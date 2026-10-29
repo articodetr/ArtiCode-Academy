@@ -2,9 +2,9 @@
 
 | البند | القيمة |
 |---|---|
-| **إصدار الوثيقة** | 1.10.0 |
-| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 20:55 (UTC+03:00) |
-| **آخر معرّف تغيير مسجّل** | CH-0016 |
+| **إصدار الوثيقة** | 1.10.1 |
+| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 21:10 (UTC+03:00) |
+| **آخر معرّف تغيير مسجّل** | CH-0017 |
 | **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): Git (CH-0004)، هيكل واجهة تجريبي ببيانات محلية (CH-0005)، تهيئة الخادم وربطه بالواجهة (CH-0006)، PostgreSQL 18 محلية في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)، أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). **أول مخطط بيانات منفَّذ (CH-0013):** 12 جدولاً للهوية والأكاديمية بترحيلَين مطبَّقين على قاعدة التطوير، مع بذر كتالوج الصلاحيات والأدوار النظامية وصف الأكاديمية (التصميم المرجعي 6.6؛ القرارات معتمدة في CH-0009/CH-0012؛ الحالة الفعلية في 6.2/6.3). **المصادقة MOD-01 منفَّذة (CH-0014):** دخول بالبريد أو اسم المستخدم، argon2id، JWT قصير العمر، رمز تحديث في كعكة httpOnly مع تدوير وكشف إعادة الاستخدام، حارسا مصادقة وصلاحيات عامّان، قفل الحساب وتحديد المعدل، أحداث تدقيق، تهيئة المدير الأول عبر CLI، وواجهة دخول/حساب حقيقية (الواجهة التجريبية أُزيلت). **MOD-01 مُعتمَدة ومقفلة (CH-0015):** تحقق قبول كامل على البيئة الحية (المدير الأول من PowerShell، الدخول/التجديد/الخروج عبر الواجهة، `JWT_SECRET` دائم بعد إعادة التشغيل) وإغلاق ثغرة login CSRF بجعل أجسام الطلبات JSON فقط (ADR-026). **خارطة الطريق الرسمية** في `docs/DEVELOPMENT_ROADMAP.md` (ADR-025). **MOD-03 بدأت (CH-0016):** T00 (قرارات المالك D-R01..D-R06 — ADR-027، متغيرات البيئة ENV-36..ENV-39، قاموس أكواد أخطاء MOD-03) وT01 (`GET /api/users` و`GET /api/users/:id` بصلاحية `users.read` — API-012/API-013، ADR-028) منفَّذتان ومختبرتان؛ T02 التالية. لا منطق أعمال لبقية الوحدات بعد؛ التصميم المستهدف الكامل في 6.7 PROPOSED (CH-0010) |
 | **المالك التقني للوثيقة** | فريق تطوير ArtiCode Academy (يُحدَّث بواسطة المطورين و Claude Code وفق `CLAUDE.md`) |
 | **اللغة** | عربية مهنية مع الإبقاء على المعرّفات التقنية والأسماء البرمجية بالإنجليزية |
@@ -103,7 +103,7 @@
 | قاعدة البيانات | **PostgreSQL 18.6 في Docker** (`compose.yaml`، CH-0007) و**Prisma 7.10.1** عبر `PrismaModule`؛ أدوار محدودة (`articode_app` للتشغيل، `articode_migrator` للترحيلات، superuser للإدارة فقط — ADR-019)؛ إعدادات القاعدة في `.env` الجذري وحده. **المخطط الأول منفَّذ (CH-0013):** 12 جدولاً، ترحيلان مطبَّقان، بذر idempotent (صف الأكاديمية، 5 أدوار، 56 صلاحية). **لا مستخدمين:** المدير الأول ينشئه المالك بـ `npm run auth:bootstrap-admin` (الطريقة متحقق منها في CH-0015 بمدير مؤقت حُذف). |
 | المصادقة والصلاحيات | **منفَّذة في الخادم (CH-0014) ومُعتمَدة بالقبول (CH-0015):** Argon2id، JWT وصول قصير، رمز تحديث مدوَّر في كعكة httpOnly مع كشف إعادة الاستخدام، حارسان عامّان (`AuthGuard` + `PermissionsGuard`)، قفل وتحديد معدل، تدقيق بلا أسرار. **أول مستهلك فعلي لـ `users.read` منذ CH-0016** (قائمة المستخدمين وتفاصيلهم). إدارة المستخدمين (إنشاء/تعديل/حالات/أدوار) والواجهة = بقية مهام MOD-03 في خارطة الطريق. |
 | التكامل بين الواجهة والخادم | **حقيقي لـ MOD-01 (CH-0014):** proxy Vite من `/api` إلى المنفذ 3000 (الكعكات تمر)، CORS، عميل HTTP بـ Bearer وتجديد تلقائي عند 401؛ بطاقة "الاتصال بالخادم" (CH-0006/CH-0007). بقية الشاشات على بيانات محلية. |
-| نظام الإصدارات | **تحت Git منذ CH-0004** (فرع `main`، commit الأساس `127cb1d`). لا remote ولا push ولا سياسة فروع بعد. |
+| نظام الإصدارات | **تحت Git منذ CH-0004** (فرع `main`، commit الأساس `127cb1d`). **منذ CH-0017 (2026-10-29):** remote `origin` على GitHub (`https://github.com/articodetr/ArtiCode-Academy.git`)، و`main` مرفوع ومتابِع لـ `origin/main`. لا سياسة فروع ولا CI بعد (S1-R02 أصبح ممكناً)؛ الرفع لا يُنفَّذ إلا بطلب صريح من المالك. |
 | التوثيق | هذه الوثيقة (المرجع التقني الوحيد) + **`docs/DEVELOPMENT_ROADMAP.md`** (المرجع الرسمي لترتيب المراحل والمهام ومعايير قبولها — CH-0015، ADR-025). |
 | نظام التوثيق المستمر | `IMPLEMENTED` بتاريخ 2026-10-28: هذه الوثيقة + `CLAUDE.md` + خطّاف تحقق (`.claude/hooks/doc-sync-check.mjs`). |
 
@@ -2847,11 +2847,11 @@ npm install <package>
 | التسجيل (Logging) | مسجّل NestJS الافتراضي فقط؛ تحذير عند غياب `DATABASE_URL` |
 | المراقبة | لا شيء؛ `GET /api/health` و`GET /api/health/ready` جاهزان للربط بأي مراقب |
 | النسخ الاحتياطي/الاستعادة | يدوي عبر `pg_dump`/`pg_restore` داخل الحاوية (14.9)؛ لا جدولة |
-| استراتيجية التراجع | Git متوفر منذ CH-0004 (commit الأساس `127cb1d` على `main`)؛ سياسة الفروع والإصدارات `NOT YET DETERMINED`؛ لا remote |
+| استراتيجية التراجع | Git متوفر منذ CH-0004 (commit الأساس `127cb1d` على `main`)؛ سياسة الفروع والإصدارات `NOT YET DETERMINED`؛ remote `origin` على GitHub منذ CH-0017 (يُحدَّث بالرفع عند طلب المالك) |
 
 ### 14.6 القيود التشغيلية
 
-- المستودع تحت Git منذ CH-0004 (KI-002 RESOLVED)؛ لا remote ولا نسخة خارج جهاز التطوير بعد.
+- المستودع تحت Git منذ CH-0004 (KI-002 RESOLVED)؛ منذ CH-0017 نسخة خارج جهاز التطوير على GitHub (`origin/main`) — تُحدَّث بالرفع عند طلب المالك فقط، فليست نسخة احتياطية آلية.
 - تثبيت الخادم أصبح قابلاً لإعادة الإنتاج عبر `npm ci` منذ CH-0003 (ويولّد عميل Prisma في `postinstall` منذ CH-0007). إضافة اعتماديات جديدة تحتاج npm 11 (KI-015).
 - قاعدة البيانات تعمل فقط عندما يعمل Docker Desktop؛ `restart: unless-stopped` يعيدها مع Docker لا مع Windows وحده. بدونها يعمل الخادم ويُعيد `/api/health/ready` 503 `down`.
 - أوامر `docker` تظهر في PATH للجلسات التي بدأت بعد تثبيت Docker Desktop فقط (KI-025).
@@ -3037,7 +3037,7 @@ docker compose start postgres
 | FS-032 | قاعدة بيانات + ORM + ترحيلات | MOD-16 | IMPLEMENTED | `compose.yaml`, `backend/prisma/schema.prisma`, `backend/prisma/migrations/*`, `backend/prisma.config.ts`, `backend/src/prisma/*` | CH-0007: PostgreSQL 18 محلية + Prisma 7 موصول وجاهزية تفحصه؛ CH-0008: الأدوار المحدودة ومصدر الإعدادات الواحد؛ CH-0013: أول مخطط (12 جدولاً) وترحيلان مطبَّقان (ADR-014، ADR-016، ADR-018، ADR-020) |
 | FS-033 | إعداد النشر (Docker/CI) | Ops | PARTIALLY_IMPLEMENTED | `compose.yaml` | Docker Compose للتطوير المحلي فقط (CH-0007)؛ لا Dockerfile للتطبيقين ولا CI (14.11) |
 | FS-034 | هيكل واجهة المنتج: تنقل، تخطيط، ~~دخول تجريبي، معاينة الأدوار~~ (استُبدلا في CH-0014)، 13 شاشة وحدة ببيانات محلية، 404/403 | MOD-FE-01 | IMPLEMENTED (نموذج أولي) | `frontend/src/app/*`, `layout/*`, `auth/*`, `components/*`, `i18n/*`, `mock/data.ts`, `pages/*` | CH-0005؛ ADR-009..ADR-012. شاشات الوحدات على بيانات محلية؛ تُستبدل بطبقة API (FS-031)؛ `RoleSwitcher` REMOVED (CH-0014) |
-| FS-035 | التحكم بالإصدارات: مستودع Git + تجاهل الملفات + تطبيع LF | Tooling | IMPLEMENTED | `.git/`, `.gitignore`, `.gitattributes` | CH-0004؛ commit الأساس `127cb1d` على `main`؛ لا remote (ADR-013) |
+| FS-035 | التحكم بالإصدارات: مستودع Git + تجاهل الملفات + تطبيع LF + remote على GitHub | Tooling | IMPLEMENTED | `.git/`, `.gitignore`, `.gitattributes` | CH-0004؛ commit الأساس `127cb1d` على `main` (ADR-013)؛ **CH-0017:** remote `origin` = `https://github.com/articodetr/ArtiCode-Academy.git`، أول رفع لـ `main` (9 commits حتى `9268113`) بعد فحص أسرار على كامل التاريخ؛ لا CI ولا حماية فرع بعد |
 | FS-036 | تهيئة الخادم: تحقق البيئة (zod)، `ValidationPipe` عام، CORS، بادئة `/api`، Swagger، `GET /api/health`، إخفاء `X-Powered-By` | MOD-00 | IMPLEMENTED | `backend/src/app.setup.ts`, `backend/src/config/env.schema.ts`, `backend/src/health/*`, `backend/.env.example` | CH-0006؛ ADR-015. API-002, API-003 |
 | FS-037 | فحص الجاهزية `GET /api/health/ready` (قاعدة البيانات) مع عرض حالتها في بطاقة الواجهة | MOD-00 / MOD-16 / MOD-FE-01 | IMPLEMENTED | `backend/src/health/*`, `backend/src/prisma/prisma.service.ts`, `frontend/src/api/health.ts`, `frontend/src/components/ServerStatusCard.tsx` | CH-0007؛ API-004؛ ADR-017 |
 | FS-038 | بيئة PostgreSQL محلية قابلة لإعادة الإنتاج: Docker Compose، مجلد دائم، فحص صحي، loopback فقط، أسرار خارج Git | MOD-16 / Ops | IMPLEMENTED | `compose.yaml`, `.env.example` | CH-0007؛ ADR-016 |
@@ -3092,6 +3092,7 @@ docker compose start postgres
 | KI-032 | اختبارات TEST-008 تكتب أحداث تدقيق حقيقية في قاعدة التطوير وتبقى بعد حذف مستخدمي الاختبار (فاعل فارغ) لأن الجدول إلحاقي بالتصميم | Tests / DB | منخفضة | `backend/test/auth.e2e-spec.ts` | قاعدة اختبار مستقلة أو CI بقاعدة مؤقتة (13.5) | ACCEPTED (CH-0014) |
 | KI-033 | **login CSRF:** `NestFactory.create` الافتراضي يسجّل محلّلَي `json` و`urlencoded`، فكان `POST /api/auth/login` يقرأ جسم نموذج HTML (`application/x-www-form-urlencoded`) مُرسَل من موقع آخر ويفحص بيانات الاعتماد (متحقق حياً: `401 invalid_credentials` بدل `400`)؛ يسمح لمهاجم بإدخال متصفح الضحية في حساب المهاجم وضبط كعكة تحديث لها. السبب مؤكد: محلّل `urlencoded` الافتراضي + غياب فحص `Origin` | Backend / Security | متوسطة (قبل أي نشر) | `backend/src/main.ts` قبل CH-0015؛ فحص curl في 13.4 | أجسام JSON فقط: `APP_CREATE_OPTIONS = { bodyParser: false }` + `app.useBodyParser('json')` في `configureApp()` (مشترك بين `main.ts` والاختبارات)؛ TEST-005 يثبت `400` للنماذج و`text/plain`؛ فحص `Origin` لاحقاً كطبقة ثانية (MOD-01-H02) | RESOLVED (CH-0015، ADR-026، SEC-R-10)؛ أُعيد التحقق موسَّعاً في CH-0016 (12.1) |
 | KI-034 | Prisma 7.10.1 يُولّد مرشّح `contains` كـ `ILIKE ('%' \|\| $1 \|\| '%')` بالمعامل الخام **دون هروب `%`/`_`/`\`**، فيعمل إدخال المستخدم في البحث كنمط LIKE (`q=%` يطابق الكل، `_` يطابق أي حرف). ليس حقناً (المعامل مرتبط) لكنه يوسّع المطابقة ويسمح بتجاوز نية البحث | Backend / MOD-03 | منخفضة | سجل `query` لعميل Prisma في CH-0016 (13.4): `PARAMS: ["a%b_cd", …]` | هروب الأحرف الثلاثة قبل `contains` بـ `escapeLikePattern()` في `backend/src/users/users.service.ts` (حرف الهروب الافتراضي في PostgreSQL `\`)؛ TEST-011 يثبت أن `%` لا يطابق شيئاً و`_` يطابق الشرطة السفلية حرفياً. **كل بحث نصي قادم يستخدم الدالة نفسها** (تُنقل إلى `common/` عند ثاني مستهلك) | ACCEPTED (معالَج في الكود — CH-0016) |
+| KI-035 | على جهاز التطوير يفشل Git (2.46، خلفية `openssl` بحزمة CA الخاصة بـ mingw64) في الوصول إلى GitHub بالخطأ `SSL certificate problem: unable to get local issuer certificate` لأن Avast Web Shield يعترض TLS بشهادة خاصة (`NODE_EXTRA_CA_CERTS` يشير إلى `wscert.pem` الخاص به)، بينما curl وNode يعملان | Dev env / Tooling | منخفضة (جهاز التطوير فقط) | CH-0017: `git ls-remote` فشل من Git Bash وPowerShell بالخطأ نفسه؛ نجح بـ `-c http.sslBackend=schannel` (مخزن شهادات Windows) وبحزمة CA مُجمَّعة تضم شهادة Avast | لكل أمر شبكة: `git -c http.sslBackend=schannel push|fetch|pull`؛ أو ضبط `git config --global http.sslBackend schannel` مرة واحدة (قرار المالك — لم يُغيَّر الإعداد العام في CH-0017). بيانات الاعتماد عبر Git Credential Manager المخزَّنة لحساب GitHub المالك | WORKAROUND (CH-0017) |
 
 ---
 
@@ -3253,7 +3254,7 @@ docker compose start postgres
 | الخيارات المدروسة | (أ) Git بلا `.gitattributes` (نهايات أسطر حسب إعداد كل جهاز)؛ (ب) `.gitattributes` بـ `* text=auto eol=lf`؛ (ج) تأجيل Git |
 | الخيار المعتمد | (ب): `git init -b main`؛ `.gitignore` جذري؛ `.gitattributes` بتطبيع LF ووسم الثنائيات؛ commit أساس يلتقط حالة Stage 0 قبل أي تعديل |
 | السبب | طلب المالك؛ تاريخ قابل للاستشهاد قبل أول تغيير كبير (CH-0005)؛ LF موحّد يمنع فروقات زائفة بين الأنظمة ويطابق الملفات المكتوبة أصلاً بـ LF |
-| النتائج | الملفات تبقى LF في المستودع وعند الاستخراج؛ سياسة الفروع والالتزامات والـ remote `NOT YET DETERMINED`؛ هوية المؤلف تحتاج ضبطاً (KI-018) |
+| النتائج | الملفات تبقى LF في المستودع وعند الاستخراج؛ سياسة الفروع والالتزامات والـ remote `NOT YET DETERMINED`؛ هوية المؤلف تحتاج ضبطاً (KI-018). **تحديث لاحق (CH-0017):** remote `origin` على GitHub أُضيف ورُفع `main` إليه بطلب المالك؛ سياسة الفروع ما زالت `NOT YET DETERMINED` |
 | الحالة | ACCEPTED (دليل: `.git/`, `.gitignore`, `.gitattributes`) |
 | المكونات المتأثرة | الجذر |
 
@@ -3484,7 +3485,7 @@ docker compose start postgres
 1. **MOD-03 الدفعة A:** ~~T00~~ و~~T01~~ منفَّذتان (CH-0016) → **T02** (إنشاء مستخدم بنوعه وملفه ودوره الافتراضي — التالية) → **T03** (الدعوة والتفعيل) — خارطة الطريق §4.5/§4.6.
 2. قرار مالك جديد قبل الواجهة (T11): نطاق `users.read` وكشف بيانات الاتصال (D-R07 ↔ SEC-R-12). القرارات D-R01..D-R06 مثبَّتة (ADR-027).
 3. تحصينات MOD-01 غير المانعة قبل أي نشر: `trust proxy`، فحص `Origin`، سقف عمر عائلة التحديث، `helmet`/Swagger — §3.2.
-4. المتبقي من Stage 1: `engines`/`.nvmrc` (S1-R01)؛ CI عند إضافة remote (S1-R02)؛ ترقية Node (KI-012).
+4. المتبقي من Stage 1: `engines`/`.nvmrc` (S1-R01)؛ CI على GitHub Actions أو ما يختاره المالك — أصبح ممكناً بعد إضافة remote في CH-0017 (S1-R02)؛ ترقية Node (KI-012).
 
 ### 18.5 التحسينات المستقبلية
 
@@ -3786,6 +3787,24 @@ docker compose start postgres
 | تغييرات كاسرة | لا شيء. نقاط النهاية الجديدة محمية افتراضياً؛ المتغيرات الجديدة اختيارية بافتراضيات؛ لا تغيير في العقود القائمة |
 | المنفّذ | Claude Code (Fable 5.1) بطلب من مالك المشروع |
 
+### CH-0017 — ربط المستودع بـ GitHub (remote `origin`) وأول رفع لـ `main` بعد فحص أسرار على كامل التاريخ
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ والوقت | 2026-10-29، بين 21:00 و21:10 تقريباً (UTC+03:00)؛ المصدر: طوابع أوامر Git وطابع حفظ هذه الوثيقة |
+| النوع | CONFIGURATION |
+| الوحدة | Tooling / Repo |
+| الوصف | (1) **فحص ما قبل النشر:** `git status` نظيف؛ لا ملف `.env` مرصود (القوالب الثلاثة فقط)؛ القيم الحقيقية لكلمات مرور القاعدة الثلاث و`JWT_SECRET` **صفر تطابق في كامل التاريخ** (`git log -p --all`؛ بالأطوال فقط دون طباعة)؛ أنماط `postgresql://user:pass@` في HEAD قوالب وقيم اختبار وهمية فقط. (2) **الاتصال:** `git ls-remote` فشل بخطأ TLS (KI-035 — اعتراض Avast)؛ نجح بـ `-c http.sslBackend=schannel` دون تغيير الإعداد العام؛ المستودع البعيد كان **فارغاً** (لا فروع ولا وسوم). (3) **الربط والرفع:** `git remote add origin https://github.com/articodetr/ArtiCode-Academy.git` ثم `git -c http.sslBackend=schannel push -u origin main` بلا مطالبات تفاعلية (`GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`؛ بيانات الاعتماد من Git Credential Manager): `main` (9 commits، الرأس `9268113` = CH-0016) أصبح يتابع `origin/main`. (4) هذا الإدخال وتحديثات FS-035/1.6/18.4/KI-035 والخارطة (S1-R02 من `BLOCKED` إلى `PLANNED`) و`CLAUDE.md` تُلتزم وتُرفع في commit ثانٍ ضمن CH-0017 نفسه |
+| السبب | طلب المالك الصريح (2026-10-29): "أريد تحديث GitHub" مع رابط المستودع `articodetr/ArtiCode-Academy` — أول رفع مسموح به وفق قاعدة "لا push إلا بطلب صريح" (خارطة الطريق §0.1) |
+| الملفات | **لا تغيير في الكود.** معدّلة: `docs/PROJECT_DOCUMENTATION.md`, `docs/DEVELOPMENT_ROADMAP.md`, `CLAUDE.md`؛ إعداد المستودع المحلي: remote `origin` وتتبع `main` (`.git/config` — غير مرصود) |
+| أثر قاعدة البيانات | لا شيء |
+| أثر API | لا شيء |
+| أثر الصلاحيات | لا شيء |
+| الاختبارات | لا تغيير في الكود؛ آخر تشغيل كامل في CH-0016 (33/33، 40/40). التحقق: `git status -sb` → `main...origin/main`؛ `git ls-remote --heads origin` يُظهر `refs/heads/main` برأس `9268113` مطابق للمحلي |
+| النتيجة | نجاح. FS-035 محدَّث (remote موجود)؛ KI-035 جديد WORKAROUND؛ S1-R02 (CI) لم يعد محجوباً بغياب remote؛ قاعدة الرفع بطلب صريح تبقى سارية |
+| تغييرات كاسرة | لا شيء. **ملاحظة أمنية:** المستودع على GitHub يحمل كامل التاريخ؛ ظهور المستودع للعموم أو خصوصيته قرار المالك في إعدادات GitHub (لم يُتحقق منه من هذه الجلسة — `gh` غير مثبَّت) |
+| المنفّذ | Claude Code (Fable 5.1) بطلب من مالك المشروع |
+
 ---
 
 ## 20. DOCUMENTATION MAINTENANCE — صيانة التوثيق
@@ -3905,3 +3924,5 @@ docker compose start postgres
 تحديث الإصدار 1.9.0 (CH-0015) بتاريخ 2026-10-29: قراءة `CLAUDE.md` والأقسام 01/06/07/08/09/10/11/12/13/15/16/18/19/20 وMOD-01/MOD-03 و6.7.8؛ قراءة كل ملفات `backend/src/auth/*` و`audit/*` و`config/env.schema.ts` و`app.setup.ts` و`app.module.ts` و`main.ts` و`scripts/bootstrap-admin.ts` و`prisma/schema.prisma` و`authorization/*` وملفات الواجهة `auth/*`, `api/*`, `pages/{Login,Profile,Users}Page.tsx`, `app/router.tsx`, `layout/navigation.ts`, `vite.config.ts`؛ `Get-CimInstance Win32_Process` و`Get-NetTCPConnection` لرصد Nest/Vite ومنافذها (لم يُوقَف شيء)؛ `docker compose ps` وعدّ الصفوف عبر `psql` قبل وبعد؛ فحص وجود `JWT_SECRET` وطوله دون طباعة قيمته وتوقيع رمز اختبار به محلياً (`jose`) ضد `/api/auth/me` قبل إعادة التشغيل وبعدها؛ `npm run auth:bootstrap-admin` من pwsh بأربعة سيناريوهات ثم حذف المدير المؤقت بـ `psql`؛ تدفق curl كامل عبر :5173 و:5174 بملف كعكات مؤقت حُذف؛ فحوص CSRF (`urlencoded`، `text/plain`، `Origin` أجنبي) قبل الإصلاح وبعده؛ قراءة مصادر `@nestjs/core`/`platform-express`/`testing` للتأكد من سلوك `bodyParser: false` و`useBodyParser` وتوقيعات `createNestApplication`؛ `lint`/`tsc --noEmit`/`test`/`test:e2e`؛ ترجمة `tsconfig.build.json` إلى مجلد مؤقت؛ تشغيل `dist/main` على :3999 وقراءة سجل الإقلاع ثم إيقافه؛ `tsc -b`/`lint`/`vite build` في الواجهة؛ `git status`. **لا ترحيل، لا تغيير في المخطط، لا مستخدمين حقيقيين (المدير المؤقت حُذف)، لا commit قبل اكتمال التوثيق، لا push.**
 
 تحديث الإصدار 1.10.0 (CH-0016) بتاريخ 2026-10-29: قراءة `CLAUDE.md` و`docs/DEVELOPMENT_ROADMAP.md` كاملةً، والأقسام 01/04/05/07/08/09/10/11/12/13/15/16/17/18/19/20 والملحقَين من هذه الوثيقة؛ قراءة `git status`/`diff` لتغييرات CH-0015 غير الملتزمة، وكل ملفات `backend/src/{auth,audit,authorization,config,prisma}/*`, `app.module.ts`, `app.setup.ts`, `prisma/schema.prisma`, `package.json`, `vitest.config*.ts`, `tsconfig*.json`, `.prettierrc`, `test/*.e2e-spec.ts`؛ فحص العمليات والمنافذ (`netstat`, `tasklist`) و`docker compose ps` وعدّ الصفوف والترتيب (`datcollate`) عبر `psql` داخل الحاوية قبل وبعد؛ `ToolSearch` عن أداة متصفح (لا شيء)؛ `lint`/`tsc --noEmit`/`test`/`test:e2e` على حالة CH-0015 ثم فحص الأسرار بالأطوال وعدد التطابقات فقط ثم commit `1020ac1`؛ 21 طلب curl لفحص CSRF على :3000؛ سكربت Prisma مؤقت بسجل `query` (حُذف) لفحص `contains` ومسند keyset؛ قراءة `src/generated/prisma/{enums,client}.ts` و`parse-uuid.pipe.d.ts` وإصدار zod؛ كتابة `src/users/*` و`test/users.e2e-spec.ts` ثم `tsc`/`lint`/`test`/`test:e2e` تكراراً حتى 33/33 و40/40؛ curl على الخادم الحي لـ `/api/users` و`/api/docs-json`. **لا ترحيل، لا تغيير في المخطط، لا مستخدمين حقيقيين، لا `npm run build` (المراقب يعمل)، لا push.**
+
+تحديث الإصدار 1.10.1 (CH-0017) بتاريخ 2026-10-29: `git remote -v` (لا remote)، `git ls-remote` من Git Bash وPowerShell (فشل TLS — KI-035)، فحص `http.sslBackend`/`http.sslCAInfo`/`credential.helper` بـ `--show-origin`، `cmdkey /list` لأسماء بيانات اعتماد GitHub المخزَّنة (الأسماء فقط)، قراءة مسار `NODE_EXTRA_CA_CERTS` (شهادة Avast)، تجربة `-c http.sslBackend=schannel` وحزمة CA مُجمَّعة في مجلد الجلسة المؤقت (كلاهما نجح؛ المستودع البعيد فارغ)، فحص أسرار على كامل التاريخ بالأطوال وعدد التطابقات فقط، `git remote add origin` ثم `push -u origin main` بلا مطالبات تفاعلية، ثم `git status -sb` و`ls-remote --heads origin` للتحقق. **لا تغيير في الكود ولا في الإعداد العام لـ Git.**

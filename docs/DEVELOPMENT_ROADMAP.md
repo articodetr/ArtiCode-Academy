@@ -56,7 +56,7 @@
 | المعرّف | المهمة | معايير القبول | الحالة |
 |---|---|---|---|
 | S1-R01 | `engines.node` + `.nvmrc` في التطبيقين (KI-008، KI-012) | `npm ci` يحذّر عند Node أقدم من المحدد؛ التوثيق 11.1 محدَّث | `PLANNED` |
-| S1-R02 | CI أساسي (GitHub Actions أو ما يختاره المالك عند إضافة remote): `lint`/`tsc`/`test`/`build` للتطبيقين + قاعدة PostgreSQL مؤقتة لـ `test:e2e` + حارس الانجراف `prisma migrate diff --exit-code` | خط أنابيب أخضر على `main`؛ فشل الانجراف يوقفه | `BLOCKED` — لا remote بعد (قرار المالك) |
+| S1-R02 | CI أساسي (GitHub Actions أو ما يختاره المالك عند إضافة remote): `lint`/`tsc`/`test`/`build` للتطبيقين + قاعدة PostgreSQL مؤقتة لـ `test:e2e` + حارس الانجراف `prisma migrate diff --exit-code` | خط أنابيب أخضر على `main`؛ فشل الانجراف يوقفه | `PLANNED` — remote `origin` على GitHub منذ CH-0017؛ اختيار أداة CI (الافتراضي المقترح GitHub Actions) قرار المالك |
 | S1-R03 | إطار اختبار للواجهة (Vitest + Testing Library) قبل تراكم شاشات MOD-03 (13.5) | اختبار واحد على `LoginPage` و`RequireAuth` يعمل بـ `npm run test` في `frontend/` | `PLANNED` — D-R05 اعتُمد (CH-0016، ADR-027)؛ يُنفَّذ مع MOD-03-T16 قبل الدفعة D |
 
 ---
@@ -297,7 +297,7 @@
 | متغيرات بيئة جديدة | `AUTH_INVITATION_TTL_HOURS` (افتراضي **48** — D-R02)، `AUTH_PASSWORD_RESET_TTL_MINUTES` (افتراضي **30**)، `AUTH_SELF_SERVICE_RESET_ENABLED` (افتراضي `false` حتى D-R01)، و`APP_PUBLIC_URL` اختياري — في `env.schema.ts` + `.env.example` + 11.3 (ENV-36..ENV-39) مع اختبار TEST-003؛ **لا مستهلك بعد** (T03/T05) | `IMPLEMENTED` (CH-0016، T00) |
 | قناة بريد | لا مزوّد بريد ولا قالب؛ D-R01 اعتمد التسليم اليدوي أولاً | `DEFERRED` (قرار D-R01؛ يُعاد فتحه عند اختيار مزوّد) |
 | إطار اختبار الواجهة | D-R05 اعتُمد (CH-0016)؛ التثبيت في T16 | `PLANNED` |
-| CI وقاعدة اختبار مؤقتة | S1-R02؛ حتى ذلك تعمل الاختبارات الشاملة على قاعدة التطوير وتترك أحداث تدقيق بفاعل فارغ (KI-032) | `BLOCKED` (لا remote) |
+| CI وقاعدة اختبار مؤقتة | S1-R02؛ حتى ذلك تعمل الاختبارات الشاملة على قاعدة التطوير وتترك أحداث تدقيق بفاعل فارغ (KI-032) | `PLANNED` (remote موجود منذ CH-0017) |
 | `trust proxy` + `AUTH_COOKIE_SECURE` + same-site | MOD-01-H01 و14.11 في الوثيقة الرئيسية؛ مطلوبة قبل أي نشر HTTPS خلف وكيل | `PLANNED` (قبل النشر) |
 | Node | ترقية إلى 22.22.3 أو أحدث لإزالة تحذيرات `EBADENGINE` (KI-012) وتثبيتها بـ `engines` (S1-R01) | `PLANNED` |
 | حدود المعدل للمسارات العامة الجديدة | قبول الدعوة وتأكيد إعادة الضبط وطلبها: تُضاف إلى `AuthThrottlerGuard` بحدود مماثلة لـ `login` | `PLANNED` (T03/T05) |
@@ -316,3 +316,4 @@
 |---|---|---|---|
 | 1.0.0 | 2026-10-29 | إنشاء الوثيقة بطلب المالك: المراحل، إغلاق MOD-01 بسجل القبول، خطة MOD-03 (T00..T16)، القرارات المطلوبة، المتطلبات المعلقة | CH-0015، ADR-025 |
 | 1.1.0 | 2026-10-29 | T00 وT01 `IMPLEMENTED`؛ D-R01..D-R06 `ACCEPTED` بقرار المالك (مع القرارات المعتمدة في §4.7)؛ D-R07 جديد `PENDING` (نطاق `users.read`)؛ T13 بحسب D-R06؛ T16 وS1-R03 من `BLOCKED` إلى `PLANNED`؛ §4.8 المتغيرات `IMPLEMENTED`؛ ملاحظة فحص CSRF على MOD-01-H02؛ §4.3 قاعدة `includeDeleted` | CH-0016، ADR-027، ADR-028 |
+| 1.1.1 | 2026-10-29 | S1-R02 (CI) و§4.8 من `BLOCKED` إلى `PLANNED` بعد ربط المستودع بـ GitHub (remote `origin`) وأول رفع لـ `main` | CH-0017 |
