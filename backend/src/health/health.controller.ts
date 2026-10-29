@@ -6,11 +6,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { Public } from '../auth/decorators.js';
 import { HealthResponseDto, ReadinessResponseDto } from './health.dto.js';
 import { HealthService } from './health.service.js';
 
 @ApiTags('health')
 @Controller('health')
+@Public()
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 

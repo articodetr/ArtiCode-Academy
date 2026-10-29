@@ -1,5 +1,8 @@
 import { validateEnv } from './env.schema.js';
 
+/** 48 characters: long enough for the production rule, obviously not a real secret. */
+const PRODUCTION_SECRET = 'test-secret-'.repeat(4);
+
 describe('validateEnv', () => {
   it('applies defaults when nothing is set', () => {
     expect(validateEnv({})).toEqual({
@@ -8,6 +11,13 @@ describe('validateEnv', () => {
       API_PREFIX: 'api',
       CORS_ORIGIN: ['http://localhost:5173'],
       SWAGGER_ENABLED: true,
+      JWT_ISSUER: 'articode-academy',
+      JWT_AUDIENCE: 'articode-academy-api',
+      JWT_ACCESS_TTL_SECONDS: 900,
+      AUTH_REFRESH_TTL_DAYS: 14,
+      AUTH_COOKIE_SECURE: false,
+      AUTH_LOCKOUT_THRESHOLD: 5,
+      AUTH_LOCKOUT_MINUTES: 15,
     });
   });
 
@@ -19,6 +29,7 @@ describe('validateEnv', () => {
       CORS_ORIGIN: 'http://a.test, http://b.test ,',
       SWAGGER_ENABLED: 'false',
       DATABASE_URL: 'postgresql://u:p@db:5432/app',
+      JWT_SECRET: PRODUCTION_SECRET,
     });
     expect(env.NODE_ENV).toBe('production');
     expect(env.PORT).toBe(4000);
@@ -59,15 +70,50 @@ describe('validateEnv', () => {
   });
 
   it('requires DATABASE_URL in production', () => {
-    expect(() => validateEnv({ NODE_ENV: 'production' })).toThrow(
+    expect(() => validateEnv({ NODE_ENV: 'production', JWT_SECRET: PRODUCTION_SECRET })).toThrow(
       /DATABASE_URL.*production/,
     );
     expect(
       validateEnv({
         NODE_ENV: 'production',
         DATABASE_URL: 'postgresql://u:p@db:5432/app',
+        JWT_SECRET: PRODUCTION_SECRET,
       }).DATABASE_URL,
     ).toBe('postgresql://u:p@db:5432/app');
+  });
+
+  it('requires a JWT_SECRET of at least 32 characters in production only', () => {
+    expect(() =>
+      validateEnv({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://u:p@db:5432/app' }),
+    ).toThrow(/JWT_SECRET.*production/);
+    expect(() => validateEnv({ JWT_SECRET: 'short' })).toThrow(/JWT_SECRET/);
+    expect(validateEnv({}).JWT_SECRET).toBeUndefined();
+    expect(validateEnv({ JWT_SECRET: '' }).JWT_SECRET).toBeUndefined();
+    expect(validateEnv({ JWT_SECRET: PRODUCTION_SECRET }).JWT_SECRET).toBe(PRODUCTION_SECRET);
+  });
+
+  it('parses the auth settings and defaults the cookie Secure flag per environment', () => {
+    const env = validateEnv({
+      JWT_ACCESS_TTL_SECONDS: '600',
+      AUTH_REFRESH_TTL_DAYS: '30',
+      AUTH_LOCKOUT_THRESHOLD: '3',
+      AUTH_LOCKOUT_MINUTES: '5',
+      AUTH_COOKIE_SECURE: 'true',
+    });
+    expect(env.JWT_ACCESS_TTL_SECONDS).toBe(600);
+    expect(env.AUTH_REFRESH_TTL_DAYS).toBe(30);
+    expect(env.AUTH_LOCKOUT_THRESHOLD).toBe(3);
+    expect(env.AUTH_LOCKOUT_MINUTES).toBe(5);
+    expect(env.AUTH_COOKIE_SECURE).toBe(true);
+    expect(
+      validateEnv({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://u:p@db:5432/app',
+        JWT_SECRET: PRODUCTION_SECRET,
+      }).AUTH_COOKIE_SECURE,
+    ).toBe(true);
+    expect(() => validateEnv({ JWT_ACCESS_TTL_SECONDS: '10' })).toThrow(/JWT_ACCESS_TTL_SECONDS/);
+    expect(() => validateEnv({ AUTH_COOKIE_SECURE: 'yes' })).toThrow(/AUTH_COOKIE_SECURE/);
   });
 
   it('derives DATABASE_URL for the application role from the variables shared with compose.yaml', () => {
@@ -111,7 +157,8 @@ describe('validateEnv', () => {
 
   it('accepts a derived URL in production and rejects an invalid POSTGRES_PORT', () => {
     expect(
-      validateEnv({ NODE_ENV: 'production', DB_APP_PASSWORD: 'x' }).DATABASE_URL,
+      validateEnv({ NODE_ENV: 'production', DB_APP_PASSWORD: 'x', JWT_SECRET: PRODUCTION_SECRET })
+        .DATABASE_URL,
     ).toMatch(/^postgresql:\/\/articode_app:x@/);
     expect(() => validateEnv({ POSTGRES_PORT: 'abc' })).toThrow(/POSTGRES_PORT/);
     expect(() => validateEnv({ POSTGRES_PORT: '0' })).toThrow(/POSTGRES_PORT/);

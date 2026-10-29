@@ -47,11 +47,16 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), roles: ['admin'], module: 'MOD-14' },
 ]
 
-export function navForRole(role: Role): NavItem[] {
-  return NAV_ITEMS.filter((item) => item.roles.includes(role))
+function roleSees(item: NavItem, role: Role | null): boolean {
+  // A user without a known role only sees the entries open to everyone.
+  return role ? item.roles.includes(role) : item.roles === ALL
 }
 
-export function canAccess(role: Role, navKey: string): boolean {
+export function navForRole(role: Role | null): NavItem[] {
+  return NAV_ITEMS.filter((item) => roleSees(item, role))
+}
+
+export function canAccess(role: Role | null, navKey: string): boolean {
   const item = NAV_ITEMS.find((entry) => entry.key === navKey)
-  return item ? item.roles.includes(role) : false
+  return item ? roleSees(item, role) : false
 }

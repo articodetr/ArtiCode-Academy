@@ -79,11 +79,56 @@ export const envSchema = z
     DB_APP_USER: stringWithDefault(POSTGRES_DEFAULTS.appUser),
     /** Password of the application role; without it no URL is derived. */
     DB_APP_PASSWORD: z.preprocess(emptyToUndefined, z.string().optional()),
+
+    // --- Authentication (MOD-01) -------------------------------------------
+    /**
+     * HS256 secret for access tokens (at least 32 characters). Required in
+     * production; otherwise TokenService generates an ephemeral secret at boot
+     * (every restart invalidates outstanding access tokens, refresh still works).
+     */
+    JWT_SECRET: z.preprocess(
+      emptyToUndefined,
+      z.string().min(32, 'must be at least 32 characters').optional(),
+    ),
+    /** `iss` claim checked on every access token. */
+    JWT_ISSUER: stringWithDefault('articode-academy'),
+    /** `aud` claim checked on every access token. */
+    JWT_AUDIENCE: stringWithDefault('articode-academy-api'),
+    /** Access token lifetime in seconds (1 to 60 minutes). */
+    JWT_ACCESS_TTL_SECONDS: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(60).max(3600).default(900),
+    ),
+    /** Refresh token lifetime in days; each rotation issues a fresh token with a full lifetime. */
+    AUTH_REFRESH_TTL_DAYS: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(1).max(90).default(14),
+    ),
+    /** `Secure` attribute of the refresh cookie. Defaults to true in production, false elsewhere. */
+    AUTH_COOKIE_SECURE: z.preprocess(emptyToUndefined, z.enum(['true', 'false']).optional()),
+    /** Failed logins (per account) before a temporary lock. */
+    AUTH_LOCKOUT_THRESHOLD: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(3).max(20).default(5),
+    ),
+    /** Duration of the temporary account lock, in minutes. */
+    AUTH_LOCKOUT_MINUTES: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(1).max(1440).default(15),
+    ),
   })
   // The derivation inputs stay out of the validated config: feature code only
   // ever sees DATABASE_URL.
   .transform(
-    ({ DB_HOST, POSTGRES_PORT, POSTGRES_DB, DB_APP_USER, DB_APP_PASSWORD, ...env }) => ({
+    ({
+      DB_HOST,
+      POSTGRES_PORT,
+      POSTGRES_DB,
+      DB_APP_USER,
+      DB_APP_PASSWORD,
+      AUTH_COOKIE_SECURE,
+      ...env
+    }) => ({
       ...env,
       DATABASE_URL:
         env.DATABASE_URL ??
@@ -96,6 +141,10 @@ export const envSchema = z
               port: POSTGRES_PORT,
               database: POSTGRES_DB,
             })),
+      AUTH_COOKIE_SECURE:
+        AUTH_COOKIE_SECURE === undefined
+          ? env.NODE_ENV === 'production'
+          : AUTH_COOKIE_SECURE === 'true',
     }),
   )
   .superRefine((env, ctx) => {
@@ -104,6 +153,13 @@ export const envSchema = z
         code: 'custom',
         path: ['DATABASE_URL'],
         message: 'is required when NODE_ENV=production (set it, or DB_APP_PASSWORD to derive it)',
+      });
+    }
+    if (env.NODE_ENV === 'production' && !env.JWT_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message: 'is required when NODE_ENV=production (at least 32 random characters)',
       });
     }
   });

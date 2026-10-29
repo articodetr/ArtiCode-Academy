@@ -13,6 +13,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
 import { PaymentsPage } from '../pages/PaymentsPage'
+import { ProfilePage } from '../pages/ProfilePage'
 import { ReportsPage } from '../pages/ReportsPage'
 import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
@@ -46,6 +47,8 @@ const router = createBrowserRouter([
       { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },
       { path: 'reports', element: guarded('reports', <ReportsPage />) },
       { path: 'settings', element: guarded('settings', <SettingsPage />) },
+      // Own profile: every signed-in user, whatever the role.
+      { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

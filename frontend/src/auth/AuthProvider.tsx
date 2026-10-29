@@ -1,62 +1,93 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import * as authApi from '../api/auth'
+import type { SessionUser } from '../api/auth'
 import { AuthContext } from './auth-context'
-import type { AuthContextValue, AuthUser } from './auth-context'
-import { isRole } from './roles'
+import type { AuthContextValue, AuthStatus, AuthUser } from './auth-context'
+import { primaryRole } from './roles'
+import { onSessionLost, setAccessToken } from './token-store'
 
-// Mock authentication only. No backend call is made; the session is kept in
-// localStorage so a page reload keeps the preview going. Replaced by MOD-01.
-const STORAGE_KEY = 'aca.mockUser'
+// Real authentication (MOD-01): the access token lives in memory only
+// (token-store.ts) and the refresh token in an httpOnly cookie set by the
+// server. On load the provider asks the server for a fresh access token; when
+// that fails the visitor is anonymous.
 
-function readStoredUser(): AuthUser | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<AuthUser>
-    if (typeof parsed.email === 'string' && isRole(parsed.role)) {
-      return {
-        id: typeof parsed.id === 'string' ? parsed.id : 'demo-user',
-        name: typeof parsed.name === 'string' ? parsed.name : parsed.email,
-        email: parsed.email,
-        role: parsed.role,
-      }
-    }
-  } catch {
-    // Corrupt or unavailable storage: start signed out.
+function toAuthUser(user: SessionUser): AuthUser {
+  return {
+    id: user.id,
+    name: user.displayName?.trim() || user.fullName,
+    email: user.email,
+    username: user.username,
+    role: primaryRole(user.roles),
+    roles: user.roles,
+    permissions: user.permissions,
+    mustChangePassword: user.mustChangePassword,
   }
-  return null
+}
+
+interface AuthState {
+  status: AuthStatus
+  user: AuthUser | null
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(readStoredUser)
+  const [state, setState] = useState<AuthState>({ status: 'loading', user: null })
 
   useEffect(() => {
-    try {
-      if (user) {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-      } else {
-        window.localStorage.removeItem(STORAGE_KEY)
-      }
-    } catch {
-      // Persistence is best-effort.
+    let cancelled = false
+    authApi
+      .refreshSession()
+      .then((session) => {
+        if (!cancelled) setState({ status: 'authenticated', user: toAuthUser(session.user) })
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: 'anonymous', user: null })
+      })
+    return () => {
+      cancelled = true
     }
-  }, [user])
+  }, [])
+
+  // A failed refresh anywhere in the app (expired cookie, revoked session) signs the user out.
+  useEffect(() => onSessionLost(() => setState({ status: 'anonymous', user: null })), [])
+
+  const login = useCallback(async (identifier: string, password: string) => {
+    const session = await authApi.login(identifier, password)
+    const user = toAuthUser(session.user)
+    setState({ status: 'authenticated', user })
+    return user
+  }, [])
+
+  const logout = useCallback(async () => {
+    await authApi.logout()
+    setState({ status: 'anonymous', user: null })
+  }, [])
+
+  const logoutAll = useCallback(async () => {
+    try {
+      await authApi.logoutAll()
+    } finally {
+      setAccessToken(null)
+      setState({ status: 'anonymous', user: null })
+    }
+  }, [])
+
+  const reloadUser = useCallback(async () => {
+    const user = toAuthUser(await authApi.fetchMe())
+    setState({ status: 'authenticated', user })
+  }, [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      user,
-      login: ({ email, role }) =>
-        setUser({
-          id: 'demo-user',
-          name: email.split('@')[0] || email,
-          email,
-          role,
-        }),
-      logout: () => setUser(null),
-      switchRole: (role) =>
-        setUser((current) => (current ? { ...current, role } : current)),
+      status: state.status,
+      user: state.user,
+      login,
+      logout,
+      logoutAll,
+      reloadUser,
+      hasPermission: (key) => state.user?.permissions.includes(key) ?? false,
     }),
-    [user],
+    [state, login, logout, logoutAll, reloadUser],
   )
 
   return <AuthContext value={value}>{children}</AuthContext>

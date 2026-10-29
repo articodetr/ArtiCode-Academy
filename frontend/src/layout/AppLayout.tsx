@@ -1,4 +1,4 @@
-import { LogoutOutlined, UserOutlined } from '@ant-design/icons'
+import { LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons'
 import { Avatar, Dropdown, Layout, Menu, Tag, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
 import { useState } from 'react'
@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
-import { RoleSwitcher } from '../components/RoleSwitcher'
 import { navForRole } from './navigation'
 import './AppLayout.css'
 
@@ -41,15 +40,20 @@ export function AppLayout() {
   )
 
   const userMenu: MenuProps['items'] = [
-    { key: 'role', label: t(`roles.${user.role}`), disabled: true },
+    { key: 'role', label: user.role ? t(`roles.${user.role}`) : t('profile.noRoles'), disabled: true },
     { type: 'divider' },
+    {
+      key: 'profile',
+      icon: <ProfileOutlined />,
+      label: t('common.profile'),
+      onClick: () => navigate('/profile'),
+    },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: t('common.logout'),
       onClick: () => {
-        logout()
-        navigate('/login')
+        void logout().finally(() => navigate('/login', { replace: true }))
       },
     },
   ]
@@ -101,7 +105,6 @@ export function AppLayout() {
             <Tag color="gold" style={{ margin: 0 }}>
               {t('common.demoMode')}
             </Tag>
-            <RoleSwitcher />
             <LanguageSwitcher />
             <Dropdown menu={{ items: userMenu }} trigger={['click']}>
               <span className="app-user">

@@ -48,6 +48,7 @@ export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
         .setTitle('ArtiCode Academy API')
         .setDescription('Academy management & learning platform')
         .setVersion(PACKAGE_VERSION)
+        .addBearerAuth()
         .build(),
     );
     SwaggerModule.setup(swaggerPath, app, document);

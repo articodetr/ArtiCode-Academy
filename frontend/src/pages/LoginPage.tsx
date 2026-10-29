@@ -1,31 +1,76 @@
-import { LockOutlined, MailOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Form, Input, Select, Typography } from 'antd'
+import { LockOutlined, UserOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Form, Input, Spin, Typography } from 'antd'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate } from 'react-router'
+import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
-import { ROLES } from '../auth/roles'
-import type { Role } from '../auth/roles'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import './LoginPage.css'
 
 interface LoginFormValues {
-  email: string
+  identifier: string
   password: string
-  role: Role
+}
+
+/** Backend error codes with a dedicated message (login.errors.*). */
+const KNOWN_CODES = new Set([
+  'invalid_credentials',
+  'account_locked',
+  'account_suspended',
+  'account_pending',
+  'account_not_activated',
+  'rate_limited',
+])
+
+interface LoginFailure {
+  key: string
+  retryAfterMinutes?: number
+}
+
+function describeFailure(error: unknown): LoginFailure {
+  if (error instanceof ApiError) {
+    if (error.code && KNOWN_CODES.has(error.code)) {
+      const body = error.body as { retryAfterSeconds?: number } | undefined
+      return {
+        key: `login.errors.${error.code}`,
+        retryAfterMinutes: body?.retryAfterSeconds ? Math.max(1, Math.ceil(body.retryAfterSeconds / 60)) : undefined,
+      }
+    }
+    return { key: error.status >= 500 ? 'login.errors.server' : 'login.errors.generic' }
+  }
+  return { key: 'login.errors.network' }
 }
 
 export function LoginPage() {
   const { t } = useTranslation()
-  const { user, login } = useAuth()
+  const { status, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
+  const [submitting, setSubmitting] = useState(false)
+  const [failure, setFailure] = useState<LoginFailure | null>(null)
 
-  if (user) return <Navigate to={from} replace />
+  if (status === 'loading') {
+    return (
+      <div className="login-page">
+        <Spin size="large" />
+      </div>
+    )
+  }
+  if (status === 'authenticated') return <Navigate to={from} replace />
 
-  const onFinish = (values: LoginFormValues) => {
-    login({ email: values.email, role: values.role })
-    navigate(from, { replace: true })
+  const onFinish = async (values: LoginFormValues) => {
+    setSubmitting(true)
+    setFailure(null)
+    try {
+      const user = await login(values.identifier.trim(), values.password)
+      navigate(user.mustChangePassword ? '/profile' : from, { replace: true })
+    } catch (error) {
+      setFailure(describeFailure(error))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -38,28 +83,22 @@ export function LoginPage() {
           <Typography.Text type="secondary">{t('login.subtitle')}</Typography.Text>
         </div>
 
-        <Alert
-          type="warning"
-          showIcon
-          message={t('login.demoNote')}
-          style={{ marginBottom: 16 }}
-        />
+        {failure ? (
+          <Alert
+            type="error"
+            showIcon
+            message={t(failure.key, { minutes: failure.retryAfterMinutes ?? '' })}
+            style={{ marginBottom: 16 }}
+          />
+        ) : null}
 
-        <Form<LoginFormValues>
-          layout="vertical"
-          requiredMark={false}
-          initialValues={{ email: 'admin@demo.academy', role: 'admin' }}
-          onFinish={onFinish}
-        >
+        <Form<LoginFormValues> layout="vertical" requiredMark={false} onFinish={onFinish} disabled={submitting}>
           <Form.Item
-            name="email"
-            label={t('login.email')}
-            rules={[
-              { required: true, message: t('login.emailRequired') },
-              { type: 'email', message: t('login.emailInvalid') },
-            ]}
+            name="identifier"
+            label={t('login.identifier')}
+            rules={[{ required: true, whitespace: true, message: t('login.identifierRequired') }]}
           >
-            <Input prefix={<MailOutlined />} autoComplete="username" />
+            <Input prefix={<UserOutlined />} autoComplete="username" autoFocus />
           </Form.Item>
 
           <Form.Item
@@ -70,14 +109,8 @@ export function LoginPage() {
             <Input.Password prefix={<LockOutlined />} autoComplete="current-password" />
           </Form.Item>
 
-          <Form.Item name="role" label={t('login.role')}>
-            <Select
-              options={ROLES.map((role) => ({ value: role, label: t(`roles.${role}`) }))}
-            />
-          </Form.Item>
-
-          <Button type="primary" htmlType="submit" block>
-            {t('login.submit')}
+          <Button type="primary" htmlType="submit" block loading={submitting}>
+            {submitting ? t('login.signingIn') : t('login.submit')}
           </Button>
         </Form>
 
