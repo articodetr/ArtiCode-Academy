@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AccountModule } from './account/account.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ENV_FILE_PATHS } from './config/env-files.js';
@@ -19,8 +20,9 @@ import { UsersModule } from './users/users.module.js';
       envFilePath: [...ENV_FILE_PATHS],
       validate: validateEnv,
     }),
-    // Named limiter used by the auth routes only (AuthThrottlerGuard); routes
-    // override it with @Throttle, nothing else is throttled yet.
+    // Named limiter used by the auth routes and the public account routes
+    // (AuthThrottlerGuard); routes override it with @Throttle, nothing else is
+    // throttled yet.
     ThrottlerModule.forRoot({
       throttlers: [{ name: 'login', ttl: 15 * 60 * 1000, limit: 10 }],
     }),
@@ -28,6 +30,8 @@ import { UsersModule } from './users/users.module.js';
     AuditModule,
     AuthModule,
     UsersModule,
+    // MOD-03-T03: invitations and activation; imports MailModule itself.
+    AccountModule,
     HealthModule,
   ],
 })

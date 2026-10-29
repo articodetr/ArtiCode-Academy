@@ -26,6 +26,7 @@ import { TokenService } from './token.service.js';
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
-  exports: [PasswordService, TokenService, AuthService],
+  // AuthThrottlerGuard is exported for the public account routes (MOD-03-T03).
+  exports: [PasswordService, TokenService, AuthService, AuthThrottlerGuard],
 })
 export class AuthModule {}

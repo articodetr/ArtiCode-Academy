@@ -18,10 +18,11 @@ import { AuthThrottlerGuard } from './auth-throttler.guard.js';
 import { authError } from './auth.errors.js';
 import { AuthErrorDto, AuthUserDto, ChangePasswordDto, LoginDto, SessionResponseDto } from './auth.dto.js';
 import { AuthService } from './auth.service.js';
-import type { IssuedSession } from './auth.service.js';
-import { clearRefreshCookie, readRefreshCookie, refreshCookiePath, requestContext, setRefreshCookie } from './cookies.js';
+import { clearRefreshCookie, readRefreshCookie, requestContext } from './cookies.js';
+import type { RefreshCookieOptions } from './cookies.js';
 import { CurrentUser, Public } from './decorators.js';
 import type { AuthPrincipal } from './principal.js';
+import { presentSession, sessionCookieOptions, toUserDto } from './session.presenter.js';
 import { TokenService } from './token.service.js';
 
 /** 10 attempts per 15 minutes per (IP, identifier). */
@@ -33,16 +34,14 @@ const REFRESH_LIMIT = { login: { limit: 30, ttl: 60 * 1000 } };
 @Controller('auth')
 @UseGuards(AuthThrottlerGuard)
 export class AuthController {
-  private readonly cookiePath: string;
-  private readonly cookieSecure: boolean;
+  private readonly cookie: RefreshCookieOptions;
 
   constructor(
     private readonly auth: AuthService,
-    private readonly tokens: TokenService,
+    tokens: TokenService,
     config: ConfigService<Env, true>,
   ) {
-    this.cookiePath = refreshCookiePath(config.get('API_PREFIX', { infer: true }));
-    this.cookieSecure = config.get('AUTH_COOKIE_SECURE', { infer: true });
+    this.cookie = sessionCookieOptions(config, tokens);
   }
 
   @Post('login')
@@ -64,7 +63,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<SessionResponseDto> {
     const session = await this.auth.login(body.identifier, body.password, requestContext(req));
-    return this.respondWithSession(res, session);
+    return presentSession(res, session, this.cookie);
   }
 
   @Post('refresh')
@@ -81,14 +80,14 @@ export class AuthController {
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<SessionResponseDto> {
     const token = readRefreshCookie(req);
     if (!token) {
-      clearRefreshCookie(res, { secure: this.cookieSecure, path: this.cookiePath });
+      clearRefreshCookie(res, this.cookie);
       throw authError.refreshMissing();
     }
     try {
       const session = await this.auth.refresh(token, requestContext(req));
-      return this.respondWithSession(res, session);
+      return presentSession(res, session, this.cookie);
     } catch (error) {
-      clearRefreshCookie(res, { secure: this.cookieSecure, path: this.cookiePath });
+      clearRefreshCookie(res, this.cookie);
       throw error;
     }
   }
@@ -101,7 +100,7 @@ export class AuthController {
   @ApiNoContentResponse()
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
     await this.auth.logout(readRefreshCookie(req), requestContext(req));
-    clearRefreshCookie(res, { secure: this.cookieSecure, path: this.cookiePath });
+    clearRefreshCookie(res, this.cookie);
   }
 
   @Post('logout-all')
@@ -117,7 +116,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
     await this.auth.logoutAll(user.id, requestContext(req));
-    clearRefreshCookie(res, { secure: this.cookieSecure, path: this.cookiePath });
+    clearRefreshCookie(res, this.cookie);
   }
 
   @Get('me')
@@ -147,33 +146,4 @@ export class AuthController {
   ): Promise<void> {
     await this.auth.changePassword(user.id, body.currentPassword, body.newPassword, readRefreshCookie(req), requestContext(req));
   }
-
-  private respondWithSession(res: Response, session: IssuedSession): SessionResponseDto {
-    setRefreshCookie(res, session.refreshToken, {
-      secure: this.cookieSecure,
-      path: this.cookiePath,
-      maxAgeMs: this.tokens.refreshTtlMs,
-    });
-    return {
-      tokenType: 'Bearer',
-      accessToken: session.accessToken,
-      expiresIn: session.expiresIn,
-      user: toUserDto(session.user),
-    };
-  }
-}
-
-function toUserDto(user: AuthPrincipal): AuthUserDto {
-  return {
-    id: user.id,
-    email: user.email,
-    username: user.username,
-    fullName: user.fullName,
-    displayName: user.displayName,
-    locale: user.locale,
-    status: user.status,
-    mustChangePassword: user.mustChangePassword,
-    roles: user.roles,
-    permissions: user.permissions,
-  };
 }

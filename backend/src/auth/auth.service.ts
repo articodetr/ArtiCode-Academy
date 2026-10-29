@@ -18,6 +18,9 @@ export interface IssuedSession {
   user: AuthPrincipal;
 }
 
+/** How a session that did not start with a password was opened (recorded in the login event). */
+export type SessionOrigin = 'invitation' | 'password_reset';
+
 type UserWithAccess = Prisma.UserGetPayload<{ include: typeof ACCESS_INCLUDE }>;
 
 const ACCESS_INCLUDE = {
@@ -132,8 +135,27 @@ export class AuthService {
       throw authError.accountNotActivated();
     }
 
+    return this.createSession(user, now, ctx);
+  }
+
+  /**
+   * Opens a session for an account whose holder has just proved themself with
+   * a one-time token — invitation acceptance (MOD-03-T03) or password reset
+   * (T05) — so there is no password to check here. The account must be usable
+   * (same gate as refresh); the login event records how the session started.
+   */
+  async openSession(userId: string, via: SessionOrigin, ctx: RequestContext): Promise<IssuedSession> {
+    const user = await this.prisma.db.user.findUnique({ where: { id: userId }, include: ACCESS_INCLUDE });
+    if (!user) throw authError.sessionInvalid();
+    const gate = this.sessionGate(user);
+    if (gate) throw gate;
+    return this.createSession(user, new Date(), ctx, via);
+  }
+
+  /** Resets the lock counters, opens a refresh-token family, records `auth.login.succeeded` and signs the access token. */
+  private async createSession(user: UserWithAccess, now: Date, ctx: RequestContext, via?: SessionOrigin): Promise<IssuedSession> {
     const refresh = this.tokens.generateRefreshToken();
-    await db.$transaction(async (tx) => {
+    await this.prisma.db.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
         data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
@@ -149,7 +171,14 @@ export class AuthService {
         select: { familyId: true },
       });
       await this.audit.record(
-        { action: AUDIT_ACTIONS.loginSucceeded, actorUserId: user.id, entityType: 'users', entityId: user.id, metadata: { familyId: created.familyId }, ...ctx },
+        {
+          action: AUDIT_ACTIONS.loginSucceeded,
+          actorUserId: user.id,
+          entityType: 'users',
+          entityId: user.id,
+          metadata: via ? { familyId: created.familyId, via } : { familyId: created.familyId },
+          ...ctx,
+        },
         tx,
       );
     });

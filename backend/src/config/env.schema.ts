@@ -5,6 +5,8 @@ import { POSTGRES_DEFAULTS, buildPostgresUrl } from './database-url.js';
 // application must be declared here so a typo or a missing value fails at boot.
 
 export const NODE_ENVS = ['development', 'test', 'production'] as const;
+/** Outgoing-mail transports (src/mail/); `log` is for development only. */
+export const MAIL_TRANSPORTS = ['none', 'log'] as const;
 
 function parseList(value: string): string[] {
   return value
@@ -151,6 +153,17 @@ export const envSchema = z
         .transform((value) => value.replace(/\/+$/, ''))
         .optional(),
     ),
+
+    // --- Mail (MOD-03-T03, owner decision D-R08) ---------------------------
+    /**
+     * How outgoing e-mail is handled. `none` (default): nothing is sent and
+     * nothing but the message kind is logged — invitation and reset tokens
+     * reach the authorized admin once, in the API response (D-R01). `log`
+     * (development only): also writes each message with its link to the
+     * server log; refused in production below. A real provider is added as a
+     * further transport in launch task LR-01.
+     */
+    MAIL_TRANSPORT: z.preprocess(emptyToUndefined, z.enum(MAIL_TRANSPORTS).default('none')),
   })
   // The derivation inputs stay out of the validated config: feature code only
   // ever sees DATABASE_URL.
@@ -195,6 +208,23 @@ export const envSchema = z
         code: 'custom',
         path: ['JWT_SECRET'],
         message: 'is required when NODE_ENV=production (at least 32 random characters)',
+      });
+    }
+    // D-R08 / ADR-031: development conveniences never reach production, and a
+    // self-service reset without a transport that reaches the user is a lie.
+    if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'log') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_TRANSPORT'],
+        message:
+          '"log" is a development-only transport and is refused when NODE_ENV=production (use "none" until a real provider is configured — LR-01)',
+      });
+    }
+    if (env.AUTH_SELF_SERVICE_RESET_ENABLED && env.MAIL_TRANSPORT === 'none') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AUTH_SELF_SERVICE_RESET_ENABLED'],
+        message: 'cannot be true while MAIL_TRANSPORT=none: the public password-reset route needs a mail transport that reaches the user',
       });
     }
   });

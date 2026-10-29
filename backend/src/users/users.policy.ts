@@ -51,9 +51,26 @@ export function extraRoleProfileProblem(kind: KindRoleKey, extras: readonly stri
   return null;
 }
 
+/** The permission grants of a role as the services select them. */
+export interface RoleGrants {
+  permissions: readonly { permissionKey: string; permission: { deprecatedAt: Date | null } }[];
+}
+
+/** Active (non-deprecated) permission keys conferred by a set of roles. */
+export function activePermissionKeys(roles: readonly RoleGrants[]): Set<string> {
+  const keys = new Set<string>();
+  for (const role of roles) {
+    for (const grant of role.permissions) {
+      if (grant.permission.deprecatedAt === null) keys.add(grant.permissionKey);
+    }
+  }
+  return keys;
+}
+
 /**
  * Permission keys the granted roles would confer that the caller neither holds
  * nor belong to the learner baseline — sorted, empty when the grant is safe.
+ * Applied to user creation (T02) and to invitation issuing (T03, SEC-R-13).
  */
 export function exceedingPermissions(
   conferred: Iterable<string>,

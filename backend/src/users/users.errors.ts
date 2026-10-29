@@ -1,5 +1,5 @@
 // Error vocabulary of MOD-03 (users, invitations, password reset, roles,
-// guardians) — fixed in MOD-03-T00, extended in T02. Same shape as
+// guardians) — fixed in MOD-03-T00, extended in T02 and T03. Same shape as
 // AuthHttpException: the body is `{ statusCode, error, code, message, ...details }`
 // and the frontend maps the stable `code` to a localized message. Only the
 // factories below are in use; the remaining codes are reserved for the tasks
@@ -108,4 +108,27 @@ export const usersError = {
     ),
   roleUnknown: (roleKeys: readonly string[]) =>
     new UsersHttpException(HttpStatus.BAD_REQUEST, 'role_unknown', 'Unknown role key', { roleKeys: [...roleKeys] }),
+  // T03 — invitations
+  userNotInvitable: (status: string) =>
+    new UsersHttpException(
+      HttpStatus.CONFLICT,
+      'user_not_invitable',
+      'Only an account that is awaiting activation (status "invited") can be invited',
+      { status },
+    ),
+  invitationInvalid: () =>
+    new UsersHttpException(HttpStatus.NOT_FOUND, 'invitation_invalid', 'This invitation link is not valid'),
+  invitationExpired: (expiredAt: Date) =>
+    new UsersHttpException(
+      HttpStatus.GONE,
+      'invitation_expired',
+      'This invitation has expired; ask the academy for a new one',
+      { expiredAt: expiredAt.toISOString() },
+    ),
+  invitationConsumed: () =>
+    new UsersHttpException(
+      HttpStatus.CONFLICT,
+      'invitation_consumed',
+      'This invitation has already been used or was replaced by a newer one',
+    ),
 };

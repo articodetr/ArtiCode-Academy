@@ -22,6 +22,7 @@ import type {
 import { usersError } from './users.errors.js';
 import {
   ASSIGN_ROLES_PERMISSION,
+  activePermissionKeys,
   exceedingPermissions,
   extraRoleKeys,
   extraRoleProfileProblem,
@@ -93,7 +94,6 @@ const ROLE_GRANT_SELECT = {
 type SummaryRow = Prisma.UserGetPayload<{ select: typeof SUMMARY_SELECT }>;
 type ListRow = Prisma.UserGetPayload<{ select: typeof LIST_SELECT }>;
 type DetailRow = Prisma.UserGetPayload<{ select: typeof DETAIL_SELECT }>;
-type RoleGrantRow = Prisma.RoleGetPayload<{ select: typeof ROLE_GRANT_SELECT }>;
 
 /** `%`, `_` and `\` matched literally inside a LIKE/ILIKE pattern (PostgreSQL escape character `\`). */
 export function escapeLikePattern(value: string): string {
@@ -322,7 +322,7 @@ export class UsersService {
 
     // No exceeding the creator: every active permission the roles confer must be
     // held by the caller, apart from the learner baseline (users.policy.ts).
-    const exceeding = exceedingPermissions(conferredPermissions(roles), caller.permissions);
+    const exceeding = exceedingPermissions(activePermissionKeys(roles), caller.permissions);
     if (exceeding.length > 0) throw authError.permissionDenied(exceeding);
 
     // Friendly 409 before the transaction; the unique indexes (which also cover
@@ -395,17 +395,6 @@ export class UsersService {
 
     return this.getById(userId, false, 'full');
   }
-}
-
-/** Active (non-deprecated) permission keys conferred by a set of roles. */
-function conferredPermissions(roles: readonly RoleGrantRow[]): Set<string> {
-  const keys = new Set<string>();
-  for (const role of roles) {
-    for (const grant of role.permissions) {
-      if (grant.permission.deprecatedAt === null) keys.add(grant.permissionKey);
-    }
-  }
-  return keys;
 }
 
 /** Maps a unique-constraint violation raised by a concurrent insert to the matching 409; rethrows anything else. */

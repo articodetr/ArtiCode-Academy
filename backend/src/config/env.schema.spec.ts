@@ -21,6 +21,7 @@ describe('validateEnv', () => {
       AUTH_INVITATION_TTL_HOURS: 48,
       AUTH_PASSWORD_RESET_TTL_MINUTES: 30,
       AUTH_SELF_SERVICE_RESET_ENABLED: false,
+      MAIL_TRANSPORT: 'none',
     });
   });
 
@@ -29,6 +30,8 @@ describe('validateEnv', () => {
       AUTH_INVITATION_TTL_HOURS: '72',
       AUTH_PASSWORD_RESET_TTL_MINUTES: '15',
       AUTH_SELF_SERVICE_RESET_ENABLED: 'true',
+      // The self-service route needs a transport (D-R08); `log` is fine outside production.
+      MAIL_TRANSPORT: 'log',
       APP_PUBLIC_URL: 'https://academy.example/',
     });
     expect(env.AUTH_INVITATION_TTL_HOURS).toBe(72);
@@ -55,6 +58,32 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ AUTH_SELF_SERVICE_RESET_ENABLED: 'yes' })).toThrow(/AUTH_SELF_SERVICE_RESET_ENABLED/);
     expect(() => validateEnv({ APP_PUBLIC_URL: 'academy.example' })).toThrow(/APP_PUBLIC_URL/);
     expect(() => validateEnv({ APP_PUBLIC_URL: 'ftp://academy.example' })).toThrow(/APP_PUBLIC_URL/);
+  });
+
+  it('selects the mail transport and refuses development-only mail settings in production (D-R08)', () => {
+    expect(validateEnv({}).MAIL_TRANSPORT).toBe('none');
+    expect(validateEnv({ MAIL_TRANSPORT: '' }).MAIL_TRANSPORT).toBe('none');
+    expect(validateEnv({ MAIL_TRANSPORT: 'log' }).MAIL_TRANSPORT).toBe('log');
+    expect(() => validateEnv({ MAIL_TRANSPORT: 'smtp' })).toThrow(/MAIL_TRANSPORT/);
+
+    const production = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u:p@db:5432/app',
+      JWT_SECRET: PRODUCTION_SECRET,
+    };
+    expect(validateEnv(production).MAIL_TRANSPORT).toBe('none');
+    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'log' })).toThrow(/MAIL_TRANSPORT.*production/);
+
+    // A self-service password reset needs a transport that reaches the user — in every environment.
+    expect(() => validateEnv({ AUTH_SELF_SERVICE_RESET_ENABLED: 'true' })).toThrow(
+      /AUTH_SELF_SERVICE_RESET_ENABLED.*MAIL_TRANSPORT=none/,
+    );
+    expect(() => validateEnv({ ...production, AUTH_SELF_SERVICE_RESET_ENABLED: 'true' })).toThrow(
+      /AUTH_SELF_SERVICE_RESET_ENABLED/,
+    );
+    expect(
+      validateEnv({ AUTH_SELF_SERVICE_RESET_ENABLED: 'true', MAIL_TRANSPORT: 'log' }).AUTH_SELF_SERVICE_RESET_ENABLED,
+    ).toBe(true);
   });
 
   it('coerces PORT, parses the CORS list and the Swagger flag', () => {
