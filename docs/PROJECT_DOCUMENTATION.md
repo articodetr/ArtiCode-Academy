@@ -2,10 +2,10 @@
 
 | البند | القيمة |
 |---|---|
-| **إصدار الوثيقة** | 1.6.2 |
-| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 18:10 (UTC+03:00) |
-| **آخر معرّف تغيير مسجّل** | CH-0012 |
-| **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): Git (CH-0004)، هيكل واجهة تجريبي ببيانات محلية (CH-0005)، تهيئة الخادم وربطه بالواجهة (CH-0006)، PostgreSQL 18 محلية في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)، أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). لا نماذج بيانات ولا مصادقة بعد؛ تصميم المخطط الأول في 6.6: الاتجاه معتمد مبدئياً وD1/D4/D5 معتمدة (CH-0009)، والبقية PROPOSED؛ التصميم المستهدف الكامل لكل الوحدات في 6.7 (D11..D22) PROPOSED (CH-0010)؛ فرز القرارات المانعة للترحيل الأول (D2, D3, D6..D8, D11, D20..D22) ودليل تنفيذه والتراجع عنه في 6.6.5 (CH-0011) بانتظار اعتماد المالك |
+| **إصدار الوثيقة** | 1.7.0 |
+| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 18:30 (UTC+03:00) |
+| **آخر معرّف تغيير مسجّل** | CH-0013 |
+| **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): Git (CH-0004)، هيكل واجهة تجريبي ببيانات محلية (CH-0005)، تهيئة الخادم وربطه بالواجهة (CH-0006)، PostgreSQL 18 محلية في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)، أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). **أول مخطط بيانات منفَّذ (CH-0013):** 12 جدولاً للهوية والأكاديمية بترحيلَين مطبَّقين على قاعدة التطوير، مع بذر كتالوج الصلاحيات والأدوار النظامية وصف الأكاديمية (التصميم المرجعي 6.6؛ القرارات معتمدة في CH-0009/CH-0012؛ الحالة الفعلية في 6.2/6.3). لا مصادقة ولا منطق أعمال بعد؛ التصميم المستهدف الكامل في 6.7 PROPOSED (CH-0010) |
 | **المالك التقني للوثيقة** | فريق تطوير ArtiCode Academy (يُحدَّث بواسطة المطورين و Claude Code وفق `CLAUDE.md`) |
 | **اللغة** | عربية مهنية مع الإبقاء على المعرّفات التقنية والأسماء البرمجية بالإنجليزية |
 
@@ -312,9 +312,14 @@ ArtiCodeAcademy/
 │   ├── oxlint.json
 │   ├── package.json                  ← بلا سكربت deploy ولا @nestjs/mau منذ CH-0006
 │   ├── package-lock.json             ← lockfileVersion 3 (أُنشئ في CH-0003، حُدّث في CH-0006 وCH-0007)
-│   ├── prisma.config.ts              ← إعداد Prisma CLI: المخطط، مجلد الترحيلات، عنوان الترحيلات بدور migrator من .env الجذري (CH-0007، CH-0008)
+│   ├── prisma.config.ts              ← إعداد Prisma CLI: المخطط، مجلد الترحيلات، عنوان الترحيلات بدور migrator من .env الجذري (CH-0007، CH-0008)، أمر البذر tsx prisma/seed.ts (CH-0013)
 │   ├── prisma/
-│   │   └── schema.prisma             ← generator prisma-client → src/generated/prisma؛ datasource postgresql؛ بلا نماذج (CH-0007)
+│   │   ├── schema.prisma             ← generator prisma-client → src/generated/prisma؛ datasource postgresql؛ 12 نموذجاً + 5 تعدادات (CH-0013، القسم 06)
+│   │   ├── seed.ts                   ← بذر idempotent: الصلاحيات، الأدوار النظامية، صف academy من SEED_ACADEMY_* (CH-0013)
+│   │   └── migrations/
+│   │       ├── migration_lock.toml
+│   │       ├── 20261029150949_init_identity_academy/migration.sql        ← 12 جدولاً + SQL يدوي (CHECK، فهرس جزئي، trigger)
+│   │       └── 20261029151839_audit_logs_allow_actor_set_null/migration.sql ← trigger الإلحاق يسمح بإفراغ actor_user_id فقط (KI-029)
 │   ├── tsconfig.json
 │   ├── tsconfig.build.json
 │   ├── vitest.config.ts              ← اختبارات الوحدة (**/*.spec.ts)
@@ -331,6 +336,10 @@ ArtiCodeAcademy/
 │   │   │   ├── database-url.ts       ← buildPostgresUrl() وpostgresUrlFromEnv() والافتراضيات المشتركة مع compose (CH-0008)
 │   │   │   ├── database-url.spec.ts  ← 6 اختبارات وحدة (TEST-006)
 │   │   │   └── env-files.ts          ← ENV_FILE_PATHS: backend/.env.local ← backend/.env ← ../.env الجذري (CH-0008)
+│   │   ├── authorization/            ← كتالوج الصلاحيات والأدوار النظامية (مصدر الحقيقة للبذر؛ بلا إطار عمل) — CH-0013
+│   │   │   ├── permission-catalog.ts ← PERMISSION_CATALOG (56 مفتاحاً بوصف ar/en ووحدة)، PERMISSION_KEYS، isPermissionKey()
+│   │   │   ├── system-roles.ts       ← SYSTEM_ROLES الخمسة بعناوينها ومصفوفة الصلاحيات الافتراضية (6.7.8)
+│   │   │   └── localized-text.ts     ← LocalizedText { ar, en?, tr? } + pickLocalized() بترتيب fallback D1
 │   │   ├── prisma/                   ← طبقة الوصول إلى قاعدة البيانات (CH-0007)
 │   │   │   ├── prisma.module.ts      ← @Global()؛ يصدّر PrismaService
 │   │   │   └── prisma.service.ts     ← PrismaClient + PrismaPg من DATABASE_URL؛ db، ping()، إغلاق عند الإيقاف
@@ -342,7 +351,8 @@ ArtiCodeAcademy/
 │   │       ├── health.dto.ts         ← HealthResponseDto، ReadinessResponseDto، DatabaseCheckDto
 │   │       └── health.service.spec.ts ← 4 اختبارات وحدة (TEST-004)
 │   └── test/
-│       └── app.e2e-spec.ts           ← 7 اختبارات شاملة: health، readiness، 404، CORS، X-Powered-By، OpenAPI (TEST-005)
+│       ├── app.e2e-spec.ts           ← 7 اختبارات شاملة: health، readiness، 404، CORS، X-Powered-By، OpenAPI (TEST-005)
+│       └── db.e2e-spec.ts            ← 9 اختبارات على القاعدة الحية (تُتخطّى بلا قاعدة): الترحيلات، uuidv7، سلوك الحذف، القيود، التدقيق، الامتيازات، الفهارس، البذر (TEST-007)
 └── frontend/                         ← تطبيق Vite 8 + React 19 + Ant Design 6 (هيكل منتج تجريبي منذ CH-0005)
     ├── .gitignore
     ├── .oxlintrc.json
@@ -411,8 +421,9 @@ ArtiCodeAcademy/
 | `backend/src/config/` | مخطط متغيرات البيئة والتحقق منها — مصدر الحقيقة لكل ما يُقرأ من البيئة؛ منذ CH-0008 يضم اشتقاق عنوان القاعدة (`database-url.ts`، مشترك مع Prisma CLI) وترتيب ملفات env (`env-files.ts`) | أي متغير جديد يُضاف هنا وفي `.env.example` و11.3 |
 | `backend/src/health/` | وحدة الفحص الحي (`GET /api/health`) | نمط المجلد لكل وحدة: module / controller / service / dto / spec |
 | `backend/src/common/` | أدوات مشتركة بلا حالة (معلومات الحزمة) | |
-| `backend/prisma/` | مخطط Prisma (`schema.prisma`) والترحيلات (`migrations/` عند إنشائها) | مصدر الحقيقة لنموذج البيانات (القسم 06) — CH-0007 |
+| `backend/prisma/` | مخطط Prisma (`schema.prisma`)، الترحيلات المراجَعة (`migrations/`)، البذر (`seed.ts`) | مصدر الحقيقة لنموذج البيانات (القسم 06) — CH-0007؛ أول مخطط وترحيلان في CH-0013. ما لا يعبّر عنه Prisma يُكتب يدوياً في `migration.sql` بعد `--create-only` |
 | `backend/src/prisma/` | وحدة الوصول إلى قاعدة البيانات (`PrismaModule` عام، `PrismaService`) | الوحدات تحقن `PrismaService` وتستخدم `.db`؛ لا `PrismaClient` خاص بأي وحدة |
+| `backend/src/authorization/` | كتالوج الصلاحيات، الأدوار النظامية، نوع النص متعدد اللغات (ثوابت ودوال نقية) | مصدر الحقيقة لجدولَي `permissions`/`roles` النظامية (يبذرهما `prisma/seed.ts`)؛ بلا استيراد من NestJS كي يحمّله tsx خارج التطبيق — CH-0013 |
 | `backend/src/generated/` | عميل Prisma المولَّد | متجاهَل في Git؛ لا يُعدَّل يدوياً؛ مستثنى من oxlint وPrettier |
 | `frontend/src/` | كود الواجهة | `tsconfig.app.json` يشمل `src` فقط |
 | `frontend/src/app/` | تركيب التطبيق: المزوّدات (`App.tsx`) والموجّه (`router.tsx`) | CH-0005 |
@@ -446,8 +457,8 @@ ArtiCodeAcademy/
 | `backend/vitest.config.e2e.ts` | نفس السابق مع `include: ['**/*.e2e-spec.ts']` |
 | `backend/oxlint.json` | `no-explicit-any: off`, `no-floating-promises: warn`, `env.node: true`؛ `ignorePatterns: ["src/generated/**"]` (CH-0007) |
 | `compose.yaml` (جذري) | اسم المشروع `articode-academy`؛ خدمة `postgres` (`postgres:18`, `restart: unless-stopped`)؛ متغيرات من `.env` الجذري (`POSTGRES_USER`/`POSTGRES_PASSWORD` إلزاميان، `POSTGRES_DB` افتراضياً `articode_academy`، `POSTGRES_PORT` افتراضياً `5432`)؛ النشر `127.0.0.1:${POSTGRES_PORT}:5432`؛ المجلد `postgres_data:/var/lib/postgresql`؛ فحص صحي `pg_isready` كل 10 ثوانٍ (CH-0007)؛ منذ CH-0008: `DB_MIGRATOR_USER`/`DB_APP_USER` (افتراضياً `articode_migrator`/`articode_app`) و`DB_MIGRATOR_PASSWORD`/`DB_APP_PASSWORD` إلزاميان، وتركيب `./docker/postgres/initdb` على `/docker-entrypoint-initdb.d` للقراءة فقط |
-| `backend/prisma.config.ts` | يحمّل `backend/.env` ثم `../.env` الجذري بـ dotenv (الأول يغلب، `quiet`)؛ `schema: prisma/schema.prisma`؛ `migrations.path: prisma/migrations`؛ `datasource.url` = `MIGRATION_DATABASE_URL` أو المشتق من `DB_MIGRATOR_*` (عبر `src/config/database-url.ts`) أو `DATABASE_URL` كخيار أخير (CH-0007، CH-0008) |
-| `backend/prisma/schema.prisma` | `generator client { provider = "prisma-client", output = "../src/generated/prisma", moduleFormat = "esm", importFileExtension = "js" }`؛ `datasource db { provider = "postgresql" }`؛ بلا نماذج (CH-0007) |
+| `backend/prisma.config.ts` | يحمّل `backend/.env` ثم `../.env` الجذري بـ dotenv (الأول يغلب، `quiet`)؛ `schema: prisma/schema.prisma`؛ `migrations.path: prisma/migrations`؛ `datasource.url` = `MIGRATION_DATABASE_URL` أو المشتق من `DB_MIGRATOR_*` (عبر `src/config/database-url.ts`) أو `DATABASE_URL` كخيار أخير (CH-0007، CH-0008)؛ `migrations.seed: 'tsx prisma/seed.ts'` (CH-0013) |
+| `backend/prisma/schema.prisma` | `generator client { provider = "prisma-client", output = "../src/generated/prisma", moduleFormat = "esm", importFileExtension = "js" }`؛ `datasource db { provider = "postgresql" }`؛ 12 نموذجاً و5 تعدادات بأسماء `@@map`/`@map` بـ snake_case (CH-0013، 6.2) |
 | `backend/.gitignore` | `node_modules`, `.env`, `/src/generated/prisma` (أنشأه `prisma init` — CH-0007) |
 | `backend/.prettierignore` | `src/generated/`, `dist/` (CH-0007) |
 | `backend/.prettierrc` | `singleQuote: true`, `trailingComma: all` |
@@ -627,10 +638,11 @@ flowchart TB
 
 ### 6.1 الحالة العامة
 
-**توجد قاعدة بيانات للتطوير منذ CH-0007، بلا أي كيان بعد.** تم التحقق (2026-10-29):
+**توجد قاعدة بيانات للتطوير منذ CH-0007، وفيها أول مخطط منذ CH-0013: 12 جدولاً وترحيلان مطبَّقان وبذر أولي.** تم التحقق (2026-10-29، آخر تحقق 18:19):
 
 - PostgreSQL **18.6** (صورة `postgres:18` الرسمية، Debian) تعمل في Docker Desktop عبر `compose.yaml` الجذري؛ الحاوية `articode-academy-postgres-1`، المجلد المسمّى `articode-academy_postgres_data`، المنفذ منشور على `127.0.0.1:5432` فقط، الفحص الصحي `healthy`.
-- Prisma 7.10.1 مثبّت وموصول (`backend/prisma/schema.prisma` بلا نماذج، `backend/src/prisma/`)؛ `prisma migrate status` اتصل بالقاعدة وأكد أنها غير مُدارة بعد (لا جدول `_prisma_migrations`)، وعدد الجداول خارج المخططات النظامية = 0.
+- Prisma 7.10.1 مثبّت وموصول (`backend/prisma/schema.prisma` بـ 12 نموذجاً، `backend/src/prisma/`)؛ منذ CH-0013: `prisma migrate status` = «Database schema is up to date» (ترحيلان في `_prisma_migrations`)، عدد الجداول خارج المخططات النظامية = 13 (12 + `_prisma_migrations`)، و`prisma migrate diff --from-config-datasource --to-schema` = «No difference detected» رغم الكائنات اليدوية (CHECK، فهرس جزئي، دالة وtrigger).
+- البذر (`npm run prisma:seed`) نُفِّذ مرتين بنتيجة واحدة: `academy` 1، `roles` 5، `permissions` 56، `role_permissions` 112، `users` 0، `audit_logs` 0.
 - `GET /api/health/ready` ينفّذ `SELECT 1` عبر `PrismaService` ويُعيد `up` مع زمن الرحلة (TEST-005).
 - المصادقة من المضيف متحقق منها بـ `pg`: كلمة المرور الصحيحة تتصل، والخاطئة تُرفض (`28P01`).
 - **الأدوار (CH-0008، ADR-019):** `articode` (superuser، للإدارة فقط)، `articode_migrator` (مالك القاعدة والمخطط `public`، يشغّل `prisma migrate`، يحمل `CREATEDB` محلياً لأجل القاعدة الظلية لـ `migrate dev` — KI-027)، `articode_app` (`CONNECT` + `USAGE` على `public` + `SELECT/INSERT/UPDATE/DELETE` على الجداول و`USAGE/SELECT` على التسلسلات، مع امتيازات افتراضية لكل ما ينشئه migrator). `CONNECT` مسحوب من `PUBLIC`. تم التحقق (2026-10-29): `has_schema_privilege(app, CREATE) = false`، `CREATE TABLE` بدور app → `permission denied for schema public`، لا `TRUNCATE` للتطبيق، والخادم الحي يظهر في `pg_stat_activity` كـ `articode_app`. القاعدة بقيت على 0 جداول والمجلد لم يُمس.
@@ -640,10 +652,10 @@ flowchart TB
 | محرك قاعدة البيانات | PostgreSQL 18.6 (`postgres:18`) — IMPLEMENTED للتطوير المحلي (ADR-016)؛ الإنتاج `NOT YET DETERMINED` |
 | معمارية الاتصال | `DATABASE_URL` (ENV-08؛ تُشتق من `DB_APP_*` + `POSTGRES_*` + `DB_HOST` عند عدم ضبطها صراحةً — CH-0008) → `PrismaService` → `PrismaClient` + `@prisma/adapter-pg` (مجمّع اتصالات `pg`)؛ مهلة الاتصال والفحص 5 ثوانٍ؛ عميل واحد لكل عملية |
 | ORM | Prisma 7.10.1 (ADR-014، ADR-018) |
-| الجداول/الكيانات الموجودة | **لا شيء** (المخطط فارغ عمداً حتى تصميم MOD-01/MOD-03) |
-| الأعمدة والمفاتيح والعلاقات | **لا شيء** |
-| الفهارس والقيود | **لا شيء** |
-| الترحيلات | Prisma Migrate؛ **لا ترحيلات بعد**؛ المجلد `backend/prisma/migrations/` يُنشأ مع أول `prisma migrate dev` |
+| الجداول/الكيانات الموجودة | **12 جدولاً** (6.2) + `_prisma_migrations`؛ 5 أنواع تعداد — IMPLEMENTED (CH-0013) |
+| الأعمدة والمفاتيح والعلاقات | في 6.2: 13 مفتاحاً أجنبياً بسلوك حذف صريح؛ كل FK مفهرس (متحقق بـ TEST-007) |
+| الفهارس والقيود | 25 فهرساً من Prisma + فهرس فريد جزئي واحد + 9 قيود CHECK + دالة وtriggerان للإلحاق — تفصيلها في 6.3 |
+| الترحيلات | Prisma Migrate؛ ترحيلان في `backend/prisma/migrations/`: `20261029150949_init_identity_academy` (الجداول الـ12 + SQL يدوي) و`20261029151839_audit_logs_allow_actor_set_null` (يدوي بالكامل — KI-029)؛ كلاهما مطبَّق على قاعدة التطوير المحلية فقط (CH-0013) |
 | اسم القاعدة / الأدوار | `POSTGRES_DB` (افتراضياً `articode_academy`) مملوكة لـ `DB_MIGRATOR_USER` (افتراضياً `articode_migrator`) منذ CH-0008؛ التطبيق يتصل بـ `DB_APP_USER` (افتراضياً `articode_app`)؛ `POSTGRES_USER` (افتراضياً `articode`) superuser للإدارة فقط (KI-024 RESOLVED) |
 | المصادقة | `scram-sha-256` لكل اتصال من خارج الحاوية (قاعدة `host all all all scram-sha-256`)؛ الاتصالات من داخل الحاوية عبر socket أو loopback موثوقة (`trust`) بإعداد الصورة الافتراضي — لا تمس اتصالات المضيف |
 | التخزين | مجلد Docker مسمّى `postgres_data` مُركَّب على `/var/lib/postgresql` (PGDATA = `/var/lib/postgresql/18/docker`)؛ data checksums مفعّلة (افتراضي PostgreSQL 18) |
@@ -652,11 +664,152 @@ flowchart TB
 
 ### 6.2 مخطط الكيانات (ER Diagram)
 
-**لا يوجد مخطط ER** لأنه لا توجد كيانات. سيُضاف هنا عند إدخال أول نموذج في `schema.prisma` (RULE 7). **يُمنع** إدراج كيانات تخطيطية هنا كما لو كانت موجودة.
+**الحالة الفعلية منذ CH-0013** (المصدر: `backend/prisma/schema.prisma` والترحيلان في 6.1؛ تم التحقق على القاعدة الحية 2026-10-29 18:19). الاصطلاحات: المفتاح الأساسي `id uuid NOT NULL DEFAULT uuidv7()` ما لم يُذكر غيره؛ `created_at`/`updated_at` بنوع `timestamptz(6)` بافتراضي `now()` (الثاني `@updatedAt` أيضاً)؛ النصوص متعددة اللغات `jsonb` بشكل `{ ar, en?, tr? }` (D1)؛ `?` = يقبل `NULL`.
+
+```mermaid
+erDiagram
+    USERS ||--o{ USER_ROLES : holds
+    ROLES ||--o{ USER_ROLES : "granted as"
+    ROLES ||--o{ ROLE_PERMISSIONS : grants
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "listed in"
+    USERS ||--o| STUDENT_PROFILES : "is student"
+    USERS ||--o| EMPLOYEE_PROFILES : "is teacher or staff"
+    USERS ||--o{ GUARDIAN_STUDENTS : "as guardian"
+    USERS ||--o{ GUARDIAN_STUDENTS : "as student"
+    USERS ||--o{ REFRESH_TOKENS : owns
+    REFRESH_TOKENS o|--o| REFRESH_TOKENS : "replaced by"
+    USERS ||--o{ VERIFICATION_TOKENS : receives
+    USERS o|--o{ AUDIT_LOGS : "acts in"
+    USERS o|--o{ USER_ROLES : "assigned by"
+    ACADEMY {
+        uuid id PK
+        boolean singleton UK
+        uuid platform_academy_id UK
+        varchar slug UK
+        jsonb name
+        locale default_locale
+        text timezone
+        char3 currency
+        jsonb settings
+    }
+    USERS {
+        uuid id PK
+        text email UK
+        varchar username UK
+        varchar phone
+        text password_hash
+        text full_name
+        text full_name_latin
+        user_status status
+        smallint failed_login_count
+        timestamptz locked_until
+        timestamptz deleted_at
+    }
+    ROLES {
+        uuid id PK
+        varchar key UK
+        jsonb label
+        boolean is_system
+        boolean is_default_for_signup
+    }
+    PERMISSIONS {
+        varchar key PK
+        varchar module
+        timestamptz deprecated_at
+    }
+    ROLE_PERMISSIONS {
+        uuid role_id PK
+        varchar permission_key PK
+    }
+    USER_ROLES {
+        uuid user_id PK
+        uuid role_id PK
+        uuid assigned_by FK
+    }
+    STUDENT_PROFILES {
+        uuid user_id PK
+        varchar student_number UK
+        date date_of_birth
+        date enrolled_on
+    }
+    EMPLOYEE_PROFILES {
+        uuid user_id PK
+        varchar employee_number UK
+        employee_kind kind
+        date hired_on
+        boolean is_active
+    }
+    GUARDIAN_STUDENTS {
+        uuid guardian_user_id PK
+        uuid student_user_id PK
+        guardian_relationship relationship
+        boolean is_primary
+    }
+    REFRESH_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        char64 token_hash UK
+        uuid family_id
+        timestamptz expires_at
+        timestamptz revoked_at
+        uuid replaced_by_id UK
+    }
+    VERIFICATION_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        token_purpose purpose
+        char64 token_hash UK
+        timestamptz expires_at
+        timestamptz consumed_at
+    }
+    AUDIT_LOGS {
+        uuid id PK
+        uuid actor_user_id FK
+        varchar action
+        varchar entity_type
+        text entity_id
+        jsonb metadata
+    }
+```
+
+جدول `academy` بلا علاقة FK مع البقية عمداً (P1/D2): القاعدة كلها تخصّه.
+
+| # | الجدول (النموذج) | الوحدة | الأعمدة | المفاتيح والفهارس | سلوك الحذف (FK) |
+|---|---|---|---|---|---|
+| 1 | `academy` (`Academy`) | MOD-02/14 | `id`, `singleton bool = true`, `platform_academy_id? uuid`, `slug varchar(64)`, `name jsonb`, `logo_url?`, `default_locale locale = ar`, `timezone text`, `currency char(3)`, `contact_email?`, `contact_phone? varchar(32)`, `settings jsonb = {}`, `created_at`, `updated_at` | PK؛ فريد: `singleton`, `platform_academy_id`, `slug` | — |
+| 2 | `users` (`User`) | MOD-03/01 | `id`, `email? text`, `username? varchar(64)`, `phone? varchar(32)`, `password_hash?`, `full_name`, `full_name_latin?`, `display_name?`, `avatar_url?`, `locale? locale`, `status user_status = invited`, `email_verified_at?`, `last_login_at?`, `failed_login_count smallint = 0`, `locked_until?`, `password_changed_at?`, `must_change_password bool = false`, `created_at`, `updated_at`, `deleted_at?` | PK؛ فريد: `email`, `username`؛ فهارس: `phone`, `status` | — |
+| 3 | `roles` (`Role`) | MOD-03 | `id`, `key varchar(64)`, `label jsonb`, `description jsonb?`, `is_system bool = false`, `is_default_for_signup bool = false`, `created_at`, `updated_at` | PK؛ فريد `key` | — |
+| 4 | `permissions` (`Permission`) | MOD-03 | `key varchar(100)`, `module varchar(32)`, `description jsonb?`, `deprecated_at?`, `created_at` | PK `key`؛ فهرس `module` | — |
+| 5 | `role_permissions` (`RolePermission`) | MOD-03 | `role_id`, `permission_key`, `created_at` | PK `(role_id, permission_key)`؛ فهرس `permission_key` | `role_id` → Cascade؛ `permission_key` → Restrict |
+| 6 | `user_roles` (`UserRole`) | MOD-03 | `user_id`, `role_id`, `assigned_by?`, `assigned_at` | PK `(user_id, role_id)`؛ فهارس: `role_id`, `assigned_by` | `user_id` → Cascade؛ `role_id` → **Restrict**؛ `assigned_by` → SetNull |
+| 7 | `student_profiles` (`StudentProfile`) | MOD-03 | `user_id`, `student_number? varchar(32)`, `date_of_birth? date`, `enrolled_on? date`, `notes?`, `created_at`, `updated_at` | PK = FK `user_id`؛ فريد `student_number` | `user_id` → Cascade |
+| 8 | `employee_profiles` (`EmployeeProfile`) | MOD-03 | `user_id`, `employee_number? varchar(32)`, `kind employee_kind`, `job_title?`, `specialization?`, `bio jsonb?`, `hired_on? date`, `is_active bool = true`, `created_at`, `updated_at` | PK = FK `user_id`؛ فريد `employee_number`؛ فهرس `kind` | `user_id` → Cascade |
+| 9 | `guardian_students` (`GuardianStudent`) | MOD-03 | `guardian_user_id`, `student_user_id`, `relationship guardian_relationship`, `is_primary bool = false`, `created_at` | PK `(guardian_user_id, student_user_id)`؛ فهرس `student_user_id`؛ فهرس فريد جزئي `uq_guardian_students_primary (student_user_id) WHERE is_primary` (SQL يدوي) | كلاهما → Cascade |
+| 10 | `refresh_tokens` (`RefreshToken`) | MOD-01 | `id`, `user_id`, `token_hash char(64)`, `family_id uuid = uuidv7()`, `expires_at`, `revoked_at?`, `replaced_by_id?`, `user_agent?`, `ip_address? inet`, `created_at` | PK؛ فريد: `token_hash`, `replaced_by_id`؛ فهارس: `(user_id, expires_at)`, `family_id` | `user_id` → Cascade؛ `replaced_by_id` (ذاتي 1:1) → SetNull |
+| 11 | `verification_tokens` (`VerificationToken`) | MOD-01 | `id`, `user_id`, `purpose token_purpose`, `token_hash char(64)`, `metadata jsonb?`, `expires_at`, `consumed_at?`, `created_at` | PK؛ فريد `token_hash`؛ فهرس `(user_id, purpose)` | `user_id` → Cascade |
+| 12 | `audit_logs` (`AuditLog`) | عرضي (12.2) | `id`, `actor_user_id?`, `action varchar(64)`, `entity_type? varchar(64)`, `entity_id? text`, `metadata jsonb?`, `ip_address? inet`, `user_agent?`, `created_at` | PK؛ فهارس: `(entity_type, entity_id)`, `(actor_user_id, created_at)`, `created_at` | `actor_user_id` → SetNull (الاستثناء الوحيد الذي يسمح به trigger الإلحاق — 6.3) |
+
+**أنواع التعداد (PostgreSQL):** `locale { ar, en, tr }`، `user_status { invited, pending, active, suspended, archived }`، `employee_kind { teacher, staff }`، `guardian_relationship { father, mother, sibling, legal_guardian, other }`، `token_purpose { invitation, email_verification, password_reset }`.
+
+**البيانات المبذورة** (`npm run prisma:seed` — 6.4؛ idempotent): صف `academy` واحد من `SEED_ACADEMY_*` (ENV-19..ENV-24؛ لا يُعاد كتابته إن وُجد)، 5 أدوار نظامية (`academy_admin`, `teacher`, `student` مع `is_default_for_signup`, `guardian`, `staff`)، 56 صلاحية من `src/authorization/permission-catalog.ts`، 112 ربط `role_permissions` وفق المصفوفة الافتراضية في 6.7.8 (`academy_admin` 56، `teacher` 20، `staff` 18، `student` 10، `guardian` 8). **لا مستخدمين**: المدير الأول يُنشأ مع MOD-01 (argon2id).
 
 ### 6.3 قيود المخطط الحالية
 
-لا ينطبق (لا مخطط). قيود البنية: ~~المستخدم الوحيد superuser (KI-024)؛ بيانات الاعتماد مكرّرة في ملفي `.env` (KI-023)~~ — حُلّا في CH-0008 (ADR-019). المتبقي: دور migrator يحمل `CREATEDB` محلياً فقط لأجل القاعدة الظلية لـ `prisma migrate dev` (KI-027)؛ `CONNECT` مسحوب من `PUBLIC` فلا يتصل بالقاعدة سوى الدورين والـ superuser.
+**قيود مكتوبة يدوياً في SQL الترحيلات** (لا تظهر في `schema.prisma`؛ Prisma يحتفظ بها ولا يقترح إسقاطها — متحقق بـ `migrate diff` في CH-0013):
+
+| الكائن | الجدول | التعريف | الترحيل |
+|---|---|---|---|
+| `ck_academy_singleton` | `academy` | `CHECK (singleton)` مع فريد `singleton` ⇒ صف واحد بالضبط | الأول |
+| `ck_academy_name_localized`, `ck_roles_label_localized` | `academy`, `roles` | `jsonb_typeof(col) = 'object' AND col ? 'ar'` (D1) | الأول |
+| `ck_academy_settings_object` | `academy` | `jsonb_typeof(settings) = 'object'` | الأول |
+| `ck_academy_currency_iso4217` | `academy` | `currency ~ '^[A-Z]{3}$'` | الأول |
+| `ck_users_login_identifier` | `users` | `email IS NOT NULL OR username IS NOT NULL` (شرط D13) | الأول |
+| `ck_users_email_lowercase`, `ck_users_username_lowercase` | `users` | القيمة `= lower(القيمة)` إن لم تكن `NULL` | الأول |
+| `ck_guardian_students_distinct` | `guardian_students` | `guardian_user_id <> student_user_id` | الأول |
+| `uq_guardian_students_primary` | `guardian_students` | `UNIQUE (student_user_id) WHERE is_primary` | الأول |
+| `audit_logs_append_only()` + `trg_audit_logs_append_only` (صف، `BEFORE UPDATE OR DELETE`) + `trg_audit_logs_no_truncate` (عبارة، `BEFORE TRUNCATE`) | `audit_logs` | ترفع `audit_logs is append-only` لكل تعديل أو حذف أو إفراغ، **باستثناء واحد:** `UPDATE` يجعل `actor_user_id` فارغاً دون تغيير أي عمود آخر (أثر `ON DELETE SET NULL` عند حذف المستخدم الفاعل — KI-029) | الثاني (حلّ محلّ trigger العبارة في الأول) |
+
+**قيود بنيوية:** كل الجداول والأنواع مملوكة لـ `articode_migrator`؛ `articode_app` يملك `SELECT/INSERT/UPDATE/DELETE` على الجداول الـ12 و`USAGE` على التعدادات، بلا `TRUNCATE` ولا `CREATE` على `public` (متحقق بـ TEST-007 وبـ `has_*_privilege`). دور migrator يحمل `CREATEDB` محلياً لأجل القاعدة الظلية (KI-027)؛ `CONNECT` مسحوب من `PUBLIC`. لا امتدادات مثبّتة. **ما لا تضمنه القاعدة ويُفرض في طبقة الخدمة:** اتساق الدور مع الملف التعريفي (6.6.1 البند 2)، تطبيع البريد واسم المستخدم إلى أحرف صغيرة قبل الكتابة (القيد يرفض غير ذلك)، صيغة الهاتف E.164، بنية `settings` (zod)، وتخزين الرموز كتجزئة SHA-256 فقط.
 
 ### 6.4 إجراءات العمل على قاعدة البيانات (منذ CH-0007)
 
@@ -667,7 +820,9 @@ flowchart TB
 | إيقافها مع الإبقاء على البيانات | `docker compose down` (من الجذر) | `down -v` **يحذف** المجلد والبيانات نهائياً |
 | إضافة/تعديل نموذج | تعديل `prisma/schema.prisma` ثم `npm run prisma:migrate -- --name <وصف>` | يتصل بدور migrator (`prisma.config.ts`)؛ يولّد ترحيلاً في `prisma/migrations/` ويطبّقه ويعيد توليد العميل؛ يُراجع ويُلتزم به |
 | تطبيق الترحيلات في بيئة غير تطويرية | `npm run prisma:deploy` | لا يولّد ترحيلات؛ آمن للتشغيل المتكرر |
-| حالة الترحيلات | `npm run prisma:status` | غير تدميري؛ يخرج بغير صفر ما دامت القاعدة غير مُدارة (الحالة الحالية) |
+| البذر الأولي | `npm run prisma:seed` (= `prisma db seed` → `tsx prisma/seed.ts`) | idempotent وفي معاملة واحدة بدور التطبيق: كتالوج الصلاحيات (المفاتيح الغائبة تُعلَّم `deprecated_at`)، الأدوار النظامية (`academy_admin` يُمنح كل المفاتيح النشطة دائماً؛ بقية الأدوار النظامية تُمنح افتراضياتها عند إنشائها فقط)، صف `academy` من `SEED_ACADEMY_*` (ENV-19..ENV-24؛ لا يُعاد كتابته). يُشغَّل بعد كل `deploy` (CH-0013) |
+| حارس الانجراف | `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` | يقارن القاعدة الحية بالمخطط؛ المتوقع «No difference detected» ورمز 0؛ يكشف تعديلاً يدوياً على القاعدة أو نموذجاً بلا ترحيل (CH-0013) |
+| حالة الترحيلات | `npm run prisma:status` | غير تدميري؛ منذ CH-0013 يعيد «Database schema is up to date» على قاعدة التطوير |
 | إعادة توليد العميل | `npm run prisma:generate` | يعمل تلقائياً في `postinstall` و`build` |
 | تصفّح البيانات | `npm run prisma:studio` أو `psql` داخل الحاوية (14.10) | |
 | **ممنوع** | `prisma db push` و`prisma migrate reset` على قاعدة فيها بيانات يُعتدّ بها | مزامنة تدميرية (ADR-018) |
@@ -679,9 +834,9 @@ flowchart TB
 3. تضمين `academy_id` أو ما يعادله فقط إذا تغيّر قرار العزل إلى قاعدة مشتركة؛ في نموذج "قاعدة لكل أكاديمية" لا حاجة له على مستوى الصفوف.
 4. توثيق كل جدول هنا بجدول: الاسم، الأعمدة، الأنواع، المفاتيح، الفهارس، القيود، العلاقات، النموذج في `schema.prisma`، الترحيل المنشئ.
 
-### 6.6 التصميم المقترح للمخطط الأول — `PROPOSED` (الاتجاه المعماري معتمد مبدئياً وD1/D4/D5 معتمدة بتاريخ 2026-10-29؛ لا نماذج ولا ترحيل بعد)
+### 6.6 تصميم المخطط الأول — `IMPLEMENTED` في CH-0013 (2026-10-29) كمرجع تصميمي؛ الحالة الفعلية للجداول والقيود في 6.2/6.3
 
-> **تنبيه (RULE 13):** كل ما في هذا البند **تصميم غير منفّذ**. لا شيء منه موجود في `schema.prisma` أو في القاعدة. **حالة الاعتماد (CH-0009، 2026-10-29):** المالك وافق مبدئياً على الاتجاه المعماري واعتمد القرارات D1 وD4 وD5 بصيغتها أدناه؛ **ثم اعتمد في CH-0012 (2026-10-29)** D2 وD3 وD6 وD7 وD8 (ومن 6.7.11: D11، D12، D13، D20 بشرط، D21، D22) والحزمة الاختيارية في 6.6.5 (ب)؛ D9 وD10 ما زالا `PROPOSED` ولا يمنعان الترحيل الأول. لا يُنشأ أي ترحيل قبل اعتماد التصميم النهائي. عند التنفيذ يُنقل كل جدول إلى 6.2/6.3 بصيغة `IMPLEMENTED` مع الترحيل المنشئ، وتتحول حالة ADR-020 إلى ACCEPTED.
+> **تنبيه:** هذا البند هو التصميم المرجعي الذي نُفِّذ في CH-0013 (`backend/prisma/schema.prisma` والترحيلان في 6.1). الفروق المقصودة بين التصميم والتنفيذ مجموعة في 6.6.5 (ط)؛ **عند أي اختلاف فالمرجع هو 6.2/6.3 والكود**. **حالة الاعتماد (CH-0009، 2026-10-29):** المالك وافق مبدئياً على الاتجاه المعماري واعتمد القرارات D1 وD4 وD5 بصيغتها أدناه؛ **ثم اعتمد في CH-0012 (2026-10-29)** D2 وD3 وD6 وD7 وD8 (ومن 6.7.11: D11، D12، D13، D20 بشرط، D21، D22) والحزمة الاختيارية في 6.6.5 (ب)؛ D9 وD10 ما زالا `PROPOSED` ولا يمنعان الترحيل الأول. لا يُنشأ أي ترحيل قبل اعتماد التصميم النهائي. عند التنفيذ يُنقل كل جدول إلى 6.2/6.3 بصيغة `IMPLEMENTED` مع الترحيل المنشئ، وتتحول حالة ADR-020 إلى ACCEPTED.
 
 **النطاق:** نواة Stage 2 (Identity & Academy): MOD-02 (هوية الأكاديمية وإعداداتها)، MOD-03 (المستخدمون والأدوار والصلاحيات وربط أولياء الأمور)، MOD-01 (رموز الجلسات والتحقق)، وسجل تدقيق أساسي. الدورات والفصول والجدولة وما بعدها (Stage 3+) **خارج** هذا الترحيل عمداً كي يبقى الترحيل الأول صغيراً وقابلاً للمراجعة.
 
@@ -827,7 +982,7 @@ erDiagram
 | D9 | طوبولوجيا النشر (جديد) | (أ) حزمة مستقلة لكل أكاديمية (`api` + `web` + `db`) توفّرها المنصة المركزية — الافتراضي وفق REQ-01؛ (ب) API مشترك يوجّه حسب النطاق إلى قاعدة الأكاديمية (`PrismaClient` لكل مستأجر) | PROPOSED (توصية: أ الآن، مع إبقاء ب ممكناً بعزل الوصول للبيانات خلف `PrismaService`) | REQ-01 صريح؛ (أ) أبسط أمنياً وأسهل عزلاً ونسخاً | (أ) كلفة تشغيل تنمو خطّياً مع عدد الأكاديميات؛ (ب) يحتاج مجمّع اتصالات مُداراً وحدود موارد لكل مستأجر |
 | D10 | القاعدة المركزية (جديد) | قاعدة PostgreSQL مستقلة `articode_platform` بمخطط Prisma وترحيلات مستقلة (6.6.2) | PROPOSED | تطلبها لوحة Super Admin والاشتراكات والدومينات؛ تفصل بيانات المنصة عن بيانات التعليم | لا FK عابرة بين القواعد؛ المعرّف المشترك `platform_academy_id`؛ أدوار وترحيلات مستقلة (`platform_app`/`platform_migrator`) |
 
-#### 6.6.1 مراجعة سلامة النماذج (2026-10-29 — نتائج المراجعة، PROPOSED)
+#### 6.6.1 مراجعة سلامة النماذج (2026-10-29 — نتائج المراجعة؛ طُبّقت معالجاتها في CH-0013)
 
 | # | النموذج | الملاحظة | المعالجة المقترحة |
 |---|---|---|---|
@@ -840,7 +995,7 @@ erDiagram
 | 7 | `verification_tokens` | الدعوة تحتاج معرفة الأدوار المستهدفة | `metadata jsonb?` (أُضيف أعلاه)؛ تنظيف دوري للمستهلَك والمنتهي |
 | 8 | `audit_logs` | `entity_id` يجب أن يقبل مفاتيح غير UUID (مثل `permissions.key`) | نوع `text` (أُضيف أعلاه)؛ الـ trigger يمنع التعديل حتى من دور app (متحقق) |
 | 9 | كل الجداول | كل FK مفهرس (صراحةً أو كبادئة PK) ✓؛ `Cascade` محصور بالتابعين ✓ | — |
-| 10 | كائنات خارج قدرة Prisma | الفهرس الفريد لصف `academy`، قيود CHECK، الفهارس الجزئية، الدالة والـ trigger | تُكتب في ملف الترحيل بعد `--create-only`؛ Prisma يتجاهل هذه الكائنات في الفروق فلا يُسقطها لاحقاً — **يُتحقق منه عملياً عند الترحيل الثاني** (`UNVERIFIED` حتى ذلك) |
+| 10 | كائنات خارج قدرة Prisma | الفهرس الفريد لصف `academy`، قيود CHECK، الفهارس الجزئية، الدالة والـ trigger | تُكتب في ملف الترحيل بعد `--create-only`؛ Prisma يتجاهل هذه الكائنات في الفروق فلا يُسقطها لاحقاً — **تم التحقق (CH-0013):** بعد تطبيق الترحيلين، `prisma migrate diff --from-config-datasource --to-schema --exit-code` = «No difference detected» (رمز 0) مع وجود الفهرس الجزئي وقيود CHECK والدالة والـ triggers؛ كما تأكد أن Prisma 7.10.1 يرفض صيغة فهرس جزئي في المخطط (`@@unique([...], where: ...)` → خطأ تحقق)، فالطريق الوحيد SQL يدوي |
 
 #### 6.6.2 القاعدة المركزية (control plane) — `PROPOSED` (D10)
 
@@ -943,17 +1098,17 @@ erDiagram
 | الأدوار في الإنتاج | `migrator_<slug>` بلا `CREATEDB` (لا قاعدة ظلية في `migrate deploy`)؛ `app_<slug>` بـ DML؛ superuser العنقود للتوفير فقط (KI-027، 14.11) |
 | التراجع | لا ترحيلات تراجع آلية في Prisma؛ التراجع = استعادة النسخة الاحتياطية المأخوذة قبل الترحيل أو ترحيل تصحيحي للأمام |
 
-#### 6.6.4 خطة التنفيذ المرحلية (بعد اعتماد التصميم النهائي؛ لا شيء منها منفَّذ)
+#### 6.6.4 خطة التنفيذ المرحلية (المرحلتان 0 و1 منفَّذتان في CH-0012/CH-0013؛ البقية PLANNED)
 
 | المرحلة | المحتوى | شرط البدء | المخرجات |
 |---|---|---|---|
 | 0 — الاعتماد | قرارات D2، D3، D6..D10؛ تحديد `timezone`/`currency` الافتراضيين وسياسة احتفاظ `audit_logs` | — | ADR-020 وADR-021 → ACCEPTED |
-| 1 — مخطط الأكاديمية الأول | النماذج والتعدادات في `schema.prisma` → `prisma:validate` → `prisma:migrate -- --create-only --name init_identity_academy` → مراجعة SQL وإضافة الكائنات اليدوية (فهرس الصف الواحد، CHECK `ar`، فهارس جزئية، قيد الولي ≠ الطالب، دالة وtrigger الإلحاق) → `migrate dev` → `generate` → فحص امتيازات app على كل جدول → بذر idempotent (`prisma/seed.ts`: `academy`، الأدوار النظامية، كتالوج الصلاحيات، مدير أول من `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` الجديدَين في `env.schema.ts` و11.3) → توثيق 6.2/6.3 بحالة IMPLEMENTED | المرحلة 0 | الترحيل الأول + البذر + اختبارات تكامل على القاعدة الحية |
+| 1 — مخطط الأكاديمية الأول | النماذج والتعدادات في `schema.prisma` → `prisma:validate` → `prisma:migrate -- --create-only --name init_identity_academy` → مراجعة SQL وإضافة الكائنات اليدوية (فهرس الصف الواحد، CHECK `ar`، فهارس جزئية، قيد الولي ≠ الطالب، دالة وtrigger الإلحاق) → `migrate dev` → `generate` → فحص امتيازات app على كل جدول → بذر idempotent (`prisma/seed.ts`: `academy`، الأدوار النظامية، كتالوج الصلاحيات، مدير أول من `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` الجديدَين في `env.schema.ts` و11.3) → توثيق 6.2/6.3 بحالة IMPLEMENTED | المرحلة 0 | الترحيل الأول + البذر + اختبارات تكامل على القاعدة الحية — **منفَّذ (CH-0013)** بفروق 6.6.5 (ط): ترحيل ثانٍ للـ trigger، والمدير الأول (`SEED_ADMIN_*`) مؤجَّل إلى MOD-01 |
 | 2 — خدمات الهوية | MOD-01 (argon2id، JWT وصول قصير + تحديث بتدوير، الدعوات، استعادة كلمة المرور، `audit_logs`)، MOD-03 (CRUD المستخدمين والأدوار، `RolesGuard`/صلاحيات دقيقة، ربط أولياء الأمور)، استبدال المصادقة التجريبية في الواجهة (KI-017) وإضافة `tr` إلى i18n | المرحلة 1 | أول نقاط نهاية محمية؛ تحديث 07 و10 و15 |
 | 3 — المنصة المركزية | `prisma/platform` + `prisma.platform.config.ts` + أدوار `platform_*`؛ جداول 6.6.2؛ مهام التوفير والترحيل (6.6.3)؛ لوحة Super Admin الأولية | قرار D9/D10 | ADR-021 منفَّذ؛ توثيق قاعدة ثانية في 06 |
 | 4 — التشغيل | CI (lint/test/build + حارس الانجراف)، نسخ احتياطي مجدول لكل أكاديمية، مراقبة، مهام تنظيف الرموز والاحتفاظ بسجل التدقيق، `compose.prod.yaml` | المرحلتان 1 و3 | 14.11 منفَّذ تدريجياً |
 
-#### 6.6.5 فرز القرارات قبل الترحيل الأول وخطة تنفيذه (مراجعة ما قبل التنفيذ 2026-10-29 — CH-0011؛ التوصيات `PROPOSED` حتى اعتماد المالك)
+#### 6.6.5 فرز القرارات قبل الترحيل الأول وخطة تنفيذه (مراجعة ما قبل التنفيذ 2026-10-29 — CH-0011؛ اعتُمدت في CH-0012 ونُفِّذت في CH-0013 — انظر (ط))
 
 > **الغرض:** حصر ما يحتاج قرار المالك **الآن** لإنشاء الجداول الـ12 في 6.6، وترك قرارات الوحدات اللاحقة كما هي، وتثبيت خطة تنفيذ الترحيل الأول واختباره والتراجع عنه. لا يعيد هذا البند كتابة 6.6/6.7؛ ما لم يُذكر هنا يبقى كما ورد فيهما. **لا شيء منه منفَّذ** (تم التحقق 2026-10-29 17:50: 0 جداول، لا ترحيل).
 
@@ -1012,6 +1167,8 @@ erDiagram
 **(ز) حفظ التغييرات الحالية في Git دون كشف الأسرار (مراجعة 2026-10-29):** `git check-ignore` يؤكد تجاهل `.env` الجذري و`backend/.env`/`.env.local` و`frontend/.env.local` و`backend/src/generated/prisma`؛ مسح الملفات المرصودة وغير المرصودة لا يُظهر أي عنوان اتصال بكلمة مرور حقيقية (الإصابات الوحيدة قيم اختبار مثل `u:p@db` في `*.spec.ts` و`change-me` في القوالب)؛ `.env` الجذري يحمل 8 متغيرات بقيم حقيقية ويبقى محلياً؛ `backend/.env` تعليقات فقط. الشجرة: 13 ملفاً معدّلاً، 3 حذف مُدرج، 28 ملفاً جديداً؛ تحذيرات CRLF على `backend/oxlint.json`/`package.json`/`package-lock.json` يطبّعها `.gitattributes` عند الالتزام (لا إجراء). **التوصية:** تبسيط خطة CH-0008 الخماسية إلى ثلاثة التزامات: (1) `feat(backend+infra)`: `backend/**` + `compose.yaml` + `docker/` + `.env.example` + `.gitignore` + الحذف المُدرج؛ (2) `feat(frontend)`: `frontend/**`؛ (3) `docs`: `docs/PROJECT_DOCUMENTATION.md` + `CLAUDE.md`. قبل كل التزام: `git diff --cached --name-only | grep -iE '(^|/)\.env($|\.local$)'` يجب أن يكون فارغاً، و`git diff --cached | grep -nE 'postgres(ql)?://[^:/]+:[^@/]+@' | grep -v change-me` تُراجَع إصاباته (المتوقع: قيم الاختبار فقط). **لا commit ولا push إلا بطلب المالك.**
 
 **(ح) ما قد يمنع البدء:** (1) اعتماد (أ) — المانع الوحيد الجوهري؛ (2) إضافة `tsx` (تطوير) للبذر — وقرار مماثل لـ `argon2` مع MOD-01؛ (3) الشجرة غير الملتزمة (يُستحسن الالتزام أولاً، غير مانع)؛ (4) عمليتا `nest start --watch` على الجهاز (CH-0008) تتعارضان مع `prisma generate`/`build` — تُوقَفان قبل الترحيل؛ (5) سلوك Prisma مع الفهرس الجزئي `UNVERIFIED` — تغطيه الخطوة 6؛ (6) KI-026 (سكربتات تثبيت Prisma الممنوعة بـ npm 11) — `migrate status` يعمل اليوم، وإن طلب `migrate dev` محرّكاً مفقوداً يُعاد `npm ci`.
+
+**(ط) ما نُفِّذ فعلاً (CH-0013، 2026-10-29) وفروقه عن الخطة:** نُفِّذت الخطوات 0–10 من (و) بالترتيب (نسخة `pg_dump` شكلية في مجلد الجلسة المؤقت، `--create-only`، مراجعة SQL وفق قائمة التحقق، إلحاق SQL اليدوي، التطبيق، فحص الامتيازات، حارس الانجراف، TEST-007، البذر، التوثيق، الالتزام). **الفروق:** (1) **ترحيل ثانٍ** `20261029151839_audit_logs_allow_actor_set_null`: كشف TEST-007 أن trigger الإلحاق على مستوى العبارة يرفض `UPDATE` الداخلي الذي ينفّذه `ON DELETE SET NULL` على `actor_user_id` فيمنع حذف أي مستخدم (KI-029)؛ الحل trigger على مستوى الصف يسمح بإفراغ `actor_user_id` فقط دون تغيير غيره + trigger مستقل لـ `TRUNCATE` — اختير ترحيل تصحيحي للأمام بدل إعادة الترحيل الأول (لا عملية تدميرية). (2) تسمية أعمدة التاريخ المجرّد `enrolled_on`/`hired_on` (`date`) بدل `enrolled_at`/`hired_at` اتساقاً مع 6.7.1. (3) قيود CHECK إضافية رخيصة: `settings` كائن، `currency` ISO 4217، البريد واسم المستخدم بأحرف صغيرة. (4) `refresh_tokens.family_id` بافتراضي `uuidv7()` و`replaced_by_id` فريد (علاقة ذاتية 1:1 في Prisma). (5) `users.locale` يقبل `NULL` (يرث `academy.default_locale`). (6) `timezone`/`currency` معاملا بذر إلزاميان بلا افتراضي (`SEED_ACADEMY_*`، ENV-19..ENV-24) وفق قرار المالك. (7) المدير الأول لم يُبذر (يحتاج argon2id — MOD-01). (8) أُضيف سكربت `prisma:seed` و`tsx` كاعتمادية تطوير، و`prisma/` إلى `lint`/`format`. (9) أسماء أنواع التعداد بـ `@@map` إلى snake_case. (10) كل ما عدا ذلك طابق 6.6 و(أ) و(ب) و(د) حرفياً. **التراجع لم يلزم**؛ قاعدة التطوير لم تُحذف ولم يُشغَّل `migrate reset`.
 
 ### 6.7 التصميم المعماري المقترح لقاعدة البيانات — منصة مركزية وقاعدة مستقلة لكل أكاديمية (`PROPOSED` — بانتظار اعتماد المالك)
 
@@ -1709,7 +1866,7 @@ sequenceDiagram
 
 ### 7.1 الحالة العامة
 
-**لا توجد أدوار ولا صلاحيات منفّذة في الخادم.** لا `Guards`، لا ديكوريتور `@Roles`، لا جداول أدوار، لا مصادقة. في الواجهة توجد منذ CH-0005 مفاتيح أدوار (`frontend/src/auth/roles.ts`) ومصفوفة دور×شاشة (`frontend/src/layout/navigation.ts`) **للعرض والمعاينة فقط** (MOD-FE-01) — ليست فرضاً أمنياً. كل ما يلي عن الخادم **`PLANNED`** ومصدره موجز المالك مع توصيف مقترح يحتاج إلى اعتماد.
+**لا فرض للأدوار أو الصلاحيات في الخادم بعد.** لا `Guards`، لا ديكوريتور `@Roles`، لا مصادقة؛ **لكن جداول الأدوار والصلاحيات موجودة ومبذورة منذ CH-0013** (`roles`, `permissions`, `role_permissions`, `user_roles` — 6.2؛ الكتالوج والمصفوفة في 7.3). في الواجهة توجد منذ CH-0005 مفاتيح أدوار (`frontend/src/auth/roles.ts`) ومصفوفة دور×شاشة (`frontend/src/layout/navigation.ts`) **للعرض والمعاينة فقط** (MOD-FE-01) — ليست فرضاً أمنياً. كل ما يلي عن الخادم **`PLANNED`** ومصدره موجز المالك مع توصيف مقترح يحتاج إلى اعتماد.
 
 ### 7.2 الأدوار المخطّطة
 
@@ -1742,6 +1899,8 @@ sequenceDiagram
 `NOT YET DETERMINED` — تُحدَّد مصفوفة الصلاحيات (Permission matrix) عند تصميم وحدة الصلاحيات (MOD-01/MOD-03). **يجب** توثيقها هنا جدولاً: الدور × الوحدة × الإجراء (create/read/update/delete/approve…).
 
 **مقترح أولي (PROPOSED — CH-0010):** كتالوج الصلاحيات (~45 مفتاحاً بنطاق `own`/`linked`/`all`) والمصفوفة الافتراضية للأدوار الخمسة في 6.7.8، والنموذج في ADR-023؛ تُنقل إلى هنا بصيغة معتمدة عند تنفيذ MOD-03.
+
+**منذ CH-0013 (بيانات فقط، بلا فرض):** الكتالوج النهائي (56 مفتاحاً، كل مفتاح بوحدته ووصف `ar`/`en`) معرَّف في `backend/src/authorization/permission-catalog.ts` ومبذور في `permissions`؛ الأدوار النظامية الخمسة ومصفوفتها الافتراضية (6.7.8) في `backend/src/authorization/system-roles.ts` ومبذورة في `roles`/`role_permissions`: `academy_admin` 56 (كل المفاتيح النشطة دائماً)، `teacher` 20، `staff` 18، `student` 10 (`is_default_for_signup`)، `guardian` 8. تعديل الكتالوج = تعديل الملف ثم `npm run prisma:seed` (المفاتيح المحذوفة تُعلَّم `deprecated_at`). **الفرض في الخادم (`AuthGuard`/`PermissionsGuard`) ما زال PLANNED** (MOD-01/MOD-03).
 
 ### 7.4 آلية فرض الصلاحيات
 
@@ -1802,23 +1961,23 @@ sequenceDiagram
 | الأخطاء المعروفة | لا شيء مرصود |
 | التحسينات المستقبلية | `helmet`، `@nestjs/throttler`، إصدار API، تسجيل منظّم، توسيع الجاهزية لتشمل Redis عند إضافته |
 
-### MOD-16 — Database infrastructure (Prisma + PostgreSQL) — `IMPLEMENTED` (بنية بلا نماذج)
+### MOD-16 — Database infrastructure (Prisma + PostgreSQL) — `IMPLEMENTED` (البنية + المخطط الأول منذ CH-0013)
 
 | البند | التفاصيل |
 |---|---|
 | الغرض التجاري | لا منطق أعمال؛ طبقة الوصول إلى قاعدة البيانات التي ستستخدمها كل وحدات البيانات القادمة، وبيئة PostgreSQL محلية قابلة لإعادة الإنتاج |
-| حالة التطوير | IMPLEMENTED في CH-0007 كبنية: الاتصال، الفحص، أوامر الترحيل. **لا نماذج ولا ترحيلات ولا استعلامات أعمال** |
+| حالة التطوير | IMPLEMENTED في CH-0007 كبنية (الاتصال، الفحص، أوامر الترحيل)؛ منذ CH-0013 يضم المخطط الأول: 12 نموذجاً في `schema.prisma`، ترحيلان مراجَعان، بذر idempotent (`prisma/seed.ts`) وكتالوج الصلاحيات (`src/authorization/`). **لا استعلامات أعمال بعد** (الوحدات MOD-01..MOD-03 ستبنيها) |
 | الملفات | `compose.yaml`, `.env.example` (جذري — مصدر إعدادات القاعدة)، `docker/postgres/initdb/10-roles.sh` (CH-0008)، `backend/prisma.config.ts`, `backend/prisma/schema.prisma`, `backend/src/prisma/prisma.module.ts`, `backend/src/prisma/prisma.service.ts`, `backend/src/config/database-url.ts` و`env-files.ts` (CH-0008)، `backend/src/generated/prisma/*` (مولَّد، غير مُلتزم)، `backend/.env.example` (تجاوزات اختيارية) |
 | الوظيفة الرئيسية | (1) `PrismaModule` عام يصدّر `PrismaService`؛ (2) `PrismaService` ينشئ `PrismaClient` واحداً بمحوّل `PrismaPg` من `DATABASE_URL` (أو يعمل بلا عميل عندما يغيب المتغير خارج الإنتاج)، يوفّر `db` للوحدات و`ping()` للجاهزية ويغلق الاتصال عند الإيقاف؛ (3) `compose.yaml` يشغّل PostgreSQL 18 بمجلد دائم وفحص صحي؛ (4) `10-roles.sh` ينشئ دور الترحيلات (مالك القاعدة) ودور التطبيق (DML) ويُعيد تطبيق كلمات المرور والامتيازات عند إعادة تشغيله؛ (5) `database-url.ts` يشتق عناوين الاتصال للدورين من متغيرات `.env` الجذري (CH-0008) |
 | قواعد الأعمال | لا شيء |
-| الكيانات | لا شيء (القسم 06) |
+| الكيانات | 12 جدولاً و5 تعدادات (6.2) وقيود يدوية (6.3) — CH-0013 |
 | نقاط النهاية | لا شيء مباشر؛ يغذّي API-004 |
 | الصلاحيات المطلوبة | لا ينطبق |
 | الاعتماديات | `@prisma/client`, `@prisma/adapter-pg`, `pg`, `prisma` (dev), `dotenv` (dev، للـ CLI فقط)، `@nestjs/config` |
 | قواعد التحقق | `DATABASE_URL` يبدأ بـ `postgresql://` أو `postgres://`؛ القيمة الفارغة تُعامل كغائبة؛ عند غيابه يُشتق من `DB_APP_PASSWORD` (إلزامي للاشتقاق) + `DB_APP_USER`/`DB_HOST`/`POSTGRES_PORT` (1–65535)/`POSTGRES_DB` بافتراضيات مشتركة مع compose؛ في الإنتاج يجب توفر أحدهما (ENV-08، ENV-13..ENV-18) |
 | القيود الحالية | دور migrator يحمل `CREATEDB` محلياً (KI-027)؛ في التطوير يقرأ الخادم `.env` الجذري كاملاً (KI-028)؛ لا نسخ احتياطي آلي؛ Docker Desktop يجب أن يعمل قبل الخادم وإلا أعادت الجاهزية 503 `down` |
 | الأخطاء المعروفة | لا شيء مرصود |
-| التحسينات المستقبلية | أول مخطط وفق التصميم المقترح في 6.6 (بعد اعتماد المالك) + ترحيل + بذر؛ نسخ احتياطي مجدول؛ `compose.prod.yaml` بلا نشر منفذ مع خدمة الخادم ودور migrator بلا `CREATEDB`؛ Redis لاحقاً |
+| التحسينات المستقبلية | ~~أول مخطط + ترحيل + بذر~~ (CH-0013)؛ نسخ احتياطي مجدول؛ `compose.prod.yaml` بلا نشر منفذ مع خدمة الخادم ودور migrator بلا `CREATEDB`؛ Redis لاحقاً |
 
 ### MOD-FE-00 — Frontend shell (template) — `REMOVED` (CH-0005)
 
@@ -1882,7 +2041,7 @@ sequenceDiagram
 | البند | التفاصيل |
 |---|---|
 | الغرض | إدارة المستخدمين بأنواعهم (معلم/طالب/ولي أمر/موظف)، الملفات الشخصية، الأدوار والصلاحيات المخصّصة، ربط أولياء الأمور بالطلاب |
-| الكيانات | `NOT YET DETERMINED` (متوقع: users, roles, permissions, role_permissions, user_roles, guardian_students)؛ تصميم مقترح تفصيلي في 6.6 مع مراجعة السلامة في 6.6.1 — PROPOSED |
+| الكيانات | **موجودة في القاعدة منذ CH-0013 (بلا منطق خدمة بعد):** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `student_profiles`, `employee_profiles`, `guardian_students` (6.2)؛ كتالوج الصلاحيات والأدوار النظامية مبذورة (7.3)؛ `refresh_tokens`/`verification_tokens` لـ MOD-01 |
 | الاعتماديات | MOD-01 |
 | واجهة تجريبية (CH-0005) | `frontend/src/pages/UsersPage.tsx` — المسار `/users`؛ جدول ببيانات محلية (`mockUsers`)؛ زر الإضافة يعرض "غير منفّذ". مفاتيح الأدوار في `frontend/src/auth/roles.ts`. لا منطق خادم |
 
@@ -2160,6 +2319,12 @@ npm install <package>
 | ENV-16 | `DB_APP_PASSWORD` | إلزامي لـ compose؛ في الخادم اختياري خارج الإنتاج (بدونه لا يُشتق `DATABASE_URL` → `not_configured`) | — | `compose.yaml` → `10-roles.sh`؛ `env.schema.ts` | كلمة مرور دور التطبيق — **سر**. تغييرها = تعديل `.env` ثم إعادة تشغيل `10-roles.sh` ثم إعادة تشغيل الخادم |
 | ENV-17 | `DB_HOST` | اختياري | `127.0.0.1` | `env.schema.ts`؛ `prisma.config.ts` | مضيف القاعدة الذي يتصل به الخادم وPrisma CLI (لا `localhost` لتجنّب IPv6)؛ داخل Compose يُفضَّل ضبط العنوانين صراحةً بدل تغييره |
 | ENV-18 | `MIGRATION_DATABASE_URL` | اختياري | — (يُشتق من `DB_MIGRATOR_*`؛ وإلا `DATABASE_URL`) | `backend/prisma.config.ts` فقط | سلسلة اتصال **دور الترحيلات** لأوامر Prisma؛ تُضبط صراحةً في CI/الإنتاج |
+| ENV-19 | `SEED_ACADEMY_SLUG` | إلزامي للبذر فقط | — | `backend/prisma/seed.ts` فقط (يقرأ ملفات env بترتيب `env-files.ts`؛ ليس في `env.schema.ts`) | معرّف الأكاديمية النصي `^[a-z0-9][a-z0-9-]{1,62}$` → `academy.slug` عند أول بذر فقط (CH-0013) |
+| ENV-20 | `SEED_ACADEMY_NAME_AR` | إلزامي للبذر فقط | — | `backend/prisma/seed.ts` | اسم الأكاديمية بالعربية (اللغة المرجعية — D1) → `academy.name.ar` |
+| ENV-21 | `SEED_ACADEMY_NAME_EN` | اختياري | — | `backend/prisma/seed.ts` | الاسم بالإنجليزية → `academy.name.en` |
+| ENV-22 | `SEED_ACADEMY_TIMEZONE` | إلزامي للبذر فقط | — (بلا افتراضي مرتبط ببلد — قرار المالك CH-0012) | `backend/prisma/seed.ts` | اسم منطقة زمنية IANA يُتحقق منه بـ `Intl.DateTimeFormat` → `academy.timezone` |
+| ENV-23 | `SEED_ACADEMY_CURRENCY` | إلزامي للبذر فقط | — | `backend/prisma/seed.ts` | رمز ISO 4217 بثلاثة أحرف كبيرة (قيد CHECK في القاعدة) → `academy.currency` |
+| ENV-24 | `SEED_ACADEMY_LOCALE` | اختياري | `ar` | `backend/prisma/seed.ts` | `ar`/`en`/`tr` → `academy.default_locale` |
 
 - القوالب: `.env.example` (جذري — **المصدر الوحيد لإعدادات القاعدة** منذ CH-0008: `POSTGRES_*`، `DB_MIGRATOR_*`، `DB_APP_*`، `DB_HOST`)، `backend/.env.example` (إعدادات HTTP وتجاوزات اختيارية)، `frontend/.env.example` — أسماء وافتراضيات وقيم وهمية فقط. تُنسخ إلى `.env`، `backend/.env` (اختياري)، `frontend/.env.local` المتجاهَلة في Git (تم التحقق في CH-0007 وCH-0008 أن `git ls-files` لا يرصد أياً منها وأن كلمات المرور الحقيقية الثلاث لا تظهر في أي ملف مرصود). ~~بيانات اعتماد القاعدة تتكرر في ملفين~~ (KI-023 RESOLVED).
 - الخادم يحمّل `backend/.env.local` ثم `backend/.env` ثم `../.env` الجذري (`src/config/env-files.ts`؛ الأول يغلب لكل متغير، ومتغيرات العملية تغلب الملفات) ثم يتحقق بمخطط zod؛ أي قيمة غير صالحة تُفشل الإقلاع برسالة تسمّي المتغير. المتغيرات غير المعلنة في المخطط تُسقَط من `ConfigService` (لكنها تبقى في `process.env` — KI-028). Prisma CLI يحمّل `backend/.env` ثم `../.env` بـ dotenv بالترتيب نفسه.
@@ -2310,6 +2475,7 @@ npm install <package>
 | TEST-004 | `backend/src/health/health.service.spec.ts` | وحدة (4) | `check()` يُعيد `ok` والإصدار والبيئة؛ `readiness()` مع `PrismaService` وهمي: up / down (مع رسالة السائق) / not_configured | ناجح (CH-0007) |
 | TEST-005 | `backend/test/app.e2e-spec.ts` | شامل (7) | `GET /api/health` JSON؛ غياب `X-Powered-By`؛ `404` JSON تحت البادئة؛ `GET /` → `404` HTML؛ CORS للأصل المسموح فقط؛ `GET /api/health/ready` (200/up مع قاعدة حية، وإلا 503 بجسم متسق)؛ `/api/docs-json` يحوي المسارين | ناجح (CH-0007، CH-0008 — مع القاعدة حية بدور app) |
 | TEST-006 | `backend/src/config/database-url.spec.ts` | وحدة (6) | `buildPostgresUrl()`: التجميع والترميز percent للكلمة والمستخدم واسم القاعدة، وبقاء الكلمات الآمنة كما هي؛ `postgresUrlFromEnv()`: undefined بلا كلمة مرور الدور، الافتراضيات المشتركة، متغيرات الدور والمضيف/المنفذ/القاعدة، رفض منفذ غير صالح | ناجح (CH-0008) |
+| TEST-007 | `backend/test/db.e2e-spec.ts` | شامل على القاعدة الحية (9؛ تُتخطّى كلها حين لا تُفتح اتصالة بدور التطبيق) | الترحيلان مطبَّقان و12 جدولاً بالضبط؛ `uuidv7` مولَّد في القاعدة (الإصدار 7 وطابع زمني حديث)؛ سلوك الحذف: Cascade للتابعين، Restrict (`23001`) لدور ممنوح وصلاحية مرتبطة، SetNull لـ `assigned_by` و`actor_user_id`؛ القيود: صف `academy` واحد، `ar` إلزامية، عملة ISO، معرّف دخول إلزامي، أحرف صغيرة، `username` فريد، الهاتف غير فريد، ولي ≠ طالب، ولي أساسي واحد؛ إلحاقية `audit_logs` (رفض `UPDATE`/`DELETE`، السماح بإفراغ الفاعل وحده)؛ دور التطبيق DML فقط (لا superuser، لا `CREATE` على `public`، لا `TRUNCATE`؛ امتيازات الجداول الـ12)؛ فهرس لكل FK والفهرس الجزئي؛ idempotency البذر (الكتالوج مرتين = لا إضافات؛ 56 صلاحية نشطة؛ `academy_admin` 56؛ `student` وحده افتراضي للتسجيل؛ صف `academy` لا يتكرر). كل اختبار بيانات داخل معاملة تُلغى | ناجح 9/9 (CH-0013) |
 
 ### 13.3 أوامر الاختبار
 
@@ -2380,12 +2546,14 @@ npm install <package>
 - لا اختبارات للواجهة، بما فيها هيكل CH-0005: التوجيه، i18n (تطابق المفاتيح يحميه `tsc` فقط)، بوابات الأدوار، المصادقة التجريبية.
 - اختبارات الخادم تغطي البيئة والفحص الحي والجاهزية والحدود (CORS / 404 / Swagger / الرؤوس) فقط؛ `ValidationPipe` غير مُختبَر على DTO فعلي (KI-022).
 - حالة "القاعدة متوقفة" للجاهزية مُختبَرة على مستوى الوحدة فقط (TEST-004 بـ `PrismaService` وهمي)؛ الاختبار الشامل يتكيّف مع البيئة ولا يفرض الحالتين. لا اختبارات تكامل تستخدم قاعدة مؤقتة (testcontainers) بعد.
+- TEST-007 يعمل على قاعدة التطوير المحلية نفسها (لا قاعدة اختبار منفصلة): اختبارات البيانات تُلغى بمعاملات، لكن اختبار البذر يكتب الكتالوج فعلاً (idempotent)؛ قاعدة اختبار مستقلة أو CI بقاعدة مؤقتة لاحقاً.
+- لا اختبار لسيناريو فشل ترحيل (الإجراء اليدوي في 6.6.5 (و)).
 - لا تغطية مقاسة.
 - لا تكامل مستمر (CI).
 
 ### 13.6 الاختبارات الفاشلة المعروفة
 
-لا شيء معروف (ولا شيء تم تشغيله في الخادم).
+لا شيء معروف. آخر تشغيل (CH-0013، 2026-10-29 18:19): وحدة 21/21، شامل 16/16 (TEST-005 7 + TEST-007 9)، `lint` نظيف، `tsc --noEmit` نظيف.
 
 ---
 
@@ -2588,8 +2756,8 @@ docker compose start postgres
 | FS-011 | إدارة الأكاديمية | MOD-02 | PLANNED | — | |
 | FS-012 | النشر المستقل لكل أكاديمية | MOD-02 / Ops | PLANNED | — | ADR-008 |
 | FS-013 | قاعدة بيانات مخصّصة لكل أكاديمية | MOD-02 / DB | PLANNED | — | ADR-014 (Prisma + PostgreSQL)، ADR-008 |
-| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PLANNED | — | شاشة تجريبية ببيانات محلية: `frontend/src/pages/UsersPage.tsx` (CH-0005) |
-| FS-015 | الأدوار والصلاحيات المخصّصة | MOD-03 | PLANNED | — | بوابة واجهة فقط حسب الدور (`frontend/src/layout/navigation.ts`, `auth/RequireAuth.tsx`)؛ لا فرض في الخادم؛ لا أدوار مخصّصة |
+| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PLANNED | — | شاشة تجريبية ببيانات محلية: `frontend/src/pages/UsersPage.tsx` (CH-0005)؛ جداول القاعدة جاهزة منذ CH-0013 (FS-040) بلا خدمة أو API |
+| FS-015 | الأدوار والصلاحيات المخصّصة | MOD-03 | PLANNED | — | بوابة واجهة فقط حسب الدور (`frontend/src/layout/navigation.ts`, `auth/RequireAuth.tsx`)؛ لا فرض في الخادم؛ لا أدوار مخصّصة. كتالوج الصلاحيات والأدوار النظامية مبذورة في القاعدة منذ CH-0013 (7.3) |
 | FS-016 | الدورات والمستويات | MOD-04 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/CoursesPage.tsx` (CH-0005) |
 | FS-017 | الفصول والمجموعات | MOD-05 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/ClassesPage.tsx` (CH-0005) |
 | FS-018 | الدروس المباشرة | MOD-06 | PLANNED | — | مزود البث غير محدد؛ شاشة تجريبية مشتركة: `frontend/src/pages/LessonsPage.tsx` (CH-0005) |
@@ -2606,7 +2774,7 @@ docker compose start postgres
 | FS-029 | التكاملات الخارجية | MOD-15 | PLANNED | — | |
 | FS-030 | واجهات للتطبيقات المحمولة | MOD-15 | PLANNED | — | |
 | FS-031 | تكامل الواجهة مع الخادم (CORS/proxy/HTTP client) | MOD-00 / MOD-FE-01 | IMPLEMENTED | `backend/src/app.setup.ts`, `frontend/vite.config.ts`, `frontend/src/api/*`, `frontend/src/components/ServerStatusCard.tsx` | CH-0006 (KI-007 RESOLVED). مستخدم في `GET /api/health` فقط؛ شاشات الوحدات ما زالت على `mock/data.ts` |
-| FS-032 | قاعدة بيانات + ORM + ترحيلات | MOD-16 | PARTIALLY_IMPLEMENTED | `compose.yaml`, `backend/prisma/schema.prisma`, `backend/prisma.config.ts`, `backend/src/prisma/*` | CH-0007: PostgreSQL 18 محلية + Prisma 7 موصول وجاهزية تفحصه؛ CH-0008: الأدوار المحدودة ومصدر الإعدادات الواحد؛ **لا نماذج ولا ترحيلات بعد** — التصميم الأول مقترح في 6.6 (ADR-014، ADR-016، ADR-018، ADR-020) |
+| FS-032 | قاعدة بيانات + ORM + ترحيلات | MOD-16 | IMPLEMENTED | `compose.yaml`, `backend/prisma/schema.prisma`, `backend/prisma/migrations/*`, `backend/prisma.config.ts`, `backend/src/prisma/*` | CH-0007: PostgreSQL 18 محلية + Prisma 7 موصول وجاهزية تفحصه؛ CH-0008: الأدوار المحدودة ومصدر الإعدادات الواحد؛ CH-0013: أول مخطط (12 جدولاً) وترحيلان مطبَّقان (ADR-014، ADR-016، ADR-018، ADR-020) |
 | FS-033 | إعداد النشر (Docker/CI) | Ops | PARTIALLY_IMPLEMENTED | `compose.yaml` | Docker Compose للتطوير المحلي فقط (CH-0007)؛ لا Dockerfile للتطبيقين ولا CI (14.11) |
 | FS-034 | هيكل واجهة المنتج: تنقل، تخطيط، دخول تجريبي، معاينة الأدوار، 13 شاشة وحدة ببيانات محلية، 404/403 | MOD-FE-01 | IMPLEMENTED (نموذج أولي) | `frontend/src/app/*`, `layout/*`, `auth/*`, `components/*`, `i18n/*`, `mock/data.ts`, `pages/*` | CH-0005؛ ADR-009..ADR-012. بيانات محلية فقط؛ تُستبدل بطبقة API (FS-031) |
 | FS-035 | التحكم بالإصدارات: مستودع Git + تجاهل الملفات + تطبيع LF | Tooling | IMPLEMENTED | `.git/`, `.gitignore`, `.gitattributes` | CH-0004؛ commit الأساس `127cb1d` على `main`؛ لا remote (ADR-013) |
@@ -2614,6 +2782,7 @@ docker compose start postgres
 | FS-037 | فحص الجاهزية `GET /api/health/ready` (قاعدة البيانات) مع عرض حالتها في بطاقة الواجهة | MOD-00 / MOD-16 / MOD-FE-01 | IMPLEMENTED | `backend/src/health/*`, `backend/src/prisma/prisma.service.ts`, `frontend/src/api/health.ts`, `frontend/src/components/ServerStatusCard.tsx` | CH-0007؛ API-004؛ ADR-017 |
 | FS-038 | بيئة PostgreSQL محلية قابلة لإعادة الإنتاج: Docker Compose، مجلد دائم، فحص صحي، loopback فقط، أسرار خارج Git | MOD-16 / Ops | IMPLEMENTED | `compose.yaml`, `.env.example` | CH-0007؛ ADR-016 |
 | FS-039 | أدوار قاعدة بيانات محدودة الصلاحيات (`articode_app` للتطبيق، `articode_migrator` للترحيلات، superuser للإدارة فقط) + مصدر واحد لإعدادات القاعدة (`.env` الجذري) مع اشتقاق عناوين الاتصال | MOD-16 / Ops / Security | IMPLEMENTED | `docker/postgres/initdb/10-roles.sh`, `compose.yaml`, `.env.example`, `backend/src/config/database-url.ts`, `backend/src/config/env-files.ts`, `backend/src/config/env.schema.ts`, `backend/prisma.config.ts` | CH-0008؛ ADR-019؛ KI-023 وKI-024 RESOLVED |
+| FS-040 | المخطط الأول لقاعدة الأكاديمية: 12 جدولاً (هوية الأكاديمية، المستخدمون، الأدوار والصلاحيات، الملفات التعريفية، أولياء الأمور، رموز الجلسات والتحقق، سجل التدقيق الإلحاقي) + بذر idempotent للصلاحيات والأدوار النظامية وصف الأكاديمية + اختبارات على القاعدة الحية | MOD-16 / MOD-03 / MOD-01 / MOD-02 (كيانات فقط) | IMPLEMENTED | `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261029150949_init_identity_academy/migration.sql`, `backend/prisma/migrations/20261029151839_audit_logs_allow_actor_set_null/migration.sql`, `backend/prisma/seed.ts`, `backend/src/authorization/*`, `backend/test/db.e2e-spec.ts` | CH-0013؛ ADR-020 ACCEPTED؛ TEST-007. بيانات وقيود فقط — لا خدمات ولا نقاط نهاية ولا فرض صلاحيات (FS-010، FS-011، FS-014، FS-015 ما زالت PLANNED) |
 
 ---
 
@@ -2649,6 +2818,7 @@ docker compose start postgres
 | KI-026 | وسم `latest` لحزمة `prisma` على npm كان إصداراً مرشّحاً (`8.0.0-rc.28`) بينما `@prisma/client` مستقر على 7.10.1؛ `npm install prisma` بلا إصدار قد يجلب RC غير متوافق. كما منع npm 11 سكربتات تثبيت `prisma`/`@prisma/engines` (`allowScripts`) ومع ذلك عمل `generate` و`migrate status` | Tooling | منخفضة | `npm view prisma dist-tags` وتحذيرات `install-scripts` في CH-0007 | الإبقاء على `^7` حتى استقرار 8 ومراجعة دليل الترقية؛ مراقبة الحاجة لاعتماد السكربتات عند أول `migrate dev` | OPEN |
 | KI-027 | دور الترحيلات `articode_migrator` يحمل سمة `CREATEDB` محلياً لأن `prisma migrate dev` ينشئ قاعدة ظلية مؤقتة؛ في الإنتاج لا يحتاجها (`migrate deploy` فقط) | DB / Security | منخفضة (تطوير فقط) | `docker/postgres/initdb/10-roles.sh` | إنشاء دور الإنتاج بلا `CREATEDB` (إجراء منفصل في 14.11)، أو `shadowDatabaseUrl` إلى قاعدة ظلية مُعدّة مسبقاً | ACCEPTED (قيد تطوير مقصود — CH-0008) |
 | KI-028 | في التطوير يقرأ الخادم `.env` الجذري كاملاً (ليشتق `DATABASE_URL`)، فتصل `POSTGRES_PASSWORD` (superuser) و`DB_MIGRATOR_PASSWORD` إلى `process.env` لعملية الخادم رغم أن `validateEnv` تُسقطهما من `ConfigService` | Config / Security | منخفضة (جهاز المطور نفسه؛ الملف مقروء له أصلاً) | `backend/src/config/env-files.ts`؛ `@nestjs/config` (`assignVariablesToProcess`) | في الإنتاج تُحقن `DATABASE_URL` مباشرة بلا ملفات؛ محلياً يمكن نقل كلمتَي superuser/migrator إلى ملف يقرؤه compose فقط إن لزم | ACCEPTED (CH-0008) |
+| KI-029 | trigger الإلحاق على `audit_logs` في الترحيل الأول (مستوى العبارة، `BEFORE UPDATE OR DELETE OR TRUNCATE`) كان يرفض أيضاً الـ `UPDATE` الداخلي الذي ينفّذه `ON DELETE SET NULL` على `actor_user_id`، فيفشل `DELETE FROM users` لأي مستخدم (حتى بلا سجلات تدقيق، لأن trigger العبارة يعمل ولو بصفر صفوف) | DB / MOD-03 | عالية لو وصلت للإنتاج (لا أثر فعلي: اكتُشفت قبل الالتزام) | TEST-007 مباشرة بعد تطبيق الترحيل الأول: `error: audit_logs is append-only` عند حذف مستخدم | السبب مؤكد: تعارض بين D5 (إلحاقي) وP11-5 (`SetNull`). الحل: ترحيل ثانٍ `20261029151839_audit_logs_allow_actor_set_null` — trigger على مستوى الصف يسمح فقط بتحويل `actor_user_id` من قيمة إلى `NULL` مع تطابق بقية الأعمدة (`to_jsonb(NEW) - 'actor_user_id' = to_jsonb(OLD) - 'actor_user_id'`)، وtrigger عبارة مستقل لـ `TRUNCATE` | RESOLVED (CH-0013؛ متحقق بـ TEST-007: الحذف يُفرغ الفاعل ويُبقي السجل، وأي تعديل آخر يُرفض) |
 
 ---
 
@@ -2902,7 +3072,7 @@ docker compose start postgres
 | الخيار المقترح | قاعدة لكل أكاديمية **بلا** `academy_id`؛ `uuid` بـ `uuidv7()`؛ Prisma PascalCase + `@@map`/`@map` إلى `snake_case` جمع؛ `jsonb` للنصوص متعددة اللغات التي يكتبها المستخدم؛ `enum` Prisma للمجموعات الصغيرة المستقرة ونص للمفاتيح القابلة للتوسع؛ `deleted_at` في `users` فقط و`Restrict` افتراضياً؛ جدول `permissions` مبذور من الكود؛ `timestamptz` لكل الأزمنة؛ فهرس صريح لكل FK؛ ما لا يعبّر عنه Prisma (فهرس الصف الواحد لـ `academy`، قيد `guardian <> student`، trigger إلحاق `audit_logs`) يُضاف يدوياً في SQL الترحيل بعد `--create-only` |
 | السبب | عزل القاعدة يلغي الحاجة إلى تصفية كل استعلام بـ `academy_id` ويقلّل خطر التسريب بين الأكاديميات؛ UUIDv7 يعطي مفاتيح غير قابلة للتخمين مع محلّية فهرس جيدة؛ `snake_case` اصطلاح PostgreSQL؛ `jsonb` يطابق نوع الواجهة ويتوسع للغات جديدة بلا ترحيل؛ الحذف المنطقي محصور في المستخدمين لأن سجلاتهم تُشار إليها تاريخياً (درجات، مدفوعات) |
 | النتائج المتوقعة | ارتباط بـ PostgreSQL ≥ 18 (`uuidv7()`)؛ الاستعلام داخل `jsonb` أثقل قليلاً من الأعمدة؛ تعديل `enum` يحتاج ترحيلاً؛ إضافة `academy_id` لاحقاً (إن تغيّر القرار) ترحيل واسع؛ كل ترحيل يُراجع يدوياً قبل الالتزام |
-| الحالة | **PROPOSED — معتمد جزئياً (CH-0009، 2026-10-29):** D1 (`jsonb` بلغات `ar`/`en`/`tr` مع fallback)، D4 (`uuidv7()` داخل PostgreSQL 18 — توافقه مع Prisma 7.10.1 متحقق منه)، D5 (`audit_logs` إلحاقي مع قواعد حماية) معتمدة من المالك؛ D2، D3، D6..D8 بانتظاره؛ D9/D10 في ADR-021؛ يتحول إلى ACCEPTED مع إدخال CH الذي ينشئ الترحيل الأول |
+| الحالة | **ACCEPTED (CH-0013، 2026-10-29):** D1/D4/D5 (CH-0009) وD2/D3/D6/D7/D8 (CH-0012) معتمدة من المالك ومنفَّذة في الترحيل الأول `20261029150949_init_identity_academy` (6.2/6.3)؛ تعديل واحد على D5/P11-5 في الترحيل الثاني (KI-029: trigger الإلحاق يسمح بإفراغ `actor_user_id` فقط)؛ D9/D10 في ADR-021 (PROPOSED) |
 | المكونات المتأثرة | `backend/prisma/schema.prisma`, `backend/prisma/migrations/*`, MOD-01, MOD-02, MOD-03, MOD-14, القسم 06 |
 
 ### ADR-021 — قاعدة مركزية للمنصة (control plane) مستقلة عن قواعد الأكاديميات، وتنسيق ترحيلات Prisma عبر قواعد متعددة
@@ -2950,7 +3120,7 @@ docker compose start postgres
 
 ### 18.1 المرحلة الحالية
 
-**Stage 1 — Foundation (جارية منذ 2026-10-29).** Git مُفعّل (CH-0004)؛ الواجهة هيكل منتج تجريبي ببيانات محلية (CH-0005، سبق جدول Stage 2 لغرض المعاينة — ADR-012)؛ الخادم مهيأ (إعدادات مُتحقَّق منها، `ValidationPipe`، CORS، `/api`، Swagger، `health`) ومربوط بالواجهة (CH-0006)؛ PostgreSQL 18 في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)؛ أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). المتبقي: `engines`، أول مخطط بيانات وترحيل (التصميم المقترح في 6.6 بانتظار اعتماد المالك)، CI.
+**Stage 1 — Foundation (جارية منذ 2026-10-29).** Git مُفعّل (CH-0004)؛ الواجهة هيكل منتج تجريبي ببيانات محلية (CH-0005، سبق جدول Stage 2 لغرض المعاينة — ADR-012)؛ الخادم مهيأ (إعدادات مُتحقَّق منها، `ValidationPipe`، CORS، `/api`، Swagger، `health`) ومربوط بالواجهة (CH-0006)؛ PostgreSQL 18 في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)؛ أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). أول مخطط بيانات (12 جدولاً) وترحيلاه وبذره على قاعدة التطوير (CH-0013). المتبقي: `engines`، CI؛ ثم Stage 2 (MOD-01 المصادقة فوق الجداول القائمة).
 
 ### 18.2 المتطلبات المتبقية
 
@@ -2960,7 +3130,7 @@ docker compose start postgres
 
 | المرحلة | المحتوى | الاعتماديات | الحالة |
 |---|---|---|---|
-| Stage 1 — Foundation | ~~`git init` + `.gitignore`~~ (CH-0004)؛ ~~تثبيت اعتماديات الخادم وملف القفل~~ (CH-0003)؛ ~~`@nestjs/config` + تحقق البيئة؛ `ValidationPipe`؛ CORS؛ بادئة `/api`؛ Swagger~~ (CH-0006)؛ ~~اختيار ORM~~ (ADR-014: Prisma)؛ ~~Docker Compose لـ PostgreSQL + ربط Prisma + فحص الجاهزية~~ (CH-0007)؛ ~~أدوار قاعدة بيانات محدودة + مصدر إعدادات واحد~~ (CH-0008)؛ **المتبقي:** `engines`؛ أول مخطط Prisma + ترحيل (6.6 بانتظار الاعتماد)؛ CI أساسي (lint/test/build) | KI-012 | PARTIALLY_IMPLEMENTED (المتبقي: المخطط الأول وCI) |
+| Stage 1 — Foundation | ~~`git init` + `.gitignore`~~ (CH-0004)؛ ~~تثبيت اعتماديات الخادم وملف القفل~~ (CH-0003)؛ ~~`@nestjs/config` + تحقق البيئة؛ `ValidationPipe`؛ CORS؛ بادئة `/api`؛ Swagger~~ (CH-0006)؛ ~~اختيار ORM~~ (ADR-014: Prisma)؛ ~~Docker Compose لـ PostgreSQL + ربط Prisma + فحص الجاهزية~~ (CH-0007)؛ ~~أدوار قاعدة بيانات محدودة + مصدر إعدادات واحد~~ (CH-0008)؛ ~~أول مخطط Prisma + ترحيل + بذر~~ (CH-0013)؛ **المتبقي:** `engines`؛ CI أساسي (lint/test/build + حارس الانجراف) | KI-012 | PARTIALLY_IMPLEMENTED (المتبقي: CI و`engines`) |
 | Stage 1b — UI prototype (خارج التسلسل الأصلي) | هيكل واجهة المنتج: Ant Design، توجيه، i18n/RTL، دخول تجريبي، معاينة الأدوار، 13 شاشة ببيانات محلية (MOD-FE-01، ADR-009..ADR-012) | — | IMPLEMENTED (CH-0005)؛ أول ربط حقيقي بالخادم عبر `GET /api/health` في CH-0006؛ استبدال بيانات الوحدات في Stage 2 وما بعدها |
 | Stage 2 — Identity & Academy | MOD-01 المصادقة؛ MOD-03 المستخدمون والأدوار؛ MOD-02 الأكاديمية؛ MOD-14 الإعدادات؛ حسم ADR-008 | Stage 1 | PLANNED |
 | Stage 3 — Academic core | MOD-04 الدورات؛ MOD-05 الفصول؛ MOD-07 الجدولة؛ MOD-06 الدروس | Stage 2 | PLANNED |
@@ -2976,7 +3146,7 @@ docker compose start postgres
 4. ~~إدخال i18n/RTL في الواجهة قبل أي شاشة منتج~~ — أُنجز في CH-0005 (ADR-010).
 5. ~~ربط الواجهة بالخادم (FS-031)~~ — أُنجز في CH-0006 (ADR-015).
 6. اعتماد إطار اختبار للواجهة (Vitest + Testing Library) قبل تراكم الشاشات (13.5).
-7. ~~تثبيت Docker Desktop وربط Prisma + PostgreSQL~~ — أُنجز في CH-0007 (ADR-016..ADR-018). ~~دور قاعدة بيانات محدود للتطبيق (KI-024)~~ — أُنجز في CH-0008 (ADR-019). التالي: اعتمد المالك D1/D4/D5 (CH-0009)؛ المتبقي قرارات D2، D3، D6..D10 في 6.6 وD11..D22 في 6.7.11 — **المانع منها للترحيل الأول فقط D2, D3, D6, D7, D8, D11, D20, D21, D22 مع توصيات نهائية ودليل تنفيذ في 6.6.5 (CH-0011)**، ثم `schema.prisma` + أول ترحيل + بذر (6.6.4 المرحلة 1 / 6.6.5 و)، ثم MOD-01 (JWT) لاستبدال المصادقة التجريبية في الواجهة (KI-017).
+7. ~~تثبيت Docker Desktop وربط Prisma + PostgreSQL~~ — أُنجز في CH-0007 (ADR-016..ADR-018). ~~دور قاعدة بيانات محدود للتطبيق (KI-024)~~ — أُنجز في CH-0008 (ADR-019). التالي: اعتمد المالك D1/D4/D5 (CH-0009)؛ المتبقي قرارات D2، D3، D6..D10 في 6.6 وD11..D22 في 6.7.11 — **المانع منها للترحيل الأول فقط D2, D3, D6, D7, D8, D11, D20, D21, D22 مع توصيات نهائية ودليل تنفيذ في 6.6.5 (CH-0011)** — اعتُمدت (CH-0012) ونُفِّذ `schema.prisma` + الترحيلان + البذر (CH-0013). التالي: MOD-01 (JWT، argon2id، المدير الأول، الدعوات) فوق الجداول القائمة لاستبدال المصادقة التجريبية في الواجهة (KI-017)، ثم MOD-03.
 
 ### 18.5 التحسينات المستقبلية
 
@@ -3206,6 +3376,24 @@ docker compose start postgres
 | تغييرات كاسرة | لا شيء |
 | المنفّذ | Claude Code (Fable 5.1، الجلسة `articodeacademy-ad`) بطلب من مالك المشروع |
 
+### CH-0013 — أول مخطط لقاعدة الأكاديمية: 12 جدولاً في Prisma 7، ترحيلان مطبَّقان على قاعدة التطوير، بذر idempotent، كتالوج الصلاحيات، اختبارات TEST-007، وإصلاح KI-029
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ والوقت | 2026-10-29، بين 18:05 و18:35 تقريباً (UTC+03:00)؛ المصدر: طوابع الترحيلين بتوقيت UTC (`20261029150949`, `20261029151839`)، طوابع تشغيل الاختبارات (18:19) وطابع حفظ هذه الوثيقة. حالة Git: ملتزم محلياً بعد كتابة هذا الإدخال (commit الترحيل)؛ لا push |
+| النوع | DATABASE, ADDED, CONFIGURATION, FIXED |
+| الوحدة | MOD-16 (المخطط والبذر)، MOD-03 وMOD-01 وMOD-02 (كيانات فقط)، Tooling (tsx)، Docs |
+| الوصف | **(1) المخطط:** 12 نموذجاً و5 تعدادات في `backend/prisma/schema.prisma` وفق 6.6 والقرارات المعتمدة (CH-0009/CH-0012) والتعديلات 6.6.5 (د): snake_case بـ `@@map`/`@map`، `uuidv7()` من القاعدة، `jsonb` للنصوص، `employee_profiles` بـ `kind` (D20)، `username` + بريد اختياري (D13)، `full_name_latin` (D12)، أعمدة القفل، `family_id`، `is_default_for_signup`، `phone` غير فريد (D21)، `audit_logs.id uuid` (D22)، `user_roles.role_id` بـ Restrict. **(2) الترحيل الأول** `20261029150949_init_identity_academy`: وُلِّد بـ `prisma migrate dev --create-only`، رُوجع SQL وفق قائمة 6.6.5 (و) الخطوة 3 (12 `CREATE TABLE`، 25 فهرساً، 13 FK بسلوك الحذف المصمَّم، لا `DROP`، لا اسم دور، لا امتداد)، ثم أُلحق SQL يدوي: 9 قيود CHECK، الفهرس الجزئي `uq_guardian_students_primary`، دالة وtrigger الإلحاق لـ `audit_logs`. طُبّق بـ `prisma migrate dev` على `articode_academy` المحلية (كانت 0 جداول؛ نسخة `pg_dump -Fc` شكلية أُخذت قبله إلى مجلد الجلسة المؤقت). **(3) FIXED — KI-029:** TEST-007 كشف أن trigger العبارة يرفض `ON DELETE SET NULL` على `actor_user_id` فيمنع حذف المستخدمين؛ أُضيف الترحيل الثاني `20261029151839_audit_logs_allow_actor_set_null` (يدوي: `CREATE OR REPLACE FUNCTION` + trigger صف يسمح بإفراغ الفاعل فقط + trigger عبارة لـ TRUNCATE) وطُبّق — تصحيح للأمام بلا أي عملية تدميرية. **(4) التحقق:** `migrate status` = up to date؛ `migrate diff --from-config-datasource --to-schema --exit-code` = لا فرق (الكائنات اليدوية محفوظة — 6.6.1 البند 10 لم يعد UNVERIFIED)؛ `has_table_privilege`/`has_type_privilege`/`has_schema_privilege` لدور app كما صُمّم؛ كل الجداول مملوكة لـ migrator. **(5) الصلاحيات كبيانات:** `src/authorization/permission-catalog.ts` (56 مفتاحاً)، `system-roles.ts` (5 أدوار + مصفوفة 6.7.8)، `localized-text.ts` (النوع وfallback D1). **(6) البذر** `prisma/seed.ts` عبر `migrations.seed` في `prisma.config.ts` بمشغّل `tsx` (اعتمادية تطوير جديدة بموافقة المالك): معاملة واحدة بدور التطبيق؛ upsert الصلاحيات وتعليم المهمل؛ الأدوار النظامية (الافتراضيات عند الإنشاء فقط، `academy_admin` كل المفاتيح دائماً)؛ صف `academy` من `SEED_ACADEMY_*` (ENV-19..ENV-24؛ `timezone`/`currency` إلزاميان بلا افتراضي — قرار المالك) ولا يُعاد كتابته؛ لا مستخدمين. نُفِّذ مرتين بنتيجة واحدة (1/5/56/112). سكربت `prisma:seed` جديد؛ `prisma/` أُضيف إلى `lint`/`format`. **(7) الاختبارات:** TEST-007 (9) في `test/db.e2e-spec.ts`. **(8) التوثيق:** 6.1–6.4 (الحالة الفعلية، ER، القيود، الأوامر)، 6.6 (IMPLEMENTED كمرجع)، 6.6.1/6.6.4/6.6.5 (ط)، 04، 7.1/7.3، MOD-16/MOD-03، 11.3 (ENV-19..24)، 13.2/13.5/13.6 (TEST-007)، 15 (FS-032 IMPLEMENTED، FS-040 جديدة، FS-014/015)، 16 (KI-029)، 17 (ADR-020 ACCEPTED)، 18، `CLAUDE.md` |
+| السبب | طلب المالك (2026-10-29) تنفيذ أول Prisma Migration بعد اعتماد القرارات (CH-0012) وفق دليل 6.6.5 (و)، مع اختبارات العلاقات والفهارس والصلاحيات والتدقيق وبذر قابل لإعادة التشغيل، دون إنشاء الجداول الـ59 ولا القاعدة المركزية ولا أي عملية تدميرية |
+| الملفات | **جديدة (8):** `backend/prisma/migrations/migration_lock.toml`, `backend/prisma/migrations/20261029150949_init_identity_academy/migration.sql`, `backend/prisma/migrations/20261029151839_audit_logs_allow_actor_set_null/migration.sql`, `backend/prisma/seed.ts`, `backend/src/authorization/permission-catalog.ts`, `backend/src/authorization/system-roles.ts`, `backend/src/authorization/localized-text.ts`, `backend/test/db.e2e-spec.ts`؛ **معدّلة (7):** `backend/prisma/schema.prisma`, `backend/prisma.config.ts`, `backend/package.json`, `backend/package-lock.json`, `backend/.env.example`, `docs/PROJECT_DOCUMENTATION.md`, `CLAUDE.md`؛ **محلية غير ملتزمة:** `backend/.env` (`SEED_ACADEMY_*` لأكاديمية التطوير `dev-academy` بـ `UTC`/`USD` — قيم تجريبية قابلة للتغيير)؛ `backend/src/generated/prisma/` أُعيد توليده (متجاهَل) |
+| أثر قاعدة البيانات | **إضافة فقط على قاعدة التطوير المحلية `articode_academy`:** 12 جدولاً، 5 أنواع، 26 فهرساً، 9 قيود CHECK، دالة وtriggerان، جدول `_prisma_migrations` بصفّين؛ بيانات مبذورة: 1 academy، 5 roles، 56 permissions، 112 role_permissions. **لا** `migrate reset`، **لا** `db push`، **لا** حذف مجلد أو قاعدة؛ القاعدة الظلية المؤقتة لـ `migrate dev` أُنشئت وحُذفت آلياً (KI-027). لا تغيير في الأدوار أو الامتيازات (الامتيازات الافتراضية منحت app حقوق DML على الجداول الجديدة تلقائياً — متحقق) |
+| أثر API | لا شيء (لا نقاط نهاية جديدة؛ `GET /api/health/ready` على الخادم الحي = 200 `up` بعد الترحيل) |
+| أثر الصلاحيات | على مستوى القاعدة فقط: جداول الأدوار والصلاحيات وبياناتها الافتراضية موجودة؛ **لا فرض في الخادم بعد** (7.3) |
+| الاختبارات | `npm run lint` نظيف (مع `prisma/`)؛ `npx tsc --noEmit` نظيف؛ وحدة 21/21؛ شامل 16/16 (TEST-005 7 + TEST-007 9)؛ البذر مرتين؛ استعلامات تحقق عبر `psql` (الجداول، الأنواع، القيود، الـ triggers، الامتيازات، `_prisma_migrations`)؛ `prisma migrate status` و`migrate diff`. **لم يُشغَّل `npm run build`** لأن خادم `start:dev` (جلسة موازية) كان يعمل على :3000 (قاعدة CLAUDE.md)؛ `tsc --noEmit` يغطي سلامة الأنواع. الواجهة لم تُمس |
+| النتيجة | نجاح. FS-032 IMPLEMENTED، FS-040 جديدة IMPLEMENTED؛ ADR-020 ACCEPTED؛ KI-029 RESOLVED؛ TEST-007؛ ENV-19..ENV-24. المرحلة 1 من 6.6.4 منجزة؛ التالي MOD-01 |
+| تغييرات كاسرة | لا شيء في API. تشغيلياً: `npm ci` مطلوب لجلب `tsx`؛ `npm run prisma:seed` يفشل برسالة واضحة بلا `SEED_ACADEMY_SLUG/NAME_AR/TIMEZONE/CURRENCY`؛ أي خادم كان يعمل قبل الترحيل يحتاج إعادة تشغيل بعد `prisma generate` (المراقب يفعل ذلك تلقائياً) |
+| المنفّذ | Claude Code (Fable 5.1، الجلسة `articodeacademy-ad`) بطلب من مالك المشروع |
+
 ---
 
 ## 20. DOCUMENTATION MAINTENANCE — صيانة التوثيق
@@ -3309,6 +3497,10 @@ docker compose start postgres
 
 تحديث الإصدار 1.5.0 (CH-0009) بتاريخ 2026-10-29: قراءة القسم 6.6 كاملاً قبل التعديل؛ `select uuidv7()` و`uuid_extract_version/timestamp` على PostgreSQL 18.6؛ `prisma validate` و`prisma migrate diff --from-empty --to-schema --script` على مخطط تجريبي خارج المستودع (بلا اتصال بالقاعدة)؛ دورة DDL كاملة بدور `articode_migrator` وفحوص `has_table_privilege`/`has_type_privilege` لدور `articode_app` واختبار trigger الإلحاق — كلها داخل معاملات أُلغيت، وعدد الجداول 0 قبل وبعد؛ `prisma migrate diff --help` و`prisma --help` للأعلام؛ قراءة `frontend/src/i18n/language.ts` و`index.ts` لتقدير أثر إضافة `tr`؛ `ListAgents` وتبادل رسائل تنسيق مع جلسة `articodeacademy-2e`؛ مقارنة طابع تعديل الوثيقة وبحث عن معرّفات غريبة (`ADR-021`, `CH-0009`) قبل الكتابة للتأكد من غياب تعديلات متزامنة. **لم يُغيَّر أي كود**، ولا جداول، ولا ترحيلات، ولا commit/push.
 
+تحديث الإصدار 1.6.0 (CH-0010) بتاريخ 2026-10-29 (توثيق فقط): قراءة كاملة للأقسام 01–20 من هذه الوثيقة بعد تحديثات CH-0008 وCH-0009، وقراءة `backend/prisma/schema.prisma`، `backend/prisma.config.ts`، `backend/src/prisma/*`، `backend/src/config/*`، `backend/src/app.module.ts`، `backend/src/health/health.service.ts`، `compose.yaml`، `docker/postgres/initdb/10-roles.sh`، قوالب `.env.example` الثلاثة (أسماء المتغيرات فقط)، و`frontend/src/mock/data.ts` و`frontend/src/auth/*` و`frontend/src/layout/navigation.ts` و`frontend/src/i18n/ar.ts` لاستخراج الحقول والحالات والأدوار؛ استعلامات قراءة فقط على القاعدة الحية عبر `docker compose exec postgres psql` (الإصدار 18.6، الأدوار `articode`/`articode_app`/`articode_migrator`، مالك `articode_academy` = `articode_migrator`، 0 جداول، الامتدادات المتاحة وغير المثبّتة، `server_encoding = UTF8`، `timezone = Etc/UTC`)؛ `npm run lint` و`npm test` (21/21) في `backend/` للتأكد من سلامة الشجرة قبل التصميم. **لم يُعدَّل أي ملف كود**، ولم يُنشأ أي نموذج أو ترحيل، ولم يُنفَّذ أي أمر يغيّر القاعدة. نُسّق العمل مع جلسة Claude Code موازية عبر الرسائل بين الجلسات لتجنّب الكتابة المتزامنة في هذه الوثيقة.
+
 تحديث الإصدار 1.6.1 (CH-0011) بتاريخ 2026-10-29 (توثيق فقط): قراءة `CLAUDE.md` والقسمين 6.6 (مع 6.6.1–6.6.4) و6.7 كاملَين وADR-008/ADR-019..ADR-023 والأقسام 07 و15 و16 و18 وCH-0008..CH-0010؛ قراءة `backend/prisma/schema.prisma`، `prisma.config.ts`، `src/config/*`، `src/prisma/*`، `package.json`، `test/app.e2e-spec.ts`، `compose.yaml`، `docker/postgres/initdb/10-roles.sh`، قوالب `.env.example` الثلاثة و`frontend/src/i18n/language.ts`؛ `git status`/`diff --stat`/`diff --cached --stat`/`check-ignore` ومسح كل الملفات المرصودة وغير المرصودة عن عناوين اتصال بكلمات مرور (أسماء متغيرات `.env` فقط دون قيم)؛ `docker compose ps` واستعلامات قراءة فقط على القاعدة الحية (18.6، `uuidv7()`، 0 جداول، الأدوار، المالك، الامتدادات، `TimeZone`، `has_schema_privilege`)؛ `npx prisma --version` و`npm run prisma:status`؛ `ListAgents` وطابع تعديل الوثيقة (17:39) قبل الكتابة للتأكد من غياب تعديل متزامن. **لم يُعدَّل أي ملف كود**، ولا نموذج ولا ترحيل ولا commit/push.
 
-تحديث الإصدار 1.6.0 (CH-0010) بتاريخ 2026-10-29 (توثيق فقط): قراءة كاملة للأقسام 01–20 من هذه الوثيقة بعد تحديثات CH-0008 وCH-0009، وقراءة `backend/prisma/schema.prisma`، `backend/prisma.config.ts`، `backend/src/prisma/*`، `backend/src/config/*`، `backend/src/app.module.ts`، `backend/src/health/health.service.ts`، `compose.yaml`، `docker/postgres/initdb/10-roles.sh`، قوالب `.env.example` الثلاثة (أسماء المتغيرات فقط)، و`frontend/src/mock/data.ts` و`frontend/src/auth/*` و`frontend/src/layout/navigation.ts` و`frontend/src/i18n/ar.ts` لاستخراج الحقول والحالات والأدوار؛ استعلامات قراءة فقط على القاعدة الحية عبر `docker compose exec postgres psql` (الإصدار 18.6، الأدوار `articode`/`articode_app`/`articode_migrator`، مالك `articode_academy` = `articode_migrator`، 0 جداول، الامتدادات المتاحة وغير المثبّتة، `server_encoding = UTF8`، `timezone = Etc/UTC`)؛ `npm run lint` و`npm test` (21/21) في `backend/` للتأكد من سلامة الشجرة قبل التصميم. **لم يُعدَّل أي ملف كود**، ولم يُنشأ أي نموذج أو ترحيل، ولم يُنفَّذ أي أمر يغيّر القاعدة. نُسّق العمل مع جلسة Claude Code موازية عبر الرسائل بين الجلسات لتجنّب الكتابة المتزامنة في هذه الوثيقة.
+تحديث الإصدار 1.6.2 (CH-0012) بتاريخ 2026-10-29: تسجيل قرارات المالك؛ `git check-ignore` وفحص غياب قيم كلمات المرور الحقيقية من فهرس Git (`git grep --cached -F` بالقيم دون طباعتها) قبل كل التزام؛ ثلاثة التزامات محلية (`e109fcc`, `90250fe`, `9ee0f09`)؛ `Get-CimInstance Win32_Process` لرصد عمليات `nest start --watch` المكرّرة وإيقافها (4 عمليات: node + cmd لكل منهما)؛ تنسيق مع الجلسة الموازية `articodeacademy-a7` التي تشغّل `start:dev` واحداً على :3000.
+
+تحديث الإصدار 1.7.0 (CH-0013) بتاريخ 2026-10-29: تحقق تجريبي أن Prisma 7.10.1 يرفض صيغة فهرس جزئي في المخطط (`prisma validate` على مخطط مؤقت خارج المستودع)؛ `prisma migrate diff --help` للأعلام (`--from-config-datasource`)؛ `prisma format` و`prisma validate`؛ `docker compose ps` وعدّ الجداول (0) قبل `pg_dump -Fc` شكلية إلى مجلد الجلسة المؤقت؛ `prisma migrate dev --create-only` ثم قراءة `migration.sql` كاملاً وعدّ `CREATE TABLE`/`INDEX`/`FOREIGN KEY`/`DROP`؛ `prisma migrate dev` مرتين (الترحيلان)؛ `prisma migrate status` و`migrate diff --exit-code` بعد كل تطبيق؛ استعلامات `psql` للجداول والأنواع والقيود والـ triggers ومالك الجداول و`has_table_privilege`/`has_type_privilege`/`has_schema_privilege`/`has_function_privilege` لدور app؛ `prisma generate` وقراءة مجلد `src/generated/prisma/models`؛ `npx prisma db seed` ثلاث مرات (الأولى فشلت بسبب التحقق من `UTC` عبر `Intl.supportedValuesOf` فاستُبدل بـ `Intl.DateTimeFormat`) وعدّ الصفوف لكل جدول ولكل دور؛ `npm run lint`، `npx tsc --noEmit`، `npm test`، `npm run test:e2e` (فشلان أثناء التطوير: رمز `23001` بدل `23503` لـ RESTRICT، وتعارض trigger الإلحاق مع SET NULL — KI-029)؛ `curl` على `/api/health/ready` للخادم الحي (200). **لم يُشغَّل `npm run build`** (خادم `start:dev` يعمل في جلسة موازية).

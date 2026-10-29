@@ -37,6 +37,8 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
+    // Idempotent seed (permissions, system roles, academy row); runs with tsx.
+    seed: 'tsx prisma/seed.ts',
   },
   datasource: {
     url: migrationDatabaseUrl(),

@@ -1,6 +1,13 @@
-// Prisma schema for the ArtiCode Academy backend (ADR-014).
+// Prisma schema for the ArtiCode Academy backend (ADR-014, ADR-020).
+//
+// One database per academy, so no table carries an academy_id (D2). Models are
+// PascalCase and map to snake_case tables/columns (P2); every primary key is a
+// UUIDv7 generated inside PostgreSQL 18 (D4). What Prisma cannot express —
+// CHECK constraints, the partial unique index of guardian_students and the
+// append-only trigger of audit_logs — is written by hand at the end of the
+// migration SQL (docs/PROJECT_DOCUMENTATION.md, section 06).
+//
 // Connection URL: prisma.config.ts for the CLI, ConfigService at runtime.
-// No models yet: the first entities arrive with MOD-01/MOD-03 and their first migration.
 
 generator client {
   provider = "prisma-client"
@@ -13,4 +20,326 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums (small, stable sets — P6). Mapped to snake_case PostgreSQL types.
+// ---------------------------------------------------------------------------
+
+/// Languages localized text can be stored in; `ar` is the reference language (D1).
+enum Locale {
+  ar
+  en
+  tr
+
+  @@map("locale")
+}
+
+enum UserStatus {
+  invited
+  pending
+  active
+  suspended
+  archived
+
+  @@map("user_status")
+}
+
+/// Employment category of an employee profile; roles stay independent (D20).
+enum EmployeeKind {
+  teacher
+  staff
+
+  @@map("employee_kind")
+}
+
+enum GuardianRelationship {
+  father
+  mother
+  sibling
+  legal_guardian
+  other
+
+  @@map("guardian_relationship")
+}
+
+enum TokenPurpose {
+  invitation
+  email_verification
+  password_reset
+
+  @@map("token_purpose")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-02 / MOD-14 — academy identity (exactly one row per database)
+// ---------------------------------------------------------------------------
+
+/// Identity and settings of this deployment. The `singleton` column is always
+/// true and unique, so the table can hold a single row (CHECK in SQL).
+model Academy {
+  id                String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  singleton         Boolean  @unique @default(true)
+  /// Id of this academy in the central platform database (no FK — separate databases).
+  platformAcademyId String?  @unique @map("platform_academy_id") @db.Uuid
+  slug              String   @unique @db.VarChar(64)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name              Json
+  logoUrl           String?  @map("logo_url")
+  defaultLocale     Locale   @default(ar) @map("default_locale")
+  /// IANA time zone name, chosen per academy.
+  timezone          String
+  /// ISO 4217 code, chosen per academy (CHECK in SQL).
+  currency          String   @db.Char(3)
+  contactEmail      String?  @map("contact_email")
+  contactPhone      String?  @map("contact_phone") @db.VarChar(32)
+  /// Free-form settings validated by zod in the service layer (D3).
+  settings          Json     @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("academy")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-03 / MOD-01 — people, roles, permissions
+// ---------------------------------------------------------------------------
+
+/// One row per person whatever their roles. The kind of user follows from
+/// user_roles and the profiles. Every account has a unique login identifier:
+/// email or username, both stored lower-case (CHECKs in SQL — D13).
+model User {
+  id                 String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email              String?    @unique
+  username           String?    @unique @db.VarChar(64)
+  /// E.164; deliberately not unique — siblings may share a guardian's phone (D21).
+  phone              String?    @db.VarChar(32)
+  /// argon2id hash; null for invited accounts that have not set a password yet (P9).
+  passwordHash       String?    @map("password_hash")
+  fullName           String     @map("full_name")
+  /// Latin-script name for English certificates and reports (D12).
+  fullNameLatin      String?    @map("full_name_latin")
+  displayName        String?    @map("display_name")
+  avatarUrl          String?    @map("avatar_url")
+  /// Preferred language; null means the academy's default_locale.
+  locale             Locale?
+  status             UserStatus @default(invited)
+  emailVerifiedAt    DateTime?  @map("email_verified_at") @db.Timestamptz(6)
+  lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  failedLoginCount   Int        @default(0) @map("failed_login_count") @db.SmallInt
+  lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(6)
+  passwordChangedAt  DateTime?  @map("password_changed_at") @db.Timestamptz(6)
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// Soft delete (D7): the row stays because history refers to it.
+  deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  roles              UserRole[]
+  assignedRoles      UserRole[]          @relation("UserRoleAssignedBy")
+  studentProfile     StudentProfile?
+  employeeProfile    EmployeeProfile?
+  /// Links where this user is the guardian.
+  guardianOf         GuardianStudent[]   @relation("GuardianStudentGuardian")
+  /// Links where this user is the student.
+  guardians          GuardianStudent[]   @relation("GuardianStudentStudent")
+  refreshTokens      RefreshToken[]
+  verificationTokens VerificationToken[]
+  auditLogs          AuditLog[]
+
+  @@index([phone])
+  @@index([status])
+  @@map("users")
+}
+
+/// System roles (seeded, `isSystem`) and custom roles created by the academy (ROLE-07).
+model Role {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  key                String   @unique @db.VarChar(64)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  label              Json
+  description        Json?
+  isSystem           Boolean  @default(false) @map("is_system")
+  /// Granted automatically on self-registration (usually `student`).
+  isDefaultForSignup Boolean  @default(false) @map("is_default_for_signup")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+/// Permission catalog seeded from the code (D8). Keys look like `users.read`;
+/// obsolete keys are marked `deprecatedAt`, never deleted while referenced.
+model Permission {
+  key          String    @id @db.VarChar(100)
+  module       String    @db.VarChar(32)
+  description  Json?
+  deprecatedAt DateTime? @map("deprecated_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  roles RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId        String   @map("role_id") @db.Uuid
+  permissionKey String   @map("permission_key") @db.VarChar(100)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Restrict)
+
+  @@id([roleId, permissionKey])
+  @@index([permissionKey])
+  @@map("role_permissions")
+}
+
+/// A user may hold several roles (teacher + staff). Deleting a role that is
+/// still granted fails (Restrict); deleting the user removes the grants.
+model UserRole {
+  userId       String   @map("user_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  assignedById String?  @map("assigned_by") @db.Uuid
+  assignedAt   DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("UserRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@index([assignedById])
+  @@map("user_roles")
+}
+
+/// 1:1 with users; created in the same transaction as the `student` role.
+model StudentProfile {
+  userId        String    @id @map("user_id") @db.Uuid
+  studentNumber String?   @unique @map("student_number") @db.VarChar(32)
+  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+  enrolledOn    DateTime? @map("enrolled_on") @db.Date
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_profiles")
+}
+
+/// 1:1 with users for teachers and staff alike (D20). `kind` is the employment
+/// category only; what the person may do comes from user_roles. Specialised
+/// data can be added later as columns or 1:1 tables.
+model EmployeeProfile {
+  userId         String       @id @map("user_id") @db.Uuid
+  employeeNumber String?      @unique @map("employee_number") @db.VarChar(32)
+  kind           EmployeeKind
+  jobTitle       String?      @map("job_title")
+  specialization String?
+  /// Localized text (D1), optional.
+  bio            Json?
+  hiredOn        DateTime?    @map("hired_on") @db.Date
+  isActive       Boolean      @default(true) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([kind])
+  @@map("employee_profiles")
+}
+
+/// Guardians ↔ students (n:m). A student has at most one primary guardian
+/// (partial unique index in SQL) and cannot be their own guardian (CHECK in SQL).
+model GuardianStudent {
+  guardianUserId String               @map("guardian_user_id") @db.Uuid
+  studentUserId  String               @map("student_user_id") @db.Uuid
+  relationship   GuardianRelationship
+  isPrimary      Boolean              @default(false) @map("is_primary")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  guardian User @relation("GuardianStudentGuardian", fields: [guardianUserId], references: [id], onDelete: Cascade)
+  student  User @relation("GuardianStudentStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@id([guardianUserId, studentUserId])
+  @@index([studentUserId])
+  @@map("guardian_students")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-01 — session and one-time tokens (hashes only — P9)
+// ---------------------------------------------------------------------------
+
+/// Rotating refresh tokens. All tokens of one login share `familyId`; reuse of
+/// a rotated token revokes the whole family.
+model RefreshToken {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  /// SHA-256 of the token (hex); the token itself is never stored.
+  tokenHash    String    @unique @map("token_hash") @db.Char(64)
+  familyId     String    @default(dbgenerated("uuidv7()")) @map("family_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  replacedById String?   @unique @map("replaced_by_id") @db.Uuid
+  userAgent    String?   @map("user_agent")
+  ipAddress    String?   @map("ip_address") @db.Inet
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken? @relation("RefreshTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces   RefreshToken? @relation("RefreshTokenRotation")
+
+  @@index([userId, expiresAt])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+/// One-time tokens: invitations, e-mail verification, password reset.
+model VerificationToken {
+  id         String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  purpose    TokenPurpose
+  tokenHash  String       @unique @map("token_hash") @db.Char(64)
+  /// Purpose-specific data, e.g. the roles an invitation grants.
+  metadata   Json?
+  expiresAt  DateTime     @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime?    @map("consumed_at") @db.Timestamptz(6)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("verification_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Cross-cutting — audit log (append-only through a trigger — D5)
+// ---------------------------------------------------------------------------
+
+/// Written by the service layer inside the transaction of the event. Never
+/// updated or deleted (trigger in SQL). `metadata` holds no secrets (P11).
+model AuditLog {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  /// Dotted event name such as `auth.login.succeeded` or `roles.permissions.changed`.
+  action      String   @db.VarChar(64)
+  entityType  String?  @map("entity_type") @db.VarChar(64)
+  /// Text so that non-UUID keys (e.g. permissions.key) fit.
+  entityId    String?  @map("entity_id")
+  metadata    Json?
+  ipAddress   String?  @map("ip_address") @db.Inet
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
