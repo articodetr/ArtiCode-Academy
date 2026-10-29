@@ -1,4 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
+import type { NestApplicationOptions } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -8,6 +9,17 @@ import type { Env } from './config/env.schema.js';
 /** Last path segment of the Swagger UI; the OpenAPI JSON is served at `<path>-json`. */
 export const SWAGGER_PATH = 'docs';
 
+/**
+ * Options for `NestFactory.create()` / `createNestApplication()` — main.ts and
+ * the e2e tests must pass the same ones. Nest's default body parsers (JSON and
+ * urlencoded) are disabled; configureApp() registers the JSON parser alone, so
+ * a request body is only ever read from `application/json`. An HTML form posted
+ * from another site (urlencoded, multipart or text/plain — the only encodings a
+ * form can send without a CORS preflight) therefore never yields a parsable
+ * body and cannot sign a victim's browser in (login CSRF, ADR-026).
+ */
+export const APP_CREATE_OPTIONS: NestApplicationOptions = { bodyParser: false };
+
 export interface AppRuntimeInfo {
   port: number;
   prefix: string;
@@ -16,8 +28,9 @@ export interface AppRuntimeInfo {
 }
 
 /**
- * Applies the cross-cutting HTTP setup (prefix, CORS, validation, Swagger).
- * Shared by main.ts and the e2e tests so both exercise the same configuration.
+ * Applies the cross-cutting HTTP setup (prefix, JSON-only bodies, CORS,
+ * validation, Swagger). Shared by main.ts and the e2e tests so both exercise
+ * the same configuration; the app must be created with APP_CREATE_OPTIONS.
  */
 export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
   const env: ConfigService<Env, true> = app.get(ConfigService);
@@ -25,6 +38,9 @@ export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
 
   app.setGlobalPrefix(prefix);
   app.disable('x-powered-by');
+  // The only body parser (see APP_CREATE_OPTIONS). Routes that accept files
+  // later opt in to multipart explicitly with an interceptor.
+  app.useBodyParser('json');
   app.enableCors({
     origin: env.get('CORS_ORIGIN', { infer: true }),
     credentials: true,

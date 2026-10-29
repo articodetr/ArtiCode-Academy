@@ -2,10 +2,10 @@
 
 | البند | القيمة |
 |---|---|
-| **إصدار الوثيقة** | 1.8.0 |
-| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 19:40 (UTC+03:00) |
-| **آخر معرّف تغيير مسجّل** | CH-0014 |
-| **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): Git (CH-0004)، هيكل واجهة تجريبي ببيانات محلية (CH-0005)، تهيئة الخادم وربطه بالواجهة (CH-0006)، PostgreSQL 18 محلية في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)، أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). **أول مخطط بيانات منفَّذ (CH-0013):** 12 جدولاً للهوية والأكاديمية بترحيلَين مطبَّقين على قاعدة التطوير، مع بذر كتالوج الصلاحيات والأدوار النظامية وصف الأكاديمية (التصميم المرجعي 6.6؛ القرارات معتمدة في CH-0009/CH-0012؛ الحالة الفعلية في 6.2/6.3). **المصادقة MOD-01 منفَّذة (CH-0014):** دخول بالبريد أو اسم المستخدم، argon2id، JWT قصير العمر، رمز تحديث في كعكة httpOnly مع تدوير وكشف إعادة الاستخدام، حارسا مصادقة وصلاحيات عامّان، قفل الحساب وتحديد المعدل، أحداث تدقيق، تهيئة المدير الأول عبر CLI، وواجهة دخول/حساب حقيقية (الواجهة التجريبية أُزيلت). لا منطق أعمال لبقية الوحدات بعد؛ التصميم المستهدف الكامل في 6.7 PROPOSED (CH-0010) |
+| **إصدار الوثيقة** | 1.9.0 |
+| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 20:20 (UTC+03:00) |
+| **آخر معرّف تغيير مسجّل** | CH-0015 |
+| **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): Git (CH-0004)، هيكل واجهة تجريبي ببيانات محلية (CH-0005)، تهيئة الخادم وربطه بالواجهة (CH-0006)، PostgreSQL 18 محلية في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)، أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). **أول مخطط بيانات منفَّذ (CH-0013):** 12 جدولاً للهوية والأكاديمية بترحيلَين مطبَّقين على قاعدة التطوير، مع بذر كتالوج الصلاحيات والأدوار النظامية وصف الأكاديمية (التصميم المرجعي 6.6؛ القرارات معتمدة في CH-0009/CH-0012؛ الحالة الفعلية في 6.2/6.3). **المصادقة MOD-01 منفَّذة (CH-0014):** دخول بالبريد أو اسم المستخدم، argon2id، JWT قصير العمر، رمز تحديث في كعكة httpOnly مع تدوير وكشف إعادة الاستخدام، حارسا مصادقة وصلاحيات عامّان، قفل الحساب وتحديد المعدل، أحداث تدقيق، تهيئة المدير الأول عبر CLI، وواجهة دخول/حساب حقيقية (الواجهة التجريبية أُزيلت). **MOD-01 مُعتمَدة ومقفلة (CH-0015):** تحقق قبول كامل على البيئة الحية (المدير الأول من PowerShell، الدخول/التجديد/الخروج عبر الواجهة، `JWT_SECRET` دائم بعد إعادة التشغيل) وإغلاق ثغرة login CSRF بجعل أجسام الطلبات JSON فقط (ADR-026). **خارطة الطريق الرسمية** في `docs/DEVELOPMENT_ROADMAP.md` (ADR-025)؛ MOD-03 مخطَّطة بمهام T00..T16. لا منطق أعمال لبقية الوحدات بعد؛ التصميم المستهدف الكامل في 6.7 PROPOSED (CH-0010) |
 | **المالك التقني للوثيقة** | فريق تطوير ArtiCode Academy (يُحدَّث بواسطة المطورين و Claude Code وفق `CLAUDE.md`) |
 | **اللغة** | عربية مهنية مع الإبقاء على المعرّفات التقنية والأسماء البرمجية بالإنجليزية |
 
@@ -98,16 +98,16 @@
 
 | العنصر | الحالة الفعلية |
 |---|---|
-| `backend/` | **NestJS 12** مهيأ (CH-0006): تحقق من متغيرات البيئة بـ zod، `ValidationPipe` عام، CORS من الإعدادات، بادئة `/api`، Swagger على `/api/docs`، ونقطة نهاية حقيقية واحدة `GET /api/health`. أُزيلت نقطة الهيكل `GET /`. لا قاعدة بيانات ولا مصادقة ولا منطق أعمال بعد. الاختبارات (5 وحدة + 6 شاملة) والبناء ناجحة. |
-| `frontend/` | تطبيق **Vite 8 + React 19 + TypeScript 7** مع **Ant Design 6** و**react-router 7** و**i18next** (CH-0005): دخول تجريبي، تخطيط عام (قائمة جانبية + ترويسة)، 13 شاشة وحدة ببيانات محلية ثنائية اللغة، عربية افتراضياً مع RTL. **لا اتصال بالخادم ولا بيانات حقيقية** — نموذج أولي للمعاينة (MOD-FE-01). |
-| قاعدة البيانات | **PostgreSQL 18.6 تعمل محلياً في Docker** (`compose.yaml`، CH-0007) و**Prisma 7.10.1 موصول** عبر `PrismaModule`؛ `GET /api/health/ready` يتحقق من الاتصال فعلياً. منذ CH-0008 يتصل التطبيق بدور `articode_app` (DML فقط) وتجري الترحيلات بدور `articode_migrator` (مالك القاعدة)، والـ superuser للإدارة فقط؛ إعدادات القاعدة في `.env` الجذري وحده (ADR-019). **لا كيانات ولا ترحيلات بعد** (نموذج البيانات يأتي مع MOD-01/MOD-03؛ التصميم المقترح في 6.6، وقد اعتمد المالك D1/D4/D5 منه في CH-0009). |
-| المصادقة والصلاحيات | **غير موجودة في الخادم.** في الواجهة مصادقة تجريبية (أي بيانات تُقبل) وبوابات أدوار للعرض فقط (KI-017). |
-| التكامل بين الواجهة والخادم | **موجود بالحد الأدنى (CH-0006):** proxy في Vite من `/api` إلى المنفذ 3000، CORS مفعّل في الخادم، عميل HTTP في الواجهة، وبطاقة "الاتصال بالخادم" في لوحة التحكم تستدعي `GET /api/health`. شاشات الوحدات ما زالت تقرأ من `frontend/src/mock/data.ts`. منذ CH-0007 تعرض البطاقة حالة قاعدة البيانات أيضاً عبر `GET /api/health/ready`. |
-| نظام الإصدارات | **تحت Git منذ CH-0004** (فرع `main`، commit الأساس `127cb1d`). لا remote ولا سياسة فروع بعد. |
-| التوثيق | قبل هذه الوثيقة: ملفا README افتراضيان من الأطر فقط. |
+| `backend/` | **NestJS 12** مهيأ (CH-0006): تحقق من متغيرات البيئة بـ zod، `ValidationPipe` عام، CORS من الإعدادات، بادئة `/api`، Swagger على `/api/docs`، `GET /api/health` و`/api/health/ready`. **MOD-01 كاملة (CH-0014) ومُعتمَدة بالقبول (CH-0015):** `src/auth/*`، `src/audit/*`، CLI المدير الأول؛ منذ CH-0015 أجسام الطلبات JSON فقط (ADR-026). الاختبارات: 29 وحدة + 29 شاملة، `lint`/`tsc` نظيفة. لا منطق أعمال لبقية الوحدات بعد. |
+| `frontend/` | تطبيق **Vite 8 + React 19 + TypeScript 7** مع **Ant Design 6** و**react-router 7** و**i18next** (CH-0005): تخطيط عام (قائمة جانبية + ترويسة)، 13 شاشة وحدة ببيانات محلية ثنائية اللغة، عربية افتراضياً مع RTL. **الدخول حقيقي منذ CH-0014** (`/login`، `/profile`؛ رمز الوصول في الذاكرة + كعكة httpOnly مع تجديد تلقائي). شاشات الوحدات ما زالت على `src/mock/data.ts` وتُستبدل وحدةً بوحدة (أولها MOD-03). |
+| قاعدة البيانات | **PostgreSQL 18.6 في Docker** (`compose.yaml`، CH-0007) و**Prisma 7.10.1** عبر `PrismaModule`؛ أدوار محدودة (`articode_app` للتشغيل، `articode_migrator` للترحيلات، superuser للإدارة فقط — ADR-019)؛ إعدادات القاعدة في `.env` الجذري وحده. **المخطط الأول منفَّذ (CH-0013):** 12 جدولاً، ترحيلان مطبَّقان، بذر idempotent (صف الأكاديمية، 5 أدوار، 56 صلاحية). **لا مستخدمين:** المدير الأول ينشئه المالك بـ `npm run auth:bootstrap-admin` (الطريقة متحقق منها في CH-0015 بمدير مؤقت حُذف). |
+| المصادقة والصلاحيات | **منفَّذة في الخادم (CH-0014) ومُعتمَدة بالقبول (CH-0015):** Argon2id، JWT وصول قصير، رمز تحديث مدوَّر في كعكة httpOnly مع كشف إعادة الاستخدام، حارسان عامّان (`AuthGuard` + `PermissionsGuard`)، قفل وتحديد معدل، تدقيق بلا أسرار. إدارة المستخدمين والأدوار من الواجهة = MOD-03 (التالية في خارطة الطريق). |
+| التكامل بين الواجهة والخادم | **حقيقي لـ MOD-01 (CH-0014):** proxy Vite من `/api` إلى المنفذ 3000 (الكعكات تمر)، CORS، عميل HTTP بـ Bearer وتجديد تلقائي عند 401؛ بطاقة "الاتصال بالخادم" (CH-0006/CH-0007). بقية الشاشات على بيانات محلية. |
+| نظام الإصدارات | **تحت Git منذ CH-0004** (فرع `main`، commit الأساس `127cb1d`). لا remote ولا push ولا سياسة فروع بعد. |
+| التوثيق | هذه الوثيقة (المرجع التقني الوحيد) + **`docs/DEVELOPMENT_ROADMAP.md`** (المرجع الرسمي لترتيب المراحل والمهام ومعايير قبولها — CH-0015، ADR-025). |
 | نظام التوثيق المستمر | `IMPLEMENTED` بتاريخ 2026-10-28: هذه الوثيقة + `CLAUDE.md` + خطّاف تحقق (`.claude/hooks/doc-sync-check.mjs`). |
 
-**الخلاصة:** المشروع في **المرحلة 1 (Foundation)**: Git مُفعّل، هيكل واجهة تجريبي يسمح بمعاينة شاشات المنتج، خادم مهيأ مربوط بالواجهة، وقاعدة PostgreSQL محلية في Docker موصولة بـ Prisma (بلا نماذج بعد). المتبقي من المرحلة 1: أول مخطط بيانات وترحيل (التصميم المقترح في 6.6 بانتظار اعتماد المالك)، المصادقة، CI. كل ميزات الرؤية المذكورة أعلاه `PLANNED` ما لم يُذكر خلاف ذلك (التفصيل في [القسم 15](#15-feature-status-matrix--مصفوفة-حالة-الميزات)).
+**الخلاصة:** المشروع في **نهاية المرحلة 1 (Foundation) وبداية المرحلة 2 (Identity & Academy)**: Git، خادم مهيأ، قاعدة PostgreSQL محلية بمخططها الأول وبذرها، و**MOD-01 مقفلة بالقبول (CH-0015)**. المتبقي من المرحلة 1: `engines`/`.nvmrc` وCI. التالي وفق `docs/DEVELOPMENT_ROADMAP.md`: MOD-03 (المستخدمون والأدوار والدعوات واستعادة كلمة المرور) بمهامها T00..T16. كل ميزات الرؤية الأخرى `PLANNED` ما لم يُذكر خلاف ذلك (التفصيل في [القسم 15](#15-feature-status-matrix--مصفوفة-حالة-الميزات)).
 
 ---
 
@@ -300,7 +300,8 @@ ArtiCodeAcademy/
 │       └── 10-roles.sh               ← ينشئ دوري articode_migrator (مالك القاعدة) وarticode_app (DML)؛ آلي في أول تشغيل، ويُعاد تشغيله يدوياً لمجلد قائم (CH-0008)
 ├── CLAUDE.md                         ← تعليمات التشغيل الدائمة لـ Claude Code (أُضيف في CH-0002)
 ├── docs/
-│   └── PROJECT_DOCUMENTATION.md      ← هذه الوثيقة (المرجع الوحيد المعتمد)
+│   ├── DEVELOPMENT_ROADMAP.md        ← خارطة الطريق الرسمية: ترتيب المراحل ومهام MOD-03 بمعايير قبول (CH-0015، ADR-025)
+│   └── PROJECT_DOCUMENTATION.md      ← هذه الوثيقة (المرجع التقني الوحيد المعتمد)
 ├── .claude/
 │   ├── settings.json                 ← إعدادات المشروع لـ Claude Code (خطّافات التحقق من التوثيق)
 │   ├── hooks/
@@ -470,7 +471,7 @@ ArtiCodeAcademy/
 | `frontend/src/mock/` | بيانات تجريبية محلية | **تُحذف** تدريجياً عند ربط كل وحدة بالخادم (ADR-012) |
 | `frontend/src/pages/` | شاشة لكل وحدة منتج + 404/403 | ملف واحد لكل شاشة بتصدير مُسمّى |
 | `frontend/public/` | أصول ثابتة تُنسخ كما هي | |
-| `docs/` | التوثيق المعتمد | ملف واحد حالياً |
+| `docs/` | التوثيق المعتمد | ملفان: `PROJECT_DOCUMENTATION.md` (الحقيقة التقنية والتاريخ) و`DEVELOPMENT_ROADMAP.md` (ترتيب التنفيذ ومعايير القبول — ADR-025) |
 | `.claude/` | أدوات Claude Code الخاصة بالمشروع | لا تحتوي على أي كود تطبيق |
 | `docker/` | ملفات دعم حاويات التطوير: `postgres/initdb/10-roles.sh` يُركَّب في `/docker-entrypoint-initdb.d` لإنشاء دوري القاعدة (CH-0008) | لا كود تطبيق؛ يعمل آلياً في أول تشغيل مجلد فارغ ويُعاد تشغيله يدوياً لمجلد قائم |
 
@@ -1962,9 +1963,9 @@ sequenceDiagram
 | MOD-00 | App bootstrap, configuration & health (Backend root) | IMPLEMENTED (مهيأ منذ CH-0006) | `backend/src/main.ts`, `app.module.ts`, `app.setup.ts`, `config/env.schema.ts`, `health/*`, `common/package-info.ts` |
 | MOD-FE-00 | Frontend shell (template) | REMOVED (CH-0005) | — (كانت: `frontend/src/App.tsx`, `App.css`, `assets/*`, `public/icons.svg`) |
 | MOD-FE-01 | Frontend application shell (prototype) | IMPLEMENTED (نموذج أولي ببيانات محلية) | `frontend/src/app/*`, `layout/*`, `auth/*`, `components/*`, `i18n/*`, `mock/data.ts`, `pages/*`, `main.tsx`, `index.html` |
-| MOD-01 | Authentication | PLANNED (شاشة دخول تجريبية فقط في الواجهة) | — |
+| MOD-01 | Authentication & session management | IMPLEMENTED (CH-0014؛ مُعتمَدة ومقفلة بالقبول في CH-0015) | `backend/src/auth/*`, `backend/src/audit/*`, `backend/scripts/bootstrap-admin.ts`, `frontend/src/auth/*`, `frontend/src/api/{client,auth}.ts`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx` |
 | MOD-02 | Academy management | PLANNED | — |
-| MOD-03 | User management & roles | PLANNED | — |
+| MOD-03 | User management & roles | PLANNED (مهام T00..T16 بمعايير قبول في `docs/DEVELOPMENT_ROADMAP.md` §4) | — (جداولها جاهزة منذ CH-0013: `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `*_profiles`, `guardian_students`, `verification_tokens`) |
 | MOD-04 | Courses & levels | PLANNED | — |
 | MOD-05 | Classes & groups | PLANNED | — |
 | MOD-06 | Lessons (live & recorded) | PLANNED | — |
@@ -1977,7 +1978,7 @@ sequenceDiagram
 | MOD-13 | Reports | PLANNED | — |
 | MOD-14 | Settings | PLANNED | — |
 | MOD-15 | Integrations & mobile API | PLANNED | — |
-| MOD-16 | Database infrastructure (Prisma + PostgreSQL) | IMPLEMENTED (بنية بلا نماذج) | `compose.yaml`, `docker/postgres/initdb/10-roles.sh`, `backend/prisma.config.ts`, `backend/prisma/schema.prisma`, `backend/src/prisma/*`, `backend/src/config/database-url.ts` |
+| MOD-16 | Database infrastructure (Prisma + PostgreSQL) | IMPLEMENTED (البنية + المخطط الأول منذ CH-0013) | `compose.yaml`, `docker/postgres/initdb/10-roles.sh`, `backend/prisma.config.ts`, `backend/prisma/schema.prisma`, `backend/prisma/migrations/*`, `backend/prisma/seed.ts`, `backend/src/prisma/*`, `backend/src/config/database-url.ts` |
 
 ### MOD-00 — App bootstrap, configuration & health (Backend root) — `IMPLEMENTED`
 
@@ -2050,12 +2051,12 @@ sequenceDiagram
 | الأخطاء المعروفة | لا شيء مرصود |
 | التحسينات المستقبلية | طبقة API (FS-031) تستبدل `mock/data.ts` وحدةً وحدة؛ ~~مصادقة حقيقية (MOD-01) تستبدل `AuthProvider`~~ (CH-0014)؛ ترشيح القائمة بالصلاحيات بدل الدور؛ تقسيم الحزمة بالمسارات (`React.lazy`)؛ اختبارات Vitest + Testing Library؛ هوية بصرية (شعار، favicon، ألوان) |
 
-### MOD-01 — Authentication & session management — `PARTIALLY_IMPLEMENTED` (النواة منفَّذة في CH-0014؛ الدعوات واستعادة كلمة المرور PLANNED)
+### MOD-01 — Authentication & session management — `IMPLEMENTED` (CH-0014؛ مُعتمَدة ومقفلة بالقبول في CH-0015 — الدعوات وتفعيل الحسابات واستعادة كلمة المرور ضمن نطاق MOD-03)
 
 | البند | التفاصيل |
 |---|---|
 | الغرض التجاري | أول دخول حقيقي وآمن من الواجهة إلى قاعدة البيانات: من يستطيع الدخول، كم تدوم جلسته، كيف تُنهى، وما الذي يُسجَّل |
-| حالة التطوير | IMPLEMENTED (CH-0014): دخول بالبريد أو اسم المستخدم، Argon2id، JWT وصول (HS256، 15 دقيقة)، رمز تحديث مدوَّر في كعكة httpOnly مع كشف إعادة الاستخدام، خروج من الجهاز/كل الأجهزة، تغيير كلمة المرور، حارسا مصادقة وصلاحيات عامّان، قفل الحساب وتحديد المعدل، أحداث تدقيق، تهيئة المدير الأول عبر CLI. **PLANNED:** الدعوات وتأكيد البريد واستعادة كلمة المرور (`verification_tokens` موجود بلا استخدام)، التسجيل الذاتي، MFA، عملاء غير متصفح (رمز التحديث في الجسم) |
+| حالة التطوير | IMPLEMENTED (CH-0014): دخول بالبريد أو اسم المستخدم، Argon2id، JWT وصول (HS256، 15 دقيقة)، رمز تحديث مدوَّر في كعكة httpOnly مع كشف إعادة الاستخدام، خروج من الجهاز/كل الأجهزة، تغيير كلمة المرور، حارسا مصادقة وصلاحيات عامّان، قفل الحساب وتحديد المعدل، أحداث تدقيق، تهيئة المدير الأول عبر CLI. **مُعتمَدة ومقفلة (CH-0015)** بعد تحقق قبول موثَّق في `docs/DEVELOPMENT_ROADMAP.md` §3 و13.4؛ منذ CH-0015 أجسام الطلبات JSON فقط (ADR-026). **خارج نطاقها (نُقلت إلى MOD-03 بقرار الإغلاق):** الدعوات وتفعيل الحسابات واستعادة كلمة المرور (`verification_tokens` موجود بلا استخدام بعد). **PLANNED لاحقاً:** التسجيل الذاتي، MFA، عملاء غير متصفح (رمز التحديث في الجسم) — تحصينات MOD-01-H01..H07 في خارطة الطريق §3.2 |
 | الملفات | `backend/src/auth/*` (القسم 04)، `backend/src/audit/*`، `backend/scripts/bootstrap-admin.ts`، `backend/src/health/health.controller.ts` (`@Public()`)، `backend/src/app.module.ts` (`ThrottlerModule`)، `backend/src/app.setup.ts` (`addBearerAuth`)، `backend/src/config/env.schema.ts` (ENV-25..ENV-32)؛ الواجهة: `frontend/src/api/{client,auth}.ts`, `frontend/src/auth/*`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx`, `frontend/src/layout/AppLayout.tsx`, `frontend/src/app/router.tsx`, `frontend/src/i18n/{ar,en}.ts` |
 | الكيانات | `users` (`password_hash`, `status`, `failed_login_count`, `locked_until`, `password_changed_at`, `must_change_password`, `last_login_at`, `deleted_at`), `refresh_tokens` (`token_hash`, `family_id`, `expires_at`, `revoked_at`, `replaced_by_id`, `ip_address`, `user_agent`), `audit_logs`، والقراءة من `roles`/`role_permissions`/`permissions` لحساب الصلاحيات (6.2). لا تغيير في المخطط |
 | نقاط النهاية | API-005 `POST /api/auth/login`، API-006 `POST /api/auth/refresh`، API-007 `POST /api/auth/logout`، API-008 `POST /api/auth/logout-all`، API-009 `GET /api/auth/me`، API-010 `POST /api/auth/password`؛ وAPI-011 `GET /api/audit-logs` (الوحدة العرضية audit) — القسم 10.2 |
@@ -2066,9 +2067,9 @@ sequenceDiagram
 | قواعد التحقق | `LoginDto`: `identifier` 1–320، `password` 1–128؛ `ChangePasswordDto`: `currentPassword` 1–128، `newPassword` 10–128؛ الحقول الزائدة → `400` (`forbidNonWhitelisted`، متحقق بـ TEST-008 — KI-022 RESOLVED) |
 | تحديد المعدل | `AuthThrottlerGuard` (تخزين في الذاكرة): `login` 10 محاولات / 15 دقيقة لكل (IP, identifier)؛ `password` 10 / 15 دقيقة؛ `refresh` 30 / دقيقة لكل IP؛ `429 rate_limited`. `me`/`logout`/`logout-all` بلا تحديد |
 | أحداث التدقيق | `auth.login.succeeded` (`familyId`)، `auth.login.failed` (`failedAttempts`, `locked`)، `auth.login.locked`، `auth.login.rejected` (`reason`: not_activated/pending/suspended)، `auth.refresh.reuse_detected` (`familyId`)، `auth.logout`، `auth.logout_all` (`revokedSessions`)، `auth.password.changed` (`revokedOtherSessions`)، `auth.bootstrap.admin_created`؛ مع `ip_address` و`user_agent`؛ **لا كلمات مرور ولا رموز ولا تجزئات** (`assertNoSecrets()` يرفض مفاتيح password/token/secret/hash) |
-| القيود الحالية | مفتاح JWT عابر خارج الإنتاج عند غياب `JWT_SECRET` (KI-031)؛ تحديد المعدل لكل عملية لا عبر النسخ (KI-030)؛ حساب الصلاحيات من القاعدة عند كل طلب بلا تخزين مؤقت (مقبول الآن)؛ CSRF على `refresh`/`logout` يعتمد على `SameSite=Strict` + CORS + JSON؛ لا عملاء غير متصفح بعد |
-| الأخطاء المعروفة | لا شيء مرصود |
-| التحسينات المستقبلية | الدعوات وتأكيد البريد واستعادة كلمة المرور (`verification_tokens`)؛ تخزين مؤقت قصير للمبدأ مع إبطال؛ `helmet`؛ تخزين Redis للمحدّد؛ قائمة الجلسات النشطة وإلغاء جلسة بعينها؛ MFA للمدراء |
+| القيود الحالية | مفتاح JWT عابر خارج الإنتاج عند غياب `JWT_SECRET` (KI-031؛ مضبوط دائماً على جهاز التطوير ومتحقق منه بعد إعادة التشغيل في CH-0015)؛ تحديد المعدل لكل عملية لا عبر النسخ (KI-030)؛ حساب الصلاحيات من القاعدة عند كل طلب بلا تخزين مؤقت (مقبول الآن)؛ CSRF على `login`/`refresh`/`logout` يعتمد على `SameSite=Strict` + CORS بقائمة + **أجسام JSON فقط (CH-0015)** بلا فحص `Origin` بعد؛ يشترط نشر الواجهة والـ API على الموقع نفسه (SEC-R-11)؛ عمر عائلة التحديث يتجدد مع كل تدوير بلا سقف مطلق؛ لا عملاء غير متصفح بعد |
+| الأخطاء المعروفة | KI-033 (login CSRF عبر محلّل `urlencoded` الافتراضي) — RESOLVED في CH-0015؛ لا شيء مفتوح |
+| التحسينات المستقبلية | (الدعوات واستعادة كلمة المرور انتقلت إلى MOD-03)؛ فحص `Origin`/`Sec-Fetch-Site` كطبقة ثانية؛ `trust proxy` بمتغير بيئة؛ سقف مطلق لعمر عائلة التحديث؛ تخزين مؤقت قصير للمبدأ مع إبطال؛ `helmet`؛ تخزين Redis للمحدّد؛ قائمة الجلسات النشطة وإلغاء جلسة بعينها؛ MFA للمدراء |
 
 ### MOD-02 — Academy management — `PLANNED`
 
@@ -2085,7 +2086,8 @@ sequenceDiagram
 |---|---|
 | الغرض | إدارة المستخدمين بأنواعهم (معلم/طالب/ولي أمر/موظف)، الملفات الشخصية، الأدوار والصلاحيات المخصّصة، ربط أولياء الأمور بالطلاب |
 | الكيانات | **موجودة في القاعدة منذ CH-0013 (بلا منطق خدمة بعد):** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `student_profiles`, `employee_profiles`, `guardian_students` (6.2)؛ كتالوج الصلاحيات والأدوار النظامية مبذورة (7.3)؛ `refresh_tokens`/`verification_tokens` لـ MOD-01 |
-| الاعتماديات | MOD-01 |
+| الاعتماديات | MOD-01 (مقفلة — CH-0015)؛ قرارات المالك D-R01..D-R06 في خارطة الطريق |
+| خطة التنفيذ (CH-0015) | `docs/DEVELOPMENT_ROADMAP.md` §4: 17 مهمة (T00..T16) بمعايير قبول واختبارات في أربع دفعات؛ **لا جداول جديدة ولا ترحيلات متوقعة ولا مفاتيح صلاحيات جديدة**؛ تشمل الدعوات وتفعيل الحسابات واستعادة كلمة المرور وحالات الحساب وتعيين الأدوار والأدوار المخصّصة وربط الأولياء والتدقيق الإداري. أول ثلاث مهام تنفيذية: T01 (قائمة/تفاصيل المستخدمين)، T02 (إنشاء مستخدم بنوعه وملفه ودوره)، T03 (الدعوة والتفعيل) |
 | واجهة تجريبية (CH-0005) | `frontend/src/pages/UsersPage.tsx` — المسار `/users`؛ جدول ببيانات محلية (`mockUsers`)؛ زر الإضافة يعرض "غير منفّذ". مفاتيح الأدوار في `frontend/src/auth/roles.ts`. لا منطق خادم |
 
 ### MOD-04 — Courses & levels — `PLANNED`
@@ -2208,7 +2210,7 @@ sequenceDiagram
 | المعرّف | الرحلة | الحالة | الوحدات المعنية | ملاحظات |
 |---|---|---|---|---|
 | WF-01 | إنشاء أكاديمية | PLANNED | MOD-02, MOD-14, MOD-01 | يشمل تهيئة قاعدة بيانات مخصّصة |
-| WF-02 | تسجيل مستخدم | PLANNED | MOD-01, MOD-03 | دعوة من المدير أو تسجيل ذاتي — `NOT YET DETERMINED` |
+| WF-02 | تسجيل مستخدم | PLANNED | MOD-03 (الدعوة والتفعيل واستعادة كلمة المرور)، MOD-01 (الجلسة) | المسار الأول المخطَّط: دعوة من المدير/الموظف → تفعيل بكلمة مرور (مهام T02/T03 في `docs/DEVELOPMENT_ROADMAP.md`)؛ التسجيل الذاتي مؤجَّل بقرار D-R04 |
 | WF-03 | تعيين معلم لفصل | PLANNED | MOD-03, MOD-05 | |
 | WF-04 | تسجيل طالب في دورة/فصل | PLANNED | MOD-03, MOD-05, MOD-11 | قد يرتبط بخطة دفع |
 | WF-05 | إنشاء دورة ومستوياتها | PLANNED | MOD-04 | |
@@ -2234,7 +2236,8 @@ sequenceDiagram
 | إصدار API | لا يوجد في المسار؛ ممكن لاحقاً عبر `API_PREFIX=api/v1` أو `enableVersioning` — `NOT YET DETERMINED` |
 | المصادقة | منذ CH-0014: **كل نقطة نهاية محمية افتراضياً** بحارس عام (`AuthGuard`) يتطلب `Authorization: Bearer <JWT>`؛ العامة فقط ما وُسم `@Public()` (`health`, `health/ready`, `auth/login`, `auth/refresh`, `auth/logout`)؛ الصلاحيات بـ `@RequirePermissions` (`PermissionsGuard`). Swagger يعرض زر Authorize (`addBearerAuth`). رمز التحديث في كعكة `aca_refresh` لا في الجسم (SEC-R-01 RESOLVED) |
 | CORS | قائمة أصول من `CORS_ORIGIN` مع `credentials: true`؛ الأصل غير المدرج لا يحصل على رأس `Access-Control-Allow-Origin` (متحقق منه في e2e) |
-| التحقق من المدخلات | `ValidationPipe` عام: الحقول غير المعلنة في DTO تُرفض بـ `400` (`forbidNonWhitelisted`)؛ التحويل الضمني للأنواع مفعّل. لم يُختبر بعد على DTO فعلي (KI-022) |
+| التحقق من المدخلات | `ValidationPipe` عام: الحقول غير المعلنة في DTO تُرفض بـ `400` (`forbidNonWhitelisted`)؛ التحويل الضمني للأنواع مفعّل؛ متحقق على DTOs المصادقة (KI-022 RESOLVED — CH-0014) |
+| أجسام الطلبات | **JSON فقط (CH-0015، ADR-026):** التطبيق يُنشأ بـ `APP_CREATE_OPTIONS = { bodyParser: false }` و`configureApp()` يسجّل `express.json` وحده (`app.useBodyParser('json')`)؛ `application/x-www-form-urlencoded` و`multipart/form-data` و`text/plain` لا تُحلَّل فيصل الجسم فارغاً ويفشل تحقق DTO بـ `400` — وهو ما يمنع إدخال متصفح الضحية بنموذج HTML من موقع آخر (login CSRF، SEC-R-10). المسارات التي ستقبل ملفات تفعّل multipart صراحةً بمعترض على مستوى المسار |
 | تنسيق الأخطاء | افتراضي NestJS لعامة الأخطاء؛ **أخطاء المصادقة والتفويض (CH-0014)** تحمل حقلاً إضافياً ثابتاً `code` (مثل `invalid_credentials`, `token_expired`, `permission_denied`) عبر `AuthHttpException` — الجسم `{ statusCode, error, code, message, ...details }` (10.2، API-005). تحت البادئة: `404` مع `{"message":"Cannot GET /api/nope","error":"Not Found","statusCode":404}`. **خارج البادئة** (مثل `GET /`) يُعيد Express صفحة HTML `404` افتراضية (متحقق منه في CH-0006) |
 | الرؤوس | لا `X-Powered-By` (معطَّل). لا `helmet` بعد |
 | OpenAPI/Swagger | API-003: UI على `/api/docs` وJSON على `/api/docs-json` عندما `SWAGGER_ENABLED=true` (الافتراضي). العنوان "ArtiCode Academy API"، الإصدار من `package.json` |
@@ -2313,12 +2316,12 @@ sequenceDiagram
 | الغرض | تسجيل الدخول بالبريد أو اسم المستخدم؛ يُصدر رمز وصول ويضبط كعكة التحديث |
 | المصادقة / الصلاحيات | عامة (`@Public()`) / لا شيء |
 | تحديد المعدل | 10 محاولات لكل 15 دقيقة لكل (IP, identifier) → `429 rate_limited` |
-| جسم الطلب | `LoginDto`: `{ "identifier": "<email أو username، 1–320>", "password": "<1–128>" }`؛ أي حقل زائد → `400` |
+| جسم الطلب | `LoginDto`: `{ "identifier": "<email أو username، 1–320>", "password": "<1–128>" }`؛ أي حقل زائد → `400`؛ **`application/json` فقط** — نموذج HTML (`urlencoded`/`text/plain`) يُعيد `400` قبل فحص أي بيانات اعتماد (CH-0015، TEST-005) |
 | الاستجابة | `200` `SessionResponseDto`: `{ "tokenType": "Bearer", "accessToken": "<JWT>", "expiresIn": 900, "user": AuthUserDto }` حيث `AuthUserDto = { id, email, username, fullName, displayName, locale, status, mustChangePassword, roles: string[], permissions: string[] }`؛ رأس `Set-Cookie: aca_refresh=<token>; Path=/api/auth; HttpOnly; SameSite=Strict[; Secure]; Max-Age=<14 يوماً>` |
 | سلوك الأخطاء | `401 invalid_credentials` (مجهول، كلمة خاطئة، محذوف منطقياً، مؤرشف — رسالة واحدة)؛ `423 account_locked` + `retryAfterSeconds` (قبل التحقق إن كان مقفلاً، أو عند المحاولة التي تبلغ الحد)؛ `403 account_not_activated` (بلا كلمة مرور / `invited`)؛ `403 account_pending`؛ `403 account_suspended` (الأخيران بعد تطابق كلمة المرور فقط)؛ `429 rate_limited` |
 | المتحكم/الخدمة | `AuthController.login()` → `AuthService.login()` → `PasswordService`, `TokenService`, `AuditService` (`backend/src/auth/*`) |
 | الواجهة | `frontend/src/api/auth.ts` (`login`)، `pages/LoginPage.tsx` |
-| الاختبارات | TEST-008 (دخول بالبريد/اسم المستخدم، خطأ، حالات الحساب، القفل، تحديد المعدل، الحقول الزائدة) |
+| الاختبارات | TEST-008 (دخول بالبريد/اسم المستخدم، خطأ، حالات الحساب، القفل، تحديد المعدل، الحقول الزائدة)؛ TEST-005 (أجسام JSON فقط — CH-0015) |
 
 #### API-006 — `POST /api/auth/refresh` — `IMPLEMENTED` (CH-0014)
 
@@ -2577,18 +2580,21 @@ npm install <package>
 | عدم كشف وجود الحساب أو حالته | IMPLEMENTED (CH-0014) | رسالة `invalid_credentials` واحدة للمجهول/الخطأ/المحذوف/المؤرشف مع تحقق وهمي لتعادل الزمن؛ الحالة تُفحص بعد تطابق كلمة المرور |
 | أحداث الأمان في سجل التدقيق بلا أسرار | IMPLEMENTED (CH-0014) | `AuditService.record()` داخل معاملة الحدث؛ `assertNoSecrets()` يرفض مفاتيح password/token/secret/hash؛ TEST-008 يتحقق من غياب كلمات المرور والتجزئات |
 | إبطال الجلسات عند تغيير كلمة المرور أو تعليق الحساب | IMPLEMENTED (CH-0014) | المبدأ يُقرأ من القاعدة عند كل طلب؛ الرموز الأقدم من `password_changed_at` تُرفض؛ TEST-008 |
-| تهيئة المدير الأول بلا بيانات افتراضية | IMPLEMENTED (CH-0014) | `scripts/bootstrap-admin.ts`: لا كلمة مرور في الكود، إدخال من البيئة أو الطرفية بلا صدى، يرفض مديراً ثانياً، idempotent |
+| تهيئة المدير الأول بلا بيانات افتراضية | IMPLEMENTED (CH-0014) | `scripts/bootstrap-admin.ts`: لا كلمة مرور في الكود، إدخال من البيئة أو الطرفية بلا صدى، يرفض مديراً ثانياً، idempotent؛ متحقق من PowerShell بأربعة سيناريوهات (CH-0015، 13.4) |
+| أجسام الطلبات JSON فقط (دفاع ضد login CSRF بنماذج HTML) | IMPLEMENTED (CH-0015) | `APP_CREATE_OPTIONS` + `app.useBodyParser('json')` في `backend/src/app.setup.ts` و`main.ts`؛ متحقق حياً (نموذج `urlencoded` → `400` بدل `401`) وبـ TEST-005؛ ADR-026، KI-033، SEC-R-10 |
+| `JWT_SECRET` دائم محلياً ومحمَّل بعد إعادة التشغيل | CONFIRMED (CH-0015) | رمز موقَّع بسرّ `backend/.env` مقبول التوقيع على الخادم قبل وبعد إعادة تشغيل المراقب؛ نسخة جديدة على :3999 أقلعت بلا تحذير السرّ العابر (KI-031) |
 
-**ما لم يُنفَّذ بعد:** `helmet`، الدعوات واستعادة كلمة المرور، MFA، تخزين موزّع لمحدّد المعدل (KI-030)، حماية Swagger في الإنتاج (SEC-R-05).
+**ما لم يُنفَّذ بعد:** `helmet`، فحص `Origin`/`Sec-Fetch-Site` كطبقة ثانية، `trust proxy` (KI-030)، MFA، تخزين موزّع لمحدّد المعدل (KI-030)، حماية Swagger في الإنتاج (SEC-R-05). الدعوات واستعادة كلمة المرور ضمن MOD-03 (خارطة الطريق §4).
 
 ### 12.2 الفجوات الحالية (مؤكدة من الكود) والتوصيات
 
 | المجال | الحالة الفعلية | التوصية (RECOMMENDED) | الأولوية |
 |---|---|---|---|
-| المصادقة | **منفَّذة (CH-0014):** JWT وصول قصير (`jose`) + رمز تحديث مدوَّر في كعكة httpOnly؛ بلا Passport | الدعوات واستعادة كلمة المرور وMFA لاحقاً؛ `JWT_SECRET` ثابت وقوي في كل بيئة (KI-031) | — |
+| المصادقة | **منفَّذة (CH-0014) ومُعتمَدة (CH-0015):** JWT وصول قصير (`jose`) + رمز تحديث مدوَّر في كعكة httpOnly؛ بلا Passport | الدعوات واستعادة كلمة المرور في MOD-03 (خارطة الطريق)؛ MFA لاحقاً؛ `JWT_SECRET` ثابت وقوي في كل بيئة (KI-031 — متحقق محلياً) | — |
 | التفويض | **منفَّذ (CH-0014):** `PermissionsGuard` بمفاتيح الكتالوج | نطاقات `own`/`linked` داخل الخدمات مع كل وحدة؛ إدارة الأدوار المخصّصة (MOD-03) | متوسطة |
 | مصادقة الواجهة | **حقيقية (CH-0014):** رمز الوصول في الذاكرة، التحديث بكعكة httpOnly، تجديد تلقائي، لا `localStorage` (KI-017 RESOLVED) | ترشيح القائمة بالصلاحيات؛ اختبارات واجهة | — |
 | تفويض الواجهة | إخفاء الشاشات حسب الدور الأساسي المشتق من الخادم (`RequireRole`, `navigation.ts`)؛ `hasPermission()` متاح | الفرض الحقيقي في الخادم (منفَّذ)؛ الواجهة تبقى طبقة تجربة مستخدم فقط | — |
+| CSRF | **منفَّذ (CH-0014/CH-0015):** كعكة التحديث `SameSite=Strict` + `Path=/api/auth` + CORS بقائمة + **أجسام JSON فقط** (ADR-026)؛ لا رمز CSRF مستقل ولا فحص `Origin` | قبل النشر بـ HTTPS: الواجهة والـ API على الموقع نفسه (SEC-R-11)، `AUTH_COOKIE_SECURE=true`، `CORS_ORIGIN` بأصل الواجهة الدقيق؛ فحص `Origin`/`Sec-Fetch-Site` كطبقة ثانية (MOD-01-H02) | متوسطة عند النشر |
 | كلمات المرور | **Argon2id (CH-0014)** بمعاملات OWASP الدنيا؛ سياسة طول (10 للمستخدمين، 12 للمدير الأول)؛ لا تُسجَّل | رفع المعاملات مع قدرة الخوادم؛ قائمة كلمات مرور شائعة | منخفضة |
 | التحقق من المدخلات | `ValidationPipe` عام + أول DTO حقيقية (`LoginDto`, `ChangePasswordDto`, `AuditLogQueryDto`) مع اختبار e2e للحقول الزائدة (KI-022 RESOLVED — CH-0014) | كل DTO قادم يحمل قواعد `class-validator` | منخفضة |
 | CORS | مفعّل بقائمة من `CORS_ORIGIN` (CH-0006) | مراجعة القائمة لكل بيئة نشر؛ عدم استخدام `*` مع `credentials` | منخفضة |
@@ -2615,8 +2621,10 @@ npm install <package>
 | SEC-R-07 | `docker compose down -v` أو حذف المجلد `postgres_data` يفقد كل البيانات بلا تراجع | منخفضة الآن | نسخة احتياطية قبل أي عملية على المجلد (14.9)؛ لا يُنفَّذ الأمر إلا بطلب صريح |
 | SEC-R-03 | الواجهة تحتوي روابط خارجية بـ `target="_blank"` بلا `rel="noopener"` | RESOLVED (CH-0005) | أُزيل محتوى القالب بالكامل؛ لا روابط خارجية في الواجهة الحالية |
 | SEC-R-04 | الجلسة التجريبية والدور في `localStorage` قابلان للتعديل من أدوات المطور (CH-0005) | RESOLVED (CH-0014) | أُزيلت الجلسة التجريبية و`RoleSwitcher`؛ الدور والصلاحيات من الخادم؛ لا رموز في `localStorage` (KI-017 RESOLVED) |
-| SEC-R-08 | خارج الإنتاج يُولَّد `JWT_SECRET` عابر عند غياب المتغير، فتبطل رموز الوصول مع كل إعادة تشغيل (الكعكة تعوّضها)؛ وفي الإنتاج يُرفض الإقلاع بلا سرّ | منخفضة (تطوير فقط) | ضبط `JWT_SECRET` ثابتاً محلياً أيضاً لتجنّب المفاجآت (KI-031) |
+| SEC-R-08 | خارج الإنتاج يُولَّد `JWT_SECRET` عابر عند غياب المتغير، فتبطل رموز الوصول مع كل إعادة تشغيل (الكعكة تعوّضها)؛ وفي الإنتاج يُرفض الإقلاع بلا سرّ | منخفضة (تطوير فقط) | ضبط `JWT_SECRET` ثابتاً محلياً أيضاً (KI-031) — **مضبوط ومتحقق منه بعد إعادة التشغيل في CH-0015** |
 | SEC-R-09 | محدّد المعدل في ذاكرة العملية: مع عدة نسخ خلف موازن أحمال تتضاعف الحدود الفعلية، ومع proxy بلا `trust proxy` يُحسب كل العملاء بعنوان واحد | منخفضة الآن (نسخة واحدة) | Redis storage لـ `@nestjs/throttler` + `trust proxy` عند النشر (KI-030)؛ القفل على مستوى الحساب في القاعدة يبقى فعالاً في كل الحالات |
+| SEC-R-10 | **login CSRF:** محلّلا الأجسام الافتراضيان في NestJS (JSON + `urlencoded`) جعلا `POST /api/auth/login` يقبل نموذج HTML مُرسَلاً من موقع آخر بلا CORS preflight (متحقق حياً قبل الإصلاح: `401 invalid_credentials` بدل `400`)، فيستطيع مهاجم إدخال متصفح الضحية في حساب يملكه هو وضبط كعكة تحديث لها | RESOLVED (CH-0015) | أجسام JSON فقط (`APP_CREATE_OPTIONS` + `useBodyParser('json')` — ADR-026، KI-033)؛ TEST-005 يثبت `400` للنماذج |
+| SEC-R-11 | قيد نشر لا ثغرة: `SameSite=Strict` تمنع إرسال كعكة التحديث إذا نُشرت الواجهة والـ API على موقعَين مختلفَين (eTLD+1 مختلف) فيتعطّل التجديد الصامت؛ وبلا `AUTH_COOKIE_SECURE=true` خارج `production` تُرسَل الكعكة على HTTP | — (تصميمي) | نشر الواجهة والـ API تحت نطاق واحد أو نطاقات فرعية منه؛ `AUTH_COOKIE_SECURE=true` في كل بيئة HTTPS؛ `trust proxy` خلف الوكيل (14.11) |
 
 ---
 
@@ -2637,7 +2645,7 @@ npm install <package>
 | TEST-002 | `backend/test/app.e2e-spec.ts` (النسخة القديمة) | شامل | `GET /` → `200` و`"Hello World!"` | REMOVED في CH-0006 (استُبدل بـ TEST-005) |
 | TEST-003 | `backend/src/config/env.schema.spec.ts` | وحدة (13؛ +2 في CH-0014: `JWT_SECRET` إلزامي في الإنتاج وبطول ≥ 32، وتحليل إعدادات المصادقة مع افتراضي `AUTH_COOKIE_SECURE` حسب البيئة) | الافتراضيات؛ تحويل `PORT` وقائمة CORS وعلم Swagger؛ رفض القيم غير الصالحة باسم المتغير؛ إسقاط المتغيرات غير المعلنة؛ `DATABASE_URL` اختياري/فارغ/صالح؛ رفض غير `postgresql://`؛ إلزامي في الإنتاج؛ **CH-0008:** اشتقاق `DATABASE_URL` من `DB_APP_*`/`POSTGRES_*`/`DB_HOST` مع ترميز الكلمة وإخفاء المدخلات من الناتج؛ أولوية العنوان الصريح؛ لا اشتقاق بلا كلمة مرور والفراغ = افتراضي؛ قبول المشتق في الإنتاج ورفض `POSTGRES_PORT` غير الصالح | ناجح (CH-0008) |
 | TEST-004 | `backend/src/health/health.service.spec.ts` | وحدة (4) | `check()` يُعيد `ok` والإصدار والبيئة؛ `readiness()` مع `PrismaService` وهمي: up / down (مع رسالة السائق) / not_configured | ناجح (CH-0007) |
-| TEST-005 | `backend/test/app.e2e-spec.ts` | شامل (7) | `GET /api/health` JSON؛ غياب `X-Powered-By`؛ `404` JSON تحت البادئة؛ `GET /` → `404` HTML؛ CORS للأصل المسموح فقط؛ `GET /api/health/ready` (200/up مع قاعدة حية، وإلا 503 بجسم متسق)؛ `/api/docs-json` يحوي المسارين | ناجح (CH-0007، CH-0008 — مع القاعدة حية بدور app) |
+| TEST-005 | `backend/test/app.e2e-spec.ts` | شامل (8؛ +1 في CH-0015) | `GET /api/health` JSON؛ غياب `X-Powered-By`؛ `404` JSON تحت البادئة؛ `GET /` → `404` HTML؛ CORS للأصل المسموح فقط؛ `GET /api/health/ready` (200/up مع قاعدة حية، وإلا 503 بجسم متسق)؛ `/api/docs-json` يحوي المسارين؛ **CH-0015:** أجسام JSON فقط — `POST /api/auth/login` بـ `urlencoded` أو `text/plain` → `400` (الجسم غير محلَّل) بينما JSON يصل إلى التحقق (`401`/`503`) | ناجح (CH-0015؛ يُنشئ التطبيق بـ `APP_CREATE_OPTIONS` كما `main.ts`) |
 | TEST-006 | `backend/src/config/database-url.spec.ts` | وحدة (6) | `buildPostgresUrl()`: التجميع والترميز percent للكلمة والمستخدم واسم القاعدة، وبقاء الكلمات الآمنة كما هي؛ `postgresUrlFromEnv()`: undefined بلا كلمة مرور الدور، الافتراضيات المشتركة، متغيرات الدور والمضيف/المنفذ/القاعدة، رفض منفذ غير صالح | ناجح (CH-0008) |
 | TEST-007 | `backend/test/db.e2e-spec.ts` | شامل على القاعدة الحية (9؛ تُتخطّى كلها حين لا تُفتح اتصالة بدور التطبيق) | الترحيلان مطبَّقان و12 جدولاً بالضبط؛ `uuidv7` مولَّد في القاعدة (الإصدار 7 وطابع زمني حديث)؛ سلوك الحذف: Cascade للتابعين، Restrict (`23001`) لدور ممنوح وصلاحية مرتبطة، SetNull لـ `assigned_by` و`actor_user_id`؛ القيود: صف `academy` واحد، `ar` إلزامية، عملة ISO، معرّف دخول إلزامي، أحرف صغيرة، `username` فريد، الهاتف غير فريد، ولي ≠ طالب، ولي أساسي واحد؛ إلحاقية `audit_logs` (رفض `UPDATE`/`DELETE`، السماح بإفراغ الفاعل وحده)؛ دور التطبيق DML فقط (لا superuser، لا `CREATE` على `public`، لا `TRUNCATE`؛ امتيازات الجداول الـ12)؛ فهرس لكل FK والفهرس الجزئي؛ idempotency البذر (الكتالوج مرتين = لا إضافات؛ 56 صلاحية نشطة؛ `academy_admin` 56؛ `student` وحده افتراضي للتسجيل؛ صف `academy` لا يتكرر). كل اختبار بيانات داخل معاملة تُلغى | ناجح 9/9 (CH-0013) |
 | TEST-008 | `backend/test/auth.e2e-spec.ts` | شامل على القاعدة الحية (12؛ تُتخطّى بلا قاعدة) | يُقلع `AppModule` كاملاً مع `configureApp()`؛ مستخدمو الاختبار بلاحقة فريدة ويُحذفون في النهاية (سجلات تدقيقهم تبقى بفاعل فارغ). (1) دخول بالبريد (غير حساس لحالة الأحرف): 200، رمز وصول، كعكة `HttpOnly; SameSite=Strict; Path=/api/auth`، التجزئة المخزّنة ≠ الكعكة، لا `passwordHash` في الجسم، `last_login_at`؛ (2) دخول باسم المستخدم + رفض حقل زائد (400 — KI-022)؛ (3) كلمة خاطئة ومعرّف مجهول = الرسالة نفسها (401 `invalid_credentials`)؛ (4) موقوف 403، معلّق 403، غير مفعّل 403، محذوف منطقياً 401، مؤرشف 401؛ (5) الحماية: بلا رمز 401 `unauthenticated`، رمز تالف `token_invalid`، رمز منتهٍ `token_expired`، صالح → `/me`، ثم تعليق الحساب يُسقط الرمز الصالح (403)؛ (6) الصلاحيات: بلا `audit.read` → 403 مع `missing`، دور اختباري يحمله → 200 وحدث الدخول ظاهر وبلا أسرار؛ (7) التدوير: كعكة جديدة ≠ القديمة، إعادة استخدام القديمة → 401 `refresh_reused` وتموت الجديدة أيضاً، كل رموز العائلة ملغاة، حدث `reuse_detected`، كعكة مفقودة/مزوّرة؛ (8) الخروج: 204 + مسح الكعكة، التجديد بعدها يفشل؛ `logout-all` يُسقط جلستين؛ (9) تغيير كلمة المرور: الحالية الخاطئة 400 `password_invalid`، الضعيفة 400 DTO، النجاح 204 ثم القديمة ترفض والجديدة تعمل، رمز الوصول الأقدم `token_invalid`، الكعكة الحالية تجدّد، الجلسة الأخرى ملغاة؛ (10) القفل: 4 فشل 401 ثم الخامس 423 `account_locked` + `retryAfterSeconds`، الصحيحة مرفوضة أثناء القفل، أحداث `login.failed`×4 و`login.locked` بلا كلمات مرور، رفع القفل يصفّر العدّاد؛ (11) تحديد المعدل: 11 محاولة لمعرّف واحد → 429 `rate_limited` ومعرّف آخر غير متأثر؛ (12) المدير الأول: إن لم يوجد مدير → `created` ثم `already_bootstrapped` لنفس البريد ودخول ناجح بدور `academy_admin` وكل الصلاحيات وحدث بلا كلمة مرور؛ دائماً: بريد آخر → `refused: admin_exists`، كلمة قصيرة → خطأ | ناجح 12/12 (CH-0014) |
@@ -2707,6 +2715,14 @@ npm install <package>
 | امتيازات app على كائنات migrator (CH-0009) | `has_table_privilege`: SELECT/INSERT/UPDATE/DELETE = t، TRUNCATE/REFERENCES/TRIGGER = f؛ `has_type_privilege(enum, USAGE)` = t؛ `CREATE TYPE` بدور app → `permission denied for schema public`؛ `rolcreatedb = f` |
 | trigger الإلحاق لـ `audit_logs` (CH-0009، D5) | داخل معاملة مُلغاة: migrator ينشئ الجدول والدالة والـ trigger ويُدرج صفاً؛ دور app يُدرج صفاً ثم `UPDATE` و`DELETE` → `ERROR: audit_logs is append-only` في الحالتين؛ الصفان بقيا؛ 0 جداول بعد التراجع |
 | `prisma migrate diff --help` / `prisma --help` (CH-0009، 6.6.3) | العلمان `--config` و`--exit-code` و`--from-migrations`/`--to-schema` متوفرة في 7.10.1 (أساس حارس الانجراف وتشغيل مخطط المنصة بإعداد منفصل) |
+| رصد العمليات والمنافذ (CH-0015) | `Get-CimInstance Win32_Process` + `Get-NetTCPConnection`: Nest واحد على :3000 (مراقب `nest start --watch` من جلسة Claude Code موازية، بدأ 19:33)؛ Vite على :5173 (جلسة Claude Code، 14:29) وVite ثانٍ على :5174 (طرفية VS Code للمالك، 14:52)؛ PostgreSQL على 127.0.0.1:5432. **لم يُوقَف أي منها** |
+| `JWT_SECRET` الدائم (CH-0015) | `backend/.env` يحمل المتغير (64 حرفاً؛ القيمة لم تُطبع)؛ رمز موقَّع محلياً به إلى `GET /api/auth/me` على :3000 → `401 session_invalid` (التوقيع مقبول والمستخدم غير موجود) قبل إعادة تشغيل المراقب وبعدها؛ نسخة من `dist/main` على :3999 أقلعت بلا تحذير `ephemeral` (health 200) ثم أُوقفت |
+| `npm run auth:bootstrap-admin` من PowerShell (CH-0015) | بمتغيرات البيئة ومدير مؤقت: إنشاء (exit 0) → نفس البريد `already_bootstrapped` (0) → بريد آخر `refused: admin_exists` (2) → بلا كلمة مرور وبلا TTY رسالة واضحة (1). المدير المؤقت حُذف بعد التحقق (`users` = 0). الإدخال التفاعلي بلا صدى `UNVERIFIED` (لا TTY في الجلسة) |
+| تدفق الجلسة عبر Vite proxy :5173 و:5174 (CH-0015) | دخول 200 + كعكة `HttpOnly; SameSite=Strict; Path=/api/auth; Max-Age=1209600`؛ `/me` 200؛ `/audit-logs` 200 (`audit.read`)؛ تجديد 200 مع تدوير الكعكة؛ إعادة استخدام القديمة `401 refresh_reused` وموت الجديدة؛ خروج 204 ثم `401 refresh_missing`؛ كلمة خاطئة `401 invalid_credentials`. العرض المرئي في متصفح `UNVERIFIED` |
+| فحص CSRF (CH-0015) | قبل الإصلاح: `POST /api/auth/login` بـ `application/x-www-form-urlencoded` → `401 invalid_credentials` (الجسم حُلِّل = login CSRF ممكن)؛ `text/plain` → `400`؛ `refresh` بـ `Origin` أجنبي بلا كعكة → `401` بلا `Access-Control-Allow-Origin`. بعد الإصلاح (المراقب أعاد التشغيل): النموذج → `400`، JSON → `401` |
+| `backend`: `lint` / `tsc --noEmit` / `test` / `test:e2e` (CH-0015) | نظيف / نظيف / 29/29 / **29/29** على القاعدة الحية (TEST-005 8 + TEST-007 9 + TEST-008 12)؛ ترجمة مكافئة للبناء `tsc -p tsconfig.build.json --outDir <مؤقت>` ناجحة (لم يُشغَّل `npm run build` لأن `start:dev` يعمل) |
+| `frontend`: `tsc -b` / `lint` / `vite build` (CH-0015) | نجحت؛ الحزمة 1,329 kB (KI-016) |
+| قاعدة التطوير بعد الجلسة (CH-0015) | `users` 0، `refresh_tokens` 0، `roles` 5، `permissions` 56، `audit_logs` 159 (كلها بفاعل فارغ — KI-032)؛ الترحيلان مطبَّقان |
 
 ### 13.5 فجوات الاختبار الحالية
 
@@ -2720,7 +2736,7 @@ npm install <package>
 
 ### 13.6 الاختبارات الفاشلة المعروفة
 
-لا شيء معروف. آخر تشغيل (CH-0014، 2026-10-29 19:18): وحدة 29/29 (TEST-003 13، TEST-004 4، TEST-006 6، TEST-009 3، TEST-010 3)، شامل 28/28 (TEST-005 7 + TEST-007 9 + TEST-008 12)، `lint` نظيف، `tsc --noEmit` نظيف؛ الواجهة: `tsc -b` و`lint` و`vite build` نظيفة.
+لا شيء معروف. آخر تشغيل (CH-0015، 2026-10-29 19:48): وحدة 29/29 (TEST-003 13، TEST-004 4، TEST-006 6، TEST-009 3، TEST-010 3)، شامل 29/29 (TEST-005 8 + TEST-007 9 + TEST-008 12)، `lint` نظيف، `tsc --noEmit` نظيف؛ الواجهة: `tsc -b` و`lint` و`vite build` نظيفة.
 
 ---
 
@@ -2908,6 +2924,7 @@ docker compose start postgres
 | المراقبة | `postgres-exporter` + Prometheus/Grafana أو بديل مُدار؛ تنبيه على فشل `/api/health/ready`؛ سجلات مركزية |
 | Redis (لاحقاً) | خدمة `redis` في compose للجلسات/الطوابير/التخزين المؤقت؛ تُضاف إلى الجاهزية؛ `REDIS_URL` في `env.schema.ts` |
 | الموارد | ضبط `shared_buffers`/`work_mem` حسب ذاكرة الخادم؛ `shm_size` للحاوية عند الاستعلامات الثقيلة |
+| HTTPS والكعكات (CH-0015) | الواجهة والـ API تحت **نطاق واحد أو نطاقات فرعية منه** لأن كعكة التحديث `SameSite=Strict` (SEC-R-11) — إما وكيل عكسي واحد يخدم `/` للواجهة و`/api` للخادم (الأبسط؛ يطابق proxy التطوير) أو `app.example` + `api.example`؛ `AUTH_COOKIE_SECURE=true` (افتراضي في `production` فقط — يُضبط صراحةً في أي بيئة HTTPS أخرى)؛ `CORS_ORIGIN` بأصل الواجهة الدقيق؛ `trust proxy` في Express خلف الوكيل (KI-030، MOD-01-H01) لصحة `req.ip` في التدقيق وتحديد المعدل؛ `SWAGGER_ENABLED=false`؛ `JWT_SECRET` من مخزن أسرار لا من ملف داخل الصورة |
 
 ---
 
@@ -2919,12 +2936,12 @@ docker compose start postgres
 | FS-002 | قالب واجهة React يعمل | MOD-FE-00 | REMOVED | — | قالب Vite الافتراضي أُزيل في CH-0005 وحلّ محلّه FS-034 |
 | FS-003 | اختبارات الخادم (وحدة + شامل) | MOD-00 | IMPLEMENTED | `backend/src/config/env.schema.spec.ts`, `backend/src/health/health.service.spec.ts`, `backend/test/app.e2e-spec.ts` | 11 اختباراً ناجحاً (CH-0006)؛ TEST-003..TEST-005 |
 | FS-004 | نظام التوثيق المستمر (وثيقة رئيسية + CLAUDE.md + خطّاف) | Tooling | IMPLEMENTED | `docs/PROJECT_DOCUMENTATION.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/doc-sync-check.mjs` | CH-0002 |
-| FS-010 | المصادقة | MOD-01 | PARTIALLY_IMPLEMENTED | `backend/src/auth/*`, `backend/src/audit/*`, `frontend/src/api/auth.ts`, `frontend/src/auth/*`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx` | CH-0014: دخول/تجديد/خروج/كلمة مرور/حراس/قفل/تحديد معدل/تدقيق منفَّذة ومختبرة (TEST-008..010)؛ **المتبقي:** الدعوات، تأكيد البريد، استعادة كلمة المرور، MFA (FS-041..FS-043 للتفاصيل) |
+| FS-010 | المصادقة وإدارة الجلسات (نواة MOD-01) | MOD-01 | IMPLEMENTED | `backend/src/auth/*`, `backend/src/audit/*`, `frontend/src/api/auth.ts`, `frontend/src/auth/*`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx` | CH-0014 منفَّذة؛ **CH-0015 مُعتمَدة ومقفلة** بعد تحقق قبول (13.4؛ خارطة الطريق §3). نطاقها: دخول/تجديد/خروج/كلمة مرور/حراس/قفل/تحديد معدل/تدقيق/المدير الأول/الواجهة (FS-041..FS-044). الدعوات وتفعيل الحسابات واستعادة كلمة المرور نُقلت إلى MOD-03 (FS-045، FS-046)؛ MFA (FS-047) PLANNED |
 | FS-011 | إدارة الأكاديمية | MOD-02 | PLANNED | — | |
 | FS-012 | النشر المستقل لكل أكاديمية | MOD-02 / Ops | PLANNED | — | ADR-008 |
 | FS-013 | قاعدة بيانات مخصّصة لكل أكاديمية | MOD-02 / DB | PLANNED | — | ADR-014 (Prisma + PostgreSQL)، ADR-008 |
-| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PLANNED | — | شاشة تجريبية ببيانات محلية: `frontend/src/pages/UsersPage.tsx` (CH-0005)؛ جداول القاعدة جاهزة منذ CH-0013 (FS-040) بلا خدمة أو API |
-| FS-015 | الأدوار والصلاحيات المخصّصة | MOD-03 | PARTIALLY_IMPLEMENTED | `backend/src/auth/permissions.guard.ts`, `decorators.ts`, `backend/src/authorization/*` | الفرض في الخادم منفَّذ (CH-0014: `@RequirePermissions` + حساب الصلاحيات من القاعدة)؛ الكتالوج والأدوار النظامية مبذورة (CH-0013)؛ **المتبقي:** إنشاء الأدوار المخصّصة وتعيينها من الواجهة (MOD-03)، نطاقات `own`/`linked` |
+| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PLANNED | — | شاشة تجريبية ببيانات محلية: `frontend/src/pages/UsersPage.tsx` (CH-0005)؛ جداول القاعدة جاهزة منذ CH-0013 (FS-040) بلا خدمة أو API؛ **مهام MOD-03-T01/T02/T04/T06/T07/T11/T14 في `docs/DEVELOPMENT_ROADMAP.md`** |
+| FS-015 | الأدوار والصلاحيات المخصّصة | MOD-03 | PARTIALLY_IMPLEMENTED | `backend/src/auth/permissions.guard.ts`, `decorators.ts`, `backend/src/authorization/*` | الفرض في الخادم منفَّذ (CH-0014: `@RequirePermissions` + حساب الصلاحيات من القاعدة)؛ الكتالوج والأدوار النظامية مبذورة (CH-0013)؛ **المتبقي:** إنشاء الأدوار المخصّصة وتعيينها من الواجهة (MOD-03-T07/T08/T13)، نطاقات `own`/`linked` (مع كل وحدة مستهلكة) |
 | FS-016 | الدورات والمستويات | MOD-04 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/CoursesPage.tsx` (CH-0005) |
 | FS-017 | الفصول والمجموعات | MOD-05 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/ClassesPage.tsx` (CH-0005) |
 | FS-018 | الدروس المباشرة | MOD-06 | PLANNED | — | مزود البث غير محدد؛ شاشة تجريبية مشتركة: `frontend/src/pages/LessonsPage.tsx` (CH-0005) |
@@ -2952,8 +2969,12 @@ docker compose start postgres
 | FS-040 | المخطط الأول لقاعدة الأكاديمية: 12 جدولاً (هوية الأكاديمية، المستخدمون، الأدوار والصلاحيات، الملفات التعريفية، أولياء الأمور، رموز الجلسات والتحقق، سجل التدقيق الإلحاقي) + بذر idempotent للصلاحيات والأدوار النظامية وصف الأكاديمية + اختبارات على القاعدة الحية | MOD-16 / MOD-03 / MOD-01 / MOD-02 (كيانات فقط) | IMPLEMENTED | `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261029150949_init_identity_academy/migration.sql`, `backend/prisma/migrations/20261029151839_audit_logs_allow_actor_set_null/migration.sql`, `backend/prisma/seed.ts`, `backend/src/authorization/*`, `backend/test/db.e2e-spec.ts` | CH-0013؛ ADR-020 ACCEPTED؛ TEST-007. بيانات وقيود فقط — لا خدمات ولا نقاط نهاية ولا فرض صلاحيات (FS-010، FS-011، FS-014، FS-015 ما زالت PLANNED) |
 | FS-041 | نواة المصادقة في الخادم: دخول بالبريد/اسم المستخدم، Argon2id، JWT وصول (jose)، رمز تحديث مدوَّر في كعكة httpOnly مع كشف إعادة الاستخدام، خروج من جهاز/كل الأجهزة، تغيير كلمة المرور، حارسا مصادقة وصلاحيات عامّان، قفل الحساب، تحديد المعدل، أحداث تدقيق | MOD-01 | IMPLEMENTED | `backend/src/auth/*`, `backend/src/audit/audit.service.ts`, `backend/src/app.module.ts`, `backend/src/config/env.schema.ts` | CH-0014؛ ADR-024؛ API-005..API-010؛ TEST-008..TEST-010 |
 | FS-042 | تهيئة المدير الأول (CLI آمن: بلا بيانات افتراضية، يرفض مديراً ثانياً، idempotent، لا طباعة للأسرار) | MOD-01 | IMPLEMENTED | `backend/scripts/bootstrap-admin.ts`, `backend/src/auth/bootstrap-admin.ts` | CH-0014؛ `npm run auth:bootstrap-admin`؛ TEST-008 (12) |
-| FS-043 | واجهة الدخول والجلسة: صفحة دخول حقيقية برسائل ar/en وحالة تحميل، جلسة بذاكرة + كعكة httpOnly مع تجديد تلقائي، صفحة الحساب (`/profile`) بتغيير كلمة المرور والخروج من كل الأجهزة، توجيه حسب الدور المشتق من الخادم | MOD-FE-01 / MOD-01 | IMPLEMENTED | `frontend/src/api/{client,auth}.ts`, `frontend/src/auth/*`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx`, `frontend/src/layout/AppLayout.tsx`, `frontend/src/app/router.tsx` | CH-0014؛ تحقق يدوي بـ curl عبر Vite proxy (دخول/me/تجديد/خروج)؛ لا اختبارات واجهة آلية بعد (13.5) |
+| FS-043 | واجهة الدخول والجلسة: صفحة دخول حقيقية برسائل ar/en وحالة تحميل، جلسة بذاكرة + كعكة httpOnly مع تجديد تلقائي، صفحة الحساب (`/profile`) بتغيير كلمة المرور والخروج من كل الأجهزة، توجيه حسب الدور المشتق من الخادم | MOD-FE-01 / MOD-01 | IMPLEMENTED | `frontend/src/api/{client,auth}.ts`, `frontend/src/auth/*`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx`, `frontend/src/layout/AppLayout.tsx`, `frontend/src/app/router.tsx` | CH-0014؛ تحقق يدوي بـ curl عبر Vite proxy (دخول/me/تجديد/خروج)؛ **تحقق قبول CH-0015 عبر :5173 و:5174** (13.4)؛ لا اختبارات واجهة آلية بعد (13.5؛ قرار D-R05) |
 | FS-044 | قراءة سجل التدقيق عبر API بصلاحية `audit.read` | audit (عرضي) | IMPLEMENTED | `backend/src/audit/audit.controller.ts`, `audit.dto.ts` | CH-0014؛ API-011؛ أول مستهلك لـ `PermissionsGuard` |
+| FS-045 | دعوة المستخدمين وتفعيل الحسابات (رمز استخدام واحد في `verification_tokens(invitation)` → ضبط كلمة المرور → `active`) | MOD-03 | PLANNED | — | نُقلت من MOD-01 بقرار الإغلاق (CH-0015)؛ MOD-03-T03/T12؛ قناة التسليم قرار D-R01 |
+| FS-046 | استعادة كلمة المرور (رابط إعادة ضبط بادئه المدير؛ المسار الذاتي عند توفر قناة بريد) | MOD-03 | PLANNED | — | CH-0015؛ MOD-03-T05/T12؛ D-R01 |
+| FS-047 | المصادقة متعددة العوامل (MFA) للمدراء | MOD-01 | PLANNED | — | MOD-01-H06 في خارطة الطريق؛ لا موعد |
+| FS-048 | أجسام الطلبات JSON فقط (تعطيل محلّل `urlencoded` الافتراضي — دفاع ضد login CSRF) | MOD-00 / Security | IMPLEMENTED | `backend/src/app.setup.ts` (`APP_CREATE_OPTIONS`, `useBodyParser('json')`), `backend/src/main.ts`, `backend/test/app.e2e-spec.ts` | CH-0015؛ ADR-026؛ KI-033 RESOLVED؛ SEC-R-10؛ TEST-005 |
 
 ---
 
@@ -2991,8 +3012,9 @@ docker compose start postgres
 | KI-028 | في التطوير يقرأ الخادم `.env` الجذري كاملاً (ليشتق `DATABASE_URL`)، فتصل `POSTGRES_PASSWORD` (superuser) و`DB_MIGRATOR_PASSWORD` إلى `process.env` لعملية الخادم رغم أن `validateEnv` تُسقطهما من `ConfigService` | Config / Security | منخفضة (جهاز المطور نفسه؛ الملف مقروء له أصلاً) | `backend/src/config/env-files.ts`؛ `@nestjs/config` (`assignVariablesToProcess`) | في الإنتاج تُحقن `DATABASE_URL` مباشرة بلا ملفات؛ محلياً يمكن نقل كلمتَي superuser/migrator إلى ملف يقرؤه compose فقط إن لزم | ACCEPTED (CH-0008) |
 | KI-029 | trigger الإلحاق على `audit_logs` في الترحيل الأول (مستوى العبارة، `BEFORE UPDATE OR DELETE OR TRUNCATE`) كان يرفض أيضاً الـ `UPDATE` الداخلي الذي ينفّذه `ON DELETE SET NULL` على `actor_user_id`، فيفشل `DELETE FROM users` لأي مستخدم (حتى بلا سجلات تدقيق، لأن trigger العبارة يعمل ولو بصفر صفوف) | DB / MOD-03 | عالية لو وصلت للإنتاج (لا أثر فعلي: اكتُشفت قبل الالتزام) | TEST-007 مباشرة بعد تطبيق الترحيل الأول: `error: audit_logs is append-only` عند حذف مستخدم | السبب مؤكد: تعارض بين D5 (إلحاقي) وP11-5 (`SetNull`). الحل: ترحيل ثانٍ `20261029151839_audit_logs_allow_actor_set_null` — trigger على مستوى الصف يسمح فقط بتحويل `actor_user_id` من قيمة إلى `NULL` مع تطابق بقية الأعمدة (`to_jsonb(NEW) - 'actor_user_id' = to_jsonb(OLD) - 'actor_user_id'`)، وtrigger عبارة مستقل لـ `TRUNCATE` | RESOLVED (CH-0013؛ متحقق بـ TEST-007: الحذف يُفرغ الفاعل ويُبقي السجل، وأي تعديل آخر يُرفض) |
 | KI-030 | محدّد المعدل (`@nestjs/throttler`) يخزّن العدّادات في ذاكرة العملية: لا يُشارك بين النسخ، ويُصفَّر عند إعادة التشغيل؛ وبلا `trust proxy` يُحسب العملاء خلف proxy بعنوان واحد | Backend / Security | منخفضة (نسخة واحدة) | `backend/src/auth/auth-throttler.guard.ts`, `app.module.ts` | Redis storage + `app.set('trust proxy', …)` عند النشر؛ القفل على مستوى الحساب (قاعدة البيانات) يبقى فعالاً | ACCEPTED (CH-0014، SEC-R-09) |
-| KI-031 | بلا `JWT_SECRET` خارج الإنتاج يُولَّد سرّ عابر عند كل إقلاع (تحذير في السجل) فتبطل رموز الوصول مع كل إعادة تشغيل للمراقب؛ الواجهة تتعافى بالتجديد عبر الكعكة | Backend / Dev | منخفضة | `backend/src/auth/token.service.ts` | ضبط `JWT_SECRET` في `backend/.env` المحلي (مضبوط على جهاز التطوير في CH-0014)؛ إلزامي في الإنتاج بمخطط البيئة | ACCEPTED (CH-0014، SEC-R-08) |
+| KI-031 | بلا `JWT_SECRET` خارج الإنتاج يُولَّد سرّ عابر عند كل إقلاع (تحذير في السجل) فتبطل رموز الوصول مع كل إعادة تشغيل للمراقب؛ الواجهة تتعافى بالتجديد عبر الكعكة | Backend / Dev | منخفضة | `backend/src/auth/token.service.ts` | ضبط `JWT_SECRET` في `backend/.env` المحلي (مضبوط على جهاز التطوير في CH-0014؛ **متحقق في CH-0015** أنه يُحمَّل بعد إعادة التشغيل: رمز موقَّع به مقبول قبل وبعد، ونسخة جديدة تقلع بلا تحذير)؛ إلزامي في الإنتاج بمخطط البيئة | ACCEPTED (CH-0014، SEC-R-08) |
 | KI-032 | اختبارات TEST-008 تكتب أحداث تدقيق حقيقية في قاعدة التطوير وتبقى بعد حذف مستخدمي الاختبار (فاعل فارغ) لأن الجدول إلحاقي بالتصميم | Tests / DB | منخفضة | `backend/test/auth.e2e-spec.ts` | قاعدة اختبار مستقلة أو CI بقاعدة مؤقتة (13.5) | ACCEPTED (CH-0014) |
+| KI-033 | **login CSRF:** `NestFactory.create` الافتراضي يسجّل محلّلَي `json` و`urlencoded`، فكان `POST /api/auth/login` يقرأ جسم نموذج HTML (`application/x-www-form-urlencoded`) مُرسَل من موقع آخر ويفحص بيانات الاعتماد (متحقق حياً: `401 invalid_credentials` بدل `400`)؛ يسمح لمهاجم بإدخال متصفح الضحية في حساب المهاجم وضبط كعكة تحديث لها. السبب مؤكد: محلّل `urlencoded` الافتراضي + غياب فحص `Origin` | Backend / Security | متوسطة (قبل أي نشر) | `backend/src/main.ts` قبل CH-0015؛ فحص curl في 13.4 | أجسام JSON فقط: `APP_CREATE_OPTIONS = { bodyParser: false }` + `app.useBodyParser('json')` في `configureApp()` (مشترك بين `main.ts` والاختبارات)؛ TEST-005 يثبت `400` للنماذج و`text/plain`؛ فحص `Origin` لاحقاً كطبقة ثانية (MOD-01-H02) | RESOLVED (CH-0015، ADR-026، SEC-R-10) |
 
 ---
 
@@ -3301,39 +3323,64 @@ docker compose start postgres
 | الحالة | **ACCEPTED** (منفَّذ في CH-0014 ومختبر بـ TEST-008..TEST-010) |
 | المكونات المتأثرة | `backend/src/auth/*`, `backend/src/audit/*`, `backend/scripts/bootstrap-admin.ts`, `frontend/src/api/*`, `frontend/src/auth/*`, ENV-25..ENV-35، الأقسام 07/10/12 |
 
+### ADR-025 — خارطة طريق رسمية مستقلة (`docs/DEVELOPMENT_ROADMAP.md`) لترتيب المراحل والمهام ومعايير القبول، مع بقاء هذه الوثيقة المرجع التقني الوحيد
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 (CH-0015) |
+| السياق | طلب المالك (2026-10-29) إغلاق MOD-01 رسمياً، وتقسيم MOD-03 إلى مهام صغيرة بمعايير قبول واختبارات، و"تحديث `DEVELOPMENT_ROADMAP.md` أو إنشائه وجعله المرجع الرسمي لترتيب مراحل التطوير". القسم 18 هنا كان يحمل تسلسلاً `RECOMMENDED` بلا معايير قبول ولا تقسيم مهام، وRULE 20 و20.3 تمنعان وثيقة موازية تكرر الحقيقة التقنية |
+| الخيارات المدروسة | (أ) توسيع القسم 18 داخل هذه الوثيقة فقط · (ب) ملف خارطة طريق مستقل يكرر حالة الوحدات والعقود · (ج) ملف مستقل **محصور في التخطيط** (الترتيب، المهام، معايير القبول، القرارات المطلوبة من المالك) يشير إلى هذه الوثيقة بالمعرّفات ولا يكرر الحقيقة التقنية، مع تحويل القسم 18 إلى ملخص حالة ومؤشر |
+| القرار | (ج). فصل المسؤوليات: هذه الوثيقة = **ما هو موجود** (الحالة الفعلية، العقود، المخطط، القرارات، التاريخ)؛ `docs/DEVELOPMENT_ROADMAP.md` = **ما سنبنيه تالياً وبأي ترتيب وكيف نعرف أنه اكتمل**. أي مهمة فيها `PLANNED` حتى تُنفَّذ وتُوثَّق هنا (RULE 13). تحديث حالة مهمة أو مرحلة يُسجَّل في الملفَين (الخارطة + القسم 19 هنا). عند التعارض: الحالة الفعلية لهذه الوثيقة، والترتيب للخارطة |
+| السبب | طلب صريح من المالك؛ وثيقة تخطيط قابلة للمراجعة والاعتماد مستقلة عن وثيقة بحجم 500 KB؛ منع التكرار بتقييد محتواها بالتخطيط وربطها بالمعرّفات |
+| النتائج المتوقعة | تعديل RULE 1 وRULE 20 في `CLAUDE.md` و20.2/20.3 هنا (استثناء مقيَّد)؛ القسم 18 يصبح قصيراً؛ خطر الانجراف بين الملفَين يُدار بقاعدة "الحقيقة التقنية هنا، الترتيب هناك" |
+| الحالة | **ACCEPTED** (CH-0015) |
+| المكونات المتأثرة | `docs/DEVELOPMENT_ROADMAP.md` (جديد)، القسمان 18 و20، `CLAUDE.md` |
+
+### ADR-026 — أجسام الطلبات JSON فقط (تعطيل محلّل `urlencoded` الافتراضي) كدفاع ضد login CSRF
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 (CH-0015) |
+| السياق | مراجعة الكعكات وCSRF قبل HTTPS (طلب المالك) كشفت أن إعداد NestJS الافتراضي يسجّل محلّلَي `json` و`urlencoded`؛ نموذج HTML من موقع آخر يستطيع إرسال `application/x-www-form-urlencoded` إلى `POST /api/auth/login` بلا CORS preflight، فتُفحص بيانات الاعتماد وتُضبط كعكة تحديث في متصفح الضحية لحساب المهاجم (login CSRF — KI-033، SEC-R-10). `SameSite=Strict` تحمي `refresh`/`logout` لا `login` (لا كعكة فيه) |
+| الخيارات المدروسة | (أ) فحص رأس `Origin`/`Sec-Fetch-Site` ضد `CORS_ORIGIN` على مسارات الكتابة · (ب) رمز CSRF (double-submit) · (ج) قبول أجسام `application/json` فقط على مستوى التطبيق (`bodyParser: false` + `useBodyParser('json')`) · (د) وسيط يرفض أنواع المحتوى غير JSON |
+| القرار | (ج): `APP_CREATE_OPTIONS = { bodyParser: false }` (في `app.setup.ts`) يُمرَّر إلى `NestFactory.create` وإلى `createNestApplication` في الاختبارات، و`configureApp()` يسجّل `express.json` وحده. النماذج (`urlencoded`/`multipart`/`text/plain`) تصل بجسم فارغ فيفشل تحقق DTO بـ `400` قبل أي منطق. المسارات التي ستقبل ملفات تفعّل multipart صراحةً بمعترض على مستوى المسار. (أ) يبقى طبقة ثانية مخطَّطة (MOD-01-H02)؛ (ب) مرفوض لأن المسارات المحمية تعتمد على Bearer لا على كعكة |
+| السبب | واجهة البرمجة JSON بالكامل أصلاً (العميل يرسل `Content-Type: application/json`)؛ حل مركزي بلا اعتماديات ولا تغيير في العقود؛ لا يتأثر بتعدد الأصول في التطوير (مثل Vite على :5174) بخلاف فحص `Origin` الصارم؛ يسدّ الفجوة للمسارات المستقبلية كلها تلقائياً |
+| النتائج المتوقعة | أي عميل يرسل `urlencoded` يحصل على `400` (لا عملاء كذلك اليوم)؛ تحميل الملفات لاحقاً يحتاج تفعيلاً صريحاً؛ كل اختبار شامل جديد يجب أن يُنشئ التطبيق بـ `APP_CREATE_OPTIONS` وإلا اختلف سلوكه عن `main.ts` (TEST-005 يحرس ذلك) |
+| الحالة | **ACCEPTED** (منفَّذ في CH-0015 ومختبر بـ TEST-005) |
+| المكونات المتأثرة | `backend/src/app.setup.ts`, `backend/src/main.ts`, `backend/test/{app,auth}.e2e-spec.ts`؛ 10.1، 12.1–12.3، KI-033، SEC-R-10 |
+
 ---
 
 ## 18. DEVELOPMENT ROADMAP — خارطة طريق التطوير
 
 ### 18.1 المرحلة الحالية
 
-**Stage 1 — Foundation (جارية منذ 2026-10-29).** Git مُفعّل (CH-0004)؛ الواجهة هيكل منتج تجريبي ببيانات محلية (CH-0005، سبق جدول Stage 2 لغرض المعاينة — ADR-012)؛ الخادم مهيأ (إعدادات مُتحقَّق منها، `ValidationPipe`، CORS، `/api`، Swagger، `health`) ومربوط بالواجهة (CH-0006)؛ PostgreSQL 18 في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)؛ أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). أول مخطط بيانات (12 جدولاً) وترحيلاه وبذره على قاعدة التطوير (CH-0013). **Stage 2 بدأت:** نواة MOD-01 (المصادقة والجلسات، الحراس، المدير الأول، واجهة الدخول والحساب) منفَّذة ومختبرة (CH-0014). المتبقي من Stage 1: `engines`، CI. التالي: MOD-03 (إدارة المستخدمين والأدوار + الدعوات) وMOD-02/MOD-14.
+**نهاية Stage 1 (Foundation) وبداية Stage 2 (Identity & Academy) — 2026-10-29.** Stage 1 منجزة (Git، الخادم المهيأ والمربوط بالواجهة، PostgreSQL 18 + Prisma 7 بأدوار محدودة، المخطط الأول وبذره — CH-0004..CH-0013) عدا `engines`/`.nvmrc` وCI (مهام S1-R01..S1-R03 في خارطة الطريق §2). **Stage 2:** MOD-01 (المصادقة والجلسات، الحراس، المدير الأول، واجهة الدخول والحساب) منفَّذة (CH-0014) و**مُعتمَدة ومقفلة بالقبول (CH-0015)**؛ التالي MOD-03 (المستخدمون والأدوار والدعوات واستعادة كلمة المرور) بمهام T00..T16، ثم MOD-02/MOD-14 وحسم ADR-008.
 
 ### 18.2 المتطلبات المتبقية
 
 كل متطلبات [القسم 02](#02-product-requirements--متطلبات-المنتج) (REQ-01 … REQ-14) ما زالت `PLANNED`.
 
-### 18.3 التسلسل المقترح (RECOMMENDED — يحتاج إلى اعتماد المالك)
+### 18.3 التسلسل الرسمي
 
-| المرحلة | المحتوى | الاعتماديات | الحالة |
-|---|---|---|---|
-| Stage 1 — Foundation | ~~`git init` + `.gitignore`~~ (CH-0004)؛ ~~تثبيت اعتماديات الخادم وملف القفل~~ (CH-0003)؛ ~~`@nestjs/config` + تحقق البيئة؛ `ValidationPipe`؛ CORS؛ بادئة `/api`؛ Swagger~~ (CH-0006)؛ ~~اختيار ORM~~ (ADR-014: Prisma)؛ ~~Docker Compose لـ PostgreSQL + ربط Prisma + فحص الجاهزية~~ (CH-0007)؛ ~~أدوار قاعدة بيانات محدودة + مصدر إعدادات واحد~~ (CH-0008)؛ ~~أول مخطط Prisma + ترحيل + بذر~~ (CH-0013)؛ **المتبقي:** `engines`؛ CI أساسي (lint/test/build + حارس الانجراف) | KI-012 | PARTIALLY_IMPLEMENTED (المتبقي: CI و`engines`) |
-| Stage 1b — UI prototype (خارج التسلسل الأصلي) | هيكل واجهة المنتج: Ant Design، توجيه، i18n/RTL، دخول تجريبي، معاينة الأدوار، 13 شاشة ببيانات محلية (MOD-FE-01، ADR-009..ADR-012) | — | IMPLEMENTED (CH-0005)؛ أول ربط حقيقي بالخادم عبر `GET /api/health` في CH-0006؛ استبدال بيانات الوحدات في Stage 2 وما بعدها |
-| Stage 2 — Identity & Academy | ~~MOD-01 المصادقة (النواة)~~ (CH-0014؛ المتبقي الدعوات/استعادة كلمة المرور)؛ MOD-03 المستخدمون والأدوار؛ MOD-02 الأكاديمية؛ MOD-14 الإعدادات؛ حسم ADR-008 | Stage 1 | PARTIALLY_IMPLEMENTED |
-| Stage 3 — Academic core | MOD-04 الدورات؛ MOD-05 الفصول؛ MOD-07 الجدولة؛ MOD-06 الدروس | Stage 2 | PLANNED |
-| Stage 4 — Assessment | MOD-08 الواجبات؛ MOD-09 الاختبارات والدرجات؛ MOD-10 الشهادات | Stage 3 | PLANNED |
-| Stage 5 — Finance & Communication | MOD-11 المدفوعات؛ MOD-12 الإشعارات؛ MOD-13 التقارير | Stage 2–4 | PLANNED |
-| Stage 6 — Scale & Reach | i18n + RTL (يُفضَّل مبكراً في الواجهة)؛ MOD-15 التكاملات وواجهات المحمول؛ مراقبة ونسخ احتياطي لكل أكاديمية | كل ما سبق | PLANNED |
+**المرجع الرسمي لترتيب المراحل وتقسيم المهام ومعايير قبولها هو `docs/DEVELOPMENT_ROADMAP.md` (ADR-025، CH-0015).** الجدول هنا ملخص حالة فقط؛ الترتيب لا يُعدَّل إلا هناك. (التسلسل المقترح السابق `RECOMMENDED` وقائمة الأولويات التاريخية وما أُنجز منها محفوظان في القسم 19 — CH-0002..CH-0014.)
 
-### 18.4 الأولويات التقنية الفورية (RECOMMENDED)
+| المرحلة | الحالة | المرجع في الخارطة |
+|---|---|---|
+| Stage 1 — Foundation | PARTIALLY_IMPLEMENTED (المتبقي: `engines`/`.nvmrc`، CI، إطار اختبار الواجهة) | §1، §2 |
+| Stage 1b — UI prototype | IMPLEMENTED (CH-0005؛ خارج التسلسل الأصلي — ADR-012) | §1 |
+| Stage 2 — Identity & Academy | IN_PROGRESS: MOD-01 مقفلة بالقبول (CH-0015)؛ MOD-03 مخطَّطة بمهام T00..T16؛ MOD-02/MOD-14 بعدها؛ حسم ADR-008 | §3، §4 |
+| Stage 3 — Academic core (MOD-04, MOD-05, MOD-07, MOD-06) | PLANNED | §1، §5 |
+| Stage 4 — Assessment (MOD-08, MOD-09, MOD-10) | PLANNED | §1، §5 |
+| Stage 5 — Finance & Communication (MOD-11, MOD-12, MOD-13) | PLANNED | §1، §5 |
+| Stage 6 — Scale & Reach (MOD-15، القاعدة المركزية، المراقبة والنسخ الاحتياطي، `tr`) | PLANNED | §1، §5 |
 
-1. ~~وضع المستودع تحت Git (KI-002)~~ — أُنجز في CH-0004. ~~ضبط هوية Git (KI-018)~~ — مضبوطة محلياً منذ CH-0005 (تم التحقق في CH-0008). المتبقي: تنفيذ خطة الالتزامات المقترحة في CH-0008، وتحديد سياسة الفروع، وإضافة remote.
-2. ترقية Node إلى 22.22.3 أو أحدث وإزالة `@nestjs/mau` غير المستخدمة (KI-012, KI-011). ملف القفل واختبارا الهيكل أُنجزا في CH-0003.
-3. ~~حسم ADR-003~~ (أُنجز: ADR-014 — Prisma + PostgreSQL) — يبقى حسم ADR-008 (نموذج العزل) قبل كتابة أول كيان.
-4. ~~إدخال i18n/RTL في الواجهة قبل أي شاشة منتج~~ — أُنجز في CH-0005 (ADR-010).
-5. ~~ربط الواجهة بالخادم (FS-031)~~ — أُنجز في CH-0006 (ADR-015).
-6. اعتماد إطار اختبار للواجهة (Vitest + Testing Library) قبل تراكم الشاشات (13.5).
-7. ~~تثبيت Docker Desktop وربط Prisma + PostgreSQL~~ — أُنجز في CH-0007 (ADR-016..ADR-018). ~~دور قاعدة بيانات محدود للتطبيق (KI-024)~~ — أُنجز في CH-0008 (ADR-019). التالي: اعتمد المالك D1/D4/D5 (CH-0009)؛ المتبقي قرارات D2، D3، D6..D10 في 6.6 وD11..D22 في 6.7.11 — **المانع منها للترحيل الأول فقط D2, D3, D6, D7, D8, D11, D20, D21, D22 مع توصيات نهائية ودليل تنفيذ في 6.6.5 (CH-0011)** — اعتُمدت (CH-0012) ونُفِّذ `schema.prisma` + الترحيلان + البذر (CH-0013). ~~MOD-01 (JWT، argon2id، المدير الأول) لاستبدال المصادقة التجريبية في الواجهة (KI-017)~~ — أُنجز في CH-0014 (ADR-024). التالي: الدعوات واستعادة كلمة المرور (`verification_tokens`) ثم MOD-03 (إدارة المستخدمين والأدوار من الواجهة).
+### 18.4 الأولويات التقنية الفورية
+
+1. **MOD-03 الدفعة A:** MOD-03-T00 (القرارات D-R01..D-R06 والمتغيرات الجديدة) → **T01** (قائمة/تفاصيل المستخدمين) → **T02** (إنشاء مستخدم بنوعه وملفه ودوره) → **T03** (الدعوة والتفعيل) — خارطة الطريق §4.5/§4.6.
+2. قرارات المالك المعلّقة التي تحدّد شكل MOD-03: قناة تسليم الدعوات وروابط إعادة الضبط (D-R01)، إطار اختبار الواجهة (D-R05) — §4.7.
+3. تحصينات MOD-01 غير المانعة قبل أي نشر: `trust proxy`، فحص `Origin`، سقف عمر عائلة التحديث، `helmet`/Swagger — §3.2.
+4. المتبقي من Stage 1: `engines`/`.nvmrc` (S1-R01)؛ CI عند إضافة remote (S1-R02)؛ ترقية Node (KI-012).
 
 ### 18.5 التحسينات المستقبلية
 
@@ -3599,6 +3646,24 @@ docker compose start postgres
 | تغييرات كاسرة | **نعم للواجهة التجريبية:** الدخول بأي بيانات انتهى؛ لا يمكن الدخول قبل تهيئة المدير الأول أو إنشاء مستخدم بكلمة مرور. **للخادم:** أي نقطة نهاية جديدة محمية افتراضياً (`@Public()` للاستثناء)؛ `npm ci` مطلوب للاعتماديات الأربع؛ في الإنتاج يفشل الإقلاع بلا `JWT_SECRET`. لا تغيير في API-002..API-004 |
 | المنفّذ | Claude Code (Fable 5.1، الجلسة `articodeacademy-ad`) بطلب من مالك المشروع |
 
+### CH-0015 — اعتماد MOD-01 وإغلاقها بالقبول، سدّ ثغرة login CSRF (أجسام JSON فقط)، وإنشاء خارطة الطريق الرسمية مع خطة MOD-03
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ والوقت | 2026-10-29، بين 19:38 و20:20 تقريباً (UTC+03:00)؛ المصدر: طوابع الاختبارات (19:41، 19:48) وسكربت التهيئة (19:44) وطابع حفظ هذه الوثيقة. حالة Git: غير ملتزم عند كتابة هذا الإدخال؛ لا push |
+| النوع | SECURITY, FIXED, ADDED (توثيق وتخطيط), MODIFIED |
+| الوحدة | MOD-01 (اعتماد وإغلاق)، MOD-00 (أجسام الطلبات)، MOD-03 (تخطيط)، Docs/Tooling (خارطة الطريق، `CLAUDE.md`) |
+| الوصف | **(1) تحقق قبول MOD-01** على البيئة الحية (13.4 وخارطة الطريق §3.1): رصد العمليات (Nest واحد على :3000؛ Vite مكرر على :5173 و:5174 — لم يُوقَف شيء)؛ `JWT_SECRET` دائم (64 حرفاً في `backend/.env`) مقبول التوقيع على الخادم قبل وبعد إعادة تشغيل المراقب، ونسخة جديدة على :3999 بلا تحذير السرّ العابر؛ `npm run auth:bootstrap-admin` من PowerShell بمساراته الأربعة (إنشاء / idempotent / رفض مدير ثانٍ / فشل نظيف بلا TTY) بمدير مؤقت حُذف بعدها؛ تدفق الدخول والتجديد (تدوير + كشف إعادة الاستخدام) والخروج وقراءة التدقيق عبر Vite proxy على المنفذَين. **(2) مراجعة الكعكات وCSRF:** الكعكة httpOnly/`SameSite=Strict`/مسار مقيَّد/`Secure` في الإنتاج سليمة؛ **اكتُشفت ثغرة login CSRF** (KI-033، SEC-R-10): محلّل `urlencoded` الافتراضي يقبل نموذج HTML من موقع آخر على `login` (متحقق: 401 بدل 400). **(3) الإصلاح:** `APP_CREATE_OPTIONS = { bodyParser: false }` في `app.setup.ts` يُمرَّر من `main.ts` والاختبارين الشاملين، و`configureApp()` يسجّل `app.useBodyParser('json')` وحده (ADR-026)؛ اختبار جديد في TEST-005 (`urlencoded`/`text/plain` → 400، JSON يصل إلى التحقق). المراقب أعاد تشغيل :3000 وتحقق السلوك الجديد حياً. **(4) إغلاق MOD-01:** الحالة IMPLEMENTED (FS-010)؛ الدعوات وتفعيل الحسابات واستعادة كلمة المرور نُقلت إلى نطاق MOD-03 (FS-045/FS-046)؛ MFA (FS-047) PLANNED؛ تحصينات غير مانعة MOD-01-H01..H07 في الخارطة. **(5) خارطة الطريق:** إنشاء `docs/DEVELOPMENT_ROADMAP.md` (ADR-025) بالمراحل وبوابات الخروج، سجل قبول MOD-01، وخطة MOD-03 بسبع عشرة مهمة (T00..T16) لكل منها نطاق ومعايير قبول واختبارات واعتماديات وتقدير، في أربع دفعات، مع إعادة استخدام الجداول الـ12 بلا جداول جديدة ولا مفاتيح صلاحيات جديدة، وست قرارات مطلوبة من المالك (D-R01..D-R06) والمتطلبات التقنية المعلقة. القسم 18 هنا تحوّل إلى ملخص حالة ومؤشر؛ 20.2/20.3 والملحق A محدَّثة. **(6) تصحيح انجراف توثيقي (RULE 17):** 1.6 وجدول 8.0 كانا يصفان حالة ما قبل CH-0013/CH-0014 (لا قاعدة ولا مصادقة؛ MOD-01 PLANNED؛ MOD-16 بلا نماذج) وحُدِّثا؛ 10.1 كان يذكر KI-022 مفتوحاً. **(7) `CLAUDE.md`:** حقائق MOD-01 والأجسام JSON وعدد الاختبارات، إدراج الخارطة في RULE 1 واستثناء مقيَّد في RULE 20 |
+| السبب | طلب المالك (2026-10-29): إغلاق مرحلة Authentication رسمياً بمعايير قبول صريحة، مراجعة الكعكات وCSRF استعداداً لـ HTTPS، واعتماد MOD-03 كمرحلة تالية بخطة مهام صغيرة في خارطة طريق رسمية؛ لا push ولا نشر |
+| الملفات | **معدّلة (6):** `backend/src/app.setup.ts`, `backend/src/main.ts`, `backend/test/app.e2e-spec.ts`, `backend/test/auth.e2e-spec.ts`, `docs/PROJECT_DOCUMENTATION.md`, `CLAUDE.md`؛ **جديدة (1):** `docs/DEVELOPMENT_ROADMAP.md`. **لا تغيير** في الواجهة ولا في ملفات `.env` |
+| أثر قاعدة البيانات | لا تغيير في المخطط ولا ترحيل. بيانات تشغيلية مؤقتة فقط: مدير مؤقت أُنشئ بالسكربت وحُذف (`users` = 0 بعد الجلسة)؛ `audit_logs` 115 → 159 (أحداث التحقق الحي وTEST-008 بفاعل فارغ — KI-032) |
+| أثر API | **لا تغيير في العقود ولا نقاط نهاية جديدة.** تغيير سلوكي عرضي: أي جسم بغير `application/json` لم يعد يُحلَّل (كان `urlencoded` مقبولاً) → `400` من تحقق DTO (10.1، API-005) |
+| أثر الصلاحيات | لا شيء |
+| الاختبارات | الخادم: `lint` نظيف؛ `tsc --noEmit` نظيف؛ وحدة 29/29؛ شامل **29/29** على القاعدة الحية (TEST-005 8 بعد الإضافة، TEST-007 9، TEST-008 12)؛ ترجمة مكافئة للبناء إلى مجلد مؤقت ناجحة (لم يُشغَّل `npm run build` لأن `start:dev` يعمل في جلسة موازية). الواجهة: `tsc -b`، `lint`، `vite build` نظيفة (1,329 kB). تحقق حي كامل بـ curl على :3000 و:5173 و:5174 و:3999 (13.4). العرض المرئي في متصفح `UNVERIFIED` |
+| النتيجة | نجاح. MOD-01 IMPLEMENTED ومقفلة؛ FS-010 IMPLEMENTED؛ FS-045..FS-048 جديدة؛ KI-033 جديدة RESOLVED؛ KI-031 متحقق؛ SEC-R-10 RESOLVED وSEC-R-11 جديدة؛ ADR-025 وADR-026 ACCEPTED؛ TEST-005 (8)؛ القسمان 18 و20 معدَّلان؛ خارطة الطريق 1.0.0 |
+| تغييرات كاسرة | **للعملاء غير JSON فقط:** طلب بجسم `application/x-www-form-urlencoded` يُعيد الآن `400` (لا يوجد عميل كذلك). للاختبارات: أي اختبار شامل جديد يجب أن يُنشئ التطبيق بـ `APP_CREATE_OPTIONS`. لا تغيير للواجهة |
+| المنفّذ | Claude Code (Fable 5.1) بطلب من مالك المشروع |
+
 ---
 
 ## 20. DOCUMENTATION MAINTENANCE — صيانة التوثيق
@@ -3622,6 +3687,7 @@ docker compose start postgres
 | حذف ميزة | 15 (الحالة REMOVED)، كل أقسام الحالة الراهنة المتأثرة، 19 (النوع REMOVED). **لا يُحذف تاريخها** |
 | تغيير حالة ميزة | 15، 19 |
 | تحديث اعتماديات | 03، 16 إن ظهرت مشكلات، 19 |
+| تغيير ترتيب المراحل أو حالة مهمة/مرحلة | `docs/DEVELOPMENT_ROADMAP.md` (المرجع الرسمي للترتيب — ADR-025) + 18 (الملخص) + 19 |
 
 ### 20.3 قواعد مصدر الحقيقة (Source of truth)
 
@@ -3629,6 +3695,7 @@ docker compose start postgres
 2. عند تعارض الوثيقة مع الكود: يُحقَّق في السبب، ثم تُصحَّح الوثيقة (أو الكود إن كان الانحراف خطأً)، ويُسجَّل ذلك في القسم 19.
 3. لا تُنشأ وثائق موازية تكرر محتوى هذه الوثيقة. ملفات README الفرعية (إن أُبقيت) تُشير إلى هنا فقط.
 4. لا تُوثَّق ميزة كـ `IMPLEMENTED` إلا بدليل من الكود (مسار ملف قابل للتحقق).
+5. **استثناء مقيَّد (ADR-025، CH-0015):** `docs/DEVELOPMENT_ROADMAP.md` هي المرجع الرسمي **لترتيب مراحل التطوير وتقسيم المهام ومعايير قبولها والقرارات المطلوبة من المالك** فقط؛ لا تحمل حقيقة تقنية (لا عقود ولا مخطط ولا حالة تنفيذ نهائية) وتشير إلى هنا بالمعرّفات. القسم 18 هنا ملخص حالة ومؤشر إليها. عند التعارض: الحالة الفعلية تُحسم لصالح هذه الوثيقة، والترتيب لصالح الخارطة.
 
 ### 20.4 الإصدار (Versioning)
 
@@ -3677,6 +3744,7 @@ docker compose start postgres
 | `KI-nnn` | مشكلة معروفة/دين تقني | 16 |
 | `ADR-nnn` | قرار معماري | 17 |
 | `CH-nnnn` | إدخال في سجل التغييرات | 19 |
+| `MOD-03-Tnn`, `S1-Rnn`, `MOD-01-Hnn`, `D-Rnn` | مهمة / تحصين / قرار مطلوب من المالك في خارطة الطريق | `docs/DEVELOPMENT_ROADMAP.md` (ADR-025) |
 
 ## الملحق B — سجل التحقق من الكود
 
@@ -3711,3 +3779,5 @@ docker compose start postgres
 تحديث الإصدار 1.7.0 (CH-0013) بتاريخ 2026-10-29: تحقق تجريبي أن Prisma 7.10.1 يرفض صيغة فهرس جزئي في المخطط (`prisma validate` على مخطط مؤقت خارج المستودع)؛ `prisma migrate diff --help` للأعلام (`--from-config-datasource`)؛ `prisma format` و`prisma validate`؛ `docker compose ps` وعدّ الجداول (0) قبل `pg_dump -Fc` شكلية إلى مجلد الجلسة المؤقت؛ `prisma migrate dev --create-only` ثم قراءة `migration.sql` كاملاً وعدّ `CREATE TABLE`/`INDEX`/`FOREIGN KEY`/`DROP`؛ `prisma migrate dev` مرتين (الترحيلان)؛ `prisma migrate status` و`migrate diff --exit-code` بعد كل تطبيق؛ استعلامات `psql` للجداول والأنواع والقيود والـ triggers ومالك الجداول و`has_table_privilege`/`has_type_privilege`/`has_schema_privilege`/`has_function_privilege` لدور app؛ `prisma generate` وقراءة مجلد `src/generated/prisma/models`؛ `npx prisma db seed` ثلاث مرات (الأولى فشلت بسبب التحقق من `UTC` عبر `Intl.supportedValuesOf` فاستُبدل بـ `Intl.DateTimeFormat`) وعدّ الصفوف لكل جدول ولكل دور؛ `npm run lint`، `npx tsc --noEmit`، `npm test`، `npm run test:e2e` (فشلان أثناء التطوير: رمز `23001` بدل `23503` لـ RESTRICT، وتعارض trigger الإلحاق مع SET NULL — KI-029)؛ `curl` على `/api/health/ready` للخادم الحي (200). **لم يُشغَّل `npm run build`** (خادم `start:dev` يعمل في جلسة موازية).
 
 تحديث الإصدار 1.8.0 (CH-0014) بتاريخ 2026-10-29: قراءة `CLAUDE.md` وMOD-01 و10 و12 و6.7.8 من هذه الوثيقة؛ قراءة كل ملفات الخادم المصدرية (`app.module/app.setup/main`, `health/*`, `common/*`, `config/*`, `prisma/*`) وكل ملفات الواجهة المتأثرة (`main.tsx`, `app/*`, `auth/*`, `api/*`, `layout/*`, `pages/LoginPage.tsx`, `components/RoleSwitcher.tsx`, `i18n/*`, `vite.config.ts`, `package.json`, `.oxlintrc.json`)؛ `npm view` لـ `@nestjs/jwt`/`@nestjs/passport`/`@nestjs/throttler`/`jose`/`argon2`/`@node-rs/argon2`/`cookie`/`cookie-parser` (النطاقات النظيرة لـ Nest 12) وقراءة إصدار Nest المثبّت (12.3.2) وتصدير `cookie` 2.x (`parseCookie`)؛ تثبيت الاعتماديات الأربع بـ npm 11 والتحقق من تحميلها تحت ESM (تجزئة argon2 فعلية)؛ `Get-CimInstance`/`Get-NetTCPConnection` لرصد عمليات `nest`/`vite` ومنافذها (لم يُوقَف أي منها: nest :3000 وvite :5173 للجلسة الموازية، vite :5174 بلا مالك معروف)؛ `tsc --noEmit`/`lint`/`npm test`/`test:e2e` تكراراً حتى 29/29 و28/28؛ `tsc -b`/`lint`/`vite build` في الواجهة؛ `curl` على :3000 و:5173 (`/api/health` 200، `/api/auth/me` 401 `unauthenticated`) ثم تحقق حي كامل بمستخدم مؤقت أُدرج بـ `psql` بتجزئة argon2 وحُذف بعده؛ عدّ أحداث التدقيق بعد التحقق؛ إضافة `JWT_SECRET` عشوائي إلى `backend/.env` المحلي. **لا ترحيل، لا تغيير في المخطط، لا مستخدمين حقيقيين، لا commit قبل اكتمال التوثيق، لا push.**
+
+تحديث الإصدار 1.9.0 (CH-0015) بتاريخ 2026-10-29: قراءة `CLAUDE.md` والأقسام 01/06/07/08/09/10/11/12/13/15/16/18/19/20 وMOD-01/MOD-03 و6.7.8؛ قراءة كل ملفات `backend/src/auth/*` و`audit/*` و`config/env.schema.ts` و`app.setup.ts` و`app.module.ts` و`main.ts` و`scripts/bootstrap-admin.ts` و`prisma/schema.prisma` و`authorization/*` وملفات الواجهة `auth/*`, `api/*`, `pages/{Login,Profile,Users}Page.tsx`, `app/router.tsx`, `layout/navigation.ts`, `vite.config.ts`؛ `Get-CimInstance Win32_Process` و`Get-NetTCPConnection` لرصد Nest/Vite ومنافذها (لم يُوقَف شيء)؛ `docker compose ps` وعدّ الصفوف عبر `psql` قبل وبعد؛ فحص وجود `JWT_SECRET` وطوله دون طباعة قيمته وتوقيع رمز اختبار به محلياً (`jose`) ضد `/api/auth/me` قبل إعادة التشغيل وبعدها؛ `npm run auth:bootstrap-admin` من pwsh بأربعة سيناريوهات ثم حذف المدير المؤقت بـ `psql`؛ تدفق curl كامل عبر :5173 و:5174 بملف كعكات مؤقت حُذف؛ فحوص CSRF (`urlencoded`، `text/plain`، `Origin` أجنبي) قبل الإصلاح وبعده؛ قراءة مصادر `@nestjs/core`/`platform-express`/`testing` للتأكد من سلوك `bodyParser: false` و`useBodyParser` وتوقيعات `createNestApplication`؛ `lint`/`tsc --noEmit`/`test`/`test:e2e`؛ ترجمة `tsconfig.build.json` إلى مجلد مؤقت؛ تشغيل `dist/main` على :3999 وقراءة سجل الإقلاع ثم إيقافه؛ `tsc -b`/`lint`/`vite build` في الواجهة؛ `git status`. **لا ترحيل، لا تغيير في المخطط، لا مستخدمين حقيقيين (المدير المؤقت حُذف)، لا commit قبل اكتمال التوثيق، لا push.**

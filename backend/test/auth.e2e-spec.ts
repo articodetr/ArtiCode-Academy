@@ -10,7 +10,7 @@ import request from 'supertest';
 import type { Response as SupertestResponse } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/app.setup.js';
+import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { bootstrapFirstAdmin } from '../src/auth/bootstrap-admin.js';
 import { REFRESH_COOKIE_NAME } from '../src/auth/cookies.js';
 import { PasswordService } from '../src/auth/password.service.js';
@@ -97,7 +97,7 @@ describe.skipIf(!available)('MOD-01 authentication (e2e, TEST-008)', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication<NestExpressApplication>();
+    app = moduleRef.createNestApplication<NestExpressApplication>(APP_CREATE_OPTIONS);
     configureApp(app);
     await app.init();
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL! }) });

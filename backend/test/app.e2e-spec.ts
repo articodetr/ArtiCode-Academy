@@ -2,7 +2,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from './../src/app.module.js';
-import { configureApp } from './../src/app.setup.js';
+import { APP_CREATE_OPTIONS, configureApp } from './../src/app.setup.js';
 import { PACKAGE_VERSION, SERVICE_NAME } from './../src/common/package-info.js';
 import { NODE_ENVS } from './../src/config/env.schema.js';
 
@@ -17,7 +17,7 @@ describe('API (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication<NestExpressApplication>();
+    app = moduleFixture.createNestApplication<NestExpressApplication>(APP_CREATE_OPTIONS);
     configureApp(app);
     await app.init();
   });
@@ -99,6 +99,31 @@ describe('API (e2e)', () => {
       expect(res.body.status).toBe('not_ready');
       expect(['down', 'not_configured']).toContain(database.status);
     }
+  });
+
+  it('reads request bodies from application/json only (form posts cannot sign anyone in — ADR-026)', async () => {
+    // What a cross-site <form> can send without a CORS preflight: urlencoded, multipart, text/plain.
+    // Without a parsable body the DTO validation fails (400) before any credential is checked.
+    const form = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .type('form')
+      .send({ identifier: 'csrf-probe@example.test', password: 'probe-only' })
+      .expect(400);
+    expect(form.body.statusCode).toBe(400);
+    expect(form.body.message).toEqual(expect.arrayContaining([expect.stringContaining('identifier')]));
+
+    const text = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('Content-Type', 'text/plain')
+      .send('{"identifier":"csrf-probe@example.test","password":"probe-only"}')
+      .expect(400);
+    expect(text.body.statusCode).toBe(400);
+
+    // JSON is still parsed: the same payload reaches validation and passes it (401 = credentials checked).
+    const json = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ identifier: 'csrf-probe@example.test', password: 'probe-only' });
+    expect([401, 503]).toContain(json.status);
   });
 
   it('serves the OpenAPI document under the prefix', async () => {
