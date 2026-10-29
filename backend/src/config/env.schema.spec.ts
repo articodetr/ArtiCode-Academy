@@ -18,7 +18,43 @@ describe('validateEnv', () => {
       AUTH_COOKIE_SECURE: false,
       AUTH_LOCKOUT_THRESHOLD: 5,
       AUTH_LOCKOUT_MINUTES: 15,
+      AUTH_INVITATION_TTL_HOURS: 48,
+      AUTH_PASSWORD_RESET_TTL_MINUTES: 30,
+      AUTH_SELF_SERVICE_RESET_ENABLED: false,
     });
+  });
+
+  it('parses the MOD-03 account lifecycle settings and rejects values out of range', () => {
+    const env = validateEnv({
+      AUTH_INVITATION_TTL_HOURS: '72',
+      AUTH_PASSWORD_RESET_TTL_MINUTES: '15',
+      AUTH_SELF_SERVICE_RESET_ENABLED: 'true',
+      APP_PUBLIC_URL: 'https://academy.example/',
+    });
+    expect(env.AUTH_INVITATION_TTL_HOURS).toBe(72);
+    expect(env.AUTH_PASSWORD_RESET_TTL_MINUTES).toBe(15);
+    expect(env.AUTH_SELF_SERVICE_RESET_ENABLED).toBe(true);
+    expect(env.APP_PUBLIC_URL).toBe('https://academy.example');
+
+    // Empty assignments fall back to the defaults; APP_PUBLIC_URL has none.
+    const empty = validateEnv({
+      AUTH_INVITATION_TTL_HOURS: '',
+      AUTH_PASSWORD_RESET_TTL_MINUTES: '',
+      AUTH_SELF_SERVICE_RESET_ENABLED: '',
+      APP_PUBLIC_URL: '',
+    });
+    expect(empty.AUTH_INVITATION_TTL_HOURS).toBe(48);
+    expect(empty.AUTH_PASSWORD_RESET_TTL_MINUTES).toBe(30);
+    expect(empty.AUTH_SELF_SERVICE_RESET_ENABLED).toBe(false);
+    expect(empty.APP_PUBLIC_URL).toBeUndefined();
+
+    expect(() => validateEnv({ AUTH_INVITATION_TTL_HOURS: '0' })).toThrow(/AUTH_INVITATION_TTL_HOURS/);
+    expect(() => validateEnv({ AUTH_INVITATION_TTL_HOURS: '721' })).toThrow(/AUTH_INVITATION_TTL_HOURS/);
+    expect(() => validateEnv({ AUTH_PASSWORD_RESET_TTL_MINUTES: '4' })).toThrow(/AUTH_PASSWORD_RESET_TTL_MINUTES/);
+    expect(() => validateEnv({ AUTH_PASSWORD_RESET_TTL_MINUTES: '1.5' })).toThrow(/AUTH_PASSWORD_RESET_TTL_MINUTES/);
+    expect(() => validateEnv({ AUTH_SELF_SERVICE_RESET_ENABLED: 'yes' })).toThrow(/AUTH_SELF_SERVICE_RESET_ENABLED/);
+    expect(() => validateEnv({ APP_PUBLIC_URL: 'academy.example' })).toThrow(/APP_PUBLIC_URL/);
+    expect(() => validateEnv({ APP_PUBLIC_URL: 'ftp://academy.example' })).toThrow(/APP_PUBLIC_URL/);
   });
 
   it('coerces PORT, parses the CORS list and the Swagger flag', () => {

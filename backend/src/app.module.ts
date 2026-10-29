@@ -7,6 +7,7 @@ import { ENV_FILE_PATHS } from './config/env-files.js';
 import { validateEnv } from './config/env.schema.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { UsersModule } from './users/users.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     PrismaModule,
     AuditModule,
     AuthModule,
+    UsersModule,
     HealthModule,
   ],
 })

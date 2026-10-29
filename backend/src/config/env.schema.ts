@@ -116,6 +116,41 @@ export const envSchema = z
       emptyToUndefined,
       z.coerce.number().int().min(1).max(1440).default(15),
     ),
+
+    // --- Account lifecycle (MOD-03: invitations, password reset) ------------
+    /** Lifetime of an invitation token in hours (1 h – 30 days; owner decision D-R02: 48). */
+    AUTH_INVITATION_TTL_HOURS: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(1).max(720).default(48),
+    ),
+    /** Lifetime of a password-reset token in minutes (5 min – 24 h; D-R02: 30). */
+    AUTH_PASSWORD_RESET_TTL_MINUTES: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(5).max(1440).default(30),
+    ),
+    /**
+     * Public "forgot my password" route. Off until an e-mail channel exists
+     * (D-R01: invitation and reset links are handed over manually for now).
+     */
+    AUTH_SELF_SERVICE_RESET_ENABLED: z.preprocess(
+      emptyToUndefined,
+      z
+        .enum(['true', 'false'])
+        .default('false')
+        .transform((value) => value === 'true'),
+    ),
+    /**
+     * Public base URL of the web app (e.g. https://academy.example), reserved
+     * for links in e-mails once a mail channel exists. http(s) only, no default;
+     * a trailing slash is removed.
+     */
+    APP_PUBLIC_URL: z.preprocess(
+      emptyToUndefined,
+      z
+        .url({ protocol: /^https?$/ })
+        .transform((value) => value.replace(/\/+$/, ''))
+        .optional(),
+    ),
   })
   // The derivation inputs stay out of the validated config: feature code only
   // ever sees DATABASE_URL.

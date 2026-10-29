@@ -2,10 +2,10 @@
 
 | البند | القيمة |
 |---|---|
-| **إصدار الوثيقة** | 1.9.0 |
-| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 20:20 (UTC+03:00) |
-| **آخر معرّف تغيير مسجّل** | CH-0015 |
-| **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): Git (CH-0004)، هيكل واجهة تجريبي ببيانات محلية (CH-0005)، تهيئة الخادم وربطه بالواجهة (CH-0006)، PostgreSQL 18 محلية في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)، أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). **أول مخطط بيانات منفَّذ (CH-0013):** 12 جدولاً للهوية والأكاديمية بترحيلَين مطبَّقين على قاعدة التطوير، مع بذر كتالوج الصلاحيات والأدوار النظامية وصف الأكاديمية (التصميم المرجعي 6.6؛ القرارات معتمدة في CH-0009/CH-0012؛ الحالة الفعلية في 6.2/6.3). **المصادقة MOD-01 منفَّذة (CH-0014):** دخول بالبريد أو اسم المستخدم، argon2id، JWT قصير العمر، رمز تحديث في كعكة httpOnly مع تدوير وكشف إعادة الاستخدام، حارسا مصادقة وصلاحيات عامّان، قفل الحساب وتحديد المعدل، أحداث تدقيق، تهيئة المدير الأول عبر CLI، وواجهة دخول/حساب حقيقية (الواجهة التجريبية أُزيلت). **MOD-01 مُعتمَدة ومقفلة (CH-0015):** تحقق قبول كامل على البيئة الحية (المدير الأول من PowerShell، الدخول/التجديد/الخروج عبر الواجهة، `JWT_SECRET` دائم بعد إعادة التشغيل) وإغلاق ثغرة login CSRF بجعل أجسام الطلبات JSON فقط (ADR-026). **خارطة الطريق الرسمية** في `docs/DEVELOPMENT_ROADMAP.md` (ADR-025)؛ MOD-03 مخطَّطة بمهام T00..T16. لا منطق أعمال لبقية الوحدات بعد؛ التصميم المستهدف الكامل في 6.7 PROPOSED (CH-0010) |
+| **إصدار الوثيقة** | 1.10.0 |
+| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 20:55 (UTC+03:00) |
+| **آخر معرّف تغيير مسجّل** | CH-0016 |
+| **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): Git (CH-0004)، هيكل واجهة تجريبي ببيانات محلية (CH-0005)، تهيئة الخادم وربطه بالواجهة (CH-0006)، PostgreSQL 18 محلية في Docker موصولة بـ Prisma 7 مع فحص جاهزية (CH-0007)، أدوار قاعدة بيانات محدودة الصلاحيات ومصدر واحد لإعدادات القاعدة (CH-0008). **أول مخطط بيانات منفَّذ (CH-0013):** 12 جدولاً للهوية والأكاديمية بترحيلَين مطبَّقين على قاعدة التطوير، مع بذر كتالوج الصلاحيات والأدوار النظامية وصف الأكاديمية (التصميم المرجعي 6.6؛ القرارات معتمدة في CH-0009/CH-0012؛ الحالة الفعلية في 6.2/6.3). **المصادقة MOD-01 منفَّذة (CH-0014):** دخول بالبريد أو اسم المستخدم، argon2id، JWT قصير العمر، رمز تحديث في كعكة httpOnly مع تدوير وكشف إعادة الاستخدام، حارسا مصادقة وصلاحيات عامّان، قفل الحساب وتحديد المعدل، أحداث تدقيق، تهيئة المدير الأول عبر CLI، وواجهة دخول/حساب حقيقية (الواجهة التجريبية أُزيلت). **MOD-01 مُعتمَدة ومقفلة (CH-0015):** تحقق قبول كامل على البيئة الحية (المدير الأول من PowerShell، الدخول/التجديد/الخروج عبر الواجهة، `JWT_SECRET` دائم بعد إعادة التشغيل) وإغلاق ثغرة login CSRF بجعل أجسام الطلبات JSON فقط (ADR-026). **خارطة الطريق الرسمية** في `docs/DEVELOPMENT_ROADMAP.md` (ADR-025). **MOD-03 بدأت (CH-0016):** T00 (قرارات المالك D-R01..D-R06 — ADR-027، متغيرات البيئة ENV-36..ENV-39، قاموس أكواد أخطاء MOD-03) وT01 (`GET /api/users` و`GET /api/users/:id` بصلاحية `users.read` — API-012/API-013، ADR-028) منفَّذتان ومختبرتان؛ T02 التالية. لا منطق أعمال لبقية الوحدات بعد؛ التصميم المستهدف الكامل في 6.7 PROPOSED (CH-0010) |
 | **المالك التقني للوثيقة** | فريق تطوير ArtiCode Academy (يُحدَّث بواسطة المطورين و Claude Code وفق `CLAUDE.md`) |
 | **اللغة** | عربية مهنية مع الإبقاء على المعرّفات التقنية والأسماء البرمجية بالإنجليزية |
 
@@ -98,16 +98,16 @@
 
 | العنصر | الحالة الفعلية |
 |---|---|
-| `backend/` | **NestJS 12** مهيأ (CH-0006): تحقق من متغيرات البيئة بـ zod، `ValidationPipe` عام، CORS من الإعدادات، بادئة `/api`، Swagger على `/api/docs`، `GET /api/health` و`/api/health/ready`. **MOD-01 كاملة (CH-0014) ومُعتمَدة بالقبول (CH-0015):** `src/auth/*`، `src/audit/*`، CLI المدير الأول؛ منذ CH-0015 أجسام الطلبات JSON فقط (ADR-026). الاختبارات: 29 وحدة + 29 شاملة، `lint`/`tsc` نظيفة. لا منطق أعمال لبقية الوحدات بعد. |
+| `backend/` | **NestJS 12** مهيأ (CH-0006): تحقق من متغيرات البيئة بـ zod، `ValidationPipe` عام، CORS من الإعدادات، بادئة `/api`، Swagger على `/api/docs`، `GET /api/health` و`/api/health/ready`. **MOD-01 كاملة (CH-0014) ومُعتمَدة بالقبول (CH-0015):** `src/auth/*`، `src/audit/*`، CLI المدير الأول؛ منذ CH-0015 أجسام الطلبات JSON فقط (ADR-026). **MOD-03 بدأت (CH-0016):** `src/users/*` — قائمة المستخدمين وتفاصيلهم (`GET /api/users`, `GET /api/users/:id`) بصلاحية `users.read` مع بحث ومرشّحات وترقيم بمؤشر (API-012/API-013)؛ متغيرات دورة حياة الحساب (ENV-36..ENV-39) وقاموس أكواد MOD-03 جاهزان للمهام التالية. الاختبارات: 33 وحدة + 40 شاملة، `lint`/`tsc` نظيفة. لا منطق أعمال لبقية الوحدات بعد. |
 | `frontend/` | تطبيق **Vite 8 + React 19 + TypeScript 7** مع **Ant Design 6** و**react-router 7** و**i18next** (CH-0005): تخطيط عام (قائمة جانبية + ترويسة)، 13 شاشة وحدة ببيانات محلية ثنائية اللغة، عربية افتراضياً مع RTL. **الدخول حقيقي منذ CH-0014** (`/login`، `/profile`؛ رمز الوصول في الذاكرة + كعكة httpOnly مع تجديد تلقائي). شاشات الوحدات ما زالت على `src/mock/data.ts` وتُستبدل وحدةً بوحدة (أولها MOD-03). |
 | قاعدة البيانات | **PostgreSQL 18.6 في Docker** (`compose.yaml`، CH-0007) و**Prisma 7.10.1** عبر `PrismaModule`؛ أدوار محدودة (`articode_app` للتشغيل، `articode_migrator` للترحيلات، superuser للإدارة فقط — ADR-019)؛ إعدادات القاعدة في `.env` الجذري وحده. **المخطط الأول منفَّذ (CH-0013):** 12 جدولاً، ترحيلان مطبَّقان، بذر idempotent (صف الأكاديمية، 5 أدوار، 56 صلاحية). **لا مستخدمين:** المدير الأول ينشئه المالك بـ `npm run auth:bootstrap-admin` (الطريقة متحقق منها في CH-0015 بمدير مؤقت حُذف). |
-| المصادقة والصلاحيات | **منفَّذة في الخادم (CH-0014) ومُعتمَدة بالقبول (CH-0015):** Argon2id، JWT وصول قصير، رمز تحديث مدوَّر في كعكة httpOnly مع كشف إعادة الاستخدام، حارسان عامّان (`AuthGuard` + `PermissionsGuard`)، قفل وتحديد معدل، تدقيق بلا أسرار. إدارة المستخدمين والأدوار من الواجهة = MOD-03 (التالية في خارطة الطريق). |
+| المصادقة والصلاحيات | **منفَّذة في الخادم (CH-0014) ومُعتمَدة بالقبول (CH-0015):** Argon2id، JWT وصول قصير، رمز تحديث مدوَّر في كعكة httpOnly مع كشف إعادة الاستخدام، حارسان عامّان (`AuthGuard` + `PermissionsGuard`)، قفل وتحديد معدل، تدقيق بلا أسرار. **أول مستهلك فعلي لـ `users.read` منذ CH-0016** (قائمة المستخدمين وتفاصيلهم). إدارة المستخدمين (إنشاء/تعديل/حالات/أدوار) والواجهة = بقية مهام MOD-03 في خارطة الطريق. |
 | التكامل بين الواجهة والخادم | **حقيقي لـ MOD-01 (CH-0014):** proxy Vite من `/api` إلى المنفذ 3000 (الكعكات تمر)، CORS، عميل HTTP بـ Bearer وتجديد تلقائي عند 401؛ بطاقة "الاتصال بالخادم" (CH-0006/CH-0007). بقية الشاشات على بيانات محلية. |
 | نظام الإصدارات | **تحت Git منذ CH-0004** (فرع `main`، commit الأساس `127cb1d`). لا remote ولا push ولا سياسة فروع بعد. |
 | التوثيق | هذه الوثيقة (المرجع التقني الوحيد) + **`docs/DEVELOPMENT_ROADMAP.md`** (المرجع الرسمي لترتيب المراحل والمهام ومعايير قبولها — CH-0015، ADR-025). |
 | نظام التوثيق المستمر | `IMPLEMENTED` بتاريخ 2026-10-28: هذه الوثيقة + `CLAUDE.md` + خطّاف تحقق (`.claude/hooks/doc-sync-check.mjs`). |
 
-**الخلاصة:** المشروع في **نهاية المرحلة 1 (Foundation) وبداية المرحلة 2 (Identity & Academy)**: Git، خادم مهيأ، قاعدة PostgreSQL محلية بمخططها الأول وبذرها، و**MOD-01 مقفلة بالقبول (CH-0015)**. المتبقي من المرحلة 1: `engines`/`.nvmrc` وCI. التالي وفق `docs/DEVELOPMENT_ROADMAP.md`: MOD-03 (المستخدمون والأدوار والدعوات واستعادة كلمة المرور) بمهامها T00..T16. كل ميزات الرؤية الأخرى `PLANNED` ما لم يُذكر خلاف ذلك (التفصيل في [القسم 15](#15-feature-status-matrix--مصفوفة-حالة-الميزات)).
+**الخلاصة:** المشروع في **نهاية المرحلة 1 (Foundation) وبداية المرحلة 2 (Identity & Academy)**: Git، خادم مهيأ، قاعدة PostgreSQL محلية بمخططها الأول وبذرها، و**MOD-01 مقفلة بالقبول (CH-0015)**، و**MOD-03 جارية (CH-0016: T00 وT01 منفَّذتان)**. المتبقي من المرحلة 1: `engines`/`.nvmrc` وCI. التالي وفق `docs/DEVELOPMENT_ROADMAP.md`: MOD-03-T02 (إنشاء مستخدم بنوعه وملفه ودوره) ثم T03 (الدعوة والتفعيل). كل ميزات الرؤية الأخرى `PLANNED` ما لم يُذكر خلاف ذلك (التفصيل في [القسم 15](#15-feature-status-matrix--مصفوفة-حالة-الميزات)).
 
 ---
 
@@ -308,7 +308,7 @@ ArtiCodeAcademy/
 │   │   └── doc-sync-check.mjs        ← سكربت التحقق من مزامنة التوثيق (SessionStart + Stop)
 │   └── .doc-sync/                    ← حالة الخطّاف (بصمات الملفات لكل جلسة) — متجاهَل بـ .gitignore ذاتي
 ├── backend/                          ← تطبيق NestJS 12 (ESM)، مهيأ منذ CH-0006
-│   ├── .env.example                  ← أسماء متغيرات البيئة وقيمها الافتراضية (بلا أسرار) — CH-0006؛ منذ CH-0008 بلا DATABASE_URL افتراضي (يُشتق من .env الجذري)
+│   ├── .env.example                  ← أسماء متغيرات البيئة وقيمها الافتراضية (بلا أسرار) — CH-0006؛ منذ CH-0008 بلا DATABASE_URL افتراضي (يُشتق من .env الجذري)؛ متغيرات دورة حياة الحساب AUTH_INVITATION_TTL_HOURS / AUTH_PASSWORD_RESET_TTL_MINUTES / AUTH_SELF_SERVICE_RESET_ENABLED / APP_PUBLIC_URL (CH-0016)
 │   ├── .gitignore                    ← node_modules، .env، /src/generated/prisma (أنشأه prisma init — CH-0007)
 │   ├── .prettierignore               ← src/generated، dist (CH-0007)
 │   ├── .prettierrc
@@ -333,13 +333,13 @@ ArtiCodeAcademy/
 │   ├── vitest.config.e2e.ts          ← الاختبارات الشاملة (**/*.e2e-spec.ts)
 │   ├── src/
 │   │   ├── main.ts                   ← bootstrap: NestFactory → configureApp → listen
-│   │   ├── app.module.ts             ← الوحدة الجذرية: ConfigModule (envFilePath من env-files.ts، validate) + PrismaModule + HealthModule
-│   │   ├── app.setup.ts              ← configureApp(): بادئة /api، CORS، ValidationPipe، Swagger، shutdown hooks
+│   │   ├── app.module.ts             ← الوحدة الجذرية: ConfigModule (envFilePath من env-files.ts، validate) + ThrottlerModule + PrismaModule + AuditModule + AuthModule + UsersModule (CH-0016) + HealthModule
+│   │   ├── app.setup.ts              ← APP_CREATE_OPTIONS (bodyParser: false — CH-0015) + configureApp(): بادئة /api، محلّل JSON وحده، CORS، ValidationPipe، Swagger (Bearer)، shutdown hooks
 │   │   ├── common/
 │   │   │   └── package-info.ts       ← اسم الحزمة وإصدارها من package.json + SERVICE_NAME
 │   │   ├── config/
-│   │   │   ├── env.schema.ts         ← مخطط zod لمتغيرات البيئة + validateEnv()؛ يشتق DATABASE_URL من DB_APP_* عند غيابه (CH-0008)
-│   │   │   ├── env.schema.spec.ts    ← 13 اختبار وحدة (TEST-003؛ +2 لمتغيرات المصادقة في CH-0014)
+│   │   │   ├── env.schema.ts         ← مخطط zod لمتغيرات البيئة + validateEnv()؛ يشتق DATABASE_URL من DB_APP_* عند غيابه (CH-0008)؛ ENV-25..32 للمصادقة (CH-0014)؛ ENV-36..39 لدورة حياة الحساب (CH-0016)
+│   │   │   ├── env.schema.spec.ts    ← 14 اختبار وحدة (TEST-003؛ +2 لمتغيرات المصادقة في CH-0014؛ +1 لمتغيرات MOD-03 في CH-0016)
 │   │   │   ├── database-url.ts       ← buildPostgresUrl() وpostgresUrlFromEnv() والافتراضيات المشتركة مع compose (CH-0008)
 │   │   │   ├── database-url.spec.ts  ← 6 اختبارات وحدة (TEST-006)
 │   │   │   └── env-files.ts          ← ENV_FILE_PATHS: backend/.env.local ← backend/.env ← ../.env الجذري (CH-0008)
@@ -365,6 +365,14 @@ ArtiCodeAcademy/
 │   │   │   ├── audit.service.ts      ← record() داخل معاملة الحدث؛ يرفض metadata تحمل كلمات مرور/رموز
 │   │   │   ├── audit.controller.ts   ← GET /api/audit-logs (@RequirePermissions('audit.read')) — API-011
 │   │   │   └── audit.dto.ts
+│   │   ├── users/                    ← MOD-03 إدارة المستخدمين — T01 القراءة (CH-0016)؛ الكتابة في T02..T07
+│   │   │   ├── users.module.ts       ← UsersController + UsersService (يعتمد على الحراس العامّين وPrismaModule)
+│   │   │   ├── users.controller.ts   ← GET /api/users (API-012)، GET /api/users/:id (API-013)؛ @RequirePermissions('users.read')؛ includeDeleted يتطلب users.deactivate
+│   │   │   ├── users.service.ts      ← بحث ILIKE بهروب الأحرف، مرشّحات، ترقيم keyset، إسقاط select صريح بلا password_hash/عدّادات، تحويل التفاصيل (أدوار، ملفات، أولياء)
+│   │   │   ├── users.dto.ts          ← ListUsersQueryDto، UserDetailQueryDto، UserSummaryDto/UserListItemDto/UserListDto، UserDetailDto وملخصات الملفات وروابط الأولياء
+│   │   │   ├── users.cursor.ts       ← encode/decodeUserCursor(): مؤشر base64url [1, sort, order, key, id] يُرفض مع ترتيب مختلف (ADR-028)
+│   │   │   ├── users.errors.ts       ← UsersHttpException + USERS_ERROR_CODES (قاموس أكواد MOD-03 — T00)
+│   │   │   └── users.cursor.spec.ts  ← 3 اختبارات وحدة (TEST-012)
 │   │   ├── authorization/            ← كتالوج الصلاحيات والأدوار النظامية (مصدر الحقيقة للبذر؛ بلا إطار عمل) — CH-0013
 │   │   │   ├── permission-catalog.ts ← PERMISSION_CATALOG (56 مفتاحاً بوصف ar/en ووحدة)، PERMISSION_KEYS، isPermissionKey()
 │   │   │   ├── system-roles.ts       ← SYSTEM_ROLES الخمسة بعناوينها ومصفوفة الصلاحيات الافتراضية (6.7.8)
@@ -380,9 +388,10 @@ ArtiCodeAcademy/
 │   │       ├── health.dto.ts         ← HealthResponseDto، ReadinessResponseDto، DatabaseCheckDto
 │   │       └── health.service.spec.ts ← 4 اختبارات وحدة (TEST-004)
 │   └── test/
-│       ├── app.e2e-spec.ts           ← 7 اختبارات شاملة: health، readiness، 404، CORS، X-Powered-By، OpenAPI (TEST-005)
+│       ├── app.e2e-spec.ts           ← 8 اختبارات شاملة: health، readiness، 404، CORS، X-Powered-By، OpenAPI، أجسام JSON فقط (TEST-005)
 │       ├── db.e2e-spec.ts            ← 9 اختبارات على القاعدة الحية (تُتخطّى بلا قاعدة): الترحيلات، uuidv7، سلوك الحذف، القيود، التدقيق، الامتيازات، الفهارس، البذر (TEST-007)
-│       └── auth.e2e-spec.ts          ← 12 اختباراً للمصادقة على القاعدة الحية: دخول/أخطاء/حالات الحساب/الحراس/الصلاحيات/التدوير وإعادة الاستخدام/الخروج/كلمة المرور/القفل/تحديد المعدل/المدير الأول (TEST-008)
+│       ├── auth.e2e-spec.ts          ← 12 اختباراً للمصادقة على القاعدة الحية: دخول/أخطاء/حالات الحساب/الحراس/الصلاحيات/التدوير وإعادة الاستخدام/الخروج/كلمة المرور/القفل/تحديد المعدل/المدير الأول (TEST-008)
+│       └── users.e2e-spec.ts         ← 11 اختباراً لقائمة المستخدمين وتفاصيلهم على القاعدة الحية: الصلاحيات، الإسقاط الآمن، البحث، المرشّحات، المحذوفون، الترقيم، المؤشر، التفاصيل، 404/400، الأداء الأساسي (TEST-011 — CH-0016)
 └── frontend/                         ← تطبيق Vite 8 + React 19 + Ant Design 6 (هيكل منتج تجريبي منذ CH-0005)
     ├── .gitignore
     ├── .oxlintrc.json
@@ -525,7 +534,7 @@ ArtiCodeAcademy/
 
 ### 5.1 المعمارية الحالية الفعلية (IMPLEMENTED)
 
-منذ CH-0006 أصبح المشروع **تطبيقين متصلين عبر HTTP**، ومنذ CH-0007 يقف الخادم على **قاعدة PostgreSQL محلية في Docker** عبر Prisma: الواجهة (React) تستدعي الخادم (NestJS) عبر proxy خادم Vite في التطوير، مع CORS مفعّل للاستدعاء المباشر. الاستدعاءان الحقيقيان حتى الآن: `GET /api/health` و`GET /api/health/ready` (الأخير ينفّذ `SELECT 1` على PostgreSQL)؛ شاشات الوحدات ما زالت على بيانات محلية:
+منذ CH-0006 أصبح المشروع **تطبيقين متصلين عبر HTTP**، ومنذ CH-0007 يقف الخادم على **قاعدة PostgreSQL محلية في Docker** عبر Prisma: الواجهة (React) تستدعي الخادم (NestJS) عبر proxy خادم Vite في التطوير، مع CORS مفعّل للاستدعاء المباشر. الاستدعاءات الحقيقية حتى الآن: `GET /api/health` و`GET /api/health/ready` (CH-0006/CH-0007)، مسارات MOD-01 (`/api/auth/*` وقراءة التدقيق — CH-0014) من الواجهة، و`GET /api/users[/:id]` (MOD-03-T01 — CH-0016) من واجهة البرمجة فقط (الواجهة تربطها في T11)؛ شاشات الوحدات ما زالت على بيانات محلية. المخطط أدناه (CH-0006/CH-0007) يُظهر المسار الأول؛ وحدات الخادم الحالية كاملةً في 5.4:
 
 ```mermaid
 flowchart LR
@@ -543,6 +552,12 @@ flowchart LR
         subgraph BE["backend/ (NestJS 12 + Express, PORT from env, default 3000)"]
             BOOT["src/main.ts\nNestFactory.create()"] --> SETUP["app.setup.ts configureApp()\nprefix /api · CORS · ValidationPipe · Swagger"]
             SETUP --> MOD["AppModule\nConfigModule.forRoot(validate: zod)"]
+            MOD --> AUTHM["AuthModule (CH-0014)\nAuthGuard + PermissionsGuard (APP_GUARD)\nPOST /api/auth/*, GET /api/auth/me"]
+            MOD --> AUDM["AuditModule @Global (CH-0014)\nAuditService · GET /api/audit-logs"]
+            MOD --> USRM["UsersModule (CH-0016, MOD-03-T01)\nGET /api/users · GET /api/users/:id"]
+            AUTHM --> PRISMA
+            AUDM --> PRISMA
+            USRM --> PRISMA
             MOD --> HM["HealthModule"]
             HM --> HCTRL["HealthController\nGET /api/health"]
             HCTRL --> HSVC["HealthService\ncheck() · readiness()"]
@@ -633,7 +648,7 @@ flowchart TB
 
 ### 5.4 علاقات الوحدات
 
-**الخادم (CH-0006):** `AppModule` يستورد `ConfigModule.forRoot({ isGlobal, validate: validateEnv })` و`HealthModule`. `HealthModule` → `HealthController` → `HealthService` الذي يحقن `ConfigService<Env, true>`. `app.setup.ts` (خارج شجرة الوحدات) يقرأ `ConfigService` من حاوية التطبيق ليطبّق البادئة وCORS والتحقق وSwagger؛ يستدعيه `main.ts` والاختبار الشامل. `common/package-info.ts` تستهلكه `HealthService` و`app.setup.ts`. **قاعدة البيانات (CH-0007):** `PrismaModule` عام (`@Global`) يصدّر `PrismaService`؛ `HealthService` يحقنه لفحص الجاهزية؛ أي وحدة بيانات قادمة تحقنه بدل إنشاء عميل خاص.
+**الخادم (CH-0006؛ محدَّث في CH-0016):** `AppModule` يستورد `ConfigModule.forRoot({ isGlobal, validate: validateEnv })`، `ThrottlerModule` (محدّد `login` — CH-0014)، `PrismaModule`، `AuditModule`، `AuthModule`، `UsersModule` (CH-0016)، `HealthModule`. **`AuthModule`** يسجّل `AuthGuard` ثم `PermissionsGuard` كـ `APP_GUARD` فيحمي كل متحكم آخر تلقائياً، ويصدّر `AuthService`/`TokenService`/`PasswordService`. **`AuditModule`** عام (`@Global`) يصدّر `AuditService` الذي تحقنه `AuthService` (والخدمات الكاتبة القادمة) لتسجيل الأحداث داخل معاملاتها. **`UsersModule`** → `UsersController` (يعلن `@RequirePermissions('users.read')` ويستخدم `authError.permissionDenied` من `auth/auth.errors.ts` لـ `includeDeleted`) → `UsersService` الذي يحقن `PrismaService` فقط. `HealthModule` → `HealthController` → `HealthService` الذي يحقن `ConfigService<Env, true>` و`PrismaService`. `app.setup.ts` (خارج شجرة الوحدات) يقرأ `ConfigService` من حاوية التطبيق ليطبّق البادئة ومحلّل JSON وCORS والتحقق وSwagger؛ يستدعيه `main.ts` والاختبارات الشاملة. `common/package-info.ts` تستهلكه `HealthService` و`app.setup.ts`. `authorization/*` (الكتالوج والأدوار النظامية) يستهلكه البذر و`bootstrap-admin.ts` والاختبارات؛ لا يعتمد على NestJS. **قاعدة البيانات (CH-0007):** `PrismaModule` عام (`@Global`) يصدّر `PrismaService`؛ كل وحدة بيانات تحقنه وتستخدم `.db` بدل إنشاء عميل خاص.
 
 **الواجهة (CH-0005):** `main.tsx` → `app/App.tsx` → `app/router.tsx` → `layout/AppLayout` → `pages/*`. الملف `layout/navigation.ts` هو مصدر الحقيقة للمسارات والأدوار ويستهلكه `AppLayout` (بناء القائمة) و`auth/RequireAuth` (البوابة `canAccess`) بينما يطابقه `router.tsx` يدوياً. `auth/*` لا يعتمد إلا على `layout/navigation.ts` و`pages/ForbiddenPage`. كل الصفحات تعتمد على `mock/data.ts` و`i18n/useLocalized` و`components/*`.
 
@@ -642,12 +657,13 @@ flowchart TB
 | النمط | الحالة | الدليل |
 |---|---|---|
 | Modular monolith بوحدات NestJS | IMPLEMENTED (بالحد الأدنى) | `AppModule` |
-| Controller → Service (حقن الاعتماديات) | IMPLEMENTED | `AppController` يحقن `AppService` عبر المُنشئ |
-| Repository / Data access layer | PARTIALLY_IMPLEMENTED | `PrismaService` (`backend/src/prisma/`) كطبقة وصول وحيدة (CH-0007)؛ لا مستودعات ولا نماذج بعد |
+| Controller → Service (حقن الاعتماديات) | IMPLEMENTED | `HealthController` → `HealthService`، `AuthController` → `AuthService`، `UsersController` → `UsersService` (CH-0016)؛ `AuditController` يستعلم `PrismaService` مباشرة (قراءة بسيطة) |
+| Repository / Data access layer | IMPLEMENTED (بلا طبقة مستودعات) | `PrismaService.db` كطبقة وصول وحيدة (CH-0007)؛ الخدمات تستعلم Prisma مباشرةً بإسقاطات `select` صريحة (`users.service.ts` — CH-0016)؛ لا مستودعات مستقلة عمداً في هذه المرحلة |
 | فصل الحيوية عن الجاهزية (liveness / readiness) | IMPLEMENTED | `GET /api/health` بلا اعتماديات؛ `GET /api/health/ready` يفحص القاعدة ويُعيد 503 عند التعطل (CH-0007، ADR-017) |
-| DTO + Validation pipes | PARTIALLY_IMPLEMENTED | `ValidationPipe` عام (`whitelist`, `forbidNonWhitelisted`, `transform`) في `backend/src/app.setup.ts` مع `class-validator`/`class-transformer`؛ **لا يوجد بعد DTO طلب يحمل قواعد تحقق** فسلوكه غير مُختبَر (KI-022) |
-| OpenAPI بالديكوريتورات (`@ApiProperty`, `@ApiOperation`) | IMPLEMENTED | `backend/src/health/health.dto.ts`, `health.controller.ts`؛ الوثيقة تُولَّد في `app.setup.ts` |
-| Guards / Roles | PLANNED | لا يوجد |
+| DTO + Validation pipes | IMPLEMENTED | `ValidationPipe` عام (`whitelist`, `forbidNonWhitelisted`, `transform`) في `backend/src/app.setup.ts` مع `class-validator`/`class-transformer`؛ DTOs الطلب: `LoginDto`, `ChangePasswordDto`, `AuditLogQueryDto` (CH-0014، KI-022 RESOLVED)، `ListUsersQueryDto`, `UserDetailQueryDto` (CH-0016 — مع `@Transform` لقراءة القيمة الخام للمعاملات المنطقية لأن التحويل الضمني يجعل `"false"` صحيحة) |
+| OpenAPI بالديكوريتورات (`@ApiProperty`, `@ApiOperation`) | IMPLEMENTED | `health.dto.ts`, `auth.dto.ts`, `audit.dto.ts`, `users.dto.ts` والمتحكمات المقابلة؛ الوثيقة تُولَّد في `app.setup.ts` مع `addBearerAuth()` |
+| Guards / Permissions | IMPLEMENTED (CH-0014) | `AuthGuard` + `PermissionsGuard` عامّان (`APP_GUARD`)؛ `@Public()`/`@RequirePermissions()`؛ لا حارس بأسماء الأدوار عمداً (ADR-023)؛ أول مستهلكان: `audit.read` (API-011) و`users.read` (API-012/013 — CH-0016) |
+| ترقيم بمؤشر (keyset pagination) لقوائم API | IMPLEMENTED (CH-0016) | `users.cursor.ts` (مؤشر مُعتم مرتبط بالترتيب) و`audit.controller.ts` (`before` زمني — CH-0014)؛ الاصطلاح الموحَّد للقوائم القادمة في ADR-028 |
 | Configuration module (`@nestjs/config`) | IMPLEMENTED | `ConfigModule.forRoot({ isGlobal: true, cache: true, envFilePath: ENV_FILE_PATHS, validate: validateEnv })` في `app.module.ts`؛ الملفات بالترتيب `backend/.env.local` ← `backend/.env` ← `../.env` الجذري (`config/env-files.ts`)؛ المخطط في `config/env.schema.ts` (zod) يشتق `DATABASE_URL` من `DB_APP_*` عند غيابه — CH-0006، CH-0008 |
 | التوجيه في المتصفح (client-side routing) | IMPLEMENTED | `frontend/src/app/router.tsx` (react-router 7، `createBrowserRouter`) |
 | i18n + RTL في الواجهة | IMPLEMENTED | `frontend/src/i18n/*`, `frontend/src/app/App.tsx` (`ConfigProvider direction/locale`) |
@@ -657,7 +673,7 @@ flowchart TB
 ### 5.6 الحدود بين المكونات
 
 - الحد الفعلي الأول: الواجهة (متصفح) ↔ الخادم (HTTP/JSON) — **عُبر في CH-0006** عبر `GET /api/health`. عقد الحدّ في القسم 10؛ التحقق على الحدّ عبر `ValidationPipe` عام.
-- الحد الثاني: الخادم ↔ قاعدة البيانات (Prisma / pg) — **عُبر في CH-0007** عبر `PrismaService.ping()` (`SELECT 1`)؛ لا استعلامات أعمال بعد.
+- الحد الثاني: الخادم ↔ قاعدة البيانات (Prisma / pg) — **عُبر في CH-0007** عبر `PrismaService.ping()` (`SELECT 1`)؛ أول استعلامات أعمال في CH-0014 (المصادقة والتدقيق) ثم CH-0016 (قائمة المستخدمين وتفاصيلهم بإسقاطات `select` صريحة).
 - الحدود المخطّطة: API ↔ قاعدة بيانات (عبر ORM)، API ↔ خدمات خارجية (دفع، إشعارات، بث).
 
 ### 5.7 الاختناقات المحتملة والقيود المؤكدة
@@ -1937,7 +1953,7 @@ sequenceDiagram
 
 **مقترح أولي (PROPOSED — CH-0010):** كتالوج الصلاحيات (~45 مفتاحاً بنطاق `own`/`linked`/`all`) والمصفوفة الافتراضية للأدوار الخمسة في 6.7.8، والنموذج في ADR-023؛ تُنقل إلى هنا بصيغة معتمدة عند تنفيذ MOD-03.
 
-**منذ CH-0013 (بيانات فقط، بلا فرض):** الكتالوج النهائي (56 مفتاحاً، كل مفتاح بوحدته ووصف `ar`/`en`) معرَّف في `backend/src/authorization/permission-catalog.ts` ومبذور في `permissions`؛ الأدوار النظامية الخمسة ومصفوفتها الافتراضية (6.7.8) في `backend/src/authorization/system-roles.ts` ومبذورة في `roles`/`role_permissions`: `academy_admin` 56 (كل المفاتيح النشطة دائماً)، `teacher` 20، `staff` 18، `student` 10 (`is_default_for_signup`)، `guardian` 8. تعديل الكتالوج = تعديل الملف ثم `npm run prisma:seed` (المفاتيح المحذوفة تُعلَّم `deprecated_at`). **الفرض في الخادم منفَّذ (CH-0014):** `backend/src/auth/permissions.guard.ts` + `@RequirePermissions('audit.read')` على `GET /api/audit-logs` (API-011) أول مستهلك فعلي؛ كل نقطة نهاية قادمة تعلن مفاتيحها وتُوثَّق في القسم 10 (RULE 8).
+**منذ CH-0013 (بيانات فقط، بلا فرض):** الكتالوج النهائي (56 مفتاحاً، كل مفتاح بوحدته ووصف `ar`/`en`) معرَّف في `backend/src/authorization/permission-catalog.ts` ومبذور في `permissions`؛ الأدوار النظامية الخمسة ومصفوفتها الافتراضية (6.7.8) في `backend/src/authorization/system-roles.ts` ومبذورة في `roles`/`role_permissions`: `academy_admin` 56 (كل المفاتيح النشطة دائماً)، `teacher` 20، `staff` 18، `student` 10 (`is_default_for_signup`)، `guardian` 8. تعديل الكتالوج = تعديل الملف ثم `npm run prisma:seed` (المفاتيح المحذوفة تُعلَّم `deprecated_at`). **الفرض في الخادم منفَّذ (CH-0014):** `backend/src/auth/permissions.guard.ts` + `@RequirePermissions('audit.read')` على `GET /api/audit-logs` (API-011) أول مستهلك فعلي؛ **منذ CH-0016** `@RequirePermissions('users.read')` على `UsersController` كله (`GET /api/users`, `GET /api/users/:id` — API-012/API-013)، و`users.deactivate` تُفحص في المتحكم لمعامل `includeDeleted` (رؤية المحذوفين منطقياً لمن يملك حذفهم) بـ `403 permission_denied` + `missing: ["users.deactivate"]`. كل نقطة نهاية قادمة تعلن مفاتيحها وتُوثَّق في القسم 10 (RULE 8). **ملاحظة تصميم مفتوحة (SEC-R-12، D-R07 في الخارطة):** `users.read` يحملها افتراضياً `teacher` و`staff` أيضاً، فتكشف القائمة بريد وهاتف كل المستخدمين لهم؛ إسقاط مخفَّض أو مفتاح `users.read_contact` قرار مطلوب من المالك قبل الواجهة (T11).
 
 ### 7.4 آلية فرض الصلاحيات
 
@@ -1965,7 +1981,7 @@ sequenceDiagram
 | MOD-FE-01 | Frontend application shell (prototype) | IMPLEMENTED (نموذج أولي ببيانات محلية) | `frontend/src/app/*`, `layout/*`, `auth/*`, `components/*`, `i18n/*`, `mock/data.ts`, `pages/*`, `main.tsx`, `index.html` |
 | MOD-01 | Authentication & session management | IMPLEMENTED (CH-0014؛ مُعتمَدة ومقفلة بالقبول في CH-0015) | `backend/src/auth/*`, `backend/src/audit/*`, `backend/scripts/bootstrap-admin.ts`, `frontend/src/auth/*`, `frontend/src/api/{client,auth}.ts`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx` |
 | MOD-02 | Academy management | PLANNED | — |
-| MOD-03 | User management & roles | PLANNED (مهام T00..T16 بمعايير قبول في `docs/DEVELOPMENT_ROADMAP.md` §4) | — (جداولها جاهزة منذ CH-0013: `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `*_profiles`, `guardian_students`, `verification_tokens`) |
+| MOD-03 | User management & roles | PARTIALLY_IMPLEMENTED (CH-0016: T00 التحضير + T01 القائمة والتفاصيل؛ T02..T16 PLANNED في `docs/DEVELOPMENT_ROADMAP.md` §4) | `backend/src/users/*`, `backend/test/users.e2e-spec.ts`, `backend/src/config/env.schema.ts` (ENV-36..39)؛ الجداول جاهزة منذ CH-0013: `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `*_profiles`, `guardian_students`, `verification_tokens` |
 | MOD-04 | Courses & levels | PLANNED | — |
 | MOD-05 | Classes & groups | PLANNED | — |
 | MOD-06 | Lessons (live & recorded) | PLANNED | — |
@@ -2080,13 +2096,25 @@ sequenceDiagram
 | الاعتماديات | ADR-008 (نموذج العزل)، MOD-14 |
 | ملاحظة | في نموذج "نشر مستقل" قد تعيش بيانات الأكاديمية في قاعدتها الخاصة، بينما تحتاج لوحة Super Admin إلى سجل مركزي للأكاديميات — `NOT YET DETERMINED`؛ **مقترح:** سجل مركزي في `articode_platform` (6.6.2: `academies`, `academy_databases`) وصف `academy` واحد في قاعدة كل أكاديمية (6.6، 6.7.4-B) — D10/ADR-021 |
 
-### MOD-03 — User management & roles — `PLANNED`
+### MOD-03 — User management & roles — `PARTIALLY_IMPLEMENTED` (CH-0016: T00 التحضير + T01 القائمة والتفاصيل؛ T02..T16 مخطَّطة)
 
 | البند | التفاصيل |
 |---|---|
-| الغرض | إدارة المستخدمين بأنواعهم (معلم/طالب/ولي أمر/موظف)، الملفات الشخصية، الأدوار والصلاحيات المخصّصة، ربط أولياء الأمور بالطلاب |
-| الكيانات | **موجودة في القاعدة منذ CH-0013 (بلا منطق خدمة بعد):** `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `student_profiles`, `employee_profiles`, `guardian_students` (6.2)؛ كتالوج الصلاحيات والأدوار النظامية مبذورة (7.3)؛ `refresh_tokens`/`verification_tokens` لـ MOD-01 |
-| الاعتماديات | MOD-01 (مقفلة — CH-0015)؛ قرارات المالك D-R01..D-R06 في خارطة الطريق |
+| الغرض التجاري | إدارة المستخدمين بأنواعهم (معلم/طالب/ولي أمر/موظف)، الملفات الشخصية، الأدوار والصلاحيات المخصّصة، ربط أولياء الأمور بالطلاب، الدعوات وتفعيل الحسابات واستعادة كلمة المرور (نُقلت من MOD-01 في CH-0015) |
+| حالة التطوير | PARTIALLY_IMPLEMENTED. **T00 (CH-0016):** قرارات المالك D-R01..D-R06 مثبَّتة (ADR-027)؛ متغيرات دورة حياة الحساب ENV-36..ENV-39 في `env.schema.ts` بافتراضيات 48 ساعة / 30 دقيقة / معطَّل (TEST-003)؛ قاموس أكواد أخطاء MOD-03 `UsersHttpException` (24 كوداً). **T01 (CH-0016):** `GET /api/users` و`GET /api/users/:id` بصلاحية `users.read` (API-012/API-013، ADR-028) مع TEST-011/TEST-012. **PLANNED:** T02 الإنشاء، T03 الدعوة والتفعيل، T04 التعديل، T05 استعادة كلمة المرور، T06 حالات الحساب، T07 تعيين الأدوار، T08 إدارة الأدوار، T09 الأولياء، T10 التدقيق، T11..T16 الواجهة (خارطة الطريق §4) |
+| الملفات | `backend/src/users/{users.module,users.controller,users.service,users.dto,users.cursor,users.errors,users.cursor.spec}.ts`، `backend/src/app.module.ts` (استيراد `UsersModule`)، `backend/src/config/env.schema.ts` + `backend/.env.example` (ENV-36..39)، `backend/test/users.e2e-spec.ts`. الواجهة التجريبية `frontend/src/pages/UsersPage.tsx` ما زالت على بيانات محلية (تُستبدل في T11). المجلدان `backend/src/roles/` و`backend/src/account/` يُنشآن مع T08 وT03 (لا ملفات فارغة) |
+| الكيانات | **قراءة فقط حتى الآن:** `users`, `user_roles` + `roles` (`key`, `label`), `student_profiles`, `employee_profiles`, `guardian_students` (6.2). جاهزة بلا منطق بعد: `verification_tokens`. لا تغيير في المخطط ولا ترحيل |
+| نقاط النهاية | API-012 `GET /api/users`، API-013 `GET /api/users/:id` — القسم 10.2 |
+| الوظيفة الرئيسية | (1) **القائمة:** بحث `q` بـ `ILIKE` غير حساس لحالة الأحرف على `email`/`username`/`full_name`/`full_name_latin`/`display_name` مع هروب `\`/`%`/`_` (`escapeLikePattern()` — KI-034)؛ مرشّحات `status` و`role` تُجمع بـ AND مع البحث؛ استبعاد `deleted_at IS NOT NULL` افتراضياً؛ ترتيب `createdAt` (عبر المفتاح الأساسي UUIDv7 الزمني — ADR-028) أو `fullName` (+`id` فاصلاً)؛ ترقيم keyset بمؤشر مُعتم base64url `[1, sort, order, key, id]` يُرفض مع ترتيب مختلف (`400 cursor_invalid`)؛ حد 1–100 (افتراضي 20) مع جلب `limit+1` لمعرفة الصفحة التالية. (2) **التفاصيل:** الهوية + الأدوار بتسمياتها `{ar,en?,tr?}` + ملخص ملفَي الطالب (`studentNumber`, `dateOfBirth`, `enrolledOn`) والموظف (`employeeNumber`, `kind`, `jobTitle`, `specialization`, `hiredOn`, `isActive`) + روابط الأولياء/الطلاب من الجهتَين (`relationship`, `isPrimary`؛ الأساسي أولاً) + `lastLoginAt`/`lockedUntil`/`emailVerifiedAt`. (3) **الإسقاط الآمن:** `select` صريح في Prisma — `password_hash`, `failed_login_count`, `password_changed_at`, `must_change_password` لا تُقرأ من القاعدة ولا تُعاد؛ لا مفتاح في الاستجابة يطابق `/hash|password/i` (TEST-011 يفحص كل المفاتيح تكرارياً). (4) **المحذوفون منطقياً:** `includeDeleted=true` مسموح لحامل `users.deactivate` فقط (من يملك الحذف يملك رؤية المحذوف)؛ غيره `403 permission_denied` + `missing: ["users.deactivate"]`؛ التفاصيل لمحذوف بلا المعامل → `404 user_not_found` |
+| قواعد الأعمال | القراءة لا تُسجَّل في التدقيق (الأحداث للمسارات الكاتبة فقط — T10)؛ عقد الاستجابة ثابت مع `includeDeleted` (الحقل `deletedAt` موجود دائماً وقيمته null للأحياء)؛ `q` فارغة أو فراغات = غائبة |
+| الصلاحيات المطلوبة | `users.read` على المتحكم كله (المدير والموظف والمعلم افتراضياً — 7.3)؛ `users.deactivate` إضافةً لـ `includeDeleted` |
+| الاعتماديات | MOD-01 (الحراس والمبدأ، `authError.permissionDenied`)، MOD-16 (Prisma)، كتالوج `src/authorization/` |
+| قواعد التحقق | `ListUsersQueryDto`/`UserDetailQueryDto` (`class-validator`): `q` 1–200 بعد `trim`، `status` تعداد `UserStatus`، `role` بنمط `^[a-z][a-z0-9_]{2,63}$`، `includeDeleted` منطقي يُقرأ من القيمة الخام (`"false"` تبقى false رغم `enableImplicitConversion`)، `sort` ∈ {`createdAt`,`fullName`}، `order` ∈ {`asc`,`desc`}، `limit` صحيح 1–100، `cursor` 1–512؛ `:id` بـ `ParseUUIDPipe`؛ أي معامل غير معلن → `400` |
+| قاموس الأكواد (T00) | `backend/src/users/users.errors.ts` — `USERS_ERROR_CODES` (24) بالشكل نفسه كـ `AuthHttpException` (10.1): **مستخدمان في T01:** `user_not_found` (404)، `cursor_invalid` (400). **محجوزة للمهام التالية (PLANNED):** `identifier_required`, `email_in_use`, `username_in_use` (T02)؛ `user_not_invitable`, `invitation_invalid`, `invitation_expired`, `invitation_consumed`, `reset_invalid`, `reset_expired`, `reset_disabled` (T03/T05)؛ `profile_mismatch`, `invalid_transition`, `self_forbidden`, `last_admin` (T04/T06)؛ `role_unknown`, `role_in_use`, `role_immutable`, `permission_unknown`, `employee_kind_required` (T07/T08)؛ `not_a_guardian`, `not_a_student`, `already_linked` (T09) |
+| أحداث التدقيق | لا شيء في T01 (قراءة)؛ قاموس أحداث MOD-03 يُوثَّق في القسم 12 مع T10 |
+| القيود الحالية | `users.read` خشنة: كل حاملها (المعلم افتراضياً) يرى بريد وهاتف كل المستخدمين (SEC-R-12؛ قرار D-R07)؛ البحث `ILIKE` بلا فهرس (مقبول لحجم أكاديمية؛ `pg_trgm` عند الحاجة)؛ اختبار الأداء في TEST-011 حارس تقريبي على قاعدة شبه فارغة؛ لا واجهة بعد |
+| التحسينات المستقبلية | T02..T16؛ إسقاط مخفَّض حسب الصلاحية؛ فهرس trigram للبحث؛ تصدير CSV للقائمة (مرحلة لاحقة) |
+| الاعتماديات التخطيطية | MOD-01 (مقفلة — CH-0015)؛ قرارات المالك D-R01..D-R06 مثبَّتة في CH-0016 (ADR-027)؛ D-R07 (نطاق `users.read`) مطلوب قبل T11 |
 | خطة التنفيذ (CH-0015) | `docs/DEVELOPMENT_ROADMAP.md` §4: 17 مهمة (T00..T16) بمعايير قبول واختبارات في أربع دفعات؛ **لا جداول جديدة ولا ترحيلات متوقعة ولا مفاتيح صلاحيات جديدة**؛ تشمل الدعوات وتفعيل الحسابات واستعادة كلمة المرور وحالات الحساب وتعيين الأدوار والأدوار المخصّصة وربط الأولياء والتدقيق الإداري. أول ثلاث مهام تنفيذية: T01 (قائمة/تفاصيل المستخدمين)، T02 (إنشاء مستخدم بنوعه وملفه ودوره)، T03 (الدعوة والتفعيل) |
 | واجهة تجريبية (CH-0005) | `frontend/src/pages/UsersPage.tsx` — المسار `/users`؛ جدول ببيانات محلية (`mockUsers`)؛ زر الإضافة يعرض "غير منفّذ". مفاتيح الأدوار في `frontend/src/auth/roles.ts`. لا منطق خادم |
 
@@ -2234,11 +2262,11 @@ sequenceDiagram
 | العنوان الأساسي | `http://localhost:${PORT:-3000}/${API_PREFIX:-api}` (منذ CH-0006). في التطوير تصل الواجهة إليه عبر `http://localhost:5173/api` (proxy) |
 | بادئة عامة | `API_PREFIX` (افتراضياً `api`) عبر `setGlobalPrefix` في `backend/src/app.setup.ts` |
 | إصدار API | لا يوجد في المسار؛ ممكن لاحقاً عبر `API_PREFIX=api/v1` أو `enableVersioning` — `NOT YET DETERMINED` |
-| المصادقة | منذ CH-0014: **كل نقطة نهاية محمية افتراضياً** بحارس عام (`AuthGuard`) يتطلب `Authorization: Bearer <JWT>`؛ العامة فقط ما وُسم `@Public()` (`health`, `health/ready`, `auth/login`, `auth/refresh`, `auth/logout`)؛ الصلاحيات بـ `@RequirePermissions` (`PermissionsGuard`). Swagger يعرض زر Authorize (`addBearerAuth`). رمز التحديث في كعكة `aca_refresh` لا في الجسم (SEC-R-01 RESOLVED) |
+| المصادقة | منذ CH-0014: **كل نقطة نهاية محمية افتراضياً** بحارس عام (`AuthGuard`) يتطلب `Authorization: Bearer <JWT>`؛ العامة فقط ما وُسم `@Public()` (`health`, `health/ready`, `auth/login`, `auth/refresh`, `auth/logout`)؛ الصلاحيات بـ `@RequirePermissions` (`PermissionsGuard`): `audit.read` لـ `audit-logs`، `users.read` لـ `users` و`users/:id` (CH-0016). Swagger يعرض زر Authorize (`addBearerAuth`). رمز التحديث في كعكة `aca_refresh` لا في الجسم (SEC-R-01 RESOLVED) |
 | CORS | قائمة أصول من `CORS_ORIGIN` مع `credentials: true`؛ الأصل غير المدرج لا يحصل على رأس `Access-Control-Allow-Origin` (متحقق منه في e2e) |
 | التحقق من المدخلات | `ValidationPipe` عام: الحقول غير المعلنة في DTO تُرفض بـ `400` (`forbidNonWhitelisted`)؛ التحويل الضمني للأنواع مفعّل؛ متحقق على DTOs المصادقة (KI-022 RESOLVED — CH-0014) |
 | أجسام الطلبات | **JSON فقط (CH-0015، ADR-026):** التطبيق يُنشأ بـ `APP_CREATE_OPTIONS = { bodyParser: false }` و`configureApp()` يسجّل `express.json` وحده (`app.useBodyParser('json')`)؛ `application/x-www-form-urlencoded` و`multipart/form-data` و`text/plain` لا تُحلَّل فيصل الجسم فارغاً ويفشل تحقق DTO بـ `400` — وهو ما يمنع إدخال متصفح الضحية بنموذج HTML من موقع آخر (login CSRF، SEC-R-10). المسارات التي ستقبل ملفات تفعّل multipart صراحةً بمعترض على مستوى المسار |
-| تنسيق الأخطاء | افتراضي NestJS لعامة الأخطاء؛ **أخطاء المصادقة والتفويض (CH-0014)** تحمل حقلاً إضافياً ثابتاً `code` (مثل `invalid_credentials`, `token_expired`, `permission_denied`) عبر `AuthHttpException` — الجسم `{ statusCode, error, code, message, ...details }` (10.2، API-005). تحت البادئة: `404` مع `{"message":"Cannot GET /api/nope","error":"Not Found","statusCode":404}`. **خارج البادئة** (مثل `GET /`) يُعيد Express صفحة HTML `404` افتراضية (متحقق منه في CH-0006) |
+| تنسيق الأخطاء | افتراضي NestJS لعامة الأخطاء (تحقق DTO: `400` بـ `message[]`)؛ **أخطاء المصادقة والتفويض (CH-0014)** تحمل حقلاً إضافياً ثابتاً `code` (مثل `invalid_credentials`, `token_expired`, `permission_denied`) عبر `AuthHttpException`، و**أخطاء MOD-03 (CH-0016)** بالشكل نفسه عبر `UsersHttpException` بقاموس `USERS_ERROR_CODES` (24 كوداً؛ المستخدم منها الآن `user_not_found`, `cursor_invalid` — بقيتها محجوزة للمهام T02..T09، انظر MOD-03) — الجسم `{ statusCode, error, code, message, ...details }` (10.2، API-005). تحت البادئة: `404` مع `{"message":"Cannot GET /api/nope","error":"Not Found","statusCode":404}`. **خارج البادئة** (مثل `GET /`) يُعيد Express صفحة HTML `404` افتراضية (متحقق منه في CH-0006) |
 | الرؤوس | لا `X-Powered-By` (معطَّل). لا `helmet` بعد |
 | OpenAPI/Swagger | API-003: UI على `/api/docs` وJSON على `/api/docs-json` عندما `SWAGGER_ENABLED=true` (الافتراضي). العنوان "ArtiCode Academy API"، الإصدار من `package.json` |
 
@@ -2403,6 +2431,35 @@ sequenceDiagram
 | المتحكم/الخدمة | `AuditController.list()` → `PrismaService` مباشرة (`backend/src/audit/audit.controller.ts`) |
 | الاختبارات | TEST-008 (مستخدم بلا الصلاحية → 403؛ دور اختباري يحمل `audit.read` → 200 بلا أسرار) |
 
+#### API-012 — `GET /api/users` — `IMPLEMENTED` (CH-0016، MOD-03-T01)
+
+| البند | القيمة |
+|---|---|
+| الطريقة / المسار | `GET /${API_PREFIX}/users` |
+| الغرض | قائمة المستخدمين للإدارة: بحث نصي، مرشّحات الحالة والدور، ترقيم بمؤشر، ترتيب |
+| المصادقة / الصلاحيات | Bearer مطلوب / `users.read` (يحملها افتراضياً `academy_admin`, `staff`, `teacher`)؛ `includeDeleted=true` يتطلب إضافةً `users.deactivate` |
+| معاملات الطلب | `q` (1–200 حرفاً بعد `trim`؛ الفارغ = غائب؛ بحث `ILIKE` غير حساس لحالة الأحرف في `email`, `username`, `full_name`, `full_name_latin`, `display_name`؛ `%`/`_`/`\` تُطابَق حرفياً) · `status` (`invited|pending|active|suspended|archived`) · `role` (مفتاح دور بنمط `^[a-z][a-z0-9_]{2,63}$` يحمله المستخدم) · `includeDeleted` (`true|false|1|0`؛ افتراضياً `false` = استبعاد `deleted_at IS NOT NULL`) · `sort` (`createdAt` افتراضياً = ترتيب الإنشاء عبر المفتاح الأساسي UUIDv7؛ `fullName` = أبجدي بترتيب القاعدة مع `id` فاصلاً) · `order` (`asc|desc`؛ الافتراضي `desc` لـ `createdAt` و`asc` لـ `fullName`) · `limit` (1–100، افتراضي 20) · `cursor` (قيمة `nextCursor` من الصفحة السابقة مع المرشّحات والترتيب نفسها؛ 1–512 حرفاً). المرشّحات تُجمع بـ AND |
+| الاستجابة | `200` `UserListDto`: `{ "items": UserListItemDto[], "nextCursor": "<opaque>" أو null }` حيث `UserListItemDto = { id, email, username, phone, fullName, fullNameLatin, displayName, avatarUrl, locale, status, roles: string[] (مفاتيح مرتبة), emailVerifiedAt, lastLoginAt, lockedUntil, createdAt, updatedAt, deletedAt }` (التواريخ ISO 8601 أو null). **لا يُعاد** `password_hash` ولا `failed_login_count` ولا `password_changed_at` ولا `must_change_password` — لا مفتاح يطابق `/hash|password/i`؛ الاستعلام بـ `select` صريح فلا تُقرأ هذه الأعمدة أصلاً |
+| الترقيم | keyset: يُجلب `limit+1` صفاً لمعرفة وجود صفحة تالية؛ المؤشر base64url لـ `[1, sort, order, key, id]` ويُرفض مع ترتيب مختلف (ADR-028). مستقر: لا تكرار ولا فقد عبر الصفحات (TEST-011) |
+| سلوك الأخطاء | `400` تحقق المعاملات (`limit` خارج 1–100 أو غير صحيح، `status`/`sort`/`order` غير معروفة، `role` بنمط خاطئ، `includeDeleted` غير منطقي، معامل غير معلن)؛ `400 cursor_invalid` (مؤشر تالف أو من ترتيب آخر)؛ `401` كما API-009؛ `403 permission_denied` + `missing: ["users.read"]` أو `["users.deactivate"]` |
+| المتحكم/الخدمة | `UsersController.list()` → `UsersService.list()` (`backend/src/users/users.controller.ts`, `users.service.ts`, `users.dto.ts`, `users.cursor.ts`) |
+| الواجهة | لا شيء بعد (MOD-03-T11) |
+| الاختبارات | TEST-011 (الصلاحيات، الإسقاط، البحث، المرشّحات، المحذوفون، الترقيم بثلاثة ترتيبات، المؤشر، المعاملات غير الصالحة، الأداء الأساسي)، TEST-012 (ترميز المؤشر) |
+
+#### API-013 — `GET /api/users/:id` — `IMPLEMENTED` (CH-0016، MOD-03-T01)
+
+| البند | القيمة |
+|---|---|
+| الطريقة / المسار | `GET /${API_PREFIX}/users/:id` |
+| الغرض | تفاصيل مستخدم: الهوية، الأدوار بتسمياتها، ملخص الملفات، روابط الأولياء/الطلاب، آخر دخول وحالة القفل |
+| المصادقة / الصلاحيات | Bearer مطلوب / `users.read`؛ `includeDeleted=true` يتطلب `users.deactivate` |
+| معاملات الطلب | `id` UUID في المسار (غير ذلك `400`)؛ `includeDeleted` كما API-012 |
+| الاستجابة | `200` `UserDetailDto`: حقول `UserSummaryDto` نفسها (كما API-012 بلا `roles`) + `roles: [{ key, label: { ar, en?, tr? } }]` مرتبة بالمفتاح + `studentProfile: { studentNumber, dateOfBirth (YYYY-MM-DD), enrolledOn } \| null` + `employeeProfile: { employeeNumber, kind, jobTitle, specialization, hiredOn, isActive } \| null` + `guardians: [{ userId, fullName, displayName, relationship, isPrimary }]` (أولياء هذا المستخدم؛ الأساسي أولاً) + `students: [...]` بالشكل نفسه (طلاب هذا الولي). لا `notes`/`bio` (ملخص فقط) |
+| سلوك الأخطاء | `404 user_not_found` (غير موجود، أو محذوف منطقياً بلا `includeDeleted`)؛ `400` معرّف غير UUID أو معامل غير معلن؛ `401`/`403` كما API-012 |
+| المتحكم/الخدمة | `UsersController.get()` → `UsersService.getById()` |
+| الواجهة | لا شيء بعد (MOD-03-T11) |
+| الاختبارات | TEST-011 (التفاصيل بالأدوار والملفات والروابط من الجهتَين؛ 404 للمجهول والمحذوف؛ 200 للمحذوف بـ `includeDeleted` المصرَّح؛ 400 للمعرّف التالف) |
+
 ### 10.3 نقاط النهاية المخطّطة
 
 لا تُوثَّق نقاط نهاية مخطّطة هنا حتى تُنفَّذ (RULE 13 و RULE 14). تُسجَّل عند التنفيذ بالصيغة أعلاه مع معرّف `API-nnn` متسلسل.
@@ -2480,6 +2537,10 @@ npm install <package>
 | ENV-33 | `BOOTSTRAP_ADMIN_EMAIL` | إلزامي لسكربت التهيئة فقط | — | `backend/scripts/bootstrap-admin.ts` فقط (ليس في `env.schema.ts`) | بريد المدير الأول؛ السكربت يرفض إن وُجد مدير نشط آخر |
 | ENV-34 | `BOOTSTRAP_ADMIN_FULL_NAME` | إلزامي لسكربت التهيئة فقط | — | `scripts/bootstrap-admin.ts` | الاسم الكامل |
 | ENV-35 | `BOOTSTRAP_ADMIN_PASSWORD` | اختياري (يُطلب من الطرفية بلا صدى إن غاب) | — | `scripts/bootstrap-admin.ts` | ≥ 12 حرفاً؛ لا تُطبع ولا تُسجَّل؛ يُفضَّل عدم حفظها في ملف |
+| ENV-36 | `AUTH_INVITATION_TTL_HOURS` | اختياري | `48` | `env.schema.ts` (CH-0016)؛ **لا مستهلك بعد** — تقرؤه خدمة الرموز في MOD-03-T03 | عمر رمز الدعوة بالساعات (1–720)؛ قرار المالك D-R02 |
+| ENV-37 | `AUTH_PASSWORD_RESET_TTL_MINUTES` | اختياري | `30` | `env.schema.ts` (CH-0016)؛ **لا مستهلك بعد** — MOD-03-T05 | عمر رمز إعادة ضبط كلمة المرور بالدقائق (5–1440)؛ D-R02 |
+| ENV-38 | `AUTH_SELF_SERVICE_RESET_ENABLED` | اختياري | `false` | `env.schema.ts` (CH-0016)؛ **لا مستهلك بعد** — MOD-03-T05 | `true`/`false`؛ يفعّل المسار العام "نسيت كلمة المرور" عند توفر قناة بريد (D-R01)؛ يبقى معطَّلاً الآن |
+| ENV-39 | `APP_PUBLIC_URL` | اختياري | — | `env.schema.ts` (CH-0016)؛ **لا مستهلك بعد** | عنوان الواجهة العام (`http(s)://…`) لبناء الروابط في البريد لاحقاً؛ يُتحقق أنه URL صالح بـ http/https وتُزال الشرطة المائلة الطرفية |
 
 - القوالب: `.env.example` (جذري — **المصدر الوحيد لإعدادات القاعدة** منذ CH-0008: `POSTGRES_*`، `DB_MIGRATOR_*`، `DB_APP_*`، `DB_HOST`)، `backend/.env.example` (إعدادات HTTP وتجاوزات اختيارية)، `frontend/.env.example` — أسماء وافتراضيات وقيم وهمية فقط. تُنسخ إلى `.env`، `backend/.env` (اختياري)، `frontend/.env.local` المتجاهَلة في Git (تم التحقق في CH-0007 وCH-0008 أن `git ls-files` لا يرصد أياً منها وأن كلمات المرور الحقيقية الثلاث لا تظهر في أي ملف مرصود). ~~بيانات اعتماد القاعدة تتكرر في ملفين~~ (KI-023 RESOLVED).
 - الخادم يحمّل `backend/.env.local` ثم `backend/.env` ثم `../.env` الجذري (`src/config/env-files.ts`؛ الأول يغلب لكل متغير، ومتغيرات العملية تغلب الملفات) ثم يتحقق بمخطط zod؛ أي قيمة غير صالحة تُفشل الإقلاع برسالة تسمّي المتغير. المتغيرات غير المعلنة في المخطط تُسقَط من `ConfigService` (لكنها تبقى في `process.env` — KI-028). Prisma CLI يحمّل `backend/.env` ثم `../.env` بـ dotenv بالترتيب نفسه.
@@ -2583,8 +2644,10 @@ npm install <package>
 | تهيئة المدير الأول بلا بيانات افتراضية | IMPLEMENTED (CH-0014) | `scripts/bootstrap-admin.ts`: لا كلمة مرور في الكود، إدخال من البيئة أو الطرفية بلا صدى، يرفض مديراً ثانياً، idempotent؛ متحقق من PowerShell بأربعة سيناريوهات (CH-0015، 13.4) |
 | أجسام الطلبات JSON فقط (دفاع ضد login CSRF بنماذج HTML) | IMPLEMENTED (CH-0015) | `APP_CREATE_OPTIONS` + `app.useBodyParser('json')` في `backend/src/app.setup.ts` و`main.ts`؛ متحقق حياً (نموذج `urlencoded` → `400` بدل `401`) وبـ TEST-005؛ ADR-026، KI-033، SEC-R-10 |
 | `JWT_SECRET` دائم محلياً ومحمَّل بعد إعادة التشغيل | CONFIRMED (CH-0015) | رمز موقَّع بسرّ `backend/.env` مقبول التوقيع على الخادم قبل وبعد إعادة تشغيل المراقب؛ نسخة جديدة على :3999 أقلعت بلا تحذير السرّ العابر (KI-031) |
+| قائمة المستخدمين وتفاصيلهم بإسقاط صريح (بلا تجزئة أو عدّادات) وهروب أحرف LIKE | IMPLEMENTED (CH-0016) | `backend/src/users/users.service.ts` (`SUMMARY_SELECT`، `escapeLikePattern()`)؛ TEST-011 يفحص كل مفاتيح الاستجابة تكرارياً ضد `/hash|password/i` ويثبت أن `%`/`_` تُطابَق حرفياً (KI-034)؛ رؤية المحذوفين منطقياً مقيَّدة بـ `users.deactivate` |
+| فحص CSRF موسَّع: CORS preflight، Content-Type، Origin، Fetch Metadata، حجم الجسم | CONFIRMED (CH-0016) | 21 طلباً بـ curl على الخادم الحي :3000 (13.4): preflight من أصل أجنبي أو `null` أو `:5174` بلا `Access-Control-Allow-Origin` (المتصفح يوقف الطلب الفعلي؛ `Access-Control-Allow-Credentials: true` تُرسَل مع كل أصل — سلوك حزمة `cors`، بلا أثر بدون ACAO)؛ الأصل المسموح يحصل على ACAO + `Vary: Origin`؛ `urlencoded`/`multipart`/`text/plain`/بلا نوع/مصفوفة JSON → `400`؛ JSON تالف → `400`؛ `application/json` بـ `charset=utf-7` يُحلَّل (لا نموذج HTML يستطيع إرساله)؛ 200 KB → `413` (حد `express.json` الافتراضي 100 KB). **الخادم لا يفحص `Origin` ولا `Sec-Fetch-Site`:** طلب مباشر بـ `Origin: https://evil.example` أو `Sec-Fetch-Site: cross-site` إلى `login`/`refresh`/`logout` يُعالَج عادياً — الدفاع الحالي هو preflight + `SameSite=Strict` + JSON فقط؛ الفحص الصريح يبقى MOD-01-H02 كطبقة ثانية ضد نطاق فرعي شقيق مخترق (same-site بلا preflight إلى `refresh`/`logout`: أثره إبطال/تدوير جلسة الضحية لا سرقتها) |
 
-**ما لم يُنفَّذ بعد:** `helmet`، فحص `Origin`/`Sec-Fetch-Site` كطبقة ثانية، `trust proxy` (KI-030)، MFA، تخزين موزّع لمحدّد المعدل (KI-030)، حماية Swagger في الإنتاج (SEC-R-05). الدعوات واستعادة كلمة المرور ضمن MOD-03 (خارطة الطريق §4).
+**ما لم يُنفَّذ بعد:** `helmet`، فحص `Origin`/`Sec-Fetch-Site` كطبقة ثانية (MOD-01-H02 — غيابه مؤكد بفحص CH-0016)، `trust proxy` (KI-030)، MFA، تخزين موزّع لمحدّد المعدل (KI-030)، حماية Swagger في الإنتاج (SEC-R-05)، إسقاط مخفَّض لقائمة المستخدمين لغير المدراء (SEC-R-12). الدعوات واستعادة كلمة المرور ضمن MOD-03 (خارطة الطريق §4).
 
 ### 12.2 الفجوات الحالية (مؤكدة من الكود) والتوصيات
 
@@ -2594,7 +2657,8 @@ npm install <package>
 | التفويض | **منفَّذ (CH-0014):** `PermissionsGuard` بمفاتيح الكتالوج | نطاقات `own`/`linked` داخل الخدمات مع كل وحدة؛ إدارة الأدوار المخصّصة (MOD-03) | متوسطة |
 | مصادقة الواجهة | **حقيقية (CH-0014):** رمز الوصول في الذاكرة، التحديث بكعكة httpOnly، تجديد تلقائي، لا `localStorage` (KI-017 RESOLVED) | ترشيح القائمة بالصلاحيات؛ اختبارات واجهة | — |
 | تفويض الواجهة | إخفاء الشاشات حسب الدور الأساسي المشتق من الخادم (`RequireRole`, `navigation.ts`)؛ `hasPermission()` متاح | الفرض الحقيقي في الخادم (منفَّذ)؛ الواجهة تبقى طبقة تجربة مستخدم فقط | — |
-| CSRF | **منفَّذ (CH-0014/CH-0015):** كعكة التحديث `SameSite=Strict` + `Path=/api/auth` + CORS بقائمة + **أجسام JSON فقط** (ADR-026)؛ لا رمز CSRF مستقل ولا فحص `Origin` | قبل النشر بـ HTTPS: الواجهة والـ API على الموقع نفسه (SEC-R-11)، `AUTH_COOKIE_SECURE=true`، `CORS_ORIGIN` بأصل الواجهة الدقيق؛ فحص `Origin`/`Sec-Fetch-Site` كطبقة ثانية (MOD-01-H02) | متوسطة عند النشر |
+| CSRF | **منفَّذ (CH-0014/CH-0015) ومُفحوص موسَّعاً (CH-0016، 12.1):** كعكة التحديث `SameSite=Strict` + `Path=/api/auth` + CORS بقائمة (preflight يفشل للأصول الأجنبية) + **أجسام JSON فقط** (ADR-026)؛ لا رمز CSRF مستقل، و**لا فحص `Origin`/`Sec-Fetch-Site`** (مؤكد بالفحص) | قبل النشر بـ HTTPS: الواجهة والـ API على الموقع نفسه (SEC-R-11)، `AUTH_COOKIE_SECURE=true`، `CORS_ORIGIN` بأصل الواجهة الدقيق؛ تنفيذ MOD-01-H02 (فحص `Origin`/`Sec-Fetch-Site` على مسارات الكعكة — تقدير S) خاصةً إن وُجدت نطاقات فرعية شقيقة تحت الموقع نفسه | متوسطة عند النشر |
+| كشف بيانات الاتصال في قائمة المستخدمين | `users.read` واحدة للقائمة والتفاصيل (CH-0016) ويحملها افتراضياً `teacher` و`staff`، فيرى المعلم بريد وهاتف كل المستخدمين (SEC-R-12) | قبل الواجهة (T11): إسقاط مخفَّض لغير `academy_admin`/`staff` (بلا بريد/هاتف)، أو مفتاح `users.read_contact`، أو نطاق `linked` (ADR-023) — قرار المالك D-R07 في خارطة الطريق | متوسطة قبل الاستخدام الفعلي |
 | كلمات المرور | **Argon2id (CH-0014)** بمعاملات OWASP الدنيا؛ سياسة طول (10 للمستخدمين، 12 للمدير الأول)؛ لا تُسجَّل | رفع المعاملات مع قدرة الخوادم؛ قائمة كلمات مرور شائعة | منخفضة |
 | التحقق من المدخلات | `ValidationPipe` عام + أول DTO حقيقية (`LoginDto`, `ChangePasswordDto`, `AuditLogQueryDto`) مع اختبار e2e للحقول الزائدة (KI-022 RESOLVED — CH-0014) | كل DTO قادم يحمل قواعد `class-validator` | منخفضة |
 | CORS | مفعّل بقائمة من `CORS_ORIGIN` (CH-0006) | مراجعة القائمة لكل بيئة نشر؛ عدم استخدام `*` مع `credentials` | منخفضة |
@@ -2625,6 +2689,7 @@ npm install <package>
 | SEC-R-09 | محدّد المعدل في ذاكرة العملية: مع عدة نسخ خلف موازن أحمال تتضاعف الحدود الفعلية، ومع proxy بلا `trust proxy` يُحسب كل العملاء بعنوان واحد | منخفضة الآن (نسخة واحدة) | Redis storage لـ `@nestjs/throttler` + `trust proxy` عند النشر (KI-030)؛ القفل على مستوى الحساب في القاعدة يبقى فعالاً في كل الحالات |
 | SEC-R-10 | **login CSRF:** محلّلا الأجسام الافتراضيان في NestJS (JSON + `urlencoded`) جعلا `POST /api/auth/login` يقبل نموذج HTML مُرسَلاً من موقع آخر بلا CORS preflight (متحقق حياً قبل الإصلاح: `401 invalid_credentials` بدل `400`)، فيستطيع مهاجم إدخال متصفح الضحية في حساب يملكه هو وضبط كعكة تحديث لها | RESOLVED (CH-0015) | أجسام JSON فقط (`APP_CREATE_OPTIONS` + `useBodyParser('json')` — ADR-026، KI-033)؛ TEST-005 يثبت `400` للنماذج |
 | SEC-R-11 | قيد نشر لا ثغرة: `SameSite=Strict` تمنع إرسال كعكة التحديث إذا نُشرت الواجهة والـ API على موقعَين مختلفَين (eTLD+1 مختلف) فيتعطّل التجديد الصامت؛ وبلا `AUTH_COOKIE_SECURE=true` خارج `production` تُرسَل الكعكة على HTTP | — (تصميمي) | نشر الواجهة والـ API تحت نطاق واحد أو نطاقات فرعية منه؛ `AUTH_COOKIE_SECURE=true` في كل بيئة HTTPS؛ `trust proxy` خلف الوكيل (14.11) |
+| SEC-R-12 | **نطاق `users.read` خشن (CH-0016):** صلاحية واحدة تفتح قائمة المستخدمين وتفاصيلهم كاملةً (بريد، هاتف، حالة، أدوار، روابط الأولياء) ويحملها افتراضياً `teacher` و`staff` (6.7.8)، فيرى المعلم بيانات اتصال كل المستخدمين بما فيهم المدراء وأولياء الأمور | منخفضة الآن (لا مستخدمين حقيقيين؛ لا واجهة)، متوسطة عند الاستخدام الفعلي | قرار المالك D-R07 قبل T11: إسقاط مخفَّض حسب الصلاحية (بلا بريد/هاتف لغير `academy_admin`/`staff`)، أو مفتاح جديد `users.read_contact`، أو نطاق `linked` للمعلم على طلابه (ADR-023). الخادم يبقى الحدّ الأمني أياً كان الخيار |
 
 ---
 
@@ -2634,7 +2699,7 @@ npm install <package>
 
 | التطبيق | الإطار | الحالة |
 |---|---|---|
-| Backend | Vitest 4 + `@nestjs/testing` + supertest | مُستخدم: ثلاثة ملفات وحدة + ملف شامل (28 اختباراً) منذ CH-0008؛ الاختبار الشامل للجاهزية يتكيّف مع وجود القاعدة ولا يتطلبها |
+| Backend | Vitest 4 + `@nestjs/testing` + supertest | مُستخدم: ستة ملفات وحدة (33 اختباراً) + أربعة ملفات شاملة (40 اختباراً) منذ CH-0016؛ الاختبار الشامل للجاهزية يتكيّف مع وجود القاعدة، والمجموعات المعتمدة على القاعدة (TEST-007، TEST-008، TEST-011) تُتخطّى بلا قاعدة |
 | Frontend | لا شيء | PLANNED (مقترح: Vitest + Testing Library، و Playwright للشامل) — لم يُعتمد بعد؛ هيكل CH-0005 بلا اختبارات آلية |
 
 ### 13.2 الاختبارات الموجودة
@@ -2643,7 +2708,7 @@ npm install <package>
 |---|---|---|---|---|
 | TEST-001 | `backend/src/app.controller.spec.ts` | وحدة | `AppController.getHello()` يُعيد `"Hello World!"` | REMOVED في CH-0006 مع الملف |
 | TEST-002 | `backend/test/app.e2e-spec.ts` (النسخة القديمة) | شامل | `GET /` → `200` و`"Hello World!"` | REMOVED في CH-0006 (استُبدل بـ TEST-005) |
-| TEST-003 | `backend/src/config/env.schema.spec.ts` | وحدة (13؛ +2 في CH-0014: `JWT_SECRET` إلزامي في الإنتاج وبطول ≥ 32، وتحليل إعدادات المصادقة مع افتراضي `AUTH_COOKIE_SECURE` حسب البيئة) | الافتراضيات؛ تحويل `PORT` وقائمة CORS وعلم Swagger؛ رفض القيم غير الصالحة باسم المتغير؛ إسقاط المتغيرات غير المعلنة؛ `DATABASE_URL` اختياري/فارغ/صالح؛ رفض غير `postgresql://`؛ إلزامي في الإنتاج؛ **CH-0008:** اشتقاق `DATABASE_URL` من `DB_APP_*`/`POSTGRES_*`/`DB_HOST` مع ترميز الكلمة وإخفاء المدخلات من الناتج؛ أولوية العنوان الصريح؛ لا اشتقاق بلا كلمة مرور والفراغ = افتراضي؛ قبول المشتق في الإنتاج ورفض `POSTGRES_PORT` غير الصالح | ناجح (CH-0008) |
+| TEST-003 | `backend/src/config/env.schema.spec.ts` | وحدة (14؛ +2 في CH-0014: `JWT_SECRET` إلزامي في الإنتاج وبطول ≥ 32، وتحليل إعدادات المصادقة مع افتراضي `AUTH_COOKIE_SECURE` حسب البيئة؛ +1 في CH-0016: متغيرات دورة حياة الحساب ENV-36..39 — القيم والافتراضيات والفراغ = افتراضي ورفض خارج النطاق وURL غير http(s)) | الافتراضيات؛ تحويل `PORT` وقائمة CORS وعلم Swagger؛ رفض القيم غير الصالحة باسم المتغير؛ إسقاط المتغيرات غير المعلنة؛ `DATABASE_URL` اختياري/فارغ/صالح؛ رفض غير `postgresql://`؛ إلزامي في الإنتاج؛ **CH-0008:** اشتقاق `DATABASE_URL` من `DB_APP_*`/`POSTGRES_*`/`DB_HOST` مع ترميز الكلمة وإخفاء المدخلات من الناتج؛ أولوية العنوان الصريح؛ لا اشتقاق بلا كلمة مرور والفراغ = افتراضي؛ قبول المشتق في الإنتاج ورفض `POSTGRES_PORT` غير الصالح | ناجح (CH-0008) |
 | TEST-004 | `backend/src/health/health.service.spec.ts` | وحدة (4) | `check()` يُعيد `ok` والإصدار والبيئة؛ `readiness()` مع `PrismaService` وهمي: up / down (مع رسالة السائق) / not_configured | ناجح (CH-0007) |
 | TEST-005 | `backend/test/app.e2e-spec.ts` | شامل (8؛ +1 في CH-0015) | `GET /api/health` JSON؛ غياب `X-Powered-By`؛ `404` JSON تحت البادئة؛ `GET /` → `404` HTML؛ CORS للأصل المسموح فقط؛ `GET /api/health/ready` (200/up مع قاعدة حية، وإلا 503 بجسم متسق)؛ `/api/docs-json` يحوي المسارين؛ **CH-0015:** أجسام JSON فقط — `POST /api/auth/login` بـ `urlencoded` أو `text/plain` → `400` (الجسم غير محلَّل) بينما JSON يصل إلى التحقق (`401`/`503`) | ناجح (CH-0015؛ يُنشئ التطبيق بـ `APP_CREATE_OPTIONS` كما `main.ts`) |
 | TEST-006 | `backend/src/config/database-url.spec.ts` | وحدة (6) | `buildPostgresUrl()`: التجميع والترميز percent للكلمة والمستخدم واسم القاعدة، وبقاء الكلمات الآمنة كما هي؛ `postgresUrlFromEnv()`: undefined بلا كلمة مرور الدور، الافتراضيات المشتركة، متغيرات الدور والمضيف/المنفذ/القاعدة، رفض منفذ غير صالح | ناجح (CH-0008) |
@@ -2651,6 +2716,8 @@ npm install <package>
 | TEST-008 | `backend/test/auth.e2e-spec.ts` | شامل على القاعدة الحية (12؛ تُتخطّى بلا قاعدة) | يُقلع `AppModule` كاملاً مع `configureApp()`؛ مستخدمو الاختبار بلاحقة فريدة ويُحذفون في النهاية (سجلات تدقيقهم تبقى بفاعل فارغ). (1) دخول بالبريد (غير حساس لحالة الأحرف): 200، رمز وصول، كعكة `HttpOnly; SameSite=Strict; Path=/api/auth`، التجزئة المخزّنة ≠ الكعكة، لا `passwordHash` في الجسم، `last_login_at`؛ (2) دخول باسم المستخدم + رفض حقل زائد (400 — KI-022)؛ (3) كلمة خاطئة ومعرّف مجهول = الرسالة نفسها (401 `invalid_credentials`)؛ (4) موقوف 403، معلّق 403، غير مفعّل 403، محذوف منطقياً 401، مؤرشف 401؛ (5) الحماية: بلا رمز 401 `unauthenticated`، رمز تالف `token_invalid`، رمز منتهٍ `token_expired`، صالح → `/me`، ثم تعليق الحساب يُسقط الرمز الصالح (403)؛ (6) الصلاحيات: بلا `audit.read` → 403 مع `missing`، دور اختباري يحمله → 200 وحدث الدخول ظاهر وبلا أسرار؛ (7) التدوير: كعكة جديدة ≠ القديمة، إعادة استخدام القديمة → 401 `refresh_reused` وتموت الجديدة أيضاً، كل رموز العائلة ملغاة، حدث `reuse_detected`، كعكة مفقودة/مزوّرة؛ (8) الخروج: 204 + مسح الكعكة، التجديد بعدها يفشل؛ `logout-all` يُسقط جلستين؛ (9) تغيير كلمة المرور: الحالية الخاطئة 400 `password_invalid`، الضعيفة 400 DTO، النجاح 204 ثم القديمة ترفض والجديدة تعمل، رمز الوصول الأقدم `token_invalid`، الكعكة الحالية تجدّد، الجلسة الأخرى ملغاة؛ (10) القفل: 4 فشل 401 ثم الخامس 423 `account_locked` + `retryAfterSeconds`، الصحيحة مرفوضة أثناء القفل، أحداث `login.failed`×4 و`login.locked` بلا كلمات مرور، رفع القفل يصفّر العدّاد؛ (11) تحديد المعدل: 11 محاولة لمعرّف واحد → 429 `rate_limited` ومعرّف آخر غير متأثر؛ (12) المدير الأول: إن لم يوجد مدير → `created` ثم `already_bootstrapped` لنفس البريد ودخول ناجح بدور `academy_admin` وكل الصلاحيات وحدث بلا كلمة مرور؛ دائماً: بريد آخر → `refused: admin_exists`، كلمة قصيرة → خطأ | ناجح 12/12 (CH-0014) |
 | TEST-009 | `backend/src/auth/password.service.spec.ts` | وحدة (3) | تجزئة `$argon2id$` تتحقق بالكلمة الصحيحة فقط ولا تحوي الكلمة؛ ملح مختلف لكل تجزئة؛ لا رمي على تجزئة تالفة؛ `verifyDummy()`؛ سياسة الطول (10/128/12 للمدير الأول، لا فراغات فقط) | ناجح (CH-0014) |
 | TEST-010 | `backend/src/auth/token.service.spec.ts` | وحدة (3) | التوقيع يحمل `sub`/`roles`/`jti`/`exp−iat`؛ رفض المنتهي (`token_expired`)، التالف، المُصدر الأجنبي، الجمهور الأجنبي، السرّ المختلف (`token_invalid`)؛ رموز التحديث عشوائية مختلفة وتجزئة SHA-256 hex وانتهاء بالأيام | ناجح (CH-0014) |
+| TEST-011 | `backend/test/users.e2e-spec.ts` | شامل على القاعدة الحية (11؛ تُتخطّى بلا قاعدة) | يُقلع `AppModule` كاملاً بـ `APP_CREATE_OPTIONS`؛ دوران اختباريان (`users.read` فقط / `users.read`+`users.deactivate`) وعشرة مستخدمين بلاحقة فريدة (طالب بملف وولي أساسي، معلم بملف موظف، موقوف، محذوف منطقياً، مدعو باسم مستخدم فقط، …) يُحذفون في النهاية. (1) بلا رمز 401؛ بلا `users.read` 403 مع `missing` للقائمة والتفاصيل؛ (2) القائمة بالمفاتيح المتوقعة بالضبط، لا مفتاح يطابق `/hash|password/i` في أي مستوى، لا `$argon2`؛ (3) البحث بالبريد واسم المستخدم والاسم العربي والاسم اللاتيني واسم العرض، غير حساس لحالة الأحرف، و`%`/`_` حرفياً؛ (4) `status`+`role`+`q` مجتمعةً؛ (5) المحذوف مخفي افتراضياً، `includeDeleted` بلا `users.deactivate` → 403، معه يظهر بـ `deletedAt`، و`includeDeleted=false` تبقى false؛ (6) الترقيم بـ `limit=4`/`2` عبر ثلاثة ترتيبات (`createdAt` desc/asc، `fullName` asc/desc): اتحاد الصفحات = المجموعة بلا تكرار، والترتيب مطابق لترتيب الإنشاء أو الأبجدي؛ (7) مؤشر من ترتيب آخر أو تالف → `400 cursor_invalid`؛ (8) التفاصيل: الأدوار بتسمياتها، ملف الطالب بتواريخ `YYYY-MM-DD`، ملف الموظف، روابط الأولياء من الجهتَين، `lastLoginAt` للمستدعي؛ (9) 404 `user_not_found` للمجهول والمحذوف، 200 للمحذوف بـ `includeDeleted` المصرَّح، 400 لمعرّف غير UUID؛ (10) عشرة معاملات غير صالحة → 400، والفارغة = غائبة؛ (11) حارس أداء تقريبي: صفحة 100 < 2 ثانية، تفاصيل < 1 ثانية | ناجح 11/11 (CH-0016) |
+| TEST-012 | `backend/src/users/users.cursor.spec.ts` | وحدة (3) | ترميز/فك المؤشر لترتيبَي `createdAt` و`fullName`؛ رفض المؤشر مع ترتيب أو اتجاه مختلف؛ رفض التالف وغير base64 والإصدار الغريب والمعرّف غير UUID والمفتاح غير المتوقع بـ `cursor_invalid` (400) | ناجح (CH-0016) |
 
 ### 13.3 أوامر الاختبار
 
@@ -2723,11 +2790,20 @@ npm install <package>
 | `backend`: `lint` / `tsc --noEmit` / `test` / `test:e2e` (CH-0015) | نظيف / نظيف / 29/29 / **29/29** على القاعدة الحية (TEST-005 8 + TEST-007 9 + TEST-008 12)؛ ترجمة مكافئة للبناء `tsc -p tsconfig.build.json --outDir <مؤقت>` ناجحة (لم يُشغَّل `npm run build` لأن `start:dev` يعمل) |
 | `frontend`: `tsc -b` / `lint` / `vite build` (CH-0015) | نجحت؛ الحزمة 1,329 kB (KI-016) |
 | قاعدة التطوير بعد الجلسة (CH-0015) | `users` 0، `refresh_tokens` 0، `roles` 5، `permissions` 56، `audit_logs` 159 (كلها بفاعل فارغ — KI-032)؛ الترحيلان مطبَّقان |
+| رصد العمليات والقاعدة (CH-0016) | `netstat`/`tasklist`: Nest على :3000 (PID 12400)، Vite على :5173 و:5174، PostgreSQL على 127.0.0.1:5432 — **لم يُوقَف شيء**؛ `docker compose ps` صحية؛ `users` 0، `roles` 5، `audit_logs` 159، `datcollate = en_US.utf8`، PostgreSQL 18.6 |
+| حالة CH-0015 قبل التزامها (CH-0016) | `lint` نظيف، `tsc --noEmit` نظيف، وحدة 29/29، شامل 29/29 على القاعدة الحية؛ فحص الأسرار: القيم الحقيقية لكلمات مرور القاعدة الثلاث و`JWT_SECRET` (الأطوال فقط دون طباعة) صفر تطابق في `git diff HEAD` وفي الملف غير المرصود؛ ملفات `.env` كلها متجاهَلة (`git check-ignore`)؛ LF في كل الملفات المعدَّلة؛ commit محلي `1020ac1` بلا push |
+| فحص CSRF الموسَّع (CH-0016) | 21 طلباً بـ curl على الخادم الحي :3000 — التفاصيل في 12.1: preflight (أجنبي/`null`/:5174 بلا ACAO؛ :5173 بـ ACAO + `Vary: Origin`)، Content-Type (urlencoded/multipart/text-plain/بلا نوع/مصفوفة/تالف → 400؛ JSON وJSON بـ charset → تحقق؛ 200 KB → 413)، `Origin` أجنبي و`Sec-Fetch-Site: cross-site` على `login`/`refresh`/`logout`/`me`/`health` تُعالَج بلا فحص (MOD-01-H02 مؤكد كفجوة مخطَّطة) |
+| Prisma `contains` (CH-0016) | سكربت مؤقت في `backend/` (حُذف بعد التشغيل؛ `git status` نظيف) بسجل `query`: `ILIKE ('%' \|\| $1 \|\| '%')` بالمعامل الخام `a%b_cd` بلا هروب (KI-034)؛ `findMany` بلا `select` يقرأ `password_hash` وكل العدّادات → اعتُمد `select` صريح في MOD-03؛ مسند keyset `(full_name > $1 OR (full_name = $2 AND id > $3))` يُولَّد كما هو متوقع |
+| `backend`: `lint` / `tsc --noEmit` / `test` / `test:e2e` (CH-0016) | نظيف / نظيف / **33/33** (TEST-003 14، TEST-004 4، TEST-006 6، TEST-009 3، TEST-010 3، **TEST-012 3 جديدة**) / **40/40** على القاعدة الحية (TEST-005 8، TEST-007 9، TEST-008 12، **TEST-011 11 جديدة**). فشل واحد أثناء التطوير كان تناقضاً داخل الاختبار نفسه (`q=` فارغة مُعامَلة كغائبة → 200 بينما توقّع 400) فصُحّح الاختبار لا الكود. **لم يُشغَّل `npm run build`** لأن `start:dev` يعمل في جلسة أخرى |
+| الخادم الحي بعد الإضافة (CH-0016) | المراقب أعاد الترجمة وخدم `UsersModule`: `GET /api/users` بلا رمز → `401 unauthenticated`؛ `/api/docs-json` يحوي `/api/users` و`/api/users/{id}` بمعاملات `q,status,role,includeDeleted,sort,order,limit,cursor` |
+| قاعدة التطوير بعد الجلسة (CH-0016) | `users` 0، `roles` 5 (دورا الاختبار حُذفا)، `refresh_tokens` 0، `audit_logs` 235 (+76 من TEST-008 وTEST-011 بفاعل فارغ — KI-032)؛ لا ترحيل ولا تغيير مخطط |
+| العرض المرئي في متصفح (CH-0016) | **غير متحقق** — لا أداة متصفح في الجلسة (`ToolSearch` بلا نتيجة)؛ صفحتا الدخول والحساب تبقيان `UNVERIFIED` بصرياً حتى يفتحهما المالك؛ T01 لا يلمس الواجهة |
 
 ### 13.5 فجوات الاختبار الحالية
 
 - لا اختبارات للواجهة، بما فيها هيكل CH-0005: التوجيه، i18n (تطابق المفاتيح يحميه `tsc` فقط)، بوابات الأدوار، المصادقة التجريبية.
-- اختبارات الخادم تغطي البيئة والفحص الحي والجاهزية والحدود (CORS / 404 / Swagger / الرؤوس) فقط؛ `ValidationPipe` غير مُختبَر على DTO فعلي (KI-022).
+- اختبارات الخادم تغطي البيئة والفحص الحي والجاهزية والحدود (CORS / 404 / Swagger / الرؤوس / أجسام JSON)، والمخطط والقيود (TEST-007)، والمصادقة كاملةً (TEST-008)، وقائمة المستخدمين وتفاصيلهم (TEST-011)؛ لا تغطية بعد لمسارات كاتبة في MOD-03 (تأتي مع T02..T09).
+- اختبار الأداء في TEST-011 حارس تقريبي (سقف 2 ثانية لصفحة من 100 وثانية للتفاصيل) على قاعدة شبه فارغة بلا حمل متزامن؛ لا قياس أداء حقيقي ولا فهرس للبحث النصي.
 - حالة "القاعدة متوقفة" للجاهزية مُختبَرة على مستوى الوحدة فقط (TEST-004 بـ `PrismaService` وهمي)؛ الاختبار الشامل يتكيّف مع البيئة ولا يفرض الحالتين. لا اختبارات تكامل تستخدم قاعدة مؤقتة (testcontainers) بعد.
 - TEST-007 يعمل على قاعدة التطوير المحلية نفسها (لا قاعدة اختبار منفصلة): اختبارات البيانات تُلغى بمعاملات، لكن اختبار البذر يكتب الكتالوج فعلاً (idempotent)؛ قاعدة اختبار مستقلة أو CI بقاعدة مؤقتة لاحقاً.
 - لا اختبار لسيناريو فشل ترحيل (الإجراء اليدوي في 6.6.5 (و)).
@@ -2736,7 +2812,7 @@ npm install <package>
 
 ### 13.6 الاختبارات الفاشلة المعروفة
 
-لا شيء معروف. آخر تشغيل (CH-0015، 2026-10-29 19:48): وحدة 29/29 (TEST-003 13، TEST-004 4، TEST-006 6، TEST-009 3، TEST-010 3)، شامل 29/29 (TEST-005 8 + TEST-007 9 + TEST-008 12)، `lint` نظيف، `tsc --noEmit` نظيف؛ الواجهة: `tsc -b` و`lint` و`vite build` نظيفة.
+لا شيء معروف. آخر تشغيل (CH-0016، 2026-10-29 20:35): وحدة 33/33 (TEST-003 14، TEST-004 4، TEST-006 6، TEST-009 3، TEST-010 3، TEST-012 3)، شامل 40/40 (TEST-005 8 + TEST-007 9 + TEST-008 12 + TEST-011 11)، `lint` نظيف، `tsc --noEmit` نظيف؛ الواجهة لم تُمس في CH-0016 (آخر فحص لها CH-0015: `tsc -b` و`lint` و`vite build` نظيفة).
 
 ---
 
@@ -2934,13 +3010,13 @@ docker compose start postgres
 |---|---|---|---|---|---|
 | FS-001 | تشغيل خادم HTTP مع `GET /` | MOD-00 | REMOVED | — | نقطة الهيكل أُزيلت في CH-0006؛ الخادم نفسه يعمل ضمن FS-036 |
 | FS-002 | قالب واجهة React يعمل | MOD-FE-00 | REMOVED | — | قالب Vite الافتراضي أُزيل في CH-0005 وحلّ محلّه FS-034 |
-| FS-003 | اختبارات الخادم (وحدة + شامل) | MOD-00 | IMPLEMENTED | `backend/src/config/env.schema.spec.ts`, `backend/src/health/health.service.spec.ts`, `backend/test/app.e2e-spec.ts` | 11 اختباراً ناجحاً (CH-0006)؛ TEST-003..TEST-005 |
+| FS-003 | اختبارات الخادم (وحدة + شامل) | MOD-00 | IMPLEMENTED | `backend/src/**/*.spec.ts`, `backend/test/*.e2e-spec.ts`, `backend/vitest.config*.ts` | 33 وحدة + 40 شاملة ناجحة (CH-0016)؛ TEST-003..TEST-012 (13.2) |
 | FS-004 | نظام التوثيق المستمر (وثيقة رئيسية + CLAUDE.md + خطّاف) | Tooling | IMPLEMENTED | `docs/PROJECT_DOCUMENTATION.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/doc-sync-check.mjs` | CH-0002 |
 | FS-010 | المصادقة وإدارة الجلسات (نواة MOD-01) | MOD-01 | IMPLEMENTED | `backend/src/auth/*`, `backend/src/audit/*`, `frontend/src/api/auth.ts`, `frontend/src/auth/*`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx` | CH-0014 منفَّذة؛ **CH-0015 مُعتمَدة ومقفلة** بعد تحقق قبول (13.4؛ خارطة الطريق §3). نطاقها: دخول/تجديد/خروج/كلمة مرور/حراس/قفل/تحديد معدل/تدقيق/المدير الأول/الواجهة (FS-041..FS-044). الدعوات وتفعيل الحسابات واستعادة كلمة المرور نُقلت إلى MOD-03 (FS-045، FS-046)؛ MFA (FS-047) PLANNED |
 | FS-011 | إدارة الأكاديمية | MOD-02 | PLANNED | — | |
 | FS-012 | النشر المستقل لكل أكاديمية | MOD-02 / Ops | PLANNED | — | ADR-008 |
 | FS-013 | قاعدة بيانات مخصّصة لكل أكاديمية | MOD-02 / DB | PLANNED | — | ADR-014 (Prisma + PostgreSQL)، ADR-008 |
-| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PLANNED | — | شاشة تجريبية ببيانات محلية: `frontend/src/pages/UsersPage.tsx` (CH-0005)؛ جداول القاعدة جاهزة منذ CH-0013 (FS-040) بلا خدمة أو API؛ **مهام MOD-03-T01/T02/T04/T06/T07/T11/T14 في `docs/DEVELOPMENT_ROADMAP.md`** |
+| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PARTIALLY_IMPLEMENTED | `backend/src/users/*`, `backend/test/users.e2e-spec.ts` | **القراءة منفَّذة (CH-0016، MOD-03-T01):** `GET /api/users` بحث/مرشّحات/ترقيم/ترتيب و`GET /api/users/:id` بصلاحية `users.read` (API-012/API-013؛ TEST-011/TEST-012)؛ التحضير T00 (ENV-36..39، قاموس الأكواد، ADR-027). **المتبقي PLANNED:** الإنشاء T02، التعديل T04، الحالات T06، الأدوار T07، الواجهة T11/T14 (الشاشة التجريبية `frontend/src/pages/UsersPage.tsx` ما زالت على بيانات محلية) |
 | FS-015 | الأدوار والصلاحيات المخصّصة | MOD-03 | PARTIALLY_IMPLEMENTED | `backend/src/auth/permissions.guard.ts`, `decorators.ts`, `backend/src/authorization/*` | الفرض في الخادم منفَّذ (CH-0014: `@RequirePermissions` + حساب الصلاحيات من القاعدة)؛ الكتالوج والأدوار النظامية مبذورة (CH-0013)؛ **المتبقي:** إنشاء الأدوار المخصّصة وتعيينها من الواجهة (MOD-03-T07/T08/T13)، نطاقات `own`/`linked` (مع كل وحدة مستهلكة) |
 | FS-016 | الدورات والمستويات | MOD-04 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/CoursesPage.tsx` (CH-0005) |
 | FS-017 | الفصول والمجموعات | MOD-05 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/ClassesPage.tsx` (CH-0005) |
@@ -2971,8 +3047,8 @@ docker compose start postgres
 | FS-042 | تهيئة المدير الأول (CLI آمن: بلا بيانات افتراضية، يرفض مديراً ثانياً، idempotent، لا طباعة للأسرار) | MOD-01 | IMPLEMENTED | `backend/scripts/bootstrap-admin.ts`, `backend/src/auth/bootstrap-admin.ts` | CH-0014؛ `npm run auth:bootstrap-admin`؛ TEST-008 (12) |
 | FS-043 | واجهة الدخول والجلسة: صفحة دخول حقيقية برسائل ar/en وحالة تحميل، جلسة بذاكرة + كعكة httpOnly مع تجديد تلقائي، صفحة الحساب (`/profile`) بتغيير كلمة المرور والخروج من كل الأجهزة، توجيه حسب الدور المشتق من الخادم | MOD-FE-01 / MOD-01 | IMPLEMENTED | `frontend/src/api/{client,auth}.ts`, `frontend/src/auth/*`, `frontend/src/pages/{LoginPage,ProfilePage}.tsx`, `frontend/src/layout/AppLayout.tsx`, `frontend/src/app/router.tsx` | CH-0014؛ تحقق يدوي بـ curl عبر Vite proxy (دخول/me/تجديد/خروج)؛ **تحقق قبول CH-0015 عبر :5173 و:5174** (13.4)؛ لا اختبارات واجهة آلية بعد (13.5؛ قرار D-R05) |
 | FS-044 | قراءة سجل التدقيق عبر API بصلاحية `audit.read` | audit (عرضي) | IMPLEMENTED | `backend/src/audit/audit.controller.ts`, `audit.dto.ts` | CH-0014؛ API-011؛ أول مستهلك لـ `PermissionsGuard` |
-| FS-045 | دعوة المستخدمين وتفعيل الحسابات (رمز استخدام واحد في `verification_tokens(invitation)` → ضبط كلمة المرور → `active`) | MOD-03 | PLANNED | — | نُقلت من MOD-01 بقرار الإغلاق (CH-0015)؛ MOD-03-T03/T12؛ قناة التسليم قرار D-R01 |
-| FS-046 | استعادة كلمة المرور (رابط إعادة ضبط بادئه المدير؛ المسار الذاتي عند توفر قناة بريد) | MOD-03 | PLANNED | — | CH-0015؛ MOD-03-T05/T12؛ D-R01 |
+| FS-045 | دعوة المستخدمين وتفعيل الحسابات (رمز استخدام واحد في `verification_tokens(invitation)` → ضبط كلمة المرور → `active`) | MOD-03 | PLANNED | `backend/src/config/env.schema.ts` (ENV-36 فقط — بلا مستهلك) | نُقلت من MOD-01 بقرار الإغلاق (CH-0015)؛ MOD-03-T03/T12؛ **القرارات مثبَّتة (CH-0016، ADR-027):** تسليم يدوي بنسخ الرابط (D-R01)، صلاحية 48 ساعة (D-R02)؛ لا منطق ولا نقاط نهاية بعد |
+| FS-046 | استعادة كلمة المرور (رابط إعادة ضبط بادئه المدير؛ المسار الذاتي عند توفر قناة بريد) | MOD-03 | PLANNED | `backend/src/config/env.schema.ts` (ENV-37, ENV-38 — بلا مستهلك) | CH-0015؛ MOD-03-T05/T12؛ **القرارات مثبَّتة (CH-0016):** 30 دقيقة (D-R02)، المسار الذاتي معطَّل بـ `AUTH_SELF_SERVICE_RESET_ENABLED=false` حتى قناة بريد (D-R01) |
 | FS-047 | المصادقة متعددة العوامل (MFA) للمدراء | MOD-01 | PLANNED | — | MOD-01-H06 في خارطة الطريق؛ لا موعد |
 | FS-048 | أجسام الطلبات JSON فقط (تعطيل محلّل `urlencoded` الافتراضي — دفاع ضد login CSRF) | MOD-00 / Security | IMPLEMENTED | `backend/src/app.setup.ts` (`APP_CREATE_OPTIONS`, `useBodyParser('json')`), `backend/src/main.ts`, `backend/test/app.e2e-spec.ts` | CH-0015؛ ADR-026؛ KI-033 RESOLVED؛ SEC-R-10؛ TEST-005 |
 
@@ -3014,7 +3090,8 @@ docker compose start postgres
 | KI-030 | محدّد المعدل (`@nestjs/throttler`) يخزّن العدّادات في ذاكرة العملية: لا يُشارك بين النسخ، ويُصفَّر عند إعادة التشغيل؛ وبلا `trust proxy` يُحسب العملاء خلف proxy بعنوان واحد | Backend / Security | منخفضة (نسخة واحدة) | `backend/src/auth/auth-throttler.guard.ts`, `app.module.ts` | Redis storage + `app.set('trust proxy', …)` عند النشر؛ القفل على مستوى الحساب (قاعدة البيانات) يبقى فعالاً | ACCEPTED (CH-0014، SEC-R-09) |
 | KI-031 | بلا `JWT_SECRET` خارج الإنتاج يُولَّد سرّ عابر عند كل إقلاع (تحذير في السجل) فتبطل رموز الوصول مع كل إعادة تشغيل للمراقب؛ الواجهة تتعافى بالتجديد عبر الكعكة | Backend / Dev | منخفضة | `backend/src/auth/token.service.ts` | ضبط `JWT_SECRET` في `backend/.env` المحلي (مضبوط على جهاز التطوير في CH-0014؛ **متحقق في CH-0015** أنه يُحمَّل بعد إعادة التشغيل: رمز موقَّع به مقبول قبل وبعد، ونسخة جديدة تقلع بلا تحذير)؛ إلزامي في الإنتاج بمخطط البيئة | ACCEPTED (CH-0014، SEC-R-08) |
 | KI-032 | اختبارات TEST-008 تكتب أحداث تدقيق حقيقية في قاعدة التطوير وتبقى بعد حذف مستخدمي الاختبار (فاعل فارغ) لأن الجدول إلحاقي بالتصميم | Tests / DB | منخفضة | `backend/test/auth.e2e-spec.ts` | قاعدة اختبار مستقلة أو CI بقاعدة مؤقتة (13.5) | ACCEPTED (CH-0014) |
-| KI-033 | **login CSRF:** `NestFactory.create` الافتراضي يسجّل محلّلَي `json` و`urlencoded`، فكان `POST /api/auth/login` يقرأ جسم نموذج HTML (`application/x-www-form-urlencoded`) مُرسَل من موقع آخر ويفحص بيانات الاعتماد (متحقق حياً: `401 invalid_credentials` بدل `400`)؛ يسمح لمهاجم بإدخال متصفح الضحية في حساب المهاجم وضبط كعكة تحديث لها. السبب مؤكد: محلّل `urlencoded` الافتراضي + غياب فحص `Origin` | Backend / Security | متوسطة (قبل أي نشر) | `backend/src/main.ts` قبل CH-0015؛ فحص curl في 13.4 | أجسام JSON فقط: `APP_CREATE_OPTIONS = { bodyParser: false }` + `app.useBodyParser('json')` في `configureApp()` (مشترك بين `main.ts` والاختبارات)؛ TEST-005 يثبت `400` للنماذج و`text/plain`؛ فحص `Origin` لاحقاً كطبقة ثانية (MOD-01-H02) | RESOLVED (CH-0015، ADR-026، SEC-R-10) |
+| KI-033 | **login CSRF:** `NestFactory.create` الافتراضي يسجّل محلّلَي `json` و`urlencoded`، فكان `POST /api/auth/login` يقرأ جسم نموذج HTML (`application/x-www-form-urlencoded`) مُرسَل من موقع آخر ويفحص بيانات الاعتماد (متحقق حياً: `401 invalid_credentials` بدل `400`)؛ يسمح لمهاجم بإدخال متصفح الضحية في حساب المهاجم وضبط كعكة تحديث لها. السبب مؤكد: محلّل `urlencoded` الافتراضي + غياب فحص `Origin` | Backend / Security | متوسطة (قبل أي نشر) | `backend/src/main.ts` قبل CH-0015؛ فحص curl في 13.4 | أجسام JSON فقط: `APP_CREATE_OPTIONS = { bodyParser: false }` + `app.useBodyParser('json')` في `configureApp()` (مشترك بين `main.ts` والاختبارات)؛ TEST-005 يثبت `400` للنماذج و`text/plain`؛ فحص `Origin` لاحقاً كطبقة ثانية (MOD-01-H02) | RESOLVED (CH-0015، ADR-026، SEC-R-10)؛ أُعيد التحقق موسَّعاً في CH-0016 (12.1) |
+| KI-034 | Prisma 7.10.1 يُولّد مرشّح `contains` كـ `ILIKE ('%' \|\| $1 \|\| '%')` بالمعامل الخام **دون هروب `%`/`_`/`\`**، فيعمل إدخال المستخدم في البحث كنمط LIKE (`q=%` يطابق الكل، `_` يطابق أي حرف). ليس حقناً (المعامل مرتبط) لكنه يوسّع المطابقة ويسمح بتجاوز نية البحث | Backend / MOD-03 | منخفضة | سجل `query` لعميل Prisma في CH-0016 (13.4): `PARAMS: ["a%b_cd", …]` | هروب الأحرف الثلاثة قبل `contains` بـ `escapeLikePattern()` في `backend/src/users/users.service.ts` (حرف الهروب الافتراضي في PostgreSQL `\`)؛ TEST-011 يثبت أن `%` لا يطابق شيئاً و`_` يطابق الشرطة السفلية حرفياً. **كل بحث نصي قادم يستخدم الدالة نفسها** (تُنقل إلى `common/` عند ثاني مستهلك) | ACCEPTED (معالَج في الكود — CH-0016) |
 
 ---
 
@@ -3349,13 +3426,40 @@ docker compose start postgres
 | الحالة | **ACCEPTED** (منفَّذ في CH-0015 ومختبر بـ TEST-005) |
 | المكونات المتأثرة | `backend/src/app.setup.ts`, `backend/src/main.ts`, `backend/test/{app,auth}.e2e-spec.ts`؛ 10.1، 12.1–12.3، KI-033، SEC-R-10 |
 
+### ADR-027 — قرارات المالك لتصميم MOD-03 (D-R01..D-R06): تسليم يدوي للروابط، أعمار الرموز 48 ساعة / 30 دقيقة، مدراء إضافيون عبر `users.roles.assign`، تأجيل التسجيل الذاتي، اعتماد Vitest + Testing Library للواجهة، إدارة الأدوار داخل الإعدادات
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 (CH-0016؛ قرار المالك بتاريخه) |
+| السياق | خارطة الطريق (§4.7) علّقت ست قرارات على المالك قبل أو أثناء MOD-03. أجاب المالك في 2026-10-29 بالقرارات الست مع طلب عرض أي تعارض جوهري مع المتطلبات الحالية قبل تثبيتها. المراجعة لم تجد تعارضاً جوهرياً؛ وجدت ملاحظتَي تصميم (أدناه) لا تمنعان التثبيت |
+| الخيارات المدروسة | لكل قرار الخيارات كما في خارطة الطريق §4.7 مع توصية المراجع: D-R01 يدوي/بريد الآن/انتظار MOD-12؛ D-R02 72 ساعة أو 7 أيام للدعوة و30 أو 60 دقيقة للإعادة؛ D-R03 `users.roles.assign` أو مفتاح جديد `users.admins.manage`؛ D-R04 داخل MOD-03 أو مؤجَّل؛ D-R05 الآن أو لاحقاً؛ D-R06 صفحة `/roles` مستقلة أو تبويب داخل `/settings` |
+| القرار | **D-R01:** روابط الدعوة وإعادة الضبط تُنسخ يدوياً من الواجهة بواسطة مسؤول مخوَّل (الرمز الخام يظهر مرة واحدة في استجابة الإصدار)؛ المسار الذاتي "نسيت كلمة المرور" يبقى معطَّلاً (`AUTH_SELF_SERVICE_RESET_ENABLED=false`) حتى تتوفر قناة بريد. **D-R02:** الدعوة 48 ساعة، إعادة الضبط 30 دقيقة (قابلان للضبط بـ ENV-36/ENV-37). **D-R03:** مدير الأكاديمية الحامل لـ `users.roles.assign` يستطيع إنشاء مدير إضافي (منح `academy_admin`) بلا مفتاح جديد، مع قاعدة "آخر مدير نشط لا يُجرَّد" وحدث تدقيق لكل تعيين. **D-R04:** التسجيل الذاتي مؤجَّل؛ يُفعَّل لاحقاً لكل أكاديمية بعلم في `academy.settings` (MOD-14) ودور `is_default_for_signup`. **D-R05:** Vitest + Testing Library (+ jsdom) معتمدة لاختبارات الواجهة؛ التثبيت في MOD-03-T16/S1-R03. **D-R06:** إدارة الأدوار والصلاحيات تبويب داخل إعدادات الأكاديمية (`/settings`) لا صفحة مستقلة |
+| السبب | طلب المالك الصريح. D-R01 يزيل اعتمادية البريد عن الدفعة A؛ D-R02 يقصّر نافذة الإساءة للرموز المسلَّمة يدوياً (إعادة إصدار الدعوة متاحة في T03 إن انتهت)؛ D-R03 يعيد استخدام الكتالوج بلا مفتاح جديد؛ D-R04 يحتاج إعدادات الأكاديمية أصلاً؛ D-R05 يمنع تراكم شاشات بلا اختبارات؛ D-R06 يجمع الإدارة في مكان واحد |
+| ملاحظات التصميم (ليست تعارضاً) | (1) **D-R06 ↔ الصلاحيات:** صفحة `/settings` اليوم مرئية لدور `admin` فقط (مصفوفة 7.2) ووحدتها MOD-14 مخطَّطة بعد MOD-03؛ تبويب الأدوار يجب أن يُفتح لحامل `roles.manage` حتى لو لم يحمل `academy.settings.read` — يُنفَّذ كمسار فرعي `/settings/roles` ببوابة `roles.manage` مستقلة (T13/T15)، ويكون أول محتوى حقيقي في صفحة الإعدادات قبل MOD-14. (2) **D-R02 ↔ التسليم اليدوي:** 48 ساعة قد لا تكفي مدعوّاً متأخراً؛ إعادة الإصدار في T03 تُبطل القديمة وتمنح رمزاً جديداً، فلا حاجة لمدة أطول |
+| النتائج المتوقعة | ENV-36..ENV-39 مُعرَّفة (CH-0016) ويستهلكها T03/T05؛ T05 يُنفَّذ بالمسار الإداري فقط والمسار الذاتي معطَّلاً بعلم بيئة؛ T13 يُبنى داخل `/settings`؛ T16 وS1-R03 غير محجوبَين؛ لا مفاتيح صلاحيات جديدة لـ MOD-03؛ عند اختيار مزوّد بريد لاحقاً يُستبدل التسليم اليدوي عبر واجهة `MailTransport` دون تغيير العقود |
+| الحالة | **ACCEPTED** (قرار المالك 2026-10-29، مسجَّل في CH-0016) |
+| المكونات المتأثرة | `docs/DEVELOPMENT_ROADMAP.md` §4.7/§4.8/§2، `backend/src/config/env.schema.ts`, `backend/.env.example`؛ لاحقاً `backend/src/account/*`, `frontend/src/pages/SettingsPage.tsx` |
+
+### ADR-028 — اصطلاح قوائم API: ترقيم keyset بمؤشر مُعتم مرتبط بالترتيب، مفتاح الإنشاء هو UUIDv7 الأساسي، إسقاط `select` صريح بلا حقول اعتماد، وهروب أحرف LIKE في البحث
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 (CH-0016، MOD-03-T01) |
+| السياق | أول قائمة إدارية حقيقية (`GET /api/users`) تحتاج ترقيماً مستقراً وبحثاً ومرشّحات، وستتبعها قوائم الأدوار (T08) والتدقيق الموسَّع (T10) وبقية الوحدات. خارطة الطريق اقترحت مؤشراً على `(createdAt, id)`. أثناء التنفيذ تبيّن أن `created_at` بدقة ميكروثانية في PostgreSQL بينما `Date` في JavaScript بدقة ميلي ثانية، فمسند `created_at < $cursor` قد يُسقط صفوفاً تشترك في الميلي ثانية نفسها (فقد عبر الصفحات)؛ وأن Prisma 7 لا يهرب `%`/`_` في `contains` (KI-034)، وأن `findMany` بلا `select` يقرأ `password_hash` |
+| الخيارات المدروسة | **الترقيم:** offset/limit · keyset على `(createdAt, id)` بمسند Prisma · keyset على `id` (UUIDv7 زمني) · استعلام خام بـ row-value comparison. **المؤشر:** قيم مكشوفة في المعاملات (`afterId`, `afterName`) · مؤشر مُعتم base64url يحمل الترتيب. **الإسقاط:** `omit` لحقول حساسة · `select` صريح لكل نقطة نهاية. **البحث:** `contains` خام · هروب يدوي · فهرس trigram |
+| القرار | (1) **keyset بمؤشر مُعتم** `base64url(JSON [version, sort, order, key, id])`؛ فكّه يتحقق من الإصدار والترتيب والاتجاه وشكل المعرّف ويُعيد `400 cursor_invalid` عند أي اختلاف؛ يُجلب `limit+1` صفاً ويُعاد `nextCursor` فقط عند وجود صفحة تالية. (2) ترتيب الإنشاء يستخدم **المفتاح الأساسي UUIDv7** (زمني بدقة ميلي ثانية وفريد، يولَّد في القاعدة عند الإدراج) مفتاحاً وحيداً، لا `created_at`؛ الترتيبات النصية (مثل `fullName`) تستخدم `(العمود, id)` بمسند `OR` صريح، والمقارنة وترتيب `ORDER BY` كلاهما بترتيب القاعدة (`en_US.utf8`) فيتطابقان. (3) **`select` صريح** في كل استعلام قوائم/تفاصيل؛ حقول الاعتماد والعدّادات الداخلية لا تُقرأ أصلاً؛ اختبار يفحص مفاتيح الاستجابة ضد `/hash|password/i`. (4) **هروب `\`/`%`/`_`** قبل `contains` (`escapeLikePattern()`)، مطابقة غير حساسة لحالة الأحرف، والفراغ = غائب. (5) حدود موحَّدة: `limit` 1–100 بافتراضي 20 للقوائم الإدارية؛ المعاملات المنطقية تُقرأ من القيمة الخام في `@Transform` لأن التحويل الضمني يجعل `"false"` صحيحة |
+| السبب | استقرار الترقيم مطلوب بمعيار قبول صريح (لا تكرار ولا فقد)؛ UUIDv7 يعطي ترتيباً زمنياً كلياً بلا مشكلة الدقة وبلا استعلام خام؛ المؤشر المُعتم يمنع تركيب مؤشر بترتيب آخر ويُبقي حرية تغيير التمثيل؛ الإسقاط الصريح دفاع في العمق لا يعتمد على تذكّر `omit` لكل حقل جديد؛ الهروب يصحّح سلوك Prisma بلا اعتمادية |
+| النتائج المتوقعة | كل قائمة قادمة (T08 الأدوار، T10 التدقيق، الدورات…) تتبع الاصطلاح نفسه؛ `users.cursor.ts` و`escapeLikePattern()` يُنقلان إلى `common/` عند ثاني مستهلك؛ API-011 (`before` زمني) يبقى كما هو حتى T10 ثم يُوحَّد؛ ترتيب الإنشاء يعكس زمن توليد `uuidv7()` (قد يختلف بميكروثوانٍ عن `now()` بداية المعاملة — بلا أثر عملي)؛ بحث `ILIKE` بلا فهرس حتى يستدعي الحجم `pg_trgm` |
+| الحالة | **ACCEPTED** (منفَّذ في CH-0016 ومختبر بـ TEST-011/TEST-012) |
+| المكونات المتأثرة | `backend/src/users/{users.cursor,users.service,users.dto}.ts`؛ 10.2 (API-012/013)، KI-034 |
+
 ---
 
 ## 18. DEVELOPMENT ROADMAP — خارطة طريق التطوير
 
 ### 18.1 المرحلة الحالية
 
-**نهاية Stage 1 (Foundation) وبداية Stage 2 (Identity & Academy) — 2026-10-29.** Stage 1 منجزة (Git، الخادم المهيأ والمربوط بالواجهة، PostgreSQL 18 + Prisma 7 بأدوار محدودة، المخطط الأول وبذره — CH-0004..CH-0013) عدا `engines`/`.nvmrc` وCI (مهام S1-R01..S1-R03 في خارطة الطريق §2). **Stage 2:** MOD-01 (المصادقة والجلسات، الحراس، المدير الأول، واجهة الدخول والحساب) منفَّذة (CH-0014) و**مُعتمَدة ومقفلة بالقبول (CH-0015)**؛ التالي MOD-03 (المستخدمون والأدوار والدعوات واستعادة كلمة المرور) بمهام T00..T16، ثم MOD-02/MOD-14 وحسم ADR-008.
+**نهاية Stage 1 (Foundation) وبداية Stage 2 (Identity & Academy) — 2026-10-29.** Stage 1 منجزة (Git، الخادم المهيأ والمربوط بالواجهة، PostgreSQL 18 + Prisma 7 بأدوار محدودة، المخطط الأول وبذره — CH-0004..CH-0013) عدا `engines`/`.nvmrc` وCI (مهام S1-R01..S1-R03 في خارطة الطريق §2). **Stage 2:** MOD-01 (المصادقة والجلسات، الحراس، المدير الأول، واجهة الدخول والحساب) منفَّذة (CH-0014) و**مُعتمَدة ومقفلة بالقبول (CH-0015)**؛ **MOD-03 جارية (CH-0016):** T00 (قرارات المالك D-R01..D-R06 — ADR-027، ENV-36..39، قاموس الأكواد) وT01 (قائمة المستخدمين وتفاصيلهم — API-012/013) منفَّذتان؛ التالي T02 (الإنشاء) ثم T03 (الدعوة والتفعيل)، ثم MOD-02/MOD-14 وحسم ADR-008.
 
 ### 18.2 المتطلبات المتبقية
 
@@ -3369,7 +3473,7 @@ docker compose start postgres
 |---|---|---|
 | Stage 1 — Foundation | PARTIALLY_IMPLEMENTED (المتبقي: `engines`/`.nvmrc`، CI، إطار اختبار الواجهة) | §1، §2 |
 | Stage 1b — UI prototype | IMPLEMENTED (CH-0005؛ خارج التسلسل الأصلي — ADR-012) | §1 |
-| Stage 2 — Identity & Academy | IN_PROGRESS: MOD-01 مقفلة بالقبول (CH-0015)؛ MOD-03 مخطَّطة بمهام T00..T16؛ MOD-02/MOD-14 بعدها؛ حسم ADR-008 | §3، §4 |
+| Stage 2 — Identity & Academy | IN_PROGRESS: MOD-01 مقفلة بالقبول (CH-0015)؛ MOD-03 جارية — T00/T01 IMPLEMENTED (CH-0016)، T02..T16 PLANNED؛ MOD-02/MOD-14 بعدها؛ حسم ADR-008 | §3، §4 |
 | Stage 3 — Academic core (MOD-04, MOD-05, MOD-07, MOD-06) | PLANNED | §1، §5 |
 | Stage 4 — Assessment (MOD-08, MOD-09, MOD-10) | PLANNED | §1، §5 |
 | Stage 5 — Finance & Communication (MOD-11, MOD-12, MOD-13) | PLANNED | §1، §5 |
@@ -3377,8 +3481,8 @@ docker compose start postgres
 
 ### 18.4 الأولويات التقنية الفورية
 
-1. **MOD-03 الدفعة A:** MOD-03-T00 (القرارات D-R01..D-R06 والمتغيرات الجديدة) → **T01** (قائمة/تفاصيل المستخدمين) → **T02** (إنشاء مستخدم بنوعه وملفه ودوره) → **T03** (الدعوة والتفعيل) — خارطة الطريق §4.5/§4.6.
-2. قرارات المالك المعلّقة التي تحدّد شكل MOD-03: قناة تسليم الدعوات وروابط إعادة الضبط (D-R01)، إطار اختبار الواجهة (D-R05) — §4.7.
+1. **MOD-03 الدفعة A:** ~~T00~~ و~~T01~~ منفَّذتان (CH-0016) → **T02** (إنشاء مستخدم بنوعه وملفه ودوره الافتراضي — التالية) → **T03** (الدعوة والتفعيل) — خارطة الطريق §4.5/§4.6.
+2. قرار مالك جديد قبل الواجهة (T11): نطاق `users.read` وكشف بيانات الاتصال (D-R07 ↔ SEC-R-12). القرارات D-R01..D-R06 مثبَّتة (ADR-027).
 3. تحصينات MOD-01 غير المانعة قبل أي نشر: `trust proxy`، فحص `Origin`، سقف عمر عائلة التحديث، `helmet`/Swagger — §3.2.
 4. المتبقي من Stage 1: `engines`/`.nvmrc` (S1-R01)؛ CI عند إضافة remote (S1-R02)؛ ترقية Node (KI-012).
 
@@ -3664,6 +3768,24 @@ docker compose start postgres
 | تغييرات كاسرة | **للعملاء غير JSON فقط:** طلب بجسم `application/x-www-form-urlencoded` يُعيد الآن `400` (لا يوجد عميل كذلك). للاختبارات: أي اختبار شامل جديد يجب أن يُنشئ التطبيق بـ `APP_CREATE_OPTIONS`. لا تغيير للواجهة |
 | المنفّذ | Claude Code (Fable 5.1) بطلب من مالك المشروع |
 
+### CH-0016 — التزام CH-0015 محلياً بعد مراجعة أمنية وفحص CSRF موسَّع، تثبيت قرارات MOD-03 (ADR-027)، وتنفيذ MOD-03-T00 وMOD-03-T01 (قائمة المستخدمين وتفاصيلهم)
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ والوقت | 2026-10-29، بين 20:05 و21:00 تقريباً (UTC+03:00)؛ المصدر: طوابع تشغيل الاختبارات (20:20، 20:34، 20:35) وcommit `1020ac1` وطابع حفظ هذه الوثيقة. حالة Git: commit CH-0015 منجز (`1020ac1`)؛ تغييرات CH-0016 تُلتزم محلياً بعد كتابة هذا الإدخال؛ لا push |
+| النوع | ADDED, CONFIGURATION, SECURITY (فحص وتوثيق), MODIFIED (توثيق وتصحيح انجراف) |
+| الوحدة | MOD-03 (T00 + T01 — أول كود فعلي)، MOD-00 (متغيرات البيئة)، MOD-01 (فحص CSRF موسَّع بلا تغيير كود)، Docs/Tooling |
+| الوصف | **(1) التزام CH-0015:** إعادة تشغيل `lint`/`tsc --noEmit`/`test` (29)/`test:e2e` (29) على حالة CH-0015 غير الملتزمة، فحص الأسرار (صفر تطابق لقيم كلمات المرور الثلاث و`JWT_SECRET` في الفرق والملف الجديد؛ `.env` متجاهَلة؛ LF)، مراجعة أمنية للفرق (`bodyParser: false` + `useBodyParser('json')` مسجَّل قبل `init()`؛ حد الجسم الافتراضي 100 KB) ثم commit `1020ac1`. **(2) فحص CSRF موسَّع** بـ 21 طلب curl على الخادم الحي: CORS preflight (أجنبي/`null`/:5174 بلا ACAO؛ :5173 مسموح؛ `Vary: Origin`)، Content-Type (urlencoded/multipart/text-plain/بلا نوع/مصفوفة/تالف → 400؛ 200 KB → 413؛ `charset=utf-7` يُحلَّل)، `Origin` أجنبي و`Sec-Fetch-Site: cross-site` على خمسة مسارات **لا يُفحصان** (MOD-01-H02 مؤكد كفجوة مخطَّطة؛ الأثر مقصور على same-site بلا preflight) — النتائج في 12.1/12.2/13.4. **(3) MOD-03-T00:** قرارات المالك D-R01..D-R06 راجعتُها فلم أجد تعارضاً جوهرياً (ملاحظتا تصميم في ADR-027: بوابة تبويب الأدوار داخل `/settings`، وكفاية 48 ساعة مع إعادة الإصدار) وثُبِّتت ACCEPTED؛ `env.schema.ts`: `AUTH_INVITATION_TTL_HOURS` (48، 1–720)، `AUTH_PASSWORD_RESET_TTL_MINUTES` (30، 5–1440)، `AUTH_SELF_SERVICE_RESET_ENABLED` (`false`)، `APP_PUBLIC_URL` (URL http/https اختياري بلا شرطة طرفية) + `.env.example` + اختبار TEST-003 جديد؛ قاموس أكواد MOD-03 `users.errors.ts` (`UsersHttpException`، 24 كوداً، اثنان مستخدمان)؛ هيكل المجلدات: `src/users/` أُنشئ، و`roles/`/`account/` يُنشآن مع T08/T03 بلا ملفات فارغة. **(4) MOD-03-T01:** `UsersModule` (`users.module/controller/service/dto/cursor.ts`) مسجَّل في `AppModule`؛ `GET /api/users` (بحث `q` بـ ILIKE على خمسة حقول مع هروب `%`/`_`/`\`، مرشّحات `status`/`role` بـ AND، استبعاد المحذوفين افتراضياً، `includeDeleted` بصلاحية `users.deactivate`، `sort` `createdAt`/`fullName` و`order`، `limit` 1–100 افتراضي 20، مؤشر keyset مُعتم مرتبط بالترتيب) و`GET /api/users/:id` (الأدوار بتسمياتها، ملخص ملفَي الطالب والموظف، روابط الأولياء/الطلاب من الجهتَين، `lastLoginAt`/`lockedUntil`؛ 404 `user_not_found`)؛ إسقاط `select` صريح بلا `password_hash`/العدّادات/`password_changed_at`/`must_change_password`؛ `@RequirePermissions('users.read')` على المتحكم. **(5) الاختبارات:** TEST-011 (11 شاملة) وTEST-012 (3 وحدة). **(6) اكتشافات أثناء التنفيذ:** Prisma لا يهرب أحرف LIKE (KI-034 — معالَج)، دقة `created_at` الميكروية تجعل مؤشر `(createdAt,id)` غير آمن فاعتُمد UUIDv7 (ADR-028)، التحويل الضمني يجعل `"false"` صحيحة فتُقرأ القيمة الخام في `@Transform`. **(7) تصحيح انجراف توثيقي (RULE 17):** 5.4 كانت تذكر `HealthModule` وحدها، 5.5 كانت تصف `AppController` المحذوف و"Guards PLANNED" و"لا DTO" (KI-022 المحلولة)، 5.6 "لا استعلامات أعمال"، 13.5 "لا DTO مُختبَر"، FS-003 بعدد اختبارات CH-0006، وشجرة 4.1 بعدد 7 لـ TEST-005 — حُدِّثت كلها. **(8) `CLAUDE.md`** وخارطة الطريق (1.1.0) محدَّثتان؛ D-R07 جديد (نطاق `users.read`) |
+| السبب | طلب المالك (2026-10-29): متابعة التطوير وفق خارطة الطريق بدءاً من MOD-03؛ مراجعة واختبار والتزام ما تبقى من CH-0015 بعد مراجعة أمنية؛ فحص CSRF إضافي يشمل Origin وFetch Metadata وCORS وContent-Type؛ تثبيت D-R01..D-R06 بعد عرض أي تعارض؛ تنفيذ T00 وT01 فقط بمتطلبات T01 العشرة؛ لا بيانات إنتاج، لا حذف، لا تعديل جداول، لا push |
+| الملفات | **جديدة (8):** `backend/src/users/{users.module,users.controller,users.service,users.dto,users.cursor,users.errors,users.cursor.spec}.ts`, `backend/test/users.e2e-spec.ts`؛ **معدّلة (7):** `backend/src/app.module.ts`, `backend/src/config/env.schema.ts`, `backend/src/config/env.schema.spec.ts`, `backend/.env.example`, `docs/PROJECT_DOCUMENTATION.md`, `docs/DEVELOPMENT_ROADMAP.md`, `CLAUDE.md`. **لا تغيير** في الواجهة ولا في ملفات `.env` ولا في المخطط |
+| أثر قاعدة البيانات | **لا تغيير في المخطط ولا ترحيل.** قراءة فقط من `users`/`user_roles`/`roles`/`student_profiles`/`employee_profiles`/`guardian_students`. بيانات اختبار مؤقتة (مستخدمون وأدوار بلاحقة فريدة) أُنشئت وحُذفت؛ `users` 0 و`roles` 5 بعد الجلسة؛ `audit_logs` 159 → 235 (KI-032) |
+| أثر API | **نقطتان جديدتان** API-012 `GET /api/users` وAPI-013 `GET /api/users/:id` (10.2)؛ أخطاء MOD-03 بحقل `code` عبر `UsersHttpException` (10.1)؛ لا تغيير في API-002..API-011 |
+| أثر الصلاحيات | أول استهلاك لـ `users.read` (المتحكم كله) و`users.deactivate` (معامل `includeDeleted`)؛ لا تغيير في الكتالوج ولا في الأدوار المبذورة؛ ملاحظة SEC-R-12 (خشونة `users.read`) → D-R07 |
+| الاختبارات | الخادم: `lint` نظيف؛ `tsc --noEmit` نظيف؛ وحدة **33/33** (+4: TEST-003 14، TEST-012 3)؛ شامل **40/40** على القاعدة الحية (+11: TEST-011). فشل واحد أثناء التطوير كان تناقضاً داخل اختبار المعاملات (`q=` فارغة) وصُحّح الاختبار. الخادم الحي: المراقب خدم `GET /api/users` (401 بلا رمز) و`docs-json` بالمسارَين. **لم يُشغَّل `npm run build`** (`start:dev` يعمل في جلسة أخرى). الواجهة لم تُمس. العرض المرئي في متصفح `UNVERIFIED` (لا أداة متصفح) |
+| النتيجة | نجاح. MOD-03 PARTIALLY_IMPLEMENTED (T00+T01)؛ FS-014 PARTIALLY_IMPLEMENTED؛ FS-003/FS-045/FS-046 محدَّثة؛ API-012/API-013؛ ENV-36..ENV-39؛ TEST-011/TEST-012؛ ADR-027/ADR-028 ACCEPTED؛ KI-034 ACCEPTED (معالَج)؛ SEC-R-12 جديد؛ KI-033 أُعيد تحققه؛ خارطة الطريق 1.1.0 (T00/T01 IMPLEMENTED، D-R01..D-R06 ACCEPTED، D-R07 جديد، T16/S1-R03 غير محجوبَين، T13 بحسب D-R06) |
+| تغييرات كاسرة | لا شيء. نقاط النهاية الجديدة محمية افتراضياً؛ المتغيرات الجديدة اختيارية بافتراضيات؛ لا تغيير في العقود القائمة |
+| المنفّذ | Claude Code (Fable 5.1) بطلب من مالك المشروع |
+
 ---
 
 ## 20. DOCUMENTATION MAINTENANCE — صيانة التوثيق
@@ -3781,3 +3903,5 @@ docker compose start postgres
 تحديث الإصدار 1.8.0 (CH-0014) بتاريخ 2026-10-29: قراءة `CLAUDE.md` وMOD-01 و10 و12 و6.7.8 من هذه الوثيقة؛ قراءة كل ملفات الخادم المصدرية (`app.module/app.setup/main`, `health/*`, `common/*`, `config/*`, `prisma/*`) وكل ملفات الواجهة المتأثرة (`main.tsx`, `app/*`, `auth/*`, `api/*`, `layout/*`, `pages/LoginPage.tsx`, `components/RoleSwitcher.tsx`, `i18n/*`, `vite.config.ts`, `package.json`, `.oxlintrc.json`)؛ `npm view` لـ `@nestjs/jwt`/`@nestjs/passport`/`@nestjs/throttler`/`jose`/`argon2`/`@node-rs/argon2`/`cookie`/`cookie-parser` (النطاقات النظيرة لـ Nest 12) وقراءة إصدار Nest المثبّت (12.3.2) وتصدير `cookie` 2.x (`parseCookie`)؛ تثبيت الاعتماديات الأربع بـ npm 11 والتحقق من تحميلها تحت ESM (تجزئة argon2 فعلية)؛ `Get-CimInstance`/`Get-NetTCPConnection` لرصد عمليات `nest`/`vite` ومنافذها (لم يُوقَف أي منها: nest :3000 وvite :5173 للجلسة الموازية، vite :5174 بلا مالك معروف)؛ `tsc --noEmit`/`lint`/`npm test`/`test:e2e` تكراراً حتى 29/29 و28/28؛ `tsc -b`/`lint`/`vite build` في الواجهة؛ `curl` على :3000 و:5173 (`/api/health` 200، `/api/auth/me` 401 `unauthenticated`) ثم تحقق حي كامل بمستخدم مؤقت أُدرج بـ `psql` بتجزئة argon2 وحُذف بعده؛ عدّ أحداث التدقيق بعد التحقق؛ إضافة `JWT_SECRET` عشوائي إلى `backend/.env` المحلي. **لا ترحيل، لا تغيير في المخطط، لا مستخدمين حقيقيين، لا commit قبل اكتمال التوثيق، لا push.**
 
 تحديث الإصدار 1.9.0 (CH-0015) بتاريخ 2026-10-29: قراءة `CLAUDE.md` والأقسام 01/06/07/08/09/10/11/12/13/15/16/18/19/20 وMOD-01/MOD-03 و6.7.8؛ قراءة كل ملفات `backend/src/auth/*` و`audit/*` و`config/env.schema.ts` و`app.setup.ts` و`app.module.ts` و`main.ts` و`scripts/bootstrap-admin.ts` و`prisma/schema.prisma` و`authorization/*` وملفات الواجهة `auth/*`, `api/*`, `pages/{Login,Profile,Users}Page.tsx`, `app/router.tsx`, `layout/navigation.ts`, `vite.config.ts`؛ `Get-CimInstance Win32_Process` و`Get-NetTCPConnection` لرصد Nest/Vite ومنافذها (لم يُوقَف شيء)؛ `docker compose ps` وعدّ الصفوف عبر `psql` قبل وبعد؛ فحص وجود `JWT_SECRET` وطوله دون طباعة قيمته وتوقيع رمز اختبار به محلياً (`jose`) ضد `/api/auth/me` قبل إعادة التشغيل وبعدها؛ `npm run auth:bootstrap-admin` من pwsh بأربعة سيناريوهات ثم حذف المدير المؤقت بـ `psql`؛ تدفق curl كامل عبر :5173 و:5174 بملف كعكات مؤقت حُذف؛ فحوص CSRF (`urlencoded`، `text/plain`، `Origin` أجنبي) قبل الإصلاح وبعده؛ قراءة مصادر `@nestjs/core`/`platform-express`/`testing` للتأكد من سلوك `bodyParser: false` و`useBodyParser` وتوقيعات `createNestApplication`؛ `lint`/`tsc --noEmit`/`test`/`test:e2e`؛ ترجمة `tsconfig.build.json` إلى مجلد مؤقت؛ تشغيل `dist/main` على :3999 وقراءة سجل الإقلاع ثم إيقافه؛ `tsc -b`/`lint`/`vite build` في الواجهة؛ `git status`. **لا ترحيل، لا تغيير في المخطط، لا مستخدمين حقيقيين (المدير المؤقت حُذف)، لا commit قبل اكتمال التوثيق، لا push.**
+
+تحديث الإصدار 1.10.0 (CH-0016) بتاريخ 2026-10-29: قراءة `CLAUDE.md` و`docs/DEVELOPMENT_ROADMAP.md` كاملةً، والأقسام 01/04/05/07/08/09/10/11/12/13/15/16/17/18/19/20 والملحقَين من هذه الوثيقة؛ قراءة `git status`/`diff` لتغييرات CH-0015 غير الملتزمة، وكل ملفات `backend/src/{auth,audit,authorization,config,prisma}/*`, `app.module.ts`, `app.setup.ts`, `prisma/schema.prisma`, `package.json`, `vitest.config*.ts`, `tsconfig*.json`, `.prettierrc`, `test/*.e2e-spec.ts`؛ فحص العمليات والمنافذ (`netstat`, `tasklist`) و`docker compose ps` وعدّ الصفوف والترتيب (`datcollate`) عبر `psql` داخل الحاوية قبل وبعد؛ `ToolSearch` عن أداة متصفح (لا شيء)؛ `lint`/`tsc --noEmit`/`test`/`test:e2e` على حالة CH-0015 ثم فحص الأسرار بالأطوال وعدد التطابقات فقط ثم commit `1020ac1`؛ 21 طلب curl لفحص CSRF على :3000؛ سكربت Prisma مؤقت بسجل `query` (حُذف) لفحص `contains` ومسند keyset؛ قراءة `src/generated/prisma/{enums,client}.ts` و`parse-uuid.pipe.d.ts` وإصدار zod؛ كتابة `src/users/*` و`test/users.e2e-spec.ts` ثم `tsc`/`lint`/`test`/`test:e2e` تكراراً حتى 33/33 و40/40؛ curl على الخادم الحي لـ `/api/users` و`/api/docs-json`. **لا ترحيل، لا تغيير في المخطط، لا مستخدمين حقيقيين، لا `npm run build` (المراقب يعمل)، لا push.**
