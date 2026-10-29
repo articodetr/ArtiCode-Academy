@@ -1,0 +1,90 @@
+# CLAUDE.md — ArtiCode Academy
+
+Permanent operating instructions for Claude Code in this repository. Keep this file short; put details in the master document.
+
+## Project facts (verified 2026-10-28)
+
+- **Product:** academy management & learning platform (vision: per-academy deployments, dedicated DB per academy, roles, courses, lessons, scheduling, exams, certificates, payments, notifications, i18n). **Current stage: Stage 0 scaffold.** None of the product features exist yet.
+- **Layout:** two independent npm packages, no root `package.json`, **not a git repository**.
+  - `backend/` — NestJS 12, TypeScript, **ESM** (`"type": "module"`; relative imports end in `.js`), Vitest, oxlint, Prettier. One endpoint: `GET /` → `Hello World!`. No DB, no auth, no config module. Lockfile present; `test`, `test:e2e`, `lint`, `build` pass.
+  - **npm 10.9.3 crashes on `npm install` in `backend/`** (`edgesOut` error). Use `npm ci` to install, and `npx -y npm@11 install <pkg>` to add or update packages. Node 22.20 triggers harmless `EBADENGINE` warnings from `@nestjs/cli` tooling.
+  - `frontend/` — Vite 8 + React 19 + TypeScript 7 default template, oxlint. No routing, no API client, no i18n. `npm ci` works; `tsc -b` and `lint` pass.
+- **Env vars:** only `PORT` (backend, default 3000). Never commit `.env` files or secrets.
+- **Master documentation (Arabic):** `docs/PROJECT_DOCUMENTATION.md` — the single authoritative technical reference. Section numbers 01–20 are stable; identifiers (`MOD-`, `API-`, `FS-`, `KI-`, `ADR-`, `CH-`, …) are never reused.
+
+## Commands
+
+```bash
+# backend/
+npm ci                 # install from lockfile (npm install crashes on npm 10)
+npm run start:dev      # dev server with watch
+npm run build          # nest build -> dist/
+npm run lint           # oxlint src/ test/
+npm run test           # vitest unit (**/*.spec.ts)
+npm run test:e2e       # vitest e2e (**/*.e2e-spec.ts)
+
+# frontend/
+npm ci
+npm run dev            # vite dev server (:5173)
+npm run build          # tsc -b && vite build
+npm run lint           # oxlint
+```
+
+## Mandatory rules
+
+- **RULE 1** — At the start of every development task, consult `docs/PROJECT_DOCUMENTATION.md` for relevant context (at least sections 04, 05, 08, 15, 16 and the module you touch).
+- **RULE 2** — Inspect the relevant actual source files before changing anything. Documentation never replaces code verification.
+- **RULE 3** — Before implementing a feature, identify its dependencies, architectural impact, database impact, and permission requirements.
+- **RULE 4** — Whenever you ADD, MODIFY, REMOVE, FIX, or REFACTOR application functionality, update the relevant sections of `docs/PROJECT_DOCUMENTATION.md` **in the same task**.
+- **RULE 5** — A code modification is not complete until the corresponding documentation has been reviewed and updated.
+- **RULE 6** — A new module must be documented: architecture, responsibilities, endpoints, entities, permissions, relationships (section 08 + 04/05/15).
+- **RULE 7** — Any change to entities, migrations, indexes, or relationships updates section 06 (including the ER diagram once entities exist).
+- **RULE 8** — Any API change updates the documented contract in section 10 (method, path, auth, permissions, params, body, response, errors, controller/service).
+- **RULE 9** — A deleted feature is marked `REMOVED` in section 15 and in every current-state section it touched. Historical change records are never deleted.
+- **RULE 10** — Every important architectural decision gets an ADR in section 17 with rationale and consequences. A changed decision gets a new ADR; the old one becomes `SUPERSEDED`.
+- **RULE 11** — Every bug fix documents the problem, confirmed cause (or "cause unconfirmed"), correction, and test outcome (sections 16 and 19).
+- **RULE 12** — Whenever a feature changes status, update the feature status matrix (section 15). Statuses: `IMPLEMENTED`, `PARTIALLY_IMPLEMENTED`, `PLANNED`, `DEPRECATED`, `REMOVED`, `UNVERIFIED`.
+- **RULE 13** — Never document planned functionality as implemented. `IMPLEMENTED` requires a verifiable file path in the codebase.
+- **RULE 14** — Never invent technical details, timestamps, or historical reasons. Label unknowns `UNVERIFIED` or `NOT YET DETERMINED`.
+- **RULE 15** — Never overwrite or erase the change history (section 19) or architectural decisions (section 17). Both are append-only.
+- **RULE 16** — Never store secrets, credentials, tokens, or connection strings with credentials in documentation. Document variable *names* only.
+- **RULE 17** — Keep documentation synchronized with the codebase. If you find a discrepancy, investigate, resolve it (fix docs or code), and record it in section 19.
+- **RULE 18** — Before completing any code-related task:
+  1. Review every file changed during the task.
+  2. Check database and API impact.
+  3. Update the affected documentation sections (see the table in section 20.2).
+  4. Append an accurate `CH-nnnn` entry to section 19 and bump "آخر معرّف تغيير" / "تاريخ آخر مزامنة" in the header table.
+  5. Run relevant verification where practical (`lint`, `tsc -b`, `test`).
+  6. Report documentation status in your final message.
+- **RULE 19** — Purely conversational, investigative, or read-only tasks do not require a change-history entry unless they produce a meaningful documented decision or finding.
+- **RULE 20** — `docs/PROJECT_DOCUMENTATION.md` is the single authoritative reference. Do not create duplicate or conflicting documentation; sub-folder READMEs may only point to it.
+
+## Workflow for every code-changing task
+
+1. Read the relevant documentation (RULE 1).
+2. Analyze the requested change.
+3. Identify affected modules and files.
+4. Implement the change.
+5. Run relevant tests and validations.
+6. Update current-state documentation sections.
+7. Update feature statuses and dependencies (section 15).
+8. Append the change-history entry (section 19).
+9. Verify consistency between code and documentation.
+10. Give a concise completion report: what changed, which files, which documentation sections, whether tests passed, remaining issues.
+
+## Documentation conventions
+
+- Write the master document in professional Arabic; keep identifiers, file names, routes, DB objects, and code terms in English.
+- Update sections in place; do not rewrite the whole document for small changes.
+- Dates `YYYY-MM-DD`, local time UTC+03:00 when known. Cite the source of any inferred date.
+- New change entry fields: date/time, ID, type (`ADDED` `MODIFIED` `FIXED` `REMOVED` `REFACTORED` `SECURITY` `DATABASE` `CONFIGURATION` `DEPRECATED`), module, description, reason, files, DB impact, API impact, permission impact, testing performed, result, breaking changes.
+
+## Automatic verification (doc-sync guard)
+
+`.claude/settings.json` registers `.claude/hooks/doc-sync-check.mjs` on `SessionStart` and `Stop`. It hashes watched source files at session start and, when you stop, blocks **once** if source files changed but `docs/PROJECT_DOCUMENTATION.md` did not. It never edits files and fails open on errors. When it blocks: update the documentation per RULE 18 and finish again. If the change truly needs no documentation (formatting only, or edits you did not make), say so explicitly in your final report and finish again. Details and limitations: section 14.7 of the master document.
+
+## Do not
+
+- Do not add dependencies, initialize git, or add tooling files unless the task asks for it (record it in section 19 when you do).
+- Do not modify application behavior during documentation-only tasks.
+- Do not add a second "source of truth" document.
