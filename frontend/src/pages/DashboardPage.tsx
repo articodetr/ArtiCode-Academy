@@ -9,6 +9,7 @@ import type { TableProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
+import { ServerStatusCard } from '../components/ServerStatusCard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import {
@@ -48,6 +49,8 @@ export function DashboardPage() {
         title={t('dashboard.welcome', { name: user?.name ?? '' })}
         subtitle={t('dashboard.subtitle')}
       />
+
+      <ServerStatusCard />
 
       <Alert type="info" showIcon message={t('common.demoBanner')} style={{ marginBottom: 24 }} />
 
