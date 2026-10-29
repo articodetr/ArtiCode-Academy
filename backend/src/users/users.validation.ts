@@ -40,6 +40,29 @@ export function textParam({ value }: { value: unknown }): unknown {
   return normalizeText(value);
 }
 
+// PATCH semantics (MOD-03-T04): an absent field is left alone, `null` clears
+// an optional field, a value replaces it. These transforms keep `null` (the
+// creation transforms above turn it into "absent").
+
+/** @Transform for optional text in a PATCH: `null` or a blank string clears the field; other strings are trimmed. */
+export function nullableTextParam({ value }: { value: unknown }): unknown {
+  if (value === null) return null;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+/** @Transform for optional identifiers (e-mail, username) in a PATCH: like nullableTextParam, lower-cased. */
+export function nullableIdentifierParam({ value }: { value: unknown }): unknown {
+  const text = nullableTextParam({ value });
+  return typeof text === 'string' ? text.toLowerCase() : text;
+}
+
+/** @Transform for required text in a PATCH: trims, but keeps a blank string so the length rule rejects it. */
+export function trimParam({ value }: { value: unknown }): unknown {
+  return typeof value === 'string' ? value.trim() : value;
+}
+
 /**
  * True for a real calendar day written as `YYYY-MM-DD` (so `2026-02-30` is
  * rejected). Dates are stored in `date` columns and compared as UTC midnight.

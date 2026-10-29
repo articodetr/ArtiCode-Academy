@@ -7,6 +7,7 @@ import { authError } from '../auth/auth.errors.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { EmployeeKind } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { isEmptyPatch, planUserUpdate } from './users.changes.js';
 import { decodeUserCursor, encodeUserCursor } from './users.cursor.js';
 import type { SortOrder, UserCursor, UserSortField } from './users.cursor.js';
 import { USERS_PAGE_DEFAULT } from './users.dto.js';
@@ -14,6 +15,7 @@ import type {
   CreateUserDto,
   GuardianLinkDto,
   ListUsersQueryDto,
+  UpdateUserDto,
   UserDetailDto,
   UserListDto,
   UserListItemDto,
@@ -40,6 +42,7 @@ export type UsersProjection = 'full' | 'reduced';
 
 export const USERS_AUDIT_ACTIONS = {
   created: 'users.created',
+  updated: 'users.updated',
 } as const;
 
 // Explicit projections: the password hash and the login counters are never
@@ -90,6 +93,22 @@ const ROLE_GRANT_SELECT = {
   key: true,
   permissions: { select: { permissionKey: true, permission: { select: { deprecatedAt: true } } } },
 } satisfies Prisma.RoleSelect;
+
+// What a PATCH compares against (users.changes.ts) plus the roles for SEC-R-15.
+const CURRENT_SELECT = {
+  email: true,
+  username: true,
+  phone: true,
+  fullName: true,
+  fullNameLatin: true,
+  displayName: true,
+  avatarUrl: true,
+  locale: true,
+  emailVerifiedAt: true,
+  studentProfile: { select: { studentNumber: true, dateOfBirth: true, enrolledOn: true, notes: true } },
+  employeeProfile: { select: { employeeNumber: true, jobTitle: true, specialization: true, hiredOn: true } },
+  roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
+} satisfies Prisma.UserSelect;
 
 type SummaryRow = Prisma.UserGetPayload<{ select: typeof SUMMARY_SELECT }>;
 type ListRow = Prisma.UserGetPayload<{ select: typeof LIST_SELECT }>;
@@ -394,6 +413,92 @@ export class UsersService {
     }
 
     return this.getById(userId, false, 'full');
+  }
+
+  // ------------------------------------------------------------- update
+
+  /**
+   * MOD-03-T04: partial update of the identity, the preferences and the
+   * profile the user already has. Only fields whose value changes are written,
+   * in one transaction with the audit event `users.updated` whose metadata
+   * names the fields and never carries values; an idempotent PATCH writes
+   * nothing. Changing the e-mail drops its verification. Changing `email` or
+   * `username` of a user whose roles confer permissions the caller lacks is
+   * refused (SEC-R-15): with manual token delivery, whoever controls the login
+   * identifiers can complete a password reset for that account.
+   */
+  async update(
+    id: string,
+    input: UpdateUserDto,
+    caller: AuthPrincipal,
+    ctx: RequestContext,
+    view: UsersProjection,
+  ): Promise<UserDetailDto> {
+    if (isEmptyPatch(input)) throw usersError.nothingToUpdate();
+    const current = await this.prisma.db.user.findFirst({ where: { id, deletedAt: null }, select: CURRENT_SELECT });
+    if (!current) throw usersError.userNotFound();
+
+    const plan = planUserUpdate(current, input);
+    if (plan.kind === 'profile_mismatch') {
+      throw usersError.profileMismatch(
+        plan.profile === 'student'
+          ? 'studentProfile: this user has no student profile'
+          : 'employeeProfile: this user has no employee profile',
+      );
+    }
+    if (plan.kind === 'identifier_required') throw usersError.identifierRequired();
+    if (plan.fields.length === 0) return this.getById(id, false, view);
+
+    if (plan.identifierChanged) {
+      const conferred = activePermissionKeys(current.roles.map((grant) => grant.role));
+      const exceeding = exceedingPermissions(conferred, caller.permissions);
+      if (exceeding.length > 0) throw authError.permissionDenied(exceeding);
+    }
+
+    // Friendly 409 before the transaction; the unique indexes (which also cover
+    // soft-deleted rows) remain the source of truth for concurrent requests.
+    const identifiers: Prisma.UserWhereInput[] = [];
+    if (typeof plan.user.email === 'string') identifiers.push({ email: plan.user.email });
+    if (typeof plan.user.username === 'string') identifiers.push({ username: plan.user.username });
+    if (identifiers.length > 0) {
+      const clash = await this.prisma.db.user.findFirst({
+        where: { OR: identifiers, NOT: { id } },
+        select: { email: true, username: true },
+      });
+      if (clash) {
+        throw clash.email !== null && clash.email === plan.user.email ? usersError.emailInUse() : usersError.usernameInUse();
+      }
+    }
+
+    try {
+      await this.prisma.db.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id },
+          data: {
+            ...plan.user,
+            studentProfile: plan.studentProfile ? { update: plan.studentProfile } : undefined,
+            employeeProfile: plan.employeeProfile ? { update: plan.employeeProfile } : undefined,
+          },
+          select: { id: true },
+        });
+        // Field names only — never the old or new values.
+        await this.audit.record(
+          {
+            action: USERS_AUDIT_ACTIONS.updated,
+            actorUserId: caller.id,
+            entityType: 'users',
+            entityId: id,
+            metadata: { fields: plan.fields },
+            ...ctx,
+          },
+          tx,
+        );
+      });
+    } catch (error) {
+      throw translateUniqueViolation(error);
+    }
+
+    return this.getById(id, false, view);
   }
 }
 

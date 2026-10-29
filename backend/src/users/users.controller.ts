@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -19,8 +19,8 @@ import { authError } from '../auth/auth.errors.js';
 import { requestContext } from '../auth/cookies.js';
 import { CurrentUser, RequirePermissions } from '../auth/decorators.js';
 import type { AuthPrincipal } from '../auth/principal.js';
-import { CreateUserDto, ListUsersQueryDto, UserDetailDto, UserDetailQueryDto, UserListDto } from './users.dto.js';
-import { CREATE_USERS_PERMISSION, READ_CONTACT_PERMISSION } from './users.policy.js';
+import { CreateUserDto, ListUsersQueryDto, UpdateUserDto, UserDetailDto, UserDetailQueryDto, UserListDto } from './users.dto.js';
+import { CREATE_USERS_PERMISSION, READ_CONTACT_PERMISSION, UPDATE_USERS_PERMISSION } from './users.policy.js';
 import { UsersService } from './users.service.js';
 import type { UsersProjection } from './users.service.js';
 
@@ -45,7 +45,9 @@ function projectionFor(caller: AuthPrincipal): UsersProjection {
 @ApiUnauthorizedResponse({ type: AuthErrorDto, description: 'unauthenticated | token_expired | token_invalid | session_invalid' })
 @ApiForbiddenResponse({
   type: AuthErrorDto,
-  description: 'permission_denied — `users.read` (or `users.deactivate` for includeDeleted); `users.create` / `users.roles.assign` / exceeding permissions for POST',
+  description:
+    'permission_denied — `users.read` (or `users.deactivate` for includeDeleted); `users.create` / `users.roles.assign` / exceeding permissions for POST; ' +
+    '`users.update` for PATCH, plus exceeding permissions when changing the login identifiers of a more privileged user',
 })
 export class UsersController {
   constructor(private readonly users: UsersService) {}
@@ -105,5 +107,32 @@ export class UsersController {
   ): Promise<UserDetailDto> {
     assertMayIncludeDeleted(caller, query.includeDeleted);
     return this.users.getById(id, query.includeDeleted === true, projectionFor(caller));
+  }
+
+  @Patch(':id')
+  @RequirePermissions(UPDATE_USERS_PERMISSION)
+  @ApiOperation({
+    summary: 'Update a user',
+    description:
+      'Partial update of the identity (`email`, `username`, `phone`, names, `displayName`, `avatarUrl`, `locale`) and of the fields of the profile the user already has. ' +
+      'Absent fields are left alone, `null` clears an optional field; only fields whose value changes are written, in one transaction with the audit event `users.updated` (field names, no values). ' +
+      'Changing the e-mail address resets its verification. Changing `email`/`username` of a user whose roles confer permissions the caller does not hold is refused. ' +
+      'Requires `users.update`; the response follows the caller’s projection (`users.read_contact`).',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: UserDetailDto, description: 'The user after the update (unchanged when nothing differed)' })
+  @ApiBadRequestResponse({
+    description: 'Validation failed, `nothing_to_update` (no field in the body) or `identifier_required` (the change would remove the last login identifier)',
+  })
+  @ApiNotFoundResponse({ description: 'user_not_found (unknown or soft-deleted)' })
+  @ApiConflictResponse({ description: 'email_in_use | username_in_use | student_number_in_use | employee_number_in_use' })
+  @ApiUnprocessableEntityResponse({ description: 'profile_mismatch (profile object for a profile the user does not have)' })
+  update(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: UpdateUserDto,
+    @CurrentUser() caller: AuthPrincipal,
+    @Req() req: Request,
+  ): Promise<UserDetailDto> {
+    return this.users.update(id, body, caller, requestContext(req), projectionFor(caller));
   }
 }

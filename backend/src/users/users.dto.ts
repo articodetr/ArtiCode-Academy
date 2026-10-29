@@ -11,11 +11,13 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Length,
   Matches,
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
@@ -33,7 +35,10 @@ import {
   REFERENCE_NUMBER_PATTERN,
   USERNAME_PATTERN,
   identifierParam,
+  nullableIdentifierParam,
+  nullableTextParam,
   textParam,
+  trimParam,
 } from './users.validation.js';
 
 export const USERS_PAGE_DEFAULT = 20;
@@ -285,6 +290,144 @@ export class CreateUserDto {
   @IsString({ each: true })
   @Matches(ROLE_KEY_PATTERN, { each: true })
   roleKeys?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// MOD-03-T04 — update
+// ---------------------------------------------------------------------------
+
+/** Upper bound of an avatar URL in a request (`avatar_url` is unbounded text). */
+export const AVATAR_URL_MAX_LENGTH = 2048;
+
+const STUDENT_NUMBER_MESSAGE = 'studentNumber must be 1–32 letters, digits, ".", "_", "-" or "/"';
+const EMPLOYEE_NUMBER_MESSAGE = 'employeeNumber must be 1–32 letters, digits, ".", "_", "-" or "/"';
+
+/**
+ * PATCH semantics for every field below: absent = unchanged, `null` = cleared
+ * (optional fields only), value = replaced. Text is trimmed; a blank string
+ * clears an optional field and is rejected for `fullName`.
+ */
+export class UpdateStudentProfileDto {
+  @ApiPropertyOptional({ nullable: true, maxLength: 32, example: 'S-2026-001', description: 'Unique within the academy; null clears it' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @Matches(REFERENCE_NUMBER_PATTERN, { message: STUDENT_NUMBER_MESSAGE })
+  studentNumber?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: '2012-05-01', description: 'YYYY-MM-DD; null clears it' })
+  @IsOptional()
+  @IsCalendarDate()
+  dateOfBirth?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: '2026-09-01', description: 'YYYY-MM-DD; null clears it' })
+  @IsOptional()
+  @IsCalendarDate()
+  enrolledOn?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 2000, description: 'Administrative notes (never returned); null clears them' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @MaxLength(2000)
+  notes?: string | null;
+}
+
+/** Employee profile fields; `kind` (T07) and `isActive` (T06) are not updatable here. */
+export class UpdateEmployeeProfileDto {
+  @ApiPropertyOptional({ nullable: true, maxLength: 32, example: 'EMP-017', description: 'Unique within the academy; null clears it' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @Matches(REFERENCE_NUMBER_PATTERN, { message: EMPLOYEE_NUMBER_MESSAGE })
+  employeeNumber?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 120, example: 'Mathematics teacher' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @Length(1, 120)
+  jobTitle?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 120, example: 'Mathematics' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @Length(1, 120)
+  specialization?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: '2025-02-10', description: 'YYYY-MM-DD; null clears it' })
+  @IsOptional()
+  @IsCalendarDate()
+  hiredOn?: string | null;
+}
+
+export class UpdateUserDto {
+  @ApiPropertyOptional({ nullable: true, maxLength: EMAIL_MAX_LENGTH, example: 'sara@example.com', description: 'Trimmed and lower-cased; null removes it (a username must remain). Changing it resets the e-mail verification.' })
+  @IsOptional()
+  @Transform(nullableIdentifierParam)
+  @IsEmail({}, { message: 'email must be a valid e-mail address' })
+  @MaxLength(EMAIL_MAX_LENGTH)
+  email?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, minLength: 3, maxLength: 64, example: 'sara.ahmed', description: 'Trimmed and lower-cased; null removes it (an e-mail must remain)' })
+  @IsOptional()
+  @Transform(nullableIdentifierParam)
+  @IsString()
+  @Matches(USERNAME_PATTERN, { message: 'username must be 3–64 lower-case letters, digits, ".", "_" or "-" starting with a letter or digit' })
+  username?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: '+905551234567', description: 'E.164; null clears it' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @Matches(E164_PATTERN, { message: 'phone must be in E.164 form, e.g. +905551234567' })
+  phone?: string | null;
+
+  @ApiPropertyOptional({ minLength: 2, maxLength: 200, example: 'سارة أحمد', description: 'Cannot be cleared' })
+  @ValidateIf((dto: UpdateUserDto) => dto.fullName !== undefined)
+  @Transform(trimParam)
+  @IsString()
+  @Length(2, 200)
+  fullName?: string;
+
+  @ApiPropertyOptional({ nullable: true, minLength: 2, maxLength: 200, example: 'Sara Ahmed' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @Length(2, 200)
+  fullNameLatin?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 120 })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsString()
+  @Length(1, 120)
+  displayName?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: AVATAR_URL_MAX_LENGTH, example: 'https://cdn.example.com/avatars/sara.png', description: 'Absolute http(s) URL; null clears it' })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true, require_tld: false }, { message: 'avatarUrl must be an absolute http(s) URL' })
+  @MaxLength(AVATAR_URL_MAX_LENGTH)
+  avatarUrl?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, enum: LOCALES, description: 'Preferred language; null = academy default' })
+  @IsOptional()
+  @IsIn(LOCALES)
+  locale?: LocaleCode | null;
+
+  @ApiPropertyOptional({ type: UpdateStudentProfileDto, description: 'Only for a user who has a student profile' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateStudentProfileDto)
+  studentProfile?: UpdateStudentProfileDto;
+
+  @ApiPropertyOptional({ type: UpdateEmployeeProfileDto, description: 'Only for a user who has an employee profile' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateEmployeeProfileDto)
+  employeeProfile?: UpdateEmployeeProfileDto;
 }
 
 // ---------------------------------------------------------------------------

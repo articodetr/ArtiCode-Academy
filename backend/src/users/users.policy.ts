@@ -13,6 +13,8 @@ import type { KindRoleKey } from '../authorization/system-roles.js';
 
 export const ASSIGN_ROLES_PERMISSION = 'users.roles.assign';
 export const CREATE_USERS_PERMISSION = 'users.create';
+/** Partial update of identity, preferences and profile fields (MOD-03-T04). */
+export const UPDATE_USERS_PERMISSION = 'users.update';
 /** Reveals e-mail, username, phone and account-security timestamps in reads (D-R07). */
 export const READ_CONTACT_PERMISSION = 'users.read_contact';
 
@@ -70,7 +72,8 @@ export function activePermissionKeys(roles: readonly RoleGrants[]): Set<string> 
 /**
  * Permission keys the granted roles would confer that the caller neither holds
  * nor belong to the learner baseline — sorted, empty when the grant is safe.
- * Applied to user creation (T02) and to invitation issuing (T03, SEC-R-13).
+ * Applied to user creation (T02), to invitation issuing (T03, SEC-R-13) and to
+ * changing a user's login identifiers (T04, SEC-R-15).
  */
 export function exceedingPermissions(
   conferred: Iterable<string>,

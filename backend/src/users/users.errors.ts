@@ -1,5 +1,5 @@
 // Error vocabulary of MOD-03 (users, invitations, password reset, roles,
-// guardians) — fixed in MOD-03-T00, extended in T02 and T03. Same shape as
+// guardians) — fixed in MOD-03-T00, extended in T02, T03 and T04. Same shape as
 // AuthHttpException: the body is `{ statusCode, error, code, message, ...details }`
 // and the frontend maps the stable `code` to a localized message. Only the
 // factories below are in use; the remaining codes are reserved for the tasks
@@ -27,6 +27,7 @@ export const USERS_ERROR_CODES = [
   'reset_disabled',
   // T02 / T04 / T06 — profiles, update and account status
   'profile_mismatch',
+  'nothing_to_update',
   'invalid_transition',
   'self_forbidden',
   'last_admin',
@@ -131,4 +132,7 @@ export const usersError = {
       'invitation_consumed',
       'This invitation has already been used or was replaced by a newer one',
     ),
+  // T04 — update
+  nothingToUpdate: () =>
+    new UsersHttpException(HttpStatus.BAD_REQUEST, 'nothing_to_update', 'The request body contains no field to update'),
 };

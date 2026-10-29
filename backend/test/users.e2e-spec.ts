@@ -1,8 +1,9 @@
-// TEST-011 — MOD-03-T01 (GET /api/users, GET /api/users/:id) and MOD-03-T02
-// (POST /api/users) against the live development database, including the
-// reduced projection of D-R07. Skipped when no database is reachable. Fixtures
-// carry a unique suffix and are deleted at the end (cascade removes their
-// roles, profiles, guardian links and tokens; their audit rows stay — KI-032).
+// TEST-011 — MOD-03-T01 (GET /api/users, GET /api/users/:id), MOD-03-T02
+// (POST /api/users) and MOD-03-T04 (PATCH /api/users/:id) against the live
+// development database, including the reduced projection of D-R07. Skipped
+// when no database is reachable. Fixtures carry a unique suffix and are deleted
+// at the end (cascade removes their roles, profiles, guardian links and tokens;
+// their audit rows stay — KI-032).
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -77,7 +78,7 @@ interface ListItem {
 
 const systemRolePermissions = (key: string): readonly string[] => SYSTEM_ROLES.find((role) => role.key === key)!.permissions;
 
-describe.skipIf(!available)('MOD-03 users list, detail and creation (e2e, TEST-011)', () => {
+describe.skipIf(!available)('MOD-03 users list, detail, creation and update (e2e, TEST-011)', () => {
   let app: NestExpressApplication;
   let prisma: PrismaClient;
   let passwords: PasswordService;
@@ -758,5 +759,276 @@ describe.skipIf(!available)('MOD-03 users list, detail and creation (e2e, TEST-0
     expect(res.body.paths['/api/users'].post.responses).toHaveProperty('201');
     expect(res.body.paths['/api/users'].post.responses).toHaveProperty('409');
     expect(res.body.paths['/api/users'].post.responses).toHaveProperty('422');
+  });
+  // ------------------------------------------------------------ T04 update
+
+  describe('PATCH /api/users/:id (T04)', () => {
+    /** Subjects created through API-014 inside this block (create() registers them for cleanup). */
+    const subject: Record<string, string> = {};
+
+    const patch = (caller: string, id: string, body: Record<string, unknown>) => api().patch(`${USERS}/${id}`).set(bearer(caller)).send(body);
+    const updateEvents = (id: string) =>
+      prisma.auditLog.findMany({ where: { action: 'users.updated', entityId: id }, orderBy: { createdAt: 'asc' } });
+
+    beforeAll(async () => {
+      const updater = await createRole('updater', ['users.update']);
+      await createUser('updater', { roleIds: [updater] });
+      tokens['updater'] = await login(email('updater'));
+
+      const created: Array<[string, Record<string, unknown>]> = [
+        ['student', { kind: 'student', email: email('patch-student'), fullName: 'Patch Student', studentProfile: { studentNumber: `PS-${RUN}`, dateOfBirth: '2012-05-01' } }],
+        ['teacher', { kind: 'teacher', username: `patch_teacher_${RUN}`, fullName: 'Patch Teacher', employeeProfile: { employeeNumber: `PT-${RUN}`, jobTitle: 'Math' } }],
+        ['teacher2', { kind: 'teacher', username: `patch_teacher2_${RUN}`, fullName: 'Patch Teacher Two', employeeProfile: { employeeNumber: `PT2-${RUN}` } }],
+        ['guardian', { kind: 'guardian', email: email('patch-guardian'), fullName: 'Patch Guardian', locale: 'ar' }],
+      ];
+      for (const [name, body] of created) {
+        const res = await create('superuser', body);
+        expect(res.status, JSON.stringify(res.body)).toBe(201);
+        subject[name] = res.body.id as string;
+      }
+    });
+
+    it('requires users.update; the response follows the caller’s projection (T04 AC 1, D-R07)', async () => {
+      const id = subject['student']!;
+      for (const caller of ['reader', 'manager', 'plain', 'creator', 'assigner']) {
+        const res = await patch(caller, id, { displayName: 'Denied' });
+        expect(res.status, caller).toBe(403);
+        expect(res.body, caller).toMatchObject({ code: 'permission_denied', missing: ['users.update'] });
+      }
+      expect((await api().patch(`${USERS}/${id}`).send({ displayName: 'Anon' }).expect(401)).body.code).toBe('unauthenticated');
+      expect(await updateEvents(id)).toHaveLength(0);
+
+      // users.update without users.read_contact: the change is applied, the contact fields come back null.
+      const reduced = await patch('updater', id, { displayName: 'Reduced View' });
+      expect(reduced.status, JSON.stringify(reduced.body)).toBe(200);
+      expect(reduced.body.displayName).toBe('Reduced View');
+      for (const field of CONTACT_FIELDS) expect(reduced.body[field], field).toBeNull();
+      expect(await prisma.user.findUniqueOrThrow({ where: { id }, select: { email: true } })).toEqual({ email: email('patch-student') });
+
+      // Staff defaults carry users.update and users.read_contact.
+      const staff = await patch('registrar', id, { displayName: 'Staff View' });
+      expect(staff.status).toBe(200);
+      expect(staff.body.email).toBe(email('patch-student'));
+      expect(await updateEvents(id)).toHaveLength(2);
+    });
+
+    it('updates identity, preferences and profile fields in one transaction with one audit event naming the fields only (T04 AC 6)', async () => {
+      const id = subject['student']!;
+      const before = await prisma.user.findUniqueOrThrow({ where: { id }, select: { updatedAt: true } });
+      const eventsBefore = (await updateEvents(id)).length;
+      const res = await patch('superuser', id, {
+        email: `  Patched.Student-${RUN}@Example.TEST `,
+        username: `Patched_Student_${RUN}`,
+        phone: '+905557654321',
+        fullName: '  طالبة معدَّلة ',
+        fullNameLatin: 'Patched Student',
+        displayName: null,
+        avatarUrl: 'https://cdn.example.test/avatars/patched.png',
+        locale: 'en',
+        studentProfile: { studentNumber: `PS2-${RUN}`, dateOfBirth: '2012-05-02', enrolledOn: '2026-09-01', notes: 'moved from branch A' },
+      });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body).toMatchObject({
+        id,
+        email: `patched.student-${RUN}@example.test`,
+        username: `patched_student_${RUN}`,
+        phone: '+905557654321',
+        fullName: 'طالبة معدَّلة',
+        fullNameLatin: 'Patched Student',
+        displayName: null,
+        avatarUrl: 'https://cdn.example.test/avatars/patched.png',
+        locale: 'en',
+        status: 'invited',
+        emailVerifiedAt: null,
+        roles: [{ key: 'student', label: { ar: 'طالب', en: 'Student' } }],
+        studentProfile: { studentNumber: `PS2-${RUN}`, dateOfBirth: '2012-05-02', enrolledOn: '2026-09-01' },
+        employeeProfile: null,
+      });
+      expect(res.body).not.toHaveProperty('notes');
+      expect([...collectKeys(res.body)].filter((key) => SENSITIVE_KEY.test(key))).toEqual([]);
+      expect(new Date(res.body.updatedAt as string).getTime()).toBeGreaterThan(before.updatedAt.getTime());
+      const row = await prisma.user.findUniqueOrThrow({ where: { id }, select: { studentProfile: { select: { notes: true } } } });
+      expect(row.studentProfile!.notes).toBe('moved from branch A');
+
+      const events = await updateEvents(id);
+      expect(events).toHaveLength(eventsBefore + 1);
+      const event = events.at(-1)!;
+      expect(event.actorUserId).toBe(fx['superuser']);
+      expect(event.entityType).toBe('users');
+      expect(event.metadata).toEqual({
+        fields: [
+          'email', 'username', 'phone', 'fullName', 'fullNameLatin', 'displayName', 'avatarUrl', 'locale',
+          'studentProfile.studentNumber', 'studentProfile.dateOfBirth', 'studentProfile.enrolledOn', 'studentProfile.notes',
+        ],
+      });
+      expect(JSON.stringify(event.metadata)).not.toMatch(new RegExp(RUN));
+      expect(JSON.stringify(event.metadata)).not.toMatch(/example\.test|\+9055|معدَّلة|branch|cdn/);
+    });
+
+    it('drops the e-mail verification when the address changes, ignores unchanged values and clears optional fields with null (T04 AC 3)', async () => {
+      const id = subject['guardian']!;
+      await prisma.user.update({ where: { id }, data: { emailVerifiedAt: new Date('2026-10-01T00:00:00Z'), phone: '+905550000099', displayName: 'G' } });
+
+      // Same address (written differently) and same phone → nothing changes, no event.
+      const same = await patch('superuser', id, { email: ` ${email('patch-guardian').toUpperCase()} `, phone: '+905550000099' });
+      expect(same.status, JSON.stringify(same.body)).toBe(200);
+      expect(same.body.emailVerifiedAt).toBe('2026-10-01T00:00:00.000Z');
+      expect(await updateEvents(id)).toHaveLength(0);
+
+      const changed = await patch('superuser', id, { email: email('patch-guardian-2') });
+      expect(changed.status).toBe(200);
+      expect(changed.body.email).toBe(email('patch-guardian-2'));
+      expect(changed.body.emailVerifiedAt).toBeNull();
+      let events = await updateEvents(id);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.metadata).toEqual({ fields: ['email', 'emailVerifiedAt'] });
+
+      // null clears optional fields; a username may replace the e-mail…
+      const cleared = await patch('superuser', id, {
+        phone: null, displayName: '', fullNameLatin: null, locale: null, avatarUrl: null,
+        username: `Patch_Guardian_${RUN}`, email: null,
+      });
+      expect(cleared.status, JSON.stringify(cleared.body)).toBe(200);
+      expect(cleared.body).toMatchObject({
+        phone: null, displayName: null, fullNameLatin: null, locale: null, avatarUrl: null,
+        email: null, username: `patch_guardian_${RUN}`, emailVerifiedAt: null,
+      });
+      events = await updateEvents(id);
+      expect(events).toHaveLength(2);
+      expect(events[1]!.metadata).toEqual({ fields: ['email', 'username', 'phone', 'displayName', 'locale'] });
+
+      // …but the account can never be left without any login identifier.
+      const orphaned = await patch('superuser', id, { username: null });
+      expect(orphaned.status).toBe(400);
+      expect(orphaned.body.code).toBe('identifier_required');
+      expect(await updateEvents(id)).toHaveLength(2);
+    });
+
+    it('rejects duplicate identifiers and reference numbers with 409 and leaves the account untouched (T04 AC 2)', async () => {
+      const teacher = subject['teacher']!;
+      const student = subject['student']!;
+      const before = await prisma.user.findUniqueOrThrow({ where: { id: teacher }, select: { updatedAt: true, employeeProfile: { select: { updatedAt: true } } } });
+      const cases: Array<[string, string, Record<string, unknown>, string]> = [
+        ['e-mail of another user', teacher, { email: email('alpha') }, 'email_in_use'],
+        ['e-mail of a soft-deleted user', teacher, { email: email('echo') }, 'email_in_use'],
+        ['username of another user', teacher, { username: `fixture-golf-${RUN}` }, 'username_in_use'],
+        ['employee number of another employee', teacher, { employeeProfile: { employeeNumber: `PT2-${RUN}` } }, 'employee_number_in_use'],
+        ['student number of another student', student, { studentProfile: { studentNumber: `S-${RUN}` } }, 'student_number_in_use'],
+        ['e-mail and username together', teacher, { email: email('alpha'), username: `fixture-golf-${RUN}` }, 'email_in_use'],
+      ];
+      for (const [label, id, body, code] of cases) {
+        const res = await patch('superuser', id, body);
+        expect(res.status, label).toBe(409);
+        expect(res.body.code, label).toBe(code);
+      }
+      // Keeping one's own identifiers is not a clash.
+      const own = await patch('superuser', teacher, { username: `patch_teacher_${RUN}`, employeeProfile: { employeeNumber: `PT-${RUN}` } });
+      expect(own.status, JSON.stringify(own.body)).toBe(200);
+
+      const after = await prisma.user.findUniqueOrThrow({ where: { id: teacher }, select: { updatedAt: true, employeeProfile: { select: { updatedAt: true } } } });
+      expect(after).toEqual(before);
+      expect(await updateEvents(teacher)).toHaveLength(0);
+    });
+
+    it('rejects undeclared fields, invalid values and an empty body with 400, and unknown or deleted users with 404 (T04 AC 4)', async () => {
+      const id = subject['student']!;
+      const eventsBefore = (await updateEvents(id)).length;
+      const invalid: Array<[string, Record<string, unknown>]> = [
+        ['status (T06)', { status: 'active' }],
+        ['password hash', { passwordHash: 'x' }],
+        ['password', { password: 'Correct-Horse-Battery-9' }],
+        ['roleKeys (T07)', { roleKeys: ['teacher'] }],
+        ['kind', { kind: 'teacher' }],
+        ['emailVerifiedAt', { emailVerifiedAt: '2026-10-01T00:00:00Z' }],
+        ['fullName null', { fullName: null }],
+        ['fullName blank', { fullName: '   ' }],
+        ['fullName too short', { fullName: 'X' }],
+        ['bad email', { email: 'not-an-email' }],
+        ['bad username', { username: 'ab' }],
+        ['bad phone', { phone: '0555 123' }],
+        ['bad locale', { locale: 'fr' }],
+        ['avatar url without http(s)', { avatarUrl: 'javascript:alert(1)' }],
+        ['relative avatar url', { avatarUrl: '/avatars/x.png' }],
+        ['impossible date', { studentProfile: { dateOfBirth: '2026-02-30' } }],
+        ['datetime instead of date', { studentProfile: { enrolledOn: '2026-09-01T00:00:00Z' } }],
+        ['nested unknown field', { studentProfile: { grade: 5 } }],
+        ['employee isActive (T06)', { employeeProfile: { isActive: false } }],
+        ['employee kind (T07)', { employeeProfile: { kind: 'staff' } }],
+        ['bad reference number', { studentProfile: { studentNumber: 'S 1' } }],
+        ['profile not an object', { studentProfile: 'x' }],
+      ];
+      for (const [label, body] of invalid) {
+        const res = await patch('superuser', id, body);
+        expect(res.status, label).toBe(400);
+        expect(res.body.statusCode, label).toBe(400);
+      }
+      for (const body of [{}, { studentProfile: {} }, { employeeProfile: {} }]) {
+        const res = await patch('superuser', id, body);
+        expect(res.status, JSON.stringify(body)).toBe(400);
+        expect(res.body.code, JSON.stringify(body)).toBe('nothing_to_update');
+      }
+      expect((await patch('superuser', 'not-a-uuid', { displayName: 'x' })).status).toBe(400);
+      const unknown = await patch('superuser', '00000000-0000-7000-8000-000000000000', { displayName: 'x' });
+      expect(unknown.status).toBe(404);
+      expect(unknown.body.code).toBe('user_not_found');
+      const deleted = await patch('superuser', fx['echo']!, { displayName: 'x' });
+      expect(deleted.status).toBe(404);
+      expect(deleted.body.code).toBe('user_not_found');
+      expect(await updateEvents(id)).toHaveLength(eventsBefore);
+      expect(await updateEvents(fx['echo']!)).toHaveLength(0);
+    });
+
+    it('answers 422 profile_mismatch for a profile the user does not have, writing nothing (T04 AC 5)', async () => {
+      const cases: Array<[string, Record<string, unknown>]> = [
+        [subject['teacher']!, { studentProfile: { studentNumber: `X-${RUN}` } }],
+        [subject['student']!, { employeeProfile: { jobTitle: 'x' } }],
+        [subject['guardian']!, { studentProfile: { notes: 'x' } }],
+        [subject['guardian']!, { employeeProfile: { jobTitle: 'x' }, fullName: 'Still Guardian' }],
+      ];
+      for (const [id, body] of cases) {
+        const res = await patch('superuser', id, body);
+        expect(res.status, JSON.stringify(body)).toBe(422);
+        expect(res.body.code).toBe('profile_mismatch');
+      }
+      // Not even the valid fullName sent alongside was written.
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: subject['guardian'] }, select: { fullName: true } })).fullName).toBe('Patch Guardian');
+      expect(await updateEvents(subject['guardian']!)).toHaveLength(2);
+    });
+
+    it('does not let a caller change the login identifiers of a user holding permissions the caller lacks (SEC-R-15)', async () => {
+      const admin = fx['superuser']!;
+      for (const body of [{ email: email('hijacked') }, { username: `hijacked_${RUN}` }, { email: null, username: `hijacked_${RUN}` }, { fullName: 'Hijacked', email: email('hijacked') }]) {
+        const res = await patch('updater', admin, body);
+        expect(res.status, JSON.stringify(body)).toBe(403);
+        expect(res.body.code).toBe('permission_denied');
+        expect(res.body.missing).toContain('roles.manage');
+        expect(res.body.missing).not.toContain('users.update');
+      }
+      // A staff member holds users.update but not a teacher's permissions either.
+      const byStaff = await patch('registrar', subject['teacher']!, { email: email('hijacked-teacher') });
+      expect(byStaff.status).toBe(403);
+      expect(byStaff.body.code).toBe('permission_denied');
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: admin }, select: { email: true, fullName: true } })).toEqual({ email: email('superuser'), fullName: 'Test superuser' });
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: subject['teacher'] }, select: { email: true } })).toEqual({ email: null });
+      expect(await updateEvents(admin)).toHaveLength(0);
+
+      // Other fields of the same user are not covered by the rule…
+      const name = await patch('updater', admin, { displayName: 'Boss' });
+      expect(name.status, JSON.stringify(name.body)).toBe(200);
+      // …and the identifiers of a learner (baseline permissions) or of oneself are allowed.
+      const learner = await patch('updater', subject['student']!, { username: `updated_by_updater_${RUN}` });
+      expect(learner.status, JSON.stringify(learner.body)).toBe(200);
+      const self = await patch('updater', fx['updater']!, { username: `updater_${RUN}` });
+      expect(self.status, JSON.stringify(self.body)).toBe(200);
+      const staffOnTeacherName = await patch('registrar', subject['teacher']!, { displayName: 'Renamed by staff' });
+      expect(staffOnTeacherName.status).toBe(200);
+    });
+
+    it('documents the update endpoint in OpenAPI', async () => {
+      const res = await api().get('/api/docs-json').expect(200);
+      const operation = res.body.paths['/api/users/{id}'].patch;
+      expect(operation).toBeDefined();
+      for (const status of ['200', '400', '401', '403', '404', '409', '422']) expect(operation.responses, status).toHaveProperty(status);
+    });
   });
 });

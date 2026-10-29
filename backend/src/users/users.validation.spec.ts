@@ -8,7 +8,10 @@ import {
   isCalendarDate,
   normalizeIdentifier,
   normalizeText,
+  nullableIdentifierParam,
+  nullableTextParam,
   textParam,
+  trimParam,
 } from './users.validation.js';
 
 describe('users validation', () => {
@@ -31,6 +34,26 @@ describe('users validation', () => {
     expect(normalizeText('')).toBeUndefined();
     expect(textParam({ value: ' x ' })).toBe('x');
     expect(textParam({ value: 7 })).toBe(7);
+  });
+
+  it('keeps null as "clear" in PATCH transforms and never blanks a required field silently (T04)', () => {
+    expect(nullableTextParam({ value: null })).toBeNull();
+    expect(nullableTextParam({ value: '' })).toBeNull();
+    expect(nullableTextParam({ value: '   ' })).toBeNull();
+    expect(nullableTextParam({ value: ' Sara ' })).toBe('Sara');
+    expect(nullableTextParam({ value: undefined })).toBeUndefined();
+    expect(nullableTextParam({ value: 7 })).toBe(7);
+
+    expect(nullableIdentifierParam({ value: null })).toBeNull();
+    expect(nullableIdentifierParam({ value: ' Sara.Ahmed@Example.COM ' })).toBe('sara.ahmed@example.com');
+    expect(nullableIdentifierParam({ value: '' })).toBeNull();
+    expect(nullableIdentifierParam({ value: { a: 1 } })).toEqual({ a: 1 });
+
+    // A blank required field stays blank so @Length rejects it with 400.
+    expect(trimParam({ value: '  سارة  ' })).toBe('سارة');
+    expect(trimParam({ value: '   ' })).toBe('');
+    expect(trimParam({ value: null })).toBeNull();
+    expect(trimParam({ value: undefined })).toBeUndefined();
   });
 
   it('accepts only real calendar days written as YYYY-MM-DD', () => {
