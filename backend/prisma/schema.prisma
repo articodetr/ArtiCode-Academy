@@ -1,0 +1,16 @@
+// Prisma schema for the ArtiCode Academy backend (ADR-014).
+// Connection URL: prisma.config.ts for the CLI, ConfigService at runtime.
+// No models yet: the first entities arrive with MOD-01/MOD-03 and their first migration.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+
+  // Match the backend's ESM + NodeNext setup (imports end in .js).
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -12,6 +12,10 @@ coverage/
 .env.*
 !.env.example
 
+# Local database backups (docs section 14.9)
+backup-*.dump
+postgres_data-*.tgz
+
 # Logs
 logs/
 *.log

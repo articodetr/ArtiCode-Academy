@@ -1,0 +1,47 @@
+# Local development infrastructure for ArtiCode Academy.
+#
+#   docker compose up -d          start PostgreSQL in the background
+#   docker compose ps             show status and health
+#   docker compose down           stop (data stays in the named volume)
+#
+# Variables come from ./.env (copy ./.env.example); the backend and the Prisma
+# CLI read the same file, so database settings are declared once. This file is
+# for local development only; production deployments use a separate override
+# (see docs/PROJECT_DOCUMENTATION.md, section 14).
+
+name: articode-academy
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      # Applied on the FIRST start only (they create the superuser and the database).
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-articode_academy}
+      # Least-privilege roles created by docker/postgres/initdb/10-roles.sh on the
+      # first start; re-run that script by hand for an existing volume (KI-024).
+      DB_MIGRATOR_USER: ${DB_MIGRATOR_USER:-articode_migrator}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?Set DB_MIGRATOR_PASSWORD in .env}
+      DB_APP_USER: ${DB_APP_USER:-articode_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env}
+    ports:
+      # Loopback only: the database is never reachable from other machines.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18 images keep PGDATA at /var/lib/postgresql/18/docker, so the
+      # volume mounts the parent directory (not the pre-18 .../data path).
+      - postgres_data:/var/lib/postgresql
+      # Initialization scripts (run once on an empty volume).
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  # Managed by Docker; on Windows it lives inside the WSL 2 VM (fast, not a bind mount).
+  postgres_data:
