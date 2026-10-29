@@ -16,6 +16,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "auth:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
+    "dev:demo-users": "tsx scripts/dev-demo-users.ts",
     "prisma:studio": "prisma studio",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.ts\"",
     "start": "nest start",

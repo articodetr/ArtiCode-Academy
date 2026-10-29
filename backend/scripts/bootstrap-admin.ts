@@ -12,8 +12,6 @@
 //
 // Exit codes: 0 created or already bootstrapped, 2 refused (an admin already
 // exists — create further admins from the application), 1 error.
-import { createInterface } from 'node:readline';
-import { Writable } from 'node:stream';
 import { config as loadDotenv } from 'dotenv';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { bootstrapFirstAdmin, bootstrapInputProblems } from '../src/auth/bootstrap-admin.js';
@@ -21,25 +19,7 @@ import { PasswordService } from '../src/auth/password.service.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
-
-function promptHidden(question: string): Promise<string> {
-  return new Promise((resolve) => {
-    let muted = false;
-    const output = new Writable({
-      write(chunk, _encoding, callback) {
-        if (!muted) process.stdout.write(chunk);
-        callback();
-      },
-    });
-    const rl = createInterface({ input: process.stdin, output, terminal: true });
-    rl.question(question, (answer) => {
-      rl.close();
-      process.stdout.write('\n');
-      resolve(answer);
-    });
-    muted = true;
-  });
-}
+import { promptHidden } from './hidden-prompt.js';
 
 async function main(): Promise<number> {
   loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
