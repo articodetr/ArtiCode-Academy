@@ -21,6 +21,7 @@ export const AUTH_ERROR_CODES = [
   'password_invalid',
   'password_weak',
   'rate_limited',
+  'origin_forbidden',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
@@ -106,4 +107,10 @@ export const authError = {
     }),
   rateLimited: () =>
     new AuthHttpException(HttpStatus.TOO_MANY_REQUESTS, 'rate_limited', 'Too many requests; try again later'),
+  originForbidden: () =>
+    new AuthHttpException(
+      HttpStatus.FORBIDDEN,
+      'origin_forbidden',
+      'The request origin is not allowed to perform state-changing requests',
+    ),
 };

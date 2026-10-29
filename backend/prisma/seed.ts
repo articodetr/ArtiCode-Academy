@@ -8,7 +8,10 @@
 //   2. roles         — create missing system roles; refresh label/description
 //                      of existing ones; never touch custom roles.
 //   3. role_permissions — academy_admin always holds every active key; other
-//                      system roles get their defaults only when first created.
+//                      system roles get their defaults when first created, plus
+//                      the default grant of any key that is NEW to the catalog
+//                      (so a key added later reaches the roles that should hold
+//                      it, while an admin's earlier removals are never undone).
 //   4. academy       — create the single row from SEED_ACADEMY_* when the table
 //                      is empty; an existing row is left untouched.
 // No user is created: the first academy admin arrives with MOD-01 (argon2id).
@@ -100,7 +103,12 @@ export function academySeedFromEnv(env: Record<string, string | undefined>): Aca
 /** Permissions + system roles + their default grants. Safe to run repeatedly. */
 export async function seedCatalog(db: Db): Promise<Omit<SeedSummary, 'academy'>> {
   let upserted = 0;
+  // Keys that did not exist before this run: their default grants apply once,
+  // even to system roles created earlier (see rule 3 above).
+  const newKeys = new Set<string>();
   for (const item of PERMISSION_CATALOG) {
+    const known = await db.permission.findUnique({ where: { key: item.key }, select: { key: true } });
+    if (!known) newKeys.add(item.key);
     await db.permission.upsert({
       where: { key: item.key },
       create: { key: item.key, module: item.module, description: item.description },
@@ -146,9 +154,12 @@ export async function seedCatalog(db: Db): Promise<Omit<SeedSummary, 'academy'>>
       created.push(definition.key);
     }
 
-    if (grantDefaults) {
+    const grants = grantDefaults
+      ? definition.permissions
+      : definition.permissions.filter((permissionKey) => newKeys.has(permissionKey));
+    if (grants.length > 0) {
       const result = await db.rolePermission.createMany({
-        data: definition.permissions.map((permissionKey) => ({ roleId, permissionKey })),
+        data: grants.map((permissionKey) => ({ roleId, permissionKey })),
         skipDuplicates: true,
       });
       added += result.count;

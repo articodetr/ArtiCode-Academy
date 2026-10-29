@@ -1,8 +1,9 @@
 // Error vocabulary of MOD-03 (users, invitations, password reset, roles,
-// guardians) — fixed in MOD-03-T00. Same shape as AuthHttpException: the body is
-// `{ statusCode, error, code, message, ...details }` and the frontend maps the
-// stable `code` to a localized message. Only the factories below are in use;
-// the remaining codes are reserved for the tasks named next to them.
+// guardians) — fixed in MOD-03-T00, extended in T02. Same shape as
+// AuthHttpException: the body is `{ statusCode, error, code, message, ...details }`
+// and the frontend maps the stable `code` to a localized message. Only the
+// factories below are in use; the remaining codes are reserved for the tasks
+// named next to them.
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -14,6 +15,8 @@ export const USERS_ERROR_CODES = [
   'identifier_required',
   'email_in_use',
   'username_in_use',
+  'student_number_in_use',
+  'employee_number_in_use',
   // T03 / T05 — invitations and password reset
   'user_not_invitable',
   'invitation_invalid',
@@ -22,12 +25,12 @@ export const USERS_ERROR_CODES = [
   'reset_invalid',
   'reset_expired',
   'reset_disabled',
-  // T04 / T06 — update and account status
+  // T02 / T04 / T06 — profiles, update and account status
   'profile_mismatch',
   'invalid_transition',
   'self_forbidden',
   'last_admin',
-  // T07 / T08 — roles and permissions
+  // T02 / T07 / T08 — roles and permissions
   'role_unknown',
   'role_in_use',
   'role_immutable',
@@ -79,4 +82,30 @@ export const usersError = {
       'cursor_invalid',
       'The pagination cursor is not valid for this sort order',
     ),
+  // T02
+  identifierRequired: () =>
+    new UsersHttpException(
+      HttpStatus.BAD_REQUEST,
+      'identifier_required',
+      'Either an e-mail address or a username is required',
+    ),
+  emailInUse: () =>
+    new UsersHttpException(HttpStatus.CONFLICT, 'email_in_use', 'This e-mail address is already registered'),
+  usernameInUse: () =>
+    new UsersHttpException(HttpStatus.CONFLICT, 'username_in_use', 'This username is already taken'),
+  studentNumberInUse: () =>
+    new UsersHttpException(HttpStatus.CONFLICT, 'student_number_in_use', 'This student number is already assigned'),
+  employeeNumberInUse: () =>
+    new UsersHttpException(HttpStatus.CONFLICT, 'employee_number_in_use', 'This employee number is already assigned'),
+  profileMismatch: (detail: string) =>
+    new UsersHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'profile_mismatch', detail),
+  employeeKindRequired: (roleKeys: readonly string[]) =>
+    new UsersHttpException(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      'employee_kind_required',
+      'An employee role needs an employee profile: create the user with kind "teacher" or "staff"',
+      { roleKeys: [...roleKeys] },
+    ),
+  roleUnknown: (roleKeys: readonly string[]) =>
+    new UsersHttpException(HttpStatus.BAD_REQUEST, 'role_unknown', 'Unknown role key', { roleKeys: [...roleKeys] }),
 };

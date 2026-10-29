@@ -27,6 +27,7 @@ export const PERMISSION_CATALOG: readonly PermissionDefinition[] = [
 
   // MOD-03 — users, roles, guardians
   p('users.read', 'MOD-03', 'عرض المستخدمين', 'View users'),
+  p('users.read_contact', 'MOD-03', 'عرض بيانات الاتصال ومعرّفات الدخول للمستخدمين', 'View users’ contact details and login identifiers'),
   p('users.create', 'MOD-03', 'إنشاء مستخدمين', 'Create users'),
   p('users.update', 'MOD-03', 'تعديل المستخدمين', 'Update users'),
   p('users.deactivate', 'MOD-03', 'تعطيل المستخدمين', 'Deactivate users'),

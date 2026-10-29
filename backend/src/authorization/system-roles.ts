@@ -113,6 +113,7 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     isDefaultForSignup: false,
     permissions: [
       'users.read',
+      'users.read_contact',
       'users.create',
       'users.update',
       'guardians.link',
@@ -135,3 +136,22 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
 ] as const;
 
 export const SYSTEM_ROLE_KEYS: readonly string[] = SYSTEM_ROLES.map((role) => role.key);
+
+/**
+ * System roles that double as the `kind` of a created user (MOD-03-T02): the
+ * kind names the default role and the profile table (student_profiles for
+ * `student`, employee_profiles for `teacher`/`staff`, none for `guardian`).
+ */
+export const KIND_ROLE_KEYS = ['student', 'teacher', 'staff', 'guardian'] as const;
+export type KindRoleKey = (typeof KIND_ROLE_KEYS)[number];
+
+/**
+ * Learner self-service permissions: the seeded defaults of `student` and
+ * `guardian`. Conferring them never elevates the grantor, so the escalation
+ * guard of user creation (users.policy.ts) exempts exactly these keys.
+ */
+export const LEARNER_BASELINE_PERMISSIONS: ReadonlySet<string> = new Set(
+  SYSTEM_ROLES.filter((role) => role.key === 'student' || role.key === 'guardian').flatMap((role) => [
+    ...role.permissions,
+  ]),
+);
