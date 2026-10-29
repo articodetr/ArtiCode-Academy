@@ -2,10 +2,10 @@
 
 | البند | القيمة |
 |---|---|
-| **إصدار الوثيقة** | 1.0.1 |
-| **تاريخ آخر مزامنة مع الكود** | 2026-10-28 15:08 (UTC+03:00) |
-| **آخر معرّف تغيير مسجّل** | CH-0003 |
-| **مرحلة المشروع الحالية** | Stage 0 — Scaffold (هياكل أولية مولّدة بأدوات الأطر، بلا منطق أعمال) |
+| **إصدار الوثيقة** | 1.1.0 |
+| **تاريخ آخر مزامنة مع الكود** | 2026-10-29 14:46 (UTC+03:00) |
+| **آخر معرّف تغيير مسجّل** | CH-0005 |
+| **مرحلة المشروع الحالية** | Stage 1 — Foundation (جارية): المستودع تحت Git (CH-0004)، وهيكل واجهة منتج تجريبي ببيانات محلية (CH-0005). الخادم ما زال هيكلاً بلا منطق أعمال |
 | **المالك التقني للوثيقة** | فريق تطوير ArtiCode Academy (يُحدَّث بواسطة المطورين و Claude Code وفق `CLAUDE.md`) |
 | **اللغة** | عربية مهنية مع الإبقاء على المعرّفات التقنية والأسماء البرمجية بالإنجليزية |
 
@@ -94,20 +94,20 @@
 - تكاملات مستقبلية وتطبيقات محمولة.
 - قابلية التوسّع والصيانة على المدى الطويل.
 
-### 1.6 مرحلة التطوير الحالية — ما هو موجود فعلاً (حالة الكود بتاريخ 2026-10-28)
+### 1.6 مرحلة التطوير الحالية — ما هو موجود فعلاً (حالة الكود بتاريخ 2026-10-29)
 
 | العنصر | الحالة الفعلية |
 |---|---|
 | `backend/` | هيكل **NestJS 12** مولَّد بأداة `@nestjs/cli`، يحتوي على وحدة واحدة (`AppModule`) ونقطة نهاية واحدة `GET /` تُعيد النص `Hello World!`. لا توجد قاعدة بيانات ولا مصادقة ولا أي منطق أعمال. الاعتماديات مثبّتة مع `package-lock.json` منذ CH-0003، والاختبارات والبناء ناجحة. |
-| `frontend/` | هيكل **Vite 8 + React 19 + TypeScript 7** القياسي (صفحة الترحيب الافتراضية مع عدّاد). لا يوجد توجيه (routing) ولا اتصال بالخادم ولا واجهات منتج. |
+| `frontend/` | تطبيق **Vite 8 + React 19 + TypeScript 7** مع **Ant Design 6** و**react-router 7** و**i18next** (CH-0005): دخول تجريبي، تخطيط عام (قائمة جانبية + ترويسة)، 13 شاشة وحدة ببيانات محلية ثنائية اللغة، عربية افتراضياً مع RTL. **لا اتصال بالخادم ولا بيانات حقيقية** — نموذج أولي للمعاينة (MOD-FE-01). |
 | قاعدة البيانات | **غير موجودة.** لا ORM، لا ترحيلات (migrations)، لا إعدادات اتصال. |
-| المصادقة والصلاحيات | **غير موجودة.** |
-| التكامل بين الواجهة والخادم | **غير موجود.** لا proxy في Vite ولا CORS في NestJS. |
-| نظام الإصدارات | **المستودع ليس تحت Git** (لا يوجد مجلد `.git`). لا يوجد تاريخ تغييرات قابل للاستشهاد. |
+| المصادقة والصلاحيات | **غير موجودة في الخادم.** في الواجهة مصادقة تجريبية (أي بيانات تُقبل) وبوابات أدوار للعرض فقط (KI-017). |
+| التكامل بين الواجهة والخادم | **غير موجود.** لا proxy في Vite ولا CORS في NestJS؛ الواجهة تقرأ من `frontend/src/mock/data.ts`. |
+| نظام الإصدارات | **تحت Git منذ CH-0004** (فرع `main`، commit الأساس `127cb1d`). لا remote ولا سياسة فروع بعد. |
 | التوثيق | قبل هذه الوثيقة: ملفا README افتراضيان من الأطر فقط. |
 | نظام التوثيق المستمر | `IMPLEMENTED` بتاريخ 2026-10-28: هذه الوثيقة + `CLAUDE.md` + خطّاف تحقق (`.claude/hooks/doc-sync-check.mjs`). |
 
-**الخلاصة:** المشروع في **المرحلة 0 (Scaffold)**. كل ميزات الرؤية المذكورة أعلاه `PLANNED` ما لم يُذكر خلاف ذلك.
+**الخلاصة:** الخادم ما زال في **المرحلة 0 (Scaffold)**؛ المشروع ككل دخل **المرحلة 1 (Foundation)** جزئياً: Git مُفعّل، وهيكل واجهة تجريبي يسمح بمعاينة شاشات المنتج. كل ميزات الرؤية المذكورة أعلاه `PLANNED` ما لم يُذكر خلاف ذلك (التفصيل في [القسم 15](#15-feature-status-matrix--مصفوفة-حالة-الميزات)).
 
 ---
 
@@ -154,7 +154,7 @@
 | NFR-04 | توفّر وتعافٍ من الكوارث (نسخ احتياطي لكل قاعدة بيانات) | RECOMMENDED | `NOT YET DETERMINED` |
 | NFR-05 | أمان: مصادقة قوية، تشفير كلمات المرور، تحقق من المدخلات، سجلات تدقيق | RECOMMENDED | انظر [القسم 12](#12-security-architecture--المعمارية-الأمنية) |
 | NFR-06 | إمكانية الوصول (Accessibility) وفق WCAG | RECOMMENDED | المستوى المستهدف `NOT YET DETERMINED` |
-| NFR-07 | تعدد اللغات مع دعم الاتجاه من اليمين لليسار (RTL) للعربية | CONFIRMED-REQUIREMENT (اللغات) / RECOMMENDED (RTL) | الواجهة الحالية `lang="en"` بلا i18n |
+| NFR-07 | تعدد اللغات مع دعم الاتجاه من اليمين لليسار (RTL) للعربية | CONFIRMED-REQUIREMENT (اللغات) / RECOMMENDED (RTL) | الواجهة: ar (افتراضي، RTL) + en منذ CH-0005 (ADR-010). الخادم: بلا i18n |
 | NFR-08 | قابلية الاختبار (اختبارات وحدة وتكامل وشاملة) | RECOMMENDED | الأطر موجودة (Vitest) بلا اختبارات ذات معنى بعد |
 
 ### 2.5 متطلبات قابلية التوسّع والأداء
@@ -164,8 +164,8 @@
 
 ### 2.6 إمكانية الوصول وتعدد اللغات
 
-- لم تُنفَّذ أي بنية i18n في الواجهة أو الخادم. `PLANNED`.
-- التوصية: اعتماد مكتبة i18n في الواجهة ودعم RTL من البداية لتجنّب إعادة الهيكلة لاحقاً (RECOMMENDED).
+- الواجهة: بنية i18n منفّذة منذ CH-0005 (`frontend/src/i18n/*`): العربية افتراضياً مع `dir="rtl"`، والإنجليزية ثانوية، مع تبديل فوري وحفظ الاختيار محلياً (ADR-010). الخادم: لا i18n — `PLANNED`.
+- إمكانية الوصول: لا فحص WCAG بعد. مكوّنات Ant Design توفّر أساساً (ARIA) لكن المستوى الفعلي `UNVERIFIED`.
 
 ---
 
@@ -202,7 +202,7 @@
 
 ### 3.2 الواجهة (Frontend) — `frontend/`
 
-| التقنية | الإصدار المعلَن | الإصدار المثبّت (من `package-lock.json`، تم التحقق 2026-10-28) | الدور |
+| التقنية | الإصدار المعلَن | الإصدار المثبّت (من `package-lock.json`، تم التحقق 2026-10-28؛ الصفوف الخمسة الأخيرة أُضيفت وتحقّقت 2026-10-29) | الدور |
 |---|---|---|---|
 | React | `^19.3.1` | **19.3.1** | مكتبة الواجهة |
 | React DOM | `^19.3.1` | **19.3.1** | التصيير في المتصفح |
@@ -212,6 +212,13 @@
 | oxlint | `^1.89.0` | **1.90.0** | الفحص الثابت |
 | `@types/react` / `@types/react-dom` | `^19.3.0` | **19.3.0** | الأنواع |
 | `@types/node` | `^24.19.2` | **24.19.2** | أنواع Node لإعدادات Vite |
+| `antd` | `^6.6.8` | **6.6.8** | مكتبة مكوّنات الواجهة؛ RTL عبر `ConfigProvider direction` — أُضيفت في CH-0005 (ADR-009) |
+| `@ant-design/icons` | `^6.3.4` | **6.3.4** | أيقونات antd — CH-0005 |
+| `react-router` | `^7.18.5` | **7.18.5** | التوجيه في المتصفح؛ مثبّت عمداً على الإصدار الرئيسي 7 (ADR-011) — CH-0005 |
+| `i18next` | `^26.5.11` | **26.5.11** | محرك الترجمة — CH-0005 (ADR-010) |
+| `react-i18next` | `^17.1.9` | **17.1.9** | ربط i18next بـ React (`useTranslation`) — CH-0005 |
+
+تثبيت الحزم الخمس أضاف 73 حزمة (102 حزمة مدقَّقة، `npm audit`: 0 ثغرات) بتاريخ 2026-10-29.
 
 ### 3.3 قاعدة البيانات و ORM
 
@@ -247,6 +254,7 @@
 | npm | 10.9.3 |
 | Claude Code (امتداد VS Code) | 2.1.312 |
 | Git Bash | متوفر (يُستخدم لتشغيل خطّافات Claude Code) |
+| Git | 2.46.2.windows.1 (تم التحقق 2026-10-29، CH-0004) |
 | PowerShell | 7+ |
 
 ### 3.9 أسباب الخيارات المعمارية المؤكدة
@@ -262,10 +270,13 @@
 
 ## 04. PROJECT STRUCTURE — هيكل المشروع
 
-### 4.1 الشجرة الفعلية بتاريخ 2026-10-28 بدون مجلدات الاعتماديات
+### 4.1 الشجرة الفعلية بتاريخ 2026-10-29 بدون مجلدات الاعتماديات
 
 ```text
 ArtiCodeAcademy/
+├── .git/                             ← مستودع Git، الفرع main (أُنشئ في CH-0004)
+├── .gitignore                        ← تجاهل جذري: node_modules, dist, coverage, *.tsbuildinfo, .env* (CH-0004)
+├── .gitattributes                    ← تطبيع نهايات الأسطر إلى LF + وسم الثنائيات (CH-0004)
 ├── CLAUDE.md                         ← تعليمات التشغيل الدائمة لـ Claude Code (أُضيف في CH-0002)
 ├── docs/
 │   └── PROJECT_DOCUMENTATION.md      ← هذه الوثيقة (المرجع الوحيد المعتمد)
@@ -293,30 +304,57 @@ ArtiCodeAcademy/
 │   │   └── app.controller.spec.ts    ← اختبار وحدة
 │   └── test/
 │       └── app.e2e-spec.ts           ← اختبار شامل لـ GET /
-└── frontend/                         ← تطبيق Vite 8 + React 19
+└── frontend/                         ← تطبيق Vite 8 + React 19 + Ant Design 6 (هيكل منتج تجريبي منذ CH-0005)
     ├── .gitignore
     ├── .oxlintrc.json
     ├── README.md                     ← README الافتراضي لقالب Vite (غير خاص بالمشروع)
-    ├── index.html                    ← قالب HTML (العنوان "frontend"، lang="en")
-    ├── package.json
+    ├── index.html                    ← lang="ar" dir="rtl"، العنوان "ArtiCode Academy"
+    ├── package.json                  ← + antd, @ant-design/icons, react-router@7, i18next, react-i18next
     ├── package-lock.json             ← lockfileVersion 3
     ├── tsconfig.json                 ← مراجع إلى app/node
     ├── tsconfig.app.json
     ├── tsconfig.node.json
-    ├── vite.config.ts                ← plugins: [react()] فقط
+    ├── vite.config.ts                ← plugins: [react()] فقط (لا proxy)
     ├── public/
-    │   ├── favicon.svg
-    │   └── icons.svg
+    │   └── favicon.svg               ← أيقونة قالب Vite، لم تُستبدل بعد (KI-019)
     └── src/
-        ├── main.tsx                  ← نقطة الدخول (createRoot + StrictMode)
-        ├── App.tsx                   ← صفحة قالب Vite الافتراضية (عدّاد + روابط)
-        ├── App.css
-        ├── index.css                 ← متغيرات ألوان + وضع داكن تلقائي
-        └── assets/
-            ├── hero.png
-            ├── react.svg
-            └── vite.svg
+        ├── main.tsx                  ← نقطة الدخول: يحمّل ./i18n ثم يصيّر <App /> داخل StrictMode
+        ├── index.css                 ← أنماط عامة بالحد الأدنى (ارتفاع كامل، خط النظام)
+        ├── app/
+        │   ├── App.tsx               ← ConfigProvider (اتجاه + لغة + ثيم antd) → AntdApp → AuthProvider → AppRouter
+        │   └── router.tsx            ← createBrowserRouter: /login عام؛ البقية داخل RequireAuth → AppLayout
+        ├── auth/                     ← مصادقة تجريبية (mock) تُستبدل بعميل MOD-01
+        │   ├── roles.ts              ← ROLES = admin | teacher | student | guardian | staff
+        │   ├── auth-context.ts       ← AuthContext + useAuth()
+        │   ├── AuthProvider.tsx      ← جلسة تجريبية في localStorage (aca.mockUser)
+        │   └── RequireAuth.tsx       ← RequireAuth (→ /login) و RequireRole (بوابة واجهة فقط → 403)
+        ├── components/
+        │   ├── PageHeader.tsx        ← عنوان + وصف + إجراءات
+        │   ├── StatusTag.tsx         ← ألوان مفردات labels.* المشتركة
+        │   ├── LanguageSwitcher.tsx  ← العربية / English
+        │   └── RoleSwitcher.tsx      ← "عرض كـ" لمعاينة الأدوار
+        ├── i18n/
+        │   ├── language.ts           ← SUPPORTED_LANGUAGES, directionOf(), نوع LocalizedText
+        │   ├── index.ts              ← تهيئة i18next (ar افتراضياً؛ التخزين في localStorage: aca.language)
+        │   ├── ar.ts                 ← القاموس المرجعي (يصدّر النوع Translation)
+        │   ├── en.ts                 ← مُلزَم بنوع Translation لضمان تطابق المفاتيح
+        │   └── useLocalized.ts       ← اختيار النص من LocalizedText حسب اللغة النشطة
+        ├── layout/
+        │   ├── navigation.ts         ← NAV_ITEMS: المفتاح، المسار، الأيقونة، الأدوار، الوحدة (MOD-xx)
+        │   ├── AppLayout.tsx         ← Sider (قائمة حسب الدور) + Header + Content (Outlet)
+        │   └── AppLayout.css
+        ├── mock/
+        │   └── data.ts               ← بيانات تجريبية ثنائية اللغة لكل وحدة (تُحذف عند الربط بالخادم)
+        └── pages/
+            ├── LoginPage.tsx / LoginPage.css
+            ├── DashboardPage.tsx
+            ├── UsersPage.tsx, CoursesPage.tsx, ClassesPage.tsx, SchedulePage.tsx
+            ├── LessonsPage.tsx, AssignmentsPage.tsx, ExamsPage.tsx, CertificatesPage.tsx
+            ├── PaymentsPage.tsx, NotificationsPage.tsx, ReportsPage.tsx, SettingsPage.tsx
+            └── NotFoundPage.tsx, ForbiddenPage.tsx
 ```
+
+أُزيلت في CH-0005: `frontend/src/App.tsx` (قالب)، `frontend/src/App.css`، `frontend/src/assets/{hero.png, react.svg, vite.svg}`، `frontend/public/icons.svg`.
 
 ### 4.2 مسؤوليات المجلدات
 
@@ -325,6 +363,13 @@ ArtiCodeAcademy/
 | `backend/src/` | كود الخادم المصدري. `nest-cli.json` يحدده كـ `sourceRoot` | المخرجات في `backend/dist/` (تُحذف قبل كل بناء: `deleteOutDir: true`) |
 | `backend/test/` | الاختبارات الشاملة (e2e) | مستبعَد من البناء عبر `tsconfig.build.json` |
 | `frontend/src/` | كود الواجهة | `tsconfig.app.json` يشمل `src` فقط |
+| `frontend/src/app/` | تركيب التطبيق: المزوّدات (`App.tsx`) والموجّه (`router.tsx`) | CH-0005 |
+| `frontend/src/auth/` | المصادقة التجريبية، الأدوار، حارسا المسارات | تُستبدل بعميل MOD-01 الحقيقي |
+| `frontend/src/components/` | مكوّنات مشتركة صغيرة (رأس صفحة، وسم حالة، مبدّلا اللغة والدور) | |
+| `frontend/src/i18n/` | تهيئة i18next، القواميس، أدوات اللغة | إضافة لغة = قاموس جديد + إدخال في `SUPPORTED_LANGUAGES` + ترجمة antd |
+| `frontend/src/layout/` | التخطيط العام وتعريف التنقل (`NAV_ITEMS`) | **مصدر الحقيقة** لمسارات الشاشات وأدوارها |
+| `frontend/src/mock/` | بيانات تجريبية محلية | **تُحذف** تدريجياً عند ربط كل وحدة بالخادم (ADR-012) |
+| `frontend/src/pages/` | شاشة لكل وحدة منتج + 404/403 | ملف واحد لكل شاشة بتصدير مُسمّى |
 | `frontend/public/` | أصول ثابتة تُنسخ كما هي | |
 | `docs/` | التوثيق المعتمد | ملف واحد حالياً |
 | `.claude/` | أدوات Claude Code الخاصة بالمشروع | لا تحتوي على أي كود تطبيق |
@@ -334,7 +379,7 @@ ArtiCodeAcademy/
 | التطبيق | الملف | ما يفعله |
 |---|---|---|
 | Backend | `backend/src/main.ts` | `NestFactory.create(AppModule)` ثم `app.listen(process.env.PORT ?? 3000)` باستخدام `await` على المستوى الأعلى (ESM) |
-| Frontend | `frontend/index.html` → `frontend/src/main.tsx` | يُنشئ جذر React داخل `<div id="root">` ويغلّف `<App />` بـ `StrictMode` |
+| Frontend | `frontend/index.html` → `frontend/src/main.tsx` | يحمّل `./i18n` (تهيئة i18next وضبط `lang`/`dir` على `<html>`) ثم يُنشئ جذر React داخل `<div id="root">` ويصيّر `<App />` من `src/app/App.tsx` داخل `StrictMode` |
 
 ### 4.4 ملفات الإعداد ودلالاتها
 
@@ -351,13 +396,15 @@ ArtiCodeAcademy/
 | `frontend/tsconfig.app.json` | `target: es2023`, `moduleResolution: bundler`, `jsx: react-jsx`, `verbatimModuleSyntax`, `erasableSyntaxOnly`, `noUnusedLocals/Parameters`, `noEmit`. **لا يُعلن `strict`** لكن تم التحقق (2026-10-28) أن TypeScript 7.0.2 يطبّق الفحوص الصارمة افتراضياً (`noImplicitAny`, `strictNullChecks` فعّالان) |
 | `frontend/tsconfig.node.json` | إعدادات `vite.config.ts` فقط |
 | `frontend/.oxlintrc.json` | plugins: `react`, `typescript`, `oxc`؛ `react/rules-of-hooks: error`؛ `react/only-export-components: warn` |
-| `frontend/.gitignore` | يتجاهل `node_modules`, `dist`, `*.local`, ملفات المحرّرات |
+| `frontend/.gitignore` | يتجاهل `node_modules`, `dist`, `*.local`, ملفات المحرّرات (أصبح مغطّى بالجذري، وأُبقي كما ولّده القالب) |
+| `.gitignore` (جذري) | `node_modules/`, `dist/`, `dist-ssr/`, `coverage/`, `*.tsbuildinfo`, `.env` و`.env.*` (مع استثناء `.env.example`)، سجلات، `.claude/settings.local.json`، ملفات المحرّرات ونظام التشغيل (CH-0004) |
+| `.gitattributes` | `* text=auto eol=lf` لتطبيع نهايات الأسطر، ووسم `png/jpg/gif/ico/woff/woff2` كثنائية (CH-0004) |
 
 ### 4.5 الاصطلاحات التطويرية المعتمدة (مستنتجة من الإعدادات الفعلية)
 
 1. **الخادم ESM:** الاستيرادات النسبية تنتهي بـ `.js`.
 2. **التنسيق في الخادم:** Prettier مع علامات اقتباس مفردة وفواصل لاحقة. تشغيل: `npm run format`.
-3. **الواجهة:** لا يوجد إعداد Prettier؛ الكود المولَّد بلا فواصل منقوطة. **اصطلاح موحّد للواجهة `NOT YET DETERMINED`** (KI-004).
+3. **الواجهة (اصطلاح فعلي منذ CH-0005، غير مفروض بأداة — KI-004):** بلا فواصل منقوطة، اقتباس مفرد، مسافتان. مكوّن واحد لكل ملف بتصدير مُسمّى (`export function UsersPage`)، والمكوّن الجذري `App` وحده تصدير افتراضي. الخطافات والسياقات والثوابت في ملفات `.ts` منفصلة عن ملفات المكوّنات (لإرضاء `react/only-export-components`). `import type` في سطر مستقل. استيرادات نسبية بلا لاحقة. لا `enum` ولا خصائص مُنشئ (`erasableSyntaxOnly`). كل نص ظاهر عبر `t()`، والبيانات ثنائية اللغة بنوع `LocalizedText`.
 4. **الفحص الثابت:** oxlint في كلا التطبيقين (`npm run lint`).
 5. **أسماء ملفات NestJS:** `<name>.module.ts`, `<name>.controller.ts`, `<name>.service.ts`, `<name>.spec.ts`, `<name>.e2e-spec.ts` (اصطلاح الإطار ومتّبع في الهيكل الحالي).
 6. **التوثيق:** كل تغيير في الكود يستلزم تحديث هذه الوثيقة وفق `CLAUDE.md`.
@@ -368,13 +415,17 @@ ArtiCodeAcademy/
 
 ### 5.1 المعمارية الحالية الفعلية (IMPLEMENTED)
 
-المشروع اليوم عبارة عن **تطبيقين مستقلّين لا يتواصلان**:
+المشروع اليوم عبارة عن **تطبيقين مستقلّين لا يتواصلان**. منذ CH-0005 أصبحت الواجهة تطبيقاً متعدد الصفحات ببيانات محلية، لكنها ما زالت لا تستدعي الخادم:
 
 ```mermaid
 flowchart LR
     subgraph Dev["Developer machine (Windows 11, Node 22)"]
         subgraph FE["frontend/ (Vite dev server, default :5173)"]
-            IDX["index.html"] --> MAIN["src/main.tsx"] --> APP["src/App.tsx\n(template counter page)"]
+            IDX["index.html\nlang=ar dir=rtl"] --> MAIN["src/main.tsx\n(i18n init)"] --> APP["src/app/App.tsx\nantd ConfigProvider + AuthProvider"]
+            APP --> RTR["src/app/router.tsx\nreact-router 7"]
+            RTR --> LOGIN["pages/LoginPage\n(mock login)"]
+            RTR --> LAYOUT["RequireAuth → layout/AppLayout\n+ 13 module pages (RequireRole)"]
+            LAYOUT --> MOCK[("src/mock/data.ts\nlocal demo data")]
         end
         subgraph BE["backend/ (NestJS 12 + Express, PORT ?? 3000)"]
             BOOT["src/main.ts\nNestFactory.create()"] --> MOD["AppModule"]
@@ -432,11 +483,14 @@ flowchart TB
 | CORS في الخادم | غير مفعّل (`NestFactory.create(AppModule)` بلا `enableCors`) |
 | Proxy في Vite | غير مُعدّ |
 | عميل HTTP في الواجهة | لا يوجد |
+| طبقة بيانات الواجهة | بيانات تجريبية محلية (`frontend/src/mock/data.ts`) منذ CH-0005؛ لا استدعاء HTTP واحد (ADR-012) |
 | توثيق OpenAPI/Swagger | لا يوجد |
 
 ### 5.4 علاقات الوحدات
 
-حالياً وحدة واحدة فقط: `AppModule` → `AppController` → `AppService`. لا توجد اعتماديات بين وحدات لأنه لا توجد وحدات أخرى.
+**الخادم:** وحدة واحدة فقط: `AppModule` → `AppController` → `AppService`. لا توجد اعتماديات بين وحدات لأنه لا توجد وحدات أخرى.
+
+**الواجهة (CH-0005):** `main.tsx` → `app/App.tsx` → `app/router.tsx` → `layout/AppLayout` → `pages/*`. الملف `layout/navigation.ts` هو مصدر الحقيقة للمسارات والأدوار ويستهلكه `AppLayout` (بناء القائمة) و`auth/RequireAuth` (البوابة `canAccess`) بينما يطابقه `router.tsx` يدوياً. `auth/*` لا يعتمد إلا على `layout/navigation.ts` و`pages/ForbiddenPage`. كل الصفحات تعتمد على `mock/data.ts` و`i18n/useLocalized` و`components/*`.
 
 ### 5.5 الأنماط المعمارية
 
@@ -448,6 +502,10 @@ flowchart TB
 | DTO + Validation pipes | PLANNED | لا يوجد `ValidationPipe` ولا `class-validator` |
 | Guards / Roles | PLANNED | لا يوجد |
 | Configuration module (`@nestjs/config`) | PLANNED | لا يوجد؛ `process.env.PORT` يُقرأ مباشرة في `main.ts` |
+| التوجيه في المتصفح (client-side routing) | IMPLEMENTED | `frontend/src/app/router.tsx` (react-router 7، `createBrowserRouter`) |
+| i18n + RTL في الواجهة | IMPLEMENTED | `frontend/src/i18n/*`, `frontend/src/app/App.tsx` (`ConfigProvider direction/locale`) |
+| بوابة أدوار على مستوى الواجهة (UI gating) | IMPLEMENTED كنموذج — **ليس فرضاً أمنياً** | `frontend/src/auth/RequireAuth.tsx`, `frontend/src/layout/navigation.ts` |
+| طبقة بيانات تجريبية (mock-first) | IMPLEMENTED (مؤقت بطبيعته) | `frontend/src/mock/data.ts` (ADR-012) |
 
 ### 5.6 الحدود بين المكونات
 
@@ -508,7 +566,7 @@ flowchart TB
 
 ### 7.1 الحالة العامة
 
-**لا توجد أدوار ولا صلاحيات منفّذة.** لا `Guards`، لا ديكوريتور `@Roles`، لا جداول أدوار، لا مصادقة. كل ما يلي **`PLANNED`** ومصدره موجز المالك مع توصيف مقترح يحتاج إلى اعتماد.
+**لا توجد أدوار ولا صلاحيات منفّذة في الخادم.** لا `Guards`، لا ديكوريتور `@Roles`، لا جداول أدوار، لا مصادقة. في الواجهة توجد منذ CH-0005 مفاتيح أدوار (`frontend/src/auth/roles.ts`) ومصفوفة دور×شاشة (`frontend/src/layout/navigation.ts`) **للعرض والمعاينة فقط** (MOD-FE-01) — ليست فرضاً أمنياً. كل ما يلي عن الخادم **`PLANNED`** ومصدره موجز المالك مع توصيف مقترح يحتاج إلى اعتماد.
 
 ### 7.2 الأدوار المخطّطة
 
@@ -522,6 +580,20 @@ flowchart TB
 | ROLE-06 | Staff | مهام إدارية محددة (تسجيل، تحصيل، دعم) حسب صلاحيات مخصّصة | يُحدَّد بالأدوار المخصّصة | PLANNED |
 | ROLE-07 | Custom roles | أدوار يُنشئها Academy Admin بمجموعة صلاحيات مختارة | ديناميكي | PLANNED |
 
+**تمثيل الأدوار في الواجهة (CH-0005، واجهة فقط):** `frontend/src/auth/roles.ts` يعرّف المفاتيح `admin`, `teacher`, `student`, `guardian`, `staff` المقابلة لـ ROLE-02 إلى ROLE-06. ROLE-01 (Super Admin) غائب عمداً لأنه على مستوى المنصة ويتوقف على ADR-008. ROLE-07 غير ممثَّل. مصفوفة الدور×الشاشة المنفّذة في `layout/navigation.ts` مأخوذة من عمود "الوحدات المتاحة (مقترح)" أعلاه وهي **مقترحة وغير معتمدة من المالك** (`UNVERIFIED` كمتطلب):
+
+| الشاشة | admin | teacher | student | guardian | staff |
+|---|---|---|---|---|---|
+| لوحة التحكم، الجدول الزمني، الإشعارات | ✓ | ✓ | ✓ | ✓ | ✓ |
+| المستخدمون | ✓ | | | | ✓ |
+| الدورات والمستويات | ✓ | ✓ | ✓ | ✓ | |
+| الفصول والمجموعات | ✓ | ✓ | | | ✓ |
+| الدروس | ✓ | ✓ | ✓ | | |
+| الواجبات، الاختبارات والدرجات | ✓ | ✓ | ✓ | ✓ | |
+| الشهادات | ✓ | | ✓ | ✓ | |
+| المدفوعات | ✓ | | ✓ | ✓ | ✓ |
+| التقارير، الإعدادات | ✓ | | | | |
+
 ### 7.3 الإجراءات المسموحة والممنوعة
 
 `NOT YET DETERMINED` — تُحدَّد مصفوفة الصلاحيات (Permission matrix) عند تصميم وحدة الصلاحيات (MOD-01/MOD-03). **يجب** توثيقها هنا جدولاً: الدور × الوحدة × الإجراء (create/read/update/delete/approve…).
@@ -533,7 +605,7 @@ flowchart TB
 | مصادقة (JWT/Session) | PLANNED |
 | `AuthGuard` + `RolesGuard` في NestJS | PLANNED |
 | صلاحيات دقيقة (permission-based بدل role-based فقط) | RECOMMENDED لدعم ROLE-07 |
-| فرض على مستوى الواجهة (إخفاء عناصر) | PLANNED — لا يُعتبر فرضاً أمنياً |
+| فرض على مستوى الواجهة (إخفاء عناصر) | PARTIALLY_IMPLEMENTED (CH-0005): القائمة والمسارات تُرشَّح حسب الدور في `frontend/src/layout/navigation.ts` و`auth/RequireAuth.tsx` (صفحة 403 عند المسار المباشر) — لا يُعتبر فرضاً أمنياً، والدور قابل للتبديل من `RoleSwitcher` |
 
 ### 7.5 العلاقة بين الأدوار
 
@@ -548,8 +620,9 @@ flowchart TB
 | المعرّف | الوحدة | الحالة | الملفات |
 |---|---|---|---|
 | MOD-00 | App bootstrap (Backend root) | IMPLEMENTED | `backend/src/main.ts`, `app.module.ts`, `app.controller.ts`, `app.service.ts` |
-| MOD-FE-00 | Frontend shell (template) | IMPLEMENTED (قالب فقط) | `frontend/src/main.tsx`, `App.tsx`, `index.css`, `App.css`, `index.html` |
-| MOD-01 | Authentication | PLANNED | — |
+| MOD-FE-00 | Frontend shell (template) | REMOVED (CH-0005) | — (كانت: `frontend/src/App.tsx`, `App.css`, `assets/*`, `public/icons.svg`) |
+| MOD-FE-01 | Frontend application shell (prototype) | IMPLEMENTED (نموذج أولي ببيانات محلية) | `frontend/src/app/*`, `layout/*`, `auth/*`, `components/*`, `i18n/*`, `mock/data.ts`, `pages/*`, `main.tsx`, `index.html` |
+| MOD-01 | Authentication | PLANNED (شاشة دخول تجريبية فقط في الواجهة) | — |
 | MOD-02 | Academy management | PLANNED | — |
 | MOD-03 | User management & roles | PLANNED | — |
 | MOD-04 | Courses & levels | PLANNED | — |
@@ -583,12 +656,14 @@ flowchart TB
 | الأخطاء المعروفة | لا شيء |
 | التحسينات المستقبلية | إضافة `@nestjs/config` مع تحقق من المتغيرات، `ValidationPipe` عام، CORS، بادئة `/api`، Swagger |
 
-### MOD-FE-00 — Frontend shell (template) — `IMPLEMENTED` (قالب فقط)
+### MOD-FE-00 — Frontend shell (template) — `REMOVED` (CH-0005)
+
+> **سجل تاريخي.** أُزيلت صفحة القالب وأصولها في CH-0005 (`App.tsx`, `App.css`, `assets/hero.png`, `assets/react.svg`, `assets/vite.svg`, `public/icons.svg`) وحلّ محلّها MOD-FE-01. بقي `public/favicon.svg` من القالب (KI-019). الوصف أدناه يصف الحالة قبل الإزالة ويُحتفظ به وفق RULE 9.
 
 | البند | التفاصيل |
 |---|---|
 | الغرض التجاري | لا يوجد بعد؛ صفحة قالب Vite الافتراضية |
-| حالة التطوير | IMPLEMENTED كقالب؛ **لا توجد أي واجهة منتج** |
+| حالة التطوير | REMOVED في CH-0005 (كانت IMPLEMENTED كقالب؛ لم تكن أي واجهة منتج) |
 | الملفات | `frontend/index.html`, `frontend/src/main.tsx`, `frontend/src/App.tsx`, `frontend/src/App.css`, `frontend/src/index.css`, `frontend/public/*`, `frontend/src/assets/*` |
 | الوظيفة الرئيسية | عرض صورة بطل (hero) وعدّاد `useState` وروابط إلى توثيق Vite/React وقنوات مجتمع Vite |
 | الحالة (state) | `useState` محلي فقط |
@@ -596,7 +671,25 @@ flowchart TB
 | الاتصال بالخادم | لا يوجد |
 | i18n / RTL | لا يوجد؛ `lang="en"` |
 | القيود | العنوان `<title>frontend</title>`؛ روابط خارجية غير متعلقة بالمنتج (KI-005) |
-| التحسينات المستقبلية | إزالة محتوى القالب، إضافة توجيه، طبقة API، i18n مع RTL، نظام تصميم |
+| التحسينات المستقبلية | إزالة محتوى القالب، إضافة توجيه، طبقة API، i18n مع RTL، نظام تصميم (أُنجز معظمها في MOD-FE-01 عدا طبقة API) |
+
+### MOD-FE-01 — Frontend application shell (prototype) — `IMPLEMENTED` (نموذج أولي ببيانات محلية)
+
+| البند | التفاصيل |
+|---|---|
+| الغرض التجاري | تمكين المالك من الدخول إلى شاشات المنتج والتنقل بينها ومعاينتها بكل دور قبل بناء الخادم (نهج "الواجهة أولاً ببيانات تجريبية" — ADR-012) |
+| حالة التطوير | IMPLEMENTED كهيكل وشاشات تجريبية (CH-0005). **لا اتصال بالخادم، لا بيانات حقيقية، لا مصادقة حقيقية** |
+| الملفات | `frontend/index.html`, `frontend/src/main.tsx`, `frontend/src/index.css`, `frontend/src/app/App.tsx`, `frontend/src/app/router.tsx`, `frontend/src/layout/{navigation.ts, AppLayout.tsx, AppLayout.css}`, `frontend/src/auth/{roles.ts, auth-context.ts, AuthProvider.tsx, RequireAuth.tsx}`, `frontend/src/components/{PageHeader, StatusTag, LanguageSwitcher, RoleSwitcher}.tsx`, `frontend/src/i18n/{language.ts, index.ts, ar.ts, en.ts, useLocalized.ts}`, `frontend/src/mock/data.ts`, `frontend/src/pages/*` (16 صفحة + `LoginPage.css`) |
+| الوظيفة الرئيسية | (1) دخول تجريبي: أي بريد/كلمة مرور + اختيار دور → جلسة في `localStorage` (`aca.mockUser`)؛ (2) تخطيط عام: قائمة جانبية مُرشَّحة حسب الدور + ترويسة (شارة "بيانات تجريبية"، مبدّل الدور "عرض كـ"، مبدّل اللغة، قائمة المستخدم/خروج)؛ (3) 13 شاشة وحدة ببيانات محلية ثنائية اللغة (جداول، إحصاءات، قوائم، نموذج إعدادات)؛ (4) صفحتا 404 و403 |
+| التوجيه | `react-router` 7 (`createBrowserRouter`): `/login` عام؛ `/` وما تحته داخل `RequireAuth` → `AppLayout` (Outlet)؛ كل شاشة داخل `RequireRole(navKey)`. المسارات: `/`, `/users`, `/courses`, `/classes`, `/schedule`, `/lessons`, `/assignments`, `/exams`, `/certificates`, `/payments`, `/notifications`, `/reports`, `/settings`, و`*` → 404 |
+| الحالة (state) | React state + Context (`AuthContext`) فقط؛ لا مكتبة إدارة حالة |
+| i18n / RTL | `i18next` + `react-i18next`؛ العربية افتراضياً مع `dir="rtl"`، الإنجليزية ثانوية؛ `ConfigProvider` في antd يتلقى `direction` و`locale` (`ar_EG` / `en_US`)؛ الاختيار محفوظ في `localStorage` (`aca.language`)؛ `document.documentElement.lang/dir` يُحدَّثان عند التبديل. قاموس `en` مُلزَم بنوع قاموس `ar` (`Translation`) فيفشل `tsc` عند أي مفتاح ناقص |
+| الأدوار (واجهة فقط) | `auth/roles.ts`: `admin, teacher, student, guardian, staff` (ROLE-02..ROLE-06). مصفوفة الدور×الشاشة في `layout/navigation.ts` (انظر 7.2؛ مقترحة وغير معتمدة). `RoleSwitcher` يسمح بالمعاينة بأي دور — أداة نمذجة، ليست حماية (KI-017) |
+| الاتصال بالخادم | لا يوجد. كل البيانات من `mock/data.ts` (مستخدمون، دورات، فصول، جدول، دروس، واجبات، اختبارات، شهادات، مدفوعات، إشعارات، تقارير، إعدادات الأكاديمية) |
+| الاعتماديات | `antd` 6.6.8، `@ant-design/icons` 6.3.4، `react-router` 7.18.5، `i18next` 26.5.11، `react-i18next` 17.1.9 |
+| القيود الحالية | أزرار "إضافة/تسجيل/إنشاء" تعرض رسالة "غير منفّذ"؛ النموذجان الوحيدان (الدخول، الإعدادات) محليان؛ حجم الحزمة الإنتاجية 1,306 kB قبل الضغط (KI-016)؛ لا اختبارات آلية (13.5)؛ favicon قالب Vite (KI-019)؛ العرض المرئي في متصفح لم يُتحقق منه آلياً في الجلسة (الملحق B) |
+| الأخطاء المعروفة | لا شيء مرصود |
+| التحسينات المستقبلية | طبقة API (FS-031) تستبدل `mock/data.ts` وحدةً وحدة؛ مصادقة حقيقية (MOD-01) تستبدل `AuthProvider`؛ تقسيم الحزمة بالمسارات (`React.lazy`)؛ اختبارات Vitest + Testing Library؛ هوية بصرية (شعار، favicon، ألوان) |
 
 ### MOD-01 — Authentication — `PLANNED`
 
@@ -609,6 +702,7 @@ flowchart TB
 | الاعتماديات المتوقعة | MOD-03 (المستخدمون)، MOD-02 (سياق الأكاديمية) |
 | قواعد مقترحة | تجزئة كلمات المرور (bcrypt/argon2)، رموز JWT قصيرة العمر + تحديث، حد لمحاولات الدخول |
 | القيود/المخاطر | أي نقطة نهاية تُضاف قبل هذه الوحدة ستكون عامة |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/LoginPage.tsx` + `frontend/src/auth/AuthProvider.tsx` — المسار `/login`؛ أي بريد/كلمة مرور يُقبلان ويُختار الدور للمعاينة. **ليست مصادقة** (KI-017)؛ تُستبدل عند تنفيذ هذه الوحدة |
 
 ### MOD-02 — Academy management — `PLANNED`
 
@@ -626,6 +720,7 @@ flowchart TB
 | الغرض | إدارة المستخدمين بأنواعهم (معلم/طالب/ولي أمر/موظف)، الملفات الشخصية، الأدوار والصلاحيات المخصّصة، ربط أولياء الأمور بالطلاب |
 | الكيانات | `NOT YET DETERMINED` (متوقع: users, roles, permissions, role_permissions, user_roles, guardian_students) |
 | الاعتماديات | MOD-01 |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/UsersPage.tsx` — المسار `/users`؛ جدول ببيانات محلية (`mockUsers`)؛ زر الإضافة يعرض "غير منفّذ". مفاتيح الأدوار في `frontend/src/auth/roles.ts`. لا منطق خادم |
 
 ### MOD-04 — Courses & levels — `PLANNED`
 
@@ -634,6 +729,7 @@ flowchart TB
 | الغرض | تعريف الدورات ومستوياتها ومحتواها ومتطلباتها |
 | الكيانات | `NOT YET DETERMINED` (متوقع: courses, levels, course_levels) |
 | الاعتماديات | MOD-02, MOD-03 |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/CoursesPage.tsx` — المسار `/courses`؛ جدول (رمز، اسم، مستوى، معلم، طلاب، حالة) من `mockCourses`. لا منطق خادم |
 
 ### MOD-05 — Classes & groups — `PLANNED`
 
@@ -642,6 +738,7 @@ flowchart TB
 | الغرض | إنشاء الفصول/المجموعات لدورة ومستوى محددين، تعيين المعلمين، تسجيل الطلاب |
 | الكيانات | `NOT YET DETERMINED` (متوقع: classes, groups, enrollments, class_teachers) |
 | الاعتماديات | MOD-03, MOD-04 |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/ClassesPage.tsx` — المسار `/classes`؛ جدول مع شريط إشغال (مسجّلون/سعة) من `mockClasses`. لا منطق خادم |
 
 ### MOD-06 — Lessons (live & recorded) — `PLANNED`
 
@@ -651,6 +748,7 @@ flowchart TB
 | الكيانات | `NOT YET DETERMINED` (متوقع: lessons, lesson_recordings, attendance) |
 | الاعتماديات | MOD-05, MOD-07, MOD-15 (مزود بث/تخزين) |
 | ملاحظة | مزوّد البث والتخزين `NOT YET DETERMINED` |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/LessonsPage.tsx` — المسار `/lessons`؛ جدول (عنوان، دورة، نوع مباشر/مسجّل، تاريخ، مدة، حالة) من `mockLessons`. لا تشغيل فيديو ولا بث |
 
 ### MOD-07 — Scheduling & timetables — `PLANNED`
 
@@ -659,6 +757,7 @@ flowchart TB
 | الغرض | الجداول الزمنية للفصول والمعلمين والقاعات، كشف التعارضات |
 | الكيانات | `NOT YET DETERMINED` (متوقع: timetables, time_slots, rooms?) |
 | الاعتماديات | MOD-05 |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/SchedulePage.tsx` — المسار `/schedule`؛ جدول أسبوعي مرتّب باليوم ثم الوقت من `mockSchedule`. لا كشف تعارضات |
 
 ### MOD-08 — Assignments — `PLANNED`
 
@@ -667,6 +766,7 @@ flowchart TB
 | الغرض | إنشاء الواجبات، التسليم، التصحيح، التغذية الراجعة |
 | الكيانات | `NOT YET DETERMINED` (متوقع: assignments, submissions, submission_files) |
 | الاعتماديات | MOD-05, MOD-09 (الدرجات) |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/AssignmentsPage.tsx` — المسار `/assignments`؛ جدول (عنوان، دورة، آخر موعد، تسليمات، حالة) من `mockAssignments`. لا تسليم ولا تصحيح |
 
 ### MOD-09 — Exams & grading — `PLANNED`
 
@@ -676,6 +776,7 @@ flowchart TB
 | الكيانات | `NOT YET DETERMINED` (متوقع: exams, questions, exam_attempts, answers, grades, grade_schemes) |
 | قواعد الأعمال | معادلات احتساب الدرجات `NOT YET DETERMINED` |
 | الاعتماديات | MOD-05, MOD-08 |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/ExamsPage.tsx` — المسار `/exams`؛ جدول (عنوان، دورة، تاريخ، مدة، درجة كاملة، متوسط، حالة) من `mockExams`. لا أداء اختبار ولا تصحيح |
 
 ### MOD-10 — Certificates & academic records — `PLANNED`
 
@@ -684,6 +785,7 @@ flowchart TB
 | الغرض | إصدار الشهادات (قوالب، ترقيم، تحقق)، السجل الأكاديمي للطالب |
 | الكيانات | `NOT YET DETERMINED` (متوقع: certificates, certificate_templates, academic_records) |
 | الاعتماديات | MOD-09 |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/CertificatesPage.tsx` — المسار `/certificates`؛ جدول (رقم تسلسلي، طالب، دورة، تاريخ إصدار، تقدير) من `mockCertificates`. لا إصدار ولا تحقق |
 
 ### MOD-11 — Payments & installments — `PLANNED`
 
@@ -693,6 +795,7 @@ flowchart TB
 | الكيانات | `NOT YET DETERMINED` (متوقع: fees, invoices, installments, payments, receipts) |
 | الاعتماديات | MOD-03, MOD-05, MOD-15 |
 | ملاحظة | بوابة الدفع والعملات `NOT YET DETERMINED` |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/PaymentsPage.tsx` — المسار `/payments`؛ إحصاءا "المحصّل/المتبقي" وجدول فواتير من `mockPayments` (العملة التجريبية `SAR` من `mockAcademySettings`). لا تسجيل دفعات ولا بوابة |
 
 ### MOD-12 — Notifications — `PLANNED`
 
@@ -701,6 +804,7 @@ flowchart TB
 | الغرض | إشعارات داخل التطبيق وبريد/رسائل/دفع (push) للأحداث المهمة |
 | الكيانات | `NOT YET DETERMINED` (متوقع: notifications, notification_preferences) |
 | الاعتماديات | MOD-03, MOD-15 (مزودي البريد/الرسائل) |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/NotificationsPage.tsx` — المسار `/notifications`؛ قائمة مع مؤشر غير مقروء ووسم القناة وزر "تعيين الكل كمقروء" (حالة محلية فقط) من `mockNotifications`. لا إرسال |
 
 ### MOD-13 — Reports — `PLANNED`
 
@@ -708,6 +812,7 @@ flowchart TB
 |---|---|
 | الغرض | تقارير أكاديمية ومالية وتشغيلية قابلة للتصدير |
 | الاعتماديات | معظم الوحدات |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/ReportsPage.tsx` — المسار `/reports`؛ بطاقات التقارير المتاحة من `mockReports`؛ زر "إنشاء التقرير" يعرض "غير منفّذ". لا توليد ولا تصدير |
 
 ### MOD-14 — Settings — `PLANNED`
 
@@ -715,6 +820,7 @@ flowchart TB
 |---|---|
 | الغرض | إعدادات الأكاديمية والنظام، اللغة الافتراضية، المنطقة الزمنية، العملة، العلامة التجارية |
 | الاعتماديات | MOD-02 |
+| واجهة تجريبية (CH-0005) | `frontend/src/pages/SettingsPage.tsx` — المسار `/settings`؛ نموذج (اسم الأكاديمية عربي/إنجليزي، اللغة الافتراضية، المنطقة الزمنية، العملة) بقيم `mockAcademySettings`؛ "حفظ" يعرض رسالة نجاح محلية ولا يرسل شيئاً |
 
 ### MOD-15 — Integrations & mobile API — `PLANNED`
 
@@ -727,7 +833,9 @@ flowchart TB
 
 ## 09. USER WORKFLOWS — رحلات المستخدم
 
-**لا توجد أي رحلة مستخدم تشغيلية حالياً.** الرحلة الوحيدة القابلة للتنفيذ هي: تشغيل الخادم واستدعاء `GET /` (تقنية وليست رحلة منتج).
+**لا توجد أي رحلة مستخدم تشغيلية حالياً.** الرحلة الوحيدة القابلة للتنفيذ على الخادم هي: تشغيله واستدعاء `GET /` (تقنية وليست رحلة منتج).
+
+منذ CH-0005 توجد في الواجهة رحلة **معاينة** (ليست رحلة منتج لأنها لا تلمس الخادم ولا بيانات حقيقية): `/login` (أي بيانات + اختيار دور) → `/` لوحة التحكم → التنقل بين شاشات الوحدات حسب الدور → تبديل الدور أو اللغة من الترويسة → تسجيل الخروج. تُوثَّق كرحلة منتج (WF-02 وما بعدها) عند ربطها بالمصادقة الحقيقية (MOD-01).
 
 | المعرّف | الرحلة | الحالة | الوحدات المعنية | ملاحظات |
 |---|---|---|---|---|
@@ -807,6 +915,9 @@ npx -y npm@11 install <package>
 # الواجهة (يحترم package-lock.json الموجود)
 cd frontend
 npm ci
+
+# الواجهة: إضافة اعتماديات (npm 10 يعمل هنا بلا مشكلة — تم التحقق في CH-0005)
+npm install <package>
 ```
 
 > **تنبيه:** كل أمر يجب تشغيله من داخل مجلد التطبيق الصحيح. أوامر `test` و`test:e2e` و`start:dev` موجودة في `backend/` فقط، وتشغيلها من `frontend/` يعطي `Missing script`.
@@ -819,6 +930,7 @@ npm ci
 
 - لا توجد ملفات `.env` أو `.env.example` في المستودع.
 - لا توجد متغيرات بيئة في الواجهة (لا `VITE_*`).
+- مفاتيح `localStorage` في الواجهة (ليست متغيرات بيئة، لكنها حالة محلية موثّقة منذ CH-0005): `aca.language` (اللغة المختارة: `ar` أو `en`)، `aca.mockUser` (الجلسة التجريبية — KI-017).
 - **لا تُسجَّل أبداً قيم سرية في هذه الوثيقة** (RULE 16). تُسجَّل الأسماء والأوصاف فقط.
 
 ### 11.4 إعداد قاعدة البيانات
@@ -879,6 +991,8 @@ npm ci
 |---|---|---|---|
 | المصادقة | غير موجودة | JWT (وصول قصير + تحديث) أو جلسات؛ `@nestjs/passport` | عالية قبل أي بيانات حقيقية |
 | التفويض | غير موجود | `RolesGuard` + صلاحيات دقيقة؛ فرض على مستوى الخدمة لا المتحكم فقط | عالية |
+| مصادقة الواجهة (CH-0005) | تجريبية: أي بيانات تُقبل، الجلسة والدور في `localStorage` (`frontend/src/auth/AuthProvider.tsx`) | تُستبدل بعميل MOD-01 (رمز JWT قصير العمر في الذاكرة + تحديث)؛ **لا تُعتبر حماية** (KI-017) | عالية قبل أي بيانات حقيقية |
+| تفويض الواجهة (CH-0005) | إخفاء الشاشات حسب الدور فقط (`RequireRole`, `navigation.ts`) | الفرض الحقيقي في الخادم؛ الواجهة تبقى طبقة تجربة مستخدم فقط | — |
 | كلمات المرور | غير موجودة | argon2id أو bcrypt بكلفة مناسبة؛ سياسة قوة؛ لا تُسجَّل في السجلات | عالية |
 | التحقق من المدخلات | لا `ValidationPipe` | `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })` + `class-validator` | عالية |
 | CORS | غير مفعّل (يمنع الواجهة من الاتصال) | `enableCors` بقائمة أصول مسموحة من الإعدادات | متوسطة |
@@ -897,7 +1011,8 @@ npm ci
 |---|---|---|---|
 | SEC-R-01 | أي نقطة نهاية جديدة ستكون عامة افتراضياً حتى تُنفَّذ MOD-01 | منخفضة الآن، عالية لاحقاً | يجب تنفيذ المصادقة قبل أي بيانات حقيقية |
 | SEC-R-02 | غياب التحقق من المدخلات | لا ينطبق الآن (لا مدخلات) | |
-| SEC-R-03 | الواجهة تحتوي روابط خارجية بـ `target="_blank"` بلا `rel="noopener"` | منخفضة جداً | محتوى قالب سيُزال (KI-005)؛ المتصفحات الحديثة تطبّق `noopener` ضمنياً |
+| SEC-R-03 | الواجهة تحتوي روابط خارجية بـ `target="_blank"` بلا `rel="noopener"` | RESOLVED (CH-0005) | أُزيل محتوى القالب بالكامل؛ لا روابط خارجية في الواجهة الحالية |
+| SEC-R-04 | الجلسة التجريبية والدور في `localStorage` قابلان للتعديل من أدوات المطور (CH-0005) | لا أثر الآن (لا بيانات حقيقية ولا خادم)؛ **حرجة إن وصلت للإنتاج** | آلية نمذجة مؤقتة (ADR-012، KI-017)؛ يجب ألا تُنشر أي نسخة تعتمد عليها |
 
 ---
 
@@ -908,7 +1023,7 @@ npm ci
 | التطبيق | الإطار | الحالة |
 |---|---|---|
 | Backend | Vitest 4 + `@nestjs/testing` + supertest | مُعدّ (ملفا إعداد) |
-| Frontend | لا شيء | PLANNED (مقترح: Vitest + Testing Library، و Playwright للشامل) |
+| Frontend | لا شيء | PLANNED (مقترح: Vitest + Testing Library، و Playwright للشامل) — لم يُعتمد بعد؛ هيكل CH-0005 بلا اختبارات آلية |
 
 ### 13.2 الاختبارات الموجودة
 
@@ -921,7 +1036,7 @@ npm ci
 
 انظر [11.5](#115-أوامر-التطوير). الوحدة: `npm run test`؛ الشامل: `npm run test:e2e`؛ التغطية: `npm run test:cov`.
 
-### 13.4 الفحوص التي أُجريت فعلاً بتاريخ 2026-10-28
+### 13.4 الفحوص التي أُجريت فعلاً بتاريخ 2026-10-28 و2026-10-29
 
 | الفحص | النتيجة |
 |---|---|
@@ -935,10 +1050,18 @@ npm ci
 | `backend`: `npm run build` (CH-0003) | نجح، والمخرجات في `backend/dist/` |
 | `backend`: تشغيل `node dist/main.js` + curl (CH-0003) | `GET /` أعاد `200`، ومسار غير موجود أعاد `404` بصيغة JSON الافتراضية |
 | `backend`: `npm audit` (CH-0003) | 5 ثغرات (2 منخفضة، 1 متوسطة، 2 عالية) كلها في شجرة `@nestjs/mau` (KI-011) |
+| Git: `git ls-files` بعد CH-0004 | 42 ملفاً مرصوداً؛ لا `node_modules` ولا `dist` ولا `*.tsbuildinfo`؛ `git status` نظيف بعد commit `127cb1d` |
+| `frontend`: `npm install` للحزم الخمس (CH-0005) | +73 حزمة، 0 ثغرات (`npm audit`) |
+| `frontend`: `npx tsc -b` (CH-0005) | نجح (exit 0) على الهيكل الجديد كاملاً |
+| `frontend`: `npm run lint` (CH-0005) | نجح بلا مخرجات (0 تحذيرات) |
+| `frontend`: `npx vite build` (CH-0005) | نجح في 3.7 ثانية؛ 3,166 وحدة؛ `index-*.js` بحجم 1,306 kB (gzip 416 kB) مع تحذير حجم > 500 kB (KI-016) |
+| `frontend`: خادم التطوير (CH-0005) | `GET /` و8 وحدات مصدرية جديدة (`main.tsx`, `app/App.tsx`, `app/router.tsx`, `layout/AppLayout.tsx`, `pages/DashboardPage.tsx`, `pages/LoginPage.tsx`, `i18n/index.ts`, `mock/data.ts`) أعادت `200`؛ HTML المُقدَّم يحمل `lang="ar" dir="rtl"` و`<title>ArtiCode Academy</title>`؛ سجل Vite بلا أخطاء بعد إعادة تحسين الاعتماديات |
+| `backend`: `GET /` أثناء CH-0005 | ما زال يُعيد `Hello World!` (الخادم لم يُمس) |
+| العرض المرئي في متصفح (CH-0005) | **لم يُتحقق منه آلياً** — لا أداة متصفح في الجلسة. `UNVERIFIED` حتى يفتحه المالك على http://localhost:5173 |
 
 ### 13.5 فجوات الاختبار الحالية
 
-- لا اختبارات للواجهة.
+- لا اختبارات للواجهة، بما فيها هيكل CH-0005: التوجيه، i18n (تطابق المفاتيح يحميه `tsc` فقط)، بوابات الأدوار، المصادقة التجريبية.
 - لا اختبارات ذات معنى للخادم (اختبارا الهيكل فقط).
 - لا تغطية مقاسة.
 - لا تكامل مستمر (CI).
@@ -980,11 +1103,11 @@ npm ci
 | التسجيل (Logging) | مسجّل NestJS الافتراضي فقط |
 | المراقبة | لا شيء |
 | النسخ الاحتياطي/الاستعادة | `NOT YET DETERMINED` |
-| استراتيجية التراجع | `NOT YET DETERMINED` (لا Git حتى الآن — KI-002) |
+| استراتيجية التراجع | Git متوفر منذ CH-0004 (commit الأساس `127cb1d` على `main`)؛ سياسة الفروع والإصدارات `NOT YET DETERMINED`؛ لا remote |
 
 ### 14.6 القيود التشغيلية
 
-- المستودع ليس تحت Git؛ لا يمكن التراجع أو تتبع التغييرات (KI-002).
+- المستودع تحت Git منذ CH-0004 (KI-002 RESOLVED)؛ لا remote ولا نسخة خارج جهاز التطوير بعد.
 - تثبيت الخادم أصبح قابلاً لإعادة الإنتاج عبر `npm ci` منذ CH-0003. إضافة اعتماديات جديدة تحتاج npm 11 (KI-015).
 
 ### 14.7 آلية التحقق من مزامنة التوثيق (Documentation sync guard) — `IMPLEMENTED`
@@ -1037,33 +1160,35 @@ stateDiagram-v2
 | المعرّف | الميزة | الوحدة | الحالة | الملفات ذات الصلة | ملاحظات |
 |---|---|---|---|---|---|
 | FS-001 | تشغيل خادم HTTP مع `GET /` | MOD-00 | IMPLEMENTED | `backend/src/main.ts`, `app.module.ts`, `app.controller.ts`, `app.service.ts` | هيكل مولَّد؛ لا منطق أعمال |
-| FS-002 | قالب واجهة React يعمل | MOD-FE-00 | IMPLEMENTED | `frontend/src/*`, `frontend/index.html` | قالب Vite الافتراضي؛ تحقق `tsc -b` و`lint` 2026-10-28 |
+| FS-002 | قالب واجهة React يعمل | MOD-FE-00 | REMOVED | — | قالب Vite الافتراضي أُزيل في CH-0005 وحلّ محلّه FS-034 |
 | FS-003 | اختبارات الخادم (وحدة + شامل) | MOD-00 | IMPLEMENTED | `backend/src/app.controller.spec.ts`, `backend/test/app.e2e-spec.ts` | اختبارا الهيكل ناجحان (CH-0003) |
 | FS-004 | نظام التوثيق المستمر (وثيقة رئيسية + CLAUDE.md + خطّاف) | Tooling | IMPLEMENTED | `docs/PROJECT_DOCUMENTATION.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/doc-sync-check.mjs` | CH-0002 |
-| FS-010 | المصادقة | MOD-01 | PLANNED | — | |
+| FS-010 | المصادقة | MOD-01 | PLANNED | — | شاشة دخول تجريبية فقط (`frontend/src/pages/LoginPage.tsx`, `auth/AuthProvider.tsx`) لا تستدعي خادماً — ليست مصادقة (KI-017) |
 | FS-011 | إدارة الأكاديمية | MOD-02 | PLANNED | — | |
 | FS-012 | النشر المستقل لكل أكاديمية | MOD-02 / Ops | PLANNED | — | ADR-008 |
 | FS-013 | قاعدة بيانات مخصّصة لكل أكاديمية | MOD-02 / DB | PLANNED | — | ADR-003, ADR-008 |
-| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PLANNED | — | |
-| FS-015 | الأدوار والصلاحيات المخصّصة | MOD-03 | PLANNED | — | |
-| FS-016 | الدورات والمستويات | MOD-04 | PLANNED | — | |
-| FS-017 | الفصول والمجموعات | MOD-05 | PLANNED | — | |
-| FS-018 | الدروس المباشرة | MOD-06 | PLANNED | — | مزود البث غير محدد |
-| FS-019 | الدروس المسجّلة | MOD-06 | PLANNED | — | التخزين غير محدد |
-| FS-020 | الجداول الزمنية والجدولة | MOD-07 | PLANNED | — | |
-| FS-021 | الواجبات | MOD-08 | PLANNED | — | |
-| FS-022 | الاختبارات والدرجات | MOD-09 | PLANNED | — | |
-| FS-023 | الشهادات والسجلات الأكاديمية | MOD-10 | PLANNED | — | |
-| FS-024 | المدفوعات والأقساط والمتابعة المالية | MOD-11 | PLANNED | — | |
-| FS-025 | الإشعارات | MOD-12 | PLANNED | — | |
-| FS-026 | التقارير | MOD-13 | PLANNED | — | |
-| FS-027 | الإعدادات | MOD-14 | PLANNED | — | |
-| FS-028 | تعدد اللغات + RTL | MOD-FE / MOD-14 | PLANNED | — | |
+| FS-014 | إدارة المستخدمين (معلم/طالب/ولي أمر/موظف) | MOD-03 | PLANNED | — | شاشة تجريبية ببيانات محلية: `frontend/src/pages/UsersPage.tsx` (CH-0005) |
+| FS-015 | الأدوار والصلاحيات المخصّصة | MOD-03 | PLANNED | — | بوابة واجهة فقط حسب الدور (`frontend/src/layout/navigation.ts`, `auth/RequireAuth.tsx`)؛ لا فرض في الخادم؛ لا أدوار مخصّصة |
+| FS-016 | الدورات والمستويات | MOD-04 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/CoursesPage.tsx` (CH-0005) |
+| FS-017 | الفصول والمجموعات | MOD-05 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/ClassesPage.tsx` (CH-0005) |
+| FS-018 | الدروس المباشرة | MOD-06 | PLANNED | — | مزود البث غير محدد؛ شاشة تجريبية مشتركة: `frontend/src/pages/LessonsPage.tsx` (CH-0005) |
+| FS-019 | الدروس المسجّلة | MOD-06 | PLANNED | — | التخزين غير محدد؛ شاشة تجريبية مشتركة: `frontend/src/pages/LessonsPage.tsx` (CH-0005) |
+| FS-020 | الجداول الزمنية والجدولة | MOD-07 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/SchedulePage.tsx` (CH-0005) |
+| FS-021 | الواجبات | MOD-08 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/AssignmentsPage.tsx` (CH-0005) |
+| FS-022 | الاختبارات والدرجات | MOD-09 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/ExamsPage.tsx` (CH-0005) |
+| FS-023 | الشهادات والسجلات الأكاديمية | MOD-10 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/CertificatesPage.tsx` (CH-0005) |
+| FS-024 | المدفوعات والأقساط والمتابعة المالية | MOD-11 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/PaymentsPage.tsx` (CH-0005) |
+| FS-025 | الإشعارات | MOD-12 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/NotificationsPage.tsx` (CH-0005) |
+| FS-026 | التقارير | MOD-13 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/ReportsPage.tsx` (CH-0005) |
+| FS-027 | الإعدادات | MOD-14 | PLANNED | — | شاشة تجريبية: `frontend/src/pages/SettingsPage.tsx` (CH-0005) |
+| FS-028 | تعدد اللغات + RTL | MOD-FE-01 / MOD-14 | PARTIALLY_IMPLEMENTED | `frontend/src/i18n/*`, `frontend/src/app/App.tsx` | الواجهة: ar (افتراضي، RTL) + en مع تبديل فوري وحفظ الاختيار (CH-0005، ADR-010). الخادم: لا شيء. لغة الأكاديمية الافتراضية من الإعدادات: PLANNED |
 | FS-029 | التكاملات الخارجية | MOD-15 | PLANNED | — | |
 | FS-030 | واجهات للتطبيقات المحمولة | MOD-15 | PLANNED | — | |
-| FS-031 | تكامل الواجهة مع الخادم (CORS/proxy/HTTP client) | MOD-00 / MOD-FE-00 | PLANNED | — | KI-007 |
+| FS-031 | تكامل الواجهة مع الخادم (CORS/proxy/HTTP client) | MOD-00 / MOD-FE-01 | PLANNED | — | KI-007؛ الواجهة تعمل ببيانات محلية (`frontend/src/mock/data.ts`) حتى يُنفَّذ |
 | FS-032 | قاعدة بيانات + ORM + ترحيلات | DB | PLANNED | — | ADR-003 |
-| FS-033 | إعداد النشر (Docker/CI) | Ops | PLANNED | — | |
+| FS-033 | إعداد النشر (Docker/CI) | Ops | PLANNED | — | Git موجود منذ CH-0004؛ لا CI ولا Docker |
+| FS-034 | هيكل واجهة المنتج: تنقل، تخطيط، دخول تجريبي، معاينة الأدوار، 13 شاشة وحدة ببيانات محلية، 404/403 | MOD-FE-01 | IMPLEMENTED (نموذج أولي) | `frontend/src/app/*`, `layout/*`, `auth/*`, `components/*`, `i18n/*`, `mock/data.ts`, `pages/*` | CH-0005؛ ADR-009..ADR-012. بيانات محلية فقط؛ تُستبدل بطبقة API (FS-031) |
+| FS-035 | التحكم بالإصدارات: مستودع Git + تجاهل الملفات + تطبيع LF | Tooling | IMPLEMENTED | `.git/`, `.gitignore`, `.gitattributes` | CH-0004؛ commit الأساس `127cb1d` على `main`؛ لا remote (ADR-013) |
 
 ---
 
@@ -1072,10 +1197,10 @@ stateDiagram-v2
 | المعرّف | الوصف | الوحدة | الشدة | الدليل | الحل المقترح | الحالة |
 |---|---|---|---|---|---|---|
 | KI-001 | اعتماديات الخادم غير مثبّتة ولا يوجد ملف قفل؛ لا يمكن إعادة إنتاج التثبيت ولا التحقق من الاختبارات | Backend | متوسطة | لا `backend/node_modules`، لا `backend/package-lock.json` (تم التحقق 2026-10-28) | تثبيت الاعتماديات وإنشاء ملف القفل | RESOLVED (CH-0003) |
-| KI-002 | المستودع ليس تحت Git؛ لا تاريخ، لا تراجع، لا مراجعة | Repo | عالية (عملياتياً) | لا مجلد `.git` في الجذر أو الفرعيات | `git init` في الجذر + `.gitignore` جذري + أول commit | OPEN |
-| KI-003 | لا يوجد `backend/.gitignore`؛ عند تفعيل Git سيُضاف `node_modules`/`dist` للمستودع | Backend | متوسطة | `ls -la backend` لا يُظهر `.gitignore` | إضافة `.gitignore` (node_modules, dist, coverage, .env*) أو `.gitignore` جذري | OPEN |
+| KI-002 | المستودع ليس تحت Git؛ لا تاريخ، لا تراجع، لا مراجعة | Repo | عالية (عملياتياً) | لا مجلد `.git` في الجذر أو الفرعيات | `git init` في الجذر + `.gitignore` جذري + أول commit | RESOLVED (CH-0004: `git init -b main`، commit `127cb1d`) |
+| KI-003 | لا يوجد `backend/.gitignore`؛ عند تفعيل Git سيُضاف `node_modules`/`dist` للمستودع | Backend | متوسطة | `ls -la backend` لا يُظهر `.gitignore` | إضافة `.gitignore` (node_modules, dist, coverage, .env*) أو `.gitignore` جذري | RESOLVED (CH-0004: `.gitignore` جذري؛ تم التحقق أن `git ls-files` لا يرصد `node_modules`/`dist`/`*.tsbuildinfo`) |
 | KI-004 | تباين الإصدارات والأدوات بين التطبيقين: TypeScript `^6.0.2` مقابل `~7.0.2`؛ oxlint `^1.58.0` مقابل `^1.89.0`؛ Prettier في الخادم فقط | Tooling | منخفضة | `backend/package.json`, `frontend/package.json` | توحيد الإصدارات واعتماد Prettier في الواجهة؛ النظر في workspaces | OPEN |
-| KI-005 | الواجهة ما زالت قالب Vite الافتراضي (العنوان `frontend`، `lang="en"`، روابط مجتمع Vite) | Frontend | منخفضة | `frontend/src/App.tsx`, `frontend/index.html` | استبدال القالب بواجهة المنتج عند بدء التطوير | OPEN |
+| KI-005 | الواجهة ما زالت قالب Vite الافتراضي (العنوان `frontend`، `lang="en"`، روابط مجتمع Vite) | Frontend | منخفضة | `frontend/src/App.tsx`, `frontend/index.html` | استبدال القالب بواجهة المنتج عند بدء التطوير | RESOLVED (CH-0005: أُزيل القالب؛ العنوان "ArtiCode Academy"، `lang="ar" dir="rtl"`). بقي favicon القالب (KI-019) |
 | KI-006 | ملفا README افتراضيان من الأطر لا يصفان المشروع | Docs | منخفضة | `backend/README.md`, `frontend/README.md` | استبدالهما بإشارة مختصرة إلى هذه الوثيقة | OPEN |
 | KI-007 | لا CORS في الخادم ولا proxy في Vite؛ الواجهة لا تستطيع الاتصال بالخادم | Integration | متوسطة (عند بدء التكامل) | `backend/src/main.ts`, `frontend/vite.config.ts` | `enableCors` بإعدادات من البيئة و/أو `server.proxy` في Vite | OPEN |
 | KI-008 | لا حقل `engines` في `package.json`؛ `@types/node@24` بينما التشغيل Node 22 | Tooling | منخفضة | `backend/package.json`, `frontend/package.json`, `node --version` | إضافة `engines.node` و`.nvmrc`؛ مواءمة `@types/node` مع إصدار التشغيل | OPEN |
@@ -1085,7 +1210,11 @@ stateDiagram-v2
 | KI-012 | Node 22.20.0 أقدم من متطلبات `@angular-devkit/*` (اعتمادية `@nestjs/cli`) التي تطلب 22.22.3 أو أحدث، فتظهر تحذيرات `EBADENGINE` | Tooling | منخفضة | مخرجات `npm install` في CH-0003. البناء والاختبارات تعمل رغم التحذير | ترقية Node إلى 22.22.3 أو أحدث، أو 24 LTS، ثم تثبيت الإصدار في `engines` و`.nvmrc` (مرتبط بـ KI-008) | OPEN |
 | KI-013 | Vitest يُظهر تحذيراً بأن `vite-tsconfig-paths` لم يعد ضرورياً لأن Vite يدعم `resolve.tsconfigPaths` أصلياً | Backend / Tests | منخفضة | مخرجات `npm run test` في CH-0003 | إزالة الإضافة من `vitest.config*.ts` واستخدام `resolve.tsconfigPaths: true` | OPEN |
 | KI-014 | الخادم يرسل رأس `X-Powered-By: Express` الذي يكشف التقنية المستخدمة | Backend / Security | منخفضة | استجابة curl في CH-0003 | `app.disable('x-powered-by')` أو `helmet` | OPEN |
-| KI-015 | `npm install` بإصدار npm 10.9.3 يتعطل في الخادم بالخطأ `Cannot read properties of null (reading 'edgesOut')` داخل `#loadPeerSet`، بسبب كثرة الاعتماديات النظيرة الاختيارية في NestJS 12 | Tooling | متوسطة | سجل npm بتاريخ 2026-10-28 12:04 UTC. السبب الدقيق داخل npm غير مؤكد | استخدام npm 11 (`npx -y npm@11 install`) أو `--legacy-peer-deps`. بعد وجود ملف القفل يعمل `npm ci` مع npm 10 | WORKAROUND |
+| KI-015 | `npm install` بإصدار npm 10.9.3 يتعطل في الخادم بالخطأ `Cannot read properties of null (reading 'edgesOut')` داخل `#loadPeerSet`، بسبب كثرة الاعتماديات النظيرة الاختيارية في NestJS 12 | Tooling | متوسطة | سجل npm بتاريخ 2026-10-28 12:04 UTC. السبب الدقيق داخل npm غير مؤكد | استخدام npm 11 (`npx -y npm@11 install`) أو `--legacy-peer-deps`. بعد وجود ملف القفل يعمل `npm ci` مع npm 10 | WORKAROUND (لا يصيب `frontend/` — تم التحقق في CH-0005) |
+| KI-016 | حزمة الواجهة الإنتاجية ملف واحد بحجم 1,306 kB قبل الضغط (416 kB gzip) بسبب antd والأيقونات؛ Vite يحذّر (> 500 kB) | Frontend / Performance | منخفضة الآن (نموذج أولي) | مخرجات `vite build` في CH-0005 | تقسيم الكود بالمسارات (`React.lazy` + `Suspense`) و`build.rolldownOptions.output.codeSplitting`؛ مراجعة استيراد الأيقونات | OPEN |
+| KI-017 | المصادقة في الواجهة تجريبية: أي بيانات تُقبل، والجلسة والدور في `localStorage` (`aca.mockUser`) قابلان للتعديل من أدوات المطور؛ `RoleSwitcher` يبدّل الدور بلا تحقق | Frontend / Security | لا أثر الآن (لا بيانات ولا خادم)؛ **حرجة إن وصلت للإنتاج** | `frontend/src/auth/AuthProvider.tsx`, `components/RoleSwitcher.tsx` | استبدالها بعميل MOD-01 (JWT) وفرض الصلاحيات في الخادم؛ إزالة `RoleSwitcher` أو حصره بوضع التطوير؛ يجب ألا تُنشر هذه النسخة | ACCEPTED-TEMPORARY (أداة نمذجة — ADR-012) |
+| KI-018 | هوية Git على جهاز التطوير (`git config --global user.email`) عنوان محلي باسم الجهاز وليس بريداً حقيقياً؛ commit الأساس `127cb1d` يحمل هذه الهوية | Repo | منخفضة | `git log -1 --format='%an <%ae>'` | ضبط `user.name`/`user.email` (محلياً للمستودع أو عالمياً) قبل الالتزامات القادمة؛ **لا يُعاد كتابة التاريخ** | OPEN |
+| KI-019 | `frontend/public/favicon.svg` ما زال أيقونة قالب Vite؛ لا شعار ولا هوية بصرية للمنتج | Frontend | منخفضة | الملف نفسه | استبداله بهوية المنتج عند توفرها (مرتبط بـ KI-005) | OPEN |
 
 ---
 
@@ -1186,13 +1315,78 @@ stateDiagram-v2
 | الحالة | PROPOSED |
 | المكونات المتأثرة | MOD-02, DB, Ops |
 
+### ADR-009 — Ant Design 6 كمكتبة مكوّنات للواجهة
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 |
+| السياق | الحاجة إلى شاشات إدارية (جداول، نماذج، قوائم، إحصاءات) بسرعة مع دعم RTL أصلي، كي يستطيع المالك معاينة المنتج مبكراً |
+| الخيارات المدروسة | (أ) Ant Design؛ (ب) MUI (Material UI)؛ (ج) Tailwind CSS فقط؛ (د) بلا مكتبة (CSS يدوي). عُرضت الأربعة على المالك مع توصية بـ (أ) |
+| الخيار المعتمد | (أ) `antd` 6.6.8 + `@ant-design/icons` 6.3.4 — **اختيار المالك بتاريخ 2026-10-29** |
+| السبب | مكوّنات إدارية جاهزة؛ RTL عبر `ConfigProvider direction="rtl"` بلا إضافات؛ ترجمات المكوّنات (`antd/locale/ar_EG`)؛ دعم React 19 أصلي في الإصدار 6 |
+| النتائج | حجم حزمة أكبر (KI-016)؛ الثيم عبر tokens في `ConfigProvider` (`frontend/src/app/App.tsx`)؛ الشاشات تعتمد على `Table`/`Form`/`Card`/`Statistic`/`List`/`Result` |
+| الحالة | ACCEPTED (دليل: `frontend/package.json`, `frontend/src/app/App.tsx`) |
+| المكونات المتأثرة | `frontend/src/**` |
+
+### ADR-010 — i18n في الواجهة: i18next، العربية افتراضياً مع RTL، الإنجليزية ثانوية
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 |
+| السياق | REQ-13 وNFR-07، والأولوية 4 في 18.4 ("i18n/RTL قبل أي شاشة منتج") |
+| الخيارات المدروسة | (أ) `i18next` + `react-i18next`؛ (ب) `react-intl` (FormatJS)؛ (ج) Context يدوي بقواميس محلية. اللغة الافتراضية: عربية / إنجليزية / عربية فقط — عُرضت على المالك |
+| الخيار المعتمد | (أ)، مع **العربية افتراضياً + الإنجليزية ثانوية** (اختيار المالك 2026-10-29). القواميس ملفات TypeScript: `ar.ts` مرجعي يصدّر النوع `Translation`، و`en.ts` مُلزَم به. النصوص داخل البيانات بنوع `LocalizedText { ar, en }` |
+| السبب | الأكثر انتشاراً ونضجاً؛ تبديل فوري بلا إعادة تحميل؛ interpolation؛ النوع المشترك يكشف المفاتيح الناقصة عند `tsc` |
+| النتائج | كل نص ظاهر عبر `t()`؛ `document.documentElement.lang/dir` و`ConfigProvider direction/locale` يتبعان اللغة؛ إضافة لغة = قاموس + `SUPPORTED_LANGUAGES` + ترجمة antd؛ الاختيار في `localStorage` (`aca.language`)؛ الخادم ما زال بلا i18n |
+| الحالة | ACCEPTED (دليل: `frontend/src/i18n/*`) |
+| المكونات المتأثرة | `frontend/src/i18n/*`, `frontend/src/app/App.tsx`, كل الصفحات |
+
+### ADR-011 — react-router 7 للتوجيه مع تثبيت الإصدار الرئيسي
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 |
+| السياق | لا توجيه في الواجهة؛ أحدث إصدار على npm وقت التنفيذ هو `react-router` 8.5.1 |
+| الخيارات المدروسة | (أ) `react-router` 8 (الأحدث)؛ (ب) `react-router` 7؛ (ج) TanStack Router |
+| الخيار المعتمد | (ب) `react-router@7` (7.18.5) بـ `createBrowserRouter` + `RouterProvider` |
+| السبب | واجهة برمجية مستقرة ومعروفة؛ التغييرات الكاسرة في الإصدار 8 **لم تُراجَع** في هذه المهمة، فأُرجئت الترقية إلى تقييم لاحق بدل المخاطرة في نموذج أولي |
+| النتائج | `"react-router": "^7.18.5"` يمنع الانتقال التلقائي إلى 8؛ الحارسان `RequireAuth`/`RequireRole` مكوّنات تغليف (لا loaders)؛ المسارات في `router.tsx` تُطابق `NAV_ITEMS` يدوياً |
+| الحالة | ACCEPTED؛ إعادة تقييم (الترقية إلى 8) `NOT YET DETERMINED` |
+| المكونات المتأثرة | `frontend/src/app/router.tsx`, `frontend/src/auth/RequireAuth.tsx`, `frontend/src/layout/AppLayout.tsx` |
+
+### ADR-012 — نهج "الواجهة أولاً ببيانات تجريبية" (mock-first) لنمذجة المنتج
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 |
+| السياق | المالك يريد الدخول إلى الواجهات ومعاينتها، بينما لا توجد قاعدة بيانات ولا مصادقة ولا أي نقطة نهاية منتج |
+| الخيارات المدروسة | (أ) الخادم أولاً ثم الواجهة؛ (ب) الواجهة ببيانات محلية ثم الربط وحدةً وحدة؛ (ج) خادم وهمي (MSW / json-server) |
+| الخيار المعتمد | (ب): `frontend/src/mock/data.ts` كطبقة بيانات محلية، و`auth/AuthProvider.tsx` كمصادقة تجريبية، و`RoleSwitcher` لمعاينة الأدوار |
+| السبب | أسرع طريق لرؤية المنتج والحصول على ملاحظات المالك على الشاشات والأدوار قبل تثبيت نموذج البيانات؛ لا يضيف اعتماديات خادم وهمي |
+| النتائج | خطر انحراف البيانات التجريبية عن النموذج الحقيقي؛ وجوب وسم كل شاشة "بيانات تجريبية" (منفّذ: شارة في الترويسة وتنبيه في اللوحة والدخول)؛ KI-017 وSEC-R-04؛ كل وحدة تُربط بالخادم تحذف بياناتها من `mock/data.ts` |
+| الحالة | ACCEPTED (مؤقت بطبيعته؛ ينتهي باكتمال FS-031 وMOD-01) |
+| المكونات المتأثرة | `frontend/src/mock/`, `frontend/src/auth/`, `frontend/src/pages/*` |
+
+### ADR-013 — اعتماد Git بفرع `main` وتطبيع نهايات الأسطر إلى LF
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ | 2026-10-29 |
+| السياق | KI-002 وKI-003؛ أول `git add` على Windows أظهر تحذيرات تحويل LF إلى CRLF لكل الملفات النصية |
+| الخيارات المدروسة | (أ) Git بلا `.gitattributes` (نهايات أسطر حسب إعداد كل جهاز)؛ (ب) `.gitattributes` بـ `* text=auto eol=lf`؛ (ج) تأجيل Git |
+| الخيار المعتمد | (ب): `git init -b main`؛ `.gitignore` جذري؛ `.gitattributes` بتطبيع LF ووسم الثنائيات؛ commit أساس يلتقط حالة Stage 0 قبل أي تعديل |
+| السبب | طلب المالك؛ تاريخ قابل للاستشهاد قبل أول تغيير كبير (CH-0005)؛ LF موحّد يمنع فروقات زائفة بين الأنظمة ويطابق الملفات المكتوبة أصلاً بـ LF |
+| النتائج | الملفات تبقى LF في المستودع وعند الاستخراج؛ سياسة الفروع والالتزامات والـ remote `NOT YET DETERMINED`؛ هوية المؤلف تحتاج ضبطاً (KI-018) |
+| الحالة | ACCEPTED (دليل: `.git/`, `.gitignore`, `.gitattributes`) |
+| المكونات المتأثرة | الجذر |
+
 ---
 
 ## 18. DEVELOPMENT ROADMAP — خارطة طريق التطوير
 
 ### 18.1 المرحلة الحالية
 
-**Stage 0 — Scaffold.** هياكل مولَّدة فقط. لا منطق أعمال.
+**Stage 1 — Foundation (جارية منذ 2026-10-29).** الخادم ما زال هيكلاً بلا منطق أعمال. Git مُفعّل (CH-0004). الواجهة أصبحت هيكل منتج تجريبياً ببيانات محلية (CH-0005) — عمل سبق جدول Stage 2 لغرض المعاينة (ADR-012) ولا يغيّر حالة وحدات الخادم.
 
 ### 18.2 المتطلبات المتبقية
 
@@ -1202,7 +1396,8 @@ stateDiagram-v2
 
 | المرحلة | المحتوى | الاعتماديات | الحالة |
 |---|---|---|---|
-| Stage 1 — Foundation | `git init` + `.gitignore`؛ ~~تثبيت اعتماديات الخادم وملف القفل~~ (أُنجز في CH-0003)؛ `engines`؛ `@nestjs/config` + تحقق البيئة؛ `ValidationPipe`؛ CORS؛ بادئة `/api`؛ Swagger؛ اختيار ORM (ADR-003) + أول ترحيل؛ Docker للتطوير؛ CI أساسي (lint/test/build) | KI-002, KI-003, KI-011, KI-012 | PARTIALLY_IMPLEMENTED |
+| Stage 1 — Foundation | ~~`git init` + `.gitignore`~~ (أُنجز في CH-0004)؛ ~~تثبيت اعتماديات الخادم وملف القفل~~ (أُنجز في CH-0003)؛ `engines`؛ `@nestjs/config` + تحقق البيئة؛ `ValidationPipe`؛ CORS؛ بادئة `/api`؛ Swagger؛ اختيار ORM (ADR-003) + أول ترحيل؛ Docker للتطوير؛ CI أساسي (lint/test/build) | KI-011, KI-012, KI-018 | PARTIALLY_IMPLEMENTED |
+| Stage 1b — UI prototype (خارج التسلسل الأصلي) | هيكل واجهة المنتج: Ant Design، توجيه، i18n/RTL، دخول تجريبي، معاينة الأدوار، 13 شاشة ببيانات محلية (MOD-FE-01، ADR-009..ADR-012) | — | IMPLEMENTED (CH-0005) كنموذج أولي؛ الربط بالخادم في Stage 1/2 |
 | Stage 2 — Identity & Academy | MOD-01 المصادقة؛ MOD-03 المستخدمون والأدوار؛ MOD-02 الأكاديمية؛ MOD-14 الإعدادات؛ حسم ADR-008 | Stage 1 | PLANNED |
 | Stage 3 — Academic core | MOD-04 الدورات؛ MOD-05 الفصول؛ MOD-07 الجدولة؛ MOD-06 الدروس | Stage 2 | PLANNED |
 | Stage 4 — Assessment | MOD-08 الواجبات؛ MOD-09 الاختبارات والدرجات؛ MOD-10 الشهادات | Stage 3 | PLANNED |
@@ -1211,10 +1406,12 @@ stateDiagram-v2
 
 ### 18.4 الأولويات التقنية الفورية (RECOMMENDED)
 
-1. وضع المستودع تحت Git (KI-002) — شرط لأي تتبع تغييرات حقيقي.
+1. ~~وضع المستودع تحت Git (KI-002)~~ — أُنجز في CH-0004. المتبقي: ضبط هوية Git (KI-018) وتحديد سياسة الفروع وإضافة remote.
 2. ترقية Node إلى 22.22.3 أو أحدث وإزالة `@nestjs/mau` غير المستخدمة (KI-012, KI-011). ملف القفل واختبارا الهيكل أُنجزا في CH-0003.
 3. حسم ADR-003 و ADR-008 قبل كتابة أول كيان.
-4. إدخال i18n/RTL في الواجهة قبل أي شاشة منتج.
+4. ~~إدخال i18n/RTL في الواجهة قبل أي شاشة منتج~~ — أُنجز في CH-0005 (ADR-010).
+5. ربط الواجهة بالخادم (FS-031): `@nestjs/config`، `ValidationPipe`، CORS، بادئة `/api`، Swagger، مسار `health`، عميل HTTP في الواجهة وproxy في Vite — ليبدأ استبدال `frontend/src/mock/data.ts`.
+6. اعتماد إطار اختبار للواجهة (Vitest + Testing Library) قبل تراكم الشاشات (13.5).
 
 ### 18.5 التحسينات المستقبلية
 
@@ -1281,6 +1478,42 @@ stateDiagram-v2
 | النتيجة | نجاح. FS-003 أصبح IMPLEMENTED، وKI-001 أصبح RESOLVED. أُضيفت KI-011 إلى KI-015 |
 | تغييرات كاسرة | لا شيء |
 | المنفّذ | Claude Code (Opus 5.5) بطلب من مالك المشروع |
+
+### CH-0004 — وضع المستودع تحت Git
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ والوقت | 2026-10-29، قبل 14:46 (UTC+03:00)؛ الطابع الدقيق محفوظ في Git (commit `127cb1d` على `main`) |
+| النوع | CONFIGURATION |
+| الوحدة | Repo / Tooling (FS-035) |
+| الوصف | (1) إنشاء `.gitignore` جذري (node_modules، dist، coverage، `*.tsbuildinfo`، `.env*` مع استثناء `.env.example`، `.claude/settings.local.json`، ملفات المحرّرات)؛ (2) إنشاء `.gitattributes` (`* text=auto eol=lf` + وسم الثنائيات) بعد ظهور تحذيرات CRLF؛ (3) `git init -b main`؛ (4) commit الأساس `127cb1d` بـ 42 ملفاً يلتقط حالة Stage 0 **قبل أي تعديل على الواجهة**. تم التحقق أن `node_modules` و`dist` و`*.tsbuildinfo` غير مرصودة، وأن `.claude/.doc-sync/` يرصد `.gitignore` الخاص به فقط |
+| السبب | طلب المالك (2026-10-29) وضع المشروع تحت Git قبل بناء الواجهات؛ الأولوية 1 في 18.4 (KI-002) |
+| الملفات | `.gitignore` (جديد)، `.gitattributes` (جديد)، `.git/` (جديد). لم يُعدَّل أي ملف تطبيق |
+| أثر قاعدة البيانات | لا شيء |
+| أثر API | لا شيء |
+| أثر الصلاحيات | لا شيء |
+| الاختبارات | `git ls-files \| wc -l` = 42؛ `git ls-files \| grep -c 'node_modules\|/dist/\|tsbuildinfo'` = 0؛ `git status` نظيف بعد الالتزام |
+| النتيجة | نجاح. KI-002 وKI-003 → RESOLVED. KI-018 جديد (هوية Git على الجهاز بريد محلي). ADR-013 |
+| تغييرات كاسرة | لا شيء |
+| المنفّذ | Claude Code (Fable 5.1) بطلب من مالك المشروع |
+
+### CH-0005 — هيكل واجهة المنتج التجريبي (MOD-FE-01)
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ والوقت | 2026-10-29، بين 14:40 و14:46 تقريباً (UTC+03:00)؛ المصدر: سجل خادم Vite وأمر `date`. حالة الالتزام في Git: انظر `git log` (كانت غير ملتزمة عند كتابة هذا الإدخال) |
+| النوع | ADDED, REMOVED, CONFIGURATION |
+| الوحدة | MOD-FE-01 (جديد)، MOD-FE-00 (REMOVED)، FS-034، FS-028، FS-002 |
+| الوصف | (1) إضافة الاعتماديات `antd`، `@ant-design/icons`، `react-router@7`، `i18next`، `react-i18next` (+73 حزمة، 0 ثغرات) بعد اعتماد المالك لـ Ant Design والعربية افتراضياً؛ (2) i18n ar/en مع RTL وحفظ الاختيار؛ (3) مصادقة تجريبية (`AuthProvider`) وحارسا مسارات (`RequireAuth`, `RequireRole`) ومبدّل دور للمعاينة؛ (4) تخطيط عام (قائمة جانبية حسب الدور + ترويسة)؛ (5) 13 شاشة وحدة ببيانات محلية ثنائية اللغة + 404/403؛ (6) حذف صفحة القالب وأصولها؛ (7) `index.html` → `lang="ar" dir="rtl"` والعنوان "ArtiCode Academy"؛ (8) استبدال `index.css` بأنماط عامة بالحد الأدنى |
+| السبب | طلب المالك "أريد أن أدخل إلى الواجهات" (2026-10-29) مع قراراته: Ant Design، العربية افتراضياً + الإنجليزية، وGit أولاً. نهج mock-first (ADR-012) يتيح المعاينة قبل الخادم |
+| الملفات | **جديدة (34):** `frontend/src/app/App.tsx`, `app/router.tsx`, `auth/roles.ts`, `auth/auth-context.ts`, `auth/AuthProvider.tsx`, `auth/RequireAuth.tsx`, `components/PageHeader.tsx`, `components/StatusTag.tsx`, `components/LanguageSwitcher.tsx`, `components/RoleSwitcher.tsx`, `i18n/language.ts`, `i18n/index.ts`, `i18n/ar.ts`, `i18n/en.ts`, `i18n/useLocalized.ts`, `layout/navigation.ts`, `layout/AppLayout.tsx`, `layout/AppLayout.css`, `mock/data.ts`, `pages/LoginPage.tsx`, `pages/LoginPage.css`, `pages/DashboardPage.tsx`, `pages/UsersPage.tsx`, `pages/CoursesPage.tsx`, `pages/ClassesPage.tsx`, `pages/SchedulePage.tsx`, `pages/LessonsPage.tsx`, `pages/AssignmentsPage.tsx`, `pages/ExamsPage.tsx`, `pages/CertificatesPage.tsx`, `pages/PaymentsPage.tsx`, `pages/NotificationsPage.tsx`, `pages/ReportsPage.tsx`, `pages/SettingsPage.tsx`, `pages/NotFoundPage.tsx`, `pages/ForbiddenPage.tsx`. **معدّلة (5):** `frontend/index.html`, `frontend/src/main.tsx`, `frontend/src/index.css`, `frontend/package.json`, `frontend/package-lock.json`. **محذوفة (6):** `frontend/src/App.tsx`, `frontend/src/App.css`, `frontend/src/assets/hero.png`, `frontend/src/assets/react.svg`, `frontend/src/assets/vite.svg`, `frontend/public/icons.svg`. **الخادم لم يُمس** |
+| أثر قاعدة البيانات | لا شيء |
+| أثر API | لا شيء؛ الواجهة لا تستدعي أي نقطة نهاية (بيانات محلية) |
+| أثر الصلاحيات | مصفوفة دور×شاشة في الواجهة فقط (7.2)، مقترحة وغير معتمدة؛ ليست فرضاً أمنياً (KI-017, SEC-R-04) |
+| الاختبارات | `npx tsc -b` نجح؛ `npm run lint` (oxlint) بلا مخرجات؛ `npx vite build` نجح (1,306 kB، تحذير حجم — KI-016)؛ خادم التطوير أعاد `200` لـ `/` و8 وحدات جديدة، وHTML المُقدَّم يحمل `lang="ar" dir="rtl"`؛ `GET /` في الخادم ما زال يعمل. **لا اختبارات آلية للواجهة** (13.5)، و**العرض المرئي لم يُتحقق منه في متصفح** (الملحق B) |
+| النتيجة | نجاح. FS-034 → IMPLEMENTED (نموذج أولي)؛ FS-002 → REMOVED؛ FS-028 → PARTIALLY_IMPLEMENTED؛ MOD-FE-00 → REMOVED؛ KI-005 → RESOLVED؛ جديد: KI-016، KI-017، KI-019، SEC-R-04؛ SEC-R-03 → RESOLVED؛ ADR-009..ADR-012 |
+| تغييرات كاسرة | إزالة صفحة القالب (لا مستهلكين لها) |
+| المنفّذ | Claude Code (Fable 5.1) بطلب من مالك المشروع |
 
 ---
 
@@ -1374,3 +1607,5 @@ stateDiagram-v2
 - **لم يُشغَّل** `npm install` في `backend/` ولم يُعدَّل أي ملف تطبيق.
 
 تحديث الإصدار 1.0.1 (CH-0003): تثبيت اعتماديات الخادم، وقراءة الإصدارات من `backend/package-lock.json`، وتشغيل `test` و`test:e2e` و`lint` و`build` و`npm audit`، والتحقق من استجابة HTTP الفعلية بتشغيل `dist/main.js` مؤقتاً على المنفذ 3999 ثم إيقافه.
+
+تحديث الإصدار 1.1.0 (CH-0004, CH-0005) بتاريخ 2026-10-29: التحقق من `git --version` وإعدادات الهوية العامة؛ `git init` ثم مراجعة قائمة الملفات المرصودة (42) قبل commit الأساس؛ قراءة كل ملفات الواجهة الأصلية (`App.tsx`, `main.tsx`, `index.html`, `vite.config.ts`, `tsconfig.app.json`, `.oxlintrc.json`, `index.css`) قبل استبدالها؛ الاستعلام عن أحدث إصدارات الحزم الخمس من npm وتثبيتها وقراءة الإصدارات المثبّتة من `node_modules/*/package.json`؛ التحقق قبل الكتابة من وجود `antd/locale/ar_EG` و`en_US` و19 أيقونة و30 تصديراً من antd؛ تشغيل `npx tsc -b` و`npm run lint` و`npx vite build` في `frontend/`؛ التحقق من استجابة خادم التطوير (`200`) لـ 9 مسارات ومن `lang`/`dir`/`title` في HTML المُقدَّم ومن خلو سجل Vite من الأخطاء؛ التحقق من استمرار `GET /` في الخادم. **لم يُفتح متصفح فعلي** (لا أداة متصفح في الجلسة)، فالعرض المرئي للشاشات `UNVERIFIED` حتى يفتحه المالك.
