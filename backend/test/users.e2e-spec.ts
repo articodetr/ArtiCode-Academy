@@ -1,17 +1,20 @@
 // TEST-011 — MOD-03-T01 (GET /api/users, GET /api/users/:id), MOD-03-T02
-// (POST /api/users) and MOD-03-T04 (PATCH /api/users/:id) against the live
-// development database, including the reduced projection of D-R07. Skipped
-// when no database is reachable. Fixtures carry a unique suffix and are deleted
-// at the end (cascade removes their roles, profiles, guardian links and tokens;
-// their audit rows stay — KI-032).
+// (POST /api/users) and MOD-03-T04 (PATCH /api/users/:id), and TEST-026 —
+// MOD-03-T06 (POST /api/users/:id/status, DELETE /api/users/:id) against the
+// live development database, including the reduced projection of D-R07.
+// Skipped when no database is reachable. Fixtures carry a unique suffix and
+// are deleted at the end (cascade removes their roles, profiles, guardian
+// links and tokens; their audit rows stay — KI-032).
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadDotenv } from 'dotenv';
 import request from 'supertest';
+import type { Response as SupertestResponse } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module.js';
 import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
+import { REFRESH_COOKIE_NAME } from '../src/auth/cookies.js';
 import { PasswordService } from '../src/auth/password.service.js';
 import { PERMISSION_KEYS } from '../src/authorization/permission-catalog.js';
 import { SYSTEM_ROLES } from '../src/authorization/system-roles.js';
@@ -78,7 +81,17 @@ interface ListItem {
 
 const systemRolePermissions = (key: string): readonly string[] => SYSTEM_ROLES.find((role) => role.key === key)!.permissions;
 
-describe.skipIf(!available)('MOD-03 users list, detail, creation and update (e2e, TEST-011)', () => {
+/** The refresh cookie value from a response, or undefined when absent. */
+function refreshCookie(res: SupertestResponse): string | undefined {
+  const header = res.headers['set-cookie'];
+  const lines: string[] = Array.isArray(header) ? header : header ? [header] : [];
+  const line = lines.find((cookie) => cookie.startsWith(`${REFRESH_COOKIE_NAME}=`));
+  if (!line) return undefined;
+  const value = line.split(';')[0]!.slice(REFRESH_COOKIE_NAME.length + 1);
+  return value.length > 0 ? value : undefined;
+}
+
+describe.skipIf(!available)('MOD-03 users list, detail, creation, update and account status (e2e, TEST-011, TEST-026)', () => {
   let app: NestExpressApplication;
   let prisma: PrismaClient;
   let passwords: PasswordService;
@@ -1029,6 +1042,406 @@ describe.skipIf(!available)('MOD-03 users list, detail, creation and update (e2e
       const operation = res.body.paths['/api/users/{id}'].patch;
       expect(operation).toBeDefined();
       for (const status of ['200', '400', '401', '403', '404', '409', '422']) expect(operation.responses, status).toHaveProperty(status);
+    });
+  });
+
+  // ------------------------------------------------------------ T06 status
+
+  describe('POST /api/users/:id/status and DELETE /api/users/:id (T06, TEST-026)', () => {
+    const STATUS_ACTIONS = ['activate', 'suspend', 'archive', 'restore', 'unlock'] as const;
+    const ME = '/api/auth/me';
+    const REFRESH = '/api/auth/refresh';
+
+    const status = (caller: string, id: string, body: Record<string, unknown>) =>
+      api().post(`${USERS}/${id}/status`).set(bearer(caller)).send(body);
+    const remove = (caller: string, id: string, body?: Record<string, unknown>) => {
+      const req = api().delete(`${USERS}/${id}`).set(bearer(caller));
+      return body ? req.send(body) : req;
+    };
+    const statusEvents = (id: string) =>
+      prisma.auditLog.findMany({
+        where: { action: { in: ['users.status.changed', 'users.deleted'] }, entityId: id },
+        orderBy: { createdAt: 'asc' },
+      });
+    const sessionsOf = (id: string) => prisma.refreshToken.findMany({ where: { userId: id }, select: { revokedAt: true } });
+    const rowOf = (id: string) =>
+      prisma.user.findUniqueOrThrow({ where: { id }, select: { status: true, deletedAt: true, lockedUntil: true, failedLoginCount: true, updatedAt: true } });
+    const tryLogin = (name: string) => api().post('/api/auth/login').send({ identifier: email(name), password: PASSWORD });
+
+    /** A full session of a fixture: access token plus refresh cookie. */
+    async function session(name: string): Promise<{ accessToken: string; cookie: string }> {
+      const res = await tryLogin(name).expect(200);
+      return { accessToken: res.body.accessToken as string, cookie: `${REFRESH_COOKIE_NAME}=${refreshCookie(res)!}` };
+    }
+
+    let adminRoleId: string;
+
+    beforeAll(async () => {
+      adminRoleId = (await prisma.role.findUniqueOrThrow({ where: { key: 'academy_admin' }, select: { id: true } })).id;
+      const studentRoleId = (await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } })).id;
+      const deactivator = await createRole('deactivator', ['users.read', 'users.deactivate']);
+      const unlocker = await createRole('unlocker', ['users.update']);
+      await createUser('deactivator', { roleIds: [deactivator] });
+      await createUser('unlocker', { roleIds: [unlocker] });
+      for (const name of ['deactivator', 'unlocker']) tokens[name] = await login(email(name));
+
+      // Subjects: active learners with a password, one pending, one archived, two real academy admins.
+      for (const name of ['victim', 'doomed', 'locked']) await createUser(name, { roleIds: [studentRoleId] });
+      await createUser('dormant', { status: 'pending' });
+      await createUser('shelved', { status: 'archived' });
+      await createUser('admin-a', { roleIds: [adminRoleId] });
+      await createUser('admin-b', { roleIds: [adminRoleId] });
+    });
+
+    it('requires a token and users.deactivate — users.update suffices for unlock only (T06 permissions)', async () => {
+      const id = fx['victim']!;
+      expect((await api().post(`${USERS}/${id}/status`).send({ action: 'suspend' }).expect(401)).body.code).toBe('unauthenticated');
+      expect((await api().delete(`${USERS}/${id}`).expect(401)).body.code).toBe('unauthenticated');
+
+      for (const action of ['activate', 'suspend', 'archive', 'restore']) {
+        for (const caller of ['reader', 'plain', 'creator', 'unlocker']) {
+          const res = await status(caller, id, { action });
+          expect(res.status, `${caller} ${action}`).toBe(403);
+          expect(res.body, `${caller} ${action}`).toMatchObject({ code: 'permission_denied', missing: ['users.deactivate'] });
+        }
+      }
+      for (const caller of ['reader', 'plain', 'creator', 'unlocker']) {
+        const res = await remove(caller, id);
+        expect(res.status, caller).toBe(403);
+        expect(res.body, caller).toMatchObject({ code: 'permission_denied', missing: ['users.deactivate'] });
+      }
+      for (const caller of ['reader', 'plain', 'creator']) {
+        const res = await status(caller, id, { action: 'unlock' });
+        expect(res.status, caller).toBe(403);
+        expect(res.body, caller).toMatchObject({ code: 'permission_denied', missing: ['users.update'] });
+      }
+      // Nothing is locked: both holders get an idempotent 200 and nothing is written.
+      expect((await status('unlocker', id, { action: 'unlock' })).status).toBe(200);
+      expect((await status('deactivator', id, { action: 'unlock' })).status).toBe(200);
+      expect((await rowOf(id)).status).toBe('active');
+      expect(await statusEvents(id)).toHaveLength(0);
+    });
+
+    it('does not let a caller act on an account whose roles confer permissions the caller lacks (SEC-R-17)', async () => {
+      const cases: Array<[string, string, string, string]> = [
+        ['deactivator', fx['superuser']!, 'suspend', 'roles.manage'],
+        ['deactivator', fx['superuser']!, 'archive', 'roles.manage'],
+        ['deactivator', fx['bravo']!, 'suspend', 'lessons.manage'],
+        ['deactivator', fx['bravo']!, 'unlock', 'lessons.manage'],
+        ['unlocker', fx['superuser']!, 'unlock', 'roles.manage'],
+        ['unlocker', fx['bravo']!, 'unlock', 'lessons.manage'],
+      ];
+      for (const [caller, id, action, missing] of cases) {
+        const res = await status(caller, id, { action });
+        expect(res.status, `${caller} ${action}`).toBe(403);
+        expect(res.body.code, `${caller} ${action}`).toBe('permission_denied');
+        expect(res.body.missing, `${caller} ${action}`).toContain(missing);
+        // The refusal names the target's excess, not the guard's key (the deactivator holds users.deactivate).
+        if (caller === 'deactivator') expect(res.body.missing, `${caller} ${action}`).not.toContain('users.deactivate');
+      }
+      const byDelete = await remove('deactivator', fx['bravo']!);
+      expect(byDelete.status).toBe(403);
+      expect(byDelete.body.code).toBe('permission_denied');
+      for (const id of [fx['superuser']!, fx['bravo']!]) {
+        expect(await rowOf(id)).toMatchObject({ status: 'active', deletedAt: null });
+        expect(await statusEvents(id)).toHaveLength(0);
+      }
+      // A learner (baseline permissions) is within reach of the deactivator — proven by the suspend flow below.
+    });
+
+    it('answers 409 invalid_transition with { from, action, allowed } for every disallowed transition, writing nothing (T06 AC 1)', async () => {
+      const invited = fx['foxtrot']!;
+      const pending = fx['dormant']!;
+      const active = fx['victim']!;
+      const suspended = fx['delta']!;
+      const archived = fx['shelved']!;
+      const deleted = fx['echo']!;
+      const cases: Array<[string, string, string, string[]]> = [
+        [invited, 'activate', 'invited', ['delete']],
+        [invited, 'suspend', 'invited', ['delete']],
+        [invited, 'unlock', 'invited', ['delete']],
+        [pending, 'suspend', 'pending', ['activate', 'delete']],
+        [pending, 'restore', 'pending', ['activate', 'delete']],
+        [pending, 'unlock', 'pending', ['activate', 'delete']],
+        [active, 'activate', 'active', ['suspend', 'archive', 'unlock', 'delete']],
+        [active, 'restore', 'active', ['suspend', 'archive', 'unlock', 'delete']],
+        [suspended, 'suspend', 'suspended', ['activate', 'archive', 'delete']],
+        [suspended, 'restore', 'suspended', ['activate', 'archive', 'delete']],
+        [suspended, 'unlock', 'suspended', ['activate', 'archive', 'delete']],
+        [archived, 'activate', 'archived', ['restore', 'delete']],
+        [archived, 'suspend', 'archived', ['restore', 'delete']],
+        [archived, 'archive', 'archived', ['restore', 'delete']],
+        [deleted, 'restore', 'deleted', []],
+        [deleted, 'activate', 'deleted', []],
+        [deleted, 'unlock', 'deleted', []],
+      ];
+      for (const [id, action, from, allowed] of cases) {
+        const res = await status('superuser', id, { action });
+        expect(res.status, `${action} from ${from}`).toBe(409);
+        expect(res.body, `${action} from ${from}`).toMatchObject({ code: 'invalid_transition', from, action, allowed });
+      }
+      const again = await remove('superuser', deleted);
+      expect(again.status).toBe(409);
+      expect(again.body).toMatchObject({ code: 'invalid_transition', from: 'deleted', action: 'delete', allowed: [] });
+      // Without users.deactivate a soft-deleted account does not even exist (same rule as the list and the detail).
+      const hidden = await status('unlocker', deleted, { action: 'unlock' });
+      expect(hidden.status).toBe(404);
+      expect(hidden.body.code).toBe('user_not_found');
+
+      for (const id of [invited, pending, active, suspended, archived, deleted]) expect(await statusEvents(id), id).toHaveLength(0);
+      expect(await rowOf(suspended)).toMatchObject({ status: 'suspended', deletedAt: null });
+      expect((await rowOf(deleted)).status).toBe('archived');
+    });
+
+    it('refuses suspend, archive and delete on one’s own account with 403 self_forbidden (T06 AC 2)', async () => {
+      for (const caller of ['deactivator', 'superuser']) {
+        const me = fx[caller]!;
+        for (const action of ['suspend', 'archive']) {
+          const res = await status(caller, me, { action });
+          expect(res.status, `${caller} ${action}`).toBe(403);
+          expect(res.body, `${caller} ${action}`).toMatchObject({ code: 'self_forbidden', action });
+        }
+        const res = await remove(caller, me, { reason: 'bye' });
+        expect(res.status, caller).toBe(403);
+        expect(res.body, caller).toMatchObject({ code: 'self_forbidden', action: 'delete' });
+        // activate/restore cannot apply to oneself (the caller is active); unlock is harmless.
+        expect((await status(caller, me, { action: 'activate' })).body.code).toBe('invalid_transition');
+        expect((await status(caller, me, { action: 'unlock' })).status).toBe(200);
+        expect(await rowOf(me)).toMatchObject({ status: 'active', deletedAt: null });
+        expect(await statusEvents(me)).toHaveLength(0);
+      }
+    });
+
+    it('suspends an account — sessions revoked at once, /me, refresh and login refused, one event — and activate, archive and restore follow the state machine (T06 AC 4, AC 6)', async () => {
+      const id = fx['victim']!;
+      const live = await session('victim');
+      await api().get(ME).set('Authorization', `Bearer ${live.accessToken}`).expect(200);
+
+      const res = await status('deactivator', id, { action: 'suspend', reason: '  Repeated violations of the rules  ' });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body).toMatchObject({ id, status: 'suspended', deletedAt: null, roles: [{ key: 'student' }] });
+      // The deactivator holds no users.read_contact: reduced projection, never a credential-like key.
+      for (const field of CONTACT_FIELDS) expect(res.body[field], field).toBeNull();
+      expect([...collectKeys(res.body)].filter((key) => SENSITIVE_KEY.test(key))).toEqual([]);
+
+      // Immediate loss of access: the access token, the cookie and a new login.
+      expect((await api().get(ME).set('Authorization', `Bearer ${live.accessToken}`).expect(403)).body.code).toBe('account_suspended');
+      await api().post(REFRESH).set('Cookie', live.cookie).expect(401);
+      expect((await tryLogin('victim').expect(403)).body.code).toBe('account_suspended');
+      const sessions = await sessionsOf(id);
+      expect(sessions).toHaveLength(1);
+      expect(sessions.every((token) => token.revokedAt !== null)).toBe(true);
+
+      let events = await statusEvents(id);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ action: 'users.status.changed', actorUserId: fx['deactivator'], entityType: 'users' });
+      expect(events[0]!.metadata).toEqual({ action: 'suspend', from: 'active', to: 'suspended', reason: 'Repeated violations of the rules', revokedSessions: 1 });
+      expect(JSON.stringify(events[0]!.metadata)).not.toMatch(/example\.test|@/);
+
+      // activate: back in service with a fresh login; the revoked cookie stays dead.
+      const back = await status('superuser', id, { action: 'activate' });
+      expect(back.status, JSON.stringify(back.body)).toBe(200);
+      expect(back.body).toMatchObject({ status: 'active', email: email('victim') });
+      await api().post(REFRESH).set('Cookie', live.cookie).expect(401);
+      const second = await session('victim');
+      await api().get(ME).set('Authorization', `Bearer ${second.accessToken}`).expect(200);
+
+      // archive: looks like an unknown account to login and to the session; restore: active again.
+      const archived = await status('superuser', id, { action: 'archive', reason: 'Left the academy' });
+      expect(archived.status).toBe(200);
+      expect(archived.body.status).toBe('archived');
+      expect((await api().get(ME).set('Authorization', `Bearer ${second.accessToken}`).expect(401)).body.code).toBe('session_invalid');
+      expect((await tryLogin('victim').expect(401)).body.code).toBe('invalid_credentials');
+      expect((await sessionsOf(id)).every((token) => token.revokedAt !== null)).toBe(true);
+      const restored = await status('superuser', id, { action: 'restore' });
+      expect(restored.status).toBe(200);
+      expect(restored.body.status).toBe('active');
+      await session('victim');
+
+      events = await statusEvents(id);
+      expect(events.map((event) => event.metadata)).toEqual([
+        { action: 'suspend', from: 'active', to: 'suspended', reason: 'Repeated violations of the rules', revokedSessions: 1 },
+        { action: 'activate', from: 'suspended', to: 'active', reason: null },
+        { action: 'archive', from: 'active', to: 'archived', reason: 'Left the academy', revokedSessions: 1 },
+        { action: 'restore', from: 'archived', to: 'active', reason: null },
+      ]);
+      expect(events.every((event) => event.action === 'users.status.changed' && event.actorUserId !== null)).toBe(true);
+    });
+
+    it('unlock clears the failed-login lock of an active account with one event, and is a no-op when nothing is locked (T06)', async () => {
+      const id = fx['locked']!;
+      const until = new Date(Date.now() + 10 * 60_000);
+      until.setMilliseconds(0);
+      await prisma.user.update({ where: { id }, data: { lockedUntil: until, failedLoginCount: 0 } });
+      expect((await tryLogin('locked').expect(423)).body.code).toBe('account_locked');
+
+      const res = await status('unlocker', id, { action: 'unlock', reason: 'Identity confirmed by phone' });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body.status).toBe('active');
+      expect(await rowOf(id)).toMatchObject({ status: 'active', lockedUntil: null, failedLoginCount: 0 });
+      await tryLogin('locked').expect(200);
+      let events = await statusEvents(id);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ action: 'users.status.changed', actorUserId: fx['unlocker'] });
+      expect(events[0]!.metadata).toEqual({
+        action: 'unlock', from: 'active', to: 'active', reason: 'Identity confirmed by phone', lockedUntil: until.toISOString(), failedAttempts: 0,
+      });
+
+      // Failed attempts without a lock are cleared as well (users.deactivate holders may unlock too).
+      await prisma.user.update({ where: { id }, data: { failedLoginCount: 3 } });
+      expect((await status('deactivator', id, { action: 'unlock' })).status).toBe(200);
+      expect((await rowOf(id)).failedLoginCount).toBe(0);
+      events = await statusEvents(id);
+      expect(events).toHaveLength(2);
+      expect(events[1]!.metadata).toEqual({ action: 'unlock', from: 'active', to: 'active', reason: null, lockedUntil: null, failedAttempts: 3 });
+
+      // Nothing to clear: 200, nothing written, no event.
+      const before = await rowOf(id);
+      const noop = await status('unlocker', id, { action: 'unlock' });
+      expect(noop.status).toBe(200);
+      expect((await rowOf(id)).updatedAt).toEqual(before.updatedAt);
+      expect(await statusEvents(id)).toHaveLength(2);
+    });
+
+    it('never takes the last active academy admin out of service, even under concurrent requests (T06 AC 3)', async () => {
+      const a = fx['admin-a']!;
+      const b = fx['admin-b']!;
+      // The rule counts every active admin of the database: the others are set aside for this test only and restored afterwards.
+      const others = await prisma.user.findMany({
+        where: { id: { notIn: [a, b] }, status: 'active', deletedAt: null, roles: { some: { roleId: adminRoleId } } },
+        select: { id: true },
+      });
+      const otherIds = others.map((row) => row.id);
+      await prisma.user.updateMany({ where: { id: { in: otherIds } }, data: { status: 'suspended' } });
+      try {
+        // Two admins left: suspending both at the same time leaves exactly one.
+        const [resA, resB] = await Promise.all([status('superuser', a, { action: 'suspend' }), status('superuser', b, { action: 'suspend' })]);
+        expect([resA.status, resB.status].sort()).toEqual([200, 409]);
+        const loser = resA.status === 409 ? resA : resB;
+        expect(loser.body.code).toBe('last_admin');
+        const remaining = resA.status === 200 ? b : a;
+        const benched = resA.status === 200 ? a : b;
+        expect(await rowOf(remaining)).toMatchObject({ status: 'active', deletedAt: null });
+        expect(await statusEvents(remaining)).toHaveLength(0);
+        expect(await statusEvents(benched)).toHaveLength(1);
+
+        for (const action of ['suspend', 'archive']) {
+          const res = await status('superuser', remaining, { action, reason: 'should not happen' });
+          expect(res.status, action).toBe(409);
+          expect(res.body.code, action).toBe('last_admin');
+        }
+        const del = await remove('superuser', remaining);
+        expect(del.status).toBe(409);
+        expect(del.body.code).toBe('last_admin');
+        expect(await rowOf(remaining)).toMatchObject({ status: 'active', deletedAt: null });
+        expect(await statusEvents(remaining)).toHaveLength(0);
+
+        // A suspended admin is outside the quorum: archiving it is fine; restoring it makes two admins again.
+        expect((await status('superuser', benched, { action: 'archive' })).status).toBe(200);
+        expect((await status('superuser', benched, { action: 'restore' })).status).toBe(200);
+        expect((await remove('superuser', remaining, { reason: 'handover done' })).status).toBe(200);
+        const last = await remove('superuser', benched);
+        expect(last.status).toBe(409);
+        expect(last.body.code).toBe('last_admin');
+        expect(await rowOf(benched)).toMatchObject({ status: 'active', deletedAt: null });
+      } finally {
+        await prisma.user.updateMany({ where: { id: { in: otherIds } }, data: { status: 'active' } });
+      }
+    });
+
+    it('soft-deletes an account: hidden from the list, cannot sign in, e-mail reserved, nothing applies afterwards, one event (T06 AC 5, AC 6)', async () => {
+      const id = fx['doomed']!;
+      const live = await session('doomed');
+
+      const res = await remove('superuser', id, { reason: 'Duplicate account' });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body).toMatchObject({ id, status: 'archived', email: email('doomed') });
+      expect(res.body.deletedAt).toEqual(expect.any(String));
+      expect([...collectKeys(res.body)].filter((key) => SENSITIVE_KEY.test(key))).toEqual([]);
+
+      // Access is gone and the account looks unknown to login.
+      expect((await api().get(ME).set('Authorization', `Bearer ${live.accessToken}`).expect(401)).body.code).toBe('session_invalid');
+      await api().post(REFRESH).set('Cookie', live.cookie).expect(401);
+      expect((await tryLogin('doomed').expect(401)).body.code).toBe('invalid_credentials');
+      expect((await sessionsOf(id)).every((token) => token.revokedAt !== null)).toBe(true);
+
+      // Hidden from the list and the detail unless includeDeleted.
+      const listed = await api().get(`${USERS}?q=doomed`).set(bearer('superuser')).expect(200);
+      expect((listed.body.items as ListItem[]).map((item) => item.id)).not.toContain(id);
+      const withDeleted = await api().get(`${USERS}?q=doomed&includeDeleted=true`).set(bearer('superuser')).expect(200);
+      expect((withDeleted.body.items as ListItem[]).map((item) => item.id)).toContain(id);
+      expect((await api().get(`${USERS}/${id}`).set(bearer('superuser')).expect(404)).body.code).toBe('user_not_found');
+      expect((await api().get(`${USERS}/${id}?includeDeleted=true`).set(bearer('superuser')).expect(200)).body.status).toBe('archived');
+
+      // The e-mail stays reserved by the unique index.
+      const clash = await create('superuser', { kind: 'student', email: email('doomed'), fullName: 'Doomed Again' });
+      expect(clash.status).toBe(409);
+      expect(clash.body.code).toBe('email_in_use');
+
+      // Nothing applies to a deleted account any more.
+      for (const action of STATUS_ACTIONS) {
+        const res = await status('superuser', id, { action });
+        expect(res.status, action).toBe(409);
+        expect(res.body, action).toMatchObject({ code: 'invalid_transition', from: 'deleted', action, allowed: [] });
+      }
+      expect((await remove('superuser', id)).body).toMatchObject({ code: 'invalid_transition', from: 'deleted' });
+
+      const events = await statusEvents(id);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ action: 'users.deleted', actorUserId: fx['superuser'], entityType: 'users' });
+      expect(events[0]!.metadata).toEqual({ action: 'delete', from: 'active', to: 'archived', reason: 'Duplicate account', revokedSessions: 1 });
+
+      // A client may send no body at all; any non-deleted state can be deleted.
+      const pending = await remove('deactivator', fx['dormant']!);
+      expect(pending.status, JSON.stringify(pending.body)).toBe(200);
+      expect(pending.body.status).toBe('archived');
+      expect(pending.body.deletedAt).toEqual(expect.any(String));
+      const pendingEvents = await statusEvents(fx['dormant']!);
+      expect(pendingEvents).toHaveLength(1);
+      expect(pendingEvents[0]!.metadata).toEqual({ action: 'delete', from: 'pending', to: 'archived', reason: null, revokedSessions: 0 });
+    });
+
+    it('rejects unknown actions, undeclared fields and bad reasons with 400 and unknown users with 404, writing nothing (T06)', async () => {
+      const id = fx['victim']!;
+      const eventsBefore = (await statusEvents(id)).length;
+      const invalid: Array<[string, Record<string, unknown>]> = [
+        ['no action', {}],
+        ['delete as a status action', { action: 'delete' }],
+        ['upper-case action', { action: 'SUSPEND' }],
+        ['action not a string', { action: ['suspend'] }],
+        ['undeclared field', { action: 'suspend', status: 'suspended' }],
+        ['reason too long', { action: 'suspend', reason: 'x'.repeat(501) }],
+      ];
+      // (A non-string `reason` is coerced by the global implicit conversion — KI-039 — so only the length and the field list are checked here.)
+      for (const [label, body] of invalid) {
+        const res = await status('superuser', id, body);
+        expect(res.status, label).toBe(400);
+        expect(res.body.statusCode, label).toBe(400);
+      }
+      for (const [label, body] of [['undeclared field', { force: true }], ['reason too long', { reason: 'x'.repeat(501) }]] as Array<[string, Record<string, unknown>]>) {
+        const res = await remove('superuser', id, body);
+        expect(res.status, label).toBe(400);
+      }
+      expect((await status('superuser', 'not-a-uuid', { action: 'suspend' })).status).toBe(400);
+      expect((await remove('superuser', 'not-a-uuid')).status).toBe(400);
+      const unknownId = '00000000-0000-7000-8000-000000000000';
+      expect((await status('superuser', unknownId, { action: 'suspend' })).body).toMatchObject({ statusCode: 404, code: 'user_not_found' });
+      expect((await remove('superuser', unknownId)).body).toMatchObject({ statusCode: 404, code: 'user_not_found' });
+      expect(await rowOf(id)).toMatchObject({ status: 'active', deletedAt: null });
+      expect(await statusEvents(id)).toHaveLength(eventsBefore);
+    });
+
+    it('documents the status and delete endpoints in OpenAPI', async () => {
+      const res = await api().get('/api/docs-json').expect(200);
+      const change = res.body.paths['/api/users/{id}/status'].post;
+      const del = res.body.paths['/api/users/{id}'].delete;
+      expect(change).toBeDefined();
+      expect(del).toBeDefined();
+      for (const code of ['200', '400', '401', '403', '404', '409']) {
+        expect(change.responses, `status ${code}`).toHaveProperty(code);
+        expect(del.responses, `delete ${code}`).toHaveProperty(code);
+      }
+      expect(change.requestBody).toBeDefined();
     });
   });
 });

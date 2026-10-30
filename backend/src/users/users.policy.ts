@@ -17,6 +17,8 @@ export const CREATE_USERS_PERMISSION = 'users.create';
 export const UPDATE_USERS_PERMISSION = 'users.update';
 /** Reveals e-mail, username, phone and account-security timestamps in reads (D-R07). */
 export const READ_CONTACT_PERMISSION = 'users.read_contact';
+/** Account status changes, soft delete and seeing soft-deleted users (MOD-03-T06); `unlock` also accepts `users.update`. */
+export { DEACTIVATE_USERS_PERMISSION } from './users.status.js';
 
 export type ProfileKind = 'student' | 'employee' | null;
 
@@ -72,8 +74,10 @@ export function activePermissionKeys(roles: readonly RoleGrants[]): Set<string> 
 /**
  * Permission keys the granted roles would confer that the caller neither holds
  * nor belong to the learner baseline — sorted, empty when the grant is safe.
- * Applied to user creation (T02), to invitation issuing (T03, SEC-R-13) and to
- * changing a user's login identifiers (T04, SEC-R-15).
+ * Applied to user creation (T02), to invitation issuing (T03, SEC-R-13), to
+ * changing a user's login identifiers (T04, SEC-R-15), to password-reset
+ * issuing (T05, SEC-R-15) and to every account-status change and soft delete
+ * (T06, SEC-R-17).
  */
 export function exceedingPermissions(
   conferred: Iterable<string>,

@@ -1,5 +1,5 @@
 // Error vocabulary of MOD-03 (users, invitations, password reset, roles,
-// guardians) — fixed in MOD-03-T00, extended in T02, T03, T04 and T05. Same shape as
+// guardians) — fixed in MOD-03-T00, extended in T02, T03, T04, T05 and T06. Same shape as
 // AuthHttpException: the body is `{ statusCode, error, code, message, ...details }`
 // and the frontend maps the stable `code` to a localized message. Only the
 // factories below are in use; the remaining codes are reserved for the tasks
@@ -136,6 +136,24 @@ export const usersError = {
   // T04 — update
   nothingToUpdate: () =>
     new UsersHttpException(HttpStatus.BAD_REQUEST, 'nothing_to_update', 'The request body contains no field to update'),
+  // T06 — account status and soft delete
+  invalidTransition: (from: string, action: string, allowed: readonly string[]) =>
+    new UsersHttpException(
+      HttpStatus.CONFLICT,
+      'invalid_transition',
+      `Action "${action}" is not allowed for an account in state "${from}"`,
+      { from, action, allowed: [...allowed] },
+    ),
+  selfForbidden: (action: string) =>
+    new UsersHttpException(HttpStatus.FORBIDDEN, 'self_forbidden', 'You cannot apply this action to your own account', {
+      action,
+    }),
+  lastAdmin: () =>
+    new UsersHttpException(
+      HttpStatus.CONFLICT,
+      'last_admin',
+      'This is the last active academy admin; make another admin active first',
+    ),
   // T05 — password reset
   userNotResettable: (status: string) =>
     new UsersHttpException(

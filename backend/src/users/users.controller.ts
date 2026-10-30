@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -19,13 +19,30 @@ import { authError } from '../auth/auth.errors.js';
 import { requestContext } from '../auth/cookies.js';
 import { CurrentUser, RequirePermissions } from '../auth/decorators.js';
 import type { AuthPrincipal } from '../auth/principal.js';
-import { CreateUserDto, ListUsersQueryDto, UpdateUserDto, UserDetailDto, UserDetailQueryDto, UserListDto } from './users.dto.js';
-import { CREATE_USERS_PERMISSION, READ_CONTACT_PERMISSION, UPDATE_USERS_PERMISSION } from './users.policy.js';
+import {
+  ChangeUserStatusDto,
+  CreateUserDto,
+  DeleteUserDto,
+  ListUsersQueryDto,
+  UpdateUserDto,
+  UserDetailDto,
+  UserDetailQueryDto,
+  UserListDto,
+} from './users.dto.js';
+import { CREATE_USERS_PERMISSION, DEACTIVATE_USERS_PERMISSION, READ_CONTACT_PERMISSION, UPDATE_USERS_PERMISSION } from './users.policy.js';
 import { UsersService } from './users.service.js';
 import type { UsersProjection } from './users.service.js';
+import { missingPermissionFor } from './users.status.js';
+import type { UserStatusAction } from './users.status.js';
 
 /** Seeing soft-deleted users is reserved to whoever may delete them. */
-export const INCLUDE_DELETED_PERMISSION = 'users.deactivate';
+export const INCLUDE_DELETED_PERMISSION = DEACTIVATE_USERS_PERMISSION;
+
+/** The permission of a status action depends on the action itself (users.status.ts), so it is checked here, not by the guard. */
+function assertMayPerform(caller: AuthPrincipal, action: UserStatusAction): void {
+  const missing = missingPermissionFor(action, caller.permissions);
+  if (missing) throw authError.permissionDenied([missing]);
+}
 
 function assertMayIncludeDeleted(caller: AuthPrincipal, includeDeleted: boolean | undefined): void {
   if (includeDeleted && !caller.permissions.includes(INCLUDE_DELETED_PERMISSION)) {
@@ -47,7 +64,9 @@ function projectionFor(caller: AuthPrincipal): UsersProjection {
   type: AuthErrorDto,
   description:
     'permission_denied — `users.read` (or `users.deactivate` for includeDeleted); `users.create` / `users.roles.assign` / exceeding permissions for POST; ' +
-    '`users.update` for PATCH, plus exceeding permissions when changing the login identifiers of a more privileged user',
+    '`users.update` for PATCH, plus exceeding permissions when changing the login identifiers of a more privileged user; ' +
+    '`users.deactivate` for status changes and DELETE (`unlock`: `users.update` suffices), plus exceeding permissions when the target holds permissions the caller lacks; ' +
+    'self_forbidden — suspend/archive/delete on one’s own account',
 })
 export class UsersController {
   constructor(private readonly users: UsersService) {}
@@ -134,5 +153,59 @@ export class UsersController {
     @Req() req: Request,
   ): Promise<UserDetailDto> {
     return this.users.update(id, body, caller, requestContext(req), projectionFor(caller));
+  }
+
+  @Post(':id/status')
+  @HttpCode(HttpStatus.OK)
+  // No static permission: `unlock` needs `users.update` (or `users.deactivate`), the other actions `users.deactivate` — see assertMayPerform().
+  @RequirePermissions()
+  @ApiOperation({
+    summary: 'Change the account status',
+    description:
+      'Applies one action of the account state machine: `activate` (pending|suspended → active), `suspend` (active → suspended), ' +
+      '`archive` (active|suspended → archived), `restore` (archived → active) or `unlock` (clears the failed-login lock of an active account). ' +
+      '`suspend` and `archive` revoke every session of the user at once; an `unlock` with nothing to clear changes nothing. ' +
+      'One audit event `users.status.changed` per transition `{ action, from, to, reason, revokedSessions? }`. ' +
+      'Requires `users.deactivate` (`unlock`: `users.update` suffices); the target’s roles may not confer a permission the caller lacks; ' +
+      'nobody can suspend or archive themself; the last active academy admin cannot be suspended or archived. The response follows the caller’s projection.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: UserDetailDto, description: 'The user after the transition' })
+  @ApiBadRequestResponse({ description: 'Validation failed (unknown `action`, undeclared field, `reason` not 1–500 characters) or `id` is not a UUID' })
+  @ApiNotFoundResponse({ description: 'user_not_found (unknown; or soft-deleted and the caller lacks `users.deactivate`)' })
+  @ApiConflictResponse({ description: 'invalid_transition `{ from, action, allowed }` (also for a soft-deleted account, `from: "deleted"`) | last_admin' })
+  changeStatus(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: ChangeUserStatusDto,
+    @CurrentUser() caller: AuthPrincipal,
+    @Req() req: Request,
+  ): Promise<UserDetailDto> {
+    assertMayPerform(caller, body.action);
+    return this.users.changeStatus(id, body, caller, requestContext(req), projectionFor(caller));
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(DEACTIVATE_USERS_PERMISSION)
+  @ApiOperation({
+    summary: 'Soft-delete a user',
+    description:
+      'Sets `deletedAt` and `status: archived`, revokes every session of the user and records one audit event `users.deleted` `{ from, to, reason, revokedSessions }`. ' +
+      'The row stays and its e-mail/username remain reserved; the user disappears from the list and the detail (except with `includeDeleted=true`), cannot sign in, ' +
+      'and no status action applies afterwards. Optional JSON body `{ reason }`. Requires `users.deactivate`; the target’s roles may not confer a permission the caller lacks; ' +
+      'nobody can delete themself; the last active academy admin cannot be deleted. The response follows the caller’s projection.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: UserDetailDto, description: 'The user after the deletion (`status: archived`, `deletedAt` set)' })
+  @ApiBadRequestResponse({ description: 'Validation failed (undeclared field, `reason` not 1–500 characters) or `id` is not a UUID' })
+  @ApiNotFoundResponse({ description: 'user_not_found' })
+  @ApiConflictResponse({ description: 'invalid_transition `{ from: "deleted", action: "delete", allowed: [] }` (already deleted) | last_admin' })
+  remove(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: DeleteUserDto,
+    @CurrentUser() caller: AuthPrincipal,
+    @Req() req: Request,
+  ): Promise<UserDetailDto> {
+    return this.users.softDelete(id, body, caller, requestContext(req), projectionFor(caller));
   }
 }

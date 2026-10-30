@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
+import { ACADEMY_ADMIN_ROLE_KEY } from '../authorization/system-roles.js';
 import type { KindRoleKey } from '../authorization/system-roles.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { authError } from '../auth/auth.errors.js';
@@ -12,7 +13,9 @@ import { decodeUserCursor, encodeUserCursor } from './users.cursor.js';
 import type { SortOrder, UserCursor, UserSortField } from './users.cursor.js';
 import { USERS_PAGE_DEFAULT } from './users.dto.js';
 import type {
+  ChangeUserStatusDto,
   CreateUserDto,
+  DeleteUserDto,
   GuardianLinkDto,
   ListUsersQueryDto,
   UpdateUserDto,
@@ -24,12 +27,22 @@ import type {
 import { usersError } from './users.errors.js';
 import {
   ASSIGN_ROLES_PERMISSION,
+  DEACTIVATE_USERS_PERMISSION,
   activePermissionKeys,
   exceedingPermissions,
   extraRoleKeys,
   extraRoleProfileProblem,
   profileKindFor,
 } from './users.policy.js';
+import {
+  accountState,
+  allowedActions,
+  isSelfForbidden,
+  nextStatus,
+  removesActiveAccount,
+  revokesSessions,
+} from './users.status.js';
+import type { AccountAction } from './users.status.js';
 import { calendarDateToDate } from './users.validation.js';
 
 /**
@@ -43,6 +56,10 @@ export type UsersProjection = 'full' | 'reduced';
 export const USERS_AUDIT_ACTIONS = {
   created: 'users.created',
   updated: 'users.updated',
+  /** T06: every status action (`activate`/`suspend`/`archive`/`restore`/`unlock`), metadata `{ action, from, to, reason, … }`. */
+  statusChanged: 'users.status.changed',
+  /** T06: soft delete, metadata `{ from, to: 'archived', reason, revokedSessions }`. */
+  deleted: 'users.deleted',
 } as const;
 
 // Explicit projections: the password hash and the login counters are never
@@ -110,9 +127,20 @@ const CURRENT_SELECT = {
   roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
 } satisfies Prisma.UserSelect;
 
+// What a status change (users.status.ts) decides on, plus the roles for SEC-R-17 and the last-admin rule.
+const STATE_SELECT = {
+  id: true,
+  status: true,
+  deletedAt: true,
+  lockedUntil: true,
+  failedLoginCount: true,
+  roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
+} satisfies Prisma.UserSelect;
+
 type SummaryRow = Prisma.UserGetPayload<{ select: typeof SUMMARY_SELECT }>;
 type ListRow = Prisma.UserGetPayload<{ select: typeof LIST_SELECT }>;
 type DetailRow = Prisma.UserGetPayload<{ select: typeof DETAIL_SELECT }>;
+type StateRow = Prisma.UserGetPayload<{ select: typeof STATE_SELECT }>;
 
 /** `%`, `_` and `\` matched literally inside a LIKE/ILIKE pattern (PostgreSQL escape character `\`). */
 export function escapeLikePattern(value: string): string {
@@ -248,10 +276,11 @@ function uniqueTarget(error: Prisma.PrismaClientKnownRequestError): string {
 
 /**
  * MOD-03 — user management. Permission checks (`users.read`, `users.read_contact`
- * for the full projection, `users.deactivate` for soft-deleted rows,
- * `users.create`) are enforced by the controller and the global guards; the
- * service shapes queries and responses and, for creation, applies the role
- * policy (users.policy.ts) inside one transaction.
+ * for the full projection, `users.deactivate` for soft-deleted rows and status
+ * changes, `users.create`, `users.update`) are enforced by the controller and
+ * the global guards; the service shapes queries and responses and applies the
+ * role policy (users.policy.ts) and the account state machine
+ * (users.status.ts) inside one transaction per write.
  */
 @Injectable()
 export class UsersService {
@@ -500,6 +529,145 @@ export class UsersService {
 
     return this.getById(id, false, view);
   }
+
+  // ------------------------------------------------------- status (T06)
+
+  /**
+   * MOD-03-T06: `activate` / `suspend` / `archive` / `restore` / `unlock`
+   * (users.status.ts). `suspend` and `archive` revoke every refresh token in
+   * the same transaction; the access tokens die at the next request through
+   * the session gate of AuthService. An `unlock` with nothing to clear is a
+   * no-op (200, nothing written, no event).
+   */
+  changeStatus(
+    id: string,
+    input: ChangeUserStatusDto,
+    caller: AuthPrincipal,
+    ctx: RequestContext,
+    view: UsersProjection,
+  ): Promise<UserDetailDto> {
+    return this.transition(id, input.action, input.reason ?? null, caller, ctx, view);
+  }
+
+  /**
+   * MOD-03-T06: soft delete — `deleted_at = now()` and `status = archived`,
+   * every refresh token revoked, one `users.deleted` event. The row stays
+   * (history refers to it) and its e-mail/username remain reserved by the
+   * unique indexes. Nothing applies to a deleted account afterwards.
+   */
+  softDelete(id: string, input: DeleteUserDto, caller: AuthPrincipal, ctx: RequestContext, view: UsersProjection): Promise<UserDetailDto> {
+    return this.transition(id, 'delete', input.reason ?? null, caller, ctx, view);
+  }
+
+  /**
+   * Order of the checks: 404 (unknown, or soft-deleted for a caller who may
+   * not see deleted users) → 403 `permission_denied` when the target's roles
+   * confer a permission the caller lacks (SEC-R-17) → 403 `self_forbidden` →
+   * 409 `invalid_transition` → inside the transaction 409 `last_admin`.
+   * The status is written with a conditional update, so a concurrent change
+   * makes the loser fail with `invalid_transition` instead of overwriting.
+   */
+  private async transition(
+    id: string,
+    action: AccountAction,
+    reason: string | null,
+    caller: AuthPrincipal,
+    ctx: RequestContext,
+    view: UsersProjection,
+  ): Promise<UserDetailDto> {
+    const target = await this.loadStateTarget(id, caller);
+    if (isSelfForbidden(action) && target.id === caller.id) throw usersError.selfForbidden(action);
+    const from = accountState(target);
+    const to = nextStatus(action, from);
+    if (to === null) throw usersError.invalidTransition(from, action, allowedActions(from));
+    if (action === 'unlock' && target.lockedUntil === null && target.failedLoginCount === 0) {
+      return this.getById(id, false, view);
+    }
+
+    const isAdmin = target.roles.some((grant) => grant.role.key === ACADEMY_ADMIN_ROLE_KEY);
+    const now = new Date();
+    await this.prisma.db.$transaction(async (tx) => {
+      if (isAdmin && removesActiveAccount(action, from)) {
+        // The active admins are locked for the rest of the transaction, so two
+        // concurrent requests cannot each count the other and leave none (AC 3).
+        const admins = await lockActiveAdmins(tx);
+        if (!admins.some((admin) => admin.id !== target.id)) throw usersError.lastAdmin();
+      }
+      const updated = await tx.user.updateMany({
+        where: { id, status: target.status, deletedAt: null },
+        data: {
+          status: to,
+          ...(action === 'delete' ? { deletedAt: now } : {}),
+          ...(action === 'unlock' ? { lockedUntil: null, failedLoginCount: 0 } : {}),
+        },
+      });
+      if (updated.count !== 1) throw usersError.invalidTransition(from, action, allowedActions(from));
+
+      let revokedSessions: number | null = null;
+      if (revokesSessions(action)) {
+        const revoked = await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: now } });
+        revokedSessions = revoked.count;
+      }
+      // Identifiers and non-sensitive values only: the administrator's reason,
+      // the cleared lock and the number of revoked sessions — never contact data.
+      await this.audit.record(
+        {
+          action: action === 'delete' ? USERS_AUDIT_ACTIONS.deleted : USERS_AUDIT_ACTIONS.statusChanged,
+          actorUserId: caller.id,
+          entityType: 'users',
+          entityId: id,
+          metadata: {
+            action,
+            from,
+            to,
+            reason,
+            ...(revokedSessions !== null ? { revokedSessions } : {}),
+            ...(action === 'unlock' ? { lockedUntil: isoOrNull(target.lockedUntil), failedAttempts: target.failedLoginCount } : {}),
+          },
+          ...ctx,
+        },
+        tx,
+      );
+    });
+
+    return this.getById(id, action === 'delete', view);
+  }
+
+  /**
+   * The account a status action targets. A soft-deleted account is visible
+   * (and so reported as `invalid_transition`) only to holders of
+   * `users.deactivate`, as in the list and the detail; others get 404.
+   * Authorisation before state (SEC-R-17): a caller who may not act on this
+   * account learns nothing about it.
+   */
+  private async loadStateTarget(id: string, caller: AuthPrincipal): Promise<StateRow> {
+    const user = await this.prisma.db.user.findUnique({ where: { id }, select: STATE_SELECT });
+    if (!user || (user.deletedAt !== null && !caller.permissions.includes(DEACTIVATE_USERS_PERMISSION))) {
+      throw usersError.userNotFound();
+    }
+    const exceeding = exceedingPermissions(activePermissionKeys(user.roles.map((grant) => grant.role)), caller.permissions);
+    if (exceeding.length > 0) throw authError.permissionDenied(exceeding);
+    return user;
+  }
+}
+
+/**
+ * Ids of the active, non-deleted holders of `academy_admin`, locked
+ * (`FOR UPDATE`) until the transaction ends. Under READ COMMITTED a waiting
+ * transaction re-evaluates the row after the lock is released, so an admin
+ * suspended meanwhile is no longer counted.
+ */
+async function lockActiveAdmins(tx: Prisma.TransactionClient): Promise<{ id: string }[]> {
+  return tx.$queryRaw<{ id: string }[]>`
+    SELECT u.id
+    FROM users u
+    WHERE u.status = 'active'
+      AND u.deleted_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id AND r.key = ${ACADEMY_ADMIN_ROLE_KEY}
+      )
+    FOR UPDATE`;
 }
 
 /** Maps a unique-constraint violation raised by a concurrent insert to the matching 409; rethrows anything else. */

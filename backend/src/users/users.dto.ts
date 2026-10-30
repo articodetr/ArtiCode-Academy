@@ -28,6 +28,8 @@ import type { KindRoleKey } from '../authorization/system-roles.js';
 import { EmployeeKind, GuardianRelationship, UserStatus } from '../generated/prisma/client.js';
 import { SORT_ORDERS, USER_SORT_FIELDS } from './users.cursor.js';
 import type { SortOrder, UserSortField } from './users.cursor.js';
+import { USER_STATUS_ACTIONS } from './users.status.js';
+import type { UserStatusAction } from './users.status.js';
 import {
   E164_PATTERN,
   EMAIL_MAX_LENGTH,
@@ -333,7 +335,7 @@ export class UpdateStudentProfileDto {
   notes?: string | null;
 }
 
-/** Employee profile fields; `kind` (T07) and `isActive` (T06) are not updatable here. */
+/** Employee profile fields; `kind` (T07) and `isActive` (employment status — not part of the account state machine, no API yet) are not updatable here. */
 export class UpdateEmployeeProfileDto {
   @ApiPropertyOptional({ nullable: true, maxLength: 32, example: 'EMP-017', description: 'Unique within the academy; null clears it' })
   @IsOptional()
@@ -428,6 +430,49 @@ export class UpdateUserDto {
   @ValidateNested()
   @Type(() => UpdateEmployeeProfileDto)
   employeeProfile?: UpdateEmployeeProfileDto;
+}
+
+// ---------------------------------------------------------------------------
+// MOD-03-T06 — account status and soft delete
+// ---------------------------------------------------------------------------
+
+/** Upper bound of the free-text reason recorded in the audit event. */
+export const STATUS_REASON_MAX_LENGTH = 500;
+
+const REASON_API = {
+  maxLength: STATUS_REASON_MAX_LENGTH,
+  example: 'Repeated violations of the academy rules',
+  description: 'Free text recorded in the audit event only (never shown to the user); trimmed, blank = absent',
+} as const;
+
+export class ChangeUserStatusDto {
+  @ApiProperty({
+    enum: USER_STATUS_ACTIONS,
+    example: 'suspend',
+    description:
+      '`activate`: pending|suspended → active · `suspend`: active → suspended · `archive`: active|suspended → archived · ' +
+      '`restore`: archived → active · `unlock`: clears the failed-login lock of an active account. ' +
+      '`suspend` and `archive` sign the user out of every device.',
+  })
+  @IsIn(USER_STATUS_ACTIONS)
+  action: UserStatusAction;
+
+  @ApiPropertyOptional(REASON_API)
+  @IsOptional()
+  @Transform(textParam)
+  @IsString()
+  @Length(1, STATUS_REASON_MAX_LENGTH)
+  reason?: string;
+}
+
+/** Optional body of `DELETE /api/users/:id` (a client may send none). */
+export class DeleteUserDto {
+  @ApiPropertyOptional(REASON_API)
+  @IsOptional()
+  @Transform(textParam)
+  @IsString()
+  @Length(1, STATUS_REASON_MAX_LENGTH)
+  reason?: string;
 }
 
 // ---------------------------------------------------------------------------
