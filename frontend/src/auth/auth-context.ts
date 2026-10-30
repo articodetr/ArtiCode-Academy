@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { SessionResponse } from '../api/client'
 import type { Role } from './roles'
 
 export interface AuthUser {
@@ -29,6 +30,11 @@ export interface AuthContextValue {
   logoutAll: () => Promise<void>
   /** Re-reads the current user from the server (after a password change etc.). */
   reloadUser: () => Promise<void>
+  /**
+   * Makes a session the server just opened the current one (invitation accepted,
+   * password reset confirmed — MOD-03-T12); the caller has already stored the access token.
+   */
+  adoptSession: (session: SessionResponse) => AuthUser
   hasPermission: (key: string) => boolean
 }
 

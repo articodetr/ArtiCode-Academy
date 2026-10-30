@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as authApi from '../api/auth'
-import type { SessionUser } from '../api/auth'
+import type { SessionResponse, SessionUser } from '../api/auth'
 import { AuthContext } from './auth-context'
 import type { AuthContextValue, AuthStatus, AuthUser } from './auth-context'
 import { primaryRole } from './roles'
@@ -77,6 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'authenticated', user })
   }, [])
 
+  // The public account pages (invitation, password reset) receive a session
+  // from the server exactly like login; the access token is already stored.
+  const adoptSession = useCallback((session: SessionResponse) => {
+    const user = toAuthUser(session.user)
+    setState({ status: 'authenticated', user })
+    return user
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status: state.status,
@@ -85,9 +93,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       logoutAll,
       reloadUser,
+      adoptSession,
       hasPermission: (key) => state.user?.permissions.includes(key) ?? false,
     }),
-    [state, login, logout, logoutAll, reloadUser],
+    [state, login, logout, logoutAll, reloadUser, adoptSession],
   )
 
   return <AuthContext value={value}>{children}</AuthContext>

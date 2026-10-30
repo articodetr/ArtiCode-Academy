@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router'
+import { InvitationPage } from '../account/InvitationPage'
+import { ResetPasswordPage } from '../account/ResetPasswordPage'
 import { RequireAuth, RequireRole } from '../auth/RequireAuth'
 import { AppLayout } from '../layout/AppLayout'
 import { AssignmentsPage } from '../pages/AssignmentsPage'
@@ -26,6 +28,9 @@ function guarded(navKey: string, page: ReactNode) {
 // Paths mirror NAV_ITEMS in ../layout/navigation.ts.
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  // Public token pages (MOD-03-T12): the one-time link is the only credential.
+  { path: '/invite/:token', element: <InvitationPage /> },
+  { path: '/reset-password/:token', element: <ResetPasswordPage /> },
   {
     path: '/',
     element: (

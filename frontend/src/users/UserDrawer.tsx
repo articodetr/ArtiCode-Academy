@@ -1,13 +1,19 @@
 // Detail / edit drawer of one user (MOD-03-T11): loads GET /api/users/:id and,
 // for callers holding `users.update`, edits it with the smallest PATCH body.
 // Contact identifiers and security timestamps appear only in the full
-// projection (`users.read_contact`, D-R07). Later tasks add tabs here
-// (invitation and reset links — T12; roles, status actions, guardians — T14).
-import { EditOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, List, Space, Spin, Tag, Typography } from 'antd'
+// projection (`users.read_contact`, D-R07). Since MOD-03-T12 the header also
+// issues the one-time invitation link (`invited` accounts, `users.create`) and
+// the password-reset link (`active` accounts, `users.update`) — API-015/API-019,
+// shown once in IssuedLinkModal. T14 adds roles, status actions and guardians.
+import { EditOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, List, Popconfirm, Space, Spin, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { IssuedLinkModal } from '../account/IssuedLinkModal'
+import type { IssuedLinkKind } from '../account/IssuedLinkModal'
+import { issueInvitation, issuePasswordReset } from '../api/account'
+import type { IssuedLink } from '../api/account'
 import { getUser, updateUser } from '../api/users'
 import type { GuardianLink, UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
@@ -55,11 +61,15 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
   const { hasPermission } = useAuth()
   const contact = hasPermission('users.read_contact')
   const canUpdate = hasPermission('users.update')
+  const canCreate = hasPermission('users.create')
   const [user, setUser] = useState<UserDetail | null>(null)
   const [loadError, setLoadError] = useState<unknown>(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [issuing, setIssuing] = useState<IssuedLinkKind | null>(null)
+  const [issued, setIssued] = useState<{ kind: IssuedLinkKind; link: IssuedLink } | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [form] = Form.useForm()
 
   useEffect(() => {
@@ -117,24 +127,68 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
     }
   }
 
+  // One-time links (T12): the server returns the raw token exactly once; the
+  // modal shows it, nothing else keeps it.
+  const issue = async (kind: IssuedLinkKind) => {
+    setIssuing(kind)
+    setActionError(null)
+    try {
+      const link = await (kind === 'invitation' ? issueInvitation(user.id) : issuePasswordReset(user.id))
+      setIssued({ kind, link })
+      message.success(t(`account.issued.${kind}.done`))
+    } catch (error) {
+      setActionError(failureMessage(t, describeUsersFailure(error)))
+    } finally {
+      setIssuing(null)
+    }
+  }
+
+  const canInvite = canCreate && user.status === 'invited' && !user.deletedAt
+  const canReset = canUpdate && user.status === 'active' && !user.deletedAt
+
   return (
     <>
       <UserHeader
         user={user}
         action={
-          canUpdate && !user.deletedAt && !editing ? (
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => {
-                setSaveError(null)
-                setEditing(true)
-              }}
-            >
-              {t('common.edit')}
-            </Button>
+          !editing ? (
+            <Space wrap>
+              {canUpdate && !user.deletedAt ? (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setSaveError(null)
+                    setEditing(true)
+                  }}
+                >
+                  {t('common.edit')}
+                </Button>
+              ) : null}
+              {canInvite ? (
+                <Button icon={<LinkOutlined />} loading={issuing === 'invitation'} onClick={() => void issue('invitation')}>
+                  {t('account.issued.invitation.button')}
+                </Button>
+              ) : null}
+              {canReset ? (
+                <Popconfirm
+                  title={t('account.issued.reset.confirm')}
+                  okText={t('account.issued.reset.button')}
+                  cancelText={t('common.cancel')}
+                  onConfirm={() => void issue('reset')}
+                >
+                  <Button icon={<KeyOutlined />} loading={issuing === 'reset'}>
+                    {t('account.issued.reset.button')}
+                  </Button>
+                </Popconfirm>
+              ) : null}
+            </Space>
           ) : null
         }
       />
+
+      {actionError ? (
+        <Alert type="error" showIcon closable message={actionError} onClose={() => setActionError(null)} style={{ marginTop: 16 }} />
+      ) : null}
 
       {!contact ? <Alert type="info" showIcon message={t('users.reducedHint')} style={{ marginTop: 16 }} /> : null}
 
@@ -172,6 +226,8 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
       ) : (
         <UserDetails user={user} contact={contact} />
       )}
+
+      <IssuedLinkModal kind={issued?.kind ?? 'invitation'} issued={issued?.link ?? null} onClose={() => setIssued(null)} />
     </>
   )
 }

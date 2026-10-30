@@ -25,6 +25,8 @@ const KNOWN_CODES = new Set([
   'employee_kind_required',
   'role_unknown',
   'nothing_to_update',
+  'user_not_invitable',
+  'user_not_resettable',
   'permission_denied',
   'origin_forbidden',
   'rate_limited',
