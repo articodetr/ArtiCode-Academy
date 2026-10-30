@@ -126,12 +126,17 @@ describe('API (e2e)', () => {
     expect([401, 503]).toContain(json.status);
   });
 
-  it('serves the OpenAPI document under the prefix', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/docs-json')
-      .expect(200);
-    expect(res.body.openapi).toMatch(/^3\./);
-    expect(res.body.paths).toHaveProperty('/api/health');
-    expect(res.body.paths).toHaveProperty('/api/health/ready');
-  });
+  // 20 s: the first OpenAPI build can exceed Vitest's 5 s under parallel e2e load (KI-040).
+  it(
+    'serves the OpenAPI document under the prefix',
+    async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      expect(res.body.openapi).toMatch(/^3\./);
+      expect(res.body.paths).toHaveProperty('/api/health');
+      expect(res.body.paths).toHaveProperty('/api/health/ready');
+    },
+    20_000,
+  );
 });

@@ -16,6 +16,15 @@ export const REFERENCE_NUMBER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,31}$/;
 
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * `%`, `_` and `\` matched literally inside a LIKE/ILIKE pattern (PostgreSQL
+ * escape character `\`). Prisma does not escape `contains`/`startsWith` values
+ * (KI-034); shared by the users search and the audit-log `action` prefix (T10).
+ */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
 /** `trim` + lower-case; empty results become undefined so "" counts as absent. */
 export function normalizeIdentifier(value: unknown): string | undefined {
   if (typeof value !== 'string') return value === null ? undefined : (value as undefined);

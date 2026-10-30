@@ -46,7 +46,7 @@ import {
   revokesSessions,
 } from './users.status.js';
 import type { AccountAction } from './users.status.js';
-import { calendarDateToDate } from './users.validation.js';
+import { calendarDateToDate, escapeLikePattern } from './users.validation.js';
 
 /**
  * How much of a user a caller may see (D-R07): `full` for holders of
@@ -159,11 +159,6 @@ type DetailRow = Prisma.UserGetPayload<{ select: typeof DETAIL_SELECT }>;
 type StateRow = Prisma.UserGetPayload<{ select: typeof STATE_SELECT }>;
 type RolesTargetRow = Prisma.UserGetPayload<{ select: typeof ROLES_TARGET_SELECT }>;
 type RoleRow = Prisma.RoleGetPayload<{ select: typeof ROLE_GRANT_SELECT }>;
-
-/** `%`, `_` and `\` matched literally inside a LIKE/ILIKE pattern (PostgreSQL escape character `\`). */
-export function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
-}
 
 function isoOrNull(value: Date | null): string | null {
   return value ? value.toISOString() : null;

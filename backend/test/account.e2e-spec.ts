@@ -422,16 +422,21 @@ describe.skipIf(!available)('MOD-03-T03 invitations and account activation (e2e,
     expect(limited).toBe(true);
   });
 
-  it('documents the three routes in the OpenAPI document', async () => {
-    const doc = await api().get('/api/docs-json').expect(200);
-    const paths = doc.body.paths as Record<string, Record<string, { security?: unknown[] }>>;
-    expect(Object.keys(paths)).toEqual(
-      expect.arrayContaining(['/api/users/{id}/invitations', '/api/account/invitations/{token}', '/api/account/invitations/{token}/accept']),
-    );
-    expect(paths['/api/users/{id}/invitations']!['post']!.security).toEqual([{ bearer: [] }]);
-    expect(paths['/api/account/invitations/{token}']!['get']!.security).toBeUndefined();
-    expect(paths['/api/account/invitations/{token}/accept']!['post']!.security).toBeUndefined();
-  });
+  // 20 s: the first OpenAPI build can exceed Vitest's 5 s under parallel e2e load (KI-040).
+  it(
+    'documents the three routes in the OpenAPI document',
+    async () => {
+      const doc = await api().get('/api/docs-json').expect(200);
+      const paths = doc.body.paths as Record<string, Record<string, { security?: unknown[] }>>;
+      expect(Object.keys(paths)).toEqual(
+        expect.arrayContaining(['/api/users/{id}/invitations', '/api/account/invitations/{token}', '/api/account/invitations/{token}/accept']),
+      );
+      expect(paths['/api/users/{id}/invitations']!['post']!.security).toEqual([{ bearer: [] }]);
+      expect(paths['/api/account/invitations/{token}']!['get']!.security).toBeUndefined();
+      expect(paths['/api/account/invitations/{token}/accept']!['post']!.security).toBeUndefined();
+    },
+    20_000,
+  );
 
   // TEST-023 — MOD-03-T05 password reset: POST /api/users/:id/password-reset
   // (API-019), POST /api/account/password-reset/:token/confirm (API-020) and
@@ -686,15 +691,19 @@ describe.skipIf(!available)('MOD-03-T03 invitations and account activation (e2e,
       expect(limited).toBe(true);
     });
 
-    it('documents the three routes in the OpenAPI document', async () => {
-      const doc = await api().get('/api/docs-json').expect(200);
-      const paths = doc.body.paths as Record<string, Record<string, { security?: unknown[] }>>;
-      expect(Object.keys(paths)).toEqual(
-        expect.arrayContaining(['/api/users/{id}/password-reset', '/api/account/password-reset/request', '/api/account/password-reset/{token}/confirm']),
-      );
-      expect(paths['/api/users/{id}/password-reset']!['post']!.security).toEqual([{ bearer: [] }]);
-      expect(paths['/api/account/password-reset/request']!['post']!.security).toBeUndefined();
-      expect(paths['/api/account/password-reset/{token}/confirm']!['post']!.security).toBeUndefined();
-    });
+    it(
+      'documents the three routes in the OpenAPI document',
+      async () => {
+        const doc = await api().get('/api/docs-json').expect(200);
+        const paths = doc.body.paths as Record<string, Record<string, { security?: unknown[] }>>;
+        expect(Object.keys(paths)).toEqual(
+          expect.arrayContaining(['/api/users/{id}/password-reset', '/api/account/password-reset/request', '/api/account/password-reset/{token}/confirm']),
+        );
+        expect(paths['/api/users/{id}/password-reset']!['post']!.security).toEqual([{ bearer: [] }]);
+        expect(paths['/api/account/password-reset/request']!['post']!.security).toBeUndefined();
+        expect(paths['/api/account/password-reset/{token}/confirm']!['post']!.security).toBeUndefined();
+      },
+      20_000,
+    );
   });
 });

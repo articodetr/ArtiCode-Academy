@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client.js';
+import type { AuditLog, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { AuditLogItemDto, AuditLogListDto } from './audit.dto.js';
+import { AUDIT_PAGE_DEFAULT, buildAuditWhere, pageOf } from './audit.query.js';
+import type { AuditListFilters } from './audit.query.js';
 
 export interface AuditEntry {
   /** Dotted event name, e.g. `auth.login.succeeded`. */
@@ -29,10 +32,24 @@ export function assertNoSecrets(metadata: Record<string, unknown> | null | undef
   }
 }
 
+function toItem(row: AuditLog): AuditLogItemDto {
+  return {
+    id: row.id,
+    action: row.action,
+    actorUserId: row.actorUserId,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    metadata: row.metadata ?? null,
+    ipAddress: row.ipAddress,
+    userAgent: row.userAgent,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 /**
  * Append-only security/business event log (D5, 12.2). `record()` never stores
  * passwords or tokens; pass the transaction of the event so the row is written
- * atomically with it.
+ * atomically with it. `list()` serves `GET /api/audit-logs` (API-011).
  */
 @Injectable()
 export class AuditService {
@@ -61,5 +78,21 @@ export class AuditService {
       if (tx) throw error;
       this.logger.error(`failed to record audit event ${entry.action}`, error instanceof Error ? error.stack : String(error));
     }
+  }
+
+  /**
+   * Newest first by the UUIDv7 id (= insertion order), filtered by the ANDed
+   * criteria; `limit + 1` rows are read so `nextCursor` is only handed out
+   * when an older page really exists (T10, ADR-039).
+   */
+  async list(filters: AuditListFilters & { limit?: number }): Promise<AuditLogListDto> {
+    const limit = filters.limit ?? AUDIT_PAGE_DEFAULT;
+    const rows = await this.prisma.db.auditLog.findMany({
+      where: buildAuditWhere(filters),
+      orderBy: { id: 'desc' },
+      take: limit + 1,
+    });
+    const page = pageOf(rows, limit);
+    return { items: page.items.map(toItem), nextCursor: page.nextCursor };
   }
 }

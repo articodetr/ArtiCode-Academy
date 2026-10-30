@@ -1,43 +1,35 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { RequirePermissions } from '../auth/decorators.js';
-import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogListDto, AuditLogQueryDto } from './audit.dto.js';
+import { AuditService } from './audit.service.js';
 
 @ApiTags('audit')
 @ApiBearerAuth()
 @Controller('audit-logs')
 export class AuditController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly audit: AuditService) {}
 
   @Get()
   @RequirePermissions('audit.read')
   @ApiOperation({
     summary: 'List audit events (newest first)',
-    description: 'Requires the `audit.read` permission (academy admin by default). Cursor pagination with `before`.',
+    description:
+      'Requires the `audit.read` permission (academy admin by default). Filters (`action` prefix, `actorUserId`, `entityType` + `entityId`, `before`) are ANDed; keyset pagination with `cursor` = `nextCursor` of the previous page.',
   })
   @ApiOkResponse({ type: AuditLogListDto })
+  @ApiBadRequestResponse({ description: 'Invalid query parameter (unknown field, malformed id or cursor, `entityId` without `entityType`)' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
   @ApiForbiddenResponse({ description: 'Caller lacks `audit.read`' })
-  async list(@Query() query: AuditLogQueryDto): Promise<AuditLogListDto> {
-    const limit = query.limit ?? 50;
-    const rows = await this.prisma.db.auditLog.findMany({
-      where: query.before ? { createdAt: { lt: new Date(query.before) } } : undefined,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit,
-    });
-    const items = rows.map((row) => ({
-      id: row.id,
-      action: row.action,
-      actorUserId: row.actorUserId,
-      entityType: row.entityType,
-      entityId: row.entityId,
-      metadata: row.metadata ?? null,
-      ipAddress: row.ipAddress,
-      userAgent: row.userAgent,
-      createdAt: row.createdAt.toISOString(),
-    }));
-    const last = items.at(-1);
-    return { items, nextBefore: items.length === limit && last ? last.createdAt : null };
+  list(@Query() query: AuditLogQueryDto): Promise<AuditLogListDto> {
+    return this.audit.list(query);
   }
 }
