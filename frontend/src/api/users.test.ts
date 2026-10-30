@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { setAccessToken } from '../auth/token-store'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeUserDetail, makeUserList } from '../test/users'
-import { createUser, getUser, listUsers, updateUser, usersListPath } from './users'
+import { changeUserStatus, createUser, deleteUser, getUser, listUsers, replaceUserRoles, updateUser, usersListPath } from './users'
 
 describe('usersListPath', () => {
   it('returns the bare path when every parameter is absent or empty', () => {
@@ -91,5 +91,48 @@ describe('users API calls', () => {
     expect(url).toBe(`/api/users/${updated.id}`)
     expect(init?.method).toBe('PATCH')
     expect(init?.body).toBe('{"displayName":"عمر","phone":null}')
+  })
+
+  it('changeUserStatus posts the action (and the reason only when given) to /api/users/:id/status', async () => {
+    const suspended = makeUserDetail({ status: 'suspended' })
+    const fetchMock = mockFetch(() => jsonResponse(200, suspended))
+
+    await expect(changeUserStatus(suspended.id, { action: 'suspend', reason: 'مخالفة' })).resolves.toEqual(suspended)
+    await changeUserStatus(suspended.id, { action: 'activate' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`/api/users/${suspended.id}/status`)
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({ action: 'suspend', reason: 'مخالفة' })
+    expect(fetchMock.mock.calls[1][1]?.body).toBe('{"action":"activate"}')
+  })
+
+  it('deleteUser sends DELETE /api/users/:id without a body unless a reason is given, and resolves with the detail', async () => {
+    const gone = makeUserDetail({ status: 'archived', deletedAt: '2026-10-30T12:00:00.000Z' })
+    const fetchMock = mockFetch(() => jsonResponse(200, gone))
+
+    await expect(deleteUser(gone.id)).resolves.toEqual(gone)
+    await deleteUser(gone.id, { reason: 'طلب الحذف' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`/api/users/${gone.id}`)
+    expect(init?.method).toBe('DELETE')
+    expect(init?.body).toBeUndefined()
+    expect(new Headers(init?.headers).has('Content-Type')).toBe(false)
+    expect(fetchMock.mock.calls[1][1]?.body).toBe('{"reason":"طلب الحذف"}')
+  })
+
+  it('replaceUserRoles puts the full set of role keys to /api/users/:id/roles', async () => {
+    const updated = makeUserDetail({ roles: [{ key: 'student', label: { ar: 'طالب' } }, { key: 'teacher', label: { ar: 'معلم' } }] })
+    const fetchMock = mockFetch(() => jsonResponse(200, updated))
+
+    await expect(replaceUserRoles(updated.id, { roleKeys: ['student', 'teacher'] })).resolves.toEqual(updated)
+    await replaceUserRoles(updated.id, { roleKeys: ['staff', 'teacher'], employeeKind: 'staff' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`/api/users/${updated.id}/roles`)
+    expect(init?.method).toBe('PUT')
+    expect(init?.body).toBe('{"roleKeys":["student","teacher"]}')
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ roleKeys: ['staff', 'teacher'], employeeKind: 'staff' })
   })
 })

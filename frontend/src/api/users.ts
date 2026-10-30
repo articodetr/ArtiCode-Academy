@@ -1,6 +1,9 @@
 // MOD-03 user endpoints consumed by the users screen (MOD-03-T11):
 // API-012 GET /api/users, API-013 GET /api/users/:id, API-014 POST /api/users,
-// API-018 PATCH /api/users/:id. Types mirror backend/src/users/users.dto.ts.
+// API-018 PATCH /api/users/:id. Since MOD-03-T14 also the account actions
+// API-027 POST /api/users/:id/status, API-028 DELETE /api/users/:id and the
+// role assignment API-034 PUT /api/users/:id/roles. Types mirror
+// backend/src/users/users.dto.ts.
 import { apiRequest } from './client'
 
 export const USER_STATUSES = ['invited', 'pending', 'active', 'suspended', 'archived'] as const
@@ -121,6 +124,8 @@ export interface ListUsersParams {
 export const USERS_PATHS = {
   list: '/api/users',
   byId: (id: string) => `/api/users/${encodeURIComponent(id)}`,
+  status: (id: string) => `/api/users/${encodeURIComponent(id)}/status`,
+  roles: (id: string) => `/api/users/${encodeURIComponent(id)}/roles`,
 } as const
 
 /** Query string of API-012: empty and default-false values are left out. */
@@ -212,4 +217,50 @@ export interface UpdateUserInput {
 
 export function updateUser(id: string, input: UpdateUserInput): Promise<UserDetail> {
   return apiRequest<UserDetail>(USERS_PATHS.byId(id), { method: 'PATCH', body: input })
+}
+
+// ---------------------------------------------------------------------------
+// MOD-03-T14 — account status (API-027/API-028) and role assignment (API-034)
+// ---------------------------------------------------------------------------
+
+/** Actions of POST /api/users/:id/status (`ChangeUserStatusDto`); the soft delete is DELETE /api/users/:id. */
+export const USER_STATUS_ACTIONS = ['activate', 'suspend', 'archive', 'restore', 'unlock'] as const
+export type UserStatusAction = (typeof USER_STATUS_ACTIONS)[number]
+
+/** `reason` is free text of 1–500 characters after trim, recorded in the audit event only. */
+export const STATUS_REASON_MAX_LENGTH = 500
+
+export interface ChangeUserStatusInput {
+  action: UserStatusAction
+  reason?: string
+}
+
+/** API-027: answers 200 with the detail after the transition (the caller's projection). */
+export function changeUserStatus(id: string, input: ChangeUserStatusInput): Promise<UserDetail> {
+  return apiRequest<UserDetail>(USERS_PATHS.status(id), { method: 'POST', body: input })
+}
+
+export interface DeleteUserInput {
+  reason?: string
+}
+
+/**
+ * API-028 soft delete: answers 200 with the detail (`status: archived`,
+ * `deletedAt` set). The optional body travels only when a reason is given.
+ */
+export function deleteUser(id: string, input?: DeleteUserInput): Promise<UserDetail> {
+  return apiRequest<UserDetail>(USERS_PATHS.byId(id), { method: 'DELETE', body: input?.reason ? input : undefined })
+}
+
+/** Body of API-034 (`ReplaceUserRolesDto`): the complete set of role keys the user holds afterwards. */
+export interface ReplaceUserRolesInput {
+  /** Unique keys, at most 10; `[]` removes every role. */
+  roleKeys: string[]
+  /** Kind of the employee profile created when `teacher` and `staff` are added together to a user without one. */
+  employeeKind?: EmployeeKind
+}
+
+/** API-034 full replacement; answers 200 with the detail (the caller's projection). */
+export function replaceUserRoles(id: string, input: ReplaceUserRolesInput): Promise<UserDetail> {
+  return apiRequest<UserDetail>(USERS_PATHS.roles(id), { method: 'PUT', body: input })
 }

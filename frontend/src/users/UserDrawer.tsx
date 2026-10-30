@@ -4,9 +4,12 @@
 // projection (`users.read_contact`, D-R07). Since MOD-03-T12 the header also
 // issues the one-time invitation link (`invited` accounts, `users.create`) and
 // the password-reset link (`active` accounts, `users.update`) — API-015/API-019,
-// shown once in IssuedLinkModal. T14 adds roles, status actions and guardians.
+// shown once in IssuedLinkModal. Since MOD-03-T14 the header carries the
+// account-actions menu (API-027/API-028) and the body is tabbed: details,
+// roles (`users.roles.assign`, API-034) and guardians / students (API-029..033).
 import { EditOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, List, Popconfirm, Space, Spin, Tag, Typography } from 'antd'
+import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, Popconfirm, Space, Spin, Tabs, Tag, Typography } from 'antd'
+import type { TabsProps } from 'antd'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,15 +18,19 @@ import type { IssuedLinkKind } from '../account/IssuedLinkModal'
 import { issueInvitation, issuePasswordReset } from '../api/account'
 import type { IssuedLink } from '../api/account'
 import { getUser, updateUser } from '../api/users'
-import type { GuardianLink, UserDetail } from '../api/users'
+import type { UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import type { Language } from '../i18n/language'
+import { GuardianLinksTab } from './GuardianLinksTab'
 import { EmployeeProfileFields, IdentityFields, StudentProfileFields } from './UserFormFields'
+import { UserRolesTab } from './UserRolesTab'
+import { UserStatusActions } from './UserStatusActions'
 import { describeUsersFailure, failureMessage } from './users.errors'
 import { displayNameOf, formatDateTime, formatDay, localizedLabel } from './users.format'
 import type { Translate } from './users.format'
+import { linkSidesOf } from './users.guardians'
 import { editFormValuesOf, planUserPatch } from './users.patch'
 import type { EditUserFormValues } from './users.patch'
 
@@ -33,7 +40,7 @@ interface UserDrawerProps {
   /** The row came from a list that includes deleted users (the server then needs `users.deactivate`). */
   includeDeleted?: boolean
   onClose: () => void
-  /** Called with the detail returned by a successful PATCH so the list can refresh its row. */
+  /** Called with the detail returned by a successful write so the list can refresh its row. */
   onUpdated: (user: UserDetail) => void
 }
 
@@ -55,6 +62,9 @@ interface UserDrawerBodyProps {
   onUpdated: (user: UserDetail) => void
 }
 
+const DETAILS_TAB = 'details'
+const ROLES_TAB = 'roles'
+
 function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
@@ -62,14 +72,17 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
   const contact = hasPermission('users.read_contact')
   const canUpdate = hasPermission('users.update')
   const canCreate = hasPermission('users.create')
+  const canAssignRoles = hasPermission('users.roles.assign')
   const [user, setUser] = useState<UserDetail | null>(null)
   const [loadError, setLoadError] = useState<unknown>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [issuing, setIssuing] = useState<IssuedLinkKind | null>(null)
   const [issued, setIssued] = useState<{ kind: IssuedLinkKind; link: IssuedLink } | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [tab, setTab] = useState(DETAILS_TAB)
   const [form] = Form.useForm()
 
   useEffect(() => {
@@ -82,7 +95,7 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
         if (!controller.signal.aborted) setLoadError(error)
       })
     return () => controller.abort()
-  }, [userId, includeDeleted])
+  }, [userId, includeDeleted, reloadKey])
 
   if (loadError) {
     return (
@@ -102,6 +115,14 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
     )
   }
 
+  /** Every write answers with the detail in the caller's projection: show it and hand it to the list. */
+  const applyUpdate = (updated: UserDetail) => {
+    setUser(updated)
+    onUpdated(updated)
+  }
+
+  const reloadDetail = () => setReloadKey((value) => value + 1)
+
   const onSave = async (values: EditUserFormValues) => {
     const patch = planUserPatch(user, values, { contact })
     if (!patch) {
@@ -112,9 +133,7 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
     setSaving(true)
     setSaveError(null)
     try {
-      const updated = await updateUser(user.id, patch)
-      setUser(updated)
-      onUpdated(updated)
+      applyUpdate(await updateUser(user.id, patch))
       setEditing(false)
       message.success(t('users.detail.saved'))
     } catch (error) {
@@ -146,6 +165,48 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
   const canInvite = canCreate && user.status === 'invited' && !user.deletedAt
   const canReset = canUpdate && user.status === 'active' && !user.deletedAt
 
+  const details = editing ? (
+    <Form<EditUserFormValues>
+      form={form}
+      layout="vertical"
+      requiredMark={false}
+      initialValues={editFormValuesOf(user)}
+      onFinish={onSave}
+      disabled={saving}
+    >
+      {saveError ? <Alert type="error" showIcon message={saveError} style={{ marginBottom: 16 }} /> : null}
+      <IdentityFields contact={contact} mode="edit" />
+      {user.studentProfile ? (
+        <>
+          <Divider plain>{t('users.detail.studentProfile')}</Divider>
+          <StudentProfileFields withNotes={false} />
+        </>
+      ) : null}
+      {user.employeeProfile ? (
+        <>
+          <Divider plain>{t('users.detail.employeeProfile')}</Divider>
+          <EmployeeProfileFields />
+        </>
+      ) : null}
+      <Space>
+        <Button type="primary" htmlType="submit" loading={saving}>
+          {t('common.save')}
+        </Button>
+        <Button onClick={() => setEditing(false)}>{t('common.cancel')}</Button>
+      </Space>
+    </Form>
+  ) : (
+    <UserDetails user={user} contact={contact} />
+  )
+
+  const tabs: TabsProps['items'] = [
+    { key: DETAILS_TAB, label: t('users.tabs.details'), children: details },
+    ...(canAssignRoles ? [{ key: ROLES_TAB, label: t('users.tabs.roles'), children: <UserRolesTab user={user} onSaved={applyUpdate} /> }] : []),
+    ...linkSidesOf(user).map((side) => ({ key: side, label: t(`users.tabs.${side}`), children: <GuardianLinksTab user={user} side={side} /> })),
+  ]
+  // A tab can disappear after a write (the student role removed, …): fall back to the details.
+  const activeKey = tabs.some((item) => item.key === tab) ? tab : DETAILS_TAB
+
   return (
     <>
       <UserHeader
@@ -158,6 +219,7 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
                   icon={<EditOutlined />}
                   onClick={() => {
                     setSaveError(null)
+                    setTab(DETAILS_TAB)
                     setEditing(true)
                   }}
                 >
@@ -181,6 +243,7 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
                   </Button>
                 </Popconfirm>
               ) : null}
+              <UserStatusActions user={user} onChanged={applyUpdate} onStale={reloadDetail} />
             </Space>
           ) : null
         }
@@ -192,40 +255,7 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
 
       {!contact ? <Alert type="info" showIcon message={t('users.reducedHint')} style={{ marginTop: 16 }} /> : null}
 
-      {editing ? (
-        <Form<EditUserFormValues>
-          form={form}
-          layout="vertical"
-          requiredMark={false}
-          initialValues={editFormValuesOf(user)}
-          onFinish={onSave}
-          disabled={saving}
-          style={{ marginTop: 16 }}
-        >
-          {saveError ? <Alert type="error" showIcon message={saveError} style={{ marginBottom: 16 }} /> : null}
-          <IdentityFields contact={contact} mode="edit" />
-          {user.studentProfile ? (
-            <>
-              <Divider plain>{t('users.detail.studentProfile')}</Divider>
-              <StudentProfileFields withNotes={false} />
-            </>
-          ) : null}
-          {user.employeeProfile ? (
-            <>
-              <Divider plain>{t('users.detail.employeeProfile')}</Divider>
-              <EmployeeProfileFields />
-            </>
-          ) : null}
-          <Space>
-            <Button type="primary" htmlType="submit" loading={saving}>
-              {t('common.save')}
-            </Button>
-            <Button onClick={() => setEditing(false)}>{t('common.cancel')}</Button>
-          </Space>
-        </Form>
-      ) : (
-        <UserDetails user={user} contact={contact} />
-      )}
+      <Tabs activeKey={activeKey} onChange={setTab} items={tabs} style={{ marginTop: 8 }} />
 
       <IssuedLinkModal kind={issued?.kind ?? 'invitation'} issued={issued?.link ?? null} onClose={() => setIssued(null)} />
     </>
@@ -310,9 +340,6 @@ function UserDetails({ user, contact }: { user: UserDetail; contact: boolean }) 
       <Divider plain>{user.employeeProfile ? t('users.detail.employeeProfile') : t('users.detail.studentProfile')}</Divider>
       <ProfileDetails user={user} t={t} language={language} />
 
-      {user.guardians.length > 0 ? <LinkList title={t('users.detail.guardians')} links={user.guardians} /> : null}
-      {user.students.length > 0 ? <LinkList title={t('users.detail.students')} links={user.students} /> : null}
-
       <Divider plain>{t('users.detail.activity')}</Divider>
       <Descriptions column={1} size="small" items={activity} />
     </>
@@ -352,26 +379,4 @@ function ProfileDetails({ user, t, language }: { user: UserDetail; t: Translate;
     )
   }
   return <Typography.Text type="secondary">{t('users.detail.noProfile')}</Typography.Text>
-}
-
-function LinkList({ title, links }: { title: string; links: GuardianLink[] }) {
-  const { t } = useTranslation()
-  return (
-    <>
-      <Divider plain>{title}</Divider>
-      <List
-        size="small"
-        dataSource={links}
-        renderItem={(link) => (
-          <List.Item key={link.userId}>
-            <Space wrap>
-              <Typography.Text>{displayNameOf(link)}</Typography.Text>
-              <Tag>{t(`users.relationships.${link.relationship}`)}</Tag>
-              {link.isPrimary ? <Tag color="green">{t('users.detail.primary')}</Tag> : null}
-            </Space>
-          </List.Item>
-        )}
-      />
-    </>
-  )
 }

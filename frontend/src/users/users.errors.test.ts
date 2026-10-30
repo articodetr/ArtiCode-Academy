@@ -32,6 +32,25 @@ describe('describeUsersFailure', () => {
     })
   })
 
+  it('maps the T14 codes, telling the two meanings of self_forbidden and user_not_found apart by their details', () => {
+    expect(describeUsersFailure(apiError(409, { code: 'last_admin' }))).toEqual({ key: 'users.errors.last_admin' })
+    expect(describeUsersFailure(apiError(409, { code: 'invalid_transition', from: 'deleted', action: 'restore', allowed: [] }))).toEqual({
+      key: 'users.errors.invalid_transition',
+    })
+    expect(describeUsersFailure(apiError(403, { code: 'self_forbidden', action: 'suspend' }))).toEqual({ key: 'users.errors.self_forbidden' })
+    expect(describeUsersFailure(apiError(403, { code: 'self_forbidden', action: 'remove_academy_admin' }))).toEqual({ key: 'users.errors.self_forbidden_roles' })
+    expect(describeUsersFailure(apiError(422, { code: 'not_a_guardian', userId: 'g' }))).toEqual({ key: 'users.errors.not_a_guardian' })
+    expect(describeUsersFailure(apiError(422, { code: 'not_a_student', userId: 's' }))).toEqual({ key: 'users.errors.not_a_student' })
+    expect(describeUsersFailure(apiError(409, { code: 'already_linked', studentId: 's', guardianId: 'g' }))).toEqual({ key: 'users.errors.already_linked' })
+    expect(describeUsersFailure(apiError(404, { code: 'user_not_found', studentId: 's', guardianId: 'g', reason: 'not_linked' }))).toEqual({ key: 'users.errors.not_linked' })
+    expect(describeUsersFailure(apiError(404, { code: 'user_not_found', userId: 'g', party: 'guardian' }))).toEqual({ key: 'users.errors.guardian_not_found' })
+    expect(describeUsersFailure(apiError(404, { code: 'user_not_found', userId: 's', party: 'student' }))).toEqual({ key: 'users.errors.student_not_found' })
+    expect(describeUsersFailure(apiError(404, { code: 'user_not_found' }))).toEqual({ key: 'users.errors.user_not_found' })
+    for (const key of ['last_admin', 'self_forbidden_roles', 'not_linked', 'guardian_not_found'] as const) {
+      expect(failureMessage(t, { key: `users.errors.${key}` })).toBe(ar.users.errors[key])
+    }
+  })
+
   it('turns a validation 400 without a code into the server message, and classifies the rest', () => {
     expect(describeUsersFailure(apiError(400, { message: 'fullName must be longer than or equal to 2 characters' }))).toEqual({
       key: 'users.errors.validation',

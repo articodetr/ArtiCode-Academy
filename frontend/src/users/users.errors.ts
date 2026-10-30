@@ -1,6 +1,7 @@
 // Maps a failed users request to a translation key (and, where the backend
 // code points at one input, the form field that should carry the message).
-// Codes: backend/src/users/users.errors.ts and the auth/permission guards.
+// Codes: backend/src/users/users.errors.ts (+ guardians.errors.ts) and the
+// auth/permission guards.
 import { ApiError } from '../api/client'
 
 export interface UsersFailure {
@@ -27,10 +28,34 @@ const KNOWN_CODES = new Set([
   'nothing_to_update',
   'user_not_invitable',
   'user_not_resettable',
+  // T14 — account status, soft delete, role assignment and guardian links
+  'invalid_transition',
+  'self_forbidden',
+  'last_admin',
+  'not_a_guardian',
+  'not_a_student',
+  'already_linked',
   'permission_denied',
   'origin_forbidden',
   'rate_limited',
 ])
+
+/** `self_forbidden` of API-034 carries this `action`; the status actions carry `suspend`/`archive`/`delete`. */
+const SELF_FORBIDDEN_ROLES_ACTION = 'remove_academy_admin'
+
+/**
+ * One backend code can carry two situations told apart by the details; the
+ * message key follows the situation (users.errors.<key>).
+ */
+function messageKeyOf(code: string, body: Record<string, unknown>): string {
+  if (code === 'self_forbidden' && body.action === SELF_FORBIDDEN_ROLES_ACTION) return 'self_forbidden_roles'
+  if (code === 'user_not_found') {
+    if (body.reason === 'not_linked') return 'not_linked'
+    if (body.party === 'guardian') return 'guardian_not_found'
+    if (body.party === 'student') return 'student_not_found'
+  }
+  return code
+}
 
 const FIELD_OF_CODE: Readonly<Record<string, string[]>> = {
   email_in_use: ['email'],
@@ -56,7 +81,7 @@ export function describeUsersFailure(error: unknown): UsersFailure {
 
   const body = (typeof error.body === 'object' && error.body !== null ? error.body : {}) as Record<string, unknown>
   if (error.code && KNOWN_CODES.has(error.code)) {
-    const failure: UsersFailure = { key: `users.errors.${error.code}` }
+    const failure: UsersFailure = { key: `users.errors.${messageKeyOf(error.code, body)}` }
     const field = FIELD_OF_CODE[error.code]
     if (field) failure.field = field
     const list = stringList(body.missing) ?? stringList(body.roleKeys)

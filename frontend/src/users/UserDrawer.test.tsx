@@ -39,7 +39,7 @@ async function startEditing() {
 }
 
 describe('UserDrawer', () => {
-  it('shows identity, localized roles, the student profile, guardians and activity for the full projection', async () => {
+  it('shows identity, localized roles, the student profile and activity for the full projection, with the roles and guardians tabs (T14)', async () => {
     mockDetailApi(makeUserDetail())
     renderDrawer()
 
@@ -49,16 +49,18 @@ describe('UserDrawer', () => {
     expect(within(dialog).getByText(ar.labels.invited)).toBeInTheDocument()
     expect(within(dialog).getByText('omar@test.local')).toBeInTheDocument()
     expect(within(dialog).getByText('S-2026-001')).toBeInTheDocument()
-    expect(within(dialog).getByText(ar.users.detail.guardians)).toBeInTheDocument()
-    expect(within(dialog).getByText('خالد محمود')).toBeInTheDocument()
-    expect(within(dialog).getByText(ar.users.relationships.father)).toBeInTheDocument()
-    expect(within(dialog).getByText(ar.users.detail.primary)).toBeInTheDocument()
     expect(within(dialog).getByText(ar.users.detail.notVerified)).toBeInTheDocument()
     expect(within(dialog).queryByText(ar.users.reducedHint)).not.toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: new RegExp(ar.common.edit) })).toBeInTheDocument()
+    // Since T14 the links live in their own tab; a student gets the guardians tab, never the students tab.
+    expect(within(dialog).getByRole('tab', { name: ar.users.tabs.details })).toHaveAttribute('aria-selected', 'true')
+    expect(within(dialog).getByRole('tab', { name: ar.users.tabs.roles })).toBeInTheDocument()
+    expect(within(dialog).getByRole('tab', { name: ar.users.tabs.guardians })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('tab', { name: ar.users.tabs.students })).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('خالد محمود')).not.toBeInTheDocument()
   })
 
-  it('shows the reduced projection without contact rows and the edit button only with users.update', async () => {
+  it('shows the reduced projection without contact rows, the edit button only with users.update and the roles tab only with users.roles.assign', async () => {
     mockDetailApi(reduced(makeUserDetail()))
     renderDrawer(['users.read'])
 
@@ -68,6 +70,9 @@ describe('UserDrawer', () => {
     expect(within(dialog).queryByText(ar.users.fields.email)).not.toBeInTheDocument()
     expect(within(dialog).queryByText(ar.users.detail.lastLoginAt)).not.toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: new RegExp(ar.common.edit) })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('tab', { name: ar.users.tabs.roles })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: new RegExp(ar.users.status.menu) })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('tab', { name: ar.users.tabs.guardians })).toBeInTheDocument()
   })
 
   it('sends only the changed fields as PATCH, reports success and hands the updated detail back', async () => {
