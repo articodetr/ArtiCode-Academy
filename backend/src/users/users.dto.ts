@@ -48,8 +48,10 @@ export const USERS_PAGE_MAX = 100;
 
 /** Role keys: lower-case, 3–64 characters (same shape as the seeded system roles). */
 export const ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]{2,63}$/;
-/** Upper bound of extra roles on creation (the catalog has five system roles; custom roles are few). */
-export const CREATE_ROLE_KEYS_MAX = 10;
+/** Upper bound of role keys in one request (the catalog has five system roles; custom roles are few). */
+export const ROLE_KEYS_MAX = 10;
+/** Upper bound of extra roles on creation. */
+export const CREATE_ROLE_KEYS_MAX = ROLE_KEYS_MAX;
 
 /**
  * Query booleans: `true`/`false` (also `1`/`0`). Reads the raw query value so
@@ -473,6 +475,37 @@ export class DeleteUserDto {
   @IsString()
   @Length(1, STATUS_REASON_MAX_LENGTH)
   reason?: string;
+}
+
+// ---------------------------------------------------------------------------
+// MOD-03-T07 — role assignment
+// ---------------------------------------------------------------------------
+
+/** Body of `PUT /api/users/:id/roles`: the complete set of roles the user ends up with. */
+export class ReplaceUserRolesDto {
+  @ApiProperty({
+    type: [String],
+    example: ['teacher', 'staff'],
+    description:
+      'The complete set of role keys the user holds afterwards (full replacement; an empty array removes every role). ' +
+      'No role may confer a permission the caller does not hold (learner baseline excepted).',
+  })
+  @IsArray()
+  @ArrayMaxSize(ROLE_KEYS_MAX)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @Matches(ROLE_KEY_PATTERN, { each: true })
+  roleKeys: string[];
+
+  @ApiPropertyOptional({
+    enum: Object.values(EmployeeKind),
+    description:
+      'Kind of the employee profile created when `teacher` or `staff` is added to a user who has none. ' +
+      'Inferred when exactly one of the two is added; required when both are. Must be absent or match an existing employee profile.',
+  })
+  @IsOptional()
+  @IsIn(Object.values(EmployeeKind))
+  employeeKind?: EmployeeKind;
 }
 
 // ---------------------------------------------------------------------------

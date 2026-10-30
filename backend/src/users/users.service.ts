@@ -18,6 +18,7 @@ import type {
   DeleteUserDto,
   GuardianLinkDto,
   ListUsersQueryDto,
+  ReplaceUserRolesDto,
   UpdateUserDto,
   UserDetailDto,
   UserListDto,
@@ -34,6 +35,8 @@ import {
   extraRoleProfileProblem,
   profileKindFor,
 } from './users.policy.js';
+import type { RoleGrants } from './users.policy.js';
+import { SELF_FORBIDDEN_ROLES_ACTION, diffRoleKeys, planProfiles, removesAcademyAdmin } from './users.roles.js';
 import {
   accountState,
   allowedActions,
@@ -60,6 +63,8 @@ export const USERS_AUDIT_ACTIONS = {
   statusChanged: 'users.status.changed',
   /** T06: soft delete, metadata `{ from, to: 'archived', reason, revokedSessions }`. */
   deleted: 'users.deleted',
+  /** T07: role replacement, metadata `{ added, removed, roles, profilesCreated? }` (keys only). */
+  rolesChanged: 'users.roles.changed',
 } as const;
 
 // Explicit projections: the password hash and the login counters are never
@@ -137,10 +142,23 @@ const STATE_SELECT = {
   roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
 } satisfies Prisma.UserSelect;
 
+// What a role replacement (users.roles.ts) decides on: the grants for the diff
+// and SEC-R-16/17, the profiles for completion, the status for the admin quorum.
+const ROLES_TARGET_SELECT = {
+  id: true,
+  status: true,
+  deletedAt: true,
+  roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
+  studentProfile: { select: { userId: true } },
+  employeeProfile: { select: { kind: true } },
+} satisfies Prisma.UserSelect;
+
 type SummaryRow = Prisma.UserGetPayload<{ select: typeof SUMMARY_SELECT }>;
 type ListRow = Prisma.UserGetPayload<{ select: typeof LIST_SELECT }>;
 type DetailRow = Prisma.UserGetPayload<{ select: typeof DETAIL_SELECT }>;
 type StateRow = Prisma.UserGetPayload<{ select: typeof STATE_SELECT }>;
+type RolesTargetRow = Prisma.UserGetPayload<{ select: typeof ROLES_TARGET_SELECT }>;
+type RoleRow = Prisma.RoleGetPayload<{ select: typeof ROLE_GRANT_SELECT }>;
 
 /** `%`, `_` and `\` matched literally inside a LIKE/ILIKE pattern (PostgreSQL escape character `\`). */
 export function escapeLikePattern(value: string): string {
@@ -645,20 +663,176 @@ export class UsersService {
     if (!user || (user.deletedAt !== null && !caller.permissions.includes(DEACTIVATE_USERS_PERMISSION))) {
       throw usersError.userNotFound();
     }
-    const exceeding = exceedingPermissions(activePermissionKeys(user.roles.map((grant) => grant.role)), caller.permissions);
-    if (exceeding.length > 0) throw authError.permissionDenied(exceeding);
+    assertWithinReach(user.roles.map((grant) => grant.role), caller);
+    return user;
+  }
+
+  // -------------------------------------------------------- roles (T07)
+
+  /**
+   * MOD-03-T07: `PUT /api/users/:id/roles` — the user ends up with exactly
+   * `roleKeys` (users.roles.ts). Written as a diff in one transaction: grants
+   * kept are untouched (their `assigned_by`/`assigned_at` stay), grants added
+   * carry the caller as `assigned_by`, and a `student`/`teacher`/`staff` role
+   * added to a user without the matching profile creates it (profiles are
+   * never removed). One event `users.roles.changed`; a request that changes
+   * no role writes nothing and records nothing. The new permissions apply at
+   * the next request of the user, because the principal is read from the
+   * database every time (ADR-024).
+   *
+   * Order of the checks: 404 (unknown or soft-deleted) → 403 `permission_denied`
+   * when the target's roles confer a permission the caller lacks (SEC-R-17) →
+   * 400 `role_unknown` → inside the transaction, on the locked row: SEC-R-17
+   * again, 403 `permission_denied` for an added role the caller could not
+   * confer (SEC-R-16), 403 `self_forbidden` when taking `academy_admin` from
+   * oneself, 422 `employee_kind_required` / `profile_mismatch`, 200 no-op,
+   * 409 `last_admin` when the target is the last active academy admin.
+   */
+  async replaceRoles(
+    id: string,
+    input: ReplaceUserRolesDto,
+    caller: AuthPrincipal,
+    ctx: RequestContext,
+    view: UsersProjection,
+  ): Promise<UserDetailDto> {
+    const before = await this.loadRolesTarget(id, caller);
+    const requestedKeys = [...new Set(input.roleKeys)].sort();
+    const requested = requestedKeys.length > 0
+      ? await this.prisma.db.role.findMany({ where: { key: { in: requestedKeys } }, select: ROLE_GRANT_SELECT })
+      : [];
+    const unknown = requestedKeys.filter((key) => !requested.some((role) => role.key === key));
+    if (unknown.length > 0) throw usersError.roleUnknown(unknown);
+
+    // Lock order (no deadlock with the status changes of T06): an active academy
+    // admin is locked through the same admin scan as T06, anyone else through
+    // their own row.
+    const quorumMember = before.status === 'active' && holdsAcademyAdmin(before.roles);
+    let added: string[] = [];
+    try {
+      await this.prisma.db.$transaction(async (tx) => {
+        let admins = quorumMember ? await lockActiveAdmins(tx) : null;
+        if (!quorumMember) await lockUserRow(tx, id);
+        const target = await tx.user.findUnique({ where: { id }, select: ROLES_TARGET_SELECT });
+        if (!target || target.deletedAt !== null) throw usersError.userNotFound();
+
+        const current = target.roles.map((grant) => grant.role);
+        assertWithinReach(current, caller);
+        const diff = diffRoleKeys(current.map((role) => role.key), requestedKeys);
+        const addedRoles = requested.filter((role) => diff.added.includes(role.key));
+        assertWithinReach(addedRoles, caller);
+        if (removesAcademyAdmin(diff) && target.id === caller.id) throw usersError.selfForbidden(SELF_FORBIDDEN_ROLES_ACTION);
+        const profiles = planProfiles(
+          diff.added,
+          { hasStudentProfile: target.studentProfile !== null, employeeKind: target.employeeProfile?.kind ?? null },
+          input.employeeKind,
+        );
+        if (profiles.kind === 'employee_kind_required') {
+          throw usersError.employeeKindRequired(
+            profiles.roleKeys,
+            'Adding both employee roles to a user without an employee profile needs employeeKind ("teacher" or "staff")',
+          );
+        }
+        if (profiles.kind === 'profile_mismatch') throw usersError.profileMismatch(profiles.detail);
+        if (diff.added.length === 0 && diff.removed.length === 0) return;
+        added = diff.added;
+
+        if (removesAcademyAdmin(diff) && target.status === 'active') {
+          // The active admins are locked for the rest of the transaction, so two
+          // concurrent requests cannot each count the other and leave none (AC 2, 5).
+          admins ??= await lockActiveAdmins(tx);
+          if (!admins.some((admin) => admin.id !== target.id)) throw usersError.lastAdmin();
+        }
+
+        const removedRoleIds = current.filter((role) => diff.removed.includes(role.key)).map((role) => role.id);
+        if (removedRoleIds.length > 0) await tx.userRole.deleteMany({ where: { userId: id, roleId: { in: removedRoleIds } } });
+        if (addedRoles.length > 0) {
+          await tx.userRole.createMany({ data: addedRoles.map((role) => ({ userId: id, roleId: role.id, assignedById: caller.id })) });
+        }
+        const profilesCreated: string[] = [];
+        if (profiles.student) {
+          await tx.studentProfile.create({ data: { userId: id }, select: { userId: true } });
+          profilesCreated.push('student');
+        }
+        if (profiles.employee !== null) {
+          await tx.employeeProfile.create({ data: { userId: id, kind: profiles.employee }, select: { userId: true } });
+          profilesCreated.push('employee');
+        }
+        // The roles are part of the user as the list and the detail present it.
+        await tx.user.update({ where: { id }, data: { updatedAt: new Date() }, select: { id: true } });
+        // Role keys and profile kinds only — never contact data or names.
+        await this.audit.record(
+          {
+            action: USERS_AUDIT_ACTIONS.rolesChanged,
+            actorUserId: caller.id,
+            entityType: 'users',
+            entityId: id,
+            metadata: {
+              added: diff.added,
+              removed: diff.removed,
+              roles: requestedKeys,
+              ...(profilesCreated.length > 0 ? { profilesCreated } : {}),
+            },
+            ...ctx,
+          },
+          tx,
+        );
+      });
+    } catch (error) {
+      throw translateRoleGrantError(error, added);
+    }
+    return this.getById(id, false, view);
+  }
+
+  /**
+   * The account whose roles are replaced: unknown or soft-deleted → 404 (as
+   * PATCH — nothing applies to a deleted account). Authorisation before
+   * anything else (SEC-R-17): a caller who may not act on this account learns
+   * nothing about it, not even whether the requested keys exist.
+   */
+  private async loadRolesTarget(id: string, caller: AuthPrincipal): Promise<RolesTargetRow> {
+    const user = await this.prisma.db.user.findFirst({ where: { id, deletedAt: null }, select: ROLES_TARGET_SELECT });
+    if (!user) throw usersError.userNotFound();
+    assertWithinReach(user.roles.map((grant) => grant.role), caller);
     return user;
   }
 }
 
 /**
+ * The no-exceeding rule on a set of roles: every active permission they confer
+ * must be held by the caller apart from the learner baseline (users.policy.ts),
+ * else `403 permission_denied` naming the excess. Applied to the roles of a
+ * target account (SEC-R-17) and to the roles a caller grants (SEC-R-16).
+ */
+function assertWithinReach(roles: readonly RoleGrants[], caller: AuthPrincipal): void {
+  const exceeding = exceedingPermissions(activePermissionKeys(roles), caller.permissions);
+  if (exceeding.length > 0) throw authError.permissionDenied(exceeding);
+}
+
+function holdsAcademyAdmin(grants: readonly { role: RoleRow }[]): boolean {
+  return grants.some((grant) => grant.role.key === ACADEMY_ADMIN_ROLE_KEY);
+}
+
+/**
+ * Locks one `users` row until the transaction ends. `FOR NO KEY UPDATE`
+ * serialises concurrent writes to the account (a second role replacement, a
+ * status change) without blocking the foreign-key checks of rows that merely
+ * reference it (`user_roles.assigned_by`, `audit_logs.actor_user_id`).
+ */
+async function lockUserRow(tx: Prisma.TransactionClient, id: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR NO KEY UPDATE`;
+}
+
+/**
  * Ids of the active, non-deleted holders of `academy_admin`, locked
- * (`FOR UPDATE`) until the transaction ends. Under READ COMMITTED a waiting
- * transaction re-evaluates the row after the lock is released, so an admin
- * suspended meanwhile is no longer counted.
+ * (`FOR UPDATE`) until the transaction ends. Two statements on purpose: under
+ * READ COMMITTED a statement that waited for a lock re-evaluates only the
+ * locked row itself (an admin suspended meanwhile is dropped), but keeps its
+ * snapshot for every other table — so `academy_admin` grants a concurrent
+ * role replacement (T07) removed meanwhile would still be seen. The second
+ * statement starts a fresh snapshot and counts the rows the first one locked.
  */
 async function lockActiveAdmins(tx: Prisma.TransactionClient): Promise<{ id: string }[]> {
-  return tx.$queryRaw<{ id: string }[]>`
+  await tx.$queryRaw`
     SELECT u.id
     FROM users u
     WHERE u.status = 'active'
@@ -668,6 +842,27 @@ async function lockActiveAdmins(tx: Prisma.TransactionClient): Promise<{ id: str
         WHERE ur.user_id = u.id AND r.key = ${ACADEMY_ADMIN_ROLE_KEY}
       )
     FOR UPDATE`;
+  return tx.$queryRaw<{ id: string }[]>`
+    SELECT u.id
+    FROM users u
+    WHERE u.status = 'active'
+      AND u.deleted_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id AND r.key = ${ACADEMY_ADMIN_ROLE_KEY}
+      )`;
+}
+
+/**
+ * A role deleted between the lookup and the grant (T08 — `user_roles.role_id`
+ * is `Restrict`, so the insert fails with P2003) reads as `400 role_unknown`
+ * naming the added keys; anything else is rethrown.
+ */
+function translateRoleGrantError(error: unknown, addedKeys: readonly string[]): unknown {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003' && addedKeys.length > 0) {
+    return usersError.roleUnknown(addedKeys);
+  }
+  return error;
 }
 
 /** Maps a unique-constraint violation raised by a concurrent insert to the matching 409; rethrows anything else. */

@@ -1,9 +1,10 @@
 // Error vocabulary of MOD-03 (users, invitations, password reset, roles,
-// guardians) — fixed in MOD-03-T00, extended in T02, T03, T04, T05 and T06. Same shape as
+// guardians) — fixed in MOD-03-T00, extended in T02, T03, T04, T05 and T06; T07
+// (role assignment) reuses role_unknown, employee_kind_required,
+// profile_mismatch, self_forbidden and last_admin. Same shape as
 // AuthHttpException: the body is `{ statusCode, error, code, message, ...details }`
-// and the frontend maps the stable `code` to a localized message. Only the
-// factories below are in use; the remaining codes are reserved for the tasks
-// named next to them.
+// and the frontend maps the stable `code` to a localized message. Every code
+// below is in use.
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -101,13 +102,10 @@ export const usersError = {
     new UsersHttpException(HttpStatus.CONFLICT, 'employee_number_in_use', 'This employee number is already assigned'),
   profileMismatch: (detail: string) =>
     new UsersHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'profile_mismatch', detail),
-  employeeKindRequired: (roleKeys: readonly string[]) =>
-    new UsersHttpException(
-      HttpStatus.UNPROCESSABLE_ENTITY,
-      'employee_kind_required',
-      'An employee role needs an employee profile: create the user with kind "teacher" or "staff"',
-      { roleKeys: [...roleKeys] },
-    ),
+  employeeKindRequired: (
+    roleKeys: readonly string[],
+    message = 'An employee role needs an employee profile: create the user with kind "teacher" or "staff"',
+  ) => new UsersHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'employee_kind_required', message, { roleKeys: [...roleKeys] }),
   roleUnknown: (roleKeys: readonly string[]) =>
     new UsersHttpException(HttpStatus.BAD_REQUEST, 'role_unknown', 'Unknown role key', { roleKeys: [...roleKeys] }),
   // T03 — invitations

@@ -1,7 +1,8 @@
 // TEST-011 — MOD-03-T01 (GET /api/users, GET /api/users/:id), MOD-03-T02
-// (POST /api/users) and MOD-03-T04 (PATCH /api/users/:id), and TEST-026 —
-// MOD-03-T06 (POST /api/users/:id/status, DELETE /api/users/:id) against the
-// live development database, including the reduced projection of D-R07.
+// (POST /api/users) and MOD-03-T04 (PATCH /api/users/:id), TEST-026 —
+// MOD-03-T06 (POST /api/users/:id/status, DELETE /api/users/:id) and TEST-028
+// — MOD-03-T07 (PUT /api/users/:id/roles) against the live development
+// database, including the reduced projection of D-R07.
 // Skipped when no database is reachable. Fixtures carry a unique suffix and
 // are deleted at the end (cascade removes their roles, profiles, guardian
 // links and tokens; their audit rows stay — KI-032).
@@ -33,6 +34,8 @@ const USERS = '/api/users';
 const SENSITIVE_KEY = /hash|password/i;
 /** Fields hidden from callers without `users.read_contact` (D-R07). */
 const CONTACT_FIELDS = ['email', 'username', 'phone', 'emailVerifiedAt', 'lastLoginAt', 'lockedUntil'] as const;
+/** The first `GET /api/docs-json` builds the whole document; under a parallel e2e load it can exceed the 5 s default (KI-040). */
+const OPENAPI_TIMEOUT_MS = 20_000;
 const SUMMARY_KEYS = [
   'avatarUrl', 'createdAt', 'deletedAt', 'displayName', 'email', 'emailVerifiedAt', 'fullName', 'fullNameLatin',
   'id', 'lastLoginAt', 'locale', 'lockedUntil', 'phone', 'status', 'updatedAt', 'username',
@@ -91,7 +94,7 @@ function refreshCookie(res: SupertestResponse): string | undefined {
   return value.length > 0 ? value : undefined;
 }
 
-describe.skipIf(!available)('MOD-03 users list, detail, creation, update and account status (e2e, TEST-011, TEST-026)', () => {
+describe.skipIf(!available)('MOD-03 users list, detail, creation, update, account status and roles (e2e, TEST-011, TEST-026, TEST-028)', () => {
   let app: NestExpressApplication;
   let prisma: PrismaClient;
   let passwords: PasswordService;
@@ -772,7 +775,7 @@ describe.skipIf(!available)('MOD-03 users list, detail, creation, update and acc
     expect(res.body.paths['/api/users'].post.responses).toHaveProperty('201');
     expect(res.body.paths['/api/users'].post.responses).toHaveProperty('409');
     expect(res.body.paths['/api/users'].post.responses).toHaveProperty('422');
-  });
+  }, OPENAPI_TIMEOUT_MS);
   // ------------------------------------------------------------ T04 update
 
   describe('PATCH /api/users/:id (T04)', () => {
@@ -1042,7 +1045,7 @@ describe.skipIf(!available)('MOD-03 users list, detail, creation, update and acc
       const operation = res.body.paths['/api/users/{id}'].patch;
       expect(operation).toBeDefined();
       for (const status of ['200', '400', '401', '403', '404', '409', '422']) expect(operation.responses, status).toHaveProperty(status);
-    });
+    }, OPENAPI_TIMEOUT_MS);
   });
 
   // ------------------------------------------------------------ T06 status
@@ -1442,6 +1445,318 @@ describe.skipIf(!available)('MOD-03 users list, detail, creation, update and acc
         expect(del.responses, `delete ${code}`).toHaveProperty(code);
       }
       expect(change.requestBody).toBeDefined();
+    }, OPENAPI_TIMEOUT_MS);
+  });
+
+  // --------------------------------------------------------------- T07 roles
+
+  describe('PUT /api/users/:id/roles (T07, TEST-028)', () => {
+    const put = (caller: string, id: string, body: unknown) => api().put(`${USERS}/${id}/roles`).set(bearer(caller)).send(body as object);
+    const roleEvents = (id: string) =>
+      prisma.auditLog.findMany({ where: { action: 'users.roles.changed', entityId: id }, orderBy: { createdAt: 'asc' } });
+    const grantsOf = (id: string) =>
+      prisma.userRole.findMany({
+        where: { userId: id },
+        select: { role: { select: { key: true } }, assignedById: true, assignedAt: true },
+        orderBy: { role: { key: 'asc' } },
+      });
+    const keysOf = async (id: string) => (await grantsOf(id)).map((grant) => grant.role.key);
+    const profilesOf = (id: string) =>
+      prisma.user.findUniqueOrThrow({
+        where: { id },
+        select: { updatedAt: true, studentProfile: { select: { studentNumber: true } }, employeeProfile: { select: { kind: true } } },
+      });
+    const customKey = (name: string) => `test_${name}_${RUN}`;
+
+    let adminRoleId: string;
+
+    beforeAll(async () => {
+      const system = await prisma.role.findMany({ where: { key: { in: ['academy_admin', 'student', 'teacher', 'guardian'] } }, select: { id: true, key: true } });
+      const systemRole = (key: string) => system.find((role) => role.key === key)!.id;
+      adminRoleId = systemRole('academy_admin');
+      await createRole('viewer', ['users.read']);
+      const roler = await createRole('roler', ['users.roles.assign']);
+      await createUser('roler', { roleIds: [roler] });
+      tokens['roler'] = await login(email('roler'));
+
+      await createUser('r-guardian', { roleIds: [systemRole('guardian')] });
+      await createUser('r-both', { roleIds: [systemRole('guardian')] });
+      await createUser('r-student', { roleIds: [systemRole('student')], studentProfile: { create: {} } });
+      await createUser('r-teacher', { roleIds: [systemRole('teacher')], employeeProfile: { create: { kind: 'teacher' } } });
+      await createUser('r-blank');
+      await createUser('r-admin-a', { roleIds: [adminRoleId] });
+      await createUser('r-admin-b', { roleIds: [adminRoleId] });
+      await createUser('r-admin-c', { roleIds: [adminRoleId], status: 'invited', withPassword: false });
     });
+
+    it('requires a token and users.roles.assign — and nothing else (T07 permissions)', async () => {
+      const id = fx['r-guardian']!;
+      expect((await api().put(`${USERS}/${id}/roles`).send({ roleKeys: [] }).expect(401)).body.code).toBe('unauthenticated');
+      for (const caller of ['reader', 'manager', 'plain', 'creator', 'deactivator']) {
+        const res = await put(caller, id, { roleKeys: ['guardian'] });
+        expect(res.status, caller).toBe(403);
+        expect(res.body, caller).toMatchObject({ code: 'permission_denied', missing: ['users.roles.assign'] });
+      }
+      // users.roles.assign alone suffices (no users.read needed); the response follows the caller’s projection.
+      const res = await put('roler', id, { roleKeys: ['guardian'] });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body).toMatchObject({ id, roles: [{ key: 'guardian' }], guardians: [], students: [] });
+      for (const field of CONTACT_FIELDS) expect(res.body[field], field).toBeNull();
+      expect([...collectKeys(res.body)].filter((key) => SENSITIVE_KEY.test(key))).toEqual([]);
+      expect(await roleEvents(id)).toHaveLength(0);
+    });
+
+    it('does not let a caller touch an account, or confer a role, beyond their own permissions (SEC-R-17, SEC-R-16)', async () => {
+      // The target’s roles: a teacher and the superuser are out of reach of a plain assigner — even for a harmless change.
+      const targets: Array<[string, string]> = [
+        [fx['r-teacher']!, 'lessons.manage'],
+        [fx['superuser']!, 'roles.manage'],
+      ];
+      for (const caller of ['roler', 'assigner']) {
+        for (const [id, missing] of targets) {
+          const res = await put(caller, id, { roleKeys: ['guardian'] });
+          expect(res.status, `${caller} ${id}`).toBe(403);
+          expect(res.body.code, `${caller} ${id}`).toBe('permission_denied');
+          expect(res.body.missing, `${caller} ${id}`).toContain(missing);
+          expect(res.body.missing, `${caller} ${id}`).not.toContain('users.roles.assign');
+        }
+      }
+      // The added roles: nothing beyond the caller’s own permissions, the learner baseline excepted.
+      const guardian = fx['r-guardian']!;
+      for (const [roleKey, missing] of [['teacher', 'lessons.manage'], ['staff', 'users.update'], ['academy_admin', 'roles.manage'], [customKey('viewer'), 'users.read']]) {
+        const res = await put('assigner', guardian, { roleKeys: ['guardian', roleKey] });
+        expect(res.status, roleKey).toBe(403);
+        expect(res.body.code, roleKey).toBe('permission_denied');
+        expect(res.body.missing, roleKey).toContain(missing);
+      }
+      expect(await keysOf(guardian)).toEqual(['guardian']);
+      expect(await keysOf(fx['r-teacher']!)).toEqual(['teacher']);
+      expect(await roleEvents(guardian)).toHaveLength(0);
+      // Learner roles are within reach: a student becomes a student-guardian.
+      const student = fx['r-student']!;
+      const ok = await put('assigner', student, { roleKeys: ['guardian', 'student'] });
+      expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+      expect(ok.body.roles.map((role: { key: string }) => role.key)).toEqual(['guardian', 'student']);
+      expect((await put('assigner', student, { roleKeys: ['student'] })).status).toBe(200);
+      expect(await keysOf(student)).toEqual(['student']);
+      expect((await roleEvents(student)).map((event) => event.metadata)).toEqual([
+        { added: ['guardian'], removed: [], roles: ['guardian', 'student'] },
+        { added: [], removed: ['guardian'], roles: ['student'] },
+      ]);
+    });
+
+    it('answers 400 role_unknown for unknown keys, 400 for invalid input and 404 for unknown or deleted users, writing nothing (T07 AC 1)', async () => {
+      const id = fx['r-guardian']!;
+      const unknown = await put('superuser', id, { roleKeys: ['guardian', 'no_such_role', 'another_ghost'] });
+      expect(unknown.status).toBe(400);
+      expect(unknown.body).toMatchObject({ code: 'role_unknown', roleKeys: ['another_ghost', 'no_such_role'] });
+
+      const invalid: Array<[string, unknown]> = [
+        ['empty body', {}],
+        ['roleKeys null', { roleKeys: null }],
+        ['roleKeys not an array', { roleKeys: 'teacher' }],
+        ['duplicate keys', { roleKeys: ['teacher', 'teacher'] }],
+        ['bad key pattern', { roleKeys: ['Academy-Admin'] }],
+        ['too many keys', { roleKeys: Array.from({ length: 11 }, (_, i) => `role_${i}`) }],
+        ['employeeKind unknown', { roleKeys: ['teacher'], employeeKind: 'manager' }],
+        ['undeclared field', { roleKeys: ['guardian'], assignedBy: 'me' }],
+      ];
+      for (const [label, body] of invalid) {
+        const res = await put('superuser', id, body);
+        expect(res.status, label).toBe(400);
+        expect(res.body.statusCode, label).toBe(400);
+        expect(res.body.code, label).toBeUndefined();
+      }
+      expect((await put('superuser', 'not-a-uuid', { roleKeys: [] })).status).toBe(400);
+      const unknownId = '00000000-0000-7000-8000-000000000000';
+      expect((await put('superuser', unknownId, { roleKeys: [] })).body).toMatchObject({ statusCode: 404, code: 'user_not_found' });
+      // A soft-deleted account is out of reach of role changes, even for a caller who may see it.
+      expect((await put('superuser', fx['echo']!, { roleKeys: [] })).body).toMatchObject({ statusCode: 404, code: 'user_not_found' });
+      expect(await keysOf(id)).toEqual(['guardian']);
+      expect(await roleEvents(id)).toHaveLength(0);
+      expect(await roleEvents(fx['echo']!)).toHaveLength(0);
+    });
+
+    it('replaces the roles as a diff with one event per change, leaves kept grants untouched, and the new permissions apply at once (T07 AC 4, AC 5)', async () => {
+      const id = fx['r-blank']!;
+      const token = await login(email('r-blank'));
+      const asBlank = () => api().get(USERS).set('Authorization', `Bearer ${token}`);
+      expect((await asBlank().expect(403)).body).toMatchObject({ code: 'permission_denied', missing: ['users.read'] });
+
+      // Granting users.read through a custom role takes effect on the very next request of the same session.
+      const viewer = customKey('viewer');
+      const granted = await put('superuser', id, { roleKeys: [viewer] });
+      expect(granted.status, JSON.stringify(granted.body)).toBe(200);
+      expect(granted.body.roles).toEqual([{ key: viewer, label: { ar: `دور اختبار viewer` } }]);
+      await asBlank().expect(200);
+      const first = await grantsOf(id);
+      expect(first).toHaveLength(1);
+      expect(first[0]).toMatchObject({ role: { key: viewer }, assignedById: fx['superuser'] });
+
+      // Adding a role keeps the existing grant exactly as it was.
+      const extended = await put('superuser', id, { roleKeys: ['guardian', viewer] });
+      expect(extended.status).toBe(200);
+      expect(extended.body.roles.map((role: { key: string }) => role.key)).toEqual(['guardian', viewer]);
+      const second = await grantsOf(id);
+      expect(second.find((grant) => grant.role.key === viewer)).toEqual(first[0]);
+      expect(second.find((grant) => grant.role.key === 'guardian')).toMatchObject({ assignedById: fx['superuser'] });
+
+      // The same set again: nothing written, nothing recorded.
+      const before = await profilesOf(id);
+      const same = await put('superuser', id, { roleKeys: [viewer, 'guardian'] });
+      expect(same.status).toBe(200);
+      expect((await profilesOf(id)).updatedAt).toEqual(before.updatedAt);
+      expect(await roleEvents(id)).toHaveLength(2);
+
+      // An empty set is allowed: every role goes, the permission goes with it — no new login needed either way.
+      const cleared = await put('superuser', id, { roleKeys: [] });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.roles).toEqual([]);
+      expect(await keysOf(id)).toEqual([]);
+      expect((await asBlank().expect(403)).body.code).toBe('permission_denied');
+      expect((await profilesOf(id)).updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+
+      const events = await roleEvents(id);
+      expect(events).toHaveLength(3);
+      expect(events.every((event) => event.actorUserId === fx['superuser'] && event.entityType === 'users')).toBe(true);
+      expect(events.map((event) => event.metadata)).toEqual([
+        { added: [viewer], removed: [], roles: [viewer] },
+        { added: ['guardian'], removed: [], roles: ['guardian', viewer] },
+        { added: [], removed: ['guardian', viewer], roles: [] },
+      ]);
+      expect(JSON.stringify(events.map((event) => event.metadata))).not.toMatch(/example\.test|@|Test r-blank/);
+    });
+
+    it('completes the missing profile of an added student, teacher or staff role and never removes one (T07)', async () => {
+      const id = fx['r-guardian']!;
+      expect(await profilesOf(id)).toMatchObject({ studentProfile: null, employeeProfile: null });
+
+      const student = await put('superuser', id, { roleKeys: ['guardian', 'student'] });
+      expect(student.status, JSON.stringify(student.body)).toBe(200);
+      expect(student.body.studentProfile).toEqual({ studentNumber: null, dateOfBirth: null, enrolledOn: null });
+      expect(student.body.employeeProfile).toBeNull();
+
+      // One employee role: the kind is inferred.
+      const teacher = await put('superuser', id, { roleKeys: ['guardian', 'student', 'teacher'] });
+      expect(teacher.status, JSON.stringify(teacher.body)).toBe(200);
+      expect(teacher.body.employeeProfile).toMatchObject({ kind: 'teacher', employeeNumber: null, isActive: true });
+
+      // Roles go, profiles stay (the records outlive the role).
+      const back = await put('superuser', id, { roleKeys: ['guardian'] });
+      expect(back.status).toBe(200);
+      expect(back.body.roles.map((role: { key: string }) => role.key)).toEqual(['guardian']);
+      expect(back.body.studentProfile).not.toBeNull();
+      expect(back.body.employeeProfile).toMatchObject({ kind: 'teacher' });
+      expect((await roleEvents(id)).map((event) => event.metadata)).toEqual([
+        { added: ['student'], removed: [], roles: ['guardian', 'student'], profilesCreated: ['student'] },
+        { added: ['teacher'], removed: [], roles: ['guardian', 'student', 'teacher'], profilesCreated: ['employee'] },
+        { added: [], removed: ['student', 'teacher'], roles: ['guardian'] },
+      ]);
+
+      // Both employee roles at once need an explicit kind; a kind that would be ignored or contradicts the profile is refused.
+      const both = fx['r-both']!;
+      const ambiguous = await put('superuser', both, { roleKeys: ['teacher', 'staff'] });
+      expect(ambiguous.status).toBe(422);
+      expect(ambiguous.body).toMatchObject({ code: 'employee_kind_required', roleKeys: ['staff', 'teacher'] });
+      expect(await keysOf(both)).toEqual(['guardian']);
+      expect((await profilesOf(both)).employeeProfile).toBeNull();
+      const explicit = await put('superuser', both, { roleKeys: ['teacher', 'staff'], employeeKind: 'staff' });
+      expect(explicit.status, JSON.stringify(explicit.body)).toBe(200);
+      expect(explicit.body.employeeProfile).toMatchObject({ kind: 'staff' });
+      expect(explicit.body.roles.map((role: { key: string }) => role.key)).toEqual(['staff', 'teacher']);
+      const contradiction = await put('superuser', both, { roleKeys: ['teacher'], employeeKind: 'teacher' });
+      expect(contradiction.status).toBe(422);
+      expect(contradiction.body.code).toBe('profile_mismatch');
+      expect(await keysOf(both)).toEqual(['staff', 'teacher']);
+      const matching = await put('superuser', both, { roleKeys: ['teacher'], employeeKind: 'staff' });
+      expect(matching.status).toBe(200);
+      expect(await keysOf(both)).toEqual(['teacher']);
+      const ignored = await put('superuser', fx['r-student']!, { roleKeys: ['student'], employeeKind: 'teacher' });
+      expect(ignored.status).toBe(422);
+      expect(ignored.body.code).toBe('profile_mismatch');
+      expect(await roleEvents(both)).toHaveLength(2);
+      expect(await roleEvents(fx['r-student']!)).toHaveLength(2);
+    });
+
+    it('refuses taking academy_admin from oneself with 403 self_forbidden, while other changes to oneself are fine (T07 AC 3)', async () => {
+      const me = fx['r-admin-a']!;
+      tokens['r-admin-a'] = await login(email('r-admin-a'));
+      for (const roleKeys of [[], ['teacher'], ['guardian', 'student']]) {
+        const res = await put('r-admin-a', me, { roleKeys });
+        expect(res.status, JSON.stringify(roleKeys)).toBe(403);
+        expect(res.body, JSON.stringify(roleKeys)).toMatchObject({ code: 'self_forbidden', action: 'remove_academy_admin' });
+      }
+      expect(await keysOf(me)).toEqual(['academy_admin']);
+      expect(await roleEvents(me)).toHaveLength(0);
+      const added = await put('r-admin-a', me, { roleKeys: ['academy_admin', 'guardian'] });
+      expect(added.status, JSON.stringify(added.body)).toBe(200);
+      expect(await keysOf(me)).toEqual(['academy_admin', 'guardian']);
+      expect((await put('r-admin-a', me, { roleKeys: ['academy_admin'] })).status).toBe(200);
+      expect(await keysOf(me)).toEqual(['academy_admin']);
+      expect(await roleEvents(me)).toHaveLength(2);
+    });
+
+    it('never strips the last active academy admin, even under concurrent requests (T07 AC 2, AC 5)', async () => {
+      const a = fx['r-admin-a']!;
+      const b = fx['r-admin-b']!;
+      // The rule counts every active admin of the database: the others are set aside for this test only and restored afterwards.
+      const others = await prisma.user.findMany({
+        where: { id: { notIn: [a, b] }, status: 'active', deletedAt: null, roles: { some: { roleId: adminRoleId } } },
+        select: { id: true },
+      });
+      const otherIds = others.map((row) => row.id);
+      await prisma.user.updateMany({ where: { id: { in: otherIds } }, data: { status: 'suspended' } });
+      const eventsBefore = { [a]: (await roleEvents(a)).length, [b]: (await roleEvents(b)).length };
+      try {
+        // Two admins left: stripping both at the same time leaves exactly one.
+        const [resA, resB] = await Promise.all([put('superuser', a, { roleKeys: [] }), put('superuser', b, { roleKeys: [] })]);
+        expect([resA.status, resB.status].sort()).toEqual([200, 409]);
+        const loser = resA.status === 409 ? resA : resB;
+        expect(loser.body.code).toBe('last_admin');
+        const remaining = resA.status === 200 ? b : a;
+        const benched = resA.status === 200 ? a : b;
+        expect(await keysOf(remaining)).toEqual(['academy_admin']);
+        expect(await keysOf(benched)).toEqual([]);
+        expect(await roleEvents(remaining)).toHaveLength(eventsBefore[remaining]!);
+        expect(await roleEvents(benched)).toHaveLength(eventsBefore[benched]! + 1);
+
+        // Replacing the role by another one is still a removal; the refusal rolls everything back (no employee profile either).
+        for (const roleKeys of [[], ['teacher'], ['guardian']]) {
+          const res = await put('superuser', remaining, { roleKeys });
+          expect(res.status, JSON.stringify(roleKeys)).toBe(409);
+          expect(res.body.code, JSON.stringify(roleKeys)).toBe('last_admin');
+        }
+        expect(await keysOf(remaining)).toEqual(['academy_admin']);
+        expect((await profilesOf(remaining)).employeeProfile).toBeNull();
+        expect(await roleEvents(remaining)).toHaveLength(eventsBefore[remaining]!);
+        // Adding a role to the last admin is fine.
+        expect((await put('superuser', remaining, { roleKeys: ['academy_admin', 'guardian'] })).status).toBe(200);
+
+        // An admin who is not active is outside the quorum: the role can go.
+        const invited = await put('superuser', fx['r-admin-c']!, { roleKeys: [] });
+        expect(invited.status, JSON.stringify(invited.body)).toBe(200);
+        expect(invited.body.roles).toEqual([]);
+
+        // A second active admin makes the first strippable again, then the second becomes the last.
+        expect((await put('superuser', benched, { roleKeys: ['academy_admin'] })).status).toBe(200);
+        expect((await put('superuser', remaining, { roleKeys: ['guardian'] })).status).toBe(200);
+        const last = await put('superuser', benched, { roleKeys: [] });
+        expect(last.status).toBe(409);
+        expect(last.body.code).toBe('last_admin');
+        expect(await keysOf(benched)).toEqual(['academy_admin']);
+      } finally {
+        await prisma.user.updateMany({ where: { id: { in: otherIds } }, data: { status: 'active' } });
+      }
+    });
+
+    it('documents the roles endpoint in OpenAPI', async () => {
+      const res = await api().get('/api/docs-json').expect(200);
+      const replace = res.body.paths['/api/users/{id}/roles'].put;
+      expect(replace).toBeDefined();
+      for (const code of ['200', '400', '401', '403', '404', '409', '422']) {
+        expect(replace.responses, `roles ${code}`).toHaveProperty(code);
+      }
+      expect(replace.requestBody).toBeDefined();
+    }, OPENAPI_TIMEOUT_MS);
   });
 });

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -24,12 +24,19 @@ import {
   CreateUserDto,
   DeleteUserDto,
   ListUsersQueryDto,
+  ReplaceUserRolesDto,
   UpdateUserDto,
   UserDetailDto,
   UserDetailQueryDto,
   UserListDto,
 } from './users.dto.js';
-import { CREATE_USERS_PERMISSION, DEACTIVATE_USERS_PERMISSION, READ_CONTACT_PERMISSION, UPDATE_USERS_PERMISSION } from './users.policy.js';
+import {
+  ASSIGN_ROLES_PERMISSION,
+  CREATE_USERS_PERMISSION,
+  DEACTIVATE_USERS_PERMISSION,
+  READ_CONTACT_PERMISSION,
+  UPDATE_USERS_PERMISSION,
+} from './users.policy.js';
 import { UsersService } from './users.service.js';
 import type { UsersProjection } from './users.service.js';
 import { missingPermissionFor } from './users.status.js';
@@ -66,7 +73,8 @@ function projectionFor(caller: AuthPrincipal): UsersProjection {
     'permission_denied — `users.read` (or `users.deactivate` for includeDeleted); `users.create` / `users.roles.assign` / exceeding permissions for POST; ' +
     '`users.update` for PATCH, plus exceeding permissions when changing the login identifiers of a more privileged user; ' +
     '`users.deactivate` for status changes and DELETE (`unlock`: `users.update` suffices), plus exceeding permissions when the target holds permissions the caller lacks; ' +
-    'self_forbidden — suspend/archive/delete on one’s own account',
+    '`users.roles.assign` for PUT roles, plus exceeding permissions when the target holds, or an added role would confer, permissions the caller lacks; ' +
+    'self_forbidden — suspend/archive/delete on one’s own account, or taking academy_admin from oneself',
 })
 export class UsersController {
   constructor(private readonly users: UsersService) {}
@@ -153,6 +161,35 @@ export class UsersController {
     @Req() req: Request,
   ): Promise<UserDetailDto> {
     return this.users.update(id, body, caller, requestContext(req), projectionFor(caller));
+  }
+
+  @Put(':id/roles')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(ASSIGN_ROLES_PERMISSION)
+  @ApiOperation({
+    summary: 'Replace the roles of a user',
+    description:
+      'The user ends up with exactly `roleKeys` (an empty array removes every role). Written as a diff in one transaction: kept grants are untouched, added grants record the caller as `assignedBy`, ' +
+      'and a `student`, `teacher` or `staff` role added to a user without the matching profile creates it (`employeeKind` when both employee roles are added at once); profiles are never removed. ' +
+      'One audit event `users.roles.changed` `{ added, removed, roles, profilesCreated? }`; a request that changes nothing writes nothing. The new permissions apply at the user’s next request without a new login. ' +
+      'Requires `users.roles.assign`; the target’s roles may not confer a permission the caller lacks, nor may any added role (learner baseline excepted); ' +
+      'nobody can take `academy_admin` from themself; the last active academy admin keeps it. The response follows the caller’s projection.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: UserDetailDto, description: 'The user after the replacement (unchanged when nothing differed)' })
+  @ApiBadRequestResponse({ description: 'Validation failed (`roleKeys` missing, not an array, duplicated, malformed or more than 10; `employeeKind` not teacher|staff; undeclared field), `id` is not a UUID, or `role_unknown` `{ roleKeys }`' })
+  @ApiNotFoundResponse({ description: 'user_not_found (unknown or soft-deleted)' })
+  @ApiConflictResponse({ description: 'last_admin — the target is the last active academy admin and would lose `academy_admin`' })
+  @ApiUnprocessableEntityResponse({
+    description: 'employee_kind_required `{ roleKeys }` (both employee roles added to a user without an employee profile and no `employeeKind`) | profile_mismatch (`employeeKind` that would be ignored or contradicts the existing profile)',
+  })
+  replaceRoles(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: ReplaceUserRolesDto,
+    @CurrentUser() caller: AuthPrincipal,
+    @Req() req: Request,
+  ): Promise<UserDetailDto> {
+    return this.users.replaceRoles(id, body, caller, requestContext(req), projectionFor(caller));
   }
 
   @Post(':id/status')
