@@ -1,5 +1,5 @@
 // Error vocabulary of MOD-03 (users, invitations, password reset, roles,
-// guardians) — fixed in MOD-03-T00, extended in T02, T03 and T04. Same shape as
+// guardians) — fixed in MOD-03-T00, extended in T02, T03, T04 and T05. Same shape as
 // AuthHttpException: the body is `{ statusCode, error, code, message, ...details }`
 // and the frontend maps the stable `code` to a localized message. Only the
 // factories below are in use; the remaining codes are reserved for the tasks
@@ -25,6 +25,7 @@ export const USERS_ERROR_CODES = [
   'reset_invalid',
   'reset_expired',
   'reset_disabled',
+  'user_not_resettable',
   // T02 / T04 / T06 — profiles, update and account status
   'profile_mismatch',
   'nothing_to_update',
@@ -135,4 +136,27 @@ export const usersError = {
   // T04 — update
   nothingToUpdate: () =>
     new UsersHttpException(HttpStatus.BAD_REQUEST, 'nothing_to_update', 'The request body contains no field to update'),
+  // T05 — password reset
+  userNotResettable: (status: string) =>
+    new UsersHttpException(
+      HttpStatus.CONFLICT,
+      'user_not_resettable',
+      'Only an active account can have its password reset; an account awaiting activation is invited instead',
+      { status },
+    ),
+  resetInvalid: () =>
+    new UsersHttpException(HttpStatus.NOT_FOUND, 'reset_invalid', 'This password-reset link is not valid or has already been used'),
+  resetExpired: (expiredAt: Date) =>
+    new UsersHttpException(
+      HttpStatus.GONE,
+      'reset_expired',
+      'This password-reset link has expired; request a new one',
+      { expiredAt: expiredAt.toISOString() },
+    ),
+  resetDisabled: () =>
+    new UsersHttpException(
+      HttpStatus.FORBIDDEN,
+      'reset_disabled',
+      'Self-service password reset is not available; ask the academy to reset your password',
+    ),
 };

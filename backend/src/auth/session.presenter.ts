@@ -1,5 +1,5 @@
 // Turns an issued session into the HTTP response every session-opening route
-// returns (MOD-01 login/refresh, MOD-03-T03 invitation acceptance, later T05):
+// returns (MOD-01 login/refresh, MOD-03-T03 invitation acceptance, MOD-03-T05 reset confirmation):
 // the refresh token goes into the httpOnly cookie, the access token and the
 // principal into the JSON body.
 import type { ConfigService } from '@nestjs/config';

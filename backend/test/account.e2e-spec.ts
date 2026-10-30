@@ -1,7 +1,8 @@
 // TEST-020 — MOD-03-T03 invitations and account activation against the live
 // development database: POST /api/users/:id/invitations (API-015),
 // GET /api/account/invitations/:token (API-016) and
-// POST /api/account/invitations/:token/accept (API-017). Skipped when no
+// POST /api/account/invitations/:token/accept (API-017); TEST-023 — MOD-03-T05
+// password reset (API-019..API-021, nested block at the end). Skipped when no
 // database is reachable. Fixtures carry a unique suffix and are deleted at the
 // end (cascade removes roles, profiles, tokens and sessions; their audit rows
 // stay — KI-032).
@@ -430,5 +431,270 @@ describe.skipIf(!available)('MOD-03-T03 invitations and account activation (e2e,
     expect(paths['/api/users/{id}/invitations']!['post']!.security).toEqual([{ bearer: [] }]);
     expect(paths['/api/account/invitations/{token}']!['get']!.security).toBeUndefined();
     expect(paths['/api/account/invitations/{token}/accept']!['post']!.security).toBeUndefined();
+  });
+
+  // TEST-023 — MOD-03-T05 password reset: POST /api/users/:id/password-reset
+  // (API-019), POST /api/account/password-reset/:token/confirm (API-020) and
+  // the disabled self-service request POST /api/account/password-reset/request
+  // (API-021; the enabled path is password-reset.e2e-spec.ts).
+  describe('password reset (T05, TEST-023)', () => {
+    const RESET = '/api/account/password-reset';
+    const RESET_PASSWORD = `Reset-By-Holder-${RUN}`;
+    const RESET_TTL_MS = Number(process.env['AUTH_PASSWORD_RESET_TTL_MINUTES'] || 30) * 60 * 1000;
+
+    const issueReset = (caller: string, userId: string) => api().post(`${USERS}/${userId}/password-reset`).set(bearer(caller));
+    const confirm = (token: string, newPassword: string) => api().post(`${RESET}/${token}/confirm`).send({ newPassword });
+    const requestReset = (identifier: unknown) => api().post(`${RESET}/request`).send({ identifier });
+    const resetRows = (userId: string) =>
+      prisma.verificationToken.findMany({ where: { userId, purpose: 'password_reset' }, orderBy: { createdAt: 'asc' } });
+    const flags = (id: string) =>
+      prisma.user.findUniqueOrThrow({
+        where: { id },
+        select: { mustChangePassword: true, failedLoginCount: true, lockedUntil: true, passwordChangedAt: true },
+      });
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    /** The first session of the account whose password gets reset: access token + refresh cookie. */
+    let oldSession: { accessToken: string; cookie: string };
+
+    beforeAll(async () => {
+      const teacherRole = await prisma.role.findUniqueOrThrow({ where: { key: 'teacher' }, select: { id: true } });
+      const studentRole = await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } });
+      const updater = await createRole('updater', ['users.update']);
+      await createUser('updater', { roleIds: [updater] });
+      tokens['updater'] = await login(email('updater'));
+
+      await createUser('resettee', { roleIds: [teacherRole.id], displayName: 'Mr. Resettee', locale: 'en' });
+      await createUser('learner', { roleIds: [studentRole.id] });
+      await createUser('noroles');
+      fx['invitedOne'] = await createViaApi('admin', { kind: 'student', email: email('invited-one'), fullName: 'Fixture Invited' });
+
+      const first = await api().post('/api/auth/login').send({ identifier: email('resettee'), password: PASSWORD }).expect(200);
+      oldSession = { accessToken: first.body.accessToken as string, cookie: refreshCookie(first)! };
+    });
+
+    it('issuing needs a token, users.update, a UUID and an existing non-deleted user', async () => {
+      expect((await api().post(`${USERS}/${fx['resettee']}/password-reset`).expect(401)).body.code).toBe('unauthenticated');
+      expect((await issueReset('plain', fx['resettee']!).expect(403)).body).toMatchObject({
+        code: 'permission_denied',
+        missing: ['users.update'],
+      });
+      await issueReset('admin', 'not-a-uuid').expect(400);
+      expect((await issueReset('admin', '00000000-0000-7000-8000-000000000000').expect(404)).body.code).toBe('user_not_found');
+      expect((await issueReset('admin', fx['deleted']!).expect(404)).body.code).toBe('user_not_found');
+      expect(await resetRows(fx['resettee']!)).toEqual([]);
+    });
+
+    it('issues a one-time token, stores only its hash, flags the account and records one event without the token (AC 1, 5)', async () => {
+      const before = Date.now();
+      const res = await issueReset('admin', fx['resettee']!).expect(201);
+      const { userId, token, link, expiresAt, delivery } = res.body as {
+        userId: string;
+        token: string;
+        link: string;
+        expiresAt: string;
+        delivery: { transport: string; status: string };
+      };
+
+      expect(userId).toBe(fx['resettee']);
+      expect(token).toMatch(TOKEN_PATTERN);
+      expect(link.endsWith(`/reset-password/${token}`)).toBe(true);
+      expect(Math.abs(new Date(expiresAt).getTime() - before - RESET_TTL_MS)).toBeLessThan(60_000);
+      expect(['none', 'log']).toContain(delivery.transport);
+      expect(['skipped', 'logged']).toContain(delivery.status);
+      expect([...collectKeys(res.body)].filter((key) => SENSITIVE_KEY.test(key))).toEqual([]);
+
+      const rows = await resetRows(fx['resettee']!);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ tokenHash: sha256(token), consumedAt: null, metadata: { via: 'admin', issuedBy: fx['admin'] } });
+      expect(rows[0]!.expiresAt.toISOString()).toBe(expiresAt);
+      expect(JSON.stringify(rows)).not.toContain(token);
+
+      // The account is flagged, but nothing else changes: the existing session keeps working.
+      expect(await flags(fx['resettee']!)).toMatchObject({ mustChangePassword: true, passwordChangedAt: null });
+      const me = await api().get('/api/auth/me').set({ Authorization: `Bearer ${oldSession.accessToken}` }).expect(200);
+      expect(me.body.mustChangePassword).toBe(true);
+
+      const issued = await events(fx['resettee']!, 'users.password_reset.issued');
+      expect(issued).toHaveLength(1);
+      expect(issued[0]).toMatchObject({
+        actorUserId: fx['admin'],
+        entityType: 'users',
+        metadata: { resetId: rows[0]!.id, via: 'admin', superseded: 0, expiresAt },
+      });
+      const everything = JSON.stringify(await prisma.auditLog.findMany({ where: { entityId: fx['resettee']! } }));
+      expect(everything).not.toContain(token);
+      expect(everything).not.toContain(email('resettee'));
+      expect(everything).not.toContain('/reset-password/');
+      tokens['reset1'] = token;
+    });
+
+    it('a new reset supersedes the pending one; the old link is simply invalid', async () => {
+      const res = await issueReset('admin', fx['resettee']!).expect(201);
+      const second = res.body.token as string;
+      expect(second).not.toBe(tokens['reset1']);
+      expect((await confirm(tokens['reset1']!, RESET_PASSWORD).expect(404)).body.code).toBe('reset_invalid');
+
+      const rows = await resetRows(fx['resettee']!);
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!.consumedAt).not.toBeNull();
+      expect(rows[1]!.consumedAt).toBeNull();
+      const issued = await events(fx['resettee']!, 'users.password_reset.issued');
+      expect(issued.map((event) => (event.metadata as { superseded: number }).superseded)).toEqual([0, 1]);
+      tokens['reset2'] = second;
+    });
+
+    it('applies the no-exceeding rule to the issuer (SEC-R-15)', async () => {
+      const denied = await issueReset('updater', fx['resettee']!).expect(403);
+      expect(denied.body.code).toBe('permission_denied');
+      expect(denied.body.missing).toContain('lessons.manage');
+      expect(denied.body.missing).toEqual([...denied.body.missing].sort());
+      expect(await resetRows(fx['resettee']!)).toHaveLength(2);
+      expect(await events(fx['resettee']!, 'users.password_reset.issued')).toHaveLength(2);
+
+      // The learner baseline and an account without roles are within the updater's reach.
+      await issueReset('updater', fx['learner']!).expect(201);
+      await issueReset('updater', fx['noroles']!).expect(201);
+      expect((await resetRows(fx['learner']!))[0]!.metadata).toMatchObject({ via: 'admin', issuedBy: fx['updater'] });
+    });
+
+    it('resets only active accounts: invited, suspended and archived ones are 409 without a token', async () => {
+      for (const [name, status] of [
+        ['invitedOne', 'invited'],
+        ['suspended', 'suspended'],
+        ['archived', 'archived'],
+      ] as const) {
+        expect((await issueReset('admin', fx[name]!).expect(409)).body).toMatchObject({ code: 'user_not_resettable', status });
+        expect(await resetRows(fx[name]!)).toEqual([]);
+        expect(await events(fx[name]!, 'users.password_reset.issued')).toEqual([]);
+      }
+    });
+
+    it('refuses a weak, unchanged or unknown-field body and malformed tokens without touching the token or the account', async () => {
+      const token = tokens['reset2']!;
+      await confirm(token, 'short').expect(400);
+      expect((await confirm(token, ' '.repeat(12)).expect(400)).body).toMatchObject({ code: 'password_weak' });
+      expect((await confirm(token, PASSWORD).expect(400)).body).toMatchObject({
+        code: 'password_weak',
+        problems: ['different from the current password'],
+      });
+      await api().post(`${RESET}/${token}/confirm`).send({ newPassword: RESET_PASSWORD, password: RESET_PASSWORD }).expect(400);
+      expect((await confirm('garbage', RESET_PASSWORD).expect(404)).body.code).toBe('reset_invalid');
+      expect((await confirm('A'.repeat(43), RESET_PASSWORD).expect(404)).body.code).toBe('reset_invalid');
+      // An invitation token is not a reset token.
+      expect((await confirm(tokens['teacherInvite2']!, RESET_PASSWORD).expect(404)).body.code).toBe('reset_invalid');
+
+      expect((await resetRows(fx['resettee']!))[1]!.consumedAt).toBeNull();
+      expect(await flags(fx['resettee']!)).toMatchObject({ mustChangePassword: true, passwordChangedAt: null });
+      expect(await events(fx['resettee']!, 'auth.password.reset')).toEqual([]);
+    });
+
+    it('confirms: new password, account unlocked, every session revoked, older access tokens dead, fresh session opened (AC 2, 3)', async () => {
+      // A locked account with a failed-login history, as after a forgotten password.
+      await prisma.user.update({
+        where: { id: fx['resettee']! },
+        data: { failedLoginCount: 3, lockedUntil: new Date(Date.now() + 10 * 60 * 1000) },
+      });
+      // Access tokens carry `iat` in seconds: make sure the old one predates the change by a full second.
+      await sleep(1100);
+
+      const res = await confirm(tokens['reset2']!, RESET_PASSWORD).expect(200);
+      expect(res.body).toMatchObject({
+        tokenType: 'Bearer',
+        expiresIn: expect.any(Number),
+        user: { id: fx['resettee'], status: 'active', roles: ['teacher'], mustChangePassword: false, email: email('resettee') },
+      });
+      expect(JSON.stringify(res.body)).not.toMatch(/\$argon2|Reset-By/);
+      const cookie = refreshCookie(res);
+      expect(cookie).toBeDefined();
+      const attributes = setCookieLines(res).find((line) => line.startsWith(`${REFRESH_COOKIE_NAME}=`)) ?? '';
+      expect(attributes).toMatch(/HttpOnly/i);
+      expect(attributes).toMatch(/SameSite=Strict/i);
+
+      // The new session works; the old access token and the old cookie do not.
+      await api().get('/api/auth/me').set({ Authorization: `Bearer ${res.body.accessToken}` }).expect(200);
+      expect((await api().get('/api/auth/me').set({ Authorization: `Bearer ${oldSession.accessToken}` }).expect(401)).body.code).toBe('token_invalid');
+      await api().post('/api/auth/refresh').set('Cookie', `${REFRESH_COOKIE_NAME}=${oldSession.cookie}`).expect(401);
+      const refreshed = await api().post('/api/auth/refresh').set('Cookie', `${REFRESH_COOKIE_NAME}=${cookie}`).expect(200);
+      expect(refreshed.body.user.id).toBe(fx['resettee']);
+      // The new password signs in, the old one does not, and the lock is gone.
+      expect((await api().post('/api/auth/login').send({ identifier: email('resettee'), password: PASSWORD }).expect(401)).body.code).toBe('invalid_credentials');
+      expect(await login(email('resettee'), RESET_PASSWORD)).toEqual(expect.any(String));
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: fx['resettee']! } });
+      expect(user).toMatchObject({ status: 'active', mustChangePassword: false, failedLoginCount: 0, lockedUntil: null });
+      expect(user.passwordHash).toMatch(/^\$argon2id\$/);
+      expect(user.passwordChangedAt).not.toBeNull();
+      const rows = await resetRows(fx['resettee']!);
+      expect(rows.every((row) => row.consumedAt !== null)).toBe(true);
+      const families = await prisma.refreshToken.findMany({ where: { userId: fx['resettee']! }, select: { revokedAt: true } });
+      // Sessions before the reset are revoked; only the one opened by the reset and the login just above survive.
+      expect(families.filter((row) => row.revokedAt === null).length).toBeLessThanOrEqual(2);
+
+      const reset = await events(fx['resettee']!, 'auth.password.reset');
+      expect(reset).toHaveLength(1);
+      expect(reset[0]).toMatchObject({ actorUserId: fx['resettee'], entityType: 'users', metadata: { resetId: rows[1]!.id } });
+      expect((reset[0]!.metadata as { revokedSessions: number }).revokedSessions).toBeGreaterThanOrEqual(1);
+      const logins = await events(fx['resettee']!, 'auth.login.succeeded');
+      expect(logins.some((event) => (event.metadata as { via?: string }).via === 'password_reset')).toBe(true);
+      expect(JSON.stringify([...reset, ...logins])).not.toMatch(/Reset-By|\$argon2|token/i);
+    });
+
+    it('uses a reset token once (AC 1)', async () => {
+      expect((await confirm(tokens['reset2']!, `${RESET_PASSWORD}-again`).expect(404)).body.code).toBe('reset_invalid');
+      expect(await resetRows(fx['resettee']!)).toHaveLength(2);
+      expect(await events(fx['resettee']!, 'auth.password.reset')).toHaveLength(1);
+    });
+
+    it('rejects an expired reset and leaves the account untouched (AC 1)', async () => {
+      const res = await issueReset('admin', fx['learner']!).expect(201);
+      const token = res.body.token as string;
+      await prisma.verificationToken.update({ where: { tokenHash: sha256(token) }, data: { expiresAt: new Date(Date.now() - 60_000) } });
+
+      expect((await confirm(token, RESET_PASSWORD).expect(410)).body).toMatchObject({ code: 'reset_expired', expiredAt: expect.any(String) });
+      expect(await flags(fx['learner']!)).toMatchObject({ mustChangePassword: true, passwordChangedAt: null });
+      expect(await login(email('learner'))).toEqual(expect.any(String));
+      expect(await events(fx['learner']!, 'auth.password.reset')).toEqual([]);
+    });
+
+    it('refuses the self-service request as a whole while it is disabled, and never creates a token (AC 4)', async () => {
+      expect((await requestReset(email('resettee')).expect(403)).body.code).toBe('reset_disabled');
+      expect((await requestReset(`nobody-${RUN}@example.test`).expect(403)).body.code).toBe('reset_disabled');
+      await requestReset('').expect(400);
+      await api().post(`${RESET}/request`).send({}).expect(400);
+      expect(await resetRows(fx['resettee']!)).toHaveLength(2);
+      expect(await events(fx['resettee']!, 'users.password_reset.issued')).toHaveLength(2);
+    });
+
+    it('public routes check the Origin and rate-limit confirmation attempts per IP', async () => {
+      const token = 'C'.repeat(43);
+      expect((await api().post(`${RESET}/${token}/confirm`).set('Origin', 'https://evil.example').send({ newPassword: RESET_PASSWORD }).expect(403)).body.code).toBe(
+        'origin_forbidden',
+      );
+      expect((await api().post(`${RESET}/request`).set('Origin', 'https://evil.example').send({ identifier: 'x' }).expect(403)).body.code).toBe('origin_forbidden');
+
+      let limited = false;
+      for (let attempt = 0; attempt < 25 && !limited; attempt += 1) {
+        const res = await confirm(token, RESET_PASSWORD);
+        if (res.status === 429) {
+          expect(res.body.code).toBe('rate_limited');
+          limited = true;
+        } else {
+          expect(res.status).toBe(404);
+        }
+      }
+      expect(limited).toBe(true);
+    });
+
+    it('documents the three routes in the OpenAPI document', async () => {
+      const doc = await api().get('/api/docs-json').expect(200);
+      const paths = doc.body.paths as Record<string, Record<string, { security?: unknown[] }>>;
+      expect(Object.keys(paths)).toEqual(
+        expect.arrayContaining(['/api/users/{id}/password-reset', '/api/account/password-reset/request', '/api/account/password-reset/{token}/confirm']),
+      );
+      expect(paths['/api/users/{id}/password-reset']!['post']!.security).toEqual([{ bearer: [] }]);
+      expect(paths['/api/account/password-reset/request']!['post']!.security).toBeUndefined();
+      expect(paths['/api/account/password-reset/{token}/confirm']!['post']!.security).toBeUndefined();
+    });
   });
 });

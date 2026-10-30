@@ -82,7 +82,7 @@ export class MailService {
     return this.deliver('invitation', mail, this.invitationLink(mail.token), renderInvitation);
   }
 
-  /** Reserved for MOD-03-T05 (no caller yet). */
+  /** MOD-03-T05: the reset link, for administrative issuing and the self-service request alike. */
   sendPasswordReset(mail: AccountMail): Promise<MailDeliveryResult> {
     return this.deliver('password_reset', mail, this.passwordResetLink(mail.token), renderPasswordReset);
   }

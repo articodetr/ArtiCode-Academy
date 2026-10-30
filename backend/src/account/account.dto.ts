@@ -72,3 +72,52 @@ export class AcceptInvitationDto {
   @Length(PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH)
   password: string;
 }
+
+// ---------------------------------------------------------------- T05 — password reset
+
+export class IssuePasswordResetResponseDto {
+  @ApiProperty({ format: 'uuid', description: 'The user whose password is being reset' })
+  userId: string;
+
+  @ApiProperty({
+    description:
+      'The raw one-time reset token — returned ONCE to the authorized caller and never stored (only its SHA-256 is). Hand the link over to the person (D-R01).',
+    example: 'Qm9vay1vZi1yYW5kb20tYnl0ZXMtMzItbG9uZy0tLQ',
+  })
+  token: string;
+
+  @ApiProperty({
+    description: 'Link the person opens: `<APP_PUBLIC_URL>/reset-password/<token>`, or the root-relative path when APP_PUBLIC_URL is not set',
+    example: 'https://academy.example/reset-password/Qm9vay1vZi1yYW5kb20tYnl0ZXMtMzItbG9uZy0tLQ',
+  })
+  link: string;
+
+  @ApiProperty({ description: 'ISO 8601; `AUTH_PASSWORD_RESET_TTL_MINUTES` after issue (30 min by default — D-R02)' })
+  expiresAt: string;
+
+  @ApiProperty({ type: MailDeliveryDto, description: 'What happened to the e-mail copy of the reset link' })
+  delivery: MailDeliveryDto;
+}
+
+/** Public "forgot my password" request (API-021); the route is disabled until a mail transport that reaches the user exists. */
+export class RequestPasswordResetDto {
+  @ApiProperty({
+    description: 'E-mail address or username of the account (case-insensitive). The response never reveals whether it exists.',
+    example: 'teacher@example.com',
+    maxLength: 320,
+  })
+  @IsString()
+  @Length(1, 320)
+  identifier: string;
+}
+
+export class ConfirmPasswordResetDto {
+  @ApiProperty({
+    minLength: PASSWORD_MIN_LENGTH,
+    maxLength: PASSWORD_MAX_LENGTH,
+    description: 'The new password (MOD-01 policy: 10–128 characters, not only whitespace, different from the current one)',
+  })
+  @IsString()
+  @Length(PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH)
+  newPassword: string;
+}
