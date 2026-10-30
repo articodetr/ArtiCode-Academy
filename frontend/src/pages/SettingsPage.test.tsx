@@ -54,6 +54,18 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('tab', { name: ar.settings.tabs.roles })).not.toBeInTheDocument()
   })
 
+  it('opens /settings/roles to a custom role (no UI role) holding roles.manage — the gate is the permission, not the role (T15)', async () => {
+    mockRolesApi()
+    renderWithProviders(<SettingsPage section="roles" />, {
+      auth: makeAuth({ user: makeUser({ role: null, roles: ['role_manager'], permissions: ['roles.manage'] }) }),
+      route: '/settings/roles',
+    })
+
+    expect(await screen.findByText('أمين المكتبة')).toBeInTheDocument()
+    expect(screen.queryByText(ar.errors.forbidden)).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: ar.settings.tabs.general })).not.toBeInTheDocument()
+  })
+
   it('shows the 403 page under /settings/roles to a user without roles.manage, and hides the roles tab on /settings', () => {
     renderWithProviders(<SettingsPage section="roles" />, { auth: makeAuth({ user: makeUser({ permissions: ['users.read'] }) }), route: '/settings/roles' })
     expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()

@@ -6,12 +6,12 @@ import { App, Button, Card, Form, Input, Select, Tabs } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../auth/auth-context'
+import { RequireAccess } from '../auth/RequireAuth'
 import { PageHeader } from '../components/PageHeader'
 import { canAccess } from '../layout/navigation'
 import { mockAcademySettings } from '../mock/data'
 import type { MockAcademySettings } from '../mock/data'
 import { RolesManager } from '../roles/RolesManager'
-import { ForbiddenPage } from './ForbiddenPage'
 
 export type SettingsSection = 'general' | 'roles'
 
@@ -22,17 +22,15 @@ export function SettingsPage({ section = 'general' }: { section?: SettingsSectio
   const navigate = useNavigate()
   const { user, hasPermission } = useAuth()
   const canManageRoles = hasPermission('roles.manage')
-  // The general tab follows the role matrix of the /settings route until T15 moves navigation to permissions.
-  const canSeeGeneral = canAccess(user?.role ?? null, 'settings')
-
-  if (section === 'roles' && !canManageRoles) return <ForbiddenPage />
+  // The general tab (a prototype without an API) still follows the role matrix of the /settings entry.
+  const canSeeGeneral = user ? canAccess(user, 'settings') : false
 
   const tabs = [
     ...(canSeeGeneral ? [{ key: 'general', label: t('settings.tabs.general') }] : []),
     ...(canManageRoles ? [{ key: 'roles', label: t('settings.tabs.roles') }] : []),
   ]
 
-  return (
+  const content = (
     <>
       <PageHeader title={t('settings.title')} subtitle={section === 'roles' ? t('rolesAdmin.subtitle') : t('settings.subtitle')} />
       {tabs.length > 1 ? (
@@ -41,6 +39,10 @@ export function SettingsPage({ section = 'general' }: { section?: SettingsSectio
       {section === 'roles' ? <RolesManager /> : <GeneralSettingsForm />}
     </>
   )
+
+  // The roles tab is gated by its permission inside the page too, so a direct render (and the
+  // route without its guard) still answers 403 without `roles.manage` (D-R06; RequireAccess — T15).
+  return section === 'roles' ? <RequireAccess permission="roles.manage">{content}</RequireAccess> : content
 }
 
 /** Prototype on mock data until MOD-14 (nothing is sent to the server). */

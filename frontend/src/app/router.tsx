@@ -2,9 +2,10 @@ import type { ReactNode } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import { InvitationPage } from '../account/InvitationPage'
 import { ResetPasswordPage } from '../account/ResetPasswordPage'
-import { RequireAuth, RequireRole } from '../auth/RequireAuth'
+import { RequireAccess, RequireAuth } from '../auth/RequireAuth'
 import { AppLayout } from '../layout/AppLayout'
 import { AssignmentsPage } from '../pages/AssignmentsPage'
+import { AuditLogPage } from '../pages/AuditLogPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
 import { ClassesPage } from '../pages/ClassesPage'
 import { CoursesPage } from '../pages/CoursesPage'
@@ -21,8 +22,9 @@ import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { UsersPage } from '../pages/UsersPage'
 
+/** The entry of NAV_ITEMS decides: permission keys where the module has an API, the role matrix elsewhere. */
 function guarded(navKey: string, page: ReactNode) {
-  return <RequireRole navKey={navKey}>{page}</RequireRole>
+  return <RequireAccess navKey={navKey}>{page}</RequireAccess>
 }
 
 // Paths mirror NAV_ITEMS in ../layout/navigation.ts.
@@ -51,8 +53,9 @@ const router = createBrowserRouter([
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },
       { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },
       { path: 'reports', element: guarded('reports', <ReportsPage />) },
+      { path: 'audit-logs', element: guarded('audit', <AuditLogPage />) }, // `audit.read` (MOD-03-T15)
       { path: 'settings', element: guarded('settings', <SettingsPage />) },
-      { path: 'settings/roles', element: <SettingsPage section="roles" /> }, // gated by `roles.manage` inside the page, not by role (D-R06, MOD-03-T13)
+      { path: 'settings/roles', element: guarded('roles', <SettingsPage section="roles" />) }, // `roles.manage` alone, not the settings role (D-R06, MOD-03-T13/T15)
       // Own profile: every signed-in user, whatever the role.
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },

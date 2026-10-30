@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
-import { navForRole } from './navigation'
+import { navFor } from './navigation'
 import './AppLayout.css'
 
 const { Header, Sider, Content } = Layout
@@ -28,7 +28,8 @@ export function AppLayout() {
 
   if (!user) return <Navigate to="/login" replace />
 
-  const navItems = navForRole(user.role)
+  // Entries by permission where the module has an API, by the role matrix elsewhere (MOD-03-T15).
+  const navItems = navFor(user)
   const menuItems: MenuProps['items'] = navItems.map((item) => ({
     key: item.path,
     icon: item.icon,

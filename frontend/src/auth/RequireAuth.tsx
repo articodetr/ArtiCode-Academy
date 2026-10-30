@@ -1,8 +1,9 @@
 import { Spin } from 'antd'
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router'
-import { canAccess } from '../layout/navigation'
 import { ForbiddenPage } from '../pages/ForbiddenPage'
+import { isAllowed } from './access'
+import type { AccessRule } from './access'
 import { useAuth } from './auth-context'
 
 function SessionLoading() {
@@ -26,12 +27,14 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 /**
  * UI-level gate (not a security boundary — the server enforces permissions):
- * hides pages the current role should not see.
+ * shows the 403 page instead of a screen the user may not open. Accepts a
+ * navigation key (its entry decides by permission or by the role matrix), a
+ * permission key, a role, or several of them together (MOD-03-T15).
  */
-export function RequireRole({ navKey, children }: { navKey: string; children: ReactNode }) {
+export function RequireAccess({ navKey, permission, role, children }: AccessRule & { children: ReactNode }) {
   const { status, user } = useAuth()
   if (status === 'loading') return <SessionLoading />
   if (!user) return <Navigate to="/login" replace />
-  if (!canAccess(user.role, navKey)) return <ForbiddenPage />
+  if (!isAllowed(user, { navKey, permission, role })) return <ForbiddenPage />
   return children
 }
