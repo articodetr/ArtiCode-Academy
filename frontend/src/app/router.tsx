@@ -52,6 +52,7 @@ const router = createBrowserRouter([
       { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },
       { path: 'reports', element: guarded('reports', <ReportsPage />) },
       { path: 'settings', element: guarded('settings', <SettingsPage />) },
+      { path: 'settings/roles', element: <SettingsPage section="roles" /> }, // gated by `roles.manage` inside the page, not by role (D-R06, MOD-03-T13)
       // Own profile: every signed-in user, whatever the role.
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
