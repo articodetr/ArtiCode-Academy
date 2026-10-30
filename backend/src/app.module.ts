@@ -8,6 +8,7 @@ import { ENV_FILE_PATHS } from './config/env-files.js';
 import { validateEnv } from './config/env.schema.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { RolesModule } from './roles/roles.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
@@ -32,6 +33,8 @@ import { UsersModule } from './users/users.module.js';
     UsersModule,
     // MOD-03-T03: invitations and activation; imports MailModule itself.
     AccountModule,
+    // MOD-03-T08: roles and the permission catalog.
+    RolesModule,
     HealthModule,
   ],
 })
