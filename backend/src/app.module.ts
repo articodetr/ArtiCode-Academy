@@ -6,6 +6,7 @@ import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ENV_FILE_PATHS } from './config/env-files.js';
 import { validateEnv } from './config/env.schema.js';
+import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RolesModule } from './roles/roles.module.js';
@@ -35,6 +36,8 @@ import { UsersModule } from './users/users.module.js';
     AccountModule,
     // MOD-03-T08: roles and the permission catalog.
     RolesModule,
+    // MOD-03-T09: guardian ↔ student links.
+    GuardiansModule,
     HealthModule,
   ],
 })
