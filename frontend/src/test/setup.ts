@@ -17,6 +17,18 @@ afterEach(() => {
 const getComputedStyle = window.getComputedStyle.bind(window)
 window.getComputedStyle = (element: Element) => getComputedStyle(element)
 
+// jsdom has no ResizeObserver; Ant Design measures Input.TextArea (showCount),
+// Select (tags) and Steps with it. Nothing is laid out in jsdom, so observing
+// nothing is correct.
+if (typeof window.ResizeObserver !== 'function') {
+  class NoopResizeObserver implements ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(window, 'ResizeObserver', { configurable: true, writable: true, value: NoopResizeObserver })
+}
+
 // jsdom has no matchMedia; Ant Design's responsive observer (Row/Col behind
 // Form.Item, Table) calls it on mount. A query that never matches is enough.
 if (typeof window.matchMedia !== 'function') {

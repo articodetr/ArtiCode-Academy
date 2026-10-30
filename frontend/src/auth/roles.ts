@@ -17,6 +17,11 @@ const SERVER_ROLE_TO_UI: Readonly<Record<string, Role>> = {
   staff: 'staff',
 }
 
+/** The UI role a single server role key maps to, or null for custom/unknown keys. */
+export function uiRoleFor(serverRoleKey: string): Role | null {
+  return SERVER_ROLE_TO_UI[serverRoleKey] ?? null
+}
+
 /** When a user holds several roles, the widest view wins. */
 const PRECEDENCE: readonly Role[] = ['admin', 'staff', 'teacher', 'guardian', 'student']
 

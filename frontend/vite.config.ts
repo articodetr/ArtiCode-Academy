@@ -26,6 +26,9 @@ export default defineConfig(({ mode }) => {
       // Every test starts with fresh spies and the original globals (fetch is stubbed per test).
       restoreMocks: true,
       unstubGlobals: true,
+      // Multi-step Ant Design screens (wizard, drawer) take 2–5 s in jsdom and exceed
+      // the 5 s default when the machine is busy (MOD-03-T11); 15 s keeps them stable.
+      testTimeout: 15_000,
     },
   }
 })

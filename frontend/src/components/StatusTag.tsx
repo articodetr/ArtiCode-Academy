@@ -6,6 +6,8 @@ const COLORS: Record<string, string> = {
   active: 'green',
   inactive: 'default',
   pending: 'gold',
+  invited: 'blue',
+  suspended: 'red',
   published: 'green',
   draft: 'default',
   archived: 'default',
