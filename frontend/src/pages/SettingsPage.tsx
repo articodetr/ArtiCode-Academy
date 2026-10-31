@@ -1,16 +1,17 @@
-// Academy settings. The general tab is still the prototype form on mock data
-// (MOD-14 is planned); the "roles & permissions" tab is real (MOD-03-T13) and
-// lives under /settings/roles behind `roles.manage` alone — a holder of that
-// permission reaches it even without the rest of the settings (D-R06, ADR-027).
-import { App, Button, Card, Form, Input, Select, Tabs } from 'antd'
+// Academy settings. The general tab is real since CH-0036 (MOD-02/MOD-14
+// minimum: GET/PATCH /api/academy — read for everyone who reaches the screen,
+// save for `academy.settings.manage`); the "roles & permissions" tab is real
+// since MOD-03-T13 and lives under /settings/roles behind `roles.manage` alone —
+// a holder of that permission reaches it even without the rest of the settings
+// (D-R06, ADR-027).
+import { Tabs } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
+import { GeneralSettingsForm } from '../academy/GeneralSettingsForm'
 import { useAuth } from '../auth/auth-context'
 import { RequireAccess } from '../auth/RequireAuth'
 import { PageHeader } from '../components/PageHeader'
 import { canAccess } from '../layout/navigation'
-import { mockAcademySettings } from '../mock/data'
-import type { MockAcademySettings } from '../mock/data'
 import { RolesManager } from '../roles/RolesManager'
 
 export type SettingsSection = 'general' | 'roles'
@@ -22,7 +23,7 @@ export function SettingsPage({ section = 'general' }: { section?: SettingsSectio
   const navigate = useNavigate()
   const { user, hasPermission } = useAuth()
   const canManageRoles = hasPermission('roles.manage')
-  // The general tab (a prototype without an API) still follows the role matrix of the /settings entry.
+  // The general tab follows the gate of the /settings entry (`academy.settings.read` or `.manage` since CH-0036).
   const canSeeGeneral = user ? canAccess(user, 'settings') : false
 
   const tabs = [
@@ -43,43 +44,4 @@ export function SettingsPage({ section = 'general' }: { section?: SettingsSectio
   // The roles tab is gated by its permission inside the page too, so a direct render (and the
   // route without its guard) still answers 403 without `roles.manage` (D-R06; RequireAccess — T15).
   return section === 'roles' ? <RequireAccess permission="roles.manage">{content}</RequireAccess> : content
-}
-
-/** Prototype on mock data until MOD-14 (nothing is sent to the server). */
-function GeneralSettingsForm() {
-  const { t } = useTranslation()
-  const { message } = App.useApp()
-  return (
-    <Card style={{ maxWidth: 640 }}>
-      <Form<MockAcademySettings>
-        layout="vertical"
-        initialValues={mockAcademySettings}
-        onFinish={() => message.success(t('settings.savedDemo'))}
-      >
-        <Form.Item name="nameAr" label={t('settings.academyNameAr')} rules={[{ required: true }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item name="nameEn" label={t('settings.academyNameEn')} rules={[{ required: true }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item name="defaultLanguage" label={t('settings.defaultLanguage')}>
-          <Select
-            options={[
-              { value: 'ar', label: 'العربية' },
-              { value: 'en', label: 'English' },
-            ]}
-          />
-        </Form.Item>
-        <Form.Item name="timezone" label={t('settings.timezone')}>
-          <Input />
-        </Form.Item>
-        <Form.Item name="currency" label={t('settings.currency')}>
-          <Input />
-        </Form.Item>
-        <Button type="primary" htmlType="submit">
-          {t('common.save')}
-        </Button>
-      </Form>
-    </Card>
-  )
 }

@@ -66,6 +66,8 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'guardians.linked',
   'guardians.updated',
   'guardians.unlinked',
+  'academy.',
+  'academy.updated',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

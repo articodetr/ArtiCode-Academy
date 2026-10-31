@@ -77,7 +77,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
   { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
   { key: 'audit', path: '/audit-logs', labelKey: 'nav.audit', icon: createElement(AuditOutlined), permissions: ['audit.read'], module: 'MOD-03' },
-  { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), roles: ['admin'], module: 'MOD-14' },
+  // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the
+  // catalog keys (either one shows it; saving needs `manage`). By default only academy_admin holds them — no visible change.
+  { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
 ]
 
 /** Whether the viewer sees an entry: by permission when the entry names keys, else by the role matrix. */

@@ -55,21 +55,22 @@ describe('RequireAuth', () => {
 
 describe('RequireAccess', () => {
   it('lets a role that owns a role-gated screen through and shows the 403 page to one that does not', () => {
+    // `reports` is still on the role matrix (admin only); `settings` moved to permission keys in CH-0036.
     const { unmount } = renderWithProviders(
-      <RequireAccess navKey="settings">
+      <RequireAccess navKey="reports">
         <p>{SECRET}</p>
       </RequireAccess>,
-      { auth: makeAuth({ user: makeUser() }), route: '/settings' },
+      { auth: makeAuth({ user: makeUser() }), route: '/reports' },
     )
     expect(screen.getByText(SECRET)).toBeInTheDocument()
     unmount()
 
     const student = makeUser({ role: 'student', roles: ['student'], permissions: [] })
     renderWithProviders(
-      <RequireAccess navKey="settings">
+      <RequireAccess navKey="reports">
         <p>{SECRET}</p>
       </RequireAccess>,
-      { auth: makeAuth({ user: student }), route: '/settings' },
+      { auth: makeAuth({ user: student }), route: '/reports' },
     )
     expectForbidden()
   })

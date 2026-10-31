@@ -2,36 +2,48 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
+import { makeAcademy } from '../test/academy'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { ALL_ROLES, makeCatalog } from '../test/roles'
 import { SettingsPage } from './SettingsPage'
 
-function mockRolesApi() {
-  return mockFetch((url) => (url === '/api/roles' ? jsonResponse(200, { items: ALL_ROLES }) : jsonResponse(200, makeCatalog())))
+/** Serves the roles tab (API-022/023) and the general tab (API-035). */
+function mockSettingsApi() {
+  return mockFetch((url) => {
+    if (url === '/api/roles') return jsonResponse(200, { items: ALL_ROLES })
+    if (url === '/api/permissions') return jsonResponse(200, makeCatalog())
+    if (url === '/api/academy') return jsonResponse(200, makeAcademy())
+    return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
+  })
 }
 
+/** The general tab follows the /settings entry: `academy.settings.read` (or `.manage`) since CH-0036. */
+const SETTINGS_ADMIN = ['academy.settings.read', 'academy.settings.manage', 'roles.manage']
+
 describe('SettingsPage', () => {
-  it('shows the general form with both tabs to an admin holding roles.manage, and the roles tab navigates to /settings/roles', async () => {
+  it('shows the real general form with both tabs to an admin holding the settings keys and roles.manage, and the roles tab navigates to /settings/roles', async () => {
+    const fetchMock = mockSettingsApi()
     renderWithProviders(<SettingsPage />, {
-      auth: makeAuth({ user: makeUser({ permissions: ['roles.manage'] }) }),
+      auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }),
       route: '/settings',
       routes: { '/settings/roles': <LocationProbe /> },
     })
 
     expect(screen.getByRole('heading', { name: ar.settings.title })).toBeInTheDocument()
-    expect(screen.getByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
+    expect(await screen.findByLabelText(ar.settings.academyNameAr)).toHaveValue('أكاديمية آرتي كود')
     expect(screen.getByRole('tab', { name: ar.settings.tabs.general })).toHaveAttribute('aria-selected', 'true')
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/academy'])
 
     await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.roles }))
     expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings/roles')
   })
 
-  it('renders the roles manager under /settings/roles for a holder of roles.manage', async () => {
-    const fetchMock = mockRolesApi()
+  it('renders the roles manager under /settings/roles for a holder of roles.manage without touching the academy endpoint', async () => {
+    const fetchMock = mockSettingsApi()
     renderWithProviders(<SettingsPage section="roles" />, {
-      auth: makeAuth({ user: makeUser({ permissions: ['roles.manage'] }) }),
+      auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }),
       route: '/settings/roles',
     })
 
@@ -43,7 +55,7 @@ describe('SettingsPage', () => {
   })
 
   it('opens /settings/roles to a roles.manage holder whose role sees no other settings, without the general tab (D-R06)', async () => {
-    mockRolesApi()
+    mockSettingsApi()
     renderWithProviders(<SettingsPage section="roles" />, {
       auth: makeAuth({ user: makeUser({ role: 'staff', roles: ['staff', 'role_manager'], permissions: ['users.read', 'roles.manage'] }) }),
       route: '/settings/roles',
@@ -55,7 +67,7 @@ describe('SettingsPage', () => {
   })
 
   it('opens /settings/roles to a custom role (no UI role) holding roles.manage — the gate is the permission, not the role (T15)', async () => {
-    mockRolesApi()
+    mockSettingsApi()
     renderWithProviders(<SettingsPage section="roles" />, {
       auth: makeAuth({ user: makeUser({ role: null, roles: ['role_manager'], permissions: ['roles.manage'] }) }),
       route: '/settings/roles',
@@ -72,9 +84,11 @@ describe('SettingsPage', () => {
     expect(screen.queryByText(ar.rolesAdmin.subtitle)).not.toBeInTheDocument()
   })
 
-  it('hides the roles tab on /settings from an admin without roles.manage', () => {
-    renderWithProviders(<SettingsPage />, { auth: makeAuth({ user: makeUser({ permissions: ['users.read'] }) }), route: '/settings' })
-    expect(screen.getByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
+  it('shows the general form alone (no tabs) to a holder of academy.settings.read without roles.manage', async () => {
+    mockSettingsApi()
+    renderWithProviders(<SettingsPage />, { auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read'] }) }), route: '/settings' })
+    expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
+    expect(screen.getByText(ar.settings.readOnlyHint)).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: ar.settings.tabs.roles })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: ar.settings.tabs.general })).not.toBeInTheDocument()
   })

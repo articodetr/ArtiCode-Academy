@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AcademyModule } from './academy/academy.module.js';
 import { AccountModule } from './account/account.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -38,6 +39,8 @@ import { UsersModule } from './users/users.module.js';
     RolesModule,
     // MOD-03-T09: guardian ↔ student links.
     GuardiansModule,
+    // MOD-02/MOD-14 minimum: the single academy row (read + update).
+    AcademyModule,
     HealthModule,
   ],
 })

@@ -17,7 +17,7 @@ describe('AppLayout navigation', () => {
 
   it('adds the roles and audit entries for their permission holders and hides them from a student', () => {
     const { unmount } = renderWithProviders(<AppLayout />, {
-      auth: makeAuth({ user: makeUser({ permissions: ['users.read', 'roles.manage', 'audit.read'] }) }),
+      auth: makeAuth({ user: makeUser({ permissions: ['users.read', 'roles.manage', 'audit.read', 'academy.settings.read'] }) }),
       route: '/',
     })
     const admin = menuLabels()
