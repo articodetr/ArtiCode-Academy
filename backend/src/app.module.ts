@@ -6,6 +6,7 @@ import { AccountModule } from './account/account.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ENV_FILE_PATHS } from './config/env-files.js';
+import { CoursesModule } from './courses/courses.module.js';
 import { validateEnv } from './config/env.schema.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -44,6 +45,8 @@ import { UsersModule } from './users/users.module.js';
     AcademyModule,
     // MOD-04-T02: course levels.
     LevelsModule,
+    // MOD-04-T03: courses.
+    CoursesModule,
     HealthModule,
   ],
 })

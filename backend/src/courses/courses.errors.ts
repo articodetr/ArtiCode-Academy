@@ -9,9 +9,14 @@
 //   level_order_invalid   400  — the order list is not a permutation of every
 //                                level ({ missing, unknown, duplicates })
 //   nothing_to_update     400  — PATCH body without any field (as API-018)
-//
-// Course codes (course_not_found, course_code_taken, course_not_deletable,
-// invalid_transition, cursor_invalid) join with MOD-04-T03/T04.
+//   course_not_found      404  — no course with this id, or a course the caller
+//                                may not see (not published, no courses.manage) ({ courseId })
+//   course_code_taken     409  — another course already uses the code ({ courseCode })
+//   course_not_deletable  409  — only a draft can be deleted; archive the others ({ status })
+//   invalid_transition    409  — status action not allowed from the current
+//                                state ({ from, action, allowed })
+//   age_range_invalid     400  — maxAge below minAge after merging the PATCH ({ minAge, maxAge })
+//   cursor_invalid        400  — the list cursor does not belong to this sort/order
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -21,6 +26,12 @@ export const COURSES_ERROR_CODES = [
   'level_in_use',
   'level_order_invalid',
   'nothing_to_update',
+  'course_not_found',
+  'course_code_taken',
+  'course_not_deletable',
+  'invalid_transition',
+  'age_range_invalid',
+  'cursor_invalid',
 ] as const;
 
 export type CoursesErrorCode = (typeof COURSES_ERROR_CODES)[number];
@@ -78,4 +89,29 @@ export const coursesError = {
     ),
   nothingToUpdate: () =>
     new CoursesHttpException(HttpStatus.BAD_REQUEST, 'nothing_to_update', 'The request body contains no field to update'),
+  courseNotFound: (courseId: string) =>
+    new CoursesHttpException(HttpStatus.NOT_FOUND, 'course_not_found', 'No course with this id', { courseId }),
+  courseCodeTaken: (courseCode: string) =>
+    new CoursesHttpException(HttpStatus.CONFLICT, 'course_code_taken', 'Another course already uses this code', { courseCode }),
+  courseNotDeletable: (status: string) =>
+    new CoursesHttpException(
+      HttpStatus.CONFLICT,
+      'course_not_deletable',
+      'Only a draft course can be deleted; archive it instead',
+      { status },
+    ),
+  invalidTransition: (from: string, action: string, allowed: readonly string[]) =>
+    new CoursesHttpException(HttpStatus.CONFLICT, 'invalid_transition', `Action "${action}" is not allowed for a ${from} course`, {
+      from,
+      action,
+      allowed: [...allowed],
+    }),
+  ageRangeInvalid: (minAge: number, maxAge: number) =>
+    new CoursesHttpException(HttpStatus.BAD_REQUEST, 'age_range_invalid', 'maxAge must not be below minAge', { minAge, maxAge }),
+  cursorInvalid: () =>
+    new CoursesHttpException(
+      HttpStatus.BAD_REQUEST,
+      'cursor_invalid',
+      'The cursor is invalid or belongs to a different sort or order; restart from the first page',
+    ),
 };
