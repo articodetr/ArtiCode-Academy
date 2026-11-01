@@ -1,11 +1,13 @@
+import { App } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import * as authApi from '../api/auth'
 import type { SessionResponse, SessionUser } from '../api/auth'
 import { AuthContext } from './auth-context'
 import type { AuthContextValue, AuthStatus, AuthUser } from './auth-context'
 import { primaryRole } from './roles'
-import { onSessionLost, setAccessToken } from './token-store'
+import { onSessionLost, onSessionSwitched, setAccessToken } from './token-store'
 
 // Real authentication (MOD-01): the access token lives in memory only
 // (token-store.ts) and the refresh token in an httpOnly cookie set by the
@@ -50,6 +52,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // A failed refresh anywhere in the app (expired cookie, revoked session) signs the user out.
   useEffect(() => onSessionLost(() => setState({ status: 'anonymous', user: null })), [])
+
+  // The refresh cookie is shared by every tab: when another tab signed in as
+  // someone else, this tab now runs as that user. Show who it is (the guards
+  // re-evaluate) and say why; the request that hit the switch was not replayed (KI-046).
+  const { message } = App.useApp()
+  const { t } = useTranslation()
+  useEffect(
+    () =>
+      onSessionSwitched((session) => {
+        const user = toAuthUser(session.user)
+        setState({ status: 'authenticated', user })
+        message.warning({ content: t('login.sessionSwitched', { name: user.name }), duration: 10 })
+      }),
+    [message, t],
+  )
 
   const login = useCallback(async (identifier: string, password: string) => {
     const session = await authApi.login(identifier, password)

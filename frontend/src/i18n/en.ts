@@ -102,6 +102,8 @@ export const en: Translation = {
     signingIn: 'Signing in...',
     identifierRequired: 'Enter your email or username',
     passwordRequired: 'Enter your password',
+    sessionSwitched:
+      'Another account signed in from another tab of this browser, so this tab now runs as {{name}}. The last request was not sent. To use two accounts at once, open the second one in a private window or another browser.',
     errors: {
       invalid_credentials: 'Incorrect sign-in details. Check the identifier and the password.',
       account_locked:

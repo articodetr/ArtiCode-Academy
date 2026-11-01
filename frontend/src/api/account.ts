@@ -74,7 +74,7 @@ export async function acceptInvitation(token: string, password: string): Promise
     auth: false,
     retry: false,
   })
-  setAccessToken(session.accessToken)
+  setAccessToken(session.accessToken, session.user.id)
   return session
 }
 
@@ -86,6 +86,6 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
     auth: false,
     retry: false,
   })
-  setAccessToken(session.accessToken)
+  setAccessToken(session.accessToken, session.user.id)
   return session
 }

@@ -1,12 +1,25 @@
 // HTTP client for the backend. Paths include the backend prefix (/api/...).
 // Adds the in-memory access token, sends cookies (refresh token) and, on a
 // 401 caused by an expired/invalid access token, refreshes once and retries.
-import { emitSessionLost, getAccessToken, setAccessToken } from '../auth/token-store'
+import {
+  emitSessionLost,
+  emitSessionSwitched,
+  getAccessToken,
+  getSessionUserId,
+  setAccessToken,
+} from '../auth/token-store'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
 
 /** Backend error codes that mean "get a new access token and try again". */
 const RETRY_CODES = new Set(['token_expired', 'token_invalid', 'unauthenticated'])
+
+/**
+ * Client-side code of the error thrown instead of a retry when the refreshed
+ * session belongs to another user (KI-046): a request is never replayed on
+ * behalf of someone other than the user who made it.
+ */
+export const SESSION_SWITCHED = 'session_switched'
 
 export class ApiError extends Error {
   readonly status: number
@@ -80,8 +93,18 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   const error = new ApiError(response.status, messageFrom(payload, `${response.status} ${response.statusText}`), payload)
   if (auth && retry && response.status === 401 && error.code && RETRY_CODES.has(error.code)) {
+    const requestedBy = getSessionUserId()
     const refreshed = await refreshSession().catch(() => null)
-    if (refreshed) return apiRequest<T>(path, { ...options, retry: false })
+    if (refreshed) {
+      if (requestedBy !== null && refreshed.user.id !== requestedBy) {
+        throw new ApiError(401, 'The session now belongs to another user', {
+          statusCode: 401,
+          code: SESSION_SWITCHED,
+          message: 'The session now belongs to another user',
+        })
+      }
+      return apiRequest<T>(path, { ...options, retry: false })
+    }
   }
   throw error
 }
@@ -117,12 +140,16 @@ let refreshInFlight: Promise<SessionResponse> | null = null
  * Rotates the refresh cookie and stores the new access token. Concurrent
  * callers share one request. Throws (and announces a lost session) when the
  * cookie is missing, expired, reused or the account is no longer usable.
+ * Announces a switched session when the cookie now belongs to another user
+ * than the stored token did (another tab signed in as someone else — KI-046).
  */
 export function refreshSession(): Promise<SessionResponse> {
   if (!refreshInFlight) {
     refreshInFlight = apiRequest<SessionResponse>('/api/auth/refresh', { method: 'POST', auth: false, retry: false })
       .then((session) => {
-        setAccessToken(session.accessToken)
+        const previousUserId = getSessionUserId()
+        setAccessToken(session.accessToken, session.user.id)
+        if (previousUserId !== null && previousUserId !== session.user.id) emitSessionSwitched(session)
         return session
       })
       .catch((error: unknown) => {

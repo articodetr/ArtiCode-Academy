@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getAccessToken, onSessionLost, setAccessToken } from '../auth/token-store'
+import { getAccessToken, getSessionUserId, onSessionLost, onSessionSwitched, setAccessToken } from '../auth/token-store'
 import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
-import { ApiError, apiRequest, apiUrl, refreshSession } from './client'
+import { ApiError, SESSION_SWITCHED, apiRequest, apiUrl, refreshSession } from './client'
 
 const EXPIRED = { statusCode: 401, code: 'token_expired', message: 'Access token expired' }
 
@@ -105,6 +105,51 @@ describe('apiRequest', () => {
     }
   })
 
+  it('never replays a request as another user when another tab signed in as someone else (KI-046)', async () => {
+    setAccessToken('admin-token', 'user-1')
+    const switched = vi.fn()
+    const unsubscribe = onSessionSwitched(switched)
+    const fetchMock = mockFetch((url) =>
+      url === '/api/auth/refresh'
+        ? jsonResponse(200, sessionResponse('student-token', { id: 'user-2', roles: ['student'], permissions: [] }))
+        : jsonResponse(401, EXPIRED),
+    )
+
+    try {
+      await expect(
+        apiRequest('/api/roles/role-1', { method: 'PATCH', body: { permissions: ['courses.read'] } }),
+      ).rejects.toMatchObject({ status: 401, code: SESSION_SWITCHED })
+      // No second PATCH: the write is not sent with the other user's token.
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/roles/role-1', '/api/auth/refresh'])
+      expect(switched).toHaveBeenCalledTimes(1)
+      expect(switched.mock.calls[0][0]).toMatchObject({ user: { id: 'user-2' } })
+      // The tab now holds the cookie's session, so the next request runs as that user knowingly.
+      expect(getAccessToken()).toBe('student-token')
+      expect(getSessionUserId()).toBe('user-2')
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('retries as before when the refreshed session belongs to the same user', async () => {
+    setAccessToken('stale', 'user-1')
+    const switched = vi.fn()
+    const unsubscribe = onSessionSwitched(switched)
+    const fetchMock = mockFetch((url, init) => {
+      if (url === '/api/auth/refresh') return jsonResponse(200, sessionResponse('fresh', { id: 'user-1' }))
+      const token = new Headers(init?.headers).get('Authorization')
+      return token === 'Bearer fresh' ? jsonResponse(200, { ok: true }) : jsonResponse(401, EXPIRED)
+    })
+
+    try {
+      await expect(apiRequest('/api/users')).resolves.toEqual({ ok: true })
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/users', '/api/auth/refresh', '/api/users'])
+      expect(switched).not.toHaveBeenCalled()
+    } finally {
+      unsubscribe()
+    }
+  })
+
   it('does not refresh for a 401 that is not about the access token', async () => {
     const fetchMock = mockFetch(() =>
       jsonResponse(401, { statusCode: 401, code: 'invalid_credentials', message: 'Invalid credentials' }),
@@ -131,6 +176,23 @@ describe('refreshSession', () => {
     expect(first).toBe(second)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(getAccessToken()).toBe('one')
+    expect(getSessionUserId()).toBe('user-1')
+  })
+
+  it('announces no switch on the first refresh of a page (no previous user)', async () => {
+    const switched = vi.fn()
+    const unsubscribe = onSessionSwitched(switched)
+    mockFetch(() => jsonResponse(200, sessionResponse('first', { id: 'user-2' })))
+
+    try {
+      await refreshSession()
+      expect(switched).not.toHaveBeenCalled()
+      expect(getSessionUserId()).toBe('user-2')
+      setAccessToken(null)
+      expect(getSessionUserId()).toBeNull()
+    } finally {
+      unsubscribe()
+    }
   })
 
   it('starts a new request once the previous one has settled', async () => {

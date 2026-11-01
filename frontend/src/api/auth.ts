@@ -22,7 +22,7 @@ export async function login(identifier: string, password: string): Promise<Sessi
     auth: false,
     retry: false,
   })
-  setAccessToken(session.accessToken)
+  setAccessToken(session.accessToken, session.user.id)
   return session
 }
 

@@ -1,11 +1,12 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
+import { App as AntdApp } from 'antd'
 import { useEffect } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
 import { AuthProvider } from './AuthProvider'
 import { useAuth } from './auth-context'
 import type { AuthContextValue } from './auth-context'
-import { emitSessionLost, getAccessToken, setAccessToken } from './token-store'
+import { emitSessionLost, emitSessionSwitched, getAccessToken, setAccessToken } from './token-store'
 
 const UNAUTHENTICATED = { statusCode: 401, code: 'unauthenticated', message: 'Authentication required' }
 
@@ -23,10 +24,13 @@ function renderProvider() {
       </output>
     )
   }
+  // Inside antd's App like in app/App.tsx: the provider shows notices through App.useApp().
   render(
-    <AuthProvider>
-      <Capture />
-    </AuthProvider>,
+    <AntdApp>
+      <AuthProvider>
+        <Capture />
+      </AuthProvider>
+    </AntdApp>,
   )
   return {
     auth: () => {
@@ -103,6 +107,24 @@ describe('AuthProvider', () => {
 
     expect(status()).toBe('anonymous')
     expect(getAccessToken()).toBeNull()
+  })
+
+  it('shows the user the cookie now belongs to, with a notice, when another tab switched accounts (KI-046)', async () => {
+    mockFetch(() => jsonResponse(200, sessionResponse()))
+    const { auth, status } = renderProvider()
+    await waitFor(() => expect(status()).toBe('authenticated'))
+    expect(screen.getByTestId('auth')).toHaveTextContent('admin:مدير الأكاديمية')
+
+    act(() => {
+      emitSessionSwitched(
+        sessionResponse('student-token', { id: 'user-2', fullName: 'طالب تجريبي', roles: ['student'], permissions: [] }),
+      )
+    })
+
+    expect(status()).toBe('authenticated')
+    expect(screen.getByTestId('auth')).toHaveTextContent('student:طالب تجريبي')
+    expect(auth().hasPermission('users.read')).toBe(false)
+    expect(await screen.findByText(/فصار هذا التبويب يعمل بحساب طالب تجريبي/)).toBeInTheDocument()
   })
 
   it('logout revokes the cookie session and forgets the token', async () => {
