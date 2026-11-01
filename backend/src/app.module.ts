@@ -9,6 +9,7 @@ import { ENV_FILE_PATHS } from './config/env-files.js';
 import { validateEnv } from './config/env.schema.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
+import { LevelsModule } from './levels/levels.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RolesModule } from './roles/roles.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -41,6 +42,8 @@ import { UsersModule } from './users/users.module.js';
     GuardiansModule,
     // MOD-02/MOD-14 minimum: the single academy row (read + update).
     AcademyModule,
+    // MOD-04-T02: course levels.
+    LevelsModule,
     HealthModule,
   ],
 })

@@ -12,6 +12,32 @@ export function isLocaleCode(value: unknown): value is LocaleCode {
 }
 
 /**
+ * Localized texts are equal when every locale matches (an absent locale equals
+ * a missing one); two nulls are equal, null and a text are not. Shared by the
+ * PATCH planners (academy, roles, levels, courses).
+ */
+export function sameLocalizedText(a: LocalizedText | null, b: LocalizedText | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.ar === b.ar && (a.en ?? null) === (b.en ?? null) && (a.tr ?? null) === (b.tr ?? null);
+}
+
+/**
+ * Reads a jsonb column as `{ ar, en?, tr? }`: only string locales are kept;
+ * anything without a string `ar` (the CHECKs make that impossible) is null.
+ */
+export function readLocalizedText(value: unknown): LocalizedText | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record['ar'] !== 'string') return null;
+  const text: LocalizedText = { ar: record['ar'] };
+  for (const locale of LOCALES) {
+    const entry = record[locale];
+    if (locale !== 'ar' && typeof entry === 'string') text[locale] = entry;
+  }
+  return text;
+}
+
+/**
  * Picks the text for `locale`, then the academy default, then `ar`, then the
  * first value present (fallback order approved in D1).
  */

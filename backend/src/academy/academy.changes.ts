@@ -4,6 +4,7 @@
 // row: only fields whose value actually changes are written, an idempotent
 // PATCH writes nothing and records no audit event, and the audit metadata
 // carries the names of the changed fields — never their values.
+import { sameLocalizedText } from '../authorization/localized-text.js';
 import type { LocaleCode, LocalizedText } from '../authorization/localized-text.js';
 
 /** Fields of `academy` a PATCH may set, in the fixed order of `fields`. */
@@ -47,10 +48,8 @@ export function isEmptyAcademyPatch(patch: Partial<Record<AcademyPatchField, unk
   return ACADEMY_PATCH_FIELDS.every((field) => patch[field] === undefined);
 }
 
-/** Localized texts are equal when every locale matches (an absent locale equals a missing one). */
-export function sameLocalizedText(a: LocalizedText, b: LocalizedText): boolean {
-  return a.ar === b.ar && (a.en ?? null) === (b.en ?? null) && (a.tr ?? null) === (b.tr ?? null);
-}
+/** Kept as a re-export: the comparison moved to authorization/localized-text.ts (third consumer — CH-0044). */
+export { sameLocalizedText };
 
 /**
  * Decides what a PATCH writes. Validation and normalisation (trim, lower-case

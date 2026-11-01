@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
+import { sameLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { PERMISSION_KEYS } from '../authorization/permission-catalog.js';
 import { authError } from '../auth/auth.errors.js';
@@ -84,10 +85,6 @@ function descriptionInput(value: LocalizedText | null): Prisma.InputJsonValue | 
   return value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
 }
 
-function sameLocalizedText(a: LocalizedText | null, b: LocalizedText | null): boolean {
-  if (a === null || b === null) return a === b;
-  return a.ar === b.ar && (a.en ?? null) === (b.en ?? null) && (a.tr ?? null) === (b.tr ?? null);
-}
 
 /**
  * MOD-03-T08 — roles and permissions. The global guards enforce `users.read`
