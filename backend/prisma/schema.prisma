@@ -71,6 +71,16 @@ enum TokenPurpose {
   @@map("token_purpose")
 }
 
+/// Publication state of a course (MOD-04, D-R13/D-R14): holders of
+/// `courses.read` alone see `published` only; `archived` replaces deletion.
+enum CourseStatus {
+  draft
+  published
+  archived
+
+  @@map("course_status")
+}
+
 // ---------------------------------------------------------------------------
 // MOD-02 / MOD-14 — academy identity (exactly one row per database)
 // ---------------------------------------------------------------------------
@@ -146,6 +156,8 @@ model User {
   refreshTokens      RefreshToken[]
   verificationTokens VerificationToken[]
   auditLogs          AuditLog[]
+  /// Courses this user created (MOD-04); the link is cleared if the user row goes.
+  coursesCreated     Course[]            @relation("CourseCreatedBy")
 
   @@index([phone])
   @@index([status])
@@ -342,4 +354,78 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-04 — courses, levels and syllabus (roadmap §4c; owner decisions
+// D-R11..D-R14). Subset of master doc 6.7.4-C: no categories, prerequisites,
+// price/currency, cover file or soft delete — archiving replaces deletion.
+// ---------------------------------------------------------------------------
+
+/// Reference list of course levels managed by the academy (not an enum — 6.7.1).
+/// `sort_order` is unique but DEFERRABLE (SQL) so a reorder can swap values
+/// inside one transaction.
+model Level {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code        String   @unique @db.VarChar(16)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name        Json
+  description Json?
+  sortOrder   Int      @map("sort_order") @db.SmallInt
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  courses Course[]
+
+  @@unique([sortOrder], map: "uq_levels_sort_order")
+  @@map("levels")
+}
+
+/// A course as an educational product. Deleting is allowed only for an unused
+/// draft (service rule); otherwise it is archived (D-R14).
+model Course {
+  id            String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code          String       @unique @db.VarChar(32)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name          Json
+  summary       Json?
+  description   Json?
+  levelId       String?      @map("level_id") @db.Uuid
+  status        CourseStatus @default(draft)
+  durationHours Decimal?     @map("duration_hours") @db.Decimal(6, 1)
+  sessionsCount Int?         @map("sessions_count") @db.SmallInt
+  minAge        Int?         @map("min_age") @db.SmallInt
+  maxAge        Int?         @map("max_age") @db.SmallInt
+  createdById   String?      @map("created_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  level         Level?               @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  createdBy     User?                @relation("CourseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  syllabusItems CourseSyllabusItem[]
+
+  @@index([status])
+  @@index([levelId])
+  @@index([createdById])
+  @@map("courses")
+}
+
+/// One ordered item of a course syllabus — the lesson template MOD-06 builds on.
+/// `(course_id, sort_order)` is unique but DEFERRABLE (SQL) for reordering.
+model CourseSyllabusItem {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courseId         String   @map("course_id") @db.Uuid
+  sortOrder        Int      @map("sort_order") @db.SmallInt
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  title            Json
+  description      Json?
+  estimatedMinutes Int?     @map("estimated_minutes") @db.SmallInt
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, sortOrder], map: "uq_course_syllabus_items_course_order")
+  @@map("course_syllabus_items")
 }
