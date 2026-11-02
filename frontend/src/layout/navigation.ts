@@ -66,7 +66,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'dashboard', path: '/', labelKey: 'nav.dashboard', icon: createElement(DashboardOutlined), roles: 'everyone', module: 'MOD-FE-01' },
   { key: 'users', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], module: 'MOD-03' },
   { key: 'roles', path: '/settings/roles', labelKey: 'nav.roles', icon: createElement(SafetyOutlined), permissions: ['roles.manage'], module: 'MOD-03' },
-  { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-04' },
+  // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too.
+  { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], module: 'MOD-04' },
   { key: 'classes', path: '/classes', labelKey: 'nav.classes', icon: createElement(AppstoreOutlined), roles: ['admin', 'teacher', 'staff'], module: 'MOD-05' },
   { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), roles: KNOWN_ROLES, module: 'MOD-07' },
   { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), roles: ['admin', 'teacher', 'student'], module: 'MOD-06' },
