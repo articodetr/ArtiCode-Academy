@@ -124,4 +124,21 @@ describe('CoursesPage', () => {
     expect(await within(dialog).findByText(ar.courses.validation.arabicFirst)).toBeInTheDocument()
     expect(api.posts).toEqual([])
   })
+
+  it('gives a manager the levels tab (MOD-04-T06) and a reader no tabs at all', async () => {
+    mockCoursesApi(makeCourseList([python]))
+    const view = renderPage(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101')
+
+    fireEvent.click(screen.getByText(ar.courses.tabs.levels))
+    expect(await screen.findByLabelText(`${ar.courses.levels.delete}: BEG`)).toBeDisabled()
+    expect(screen.queryByText(ar.courses.addCourse)).not.toBeInTheDocument()
+    expect(screen.getByText(ar.courses.levels.add)).toBeInTheDocument()
+    view.unmount()
+
+    mockCoursesApi(makeCourseList([python]))
+    renderPage(COURSE_READER_PERMISSIONS)
+    await screen.findByText('PY-101')
+    expect(screen.queryByText(ar.courses.tabs.levels)).not.toBeInTheDocument()
+  })
 })
