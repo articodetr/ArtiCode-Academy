@@ -9,6 +9,12 @@
             "type": "command",
             "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/doc-sync-check.mjs\"",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/git-sync-check.mjs\"",
+            "timeout": 30,
+            "statusMessage": "git-sync: fetching origin (read-only)…"
           }
         ]
       }
@@ -20,6 +26,11 @@
             "type": "command",
             "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/doc-sync-check.mjs\"",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/git-sync-check.mjs\"",
+            "timeout": 10
           }
         ]
       }
