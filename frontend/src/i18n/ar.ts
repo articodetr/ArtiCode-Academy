@@ -493,7 +493,6 @@ export const ar = {
       minAge: 'أصغر عمر',
       maxAge: 'أكبر عمر',
       ageRange: 'الفئة العمرية',
-      syllabusCount: 'بنود المنهج',
       createdAt: 'أُنشئت في',
       updatedAt: 'آخر تعديل',
     },
