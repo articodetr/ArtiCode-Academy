@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { CoursesController } from './courses.controller.js';
 import { CoursesService } from './courses.service.js';
+import { SyllabusController } from './syllabus.controller.js';
+import { SyllabusService } from './syllabus.service.js';
 
 /**
  * MOD-04-T03 — courses (`/api/courses`). Relies on the global guards
@@ -9,8 +11,9 @@ import { CoursesService } from './courses.service.js';
  * are shared with LevelsModule; the keyset cursor lives in common/.
  */
 @Module({
-  controllers: [CoursesController],
-  providers: [CoursesService],
-  exports: [CoursesService],
+  // MOD-04-T04 (CH-0046): the syllabus routes /api/courses/:id/syllabus live in the same module.
+  controllers: [CoursesController, SyllabusController],
+  providers: [CoursesService, SyllabusService],
+  exports: [CoursesService, SyllabusService],
 })
 export class CoursesModule {}

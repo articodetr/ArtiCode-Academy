@@ -80,6 +80,8 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'courses.updated',
   'courses.status.changed',
   'courses.deleted',
+  // MOD-04-T04 (CH-0046)
+  'courses.syllabus.changed',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */
