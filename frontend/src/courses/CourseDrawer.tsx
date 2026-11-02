@@ -1,10 +1,11 @@
-// Detail drawer of one course (MOD-04-T05): reads GET /api/courses/:id
-// (API-043); for holders of `courses.manage` an edit form (smallest PATCH —
-// API-045) and an actions menu built from the mirrored state machine
-// (courses.status.ts → API-046, and API-047 for a draft), each action
-// confirmed in a modal. Everyone else sees the published course read-only.
+// Detail drawer of one course (MOD-04-T05/T06): reads GET /api/courses/:id
+// (API-043) and shows two tabs — details and syllabus (SyllabusTab, T06).
+// For holders of `courses.manage`: an edit form (smallest PATCH — API-045) and
+// an actions menu built from the mirrored state machine (courses.status.ts →
+// API-046, and API-047 for a draft), each action confirmed in a modal.
+// Everyone else sees the published course read-only.
 import { DeleteOutlined, DownOutlined, EditOutlined, InboxOutlined, RocketOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Modal, Skeleton, Space, Typography } from 'antd'
+import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -22,6 +23,7 @@ import { courseFormValuesOf, planCoursePatch } from './courses.form'
 import type { CourseFormValues } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction } from './courses.status'
 import type { CourseMenuAction } from './courses.status'
+import { SyllabusTab } from './SyllabusTab'
 
 const ICONS: Readonly<Record<CourseMenuAction, ReactNode>> = {
   publish: <RocketOutlined />,
@@ -32,6 +34,8 @@ const ICONS: Readonly<Record<CourseMenuAction, ReactNode>> = {
 }
 
 const DASH = '—'
+
+type DrawerTab = 'details' | 'syllabus'
 
 interface CourseDrawerProps {
   courseId: string | null
@@ -52,13 +56,11 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
   const [course, setCourse] = useState<Course | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  const [tab, setTab] = useState<DrawerTab>('details')
   const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [pending, setPending] = useState<CourseMenuAction | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  // Untyped so setFields accepts the string[] name paths of the error mapper.
-  const [form] = Form.useForm()
 
   useEffect(() => {
     if (!courseId) return
@@ -81,6 +83,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
   const close = () => {
     setCourse(null)
     setLoadError(null)
+    setTab('details')
     setEditing(false)
     setPending(null)
     setActionError(null)
@@ -90,29 +93,6 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
   const applyUpdate = (updated: Course) => {
     setCourse(updated)
     onUpdated(updated)
-  }
-
-  const save = async (values: CourseFormValues) => {
-    if (!course) return
-    const body = planCoursePatch(course, values)
-    if (!body) {
-      message.info(t('courses.drawer.nothingChanged'))
-      setEditing(false)
-      return
-    }
-    setSaving(true)
-    try {
-      applyUpdate(await updateCourse(course.id, body))
-      setEditing(false)
-      message.success(t('courses.drawer.saved'))
-    } catch (caught) {
-      const failure = describeCoursesFailure(caught)
-      const text = failureMessage(t, failure)
-      if (failure.field) form.setFields([{ name: failure.field, errors: [text] }])
-      else message.error(text)
-    } finally {
-      setSaving(false)
-    }
   }
 
   const confirmAction = async () => {
@@ -150,8 +130,48 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
   }))
 
   const name = course ? localizedLabel(course.name, language) : t('courses.drawer.title')
-  const optional = (value: string | number | null | undefined, render?: (value: string | number) => string) =>
-    value === null || value === undefined || value === '' ? DASH : render ? render(value) : String(value)
+  const optional = (value: string | number | null | undefined) => (value === null || value === undefined || value === '' ? DASH : String(value))
+
+  const details = course ? (
+    editing ? (
+      <CourseEditForm
+        // Remount per server version so the form starts from what the server holds.
+        key={`${course.id}:${course.updatedAt}`}
+        course={course}
+        levels={levels}
+        onSaved={(updated) => {
+          applyUpdate(updated)
+          setEditing(false)
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    ) : (
+      <Descriptions column={1} bordered size="small">
+        <Descriptions.Item label={t('courses.fields.code')}>
+          <Typography.Text dir="ltr">{course.code}</Typography.Text>
+        </Descriptions.Item>
+        <Descriptions.Item label={t('common.status')}>
+          <StatusTag value={course.status} />
+        </Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.nameAr')}>{course.name.ar}</Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.nameEn')}>{optional(course.name.en)}</Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.level')}>
+          {course.level ? `${localizedLabel(course.level.name, language)} (${course.level.code})` : DASH}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.durationHours')}>{optional(course.durationHours)}</Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.sessionsCount')}>{optional(course.sessionsCount)}</Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.ageRange')}>
+          {course.minAge === null && course.maxAge === null ? DASH : `${optional(course.minAge)} – ${optional(course.maxAge)}`}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.summary')}>{course.summary ? localizedLabel(course.summary, language) : DASH}</Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.description')}>
+          {course.description ? localizedLabel(course.description, language) : DASH}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.createdAt')}>{formatDateTime(course.createdAt, language)}</Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.updatedAt')}>{formatDateTime(course.updatedAt, language)}</Descriptions.Item>
+      </Descriptions>
+    )
+  ) : null
 
   return (
     <Drawer
@@ -163,9 +183,11 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
       extra={
         canManage && course && !editing ? (
           <Space>
-            <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-              {t('common.edit')}
-            </Button>
+            {tab === 'details' ? (
+              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                {t('common.edit')}
+              </Button>
+            ) : null}
             {menu.length > 0 ? (
               <Dropdown
                 trigger={['click']}
@@ -203,54 +225,15 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
 
       {!course && !loadError ? <Skeleton active paragraph={{ rows: 8 }} data-testid="course-loading" /> : null}
 
-      {course && editing ? (
-        <Form
-          // Remount per server version so the form starts from what the server holds.
-          key={`${course.id}:${course.updatedAt}`}
-          form={form}
-          layout="vertical"
-          requiredMark={false}
-          initialValues={courseFormValuesOf(course)}
-          onFinish={(values) => void save(values as CourseFormValues)}
-          disabled={saving}
-        >
-          <CourseFormFields form={form} levels={levels} />
-          <Flex gap={8} justify="flex-end">
-            <Button onClick={() => setEditing(false)} disabled={saving}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="primary" htmlType="submit" loading={saving}>
-              {t('common.save')}
-            </Button>
-          </Flex>
-        </Form>
-      ) : null}
-
-      {course && !editing ? (
-        <Descriptions column={1} bordered size="small">
-          <Descriptions.Item label={t('courses.fields.code')}>
-            <Typography.Text dir="ltr">{course.code}</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label={t('common.status')}>
-            <StatusTag value={course.status} />
-          </Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.nameAr')}>{course.name.ar}</Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.nameEn')}>{optional(course.name.en)}</Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.level')}>
-            {course.level ? `${localizedLabel(course.level.name, language)} (${course.level.code})` : DASH}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.durationHours')}>{optional(course.durationHours)}</Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.sessionsCount')}>{optional(course.sessionsCount)}</Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.ageRange')}>
-            {course.minAge === null && course.maxAge === null ? DASH : `${optional(course.minAge)} – ${optional(course.maxAge)}`}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.summary')}>{course.summary ? localizedLabel(course.summary, language) : DASH}</Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.description')}>
-            {course.description ? localizedLabel(course.description, language) : DASH}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.createdAt')}>{formatDateTime(course.createdAt, language)}</Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.updatedAt')}>{formatDateTime(course.updatedAt, language)}</Descriptions.Item>
-        </Descriptions>
+      {course ? (
+        <Tabs
+          activeKey={tab}
+          onChange={(key) => setTab(key as DrawerTab)}
+          items={[
+            { key: 'details', label: t('courses.drawer.tabs.details'), children: details },
+            { key: 'syllabus', label: t('courses.drawer.tabs.syllabus'), children: <SyllabusTab courseId={course.id} canManage={canManage} />, disabled: editing },
+          ]}
+        />
       ) : null}
 
       <Modal
@@ -273,5 +256,68 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
         {actionError ? <Alert type="error" showIcon message={actionError} /> : null}
       </Modal>
     </Drawer>
+  )
+}
+
+interface CourseEditFormProps {
+  course: Course
+  levels: Level[]
+  onSaved: (course: Course) => void
+  onCancel: () => void
+}
+
+/**
+ * The edit form of one edit session. It owns its form so every session starts
+ * from the course as the server holds it: a form instance kept across
+ * sessions would merge the values typed in a cancelled session over the new
+ * initial values (rc-field-form keeps unmounted values — CH-0049).
+ */
+function CourseEditForm({ course, levels, onSaved, onCancel }: CourseEditFormProps) {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  // Untyped so setFields accepts the string[] name paths of the error mapper.
+  const [form] = Form.useForm()
+  const [saving, setSaving] = useState(false)
+
+  const save = async (values: CourseFormValues) => {
+    const body = planCoursePatch(course, values)
+    if (!body) {
+      message.info(t('courses.drawer.nothingChanged'))
+      onCancel()
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateCourse(course.id, body)
+      message.success(t('courses.drawer.saved'))
+      onSaved(updated)
+    } catch (caught) {
+      const failure = describeCoursesFailure(caught)
+      const text = failureMessage(t, failure)
+      if (failure.field) form.setFields([{ name: failure.field, errors: [text] }])
+      else message.error(text)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Form
+      form={form}
+      layout="vertical"
+      requiredMark={false}
+      initialValues={courseFormValuesOf(course)}
+      onFinish={(values) => void save(values as CourseFormValues)}
+      disabled={saving}
+    >
+      <CourseFormFields form={form} levels={levels} />
+      <Flex gap={8} justify="flex-end">
+        <Button onClick={onCancel} disabled={saving}>
+          {t('common.cancel')}
+        </Button>
+        <Button type="primary" htmlType="submit" loading={saving}>
+          {t('common.save')}
+        </Button>
+      </Flex>
+    </Form>
   )
 }

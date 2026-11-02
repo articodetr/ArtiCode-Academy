@@ -1,7 +1,8 @@
-// Fixtures for the courses screen (MOD-04-T05): the shapes of API-037 and
-// API-042..API-046 as the backend returns them, plus the permission sets.
+// Fixtures for the courses screen (MOD-04-T05/T06): the shapes of API-037,
+// API-042..API-046 and API-048 as the backend returns them, plus the permission sets.
 import type { Course, CourseList } from '../api/courses'
 import type { Level, LevelList } from '../api/levels'
+import type { Syllabus, SyllabusItem } from '../api/syllabus'
 
 export const COURSE_ID = '0193a000-0000-7000-8000-00000000c001'
 export const LEVEL_ID = '0193a000-0000-7000-8000-00000000b001'
@@ -53,4 +54,43 @@ export function makeCourse(overrides: Partial<Course> = {}): Course {
 
 export function makeCourseList(items: Course[], nextCursor: string | null = null): CourseList {
   return { items, nextCursor }
+}
+
+export const SYLLABUS_ITEM_IDS = ['0193a000-0000-7000-8000-00000000d001', '0193a000-0000-7000-8000-00000000d002', '0193a000-0000-7000-8000-00000000d003'] as const
+
+export function makeSyllabusItem(overrides: Partial<SyllabusItem> = {}): SyllabusItem {
+  return {
+    id: SYLLABUS_ITEM_IDS[0],
+    sortOrder: 0,
+    title: { ar: 'المتغيرات', en: 'Variables' },
+    description: null,
+    estimatedMinutes: 45,
+    createdAt: '2026-11-02T10:00:00.000Z',
+    updatedAt: '2026-11-02T10:00:00.000Z',
+    ...overrides,
+  }
+}
+
+/** Three items: «المتغيرات» (45 min), «الشروط» (60 min, with a description), «الحلقات» (no estimate). */
+export function makeSyllabus(items: SyllabusItem[] = THREE_ITEMS()): Syllabus {
+  return { courseId: COURSE_ID, items }
+}
+
+export function THREE_ITEMS(): SyllabusItem[] {
+  return [
+    makeSyllabusItem(),
+    makeSyllabusItem({ id: SYLLABUS_ITEM_IDS[1], sortOrder: 1, title: { ar: 'الشروط' }, description: { ar: 'if و else' }, estimatedMinutes: 60 }),
+    makeSyllabusItem({ id: SYLLABUS_ITEM_IDS[2], sortOrder: 2, title: { ar: 'الحلقات', en: 'Loops', tr: 'Döngüler' }, estimatedMinutes: null }),
+  ]
+}
+
+export const LEVEL_IDS = ['0193a000-0000-7000-8000-00000000b001', '0193a000-0000-7000-8000-00000000b002', '0193a000-0000-7000-8000-00000000b003'] as const
+
+/** Three levels in order: BEG (1 course), INT (no course), ADV (inactive, no course). */
+export function THREE_LEVELS(): Level[] {
+  return [
+    makeLevel(),
+    makeLevel({ id: LEVEL_IDS[1], code: 'INT', name: { ar: 'متوسط', en: 'Intermediate' }, sortOrder: 1, courseCount: 0 }),
+    makeLevel({ id: LEVEL_IDS[2], code: 'ADV', name: { ar: 'متقدم' }, sortOrder: 2, isActive: false, courseCount: 0 }),
+  ]
 }
