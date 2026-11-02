@@ -134,18 +134,37 @@ export interface SessionResponse {
   user: SessionUser
 }
 
+/**
+ * Name of the Web Lock that serialises refreshes across the tabs of the
+ * browser (MOD-01-H08, KI-047). Every tab sends the same refresh cookie, and
+ * the server treats a cookie it has already rotated as stolen and revokes the
+ * whole session. Under the lock a tab sends its request only after the
+ * previous tab's response has stored the new cookie.
+ */
+export const REFRESH_LOCK_NAME = 'articode.auth.refresh'
+
+function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
+  // Missing outside a secure context (plain-HTTP origins other than localhost)
+  // and in old browsers: refresh without the lock, as before H08.
+  const locks: LockManager | undefined = globalThis.navigator?.locks
+  return locks ? locks.request(REFRESH_LOCK_NAME, task) : task()
+}
+
 let refreshInFlight: Promise<SessionResponse> | null = null
 
 /**
  * Rotates the refresh cookie and stores the new access token. Concurrent
- * callers share one request. Throws (and announces a lost session) when the
+ * callers in this tab share one request; requests from other tabs wait for it
+ * (REFRESH_LOCK_NAME). Throws (and announces a lost session) when the
  * cookie is missing, expired, reused or the account is no longer usable.
  * Announces a switched session when the cookie now belongs to another user
  * than the stored token did (another tab signed in as someone else — KI-046).
  */
 export function refreshSession(): Promise<SessionResponse> {
   if (!refreshInFlight) {
-    refreshInFlight = apiRequest<SessionResponse>('/api/auth/refresh', { method: 'POST', auth: false, retry: false })
+    refreshInFlight = withRefreshLock(() =>
+      apiRequest<SessionResponse>('/api/auth/refresh', { method: 'POST', auth: false, retry: false }),
+    )
       .then((session) => {
         const previousUserId = getSessionUserId()
         setAccessToken(session.accessToken, session.user.id)
