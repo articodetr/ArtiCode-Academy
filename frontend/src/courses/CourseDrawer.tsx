@@ -244,7 +244,6 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
           <Descriptions.Item label={t('courses.fields.ageRange')}>
             {course.minAge === null && course.maxAge === null ? DASH : `${optional(course.minAge)} – ${optional(course.maxAge)}`}
           </Descriptions.Item>
-          <Descriptions.Item label={t('courses.fields.syllabusCount')}>{course.syllabusCount}</Descriptions.Item>
           <Descriptions.Item label={t('courses.fields.summary')}>{course.summary ? localizedLabel(course.summary, language) : DASH}</Descriptions.Item>
           <Descriptions.Item label={t('courses.fields.description')}>
             {course.description ? localizedLabel(course.description, language) : DASH}

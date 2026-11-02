@@ -495,7 +495,6 @@ export const en: Translation = {
       minAge: 'Minimum age',
       maxAge: 'Maximum age',
       ageRange: 'Age range',
-      syllabusCount: 'Syllabus items',
       createdAt: 'Created',
       updatedAt: 'Last updated',
     },
