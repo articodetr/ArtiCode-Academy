@@ -29,3 +29,8 @@ export function codeParam({ value }: { value: unknown }): unknown {
 export function rawBoolean({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
   return obj[key];
 }
+
+/** Same rule for body numbers: `"30"` stays a string so @IsInt rejects it (no implicit conversion). */
+export function rawNumber({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
+  return obj[key];
+}
