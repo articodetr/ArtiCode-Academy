@@ -324,18 +324,25 @@ export class CoursesService {
     return this.getForManager(id);
   }
 
-  /** Deletes a draft (its syllabus cascades); any other state is 409 course_not_deletable — archive it instead. */
+  /**
+   * Deletes a draft (its syllabus cascades); any other state is 409
+   * course_not_deletable — archive it instead. A draft that still has classes
+   * (published, given classes, then unpublished — MOD-05-T02 AC7) is 409
+   * course_in_use: `classes.course_id` is Restrict, so the delete would fail
+   * in the database. The course row is locked first (`FOR UPDATE`); a class
+   * insert takes `FOR KEY SHARE` on it and waits, so the count cannot miss a
+   * class committed meanwhile.
+   */
   async remove(id: string, caller: AuthPrincipal, ctx: RequestContext): Promise<void> {
-    const row = await this.prisma.db.course.findUnique({ where: { id }, select: { id: true, code: true, status: true } });
-    if (!row) throw coursesError.courseNotFound(id);
-    if (!isDeletable(row.status)) throw coursesError.courseNotDeletable(row.status);
     await this.prisma.db.$transaction(async (tx) => {
-      const deleted = await tx.course.deleteMany({ where: { id, status: 'draft' } });
-      if (deleted.count === 0) {
-        const now = await tx.course.findUnique({ where: { id }, select: { status: true } });
-        if (!now) throw coursesError.courseNotFound(id);
-        throw coursesError.courseNotDeletable(now.status);
-      }
+      const locked = await tx.$queryRaw<{ code: string; status: CourseStatus }[]>`
+        SELECT code, status FROM courses WHERE id = ${id}::uuid FOR UPDATE`;
+      const row = locked[0];
+      if (!row) throw coursesError.courseNotFound(id);
+      if (!isDeletable(row.status)) throw coursesError.courseNotDeletable(row.status);
+      const classCount = await tx.class.count({ where: { courseId: id } });
+      if (classCount > 0) throw coursesError.courseInUse(classCount);
+      await tx.course.delete({ where: { id }, select: { id: true } });
       await this.audit.record(
         {
           action: COURSES_AUDIT_ACTIONS.deleted,

@@ -13,6 +13,7 @@
 //                                may not see (not published, no courses.manage) ({ courseId })
 //   course_code_taken     409  — another course already uses the code ({ courseCode })
 //   course_not_deletable  409  — only a draft can be deleted; archive the others ({ status })
+//   course_in_use         409  — classes still belong to the course (MOD-05-T02) ({ classCount })
 //   invalid_transition    409  — status action not allowed from the current
 //                                state ({ from, action, allowed })
 //   age_range_invalid     400  — maxAge below minAge after merging the PATCH ({ minAge, maxAge })
@@ -31,6 +32,7 @@ export const COURSES_ERROR_CODES = [
   'course_not_found',
   'course_code_taken',
   'course_not_deletable',
+  'course_in_use',
   'invalid_transition',
   'age_range_invalid',
   'cursor_invalid',
@@ -102,6 +104,13 @@ export const coursesError = {
       'course_not_deletable',
       'Only a draft course can be deleted; archive it instead',
       { status },
+    ),
+  courseInUse: (classCount: number) =>
+    new CoursesHttpException(
+      HttpStatus.CONFLICT,
+      'course_in_use',
+      'Classes still belong to this course; archive it instead',
+      { classCount },
     ),
   invalidTransition: (from: string, action: string, allowed: readonly string[]) =>
     new CoursesHttpException(HttpStatus.CONFLICT, 'invalid_transition', `Action "${action}" is not allowed for a ${from} course`, {
