@@ -154,11 +154,7 @@ export class CoursesService {
     if (query.q) {
       const pattern = escapeLikePattern(query.q);
       filters.push({
-        OR: [
-          { code: { contains: pattern, mode: 'insensitive' } },
-          { name: { path: ['ar'], string_contains: query.q } },
-          { name: { path: ['en'], string_contains: query.q } },
-        ],
+        OR: [{ code: { contains: pattern, mode: 'insensitive' } }, { id: { in: await this.courseIdsByName(pattern) } }],
       });
     }
     if (query.cursor) {
@@ -180,6 +176,22 @@ export class CoursesService {
         ? encodeKeysetCursor({ sort, order, key: sort === 'code' ? last.code : null, id: last.id })
         : null;
     return { items: page.map(toCourseDto), nextCursor };
+  }
+
+  /**
+   * Ids of the courses whose Arabic or English name contains `pattern` (already
+   * passed through escapeLikePattern), case-insensitively. Prisma's JSON
+   * `string_contains` builds a case-sensitive LIKE with the value unescaped,
+   * so `%` and `_` acted as wildcards (KI-048); a parameterised ILIKE with the
+   * backslash as ESCAPE matches them literally. The caller's other filters
+   * (status visibility, level, cursor) still apply to the final query.
+   */
+  private async courseIdsByName(pattern: string): Promise<string[]> {
+    const like = `%${pattern}%`;
+    const rows = await this.prisma.db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM courses
+      WHERE name ->> 'ar' ILIKE ${like} ESCAPE '\\' OR name ->> 'en' ILIKE ${like} ESCAPE '\\'`;
+    return rows.map((row) => row.id);
   }
 
   async get(id: string, caller: AuthPrincipal): Promise<CourseDto> {

@@ -361,6 +361,25 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
     expect(byName.body.items.map((item: { code: string }) => item.code)).toContain(code('A'));
   });
 
+  it('KI-048 (TEST-062) — q matches course names literally and case-insensitively: % and _ are no wildcards in the Arabic or the English name', async () => {
+    const tag = `KI048-${RUN}`;
+    const make = (suffix: string, en: string, ar: string) => createCourse(suffix, { name: { ar, en } });
+    await make('N1', `${tag} 50% off`, `${tag} خصم كبير`);
+    await make('N2', `${tag} 50x off`, `${tag} خصم عادي`);
+    await make('N3', `${tag} a_b`, `${tag} أ_ب`);
+    await make('N4', `${tag} aXb`, `${tag} أسب`);
+    const search = async (q: string): Promise<string[]> => {
+      const res = await api().get(COURSES).query({ q, limit: 50 }).set(bearer('manager')).expect(200);
+      return res.body.items.map((item: { code: string }) => item.code).sort();
+    };
+
+    expect(await search(`${tag} 50%`)).toEqual([code('N1')]);
+    expect(await search(`${tag} a_b`)).toEqual([code('N3')]);
+    expect(await search(`${tag} أ_ب`)).toEqual([code('N3')]);
+    expect(await search(`${tag.toLowerCase()} 50% OFF`)).toEqual([code('N1')]);
+    expect(await search(`${tag} 50`)).toEqual([code('N1'), code('N2')]);
+  });
+
   it(
     'checks the Origin of writing requests and documents the routes in OpenAPI',
     async () => {
