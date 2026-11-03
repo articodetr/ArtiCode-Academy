@@ -17,6 +17,8 @@
 //                                state ({ from, action, allowed })
 //   age_range_invalid     400  — maxAge below minAge after merging the PATCH ({ minAge, maxAge })
 //   cursor_invalid        400  — the list cursor does not belong to this sort/order
+//   syllabus_invalid      400  — a syllabus replacement names an item of another
+//                                course (or none) or repeats an id ({ unknown, duplicates })
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -32,6 +34,7 @@ export const COURSES_ERROR_CODES = [
   'invalid_transition',
   'age_range_invalid',
   'cursor_invalid',
+  'syllabus_invalid',
 ] as const;
 
 export type CoursesErrorCode = (typeof COURSES_ERROR_CODES)[number];
@@ -113,5 +116,12 @@ export const coursesError = {
       HttpStatus.BAD_REQUEST,
       'cursor_invalid',
       'The cursor is invalid or belongs to a different sort or order; restart from the first page',
+    ),
+  syllabusInvalid: (unknown: readonly string[], duplicates: readonly string[]) =>
+    new CoursesHttpException(
+      HttpStatus.BAD_REQUEST,
+      'syllabus_invalid',
+      'Every item id must belong to this course and appear at most once; new items carry no id',
+      { unknown: [...unknown], duplicates: [...duplicates] },
     ),
 };
