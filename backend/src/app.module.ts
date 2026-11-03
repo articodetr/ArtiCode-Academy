@@ -10,6 +10,7 @@ import { ClassesModule } from './classes/classes.module.js';
 import { ENV_FILE_PATHS } from './config/env-files.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { validateEnv } from './config/env.schema.js';
+import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LevelsModule } from './levels/levels.module.js';
@@ -51,6 +52,8 @@ import { UsersModule } from './users/users.module.js';
     CoursesModule,
     // MOD-05-T02: classes.
     ClassesModule,
+    // MOD-05-T04: enrollments (class rosters, enrolling, enrollment actions).
+    EnrollmentsModule,
     // MOD-02-T06 (O8): branches of the academy.
     BranchesModule,
     HealthModule,
