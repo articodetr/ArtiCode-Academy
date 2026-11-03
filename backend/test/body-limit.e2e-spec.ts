@@ -102,8 +102,13 @@ describe('JSON body limits (KI-050, TEST-064)', () => {
     await api().put(SYLLABUS_PATH).send({ items: [], pad: 'x'.repeat(530 * KB) }).expect(413);
   });
 
-  it('bodies stay JSON only (ADR-026): the same text sent as text/plain is not read', async () => {
-    const res = await api().put(SYLLABUS_PATH).set('Content-Type', 'text/plain').send(JSON.stringify(body));
+  it('bodies stay JSON only (ADR-026): a valid syllabus sent as text/plain is not read', async () => {
+    // A small body on purpose (KI-070): no parser reads text/plain, so a large one stays unread on the
+    // socket and Windows may reset the connection (ECONNRESET) before the client reads the 400.
+    const res = await api()
+      .put(SYLLABUS_PATH)
+      .set('Content-Type', 'text/plain')
+      .send(JSON.stringify({ items: [{ title: { ar: 'مقدمة' } }] }));
     expect(res.status).toBe(400);
     expect(JSON.stringify(res.body.message)).toContain('items');
   });
