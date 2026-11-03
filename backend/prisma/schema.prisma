@@ -145,19 +145,27 @@ model User {
   /// Soft delete (D7): the row stays because history refers to it.
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
-  roles              UserRole[]
-  assignedRoles      UserRole[]          @relation("UserRoleAssignedBy")
-  studentProfile     StudentProfile?
-  employeeProfile    EmployeeProfile?
+  roles                   UserRole[]
+  assignedRoles           UserRole[]          @relation("UserRoleAssignedBy")
+  studentProfile          StudentProfile?
+  employeeProfile         EmployeeProfile?
   /// Links where this user is the guardian.
-  guardianOf         GuardianStudent[]   @relation("GuardianStudentGuardian")
+  guardianOf              GuardianStudent[]   @relation("GuardianStudentGuardian")
   /// Links where this user is the student.
-  guardians          GuardianStudent[]   @relation("GuardianStudentStudent")
-  refreshTokens      RefreshToken[]
-  verificationTokens VerificationToken[]
-  auditLogs          AuditLog[]
+  guardians               GuardianStudent[]   @relation("GuardianStudentStudent")
+  refreshTokens           RefreshToken[]
+  verificationTokens      VerificationToken[]
+  auditLogs               AuditLog[]
   /// Courses this user created (MOD-04); the link is cleared if the user row goes.
-  coursesCreated     Course[]            @relation("CourseCreatedBy")
+  coursesCreated          Course[]            @relation("CourseCreatedBy")
+  /// MOD-05: classes this user created, classes they teach (and teacher
+  /// assignments they made), their enrollments as a student and the
+  /// enrollments they created.
+  classesCreated          Class[]             @relation("ClassCreatedBy")
+  classTeacherships       ClassTeacher[]      @relation("ClassTeacherTeacher")
+  classTeacherAssignments ClassTeacher[]      @relation("ClassTeacherAssignedBy")
+  enrollments             Enrollment[]        @relation("EnrollmentStudent")
+  enrollmentsCreated      Enrollment[]        @relation("EnrollmentCreatedBy")
 
   @@index([phone])
   @@index([status])
@@ -404,6 +412,8 @@ model Course {
   level         Level?               @relation(fields: [levelId], references: [id], onDelete: Restrict)
   createdBy     User?                @relation("CourseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   syllabusItems CourseSyllabusItem[]
+  /// MOD-05: runs of this course (Restrict — a course with classes cannot be deleted).
+  classes       Class[]
 
   @@index([status])
   @@index([levelId])
@@ -428,4 +438,131 @@ model CourseSyllabusItem {
 
   @@unique([courseId, sortOrder], map: "uq_course_syllabus_items_course_order")
   @@map("course_syllabus_items")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-05 — classes, class teachers and enrollments (roadmap §4d; owner
+// decisions D-R15..D-R18). Subset of master doc 6.7.4-C: no academic terms,
+// branches, rooms, price override, enrollment window, final grade or soft
+// delete — cancelling replaces deletion (D-R17).
+// ---------------------------------------------------------------------------
+
+enum ClassStatus {
+  planned
+  open
+  running
+  completed
+  cancelled
+
+  @@map("class_status")
+}
+
+enum ClassTeacherRole {
+  lead
+  assistant
+
+  @@map("class_teacher_role")
+}
+
+/// `pending` is not used by version 1 (no waitlist — D-R18); it exists so a
+/// later waitlist needs no enum migration.
+enum EnrollmentStatus {
+  pending
+  active
+  completed
+  withdrawn
+  cancelled
+
+  @@map("enrollment_status")
+}
+
+/// Version 1 writes `admin` only (D-R18); the other sources are reserved for
+/// self-enrollment, imports and transfers.
+enum EnrollmentSource {
+  admin
+  self
+  import
+  transfer
+
+  @@map("enrollment_source")
+}
+
+/// A run of a published course for a group of students (D-R15). The status
+/// moves through manual actions only (D-R17); only a `planned` class without
+/// enrollments can be deleted, any other is cancelled. The enrolled count is
+/// computed from `enrollments`, never stored (6.7.4-C).
+model Class {
+  id          String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courseId    String      @map("course_id") @db.Uuid
+  code        String      @unique @db.VarChar(32)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name        Json
+  /// Hard capacity (D-R18); > 0 (CHECK in SQL).
+  capacity    Int         @db.SmallInt
+  status      ClassStatus @default(planned)
+  /// Display dates only (D-R17); ends_on >= starts_on (CHECK in SQL).
+  startsOn    DateTime?   @map("starts_on") @db.Date
+  endsOn      DateTime?   @map("ends_on") @db.Date
+  notes       String?
+  createdById String?     @map("created_by") @db.Uuid
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  createdBy   User?          @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  teachers    ClassTeacher[]
+  enrollments Enrollment[]
+
+  @@index([courseId])
+  @@index([status])
+  @@index([createdById])
+  @@map("classes")
+}
+
+/// Teachers of a class: at most one `lead` per class (partial unique index
+/// `uq_class_teachers_lead` in SQL) and any number of assistants.
+model ClassTeacher {
+  classId       String           @map("class_id") @db.Uuid
+  teacherUserId String           @map("teacher_user_id") @db.Uuid
+  role          ClassTeacherRole
+  assignedAt    DateTime         @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  assignedById  String?          @map("assigned_by") @db.Uuid
+
+  class      Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher    User  @relation("ClassTeacherTeacher", fields: [teacherUserId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("ClassTeacherAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([classId, teacherUserId])
+  @@index([teacherUserId])
+  @@index([assignedById])
+  @@map("class_teachers")
+}
+
+/// A student's enrollment in a class — one row per (class, student):
+/// enrolling again reactivates the same row. `status` has no default, so
+/// every writer states it (version 1 writes `active` directly — D-R18).
+model Enrollment {
+  id               String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  classId          String           @map("class_id") @db.Uuid
+  studentUserId    String           @map("student_user_id") @db.Uuid
+  status           EnrollmentStatus
+  source           EnrollmentSource @default(admin)
+  enrolledAt       DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  activatedAt      DateTime?        @map("activated_at") @db.Timestamptz(6)
+  completedAt      DateTime?        @map("completed_at") @db.Timestamptz(6)
+  withdrawnAt      DateTime?        @map("withdrawn_at") @db.Timestamptz(6)
+  withdrawalReason String?          @map("withdrawal_reason")
+  createdById      String?          @map("created_by") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  class     Class @relation(fields: [classId], references: [id], onDelete: Restrict)
+  student   User  @relation("EnrollmentStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("EnrollmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([classId, studentUserId], map: "uq_enrollments_class_student")
+  @@index([studentUserId])
+  @@index([status])
+  @@index([createdById])
+  @@map("enrollments")
 }
