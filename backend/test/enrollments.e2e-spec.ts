@@ -1,5 +1,6 @@
 // TEST-050 — MOD-05-T04 enrollments (GET/POST /api/classes/:id/enrollments,
-// POST /api/enrollments/:id/status), against the live development database.
+// POST /api/enrollments/:id/status) and TEST-051 — MOD-05-T05 "my classes"
+// (GET /api/me/classes, the nested describe), against the live development database.
 // Skipped when no database is reachable. Fixture users, roles, the course,
 // classes, teacher assignments and enrollments carry a unique prefix and are
 // deleted at the end (their audit rows stay — KI-032). Classes are written
@@ -89,6 +90,7 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
   let passwords: PasswordService;
   let courseId: string;
   let studentRoleId: string;
+  let guardianRoleId: string;
   const createdUserIds: string[] = [];
   const createdRoleIds: string[] = [];
   const fx: Record<string, string> = {};
@@ -227,6 +229,7 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     passwords = new PasswordService();
 
     studentRoleId = (await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } })).id;
+    guardianRoleId = (await prisma.role.findUniqueOrThrow({ where: { key: 'guardian' }, select: { id: true } })).id;
     courseId = (
       await prisma.course.create({ data: { code: code('CRS'), name: { ar: 'دورة التسجيلات' }, status: 'published' }, select: { id: true } })
     ).id;
@@ -559,6 +562,102 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     await api().get(roster(classes['A']!)).query({ limit: 101 }).set(bearer('manager')).expect(400);
   });
 
+  describe('GET /api/me/classes (MOD-05-T05)', () => {
+    const MY_ITEM_KEYS = ['class', 'completedAt', 'enrolledAt', 'enrollmentId', 'enrollmentStatus', 'relation', 'student'];
+    const MY_CLASS_KEYS = ['code', 'course', 'endsOn', 'id', 'leadTeacher', 'name', 'startsOn', 'status'];
+    const mine = (as: string, status?: string) =>
+      api().get('/api/me/classes').query(status ? { status } : {}).set(bearer(as));
+    const enrollmentIds = (body: { items: { enrollmentId: string }[] }) => body.items.map((item) => item.enrollmentId);
+    const my: Record<string, string> = {};
+
+    async function put(classSuffix: string, studentUserId: string, status: EnrollmentStatus, key: string): Promise<void> {
+      const row = await prisma.enrollment.create({
+        data: { classId: classes[classSuffix]!, studentUserId, status, completedAt: status === 'completed' ? new Date() : null },
+        select: { id: true },
+      });
+      my[key] = row.id;
+    }
+
+    beforeAll(async () => {
+      // A student and a guardian who sign in; children who never do.
+      await createUser('me', [studentRoleId]);
+      await createUser('guardian', [guardianRoleId]);
+      for (const name of ['me', 'guardian']) tokens[name] = await login(email(name));
+      await createStudent('child1');
+      await createStudent('child2');
+      await createStudent('unlinked');
+      await createStudent('gone');
+      await createClass('M1', 'open', 5);
+      await createClass('M2', 'running', 5);
+      await createClass('M3', 'open', 5);
+      await prisma.classTeacher.create({ data: { classId: classes['M1']!, teacherUserId: fx['teacher']!, role: 'lead' } });
+      await prisma.classTeacher.create({ data: { classId: classes['M2']!, teacherUserId: fx['stranger']!, role: 'assistant' } });
+
+      // Insertion order = enrollment order (the list is newest first).
+      await put('M1', fx['me']!, 'active', 'meM1');
+      await put('M2', fx['me']!, 'completed', 'meM2');
+      await put('M3', fx['me']!, 'withdrawn', 'meM3');
+      await put('M1', students['child1']!, 'active', 'child1M1');
+      await put('M2', students['child2']!, 'active', 'child2M2');
+      await put('M1', students['unlinked']!, 'active', 'unlinkedM1');
+      await put('M3', students['gone']!, 'active', 'goneM3');
+      await prisma.guardianStudent.createMany({
+        data: ['child1', 'child2', 'gone'].map((name) => ({ guardianUserId: fx['guardian']!, studentUserId: students[name]!, relationship: 'mother' as const })),
+      });
+      await prisma.user.update({ where: { id: students['gone']! }, data: { deletedAt: new Date(), status: 'archived' } });
+    });
+
+    it('AC1/AC4 — a student sees their own active and completed classes only, with the class, the course and the lead teacher by name — no contact field, no other student', async () => {
+      const res = await mine('me').expect(200);
+      expect(enrollmentIds(res.body)).toEqual([my['meM2'], my['meM1']]);
+      const [m2, m1] = res.body.items;
+      expect(Object.keys(m1).sort()).toEqual(MY_ITEM_KEYS);
+      expect(Object.keys(m1.class).sort()).toEqual(MY_CLASS_KEYS);
+      expect(m1).toMatchObject({
+        enrollmentStatus: 'active',
+        relation: 'self',
+        completedAt: null,
+        student: { id: fx['me'], fullName: 'Test me', displayName: null },
+        class: { id: classes['M1'], code: code('M1'), status: 'open', name: { ar: 'فصل M1' }, course: { id: courseId, code: code('CRS') } },
+      });
+      expect(Object.keys(m1.student).sort()).toEqual(['displayName', 'fullName', 'id']);
+      expect(m1.class.leadTeacher).toEqual({ fullName: 'Test teacher', displayName: null });
+      // M2 has an assistant only: no lead teacher.
+      expect(m2).toMatchObject({ enrollmentStatus: 'completed', relation: 'self', class: { status: 'running', leadTeacher: null } });
+      expect(m2.completedAt).not.toBeNull();
+
+      const keys = deepKeys(res.body);
+      for (const banned of ['email', 'username', 'phone', 'withdrawalReason', 'createdById', 'teacherUserId']) expect(keys).not.toContain(banned);
+      expect(keys.filter((key) => /hash|password/i.test(key))).toEqual([]);
+      const studentIds = new Set((res.body.items as { student: { id: string } }[]).map((item) => item.student.id));
+      expect([...studentIds]).toEqual([fx['me']]);
+
+      expect(enrollmentIds((await mine('me', 'withdrawn').expect(200)).body)).toEqual([my['meM3']]);
+      expect((await mine('me', 'cancelled').expect(200)).body.items).toEqual([]);
+      await mine('me', 'waiting').expect(400);
+    });
+
+    it('AC2 — a guardian sees the classes of linked children only (named per item), not an unlinked or soft-deleted student, and loses a child once unlinked', async () => {
+      const res = await mine('guardian').expect(200);
+      expect(enrollmentIds(res.body)).toEqual([my['child2M2'], my['child1M1']]);
+      for (const item of res.body.items as { relation: string; student: { id: string } }[]) expect(item.relation).toBe('child');
+      expect(res.body.items[0].student).toEqual({ id: students['child2'], fullName: 'Student child2', displayName: null });
+      expect(res.body.items[1].student.id).toBe(students['child1']);
+      const ids = enrollmentIds(res.body);
+      expect(ids).not.toContain(my['unlinkedM1']);
+      expect(ids).not.toContain(my['goneM3']);
+
+      await prisma.guardianStudent.delete({ where: { guardianUserId_studentUserId: { guardianUserId: fx['guardian']!, studentUserId: students['child2']! } } });
+      expect(enrollmentIds((await mine('guardian').expect(200)).body)).toEqual([my['child1M1']]);
+    });
+
+    it('AC3 — a user without enrollments or children gets an empty list, not 403; without a token it is 401', async () => {
+      expect((await mine('outsider').expect(200)).body).toEqual({ items: [] });
+      expect((await mine('teacher').expect(200)).body).toEqual({ items: [] });
+      expect((await api().get('/api/me/classes').expect(401)).body.code).toBe('unauthenticated');
+    });
+  });
+
   it(
     'checks the Origin of writing requests and documents the routes in OpenAPI',
     async () => {
@@ -574,8 +673,18 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
       const paths = docs.body.paths as Record<string, Record<string, unknown>>;
       expect(Object.keys(paths['/api/classes/{id}/enrollments'] ?? {}).sort()).toEqual(['get', 'post']);
       expect(Object.keys(paths['/api/enrollments/{id}/status'] ?? {})).toEqual(['post']);
+      expect(Object.keys(paths['/api/me/classes'] ?? {})).toEqual(['get']);
       const schemas = docs.body.components.schemas as Record<string, unknown>;
-      for (const name of ['EnrollmentDto', 'EnrollmentListDto', 'EnrollmentStudentDto', 'CreateEnrollmentDto', 'ChangeEnrollmentStatusDto']) {
+      for (const name of [
+        'EnrollmentDto',
+        'EnrollmentListDto',
+        'EnrollmentStudentDto',
+        'CreateEnrollmentDto',
+        'ChangeEnrollmentStatusDto',
+        'MyClassListDto',
+        'MyClassItemDto',
+        'MyClassSummaryDto',
+      ]) {
         expect(schemas).toHaveProperty(name);
       }
     },
