@@ -1,8 +1,10 @@
 // TEST-030 — MOD-03-T10 audit coverage of every writer route of T02..T09 and
 // the filters of GET /api/audit-logs (API-011) against the live development
-// database. Skipped when no database is reachable. Fixtures carry a unique
-// suffix and are deleted at the end (their audit rows stay with a NULL actor —
-// the log is append-only by design, KI-032).
+// database; since CH-0051 (MOD-04-T07 backend half, task C2) also every writer
+// route of MOD-04 T02..T04 (levels, courses, syllabus). Skipped when no
+// database is reachable. Fixtures carry a unique suffix and are deleted at the
+// end (their audit rows stay with a NULL actor — the log is append-only by
+// design, KI-032).
 //
 // Counting strategy: events are read back by actor. Every actor here is a
 // fixture of this run, so events written meanwhile by other clients of the
@@ -33,6 +35,11 @@ const RESET_PASSWORD = 'Reset-Horse-Battery-8';
 const USER_AGENT = 'TEST-030 supertest';
 const USERS = '/api/users';
 const AUDIT = '/api/audit-logs';
+const LEVELS = '/api/levels';
+const COURSES = '/api/courses';
+/** MOD-04 fixture codes (upper case, within LEVEL_CODE_PATTERN / COURSE_CODE_PATTERN). */
+const LEVEL_PREFIX = `T${RUN.toUpperCase()}`;
+const COURSE_PREFIX = `C${RUN.toUpperCase()}`;
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 async function canConnect(url: string): Promise<boolean> {
@@ -65,7 +72,8 @@ interface ExpectedEvent {
   action: string;
   actorUserId: string;
   entityType?: string;
-  entityId: string;
+  /** null for events about a whole collection (levels.reordered). */
+  entityId: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -80,6 +88,8 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   /** One-time tokens handed over by the API — must never appear in the log. */
   const secrets: string[] = [PASSWORD, INVITE_PASSWORD, RESET_PASSWORD];
   let customRoleId = '';
+  /** MOD-04 fixtures created through the API by the admin. */
+  const mod04 = { levelA: '', levelB: '', courseA: '', courseB: '' };
 
   // E-mail addresses are stored lower-case (CHECK ck_users_email_lowercase).
   const email = (name: string) => `${name.toLowerCase()}-${RUN}@example.test`;
@@ -170,6 +180,9 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   });
 
   afterAll(async () => {
+    // Courses first: their level is Restrict.
+    await prisma.course.deleteMany({ where: { code: { startsWith: COURSE_PREFIX } } });
+    await prisma.level.deleteMany({ where: { code: { startsWith: LEVEL_PREFIX } } });
     if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     if (createdRoleIds.length > 0) await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
     await prisma.$disconnect();
@@ -397,6 +410,121 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
         metadata: { action: 'delete', from: 'invited', to: 'archived', reason: 'T10 coverage' },
       },
     ]);
+  });
+
+  // MOD-04 (CH-0051 — MOD-04-T07 backend half, task C2): every writer route of T02..T04 once.
+
+  it('MOD-04-T02 — level create, update, reorder and delete record one levels.* event each', async () => {
+    const admin = fx['admin']!;
+    const levelEvent = (action: string, entityId: string | null, metadata: Record<string, unknown>): ExpectedEvent => ({
+      action,
+      actorUserId: admin,
+      entityType: 'levels',
+      entityId,
+      metadata,
+    });
+
+    let m = await mark();
+    const a = await api().post(LEVELS).set(bearer('admin')).send({ code: `${LEVEL_PREFIX}A`, name: { ar: 'مستوى T07 أ' } }).expect(201);
+    mod04.levelA = a.body.id;
+    await expectEvents(m, [levelEvent('levels.created', mod04.levelA, { code: `${LEVEL_PREFIX}A` })]);
+
+    m = await mark();
+    const b = await api().post(LEVELS).set(bearer('admin')).send({ code: `${LEVEL_PREFIX}B`, name: { ar: 'مستوى T07 ب' } }).expect(201);
+    mod04.levelB = b.body.id;
+    await expectEvents(m, [levelEvent('levels.created', mod04.levelB, { code: `${LEVEL_PREFIX}B` })]);
+
+    m = await mark();
+    await api().patch(`${LEVELS}/${mod04.levelA}`).set(bearer('admin')).send({ name: { ar: 'مستوى T07 أ معدَّل' } }).expect(200);
+    await expectEvents(m, [levelEvent('levels.updated', mod04.levelA, { code: `${LEVEL_PREFIX}A`, fields: ['name'] })]);
+
+    // Swap the two fixture levels (appended at the end); every other level keeps its place.
+    const current = (await prisma.level.findMany({ orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true } })).map((row) => row.id);
+    const swapped = current.map((id) => (id === mod04.levelA ? mod04.levelB : id === mod04.levelB ? mod04.levelA : id));
+    m = await mark();
+    await api().put(`${LEVELS}/order`).set(bearer('admin')).send({ levelIds: swapped }).expect(200);
+    await expectEvents(m, [levelEvent('levels.reordered', null, { levelIds: swapped })]);
+
+    m = await mark();
+    await api().delete(`${LEVELS}/${mod04.levelB}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [levelEvent('levels.deleted', mod04.levelB, { code: `${LEVEL_PREFIX}B` })]);
+  });
+
+  it('MOD-04-T03/T04 — course create, update, syllabus replacement, publish and draft delete record one event each', async () => {
+    const admin = fx['admin']!;
+    const courseEvent = (action: string, entityId: string, metadata: Record<string, unknown>): ExpectedEvent => ({
+      action,
+      actorUserId: admin,
+      entityType: 'courses',
+      entityId,
+      metadata,
+    });
+    const codeA = `${COURSE_PREFIX}-A`;
+    const codeB = `${COURSE_PREFIX}-B`;
+
+    let m = await mark();
+    const a = await api().post(COURSES).set(bearer('admin')).send({ code: codeA, name: { ar: 'دورة T07 أ' }, levelId: mod04.levelA }).expect(201);
+    mod04.courseA = a.body.id;
+    await expectEvents(m, [courseEvent('courses.created', mod04.courseA, { code: codeA, status: 'draft' })]);
+
+    m = await mark();
+    await api().patch(`${COURSES}/${mod04.courseA}`).set(bearer('admin')).send({ summary: { ar: 'ملخص T07' } }).expect(200);
+    await expectEvents(m, [courseEvent('courses.updated', mod04.courseA, { code: codeA, fields: ['summary'] })]);
+
+    m = await mark();
+    await api()
+      .put(`${COURSES}/${mod04.courseA}/syllabus`)
+      .set(bearer('admin'))
+      .send({ items: [{ title: { ar: 'مقدمة' } }, { title: { ar: 'تطبيق' }, estimatedMinutes: 45 }, { title: { ar: 'مراجعة' } }] })
+      .expect(200);
+    await expectEvents(m, [courseEvent('courses.syllabus.changed', mod04.courseA, { code: codeA, added: 3, updated: 0, removed: 0, reordered: false, items: 3 })]);
+
+    m = await mark();
+    await api().post(`${COURSES}/${mod04.courseA}/status`).set(bearer('admin')).send({ action: 'publish' }).expect(200);
+    await expectEvents(m, [courseEvent('courses.status.changed', mod04.courseA, { code: codeA, action: 'publish', from: 'draft', to: 'published' })]);
+
+    m = await mark();
+    const b = await api().post(COURSES).set(bearer('admin')).send({ code: codeB, name: { ar: 'دورة T07 ب' } }).expect(201);
+    mod04.courseB = b.body.id;
+    await expectEvents(m, [courseEvent('courses.created', mod04.courseB, { code: codeB, status: 'draft' })]);
+
+    m = await mark();
+    await api().delete(`${COURSES}/${mod04.courseB}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [courseEvent('courses.deleted', mod04.courseB, { code: codeB })]);
+  });
+
+  it('MOD-04 — rejected requests and writes without a difference record nothing', async () => {
+    const codeA = `${COURSE_PREFIX}-A`;
+    const course = `${COURSES}/${mod04.courseA}`;
+    const syllabus = await api().get(`${course}/syllabus`).set(bearer('admin')).expect(200);
+    const sameItems = (syllabus.body.items as { id: string; title: unknown; estimatedMinutes: number | null }[]).map((item) => ({
+      id: item.id,
+      title: item.title,
+      estimatedMinutes: item.estimatedMinutes,
+    }));
+    const order = (await prisma.level.findMany({ orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true } })).map((row) => row.id);
+
+    const m = await mark();
+    // Validation, constraint, permission and business-rule refusals.
+    await api().post(LEVELS).set(bearer('admin')).send({ name: { ar: 'بلا رمز' } }).expect(400);
+    expect((await api().post(LEVELS).set(bearer('admin')).send({ code: `${LEVEL_PREFIX}A`, name: { ar: 'مكرر' } }).expect(409)).body.code).toBe('level_code_taken');
+    expect((await api().delete(`${LEVELS}/${mod04.levelA}`).set(bearer('admin')).expect(409)).body.code).toBe('level_in_use');
+    expect((await api().put(`${LEVELS}/order`).set(bearer('admin')).send({ levelIds: [mod04.levelA] }).expect(400)).body.code).toBe('level_order_invalid');
+    expect((await api().post(COURSES).set(bearer('plain')).send({ code: `${COURSE_PREFIX}-X`, name: { ar: 'م' } }).expect(403)).body.code).toBe('permission_denied');
+    expect((await api().post(COURSES).set(bearer('admin')).send({ code: codeA, name: { ar: 'مكرر' } }).expect(409)).body.code).toBe('course_code_taken');
+    expect((await api().patch(course).set(bearer('admin')).send({}).expect(400)).body.code).toBe('nothing_to_update');
+    expect((await api().post(`${course}/status`).set(bearer('admin')).send({ action: 'publish' }).expect(409)).body.code).toBe('invalid_transition');
+    expect((await api().delete(course).set(bearer('admin')).expect(409)).body.code).toBe('course_not_deletable');
+    expect((await api().put(`${course}/syllabus`).set(bearer('admin')).send({ items: [{ id: NIL_ID, title: { ar: 'غريب' } }] }).expect(400)).body.code).toBe(
+      'syllabus_invalid',
+    );
+    await api().put(`${course}/syllabus`).set(bearer('plain')).send({ items: [] }).expect(403);
+    // Writes identical to the stored state: 200, nothing written, nothing recorded.
+    await api().patch(`${LEVELS}/${mod04.levelA}`).set(bearer('admin')).send({ name: { ar: 'مستوى T07 أ معدَّل' } }).expect(200);
+    await api().put(`${LEVELS}/order`).set(bearer('admin')).send({ levelIds: order }).expect(200);
+    await api().patch(course).set(bearer('admin')).send({ summary: { ar: 'ملخص T07' } }).expect(200);
+    await api().put(`${course}/syllabus`).set(bearer('admin')).send({ items: sameItems }).expect(200);
+    expect(await since(m)).toEqual([]);
   });
 
   it('filters by actor, action prefix (literal, `_` is no wildcard) and entity — audit.read alone suffices', async () => {
