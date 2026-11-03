@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { POSTGRES_DEFAULTS, buildPostgresUrl } from './database-url.js';
 
@@ -27,6 +28,51 @@ function stringWithDefault(defaultValue: string) {
 
 const portSchema = z.coerce.number().int().min(1).max(65535);
 
+/** Address keywords Express accepts in `trust proxy` besides IPs and CIDR ranges. */
+export const TRUST_PROXY_KEYWORDS = ['loopback', 'linklocal', 'uniquelocal'] as const;
+/** Express `trust proxy` value: off, a number of proxies, or the trusted proxy addresses. */
+export type TrustProxy = false | number | string[];
+const MAX_PROXY_HOPS = 10;
+
+function isProxyAddress(entry: string): boolean {
+  if ((TRUST_PROXY_KEYWORDS as readonly string[]).includes(entry)) return true;
+  const [address, bits, extra] = entry.split('/');
+  if (extra !== undefined || !address) return false;
+  const version = isIP(address);
+  if (version === 0) return false;
+  if (bits === undefined) return true;
+  return /^\d{1,3}$/.test(bits) && Number(bits) <= (version === 4 ? 32 : 128);
+}
+
+/**
+ * TRUST_PROXY (MOD-01-H01): absent, empty, `false` or `0` → off; `1`–`10` → that
+ * many proxies in front of the API; otherwise a comma-separated list of proxy
+ * addresses, CIDR ranges and TRUST_PROXY_KEYWORDS. `true` is refused: it trusts
+ * every X-Forwarded-For header, so any client could choose its own IP.
+ */
+export function parseTrustProxy(raw: string | undefined): { value: TrustProxy } | { error: string } {
+  const value = raw?.trim().toLowerCase();
+  if (value === undefined || value === '' || value === 'false' || value === '0') return { value: false };
+  if (value === 'true') {
+    return {
+      error:
+        '"true" trusts every X-Forwarded-For header, so any client could choose its own IP; give the number of proxies in front of the API (e.g. 1) or their addresses',
+    };
+  }
+  if (/^\d+$/.test(value)) {
+    const hops = Number(value);
+    return hops <= MAX_PROXY_HOPS ? { value: hops } : { error: `must be at most ${MAX_PROXY_HOPS} proxies` };
+  }
+  const entries = parseList(value);
+  const invalid = entries.filter((entry) => !isProxyAddress(entry));
+  if (entries.length === 0 || invalid.length > 0) {
+    return {
+      error: `must be a number of proxies, or IP addresses, CIDR ranges and ${TRUST_PROXY_KEYWORDS.join('/')} separated by commas (invalid: ${invalid.join(', ') || value})`,
+    };
+  }
+  return { value: entries };
+}
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(NODE_ENVS).default('development'),
@@ -51,6 +97,22 @@ export const envSchema = z
       .enum(['true', 'false'])
       .default('true')
       .transform((value) => value === 'true'),
+
+    /**
+     * Express `trust proxy` (MOD-01-H01, KI-030): which reverse proxies may set
+     * X-Forwarded-For / X-Forwarded-Proto, so that `req.ip` (audit log, refresh
+     * tokens, rate limiting) and `req.protocol` (OriginGuard) describe the real
+     * client. Off by default — set it when the API runs behind nginx/Caddy
+     * (e.g. `1`). Format and the refusal of `true`: parseTrustProxy().
+     */
+    TRUST_PROXY: z.preprocess(emptyToUndefined, z.string().optional()).transform((raw, ctx) => {
+      const parsed = parseTrustProxy(raw);
+      if ('error' in parsed) {
+        ctx.addIssue({ code: 'custom', message: parsed.error });
+        return z.NEVER;
+      }
+      return parsed.value;
+    }),
 
     /**
      * PostgreSQL connection string for the APPLICATION role (DML only, KI-024).
