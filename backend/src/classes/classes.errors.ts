@@ -23,6 +23,8 @@
 //   nothing_to_update        400  — PATCH body without any field (as API-018)
 //   cursor_invalid           400  — the list cursor does not belong to this sort/order
 //   -- T03 (class teachers) --
+//   teachers_invalid         400  — the replacement list names more than one lead or repeats
+//                                   a user (T03 addition) ({ duplicates, leadCount })
 //   not_a_teacher            422  — the user holds no `teacher` role ({ userId })
 //   user_not_eligible        422  — the user is neither invited nor active ({ userId, status })
 //   user_not_found           404  — unknown or soft-deleted user ({ userId })
@@ -47,6 +49,7 @@ export const CLASSES_ERROR_CODES = [
   'date_range_invalid',
   'nothing_to_update',
   'cursor_invalid',
+  'teachers_invalid',
   'not_a_teacher',
   'user_not_eligible',
   'user_not_found',
@@ -127,6 +130,13 @@ export const classesError = {
       HttpStatus.BAD_REQUEST,
       'cursor_invalid',
       'The cursor is invalid or belongs to a different sort or order; restart from the first page',
+    ),
+  teachersInvalid: (duplicates: readonly string[], leadCount: number) =>
+    new ClassesHttpException(
+      HttpStatus.BAD_REQUEST,
+      'teachers_invalid',
+      'A class has at most one lead teacher and each user appears once',
+      { duplicates: [...duplicates], leadCount },
     ),
   notATeacher: (userId: string) =>
     new ClassesHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'not_a_teacher', 'The user does not hold the teacher role', { userId }),

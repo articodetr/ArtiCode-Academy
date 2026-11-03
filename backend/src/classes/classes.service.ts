@@ -374,7 +374,8 @@ export class ClassesService {
     });
   }
 
-  private async getForManager(id: string): Promise<ClassDto> {
+  /** The class as a manager sees it (no visibility filter); shared with the T03 teacher replacement. */
+  async getForManager(id: string): Promise<ClassDto> {
     const row = await this.prisma.db.class.findUnique({ where: { id }, select: CLASS_SELECT });
     if (!row) throw classesError.classNotFound(id);
     return toClassDto(row);
