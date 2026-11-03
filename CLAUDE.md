@@ -29,11 +29,11 @@ The **owner** and the **collaborator** both work on the **backend**, split by mo
 
 | | Owner | Collaborator |
 |---|---|---|
-| CH | CH-0070..CH-0099 (used up to CH-0083; CH-0077 was written by a session on another machine — CH-0078) | CH-0050..CH-0069 (050..054 used; 055 reserved for T04) |
+| CH | CH-0070..CH-0099 (used up to CH-0084; CH-0077 was written by a session on another machine — CH-0078) | CH-0050..CH-0069 (050..054 used; 055 reserved for T04) |
 | TEST | TEST-060..079 (060..066 used) | TEST-045..059 (045..049 used; 050 reserved for T04) |
 | ADR | ADR-060..069 (060..064 used) | ADR-047..059 |
 | FS | FS-090..109 (090 used) | FS-072..089 (072..074 used; 075 reserved for T04) |
-| KI | KI-070..089 | KI-050..069 (050 used) |
+| KI | KI-070..089 (070 used) | KI-050..069 (050 used) |
 | API | API-080..API-109 (new in CH-0075) | API-048..API-079 (048/049 = syllabus, 050..055 = classes, 056 = class teachers, 057..059 reserved for T04 enrollments) |
 | D-R | numbered by the owner when deciding, from D-R15 (D-R15..D-R18 used for MOD-05 in CH-0076; next D-R19) | — |
 
