@@ -92,11 +92,12 @@ export const envSchema = z
     /** Comma-separated list of browser origins allowed by CORS. */
     CORS_ORIGIN: z.string().default('http://localhost:5173').transform(parseList),
 
-    /** Serve Swagger UI and the OpenAPI document under `<API_PREFIX>/docs`. */
-    SWAGGER_ENABLED: z
-      .enum(['true', 'false'])
-      .default('true')
-      .transform((value) => value === 'true'),
+    /**
+     * Serve Swagger UI and the OpenAPI document under `<API_PREFIX>/docs`.
+     * Defaults to true outside production and false in production (MOD-01-H04,
+     * SEC-R-05): the full API map is published there only on an explicit `true`.
+     */
+    SWAGGER_ENABLED: z.preprocess(emptyToUndefined, z.enum(['true', 'false']).optional()),
 
     /**
      * Express `trust proxy` (MOD-01-H01, KI-030): which reverse proxies may set
@@ -246,9 +247,11 @@ export const envSchema = z
       DB_APP_USER,
       DB_APP_PASSWORD,
       AUTH_COOKIE_SECURE,
+      SWAGGER_ENABLED,
       ...env
     }) => ({
       ...env,
+      SWAGGER_ENABLED: SWAGGER_ENABLED === undefined ? env.NODE_ENV !== 'production' : SWAGGER_ENABLED === 'true',
       DATABASE_URL:
         env.DATABASE_URL ??
         (DB_APP_PASSWORD === undefined

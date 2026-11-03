@@ -3,6 +3,7 @@ import type { NestApplicationOptions } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import type { IncomingMessage } from 'node:http';
 import { PACKAGE_VERSION } from './common/package-info.js';
 import type { Env } from './config/env.schema.js';
@@ -66,9 +67,26 @@ export interface AppRuntimeInfo {
 }
 
 /**
- * Applies the cross-cutting HTTP setup (prefix, JSON-only bodies, CORS,
- * validation, Swagger). Shared by main.ts and the e2e tests so both exercise
- * the same configuration; the app must be created with APP_CREATE_OPTIONS.
+ * helmet's security headers (MOD-01-H04, ADR-064) with its defaults, which the
+ * Swagger UI page also satisfies: its scripts are files under the docs path
+ * (script-src 'self'), its inline styles and data: icons are allowed by the
+ * default style-src / img-src. Only `upgrade-insecure-requests` is limited to
+ * production: on plain http://localhost it would send the page's own requests
+ * to https and break the docs during development.
+ */
+export function securityHeaders(nodeEnv: Env['NODE_ENV']): ReturnType<typeof helmet> {
+  return helmet({
+    contentSecurityPolicy: {
+      directives: { upgradeInsecureRequests: nodeEnv === 'production' ? [] : null },
+    },
+  });
+}
+
+/**
+ * Applies the cross-cutting HTTP setup (security headers, prefix, JSON-only
+ * bodies, CORS, validation, Swagger). Shared by main.ts and the e2e tests so
+ * both exercise the same configuration; the app must be created with
+ * APP_CREATE_OPTIONS.
  */
 export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
   const env: ConfigService<Env, true> = app.get(ConfigService);
@@ -76,6 +94,8 @@ export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
 
   app.setGlobalPrefix(prefix);
   app.disable('x-powered-by');
+  // First middleware: every response — JSON, errors, 404s and the Swagger UI — carries the headers.
+  app.use(securityHeaders(env.get('NODE_ENV', { infer: true })));
   // MOD-01-H01 (KI-030): behind a reverse proxy, req.ip and req.protocol come
   // from X-Forwarded-For / X-Forwarded-Proto only for the proxies TRUST_PROXY
   // names; off by default, so a directly exposed API ignores those headers.
