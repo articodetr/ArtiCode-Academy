@@ -77,13 +77,10 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
   const [loadError, setLoadError] = useState<unknown>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [issuing, setIssuing] = useState<IssuedLinkKind | null>(null)
   const [issued, setIssued] = useState<{ kind: IssuedLinkKind; link: IssuedLink } | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [tab, setTab] = useState(DETAILS_TAB)
-  const [form] = Form.useForm()
 
   useEffect(() => {
     const controller = new AbortController()
@@ -123,29 +120,6 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
 
   const reloadDetail = () => setReloadKey((value) => value + 1)
 
-  const onSave = async (values: EditUserFormValues) => {
-    const patch = planUserPatch(user, values, { contact })
-    if (!patch) {
-      message.info(t('users.detail.nothingChanged'))
-      setEditing(false)
-      return
-    }
-    setSaving(true)
-    setSaveError(null)
-    try {
-      applyUpdate(await updateUser(user.id, patch))
-      setEditing(false)
-      message.success(t('users.detail.saved'))
-    } catch (error) {
-      const failure = describeUsersFailure(error)
-      const text = failureMessage(t, failure)
-      if (failure.field) form.setFields([{ name: failure.field, errors: [text] }])
-      else setSaveError(text)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   // One-time links (T12): the server returns the raw token exactly once; the
   // modal shows it, nothing else keeps it.
   const issue = async (kind: IssuedLinkKind) => {
@@ -166,35 +140,15 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
   const canReset = canUpdate && user.status === 'active' && !user.deletedAt
 
   const details = editing ? (
-    <Form<EditUserFormValues>
-      form={form}
-      layout="vertical"
-      requiredMark={false}
-      initialValues={editFormValuesOf(user)}
-      onFinish={onSave}
-      disabled={saving}
-    >
-      {saveError ? <Alert type="error" showIcon message={saveError} style={{ marginBottom: 16 }} /> : null}
-      <IdentityFields contact={contact} mode="edit" />
-      {user.studentProfile ? (
-        <>
-          <Divider plain>{t('users.detail.studentProfile')}</Divider>
-          <StudentProfileFields withNotes={false} />
-        </>
-      ) : null}
-      {user.employeeProfile ? (
-        <>
-          <Divider plain>{t('users.detail.employeeProfile')}</Divider>
-          <EmployeeProfileFields />
-        </>
-      ) : null}
-      <Space>
-        <Button type="primary" htmlType="submit" loading={saving}>
-          {t('common.save')}
-        </Button>
-        <Button onClick={() => setEditing(false)}>{t('common.cancel')}</Button>
-      </Space>
-    </Form>
+    <UserEditForm
+      user={user}
+      contact={contact}
+      onSaved={(updated) => {
+        applyUpdate(updated)
+        setEditing(false)
+      }}
+      onCancel={() => setEditing(false)}
+    />
   ) : (
     <UserDetails user={user} contact={contact} />
   )
@@ -218,7 +172,6 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
                 <Button
                   icon={<EditOutlined />}
                   onClick={() => {
-                    setSaveError(null)
                     setTab(DETAILS_TAB)
                     setEditing(true)
                   }}
@@ -259,6 +212,83 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
 
       <IssuedLinkModal kind={issued?.kind ?? 'invitation'} issued={issued?.link ?? null} onClose={() => setIssued(null)} />
     </>
+  )
+}
+
+interface UserEditFormProps {
+  user: UserDetail
+  contact: boolean
+  /** Called with the detail returned by a successful PATCH. */
+  onSaved: (user: UserDetail) => void
+  onCancel: () => void
+}
+
+/**
+ * The edit form of one edit session. It owns its form so every session starts
+ * from the user as the server holds it: a form instance kept across sessions
+ * would merge the values typed in a cancelled session over the new initial
+ * values, and saving would send them (rc-field-form keeps unmounted values — KI-049).
+ */
+function UserEditForm({ user, contact, onSaved, onCancel }: UserEditFormProps) {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  // Untyped so setFields accepts the string[] name paths of the error mapper.
+  const [form] = Form.useForm()
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const onSave = async (values: EditUserFormValues) => {
+    const patch = planUserPatch(user, values, { contact })
+    if (!patch) {
+      message.info(t('users.detail.nothingChanged'))
+      onCancel()
+      return
+    }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const updated = await updateUser(user.id, patch)
+      message.success(t('users.detail.saved'))
+      onSaved(updated)
+    } catch (error) {
+      const failure = describeUsersFailure(error)
+      const text = failureMessage(t, failure)
+      if (failure.field) form.setFields([{ name: failure.field, errors: [text] }])
+      else setSaveError(text)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Form<EditUserFormValues>
+      form={form}
+      layout="vertical"
+      requiredMark={false}
+      initialValues={editFormValuesOf(user)}
+      onFinish={(values) => void onSave(values)}
+      disabled={saving}
+    >
+      {saveError ? <Alert type="error" showIcon message={saveError} style={{ marginBottom: 16 }} /> : null}
+      <IdentityFields contact={contact} mode="edit" />
+      {user.studentProfile ? (
+        <>
+          <Divider plain>{t('users.detail.studentProfile')}</Divider>
+          <StudentProfileFields withNotes={false} />
+        </>
+      ) : null}
+      {user.employeeProfile ? (
+        <>
+          <Divider plain>{t('users.detail.employeeProfile')}</Divider>
+          <EmployeeProfileFields />
+        </>
+      ) : null}
+      <Space>
+        <Button type="primary" htmlType="submit" loading={saving}>
+          {t('common.save')}
+        </Button>
+        <Button onClick={onCancel}>{t('common.cancel')}</Button>
+      </Space>
+    </Form>
   )
 }
 

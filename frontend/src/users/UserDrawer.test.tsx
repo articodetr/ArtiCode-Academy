@@ -106,6 +106,24 @@ describe('UserDrawer', () => {
     expect(screen.queryByRole('button', { name: ar.common.save })).not.toBeInTheDocument()
   })
 
+  it('starts every edit session from the stored user: a cancelled session leaves nothing behind (KI-049)', async () => {
+    const api = mockDetailApi(makeUserDetail())
+    renderDrawer()
+    await startEditing()
+
+    await userEvent.type(screen.getByLabelText(ar.users.fields.displayName), 'مسودة')
+    await userEvent.clear(screen.getByLabelText(ar.users.fields.phone))
+    await userEvent.click(screen.getByText(ar.common.cancel).closest('button')!)
+
+    const save = await startEditing()
+    expect(screen.getByLabelText(ar.users.fields.displayName)).toHaveValue('')
+    expect(screen.getByLabelText(ar.users.fields.phone)).toHaveValue(makeUserDetail().phone ?? '')
+    // Saving the fresh session sends nothing: the cancelled values are gone, not just hidden.
+    await userEvent.click(save)
+    expect(await screen.findByText(ar.users.detail.nothingChanged)).toBeInTheDocument()
+    expect(api.patches).toHaveLength(0)
+  })
+
   it('puts a 409 email_in_use on the e-mail field and stays in edit mode', async () => {
     const api = mockDetailApi(makeUserDetail(), () => jsonResponse(409, { statusCode: 409, code: 'email_in_use', message: 'taken' }))
     renderDrawer()
