@@ -4,8 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { SignJWT, errors as joseErrors, jwtVerify } from 'jose';
 import type { Env } from '../config/env.schema.js';
 import { authError } from './auth.errors.js';
+import { familyDeadline } from './refresh-family.js';
 
 export const JWT_ALGORITHM = 'HS256';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Claims the API relies on after verification. */
 export interface AccessTokenClaims {
@@ -47,6 +50,8 @@ export class TokenService {
   readonly audience: string;
   readonly accessTtlSeconds: number;
   readonly refreshTtlMs: number;
+  /** Absolute lifetime of a refresh-token family, counted from sign-in (MOD-01-H03). */
+  readonly refreshFamilyMaxMs: number;
 
   constructor(config: ConfigService<Env, true>) {
     const secret = config.get('JWT_SECRET', { infer: true });
@@ -62,7 +67,8 @@ export class TokenService {
     this.issuer = config.get('JWT_ISSUER', { infer: true });
     this.audience = config.get('JWT_AUDIENCE', { infer: true });
     this.accessTtlSeconds = config.get('JWT_ACCESS_TTL_SECONDS', { infer: true });
-    this.refreshTtlMs = config.get('AUTH_REFRESH_TTL_DAYS', { infer: true }) * 24 * 60 * 60 * 1000;
+    this.refreshTtlMs = config.get('AUTH_REFRESH_TTL_DAYS', { infer: true }) * DAY_MS;
+    this.refreshFamilyMaxMs = config.get('AUTH_REFRESH_FAMILY_MAX_DAYS', { infer: true }) * DAY_MS;
   }
 
   async signAccessToken(
@@ -120,7 +126,14 @@ export class TokenService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  refreshExpiry(from: Date = new Date()): Date {
-    return new Date(from.getTime() + this.refreshTtlMs);
+  /** A fresh refresh token's expiry: a full lifetime, but never past the family's deadline. */
+  refreshExpiry(from: Date = new Date(), deadline: Date | null = null): Date {
+    const full = from.getTime() + this.refreshTtlMs;
+    return new Date(deadline ? Math.min(full, deadline.getTime()) : full);
+  }
+
+  /** When the family behind `familyId` must stop rotating; null (= expired) for an id that is not a UUIDv7. */
+  familyDeadline(familyId: string): Date | null {
+    return familyDeadline(familyId, this.refreshFamilyMaxMs);
   }
 }

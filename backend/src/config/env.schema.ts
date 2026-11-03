@@ -168,6 +168,15 @@ export const envSchema = z
       emptyToUndefined,
       z.coerce.number().int().min(1).max(90).default(14),
     ),
+    /**
+     * Absolute lifetime of a refresh-token family in days, counted from sign-in
+     * (MOD-01-H03, owner decision: 30). Rotation never extends a session past it;
+     * the user signs in again. Must be at least AUTH_REFRESH_TTL_DAYS.
+     */
+    AUTH_REFRESH_FAMILY_MAX_DAYS: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(1).max(365).default(30),
+    ),
     /** `Secure` attribute of the refresh cookie. Defaults to true in production, false elsewhere. */
     AUTH_COOKIE_SECURE: z.preprocess(emptyToUndefined, z.enum(['true', 'false']).optional()),
     /** Failed logins (per account) before a temporary lock. */
@@ -280,6 +289,13 @@ export const envSchema = z
         path: ['MAIL_TRANSPORT'],
         message:
           '"log" is a development-only transport and is refused when NODE_ENV=production (use "none" until a real provider is configured — LR-01)',
+      });
+    }
+    if (env.AUTH_REFRESH_FAMILY_MAX_DAYS < env.AUTH_REFRESH_TTL_DAYS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AUTH_REFRESH_FAMILY_MAX_DAYS'],
+        message: `must be at least AUTH_REFRESH_TTL_DAYS (${env.AUTH_REFRESH_TTL_DAYS}): a session cannot be capped below the lifetime of a single refresh token`,
       });
     }
     if (env.AUTH_SELF_SERVICE_RESET_ENABLED && env.MAIL_TRANSPORT === 'none') {

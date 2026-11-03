@@ -15,6 +15,8 @@ export interface IssuedSession {
   accessToken: string;
   expiresIn: number;
   refreshToken: string;
+  /** Expiry of `refreshToken` — never past the family's deadline (MOD-01-H03); the cookie lives as long. */
+  refreshExpiresAt: Date;
   user: AuthPrincipal;
 }
 
@@ -155,6 +157,8 @@ export class AuthService {
   /** Resets the lock counters, opens a refresh-token family, records `auth.login.succeeded` and signs the access token. */
   private async createSession(user: UserWithAccess, now: Date, ctx: RequestContext, via?: SessionOrigin): Promise<IssuedSession> {
     const refresh = this.tokens.generateRefreshToken();
+    // A new family starts now; AUTH_REFRESH_FAMILY_MAX_DAYS ≥ AUTH_REFRESH_TTL_DAYS, so the first token gets its full lifetime.
+    const refreshExpiresAt = this.tokens.refreshExpiry(now);
     await this.prisma.db.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
@@ -164,7 +168,7 @@ export class AuthService {
         data: {
           userId: user.id,
           tokenHash: refresh.hash,
-          expiresAt: this.tokens.refreshExpiry(now),
+          expiresAt: refreshExpiresAt,
           userAgent: ctx.userAgent,
           ipAddress: ctx.ip,
         },
@@ -189,6 +193,7 @@ export class AuthService {
       accessToken: access.token,
       expiresIn: access.expiresIn,
       refreshToken: refresh.token,
+      refreshExpiresAt,
       user: toPrincipal(user, claims.jti),
     };
   }
@@ -246,7 +251,11 @@ export class AuthService {
       throw authError.refreshReused();
     }
 
-    if (stored.expiresAt <= now) {
+    // MOD-01-H03: past the family's absolute deadline the session ends even if this token is still valid
+    // (tokens issued before the cap, or a lowered AUTH_REFRESH_FAMILY_MAX_DAYS). A family id that is not a
+    // UUIDv7 has no known start and is treated as expired.
+    const deadline = this.tokens.familyDeadline(stored.familyId);
+    if (stored.expiresAt <= now || deadline === null || deadline <= now) {
       await db.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: now } });
       throw authError.refreshExpired();
     }
@@ -259,13 +268,14 @@ export class AuthService {
     }
 
     const next = this.tokens.generateRefreshToken();
+    const refreshExpiresAt = this.tokens.refreshExpiry(now, deadline);
     await db.$transaction(async (tx) => {
       const created = await tx.refreshToken.create({
         data: {
           userId: user.id,
           familyId: stored.familyId,
           tokenHash: next.hash,
-          expiresAt: this.tokens.refreshExpiry(now),
+          expiresAt: refreshExpiresAt,
           userAgent: ctx.userAgent,
           ipAddress: ctx.ip,
         },
@@ -279,7 +289,13 @@ export class AuthService {
 
     const access = await this.tokens.signAccessToken({ userId: user.id, roles: user.roles.map((g) => g.role.key) });
     const claims = await this.tokens.verifyAccessToken(access.token);
-    return { accessToken: access.token, expiresIn: access.expiresIn, refreshToken: next.token, user: toPrincipal(user, claims.jti) };
+    return {
+      accessToken: access.token,
+      expiresIn: access.expiresIn,
+      refreshToken: next.token,
+      refreshExpiresAt,
+      user: toPrincipal(user, claims.jti),
+    };
   }
 
   // -------------------------------------------------------------- logout

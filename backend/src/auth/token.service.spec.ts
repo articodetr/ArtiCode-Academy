@@ -83,4 +83,17 @@ describe('TokenService', () => {
     const from = new Date('2026-01-01T00:00:00Z');
     expect(service.refreshExpiry(from).toISOString()).toBe('2026-01-08T00:00:00.000Z');
   });
+
+  it('caps a rotated token at the family deadline (MOD-01-H03, TEST-065)', () => {
+    const service = new TokenService(configFor({ AUTH_REFRESH_TTL_DAYS: '14', AUTH_REFRESH_FAMILY_MAX_DAYS: '30' }));
+    expect(service.refreshFamilyMaxMs).toBe(30 * 24 * 60 * 60 * 1000);
+    // RFC 9562 UUIDv7 example: the family started at 2022-02-22T19:22:22Z.
+    const deadline = service.familyDeadline('017f22e2-79b0-7cc3-98c4-dc0c0c07398f');
+    expect(deadline?.toISOString()).toBe('2022-03-24T19:22:22.000Z');
+    // Far from the deadline: the full 14 days.
+    expect(service.refreshExpiry(new Date('2022-03-01T00:00:00Z'), deadline).toISOString()).toBe('2022-03-15T00:00:00.000Z');
+    // Three days before it: only up to the deadline.
+    expect(service.refreshExpiry(new Date('2022-03-21T19:22:22Z'), deadline).toISOString()).toBe('2022-03-24T19:22:22.000Z');
+    expect(service.familyDeadline('9b2f6a1e-4c3d-4f5a-8b6c-7d8e9f0a1b2c')).toBeNull();
+  });
 });

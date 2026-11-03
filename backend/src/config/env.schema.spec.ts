@@ -16,6 +16,7 @@ describe('validateEnv', () => {
       JWT_AUDIENCE: 'articode-academy-api',
       JWT_ACCESS_TTL_SECONDS: 900,
       AUTH_REFRESH_TTL_DAYS: 14,
+      AUTH_REFRESH_FAMILY_MAX_DAYS: 30,
       AUTH_COOKIE_SECURE: false,
       AUTH_LOCKOUT_THRESHOLD: 5,
       AUTH_LOCKOUT_MINUTES: 15,
@@ -180,6 +181,20 @@ describe('validateEnv', () => {
     ).toBe(true);
     expect(() => validateEnv({ JWT_ACCESS_TTL_SECONDS: '10' })).toThrow(/JWT_ACCESS_TTL_SECONDS/);
     expect(() => validateEnv({ AUTH_COOKIE_SECURE: 'yes' })).toThrow(/AUTH_COOKIE_SECURE/);
+  });
+
+  it('parses AUTH_REFRESH_FAMILY_MAX_DAYS (MOD-01-H03, TEST-065): 30 by default, 1–365, never below AUTH_REFRESH_TTL_DAYS', () => {
+    expect(validateEnv({}).AUTH_REFRESH_FAMILY_MAX_DAYS).toBe(30);
+    expect(validateEnv({ AUTH_REFRESH_FAMILY_MAX_DAYS: '' }).AUTH_REFRESH_FAMILY_MAX_DAYS).toBe(30);
+    expect(validateEnv({ AUTH_REFRESH_FAMILY_MAX_DAYS: '90' }).AUTH_REFRESH_FAMILY_MAX_DAYS).toBe(90);
+    // Equal to the token lifetime is allowed: every session then ends one lifetime after sign-in.
+    expect(validateEnv({ AUTH_REFRESH_TTL_DAYS: '14', AUTH_REFRESH_FAMILY_MAX_DAYS: '14' }).AUTH_REFRESH_FAMILY_MAX_DAYS).toBe(14);
+    expect(() => validateEnv({ AUTH_REFRESH_FAMILY_MAX_DAYS: '0' })).toThrow(/AUTH_REFRESH_FAMILY_MAX_DAYS/);
+    expect(() => validateEnv({ AUTH_REFRESH_FAMILY_MAX_DAYS: '366' })).toThrow(/AUTH_REFRESH_FAMILY_MAX_DAYS/);
+    expect(() => validateEnv({ AUTH_REFRESH_FAMILY_MAX_DAYS: '7.5' })).toThrow(/AUTH_REFRESH_FAMILY_MAX_DAYS/);
+    // The default 30 is below a 60-day token lifetime: refused, naming both variables.
+    expect(() => validateEnv({ AUTH_REFRESH_TTL_DAYS: '60' })).toThrow(/AUTH_REFRESH_FAMILY_MAX_DAYS.*AUTH_REFRESH_TTL_DAYS \(60\)/);
+    expect(() => validateEnv({ AUTH_REFRESH_TTL_DAYS: '20', AUTH_REFRESH_FAMILY_MAX_DAYS: '19' })).toThrow(/AUTH_REFRESH_FAMILY_MAX_DAYS/);
   });
 
   it('derives DATABASE_URL for the application role from the variables shared with compose.yaml', () => {

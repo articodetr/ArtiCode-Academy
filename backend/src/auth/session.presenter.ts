@@ -36,9 +36,13 @@ export function toUserDto(user: AuthPrincipal): AuthUserDto {
   };
 }
 
-/** Sets the refresh cookie and returns the response body. */
+/**
+ * Sets the refresh cookie and returns the response body. The cookie lives as
+ * long as its token: the full lifetime, or less near the family's deadline (MOD-01-H03).
+ */
 export function presentSession(res: Response, session: IssuedSession, cookie: RefreshCookieOptions): SessionResponseDto {
-  setRefreshCookie(res, session.refreshToken, cookie);
+  const remainingMs = Math.max(0, session.refreshExpiresAt.getTime() - Date.now());
+  setRefreshCookie(res, session.refreshToken, { ...cookie, maxAgeMs: Math.min(cookie.maxAgeMs, remainingMs) });
   return {
     tokenType: 'Bearer',
     accessToken: session.accessToken,
