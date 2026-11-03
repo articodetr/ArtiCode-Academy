@@ -509,7 +509,8 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     await api().post(LEVELS).set(bearer('admin')).send({ name: { ar: 'بلا رمز' } }).expect(400);
     expect((await api().post(LEVELS).set(bearer('admin')).send({ code: `${LEVEL_PREFIX}A`, name: { ar: 'مكرر' } }).expect(409)).body.code).toBe('level_code_taken');
     expect((await api().delete(`${LEVELS}/${mod04.levelA}`).set(bearer('admin')).expect(409)).body.code).toBe('level_in_use');
-    expect((await api().put(`${LEVELS}/order`).set(bearer('admin')).send({ levelIds: [mod04.levelA] }).expect(400)).body.code).toBe('level_order_invalid');
+    // A duplicate is refused whatever other levels the database holds ([levelA] alone is a full order on a fresh CI database).
+    expect((await api().put(`${LEVELS}/order`).set(bearer('admin')).send({ levelIds: [...order, mod04.levelA] }).expect(400)).body.code).toBe('level_order_invalid');
     expect((await api().post(COURSES).set(bearer('plain')).send({ code: `${COURSE_PREFIX}-X`, name: { ar: 'م' } }).expect(403)).body.code).toBe('permission_denied');
     expect((await api().post(COURSES).set(bearer('admin')).send({ code: codeA, name: { ar: 'مكرر' } }).expect(409)).body.code).toBe('course_code_taken');
     expect((await api().patch(course).set(bearer('admin')).send({}).expect(400)).body.code).toBe('nothing_to_update');
