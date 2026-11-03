@@ -115,6 +115,17 @@ describe('validateEnv', () => {
     );
   });
 
+  it('defaults SWAGGER_ENABLED per environment (MOD-01-H04, TEST-066): on outside production, off in production unless set to true', () => {
+    const production = { NODE_ENV: 'production', DATABASE_URL: 'postgresql://u:p@db:5432/app', JWT_SECRET: PRODUCTION_SECRET };
+    expect(validateEnv({}).SWAGGER_ENABLED).toBe(true);
+    expect(validateEnv({ NODE_ENV: 'test' }).SWAGGER_ENABLED).toBe(true);
+    expect(validateEnv({ SWAGGER_ENABLED: '' }).SWAGGER_ENABLED).toBe(true);
+    expect(validateEnv({ SWAGGER_ENABLED: 'false' }).SWAGGER_ENABLED).toBe(false);
+    expect(validateEnv(production).SWAGGER_ENABLED).toBe(false);
+    expect(validateEnv({ ...production, SWAGGER_ENABLED: '' }).SWAGGER_ENABLED).toBe(false);
+    expect(validateEnv({ ...production, SWAGGER_ENABLED: 'true' }).SWAGGER_ENABLED).toBe(true);
+  });
+
   it('drops variables that are not part of the schema', () => {
     const env = validateEnv({ HOME: '/tmp', PORT: '3001' });
     expect(env).not.toHaveProperty('HOME');
