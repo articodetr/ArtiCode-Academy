@@ -11,6 +11,7 @@ describe('validateEnv', () => {
       API_PREFIX: 'api',
       CORS_ORIGIN: ['http://localhost:5173'],
       SWAGGER_ENABLED: true,
+      TRUST_PROXY: false,
       JWT_ISSUER: 'articode-academy',
       JWT_AUDIENCE: 'articode-academy-api',
       JWT_ACCESS_TTL_SECONDS: 900,
@@ -227,5 +228,27 @@ describe('validateEnv', () => {
     ).toMatch(/^postgresql:\/\/articode_app:x@/);
     expect(() => validateEnv({ POSTGRES_PORT: 'abc' })).toThrow(/POSTGRES_PORT/);
     expect(() => validateEnv({ POSTGRES_PORT: '0' })).toThrow(/POSTGRES_PORT/);
+  });
+
+  it('parses TRUST_PROXY (MOD-01-H01, TEST-063): off by default, a number of proxies or their addresses; refuses true and malformed entries', () => {
+    for (const off of [undefined, '', 'false', 'FALSE', '0', ' 0 ']) {
+      expect(validateEnv(off === undefined ? {} : { TRUST_PROXY: off }).TRUST_PROXY, String(off)).toBe(false);
+    }
+    expect(validateEnv({ TRUST_PROXY: '1' }).TRUST_PROXY).toBe(1);
+    expect(validateEnv({ TRUST_PROXY: ' 2 ' }).TRUST_PROXY).toBe(2);
+    expect(validateEnv({ TRUST_PROXY: 'loopback' }).TRUST_PROXY).toEqual(['loopback']);
+    expect(validateEnv({ TRUST_PROXY: 'Loopback, 10.0.0.0/8 , 172.16.0.1, fd00::/8, ::1' }).TRUST_PROXY).toEqual([
+      'loopback',
+      '10.0.0.0/8',
+      '172.16.0.1',
+      'fd00::/8',
+      '::1',
+    ]);
+
+    expect(() => validateEnv({ TRUST_PROXY: 'true' })).toThrow(/TRUST_PROXY: "true" trusts every X-Forwarded-For/);
+    expect(() => validateEnv({ TRUST_PROXY: '11' })).toThrow(/TRUST_PROXY: must be at most 10 proxies/);
+    for (const bad of ['nginx', '10.0.0.0/33', '10.0.0.0/8/1', 'fd00::/129', '300.1.1.1', 'loopback, example.com', ',']) {
+      expect(() => validateEnv({ TRUST_PROXY: bad }), bad).toThrow(/TRUST_PROXY: must be a number of proxies/);
+    }
   });
 });

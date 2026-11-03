@@ -38,6 +38,11 @@ export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
 
   app.setGlobalPrefix(prefix);
   app.disable('x-powered-by');
+  // MOD-01-H01 (KI-030): behind a reverse proxy, req.ip and req.protocol come
+  // from X-Forwarded-For / X-Forwarded-Proto only for the proxies TRUST_PROXY
+  // names; off by default, so a directly exposed API ignores those headers.
+  const trustProxy = env.get('TRUST_PROXY', { infer: true });
+  if (trustProxy !== false) app.set('trust proxy', trustProxy);
   // The only body parser (see APP_CREATE_OPTIONS). Routes that accept files
   // later opt in to multipart explicitly with an interceptor.
   app.useBodyParser('json');
