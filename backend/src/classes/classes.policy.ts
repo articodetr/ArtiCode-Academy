@@ -13,6 +13,13 @@ export const READ_ENROLLMENTS_PERMISSION = 'enrollments.read';
 /** Enrolling students and enrollment actions (T04). */
 export const MANAGE_ENROLLMENTS_PERMISSION = 'enrollments.manage';
 
+/** System role a class teacher must actually hold (a `user_roles` row — T03). */
+export const TEACHER_ROLE_KEY = 'teacher';
+/** System role an enrolled student must actually hold (T04). */
+export const STUDENT_ROLE_KEY = 'student';
+/** Account states that may be assigned to a class or enrolled (4d.7: suspended/archived → user_not_eligible). */
+export const ELIGIBLE_USER_STATUSES = ['invited', 'active'] as const;
+
 /** True when the caller sees every class, not only the assigned ones. */
 export function canManageClasses(permissions: readonly string[]): boolean {
   return permissions.includes(MANAGE_CLASSES_PERMISSION);
