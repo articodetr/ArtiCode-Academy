@@ -2,6 +2,7 @@
 // Skipped when no database is reachable. Fixture users are created with a
 // unique suffix and deleted at the end (cascade removes their tokens; their
 // audit rows stay, as the log is append-only by design).
+import { randomBytes, randomInt } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -14,6 +15,7 @@ import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { bootstrapFirstAdmin } from '../src/auth/bootstrap-admin.js';
 import { REFRESH_COOKIE_NAME } from '../src/auth/cookies.js';
 import { PasswordService } from '../src/auth/password.service.js';
+import { uuidV7Time } from '../src/auth/refresh-family.js';
 import { TokenService } from '../src/auth/token.service.js';
 import { ACADEMY_ADMIN_ROLE_KEY } from '../src/authorization/system-roles.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
@@ -52,6 +54,15 @@ function refreshCookie(res: SupertestResponse): string | undefined {
   if (!line) return undefined;
   const value = line.split(';')[0]!.slice(REFRESH_COOKIE_NAME.length + 1);
   return value.length > 0 ? value : undefined;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A UUIDv7 whose timestamp is `at` (RFC 9562 layout, random bits from crypto) — to make a family look older. */
+function uuidV7At(at: Date): string {
+  const random = (digits: number) => randomBytes(digits).toString('hex').slice(0, digits);
+  const hex = `${at.getTime().toString(16).padStart(12, '0')}7${random(3)}${(8 + randomInt(4)).toString(16)}${random(15)}`;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function cookieAttributes(res: SupertestResponse): string {
@@ -257,6 +268,44 @@ describe.skipIf(!available)('MOD-01 authentication (e2e, TEST-008)', () => {
     expect(
       (await request(app.getHttpServer()).post('/api/auth/refresh').set('Cookie', `${REFRESH_COOKIE_NAME}=forged`).expect(401)).body.code,
     ).toBe('refresh_invalid');
+  });
+
+  it('ends a session at its family deadline, whatever its token says (MOD-01-H03, TEST-065)', async () => {
+    const tokens = app.get(TokenService);
+    const refreshWith = (cookie: string) =>
+      request(app.getHttpServer()).post('/api/auth/refresh').set('Cookie', `${REFRESH_COOKIE_NAME}=${cookie}`);
+    const user = await createUser('family-cap');
+
+    // At sign-in PostgreSQL generates the family id with uuidv7(): it carries the sign-in time.
+    const before = Date.now();
+    const first = await login(user.email).expect(200);
+    const signedIn = await prisma.refreshToken.findFirstOrThrow({ where: { userId: user.id } });
+    expect(Math.abs(uuidV7Time(signedIn.familyId)!.getTime() - before)).toBeLessThan(60_000);
+    expect(signedIn.expiresAt.getTime() - before).toBeGreaterThan(tokens.refreshTtlMs - 60_000);
+
+    // Three days before the deadline: the rotation works, but the new token and its cookie stop at the deadline.
+    const nearFamily = uuidV7At(new Date(Date.now() - tokens.refreshFamilyMaxMs + 3 * DAY_MS));
+    await prisma.refreshToken.update({ where: { id: signedIn.id }, data: { familyId: nearFamily } });
+    const rotated = await refreshWith(refreshCookie(first)!).expect(200);
+    const next = await prisma.refreshToken.findFirstOrThrow({ where: { userId: user.id, revokedAt: null } });
+    expect(next.familyId).toBe(nearFamily);
+    expect(next.expiresAt.getTime()).toBe(tokens.familyDeadline(nearFamily)!.getTime());
+    const maxAge = Number(/Max-Age=(\d+)/i.exec(cookieAttributes(rotated))?.[1]);
+    expect(maxAge).toBeGreaterThan((3 * DAY_MS) / 1000 - 120);
+    expect(maxAge).toBeLessThanOrEqual((3 * DAY_MS) / 1000);
+
+    // Past the deadline: refused although the token itself is still valid, and that token is revoked.
+    await prisma.refreshToken.update({ where: { id: next.id }, data: { familyId: uuidV7At(new Date(Date.now() - tokens.refreshFamilyMaxMs - DAY_MS)) } });
+    expect(next.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect((await refreshWith(refreshCookie(rotated)!).expect(401)).body.code).toBe('refresh_expired');
+    expect((await prisma.refreshToken.findUniqueOrThrow({ where: { id: next.id } })).revokedAt).not.toBeNull();
+    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(2);
+
+    // A family id that is not a UUIDv7 has no known start: treated as expired (fail closed).
+    const other = await login(user.email).expect(200);
+    const otherRow = await prisma.refreshToken.findFirstOrThrow({ where: { userId: user.id, revokedAt: null } });
+    await prisma.refreshToken.update({ where: { id: otherRow.id }, data: { familyId: '9b2f6a1e-4c3d-4f5a-8b6c-7d8e9f0a1b2c' } });
+    expect((await refreshWith(refreshCookie(other)!).expect(401)).body.code).toBe('refresh_expired');
   });
 
   it('logs out of the current device and of all devices', async () => {
