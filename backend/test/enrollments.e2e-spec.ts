@@ -54,7 +54,7 @@ interface EnrollmentBody {
   completedAt: string | null;
   withdrawnAt: string | null;
   withdrawalReason: string | null;
-  student: { id: string; email: string | null };
+  student: { id: string; email: string | null; deletedAt: string | null };
 }
 
 async function canConnect(url: string): Promise<boolean> {
@@ -491,21 +491,32 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     await api().post(statusPath(enrollmentId)).set(bearer('teacher')).send({ action: 'withdraw' }).expect(403);
     expect(await eventsSince(m)).toHaveLength(0);
 
-    // The assigned teacher reads the roster without contact fields.
+    // A student who withdrew with a reason and whose account was soft-deleted afterwards (written with Prisma).
+    const left = await prisma.enrollment.create({
+      data: { classId: classes['A']!, studentUserId: students['deleted']!, status: 'withdrawn', withdrawnAt: new Date(), withdrawalReason: 'family moved abroad' },
+      select: { id: true },
+    });
+
+    // The assigned teacher reads the roster without contact fields and without withdrawal reasons.
     const teacherView = await api().get(roster(classes['A']!)).set(bearer('teacher')).expect(200);
     expect(teacherView.body.items.length).toBeGreaterThan(0);
     for (const item of teacherView.body.items as EnrollmentBody[]) {
       expect(item.classId).toBe(classes['A']);
       expect(item.student.email).toBeNull();
+      expect(item.withdrawalReason).toBeNull();
     }
     expect(deepKeys(teacherView.body).filter((key) => /hash|password/i.test(key))).toEqual([]);
+    // Owner decision (PR #14 review): the teacher sees that the account was deleted, not why the student left.
+    const leftForTeacher = (teacherView.body.items as EnrollmentBody[]).find((item) => item.id === left.id);
+    expect(leftForTeacher).toMatchObject({ status: 'withdrawn', withdrawalReason: null });
+    expect(leftForTeacher!.student.deletedAt).not.toBeNull();
 
     // An assistant teacher of the class reads the same roster, in the same projection.
     const assistantView = await api().get(roster(classes['A']!)).set(bearer('assistant')).expect(200);
     expect((assistantView.body.items as EnrollmentBody[]).map((item) => item.id)).toEqual(
       (teacherView.body.items as EnrollmentBody[]).map((item) => item.id),
     );
-    expect((assistantView.body.items as EnrollmentBody[]).every((item) => item.student.email === null)).toBe(true);
+    expect((assistantView.body.items as EnrollmentBody[]).every((item) => item.student.email === null && item.withdrawalReason === null)).toBe(true);
 
     // A teacher of another class and a caller without enrollments.read do not.
     expect((await api().get(roster(classes['A']!)).set(bearer('stranger')).expect(404)).body).toMatchObject({ code: 'class_not_found' });
@@ -517,6 +528,9 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     const ids = (all.body.items as EnrollmentBody[]).map((item) => item.id);
     expect(ids).toEqual([...ids].sort());
     expect((all.body.items as EnrollmentBody[]).every((item) => item.student.email !== null)).toBe(true);
+    const leftForManager = (all.body.items as EnrollmentBody[]).find((item) => item.id === left.id);
+    expect(leftForManager).toMatchObject({ status: 'withdrawn', withdrawalReason: 'family moved abroad' });
+    expect(leftForManager!.student.deletedAt).not.toBeNull();
     expect(all.body.nextCursor).toBeNull();
     const active = await api().get(roster(classes['A']!)).query({ status: 'active' }).set(bearer('manager')).expect(200);
     expect((active.body.items as EnrollmentBody[]).every((item) => item.status === 'active')).toBe(true);
