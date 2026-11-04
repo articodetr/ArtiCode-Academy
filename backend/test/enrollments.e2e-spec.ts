@@ -637,7 +637,7 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
       await mine('me', 'waiting').expect(400);
     });
 
-    it('AC2 — a guardian sees the classes of linked children only (named per item), not an unlinked or soft-deleted student, and loses a child once unlinked', async () => {
+    it('AC2 — a guardian sees the classes of linked children only (named per item), not an unlinked or soft-deleted student, loses a child once unlinked, and every child once the guardian role is taken away', async () => {
       const res = await mine('guardian').expect(200);
       expect(enrollmentIds(res.body)).toEqual([my['child2M2'], my['child1M1']]);
       for (const item of res.body.items as { relation: string; student: { id: string } }[]) expect(item.relation).toBe('child');
@@ -648,6 +648,14 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
       expect(ids).not.toContain(my['goneM3']);
 
       await prisma.guardianStudent.delete({ where: { guardianUserId_studentUserId: { guardianUserId: fx['guardian']!, studentUserId: students['child2']! } } });
+      expect(enrollmentIds((await mine('guardian').expect(200)).body)).toEqual([my['child1M1']]);
+
+      // Owner decision (#19): the link to child1 stays, but without the guardian role it grants nothing.
+      // The same token works: the caller's roles are read from the database on every request.
+      await prisma.userRole.deleteMany({ where: { userId: fx['guardian']!, roleId: guardianRoleId } });
+      expect(await prisma.guardianStudent.count({ where: { guardianUserId: fx['guardian']! } })).toBe(2);
+      expect((await mine('guardian').expect(200)).body).toEqual({ items: [] });
+      await prisma.userRole.create({ data: { userId: fx['guardian']!, roleId: guardianRoleId } });
       expect(enrollmentIds((await mine('guardian').expect(200)).body)).toEqual([my['child1M1']]);
     });
 
