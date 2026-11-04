@@ -9,6 +9,7 @@ import { isEmptyAcademyPatch, planAcademyUpdate } from './academy.changes.js';
 import type { AcademyPatch, AcademyUpdateData, CurrentAcademyRow } from './academy.changes.js';
 import type { AcademyDto, UpdateAcademyDto } from './academy.dto.js';
 import { academyError } from './academy.errors.js';
+import { readSettings } from './academy.settings.js';
 
 export const ACADEMY_AUDIT_ACTIONS = {
   updated: 'academy.updated',
@@ -17,7 +18,8 @@ export const ACADEMY_AUDIT_ACTIONS = {
 /** Audit `entity_type` of the academy row. */
 export const ACADEMY_ENTITY_TYPE = 'academy';
 
-// Explicit projection (D-R09): never `singleton`, `platformAcademyId` or `settings`.
+// Explicit projection (D-R09): never `singleton` or `platformAcademyId`; `settings` is
+// read through its zod schema (MOD-02-T03) and never returned raw.
 const ACADEMY_SELECT = {
   id: true,
   slug: true,
@@ -28,6 +30,7 @@ const ACADEMY_SELECT = {
   currency: true,
   contactEmail: true,
   contactPhone: true,
+  settings: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.AcademySelect;
@@ -53,6 +56,7 @@ function toAcademyDto(row: AcademyRow): AcademyDto {
     currency: row.currency,
     contactEmail: row.contactEmail,
     contactPhone: row.contactPhone,
+    settings: readSettings(row.settings),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -67,6 +71,7 @@ function currentRowOf(row: AcademyRow): CurrentAcademyRow {
     currency: row.currency,
     contactEmail: row.contactEmail,
     contactPhone: row.contactPhone,
+    settings: row.settings,
   };
 }
 
@@ -80,9 +85,10 @@ function patchOf(input: UpdateAcademyDto): AcademyPatch {
 
 /** Planner output → Prisma update input (`name` needs the JSON input type). */
 function toUpdateInput(data: AcademyUpdateData): Prisma.AcademyUpdateInput {
-  const { name, ...scalars } = data;
+  const { name, settings, ...scalars } = data;
   const input: Prisma.AcademyUpdateInput = { ...scalars };
   if (name !== undefined) input.name = name as Prisma.InputJsonValue;
+  if (settings !== undefined) input.settings = settings as Prisma.InputJsonValue;
   return input;
 }
 
@@ -91,7 +97,10 @@ function toUpdateInput(data: AcademyUpdateData): Prisma.AcademyUpdateInput {
  * The global guards authenticate every call; `academy.settings.manage` is
  * enforced on PATCH by the controller. Every write is one transaction with
  * exactly one audit event (`academy.updated { fields }` — names only); a PATCH
- * without a difference writes nothing and records nothing.
+ * without a difference writes nothing and records nothing. A write locks the
+ * row (`FOR NO KEY UPDATE`) and plans again on the fresh row: two concurrent
+ * PATCHes of different settings keys both survive (the jsonb is rewritten as a
+ * whole) and never record two events for one change.
  */
 @Injectable()
 export class AcademyService {
@@ -106,11 +115,17 @@ export class AcademyService {
 
   async update(input: UpdateAcademyDto, caller: AuthPrincipal, ctx: RequestContext): Promise<AcademyDto> {
     if (isEmptyAcademyPatch(input)) throw academyError.nothingToUpdate();
+    const patch = patchOf(input);
     const current = await this.load();
-    const plan = planAcademyUpdate(currentRowOf(current), patchOf(input));
-    if (plan.fields.length === 0) return toAcademyDto(current);
+    // Fast path: nothing differs from the current row — no transaction, no lock.
+    if (planAcademyUpdate(currentRowOf(current), patch).fields.length === 0) return toAcademyDto(current);
 
     const updated = await this.prisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM academy WHERE id = ${current.id}::uuid FOR NO KEY UPDATE`;
+      const fresh = await tx.academy.findUnique({ where: { id: current.id }, select: ACADEMY_SELECT });
+      if (!fresh) throw academyError.notConfigured();
+      const plan = planAcademyUpdate(currentRowOf(fresh), patch);
+      if (plan.fields.length === 0) return fresh;
       const row = await tx.academy.update({ where: { id: current.id }, data: toUpdateInput(plan.data), select: ACADEMY_SELECT });
       // Field names only — never the old or new values.
       await this.audit.record(

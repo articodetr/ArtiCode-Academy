@@ -15,6 +15,7 @@ function row(overrides: Partial<CurrentAcademyRow> = {}): CurrentAcademyRow {
     currency: 'SAR',
     contactEmail: 'info@example.test',
     contactPhone: null,
+    settings: {},
     ...overrides,
   };
 }
@@ -94,5 +95,50 @@ describe('academy format rules', () => {
     expect(currencyParam({ value: null })).toBeNull();
     for (const code of ['SAR', 'TRY', 'USD']) expect(CURRENCY_PATTERN.test(code), code).toBe(true);
     for (const code of ['sar', 'SA', 'SAR1', 'S4R', '']) expect(CURRENCY_PATTERN.test(code), code).toBe(false);
+  });
+});
+
+// TEST-068 (MOD-02-T03) — settings keys planned like the row fields.
+describe('academy settings planning (TEST-068)', () => {
+  it('treats a body whose only settings carry no known key as empty, and a null key as a change request', () => {
+    expect(isEmptyAcademyPatch({ settings: {} })).toBe(true);
+    expect(isEmptyAcademyPatch({ settings: { scheduling: {} } })).toBe(true);
+    expect(isEmptyAcademyPatch({ settings: { scheduling: { weekStartsOn: null } } })).toBe(false);
+    expect(isEmptyAcademyPatch({ settings: { scheduling: { workingDays: [0, 1] } } })).toBe(false);
+  });
+
+  it('sets one key without touching the other or the row, keeps unknown stored keys, and names the dotted field', () => {
+    const current = row({ settings: { scheduling: { workingDays: [0, 1, 2, 3, 4] }, future: { flag: true } } });
+    const plan = planAcademyUpdate(current, { settings: { scheduling: { weekStartsOn: 6 } } });
+    expect(plan.fields).toEqual(['settings.scheduling.weekStartsOn']);
+    expect(plan.data).toEqual({ settings: { scheduling: { workingDays: [0, 1, 2, 3, 4], weekStartsOn: 6 }, future: { flag: true } } });
+    // The current object is not mutated.
+    expect(current.settings).toEqual({ scheduling: { workingDays: [0, 1, 2, 3, 4] }, future: { flag: true } });
+  });
+
+  it('puts the row fields first and the settings keys after them in the schema order', () => {
+    const plan = planAcademyUpdate(row(), { currency: 'TRY', settings: { scheduling: { workingDays: [1, 0], weekStartsOn: 1 } } });
+    expect(plan.fields).toEqual(['currency', 'settings.scheduling.weekStartsOn', 'settings.scheduling.workingDays']);
+    expect(plan.data.settings).toEqual({ scheduling: { weekStartsOn: 1, workingDays: [0, 1] } });
+  });
+
+  it('compares days after sorting, so the same set in another order is no change', () => {
+    const current = row({ settings: { scheduling: { workingDays: [0, 1, 2, 3, 4], weekStartsOn: 0 } } });
+    expect(planAcademyUpdate(current, { settings: { scheduling: { workingDays: [4, 3, 2, 1, 0], weekStartsOn: 0 } } }).fields).toEqual([]);
+  });
+
+  it('clears with null, removes an emptied domain, and treats null on an unset key as no change', () => {
+    const current = row({ settings: { scheduling: { weekStartsOn: 6 } } });
+    const cleared = planAcademyUpdate(current, { settings: { scheduling: { weekStartsOn: null } } });
+    expect(cleared.fields).toEqual(['settings.scheduling.weekStartsOn']);
+    expect(cleared.data.settings).toEqual({});
+    expect(planAcademyUpdate(row(), { settings: { scheduling: { workingDays: null } } }).fields).toEqual([]);
+  });
+
+  it('lets null clear a stored value that the schema cannot read', () => {
+    const current = row({ settings: { scheduling: { weekStartsOn: 'monday' } } });
+    const plan = planAcademyUpdate(current, { settings: { scheduling: { weekStartsOn: null } } });
+    expect(plan.fields).toEqual(['settings.scheduling.weekStartsOn']);
+    expect(plan.data.settings).toEqual({});
   });
 });

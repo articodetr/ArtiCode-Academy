@@ -37,7 +37,8 @@ export class AcademyController {
     summary: 'Read the academy',
     description:
       'Identity and settings of this deployment: `slug`, localized `name`, `logoUrl`, `defaultLocale`, `timezone`, `currency`, contact details. ' +
-      'Every authenticated user may read it (the frontend needs the name, logo, locale, time zone and currency in every role); `settings` and `platformAcademyId` are not exposed.',
+      'Every authenticated user may read it (the frontend needs the name, logo, locale, time zone and currency in every role). ' +
+      '`settings` carries every known key, `null` when not set (MOD-02-T03: `scheduling.weekStartsOn`, `scheduling.workingDays`); `platformAcademyId` is not exposed.',
   })
   @ApiOkResponse({ type: AcademyDto })
   get(): Promise<AcademyDto> {
@@ -51,7 +52,8 @@ export class AcademyController {
     description:
       'Partial update of `name` (whole localized object, `ar` required), `logoUrl`, `defaultLocale`, `timezone` (canonical IANA name or `UTC`), `currency` (ISO 4217), `contactEmail`, `contactPhone`. ' +
       'Absent fields are left alone, `null` clears `logoUrl`/`contactEmail`/`contactPhone`; only fields whose value changes are written, in one transaction with the audit event `academy.updated` (field names, no values). ' +
-      '`slug`, `platformAcademyId` and `settings` are out of scope (400). Requires `academy.settings.manage`.',
+      '`settings` is patched key by key (absent = unchanged, `null` = clear; the event names the dotted keys, e.g. `settings.scheduling.weekStartsOn`). ' +
+      '`slug`, `platformAcademyId` and unknown settings keys are out of scope (400). Requires `academy.settings.manage`.',
   })
   @ApiOkResponse({ type: AcademyDto, description: 'The academy after the update (unchanged when nothing differed)' })
   @ApiBadRequestResponse({ description: 'Validation failed (unknown time zone, currency not ISO 4217, name without `ar`, …) or `nothing_to_update` (empty body)' })

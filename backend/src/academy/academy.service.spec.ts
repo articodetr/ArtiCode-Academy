@@ -16,6 +16,7 @@ const ROW = {
   currency: 'SAR',
   contactEmail: null,
   contactPhone: null,
+  settings: { scheduling: { weekStartsOn: 6 } },
   createdAt: new Date('2026-10-29T12:00:00.000Z'),
   updatedAt: new Date('2026-10-29T12:00:00.000Z'),
 };
@@ -56,7 +57,7 @@ describe('AcademyService', () => {
     expect(findFirst).not.toHaveBeenCalled();
   });
 
-  it('returns the row as a DTO (no settings, platformAcademyId or singleton) and writes nothing for an idempotent PATCH', async () => {
+  it('returns the row as a DTO (settings read through the schema; no platformAcademyId or singleton) and writes nothing for an idempotent PATCH', async () => {
     const { service, transaction, record } = makeService(ROW);
     const dto = await service.get();
     expect(Object.keys(dto).sort()).toEqual([
@@ -68,14 +69,18 @@ describe('AcademyService', () => {
       'id',
       'logoUrl',
       'name',
+      'settings',
       'slug',
       'timezone',
       'updatedAt',
     ]);
     expect(dto.createdAt).toBe('2026-10-29T12:00:00.000Z');
+    expect(dto.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: null } });
 
     const same = await service.update({ currency: 'SAR', name: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' }, logoUrl: null }, CALLER, CTX);
     expect(same).toEqual(dto);
+    // The same settings value (TEST-068) is no change either.
+    expect(await service.update({ settings: { scheduling: { weekStartsOn: 6 } } }, CALLER, CTX)).toEqual(dto);
     expect(transaction).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
   });

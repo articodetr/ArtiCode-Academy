@@ -5,7 +5,8 @@
 // database is shared with other sessions. Fixture users/roles carry a unique
 // suffix and are deleted at the end (their audit rows stay — KI-032); audit
 // events are counted by fixture actor above an id watermark, as in TEST-030,
-// so other clients of the database never pollute the counts.
+// so other clients of the database never pollute the counts. TEST-068 (MOD-02-T03)
+// adds the settings keys: `settings` is part of the projection and restored too.
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -28,7 +29,7 @@ const PASSWORD = 'Correct-Horse-Battery-9';
 const USER_AGENT = 'TEST-036 supertest';
 const ACADEMY = '/api/academy';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
-const DTO_KEYS = ['contactEmail', 'contactPhone', 'createdAt', 'currency', 'defaultLocale', 'id', 'logoUrl', 'name', 'slug', 'timezone', 'updatedAt'];
+const DTO_KEYS = ['contactEmail', 'contactPhone', 'createdAt', 'currency', 'defaultLocale', 'id', 'logoUrl', 'name', 'settings', 'slug', 'timezone', 'updatedAt'];
 const SENSITIVE_KEY = /hash|password|secret|token/i;
 
 async function canConnect(url: string): Promise<boolean> {
@@ -55,6 +56,7 @@ const RESTORE_SELECT = {
   currency: true,
   contactEmail: true,
   contactPhone: true,
+  settings: true,
   updatedAt: true,
 } satisfies Prisma.AcademySelect;
 
@@ -153,7 +155,10 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     try {
       if (original) {
         const { id, updatedAt: _updatedAt, ...values } = original;
-        await prisma.academy.update({ where: { id }, data: { ...values, name: values.name as Prisma.InputJsonValue } });
+        await prisma.academy.update({
+          where: { id },
+          data: { ...values, name: values.name as Prisma.InputJsonValue, settings: values.settings as Prisma.InputJsonValue },
+        });
       }
     } finally {
       if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
@@ -176,7 +181,9 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     expect(res.body.defaultLocale).toBe(original.defaultLocale);
     expect(res.body.updatedAt).toBe(original.updatedAt.toISOString());
     for (const key of collectKeys(res.body)) expect(key).not.toMatch(SENSITIVE_KEY);
-    expect(res.body).not.toHaveProperty('settings');
+    // TEST-068: every known settings key, null when unset — never the raw jsonb.
+    expect(Object.keys(res.body.settings)).toEqual(['scheduling']);
+    expect(Object.keys(res.body.settings.scheduling).sort()).toEqual(['weekStartsOn', 'workingDays']);
     expect(res.body).not.toHaveProperty('platformAcademyId');
     expect(res.body).not.toHaveProperty('singleton');
 
@@ -220,10 +227,25 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
       { defaultLocale: null },
       // Out of scope (D-R10) — rejected by forbidNonWhitelisted.
       { slug: `other-${RUN}` },
-      { settings: { theme: 'dark' } },
       { platformAcademyId: NIL_ID },
       { singleton: false },
       { id: NIL_ID },
+      // Settings (TEST-068): unknown keys, wrong shapes and out-of-range values.
+      { settings: { theme: 'dark' } },
+      { settings: { scheduling: { bar: 1 } } },
+      { settings: null },
+      { settings: 'x' },
+      { settings: { scheduling: null } },
+      { settings: { scheduling: { weekStartsOn: 7 } } },
+      { settings: { scheduling: { weekStartsOn: -1 } } },
+      { settings: { scheduling: { weekStartsOn: 1.5 } } },
+      { settings: { scheduling: { weekStartsOn: '6' } } },
+      { settings: { scheduling: { weekStartsOn: true } } },
+      { settings: { scheduling: { workingDays: [] } } },
+      { settings: { scheduling: { workingDays: [1, 1] } } },
+      { settings: { scheduling: { workingDays: [7] } } },
+      { settings: { scheduling: { workingDays: ['1'] } } },
+      { settings: { scheduling: { workingDays: 'mon' } } },
     ];
     for (const body of invalid) {
       const res = await api().patch(ACADEMY).set(bearer('manager')).send(body);
@@ -239,6 +261,12 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     const res = await api().patch(ACADEMY).set(bearer('manager')).send({});
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('nothing_to_update');
+    // TEST-068: settings without any known key are empty too.
+    for (const body of [{ settings: {} }, { settings: { scheduling: {} } }]) {
+      const empty = await api().patch(ACADEMY).set(bearer('manager')).send(body);
+      expect(empty.status, JSON.stringify(body)).toBe(400);
+      expect(empty.body.code, JSON.stringify(body)).toBe('nothing_to_update');
+    }
     expect(await currentRow()).toEqual(original);
     expect(await eventsSince(m)).toEqual([]);
   });
@@ -323,6 +351,60 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     const events = await eventsSince(m);
     expect(events.map((event) => event.action)).toEqual(['academy.updated']);
     expect(events[0]!.metadata).toEqual({ fields: ['logoUrl', 'contactEmail', 'contactPhone'] });
+  });
+
+  it('T03 (TEST-068) — settings: one key at a time with exactly one academy.updated naming the dotted field; the same value again changes nothing; 403 without the key; null clears', async () => {
+    // A known start: both keys unset (its own event, if any, is below the watermark).
+    await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { weekStartsOn: null, workingDays: null } } }).expect(200);
+    const before = await currentRow();
+    const m = await mark();
+
+    const start = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { weekStartsOn: 6 } } });
+    expect(start.status, JSON.stringify(start.body)).toBe(200);
+    expect(start.body.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: null } });
+    expect(start.body.currency).toBe(before.currency);
+
+    const days = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { workingDays: [4, 3, 2, 1, 0] } } }).expect(200);
+    expect(days.body.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] } });
+    const stored = await prisma.academy.findUniqueOrThrow({ where: { id: original.id }, select: { settings: true } });
+    expect(stored.settings).toMatchObject({ scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] } });
+
+    // The same values in another order: no write, no event.
+    await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { workingDays: [0, 1, 2, 3, 4], weekStartsOn: 6 } } }).expect(200);
+
+    // Every signed-in user reads it; writing still needs academy.settings.manage.
+    const read = await api().get(ACADEMY).set(bearer('reader')).expect(200);
+    expect(read.body.settings).toEqual(days.body.settings);
+    const denied = await api().patch(ACADEMY).set(bearer('reader')).send({ settings: { scheduling: { weekStartsOn: 0 } } });
+    expect(denied.status).toBe(403);
+    expect(denied.body.code).toBe('permission_denied');
+
+    const cleared = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { weekStartsOn: null } } }).expect(200);
+    expect(cleared.body.settings).toEqual({ scheduling: { weekStartsOn: null, workingDays: [0, 1, 2, 3, 4] } });
+
+    const events = await eventsSince(m);
+    expect(events.map((event) => [event.action, event.metadata, event.entityType])).toEqual([
+      ['academy.updated', { fields: ['settings.scheduling.weekStartsOn'] }, 'academy'],
+      ['academy.updated', { fields: ['settings.scheduling.workingDays'] }, 'academy'],
+      ['academy.updated', { fields: ['settings.scheduling.weekStartsOn'] }, 'academy'],
+    ]);
+  });
+
+  it('T03 (TEST-068) — two concurrent PATCHes of different settings keys both survive, with one event each', async () => {
+    await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { weekStartsOn: null, workingDays: null } } }).expect(200);
+    const m = await mark();
+    const [first, second] = await Promise.all([
+      api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { weekStartsOn: 1 } } }),
+      api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { workingDays: [1, 2, 3] } } }),
+    ]);
+    expect([first.status, second.status]).toEqual([200, 200]);
+    const read = await api().get(ACADEMY).set(bearer('reader')).expect(200);
+    expect(read.body.settings).toEqual({ scheduling: { weekStartsOn: 1, workingDays: [1, 2, 3] } });
+    const events = await eventsSince(m);
+    expect(events.map((event) => (event.metadata as { fields: string[] }).fields).sort()).toEqual([
+      ['settings.scheduling.weekStartsOn'],
+      ['settings.scheduling.workingDays'],
+    ]);
   });
 
   it(
