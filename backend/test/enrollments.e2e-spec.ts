@@ -237,9 +237,10 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     const outsider = await createRole('enoutsider', ['classes.read']);
     await createUser('manager', [manager]);
     await createUser('teacher', [teacher]);
+    await createUser('assistant', [teacher]);
     await createUser('stranger', [teacher]);
     await createUser('outsider', [outsider]);
-    for (const name of ['manager', 'teacher', 'stranger', 'outsider']) tokens[name] = await login(email(name));
+    for (const name of ['manager', 'teacher', 'assistant', 'stranger', 'outsider']) tokens[name] = await login(email(name));
 
     for (const index of [1, 2, 3, 4, 5, 6, 7, 8, 9]) await createStudent(`s${index}`);
     await createStudent('invited', { status: 'invited' });
@@ -252,9 +253,15 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     await createClass('F', 'open', 1);
     await createClass('R', 'running', 1);
     await prisma.classTeacher.create({ data: { classId: classes['A']!, teacherUserId: fx['teacher']!, role: 'lead' } });
+    await prisma.classTeacher.create({ data: { classId: classes['A']!, teacherUserId: fx['assistant']!, role: 'assistant' } });
   });
 
   afterAll(async () => {
+    // A failed beforeAll leaves the client unset: close what exists and let that failure be the one reported.
+    if (!prisma) {
+      await app?.close();
+      return;
+    }
     try {
       await prisma.enrollment.deleteMany({ where: { class: { code: { startsWith: PREFIX } } } });
       await prisma.class.deleteMany({ where: { code: { startsWith: PREFIX } } });
@@ -348,6 +355,32 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     expect(events[0]!.entityId).toBe(results.find((res) => res.status === 201)!.body.id);
   });
 
+  it('AC3 — a reactivation and a new enrollment racing for the last seat let exactly one through', async () => {
+    // Its own class and students, so it also runs alone (-t). Both writers take
+    // the same class-row lock: whichever runs first gets the seat, the other
+    // one counts it and gets class_full. Without the lock both would count zero.
+    await createClass('L', 'running', 1);
+    await createStudent('returning');
+    await createStudent('newcomer');
+    const returning = await seed('L', 'returning', 'withdrawn');
+    const m = await mark();
+
+    const [reactivated, enrolled] = await withClassRowHeld(classes['L']!, 2, () =>
+      Promise.all([act(returning, 'reactivate'), enroll('L', 'newcomer')]),
+    );
+    expect([
+      [200, 409],
+      [409, 201],
+    ]).toContainEqual([reactivated.status, enrolled.status]);
+    const winner = reactivated.status === 200 ? reactivated : enrolled;
+    const loser = reactivated.status === 200 ? enrolled : reactivated;
+    expect(loser.body).toMatchObject({ code: 'class_full', capacity: 1, enrolledCount: 1 });
+    expect(await prisma.enrollment.count({ where: { classId: classes['L'], status: 'active' } })).toBe(1);
+    const events = await eventsSince(m);
+    expect(events.map((event) => event.action)).toEqual([reactivated.status === 200 ? 'enrollments.status.changed' : 'enrollments.created']);
+    expect(events[0]!.entityId).toBe(winner.body.id);
+  });
+
   it('AC5 — the enrollment actions write one enrollments.status.changed each; the rest is 409 invalid_transition with the allowed actions', async () => {
     const id = (await enroll('A', 's8').expect(201)).body.id as string;
     const m = await mark();
@@ -357,6 +390,8 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     expect(withdrawn.body.withdrawnAt).not.toBeNull();
     const repeat = await act(id, 'withdraw').expect(409);
     expect(repeat.body).toMatchObject({ code: 'invalid_transition', from: 'withdrawn', action: 'withdraw', allowed: ['reactivate'] });
+    // AC4 for a row that is not active: enrolling again is refused — reactivate it instead.
+    expect((await enroll('A', 's8').expect(409)).body).toMatchObject({ code: 'already_enrolled', enrollmentId: id, status: 'withdrawn' });
 
     const reactivated = await act(id, 'reactivate').expect(200);
     expect(reactivated.body).toMatchObject({ status: 'active', withdrawnAt: null, withdrawalReason: null, completedAt: null });
@@ -397,6 +432,8 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     await act(id, 'archive').expect(400);
     await act(id, 'withdraw', 'x'.repeat(501)).expect(400);
     expect((await act(NIL_ID, 'withdraw').expect(404)).body).toMatchObject({ code: 'enrollment_not_found', enrollmentId: NIL_ID });
+    expect((await enroll('A', 's8').expect(409)).body).toMatchObject({ code: 'already_enrolled', enrollmentId: id, status: 'completed' });
+    expect((await enroll('A', 's9').expect(409)).body).toMatchObject({ code: 'already_enrolled', enrollmentId: cancelId, status: 'cancelled' });
     expect(await eventsSince(refusal)).toHaveLength(0);
   });
 
@@ -415,6 +452,37 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
     expect((await act(onFull, 'reactivate').expect(200)).body.status).toBe('active');
   });
 
+  it('AC5 — reactivate re-checks the student like a new enrollment: deleted 404, suspended 422 user_not_eligible, without the student role 422 not_a_student — no write, no event', async () => {
+    // Its own class and students, so it also runs alone (-t). Each student was
+    // enrolled while eligible, left the class, and only then lost the eligibility.
+    await createClass('V', 'open', 5);
+    for (const name of ['erased', 'paused', 'demoted']) await createStudent(name);
+    const erased = await seed('V', 'erased', 'withdrawn');
+    const paused = await seed('V', 'paused', 'cancelled');
+    const demoted = await seed('V', 'demoted', 'withdrawn');
+    await prisma.user.update({ where: { id: students['erased']! }, data: { status: 'archived', deletedAt: new Date() } });
+    await prisma.user.update({ where: { id: students['paused']! }, data: { status: 'suspended' } });
+    await prisma.userRole.deleteMany({ where: { userId: students['demoted']!, roleId: studentRoleId } });
+
+    const m = await mark();
+    expect((await act(erased, 'reactivate').expect(404)).body).toMatchObject({ code: 'user_not_found', userId: students['erased'] });
+    expect((await act(paused, 'reactivate').expect(422)).body).toMatchObject({
+      code: 'user_not_eligible',
+      userId: students['paused'],
+      status: 'suspended',
+    });
+    expect((await act(demoted, 'reactivate').expect(422)).body).toMatchObject({ code: 'not_a_student', userId: students['demoted'] });
+    expect(await eventsSince(m)).toHaveLength(0);
+    const rows = await prisma.enrollment.findMany({ where: { id: { in: [erased, paused, demoted] } }, select: { id: true, status: true } });
+    expect(Object.fromEntries(rows.map((row) => [row.id, row.status]))).toEqual({ [erased]: 'withdrawn', [paused]: 'cancelled', [demoted]: 'withdrawn' });
+    expect(await prisma.enrollment.count({ where: { classId: classes['V'], status: 'active' } })).toBe(0);
+
+    // The refusal came from the student: once eligible again, the same request goes through.
+    await prisma.user.update({ where: { id: students['paused']! }, data: { status: 'active' } });
+    expect((await act(paused, 'reactivate').expect(200)).body).toMatchObject({ id: paused, status: 'active' });
+    expect((await eventsSince(m)).map((event) => event.action)).toEqual(['enrollments.status.changed']);
+  });
+
   it('AC1 — writes need enrollments.manage; the roster is for enrollment managers and assigned teachers only, in the caller’s projection', async () => {
     const m = await mark();
     const denied = await enroll('A', 's3', 'teacher').expect(403);
@@ -431,6 +499,13 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
       expect(item.student.email).toBeNull();
     }
     expect(deepKeys(teacherView.body).filter((key) => /hash|password/i.test(key))).toEqual([]);
+
+    // An assistant teacher of the class reads the same roster, in the same projection.
+    const assistantView = await api().get(roster(classes['A']!)).set(bearer('assistant')).expect(200);
+    expect((assistantView.body.items as EnrollmentBody[]).map((item) => item.id)).toEqual(
+      (teacherView.body.items as EnrollmentBody[]).map((item) => item.id),
+    );
+    expect((assistantView.body.items as EnrollmentBody[]).every((item) => item.student.email === null)).toBe(true);
 
     // A teacher of another class and a caller without enrollments.read do not.
     expect((await api().get(roster(classes['A']!)).set(bearer('stranger')).expect(404)).body).toMatchObject({ code: 'class_not_found' });

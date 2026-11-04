@@ -5,7 +5,7 @@
 //   withdraw    active → withdrawn                 (withdrawn_at + withdrawal_reason)
 //   complete    active → completed                 (completed_at)
 //   cancel      active → cancelled
-//   reactivate  withdrawn | cancelled → active     (needs an open/running class with a free seat)
+//   reactivate  withdrawn | cancelled → active     (needs an eligible student and an open/running class with a free seat)
 //
 // `completed` is final; `pending` is not used by version 1 (no waitlist), so
 // no action applies to it. The class state machine (classes.status.ts) moves
@@ -35,7 +35,7 @@ export function allowedEnrollmentActions(from: EnrollmentStatus): EnrollmentStat
   return ENROLLMENT_STATUS_ACTIONS.filter((action) => TRANSITIONS[action][from] !== undefined);
 }
 
-/** True when the action takes a seat again, so the class state and capacity are checked under the class lock. */
+/** True when the action takes a seat again, so the student, the class state and the capacity are checked under the class lock, as for a new enrollment. */
 export function takesSeat(action: EnrollmentStatusAction): boolean {
   return action === 'reactivate';
 }
