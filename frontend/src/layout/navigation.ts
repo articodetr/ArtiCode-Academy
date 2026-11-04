@@ -68,8 +68,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'roles', path: '/settings/roles', labelKey: 'nav.roles', icon: createElement(SafetyOutlined), permissions: ['roles.manage'], module: 'MOD-03' },
   // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too.
   { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], module: 'MOD-04' },
-  // MOD-05 (J-F01): the classes API is real — gated by the keys the server enforces; a teacher (classes.read) sees only assigned classes (D-R16).
-  { key: 'classes', path: '/classes', labelKey: 'nav.classes', icon: createElement(AppstoreOutlined), permissions: ['classes.read', 'classes.manage'], module: 'MOD-05' },
+  // MOD-05 (J-F01): the classes API is real — gated by the one key every read of `/api/classes` requires
+  // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
+  // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16).
+  { key: 'classes', path: '/classes', labelKey: 'nav.classes', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
   { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), roles: KNOWN_ROLES, module: 'MOD-07' },
   { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), roles: ['admin', 'teacher', 'student'], module: 'MOD-06' },
   { key: 'assignments', path: '/assignments', labelKey: 'nav.assignments', icon: createElement(FileTextOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-08' },

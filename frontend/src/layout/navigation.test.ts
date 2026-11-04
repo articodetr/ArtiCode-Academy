@@ -56,11 +56,14 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('student', []), 'courses')).toBe(false)
   })
 
-  it('gates the classes screen by classes.read or classes.manage since its API is real (J-F01) — students and guardians hold neither', () => {
+  it('gates the classes screen by classes.read alone since every read of /api/classes requires it (J-F01, PR #26 review) — students and guardians do not hold it', () => {
     const classes = NAV_ITEMS.find((item) => item.key === 'classes')!
-    expect(classes.permissions).toEqual(['classes.read', 'classes.manage'])
+    expect(classes.permissions).toEqual(['classes.read'])
     expect(keysFor(viewer(null, ['classes.read']))).toEqual(['dashboard', 'classes'])
-    expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard', 'classes'])
+    // A custom role holding classes.manage without classes.read would get 403 on the list — the entry stays hidden.
+    expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard'])
+    expect(keysFor(viewer(null, ['classes.manage', 'classes.teachers.assign']))).toEqual(['dashboard'])
+    expect(canAccess(viewer(null, ['classes.manage']), 'classes')).toBe(false)
     expect(keysFor(viewer(null, ['classes.teachers.assign']))).toEqual(['dashboard'])
     expect(canAccess(viewer('student'), 'classes')).toBe(false)
     expect(canAccess(viewer('guardian'), 'classes')).toBe(false)
