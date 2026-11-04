@@ -566,3 +566,30 @@ model Enrollment {
   @@index([createdById])
   @@map("enrollments")
 }
+
+// MOD-02 (O8) — branches (D-R19, CH-0087)
+
+/// A site of the academy (D14/D-R19). No relations yet: rooms point to it in
+/// MOD-07 (O9); branch-scoped roles and `classes.branch_id` come later
+/// (D-R22). At most one main branch (partial unique index in SQL) and a main
+/// branch is active (CHECK). No `deleted_at`: like `levels`, a branch is
+/// deactivated, or deleted while nothing uses it.
+model Branch {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Trimmed and upper-cased by the API; CHECK in SQL.
+  code      String   @unique @db.VarChar(16)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name      Json
+  /// Localized text `{ ar, en?, tr? }` or NULL (CHECK in SQL).
+  address   Json?
+  /// E.164, validated by the API.
+  phone     String?  @db.VarChar(32)
+  /// IANA time zone when it differs from the academy's; NULL = the academy's.
+  timezone  String?
+  isMain    Boolean  @default(false) @map("is_main")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("branches")
+}
