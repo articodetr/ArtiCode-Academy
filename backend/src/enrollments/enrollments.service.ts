@@ -143,10 +143,10 @@ async function lockClass(tx: Prisma.TransactionClient, classId: string): Promise
  * is read by holders of `enrollments.manage` or by a teacher assigned to the
  * class (everyone else 404); `enrollments.manage` enrolls a student straight
  * to `active` and runs the enrollment actions. Enrolling and reactivating
- * check the class state and the hard capacity behind the class-row lock, so
- * two requests for the last seat cannot both succeed. Every write is one
- * transaction with exactly one audit event (`enrollments.*`); a refusal
- * writes and records nothing.
+ * check the student, the class state and the hard capacity behind the
+ * class-row lock, so two requests for the last seat cannot both succeed.
+ * Every write is one transaction with exactly one audit event
+ * (`enrollments.*`); a refusal writes and records nothing.
  */
 @Injectable()
 export class EnrollmentsService {
@@ -230,8 +230,11 @@ export class EnrollmentsService {
    * withdraw / complete / cancel / reactivate (enrollments.status.ts). The
    * class row is locked first, so the action runs one after the other with
    * enrollments, capacity changes and the class's own complete/cancel (which
-   * move active enrollments); `reactivate` then checks the class state and the
-   * capacity like a new enrollment.
+   * move active enrollments). `reactivate` opens a new active period, so it
+   * re-checks everything a new enrollment checks: the student (404 / 422
+   * user_not_eligible / 422 not_a_student — a student deleted, suspended or
+   * stripped of the role after the withdrawal gets no seat), then the class
+   * state and the capacity.
    */
   async changeStatus(id: string, input: ChangeEnrollmentStatusDto, caller: AuthPrincipal, ctx: RequestContext): Promise<EnrollmentDto> {
     const target = await this.prisma.db.enrollment.findUnique({ where: { id }, select: { classId: true } });
@@ -249,6 +252,7 @@ export class EnrollmentsService {
       if (to === null) throw enrollmentsError.invalidTransition(current.status, input.action, allowedEnrollmentActions(current.status));
 
       if (takesSeat(input.action)) {
+        await this.assertEnrollableStudent(tx, current.studentUserId);
         if (!isEnrollableClass(klass.status)) throw classesError.classNotEnrollable(klass.status);
         const activeCount = await tx.enrollment.count({ where: { classId, status: 'active' } });
         if (!hasFreeSeat(klass.capacity, activeCount)) throw classesError.classFull(klass.capacity, activeCount);
@@ -295,7 +299,11 @@ export class EnrollmentsService {
     if (!klass || !canReadRoster(manages, klass.teachers.length > 0)) throw classesError.classNotFound(classId);
   }
 
-  /** Unknown or soft-deleted 404, not invited/active 422 user_not_eligible, no `student` role row 422 not_a_student (the T03 order for teachers). */
+  /**
+   * For enroll and reactivate: unknown or soft-deleted 404, not invited/active
+   * 422 user_not_eligible, no `student` role row 422 not_a_student (the T03
+   * order for teachers).
+   */
   private async assertEnrollableStudent(tx: Prisma.TransactionClient, studentId: string): Promise<void> {
     const student = await tx.user.findUnique({
       where: { id: studentId },
