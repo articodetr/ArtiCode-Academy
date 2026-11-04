@@ -6,6 +6,43 @@ import type { LocaleCode, LocalizedText } from '../authorization/localized-text.
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { E164_PATTERN, EMAIL_MAX_LENGTH, nullableIdentifierParam, nullableTextParam, trimParam } from '../users/users.validation.js';
 import { CURRENCY_PATTERN, IsIanaTimeZone, TIME_ZONE_MAX_LENGTH, currencyParam } from './academy.validation.js';
+import { MatchesSchema, weekStartsOnSchema, workingDaysSchema } from './academy.settings.js';
+import type { AcademySettings } from './academy.settings.js';
+
+/** Body values of the settings stay raw JSON: the implicit conversion must not turn "6" into 6. */
+function rawValue({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
+  return obj[key];
+}
+
+/** `settings.scheduling` of a PATCH (MOD-02-T03, D-R20): per key, absent = unchanged, `null` = clear. */
+export class SchedulingSettingsPatchDto {
+  @ApiPropertyOptional({ nullable: true, minimum: 0, maximum: 6, example: 6, description: 'First day of the week: 0 = Sunday … 6 = Saturday; null clears it' })
+  @ValidateIf((dto: SchedulingSettingsPatchDto) => dto.weekStartsOn !== undefined && dto.weekStartsOn !== null)
+  @Transform(rawValue)
+  @MatchesSchema(weekStartsOnSchema, 'settings.scheduling.weekStartsOn must be an integer 0–6 (0 = Sunday) or null')
+  weekStartsOn?: number | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: [Number],
+    example: [0, 1, 2, 3, 4],
+    description: '1–7 distinct weekdays (0 = Sunday … 6 = Saturday), stored in ascending order; null clears it',
+  })
+  @ValidateIf((dto: SchedulingSettingsPatchDto) => dto.workingDays !== undefined && dto.workingDays !== null)
+  @Transform(rawValue)
+  @MatchesSchema(workingDaysSchema, 'settings.scheduling.workingDays must be 1–7 distinct integers 0–6 (0 = Sunday) or null')
+  workingDays?: number[] | null;
+}
+
+/** `settings` of a PATCH: the known domains only (unknown keys are 400 through forbidNonWhitelisted). */
+export class AcademySettingsPatchDto {
+  @ApiPropertyOptional({ type: SchedulingSettingsPatchDto })
+  @ValidateIf((dto: AcademySettingsPatchDto) => dto.scheduling !== undefined)
+  @IsObject({ message: 'settings.scheduling must be an object' })
+  @ValidateNested()
+  @Type(() => SchedulingSettingsPatchDto)
+  scheduling?: SchedulingSettingsPatchDto;
+}
 
 /** Upper bound of the logo URL in a request (`logo_url` is unbounded text). */
 export const LOGO_URL_MAX_LENGTH = 2048;
@@ -15,8 +52,9 @@ export const LOGO_URL_MAX_LENGTH = 2048;
  * clears a nullable field (`logoUrl`, `contactEmail`, `contactPhone`), a value
  * replaces. `name`, `defaultLocale`, `timezone` and `currency` are NOT NULL in
  * the database and refuse `null` (ValidateIf runs the rules on every value but
- * `undefined`). `slug`, `platformAcademyId` and `settings` are out of scope and
- * rejected by the global `forbidNonWhitelisted`.
+ * `undefined`). `settings` (MOD-02-T03) is patched key by key. `slug` and
+ * `platformAcademyId` are out of scope and rejected by the global
+ * `forbidNonWhitelisted`, like unknown settings keys.
  */
 export class UpdateAcademyDto {
   @ApiPropertyOptional({
@@ -69,6 +107,13 @@ export class UpdateAcademyDto {
   @IsString()
   @Matches(E164_PATTERN, { message: 'contactPhone must be in E.164 form, e.g. +966500000000' })
   contactPhone?: string | null;
+
+  @ApiPropertyOptional({ type: AcademySettingsPatchDto, description: 'Settings keys, PATCH semantics per key (MOD-02-T03); not nullable' })
+  @ValidateIf((dto: UpdateAcademyDto) => dto.settings !== undefined)
+  @IsObject({ message: 'settings must be an object' })
+  @ValidateNested()
+  @Type(() => AcademySettingsPatchDto)
+  settings?: AcademySettingsPatchDto;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,8 +122,8 @@ export class UpdateAcademyDto {
 
 /**
  * The single academy row as every signed-in user may see it (D-R09). Not
- * exposed: `singleton`, `platformAcademyId` (platform-internal) and `settings`
- * (deferred until its zod schema exists — ADR-044).
+ * exposed: `singleton` and `platformAcademyId` (platform-internal). `settings`
+ * carries every known key since MOD-02-T03 (`null` = not set).
  */
 export class AcademyDto {
   @ApiProperty({ format: 'uuid' })
@@ -108,9 +153,25 @@ export class AcademyDto {
   @ApiProperty({ nullable: true, description: 'E.164' })
   contactPhone: string | null;
 
+  @ApiProperty({ type: () => AcademySettingsDto, description: 'Every known settings key; null = not set (MOD-02-T03)' })
+  settings: AcademySettings;
+
   @ApiProperty({ description: 'ISO 8601' })
   createdAt: string;
 
   @ApiProperty({ description: 'ISO 8601' })
   updatedAt: string;
+}
+
+export class SchedulingSettingsDto {
+  @ApiProperty({ nullable: true, minimum: 0, maximum: 6, example: 6, description: 'First day of the week: 0 = Sunday … 6 = Saturday' })
+  weekStartsOn: number | null;
+
+  @ApiProperty({ nullable: true, type: [Number], example: [0, 1, 2, 3, 4], description: 'Working days in ascending order (0 = Sunday … 6 = Saturday)' })
+  workingDays: number[] | null;
+}
+
+export class AcademySettingsDto {
+  @ApiProperty({ type: SchedulingSettingsDto })
+  scheduling: SchedulingSettingsDto;
 }
