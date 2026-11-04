@@ -563,7 +563,8 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
   });
 
   describe('GET /api/me/classes (MOD-05-T05)', () => {
-    const MY_ITEM_KEYS = ['class', 'completedAt', 'enrolledAt', 'enrollmentId', 'enrollmentStatus', 'relation', 'student'];
+    const MY_ITEM_KEYS = ['class', 'completedAt', 'enrolledAt', 'enrollmentId', 'enrollmentStatus', 'relation', 'student', 'withdrawnAt'];
+    const BANNED_KEYS = ['email', 'username', 'phone', 'withdrawalReason', 'createdById', 'teacherUserId'];
     const MY_CLASS_KEYS = ['code', 'course', 'endsOn', 'id', 'leadTeacher', 'name', 'startsOn', 'status'];
     const mine = (as: string, status?: string) =>
       api().get('/api/me/classes').query(status ? { status } : {}).set(bearer(as));
@@ -572,7 +573,14 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
 
     async function put(classSuffix: string, studentUserId: string, status: EnrollmentStatus, key: string): Promise<void> {
       const row = await prisma.enrollment.create({
-        data: { classId: classes[classSuffix]!, studentUserId, status, completedAt: status === 'completed' ? new Date() : null },
+        data: {
+          classId: classes[classSuffix]!,
+          studentUserId,
+          status,
+          completedAt: status === 'completed' ? new Date() : null,
+          withdrawnAt: status === 'withdrawn' ? new Date() : null,
+          withdrawalReason: status === 'withdrawn' ? 'moved to another city' : null,
+        },
         select: { id: true },
       });
       my[key] = row.id;
@@ -617,6 +625,7 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
         enrollmentStatus: 'active',
         relation: 'self',
         completedAt: null,
+        withdrawnAt: null,
         student: { id: fx['me'], fullName: 'Test me', displayName: null },
         class: { id: classes['M1'], code: code('M1'), status: 'open', name: { ar: 'فصل M1' }, course: { id: courseId, code: code('CRS') } },
       });
@@ -627,12 +636,16 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
       expect(m2.completedAt).not.toBeNull();
 
       const keys = deepKeys(res.body);
-      for (const banned of ['email', 'username', 'phone', 'withdrawalReason', 'createdById', 'teacherUserId']) expect(keys).not.toContain(banned);
+      for (const banned of BANNED_KEYS) expect(keys).not.toContain(banned);
       expect(keys.filter((key) => /hash|password/i.test(key))).toEqual([]);
       const studentIds = new Set((res.body.items as { student: { id: string } }[]).map((item) => item.student.id));
       expect([...studentIds]).toEqual([fx['me']]);
 
-      expect(enrollmentIds((await mine('me', 'withdrawn').expect(200)).body)).toEqual([my['meM3']]);
+      // A withdrawn enrollment shows when it ended, never why (owner review of #17).
+      const withdrawn = (await mine('me', 'withdrawn').expect(200)).body;
+      expect(enrollmentIds(withdrawn)).toEqual([my['meM3']]);
+      expect(withdrawn.items[0].withdrawnAt).not.toBeNull();
+      expect(deepKeys(withdrawn)).not.toContain('withdrawalReason');
       expect((await mine('me', 'cancelled').expect(200)).body.items).toEqual([]);
       await mine('me', 'waiting').expect(400);
     });
@@ -646,6 +659,10 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
       const ids = enrollmentIds(res.body);
       expect(ids).not.toContain(my['unlinkedM1']);
       expect(ids).not.toContain(my['goneM3']);
+      // The guardian's view goes through the same DTO: deep-scanned like the student's (owner review of #17).
+      const keys = deepKeys(res.body);
+      for (const banned of BANNED_KEYS) expect(keys).not.toContain(banned);
+      expect(keys.filter((key) => /hash|password/i.test(key))).toEqual([]);
 
       await prisma.guardianStudent.delete({ where: { guardianUserId_studentUserId: { guardianUserId: fx['guardian']!, studentUserId: students['child2']! } } });
       expect(enrollmentIds((await mine('guardian').expect(200)).body)).toEqual([my['child1M1']]);
@@ -663,6 +680,19 @@ describe.skipIf(!available)('MOD-05 enrollments (e2e, TEST-050)', () => {
       expect((await mine('outsider').expect(200)).body).toEqual({ items: [] });
       expect((await mine('teacher').expect(200)).body).toEqual({ items: [] });
       expect((await api().get('/api/me/classes').expect(401)).body.code).toBe('unauthenticated');
+    });
+
+    it('AC1/AC2 — a caller who is both a student and a guardian sees their own classes (self) and the linked child’s (child), and nothing else (owner review of #17)', async () => {
+      await createUser('both', [studentRoleId, guardianRoleId]);
+      tokens['both'] = await login(email('both'));
+      await put('M2', fx['both']!, 'active', 'bothM2');
+      await prisma.guardianStudent.create({ data: { guardianUserId: fx['both']!, studentUserId: students['child1']!, relationship: 'father' } });
+
+      const res = await mine('both').expect(200);
+      expect(enrollmentIds(res.body)).toEqual([my['bothM2'], my['child1M1']]);
+      const relations = (res.body.items as { relation: string; student: { id: string } }[]).map((item) => [item.relation, item.student.id]);
+      expect(relations).toEqual([['self', fx['both']], ['child', students['child1']]]);
+      for (const banned of BANNED_KEYS) expect(deepKeys(res.body)).not.toContain(banned);
     });
   });
 

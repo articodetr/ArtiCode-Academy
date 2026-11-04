@@ -15,6 +15,7 @@ const MY_CLASS_SELECT = {
   status: true,
   enrolledAt: true,
   completedAt: true,
+  withdrawnAt: true,
   studentUserId: true,
   student: { select: { id: true, fullName: true, displayName: true } },
   class: {
@@ -44,6 +45,7 @@ function toItem(row: MyClassRow, callerId: string): MyClassItemDto {
     enrollmentStatus: row.status,
     enrolledAt: row.enrolledAt.toISOString(),
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+    withdrawnAt: row.withdrawnAt ? row.withdrawnAt.toISOString() : null,
     relation: relationOf(row.studentUserId, callerId),
     student: { id: row.student.id, fullName: row.student.fullName, displayName: row.student.displayName },
     class: {
