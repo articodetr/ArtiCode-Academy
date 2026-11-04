@@ -91,6 +91,9 @@ export class MyClassItemDto {
   @ApiProperty({ nullable: true, description: 'ISO 8601' })
   completedAt: string | null;
 
+  @ApiProperty({ nullable: true, description: 'ISO 8601 — set while the enrollment is `withdrawn` (the reason is never shown here)' })
+  withdrawnAt: string | null;
+
   @ApiProperty({ enum: RELATIONS, description: '`self` = the caller is the student; `child` = a student linked to the caller as guardian' })
   relation: MyClassRelation;
 
