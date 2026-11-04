@@ -166,6 +166,9 @@ model User {
   classTeacherAssignments ClassTeacher[]      @relation("ClassTeacherAssignedBy")
   enrollments             Enrollment[]        @relation("EnrollmentStudent")
   enrollmentsCreated      Enrollment[]        @relation("EnrollmentCreatedBy")
+  /// MOD-07: weekly slots this user teaches and the slots they created.
+  classSchedulesTaught    ClassSchedule[]     @relation("ClassScheduleTeacher")
+  classSchedulesCreated   ClassSchedule[]     @relation("ClassScheduleCreatedBy")
 
   @@index([phone])
   @@index([status])
@@ -508,10 +511,12 @@ model Class {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  course      Course         @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  createdBy   User?          @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  course      Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  createdBy   User?           @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   teachers    ClassTeacher[]
   enrollments Enrollment[]
+  /// MOD-07: the weekly slots of this class (deleted with it).
+  schedules   ClassSchedule[]
 
   @@index([courseId])
   @@index([status])
@@ -569,9 +574,9 @@ model Enrollment {
 
 // MOD-02 (O8) — branches (D-R19, CH-0087)
 
-/// A site of the academy (D14/D-R19). No relations yet: rooms point to it in
-/// MOD-07 (O9); branch-scoped roles and `classes.branch_id` come later
-/// (D-R22). At most one main branch (partial unique index in SQL) and a main
+/// A site of the academy (D14/D-R19). Rooms point to it since MOD-07-T01
+/// (O9); branch-scoped roles come later and classes get no `branch_id` — a
+/// class is placed through the rooms of its slots (D-R22, D-R24). At most one main branch (partial unique index in SQL) and a main
 /// branch is active (CHECK). No `deleted_at`: like `levels`, a branch is
 /// deactivated, or deleted while nothing uses it.
 model Branch {
@@ -591,5 +596,86 @@ model Branch {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  rooms Room[]
+
   @@map("branches")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-07 (O9) — rooms and weekly class schedules (roadmap §4e; owner
+// decisions D-R23..D-R29, CH-0090). Subset of master doc 6.7.4: no academic
+// terms or holidays (D-R23), no default room or branch on `classes` (D-R24).
+// Room and teacher double-booking is refused by two EXCLUDE constraints in
+// SQL (extension `btree_gist` — D-R25), which Prisma cannot express.
+// ---------------------------------------------------------------------------
+
+enum RoomKind {
+  classroom
+  lab
+  hall
+  virtual
+
+  @@map("room_kind")
+}
+
+/// A place where a class meets. Without a branch it belongs to the academy's
+/// own site. The code is unique inside its branch, and rooms without a branch
+/// share one namespace (the unique index is NULLS NOT DISTINCT in SQL). No
+/// `deleted_at`: a room is deactivated, or deleted while nothing uses it.
+model Room {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  branchId  String?  @map("branch_id") @db.Uuid
+  /// Trimmed by the API; CHECK in SQL.
+  code      String   @db.VarChar(16)
+  /// Localized text `{ ar, en?, tr? }` or NULL (CHECK in SQL).
+  name      Json?
+  /// > 0 when set (CHECK in SQL); not checked against class capacity (§4e.1).
+  capacity  Int?     @db.SmallInt
+  kind      RoomKind @default(classroom)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  branch    Branch?         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  schedules ClassSchedule[]
+
+  /// Also covers the `branch_id` foreign key (its first column).
+  @@unique([branchId, code], map: "uq_rooms_branch_code")
+  @@map("rooms")
+}
+
+/// One recurring weekly slot of a class: a weekday, a local start/end time
+/// (the time zone of the room's branch, else the academy's), an optional room
+/// and teacher, and an effective date range (`effective_to` NULL = open-ended).
+/// Lessons are generated from it later (T05); the times become timestamptz
+/// only then.
+model ClassSchedule {
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  classId       String    @map("class_id") @db.Uuid
+  /// 0 = Sunday … 6 = Saturday, like `scheduling.*` (CHECK in SQL).
+  weekday       Int       @db.SmallInt
+  /// Local wall-clock times; end > start (CHECK in SQL). Adjacent slots do not
+  /// overlap (half-open ranges in the EXCLUDE constraints).
+  startTime     DateTime  @map("start_time") @db.Time(0)
+  endTime       DateTime  @map("end_time") @db.Time(0)
+  roomId        String?   @map("room_id") @db.Uuid
+  /// One of the class's teachers (service rule — D-R26); NULL = the lead teacher.
+  teacherUserId String?   @map("teacher_user_id") @db.Uuid
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  /// Inclusive; NULL = no end; >= effective_from (CHECK in SQL).
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  createdById   String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  room      Room? @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  teacher   User? @relation("ClassScheduleTeacher", fields: [teacherUserId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("ClassScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([classId])
+  @@index([roomId, weekday])
+  @@index([teacherUserId, weekday])
+  @@index([createdById])
+  @@map("class_schedules")
 }
