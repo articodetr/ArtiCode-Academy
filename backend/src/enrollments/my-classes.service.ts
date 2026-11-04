@@ -4,7 +4,7 @@ import { readLocalizedText } from '../authorization/localized-text.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { ListMyClassesQueryDto, MyClassItemDto, MyClassListDto } from './my-classes.dto.js';
-import { myClassStatuses, relationOf } from './my-classes.policy.js';
+import { myClassStatuses, relationOf, seesChildren } from './my-classes.policy.js';
 
 // Only what the caller may know about their own (or their child's) class:
 // identity of the student without contact fields, the class and course
@@ -66,20 +66,21 @@ function toItem(row: MyClassRow, callerId: string): MyClassItemDto {
 /**
  * MOD-05-T05 — "my classes" (`GET /api/me/classes`). Ownership instead of a
  * permission key (D-R16 — the student and guardian roles hold no class keys):
- * the caller's own enrollments, plus those of the students linked to the
+ * the caller's own enrollments, plus — while the caller holds the `guardian`
+ * role (owner decision, issue #19) — those of the students linked to the
  * caller in `guardian_students` (soft-deleted children hidden, as in the
  * guardian links of MOD-03-T09). A user with neither gets an empty list.
+ * The caller's role keys are read from the database on every request.
  */
 @Injectable()
 export class MyClassesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: ListMyClassesQueryDto, caller: AuthPrincipal): Promise<MyClassListDto> {
+    const owned: Prisma.EnrollmentWhereInput[] = [{ studentUserId: caller.id }];
+    if (seesChildren(caller.roles)) owned.push({ student: { deletedAt: null, guardians: { some: { guardianUserId: caller.id } } } });
     const rows = await this.prisma.db.enrollment.findMany({
-      where: {
-        status: { in: myClassStatuses(query.status) },
-        OR: [{ studentUserId: caller.id }, { student: { deletedAt: null, guardians: { some: { guardianUserId: caller.id } } } }],
-      },
+      where: { status: { in: myClassStatuses(query.status) }, OR: owned },
       orderBy: [{ id: 'desc' }],
       select: MY_CLASS_SELECT,
     });
