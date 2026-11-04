@@ -2,8 +2,10 @@
 // reads GET /api/academy for everyone who reaches the screen and saves the
 // smallest PATCH /api/academy for holders of `academy.settings.manage`. Local
 // rules mirror the server (academy.validation.ts); the server stays the boundary.
+// Since J-F02 the same form also edits the weekly schedule (`settings.scheduling`,
+// MOD-02-T03) and saves it in the same single PATCH.
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, AutoComplete, Button, Card, Flex, Form, Input, Select, Skeleton, Space, Typography } from 'antd'
+import { Alert, App, AutoComplete, Button, Card, Checkbox, Flex, Form, Input, Select, Skeleton, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ACADEMY_LOCALES, updateAcademy } from '../api/academy'
@@ -15,6 +17,7 @@ import { E164_PATTERN } from '../users/users.validation'
 import { describeAcademyFailure, failureMessage } from './academy.errors'
 import { planAcademyPatch, settingsFormValuesOf } from './academy.patch'
 import type { GeneralSettingsFormValues } from './academy.patch'
+import { orderedWeekdays, WEEKDAY_KEYS, WEEKDAYS } from './academy.settings'
 import { isCurrencyCode, isHttpUrl, isIanaTimeZone, matchTimeZones, normaliseCurrency, TIME_ZONE_MAX_LENGTH } from './academy.validation'
 import { MANAGE_ACADEMY_SETTINGS_PERMISSION } from './academy.policy'
 import { useAcademy } from './useAcademy'
@@ -91,6 +94,11 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
   }
 
   const timeZoneOptions = matchTimeZones(timeZoneQuery).map((zone) => ({ value: zone }))
+  // The working days follow the chosen first day of the week (Sunday while it is not set).
+  const weekStartsOn = Form.useWatch('weekStartsOn', form)
+  const dayLabel = (day: number) => t(`settings.weekdays.${WEEKDAY_KEYS[day]}`)
+  const firstDayOptions = WEEKDAYS.map((day) => ({ value: day, label: dayLabel(day) }))
+  const workingDayOptions = orderedWeekdays(weekStartsOn).map((day) => ({ value: day, label: dayLabel(day) }))
 
   return (
     <Form<GeneralSettingsFormValues> form={form} layout="vertical" initialValues={settingsFormValuesOf(academy)} onFinish={submit} disabled={!canManage || saving}>
@@ -148,6 +156,17 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
         rules={[{ validator: (_, value: string | undefined) => (!value?.trim() || E164_PATTERN.test(value.trim()) ? Promise.resolve() : Promise.reject(new Error(t('settings.validation.phone')))) }]}
       >
         <Input dir="ltr" placeholder="+966500000000" />
+      </Form.Item>
+
+      <Typography.Title level={5} style={{ marginTop: 8 }}>
+        {t('settings.scheduling.title')}
+      </Typography.Title>
+      <Typography.Paragraph type="secondary">{t('settings.scheduling.intro')}</Typography.Paragraph>
+      <Form.Item name="weekStartsOn" label={t('settings.scheduling.weekStartsOn')}>
+        <Select allowClear placeholder={t('settings.scheduling.notSet')} options={firstDayOptions} style={{ maxWidth: 240 }} />
+      </Form.Item>
+      <Form.Item name="workingDays" label={t('settings.scheduling.workingDays')} extra={t('settings.scheduling.workingDaysHint')}>
+        <Checkbox.Group options={workingDayOptions} />
       </Form.Item>
 
       <Flex justify="space-between" align="center" wrap gap={12}>

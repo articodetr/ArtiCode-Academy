@@ -10,7 +10,31 @@ export type { LocalizedLabel } from './users'
 export const ACADEMY_LOCALES = ['ar', 'en', 'tr'] as const
 export type AcademyLocale = (typeof ACADEMY_LOCALES)[number]
 
-/** `AcademyDto`: the single row without `settings`, `platformAcademyId` or `singleton`. */
+/** Day of the week as the server counts it: 0 = Sunday … 6 = Saturday. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+/** `SchedulingSettingsDto` (MOD-02-T03): `null` = not set — no country-bound default. */
+export interface SchedulingSettings {
+  /** First day of the week in calendars and timetables. */
+  weekStartsOn: Weekday | null
+  /** 1–7 distinct weekdays in ascending order. */
+  workingDays: Weekday[] | null
+}
+
+/** `AcademySettingsDto`: every known key, `null` when not set (an unreadable stored value reads as `null`). */
+export interface AcademySettings {
+  scheduling: SchedulingSettings
+}
+
+/** `settings` of a PATCH, per key: absent = unchanged, `null` = clear, a value = replace. */
+export interface AcademySettingsInput {
+  scheduling?: {
+    weekStartsOn?: Weekday | null
+    workingDays?: Weekday[] | null
+  }
+}
+
+/** `AcademyDto`: the single row without `platformAcademyId` or `singleton`; `settings` since MOD-02-T03. */
 export interface Academy {
   id: string
   /** Deployment identifier; read-only. */
@@ -24,6 +48,7 @@ export interface Academy {
   currency: string
   contactEmail: string | null
   contactPhone: string | null
+  settings: AcademySettings
   createdAt: string
   updatedAt: string
 }
@@ -31,7 +56,8 @@ export interface Academy {
 /**
  * Body of API-036 (`UpdateAcademyDto`): absent = unchanged; `null` clears
  * `logoUrl`/`contactEmail`/`contactPhone`; `name` replaces the whole localized
- * object (`ar` required); `defaultLocale`/`timezone`/`currency` never null.
+ * object (`ar` required); `defaultLocale`/`timezone`/`currency` never null;
+ * `settings` is patched key by key and is never null itself.
  */
 export interface UpdateAcademyInput {
   name?: LocalizedLabel
@@ -41,6 +67,7 @@ export interface UpdateAcademyInput {
   currency?: string
   contactEmail?: string | null
   contactPhone?: string | null
+  settings?: AcademySettingsInput
 }
 
 export const ACADEMY_PATH = '/api/academy'
