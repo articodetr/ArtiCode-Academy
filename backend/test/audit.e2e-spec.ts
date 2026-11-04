@@ -180,13 +180,17 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   });
 
   afterAll(async () => {
-    // Courses first: their level is Restrict.
-    await prisma.course.deleteMany({ where: { code: { startsWith: COURSE_PREFIX } } });
-    await prisma.level.deleteMany({ where: { code: { startsWith: LEVEL_PREFIX } } });
-    if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
-    if (createdRoleIds.length > 0) await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
-    await prisma.$disconnect();
-    await app.close();
+    try {
+      // Courses first: their level is Restrict.
+      await prisma.course.deleteMany({ where: { code: { startsWith: COURSE_PREFIX } } });
+      await prisma.level.deleteMany({ where: { code: { startsWith: LEVEL_PREFIX } } });
+    } finally {
+      // The run's users and roles go even when the MOD-04 cleanup throws.
+      if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+      if (createdRoleIds.length > 0) await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
+      await prisma.$disconnect();
+      await app.close();
+    }
   });
 
   it('T02 — POST /api/users records exactly one users.created per account, inside its transaction', async () => {
