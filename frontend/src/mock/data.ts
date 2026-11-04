@@ -26,16 +26,6 @@ export interface MockCourse {
   status: 'published' | 'draft' | 'archived'
 }
 
-export interface MockClass {
-  id: string
-  name: LocalizedText
-  course: LocalizedText
-  teacher: LocalizedText
-  capacity: number
-  enrolled: number
-  room: string
-}
-
 export interface MockScheduleEntry {
   id: string
   day: DayKey
@@ -155,13 +145,6 @@ export const mockCourses: MockCourse[] = [
   { id: 'c-003', code: 'DS-301', name: T.courseData, level: { ar: 'متقدم', en: 'Advanced' }, teacher: T.teacher1, students: 0, status: 'draft' },
   { id: 'c-004', code: 'SCR-100', name: T.courseScratch, level: { ar: 'مبتدئ', en: 'Beginner' }, teacher: T.teacher2, students: 15, status: 'published' },
   { id: 'c-005', code: 'JS-150', name: T.courseJs, level: { ar: 'مبتدئ', en: 'Beginner' }, teacher: T.teacher1, students: 0, status: 'archived' },
-]
-
-export const mockClasses: MockClass[] = [
-  { id: 'cl-001', name: T.classPyA, course: T.coursePython, teacher: T.teacher1, capacity: 25, enrolled: 24, room: 'Lab 1' },
-  { id: 'cl-002', name: T.classPyB, course: T.coursePython, teacher: T.teacher1, capacity: 25, enrolled: 16, room: 'Lab 2' },
-  { id: 'cl-003', name: T.classReact, course: T.courseReact, teacher: T.teacher2, capacity: 20, enrolled: 18, room: 'Lab 3' },
-  { id: 'cl-004', name: T.classScratch, course: T.courseScratch, teacher: T.teacher2, capacity: 15, enrolled: 15, room: 'Room A' },
 ]
 
 export const mockSchedule: MockScheduleEntry[] = [

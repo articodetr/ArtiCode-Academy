@@ -3,11 +3,11 @@ import type { Role } from '../auth/roles'
 import { NAV_ITEMS, canAccess, navFor } from './navigation'
 import type { NavViewer } from './navigation'
 
-/** The MOD-03/MOD-04/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
+/** The MOD-03/MOD-04/MOD-05/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
 const SEEDED: Readonly<Record<Role, string[]>> = {
-  admin: ['users.read', 'users.read_contact', 'roles.manage', 'audit.read', 'academy.settings.read', 'academy.settings.manage', 'courses.read', 'courses.manage'],
-  staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read'],
-  teacher: ['users.read', 'courses.read', 'lessons.manage'],
+  admin: ['users.read', 'users.read_contact', 'roles.manage', 'audit.read', 'academy.settings.read', 'academy.settings.manage', 'courses.read', 'courses.manage', 'classes.read', 'classes.manage', 'classes.teachers.assign'],
+  staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read', 'classes.read', 'classes.manage'],
+  teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.manage'],
   student: ['courses.read', 'assignments.submit'],
   guardian: ['courses.read', 'grades.read_linked'],
 }
@@ -55,6 +55,16 @@ describe('NAV_ITEMS', () => {
     expect(keysFor(viewer(null, ['courses.manage']))).toEqual(['dashboard'])
     expect(canAccess(viewer('student', []), 'courses')).toBe(false)
   })
+
+  it('gates the classes screen by classes.read or classes.manage since its API is real (J-F01) — students and guardians hold neither', () => {
+    const classes = NAV_ITEMS.find((item) => item.key === 'classes')!
+    expect(classes.permissions).toEqual(['classes.read', 'classes.manage'])
+    expect(keysFor(viewer(null, ['classes.read']))).toEqual(['dashboard', 'classes'])
+    expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard', 'classes'])
+    expect(keysFor(viewer(null, ['classes.teachers.assign']))).toEqual(['dashboard'])
+    expect(canAccess(viewer('student'), 'classes')).toBe(false)
+    expect(canAccess(viewer('guardian'), 'classes')).toBe(false)
+  })
 })
 
 describe('navFor', () => {
@@ -68,8 +78,8 @@ describe('navFor', () => {
     expect(keysFor(viewer(null, []))).toEqual(['dashboard'])
   })
 
-  it('ignores the role for permission-gated entries: an admin whose role lost users.read does not see the users (or courses, or settings) page', () => {
-    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports'])
+  it('ignores the role for permission-gated entries: an admin whose role lost users.read does not see the users (or courses, classes, settings) page', () => {
+    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports'])
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
