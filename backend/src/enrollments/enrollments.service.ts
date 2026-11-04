@@ -86,9 +86,23 @@ function isoOrNull(value: Date | null): string | null {
   return value ? value.toISOString() : null;
 }
 
-/** Contact identifiers are shown to holders of `users.read_contact` only (D-R07). */
-function projectionOf(caller: AuthPrincipal): UsersProjection {
-  return caller.permissions.includes(READ_CONTACT_PERMISSION) ? 'full' : 'reduced';
+/**
+ * What the caller sees of an enrollment: contact identifiers for holders of
+ * `users.read_contact` only (D-R07), and the withdrawal reason for holders of
+ * `enrollments.manage` only — an assigned teacher reading the roster gets
+ * `null` (owner decision in the PR #14 review). `student.deletedAt` stays
+ * visible to every roster reader.
+ */
+interface EnrollmentView {
+  contact: UsersProjection;
+  withdrawalReason: boolean;
+}
+
+function viewOf(caller: AuthPrincipal): EnrollmentView {
+  return {
+    contact: caller.permissions.includes(READ_CONTACT_PERMISSION) ? 'full' : 'reduced',
+    withdrawalReason: caller.permissions.includes(MANAGE_ENROLLMENTS_PERMISSION),
+  };
 }
 
 function toStudentDto(row: StudentRow, view: UsersProjection): EnrollmentStudentDto {
@@ -107,7 +121,7 @@ function toStudentDto(row: StudentRow, view: UsersProjection): EnrollmentStudent
   };
 }
 
-function toEnrollmentDto(row: EnrollmentRow, view: UsersProjection): EnrollmentDto {
+function toEnrollmentDto(row: EnrollmentRow, view: EnrollmentView): EnrollmentDto {
   return {
     id: row.id,
     classId: row.classId,
@@ -117,8 +131,8 @@ function toEnrollmentDto(row: EnrollmentRow, view: UsersProjection): EnrollmentD
     activatedAt: isoOrNull(row.activatedAt),
     completedAt: isoOrNull(row.completedAt),
     withdrawnAt: isoOrNull(row.withdrawnAt),
-    withdrawalReason: row.withdrawalReason,
-    student: toStudentDto(row.student, view),
+    withdrawalReason: view.withdrawalReason ? row.withdrawalReason : null,
+    student: toStudentDto(row.student, view.contact),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -173,7 +187,7 @@ export class EnrollmentsService {
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     const nextCursor = rows.length > limit && last ? encodeKeysetCursor({ sort: ROSTER_SORT, order: ROSTER_ORDER, key: null, id: last.id }) : null;
-    const view = projectionOf(caller);
+    const view = viewOf(caller);
     return { items: page.map((row) => toEnrollmentDto(row, view)), nextCursor };
   }
 
@@ -223,7 +237,7 @@ export class EnrollmentsService {
     } catch (error) {
       throw await this.translateEnrollError(error, classId, studentId);
     }
-    return this.getById(enrollmentId, projectionOf(caller));
+    return this.getById(enrollmentId, viewOf(caller));
   }
 
   /**
@@ -286,7 +300,7 @@ export class EnrollmentsService {
         tx,
       );
     });
-    return this.getById(id, projectionOf(caller));
+    return this.getById(id, viewOf(caller));
   }
 
   /** D-R16: the roster belongs to enrollment managers and to the class's assigned teachers; anyone else gets 404 as for an unknown class. */
@@ -333,7 +347,7 @@ export class EnrollmentsService {
     return error;
   }
 
-  private async getById(id: string, view: UsersProjection): Promise<EnrollmentDto> {
+  private async getById(id: string, view: EnrollmentView): Promise<EnrollmentDto> {
     const row = await this.prisma.db.enrollment.findUnique({ where: { id }, select: ENROLLMENT_SELECT });
     if (!row) throw classesError.enrollmentNotFound(id);
     return toEnrollmentDto(row, view);
