@@ -5,6 +5,7 @@ import { AcademyModule } from './academy/academy.module.js';
 import { AccountModule } from './account/account.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { BranchesModule } from './branches/branches.module.js';
 import { ClassesModule } from './classes/classes.module.js';
 import { ENV_FILE_PATHS } from './config/env-files.js';
 import { CoursesModule } from './courses/courses.module.js';
@@ -50,6 +51,8 @@ import { UsersModule } from './users/users.module.js';
     CoursesModule,
     // MOD-05-T02: classes.
     ClassesModule,
+    // MOD-02-T06 (O8): branches of the academy.
+    BranchesModule,
     HealthModule,
   ],
 })
