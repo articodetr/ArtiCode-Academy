@@ -80,6 +80,13 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'courses.updated',
   'courses.status.changed',
   'courses.deleted',
+  // MOD-05-T02/T03 (CH-0053, CH-0054)
+  'classes.',
+  'classes.created',
+  'classes.updated',
+  'classes.status.changed',
+  'classes.deleted',
+  'classes.teachers.changed',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

@@ -15,6 +15,9 @@ const COLORS: Record<string, string> = {
   completed: 'green',
   cancelled: 'red',
   open: 'blue',
+  // MOD-05 class statuses (J-F01); open/completed/cancelled above
+  planned: 'default',
+  running: 'processing',
   closed: 'default',
   grading: 'gold',
   graded: 'green',
