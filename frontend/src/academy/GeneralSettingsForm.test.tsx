@@ -1,7 +1,7 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import type { Academy } from '../api/academy'
+import type { Academy, AcademySettings } from '../api/academy'
 import { ar } from '../i18n/ar'
 import { SETTINGS_MANAGER_PERMISSIONS, SETTINGS_READER_PERMISSIONS, makeAcademy } from '../test/academy'
 import { jsonResponse, mockFetch } from '../test/http'
@@ -29,10 +29,33 @@ function mockAcademyApi({ academy = makeAcademy(), write }: Options = {}) {
     writes.push(body)
     if (write) return write(body)
     const base = academy instanceof Response ? makeAcademy() : academy
-    return jsonResponse(200, { ...base, ...body, updatedAt: '2026-10-31T10:00:00.000Z' })
+    const settings = mergeSettings(base.settings, body.settings as { scheduling?: Record<string, unknown> } | undefined)
+    return jsonResponse(200, { ...base, ...body, settings, updatedAt: '2026-10-31T10:00:00.000Z' })
   })
   return { writes, fetchMock, gets: () => gets }
 }
+
+/** What the server does with `settings` of a PATCH: key by key, `null` clears (days already sorted by the form). */
+function mergeSettings(current: AcademySettings, patch: { scheduling?: Record<string, unknown> } | undefined): AcademySettings {
+  return { scheduling: { ...current.scheduling, ...(patch?.scheduling ?? {}) } as AcademySettings['scheduling'] }
+}
+
+/** The Form.Item whose label has that text (the select shows its value inside it). */
+const fieldOf = (label: string) => screen.getByText(label).closest('.ant-form-item') as HTMLElement
+
+/** Opens an antd Select and clicks the option with that text (the options live in a portal). */
+function pickOption(label: string, option: string) {
+  fireEvent.mouseDown(screen.getByLabelText(label))
+  const item = [...document.querySelectorAll('.ant-select-item-option-content')].find((node) => node.textContent === option)
+  if (!item) throw new Error(`option ${option} not found`)
+  fireEvent.click(item)
+}
+
+/** A working-day checkbox, looked up inside its own field (the select's options carry the same day names). */
+const dayBox = (name: string) => within(fieldOf(ar.settings.scheduling.workingDays)).getByLabelText(name) as HTMLInputElement
+const checkedDays = () =>
+  Object.values(ar.settings.weekdays).filter((name) => dayBox(name).checked)
+const dayOrder = () => [...fieldOf(ar.settings.scheduling.workingDays).querySelectorAll('.ant-checkbox-wrapper')].map((node) => node.textContent)
 
 function renderForm(permissions: string[] = SETTINGS_MANAGER_PERMISSIONS) {
   return renderWithProviders(<GeneralSettingsForm />, { auth: makeAuth({ user: makeUser({ permissions }) }), route: '/settings' })
@@ -154,5 +177,66 @@ describe('GeneralSettingsForm', () => {
     expect(await screen.findByLabelText(ar.settings.academyNameAr)).toHaveValue('أكاديمية آرتي كود')
     expect(screen.queryByText(ar.settings.loadFailed)).not.toBeInTheDocument()
     expect(attempt).toBe(2)
+  })
+})
+
+describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
+  const { sun, mon, tue, wed, thu, fri, sat } = ar.settings.weekdays
+
+  it('shows the stored first day in the select and the working days checked, ordered from that first day', async () => {
+    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] } } }) })
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(within(fieldOf(ar.settings.scheduling.weekStartsOn)).getByText(sat)).toBeInTheDocument()
+    expect(checkedDays()).toEqual([sun, mon, tue, wed, thu])
+    expect(dayOrder()).toEqual([sat, sun, mon, tue, wed, thu, fri])
+  })
+
+  it('saves both keys in one PATCH under settings.scheduling (days sorted) and shows what the server returned', async () => {
+    const api = mockAcademyApi()
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(within(fieldOf(ar.settings.scheduling.weekStartsOn)).getByText(ar.settings.scheduling.notSet)).toBeInTheDocument()
+    expect(checkedDays()).toEqual([])
+    expect(dayOrder()[0]).toBe(sun)
+
+    pickOption(ar.settings.scheduling.weekStartsOn, sat)
+    await waitFor(() => expect(dayOrder()[0]).toBe(sat))
+    for (const day of [thu, sun, mon]) fireEvent.click(dayBox(day))
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(api.writes).toHaveLength(1))
+    expect(api.writes[0]).toEqual({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0, 1, 4] } } })
+    expect(await screen.findByText(ar.settings.saved)).toBeInTheDocument()
+    // The remounted form shows the saved schedule.
+    await waitFor(() => expect(checkedDays()).toEqual([sun, mon, thu]))
+    expect(dayOrder()[0]).toBe(sat)
+    expect(api.gets()).toBe(1)
+  })
+
+  it('clears the working days with null when every day is unchecked, and leaves the first day out of the body', async () => {
+    const api = mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1] } } }) })
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    fireEvent.click(dayBox(sun))
+    fireEvent.click(dayBox(mon))
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(api.writes).toHaveLength(1))
+    expect(api.writes[0]).toEqual({ settings: { scheduling: { workingDays: null } } })
+  })
+
+  it('shows the schedule read-only to a viewer without academy.settings.manage', async () => {
+    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0] } } }) })
+    renderForm(SETTINGS_READER_PERMISSIONS)
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(dayBox(sun)).toBeChecked()
+    expect(dayBox(sun)).toBeDisabled()
+    expect(dayBox(sat)).toBeDisabled()
+    expect(screen.getByLabelText(ar.settings.scheduling.weekStartsOn)).toBeDisabled()
   })
 })
