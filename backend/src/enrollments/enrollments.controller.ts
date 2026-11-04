@@ -46,7 +46,8 @@ export class EnrollmentsController {
     description:
       'The roster of a class in enrollment order, every status unless `status` is given, keyset-paginated (`limit` 1–100, default 50, opaque `cursor`). ' +
       'Readable by holders of `enrollments.manage` and by the teachers assigned to the class; for anyone else the class is 404. ' +
-      'The student is shown in the caller’s projection: `email`, `username` and `phone` need `users.read_contact`.',
+      'The student is shown in the caller’s projection: `email`, `username` and `phone` need `users.read_contact`; ' +
+      '`withdrawalReason` needs `enrollments.manage` (null for an assigned teacher), while `student.deletedAt` is shown to every reader.',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'The class' })
   @ApiOkResponse({ type: EnrollmentListDto })

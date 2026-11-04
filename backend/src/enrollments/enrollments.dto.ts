@@ -130,7 +130,10 @@ export class EnrollmentDto {
   @ApiProperty({ nullable: true, description: 'ISO 8601' })
   withdrawnAt: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({
+    nullable: true,
+    description: 'Set on withdraw; null for callers without `enrollments.manage` (an assigned teacher reading the roster sees `student.deletedAt` but not the reason)',
+  })
   withdrawalReason: string | null;
 
   @ApiProperty({ type: EnrollmentStudentDto })
