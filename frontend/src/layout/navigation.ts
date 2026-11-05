@@ -12,6 +12,7 @@ import {
   FileTextOutlined,
   FormOutlined,
   PlayCircleOutlined,
+  ReadOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
   SettingOutlined,
@@ -24,6 +25,8 @@ import type { Role } from '../auth/roles'
 export interface NavViewer {
   /** UI role derived from the server roles; null when none of them is known (custom roles only). */
   role: Role | null
+  /** Server role keys the user holds (e.g. `student`, `guardian`), for the entries gated by `roleKeys`. */
+  roles: readonly string[]
   /** Permission keys granted through the roles (ADR-023). */
   permissions: readonly string[]
 }
@@ -44,6 +47,7 @@ interface NavItemBase {
 interface RoleGatedItem extends NavItemBase {
   roles: readonly Role[] | 'everyone'
   permissions?: undefined
+  roleKeys?: undefined
 }
 
 /**
@@ -54,9 +58,23 @@ interface RoleGatedItem extends NavItemBase {
 interface PermissionGatedItem extends NavItemBase {
   permissions: readonly string[]
   roles?: undefined
+  roleKeys?: undefined
 }
 
-export type NavItem = RoleGatedItem | PermissionGatedItem
+/**
+ * A screen served by ownership, without a permission key (J-F04 — «my classes»,
+ * API-060): shown to a user holding ANY of these server role keys — the rule the
+ * server applies (`seesChildren()` looks at the `guardian` key, a student's
+ * enrollments follow the `student` role), not the single UI role, so a teacher
+ * who is also a guardian still sees it.
+ */
+interface RoleKeyGatedItem extends NavItemBase {
+  roleKeys: readonly string[]
+  roles?: undefined
+  permissions?: undefined
+}
+
+export type NavItem = RoleGatedItem | PermissionGatedItem | RoleKeyGatedItem
 
 /** Every known UI role (not a user without one). */
 const KNOWN_ROLES: readonly Role[] = ROLES
@@ -72,6 +90,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
   // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16).
   { key: 'classes', path: '/classes', labelKey: 'nav.classes', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
+  // MOD-05 (J-F04): «my classes» (API-060) needs no permission key — ownership; shown to whoever holds the
+  // `student` or `guardian` server role, as the server reads them (an admin or a teacher alone gets an empty list).
+  { key: 'myClasses', path: '/my-classes', labelKey: 'nav.myClasses', icon: createElement(ReadOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-05' },
   { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), roles: KNOWN_ROLES, module: 'MOD-07' },
   { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), roles: ['admin', 'teacher', 'student'], module: 'MOD-06' },
   { key: 'assignments', path: '/assignments', labelKey: 'nav.assignments', icon: createElement(FileTextOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-08' },
@@ -86,9 +107,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
 ]
 
-/** Whether the viewer sees an entry: by permission when the entry names keys, else by the role matrix. */
+/** Whether the viewer sees an entry: by permission when the entry names keys, by server role keys when it names those, else by the role matrix. */
 export function sees(item: NavItem, viewer: NavViewer): boolean {
   if (item.permissions) return item.permissions.some((key) => viewer.permissions.includes(key))
+  if (item.roleKeys) return item.roleKeys.some((key) => viewer.roles.includes(key))
   if (item.roles === 'everyone') return true
   return viewer.role !== null && item.roles.includes(viewer.role)
 }

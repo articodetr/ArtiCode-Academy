@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AcademyClass } from '../api/classes'
 import { ar } from '../i18n/ar'
-import { CLASS_ID, CLASS_MANAGER_PERMISSIONS, CLASS_READER_PERMISSIONS, makeClass } from '../test/classes'
+import { CLASS_ID, CLASS_MANAGER_PERMISSIONS, CLASS_READER_PERMISSIONS, TEACHER_IDS, makeClass } from '../test/classes'
+import { ROSTER_MANAGER_PERMISSIONS, ROSTER_TEACHER_PERMISSIONS, makeEnrollment, makeEnrollmentList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { canReadRoster } from '../enrollments/enrollments.status'
 import { ClassDrawer } from './ClassDrawer'
 
 interface Call {
@@ -26,12 +28,12 @@ function mockClassApi(detail: () => AcademyClass, writes: Partial<Record<string,
   return calls
 }
 
-function renderDrawer(permissions: string[]) {
+function renderDrawer(permissions: string[], userId = 'user-1') {
   const onUpdated = vi.fn()
   const onDeleted = vi.fn()
   const onClose = vi.fn()
   renderWithProviders(<ClassDrawer classId={CLASS_ID} onClose={onClose} onUpdated={onUpdated} onDeleted={onDeleted} />, {
-    auth: makeAuth({ user: makeUser({ permissions }) }),
+    auth: makeAuth({ user: makeUser({ id: userId, permissions }) }),
     route: '/classes',
   })
   return { onUpdated, onDeleted, onClose }
@@ -137,6 +139,31 @@ describe('ClassDrawer', () => {
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(CLASS_ID))
     expect(onClose).toHaveBeenCalled()
     expect(calls.filter((call) => call.method === 'DELETE')).toEqual([{ method: 'DELETE', url: `/api/classes/${CLASS_ID}`, body: undefined }])
+  })
+
+  it('shows the students tab to an enrollment manager and to the assigned teacher only (J-F04 — mirror of the roster rule)', async () => {
+    const hasAll = (keys: string[]) => (key: string) => keys.includes(key)
+    const cls = makeClass({ status: 'open', enrolledCount: 3 })
+    expect(canReadRoster(hasAll(ROSTER_MANAGER_PERMISSIONS), cls, 'someone-else')).toBe(true)
+    expect(canReadRoster(hasAll(ROSTER_TEACHER_PERMISSIONS), cls, TEACHER_IDS[0])).toBe(true)
+    expect(canReadRoster(hasAll(ROSTER_TEACHER_PERMISSIONS), cls, 'someone-else')).toBe(false)
+    // `enrollments.manage` without `enrollments.read` would get 403 on the list — no tab.
+    expect(canReadRoster(hasAll(['classes.read', 'enrollments.manage']), cls, 'someone-else')).toBe(false)
+    expect(canReadRoster(hasAll(CLASS_READER_PERMISSIONS), cls, TEACHER_IDS[0])).toBe(false)
+
+    mockFetch((url) => (url.endsWith('/enrollments?limit=50') ? jsonResponse(200, makeEnrollmentList([makeEnrollment()])) : jsonResponse(200, cls)))
+    const { unmount } = renderWithProviders(<ClassDrawer classId={CLASS_ID} onClose={vi.fn()} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
+      auth: makeAuth({ user: makeUser({ id: TEACHER_IDS[0], permissions: ROSTER_TEACHER_PERMISSIONS }) }),
+      route: '/classes',
+    })
+    await screen.findByText('PY-101-A')
+    fireEvent.click(screen.getByText('الطلاب (3)'))
+    expect(await screen.findByText('عمر خالد')).toBeInTheDocument()
+    unmount()
+
+    renderDrawer(CLASS_READER_PERMISSIONS, 'someone-else')
+    await screen.findByText('PY-101-A')
+    expect(screen.queryByText('الطلاب (3)')).not.toBeInTheDocument()
   })
 
   it('shows invalid_transition in the dialog and re-reads the class', async () => {
