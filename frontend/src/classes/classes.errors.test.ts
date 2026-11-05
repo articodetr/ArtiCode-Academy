@@ -27,6 +27,16 @@ describe('describeClassesFailure', () => {
     expect(failureMessage(t, describeClassesFailure(error))).toBe('«u-1» لا يحمل دور معلم.')
   })
 
+  it('maps the enrollment codes of T04 (J-F04): the seat numbers, the student name and the translated status of the existing enrollment', () => {
+    expect(failureMessage(t, describeClassesFailure(apiError(409, { code: 'class_full', capacity: 20, enrolledCount: 20 })))).toBe('الفصل ممتلئ (20 / 20)؛ لا مقعد متاحاً.')
+    expect(failureMessage(t, describeClassesFailure(apiError(409, { code: 'class_not_enrollable', status: 'planned' })))).toBe(ar.classes.errors.class_not_enrollable)
+    expect(failureMessage(t, describeClassesFailure(apiError(422, { code: 'not_a_student', userId: 's-1' }), (id) => (id === 's-1' ? 'ليلى' : undefined)))).toBe('«ليلى» لا يحمل دور طالب.')
+    expect(failureMessage(t, describeClassesFailure(apiError(409, { code: 'already_enrolled', enrollmentId: 'e-1', status: 'cancelled' })))).toBe(
+      'للطالب تسجيل سابق في هذا الفصل (ملغى)؛ أعد تفعيله من القائمة بدلاً من تسجيله مجدداً.',
+    )
+    expect(describeClassesFailure(apiError(404, { code: 'enrollment_not_found', enrollmentId: 'e-1' }))).toEqual({ key: 'classes.errors.enrollment_not_found' })
+  })
+
   it('falls back to validation, server, network and generic messages', () => {
     expect(describeClassesFailure(apiError(400, { message: 'capacity must be an integer' }))).toEqual({ key: 'classes.errors.validation', params: { message: 'capacity must be an integer' } })
     expect(describeClassesFailure(apiError(503, {}))).toEqual({ key: 'login.errors.server' })

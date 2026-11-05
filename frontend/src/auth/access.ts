@@ -17,7 +17,7 @@ export interface AccessRule {
   role?: Role | readonly Role[]
 }
 
-export function isAllowed(user: Pick<AuthUser, 'role' | 'permissions'>, rule: AccessRule): boolean {
+export function isAllowed(user: Pick<AuthUser, 'role' | 'roles' | 'permissions'>, rule: AccessRule): boolean {
   if (rule.navKey !== undefined && !canAccess(user, rule.navKey)) return false
   if (rule.permission !== undefined && !user.permissions.includes(rule.permission)) return false
   if (rule.role !== undefined) {

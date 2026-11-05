@@ -89,6 +89,10 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'classes.status.changed',
   'classes.deleted',
   'classes.teachers.changed',
+  // MOD-05-T04 (CH-0055) — first shown in the frontend with J-F04
+  'enrollments.',
+  'enrollments.created',
+  'enrollments.status.changed',
   // MOD-07-T02/T03 (CH-0095, CH-0096) — first offered with J-F05 (CH-0105)
   'rooms.',
   'rooms.created',

@@ -165,6 +165,6 @@ describe('isAllowed', () => {
     expect(isAllowed(admin, { navKey: 'users', role: 'admin' })).toBe(true)
     expect(isAllowed(admin, { navKey: 'users', permission: 'roles.manage' })).toBe(false)
     expect(isAllowed(admin, { permission: 'users.read', role: 'staff' })).toBe(false)
-    expect(isAllowed({ role: null, permissions: [] }, { role: ['admin', 'staff'] })).toBe(false)
+    expect(isAllowed({ role: null, roles: [], permissions: [] }, { role: ['admin', 'staff'] })).toBe(false)
   })
 })
