@@ -874,6 +874,23 @@ export const en: Translation = {
     retry: 'Retry',
     saved: 'Academy settings saved',
     nothingChanged: 'Nothing to save',
+    scheduling: {
+      title: 'Weekly schedule',
+      intro: 'Used by calendars and timetables. Left unset, no first day of the week is assumed and scheduling is not limited to particular days.',
+      weekStartsOn: 'First day of the week',
+      notSet: 'Not set',
+      workingDays: 'Working days',
+      workingDaysHint: 'Clearing every day sets the working days back to “not set”.',
+    },
+    weekdays: {
+      sun: 'Sunday',
+      mon: 'Monday',
+      tue: 'Tuesday',
+      wed: 'Wednesday',
+      thu: 'Thursday',
+      fri: 'Friday',
+      sat: 'Saturday',
+    },
     validation: {
       nameArRequired: 'The Arabic academy name is required',
       url: 'Enter an absolute URL starting with http or https',

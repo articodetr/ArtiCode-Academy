@@ -14,6 +14,8 @@ describe('settingsFormValuesOf', () => {
       currency: 'SAR',
       contactEmail: 'info@articode.test',
       contactPhone: '',
+      weekStartsOn: undefined,
+      workingDays: [],
     })
   })
 })
@@ -57,6 +59,16 @@ describe('planAcademyPatch', () => {
     const academy = makeAcademy()
     const values = { ...settingsFormValuesOf(academy), nameEn: '', contactEmail: 'Hello@ArtiCode.test', defaultLocale: 'en' as const }
     expect(planAcademyPatch(academy, values)).toEqual({ name: { ar: 'أكاديمية آرتي كود' }, defaultLocale: 'en', contactEmail: 'hello@articode.test' })
+  })
+
+  it('adds the changed weekly-schedule keys under settings.scheduling, in the same body as the row fields (J-F02)', () => {
+    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1, 2, 3, 4] } } })
+    const values = settingsFormValuesOf(academy)
+    expect(planAcademyPatch(academy, { ...values, workingDays: [4, 3, 2, 1, 0] })).toBeNull()
+    expect(planAcademyPatch(academy, { ...values, currency: 'TRY', weekStartsOn: 6, workingDays: [] })).toEqual({
+      currency: 'TRY',
+      settings: { scheduling: { weekStartsOn: 6, workingDays: null } },
+    })
   })
 
   it('never sends a blank required field (the form rules refuse it first) and nothing for an unchanged one', () => {

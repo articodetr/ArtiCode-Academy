@@ -2,12 +2,15 @@
 // the pattern of users/users.patch.ts: only fields whose normalised value
 // differs from the loaded academy are sent; a cleared nullable field becomes
 // null; the localized name travels as a whole object when any of its locales
-// changes; nothing changed → null.
+// changes; the weekly-schedule keys travel under `settings.scheduling`, key by
+// key (academy.settings.ts — J-F02); nothing changed → null.
 import type { Academy, AcademyLocale, LocalizedLabel, UpdateAcademyInput } from '../api/academy'
+import { planSchedulingPatch, schedulingFormValuesOf } from './academy.settings'
+import type { SchedulingFormValues } from './academy.settings'
 import { normaliseCurrency } from './academy.validation'
 
-/** Form values: every field a string (empty = cleared where the server allows it). */
-export interface GeneralSettingsFormValues {
+/** Form values: every text field a string (empty = cleared where the server allows it), plus the weekly schedule. */
+export interface GeneralSettingsFormValues extends SchedulingFormValues {
   nameAr: string
   nameEn?: string
   nameTr?: string
@@ -33,6 +36,7 @@ export function settingsFormValuesOf(academy: Academy): GeneralSettingsFormValue
     currency: academy.currency,
     contactEmail: text(academy.contactEmail),
     contactPhone: text(academy.contactPhone),
+    ...schedulingFormValuesOf(academy.settings.scheduling),
   }
 }
 
@@ -86,6 +90,9 @@ export function planAcademyPatch(current: Academy, values: GeneralSettingsFormVa
   if (contactEmail !== undefined) body.contactEmail = contactEmail
   const contactPhone = changedNullable(current.contactPhone, values.contactPhone)
   if (contactPhone !== undefined) body.contactPhone = contactPhone
+
+  const scheduling = planSchedulingPatch(current.settings.scheduling, values)
+  if (scheduling) body.settings = { scheduling }
 
   return Object.keys(body).length === 0 ? null : body
 }
