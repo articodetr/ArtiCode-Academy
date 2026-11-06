@@ -45,6 +45,9 @@ const TABLES = [
   // MOD-07-T01 (20261104144352_mod07_rooms_class_schedules, O9) — details in TEST-070.
   'rooms',
   'class_schedules',
+  // MOD-06-T01 (20261106123612_mod06_lessons_attendance) — details in TEST-076.
+  'lessons',
+  'attendance_records',
 ] as const;
 
 // PostgreSQL SQLSTATE codes
@@ -125,7 +128,7 @@ describe.skipIf(!available)('database schema — first migration (e2e, TEST-007)
     return rows[0]!.id;
   }
 
-  it('records the applied migrations (first one first) and the 21 tables', async () => {
+  it('records the applied migrations (first one first) and the 23 tables', async () => {
     const migrations = await pool.query<{ migration_name: string; finished: boolean; rolled_back: boolean }>(
       `SELECT migration_name, finished_at IS NOT NULL AS finished, rolled_back_at IS NOT NULL AS rolled_back
          FROM _prisma_migrations ORDER BY started_at`,
