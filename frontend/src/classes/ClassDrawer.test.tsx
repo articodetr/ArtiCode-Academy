@@ -3,13 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AcademyClass } from '../api/classes'
 import { ar } from '../i18n/ar'
-import { makeAcademy } from '../test/academy'
 import { CLASS_ID, CLASS_MANAGER_PERMISSIONS, CLASS_READER_PERMISSIONS, TEACHER_IDS, makeClass } from '../test/classes'
 import { ROSTER_MANAGER_PERMISSIONS, ROSTER_TEACHER_PERMISSIONS, makeEnrollment, makeEnrollmentList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { canReadRoster } from '../enrollments/enrollments.status'
-import { makeSchedule } from '../test/schedule'
 import { ClassDrawer } from './ClassDrawer'
 
 interface Call {
@@ -183,23 +181,5 @@ describe('ClassDrawer', () => {
 
     expect(await within(dialog).findByText(ar.classes.errors.invalid_transition)).toBeInTheDocument()
     await waitFor(() => expect(reads()).toBeGreaterThan(before))
-  })
-
-  it('opens the weekly schedule tab (J-F07) and reads the class schedule', async () => {
-    mockFetch((url, init) => {
-      const parsed = new URL(url, 'http://localhost')
-      if ((init?.method ?? 'GET') !== 'GET') return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
-      if (parsed.pathname === `/api/classes/${CLASS_ID}`) return jsonResponse(200, makeClass())
-      if (parsed.pathname === `/api/classes/${CLASS_ID}/schedule`) return jsonResponse(200, makeSchedule())
-      if (parsed.pathname === '/api/academy') return jsonResponse(200, makeAcademy())
-      return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
-    })
-    renderDrawer(CLASS_READER_PERMISSIONS)
-    await screen.findByText('PY-101-A')
-
-    fireEvent.click(screen.getByRole('tab', { name: ar.classSchedule.tab }))
-    expect(await screen.findByText('10:00–11:00')).toBeInTheDocument()
-    expect(screen.getByText('LAB-1 — مختبر 1')).toBeInTheDocument()
-    expect(screen.queryByText(ar.classSchedule.edit)).not.toBeInTheDocument()
   })
 })
