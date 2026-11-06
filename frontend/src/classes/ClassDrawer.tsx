@@ -1,8 +1,9 @@
 // Detail drawer of one class (J-F01): reads GET /api/classes/:id (API-051) and
-// shows three tabs — details, teachers (ClassTeachersTab, API-056) and, since
-// J-F04, students (ClassEnrollmentsTab, API-057..API-059) for whoever may read
+// shows up to four tabs — details, teachers (ClassTeachersTab, API-056), since
+// J-F04 students (ClassEnrollmentsTab, API-057..API-059) for whoever may read
 // the roster: `enrollments.read` plus `enrollments.manage` or an assignment to
-// the class (D-R16 — the server answers 404 otherwise). For holders of
+// the class (D-R16 — the server answers 404 otherwise), and since J-F07 the
+// weekly schedule (ClassScheduleTab on API-088/API-089). For holders of
 // `classes.manage`: an edit form (smallest PATCH — API-053) and an actions menu
 // built from the mirrored state machine (classes.status.ts → API-054 with an
 // optional reason, and API-055 for a planned class), each action confirmed in
@@ -20,6 +21,7 @@ import { StatusTag } from '../components/StatusTag'
 import { ClassEnrollmentsTab } from '../enrollments/ClassEnrollmentsTab'
 import { canReadRoster } from '../enrollments/enrollments.status'
 import { useLocalized } from '../i18n/useLocalized'
+import { ClassScheduleTab } from '../schedule/ClassScheduleTab'
 import { formatDateTime, formatDay, localizedLabel } from '../users/users.format'
 import { ClassFormFields } from './ClassFormFields'
 import { ClassTeachersTab } from './ClassTeachersTab'
@@ -41,7 +43,7 @@ const ICONS: Readonly<Record<ClassMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'teachers' | 'students'
+type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule'
 
 // The classes list keeps importing the bar from here (it lives in SeatsBar.tsx since J-F04).
 export { SeatsBar }
@@ -218,6 +220,12 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
                   },
                 ]
               : []),
+            {
+              key: 'schedule',
+              label: t('classSchedule.tab'),
+              children: <ClassScheduleTab cls={cls} />,
+              disabled: editing,
+            },
           ]}
         />
       ) : null}
