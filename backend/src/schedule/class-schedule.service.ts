@@ -94,6 +94,14 @@ function slotDetail(values: SlotValues, index: number): Record<string, unknown> 
   return { index, ...values };
 }
 
+/** Attempts of the replace transaction when PostgreSQL reports a write conflict or a deadlock (KI-071). */
+const WRITE_CONFLICT_ATTEMPTS = 2;
+
+/** Prisma's `P2034` — "Transaction failed due to a write conflict or a deadlock" (SQLSTATE 40001 / 40P01). */
+export function isWriteConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+}
+
 /**
  * Which EXCLUDE constraint a database error names (`ex_class_schedules_room` /
  * `ex_class_schedules_teacher` — §4e.8 (1)). Prisma 7 with the pg adapter does
@@ -155,66 +163,75 @@ export class ClassScheduleService {
     const workingDays = await this.workingDays();
     const written: SlotValues[] = [];
 
-    try {
-      return await this.prisma.db.$transaction(async (tx) => {
-        const locked = await tx.$queryRaw<{ code: string; status: ClassStatus }[]>`
-          SELECT code, status FROM classes WHERE id = ${classId}::uuid FOR NO KEY UPDATE`;
-        const klass = locked[0];
-        if (!klass) throw scheduleError.classNotFound(classId);
-        if (!SCHEDULABLE_CLASS_STATUSES.includes(klass.status)) throw scheduleError.classNotSchedulable(klass.status);
+    // A true tie on an EXCLUDE constraint — two requests inserting mutually
+    // conflicting slots at the same instant — ends for the loser with a
+    // deadlock (SQLSTATE 40P01, Prisma P2034) instead of 23P01 (KI-071). One
+    // retry: the winner has committed by then, so the loser meets the
+    // exclusion violation and is answered with the conflicting slot.
+    for (let attempt = 1; ; attempt++) {
+      written.length = 0;
+      try {
+        return await this.prisma.db.$transaction(async (tx) => {
+          const locked = await tx.$queryRaw<{ code: string; status: ClassStatus }[]>`
+            SELECT code, status FROM classes WHERE id = ${classId}::uuid FOR NO KEY UPDATE`;
+          const klass = locked[0];
+          if (!klass) throw scheduleError.classNotFound(classId);
+          if (!SCHEDULABLE_CLASS_STATUSES.includes(klass.status)) throw scheduleError.classNotSchedulable(klass.status);
 
-        const rows = await tx.classSchedule.findMany({ where: { classId }, orderBy: SLOT_ORDER, select: SLOT_SELECT });
-        const plan = planScheduleReplacement(rows.map(existingOf), requested);
-        if (!plan.ok) throw scheduleError.scheduleInvalid(plan.unknown, plan.duplicates);
-        if (!plan.changed) return { classId, slots: rows.map(toSlotDto) };
+          const rows = await tx.classSchedule.findMany({ where: { classId }, orderBy: SLOT_ORDER, select: SLOT_SELECT });
+          const plan = planScheduleReplacement(rows.map(existingOf), requested);
+          if (!plan.ok) throw scheduleError.scheduleInvalid(plan.unknown, plan.duplicates);
+          if (!plan.changed) return { classId, slots: rows.map(toSlotDto) };
 
-        const final = requested.map(valuesOf);
-        const offDay = findNonWorkingDay(final, workingDays);
-        if (offDay) throw scheduleError.nonWorkingDay(offDay.weekday);
-        await this.assertRoomsUsable(tx, referencedIds(plan, 'roomId'));
-        await this.assertTeachersAssigned(tx, classId, referencedIds(plan, 'teacherUserId'));
-        const conflict = findRequestConflict(final);
-        if (conflict) throw scheduleError.scheduleConflict(conflict.kind, slotDetail(final[conflict.second]!, conflict.second), null, classId);
+          const final = requested.map(valuesOf);
+          const offDay = findNonWorkingDay(final, workingDays);
+          if (offDay) throw scheduleError.nonWorkingDay(offDay.weekday);
+          await this.assertRoomsUsable(tx, referencedIds(plan, 'roomId'));
+          await this.assertTeachersAssigned(tx, classId, referencedIds(plan, 'teacherUserId'));
+          const conflict = findRequestConflict(final);
+          if (conflict) throw scheduleError.scheduleConflict(conflict.kind, slotDetail(final[conflict.second]!, conflict.second), null, classId);
 
-        written.push(...plan.create, ...plan.update.map((change) => ({ ...existingOf(rows.find((row) => row.id === change.id)!), ...change })));
-        if (plan.remove.length > 0) await tx.classSchedule.deleteMany({ where: { classId, id: { in: plan.remove } } });
-        for (const change of plan.update) {
-          const { id, ...values } = change;
-          await tx.classSchedule.update({ where: { id }, data: toColumns(values), select: { id: true } });
-        }
-        if (plan.create.length > 0) {
-          await tx.classSchedule.createMany({
-            data: plan.create.map((values) => ({
-              classId,
-              createdById: caller.id,
-              weekday: values.weekday,
-              startTime: clockTimeToColumn(values.startTime),
-              endTime: clockTimeToColumn(values.endTime),
-              roomId: values.roomId,
-              teacherUserId: values.teacherUserId,
-              effectiveFrom: calendarDateToColumn(values.effectiveFrom),
-              effectiveTo: values.effectiveTo === null ? null : calendarDateToColumn(values.effectiveTo),
-            })),
-          });
-        }
-        await this.audit.record(
-          {
-            action: CLASS_SCHEDULE_AUDIT_ACTION,
-            actorUserId: caller.id,
-            entityType: 'classes',
-            entityId: classId,
-            metadata: { code: klass.code, ...plan.counts, slots: requested.length },
-            ...ctx,
-          },
-          tx,
-        );
-        return this.read(tx, classId);
-      });
-    } catch (error) {
-      const kind = exclusionKindOf(error);
-      if (kind === null) throw error;
-      // The transaction is rolled back; name the slot of another class that the constraint protected.
-      throw await this.conflictWithOtherClass(classId, kind, written);
+          written.push(...plan.create, ...plan.update.map((change) => ({ ...existingOf(rows.find((row) => row.id === change.id)!), ...change })));
+          if (plan.remove.length > 0) await tx.classSchedule.deleteMany({ where: { classId, id: { in: plan.remove } } });
+          for (const change of plan.update) {
+            const { id, ...values } = change;
+            await tx.classSchedule.update({ where: { id }, data: toColumns(values), select: { id: true } });
+          }
+          if (plan.create.length > 0) {
+            await tx.classSchedule.createMany({
+              data: plan.create.map((values) => ({
+                classId,
+                createdById: caller.id,
+                weekday: values.weekday,
+                startTime: clockTimeToColumn(values.startTime),
+                endTime: clockTimeToColumn(values.endTime),
+                roomId: values.roomId,
+                teacherUserId: values.teacherUserId,
+                effectiveFrom: calendarDateToColumn(values.effectiveFrom),
+                effectiveTo: values.effectiveTo === null ? null : calendarDateToColumn(values.effectiveTo),
+              })),
+            });
+          }
+          await this.audit.record(
+            {
+              action: CLASS_SCHEDULE_AUDIT_ACTION,
+              actorUserId: caller.id,
+              entityType: 'classes',
+              entityId: classId,
+              metadata: { code: klass.code, ...plan.counts, slots: requested.length },
+              ...ctx,
+            },
+            tx,
+          );
+          return this.read(tx, classId);
+        });
+      } catch (error) {
+        const kind = exclusionKindOf(error);
+        // The transaction is rolled back; name the slot of another class that the constraint protected.
+        if (kind !== null) throw await this.conflictWithOtherClass(classId, kind, written);
+        if (isWriteConflict(error) && attempt < WRITE_CONFLICT_ATTEMPTS) continue;
+        throw error;
+      }
     }
   }
 

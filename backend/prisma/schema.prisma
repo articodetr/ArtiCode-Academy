@@ -169,6 +169,12 @@ model User {
   /// MOD-07: weekly slots this user teaches and the slots they created.
   classSchedulesTaught    ClassSchedule[]     @relation("ClassScheduleTeacher")
   classSchedulesCreated   ClassSchedule[]     @relation("ClassScheduleCreatedBy")
+  /// MOD-06: lessons this user teaches or created, their attendance as a
+  /// student and the attendance records they wrote as a teacher.
+  lessonsTaught           Lesson[]            @relation("LessonTeacher")
+  lessonsCreated          Lesson[]            @relation("LessonCreatedBy")
+  attendanceRecords       AttendanceRecord[]  @relation("AttendanceStudent")
+  attendanceRecorded      AttendanceRecord[]  @relation("AttendanceRecordedBy")
 
   @@index([phone])
   @@index([status])
@@ -437,7 +443,9 @@ model CourseSyllabusItem {
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// MOD-06: lessons that cover this item (the link is cleared when the item goes).
+  lessons Lesson[]
 
   @@unique([courseId, sortOrder], map: "uq_course_syllabus_items_course_order")
   @@map("course_syllabus_items")
@@ -517,6 +525,7 @@ model Class {
   enrollments Enrollment[]
   /// MOD-07: the weekly slots of this class (deleted with it).
   schedules   ClassSchedule[]
+  lessons     Lesson[]
 
   @@index([courseId])
   @@index([status])
@@ -638,6 +647,8 @@ model Room {
 
   branch    Branch?         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   schedules ClassSchedule[]
+  /// MOD-06: lessons held in this room (a room with lessons cannot be deleted).
+  lessons   Lesson[]
 
   /// Also covers the `branch_id` foreign key (its first column).
   @@unique([branchId, code], map: "uq_rooms_branch_code")
@@ -668,14 +679,126 @@ model ClassSchedule {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  class     Class @relation(fields: [classId], references: [id], onDelete: Cascade)
-  room      Room? @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  teacher   User? @relation("ClassScheduleTeacher", fields: [teacherUserId], references: [id], onDelete: Restrict)
-  createdBy User? @relation("ClassScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  room      Room?    @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  teacher   User?    @relation("ClassScheduleTeacher", fields: [teacherUserId], references: [id], onDelete: Restrict)
+  createdBy User?    @relation("ClassScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// MOD-06: lessons generated from this slot (the link is cleared when the slot goes).
+  lessons   Lesson[]
 
   @@index([classId])
   @@index([roomId, weekday])
   @@index([teacherUserId, weekday])
   @@index([createdById])
   @@map("class_schedules")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-06 — lessons and attendance (roadmap §4f; owner decisions D-R30..D-R34,
+// CH-0094). Subset of master doc 6.7.4-C: no lesson materials or recordings
+// (D-R30), no meeting provider fields (MOD-15). Teacher and room
+// double-booking between non-cancelled lessons is refused by two EXCLUDE
+// constraints in SQL (D-R34; extension `btree_gist` since CH-0092), which
+// Prisma cannot express. Every write on `lessons` goes through MOD-06's
+// service (D-R31) — MOD-07 generates lessons from weekly slots through it.
+// ---------------------------------------------------------------------------
+
+enum DeliveryMode {
+  in_person
+  live_online
+  recorded
+  hybrid
+
+  @@map("delivery_mode")
+}
+
+enum LessonStatus {
+  scheduled
+  in_progress
+  completed
+  cancelled
+
+  @@map("lesson_status")
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+  excused
+
+  @@map("attendance_status")
+}
+
+/// An actual session of a class at a point in time — generated from a weekly
+/// slot (MOD-07-T05) or created by hand. `in_progress` is in the enum but
+/// unused in the first version (D-R33: manual complete/cancel/restore).
+model Lesson {
+  id                 String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  classId            String       @map("class_id") @db.Uuid
+  syllabusItemId     String?      @map("syllabus_item_id") @db.Uuid
+  /// The weekly slot this lesson was generated from, if any.
+  scheduleId         String?      @map("schedule_id") @db.Uuid
+  roomId             String?      @map("room_id") @db.Uuid
+  /// One of the class's teachers (service rule); the lead teacher by default
+  /// at creation — a snapshot that does not follow later reassignments.
+  teacherUserId      String?      @map("teacher_user_id") @db.Uuid
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  title              Json
+  /// Localized text `{ ar, en?, tr? }` or NULL (CHECK in SQL).
+  description        Json?
+  deliveryMode       DeliveryMode @default(in_person) @map("delivery_mode")
+  /// Instants (timestamptz); the academy's or the branch's zone is for display only.
+  startsAt           DateTime     @map("starts_at") @db.Timestamptz(6)
+  /// > starts_at (CHECK in SQL).
+  endsAt             DateTime     @map("ends_at") @db.Timestamptz(6)
+  status             LessonStatus @default(scheduled)
+  /// A pasted link, https:// only (CHECK in SQL); providers come with MOD-15.
+  meetingUrl         String?      @map("meeting_url")
+  cancellationReason String?      @map("cancellation_reason")
+  attendanceTakenAt  DateTime?    @map("attendance_taken_at") @db.Timestamptz(6)
+  createdById        String?      @map("created_by") @db.Uuid
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  class        Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  syllabusItem CourseSyllabusItem? @relation(fields: [syllabusItemId], references: [id], onDelete: SetNull)
+  schedule     ClassSchedule?      @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  room         Room?               @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  teacher      User?               @relation("LessonTeacher", fields: [teacherUserId], references: [id], onDelete: Restrict)
+  createdBy    User?               @relation("LessonCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  attendance   AttendanceRecord[]
+
+  @@index([classId, startsAt])
+  @@index([teacherUserId, startsAt])
+  @@index([roomId, startsAt])
+  @@index([status, startsAt])
+  @@index([syllabusItemId])
+  @@index([scheduleId])
+  @@index([createdById])
+  @@map("lessons")
+}
+
+/// One student's attendance at one lesson, written as an upsert by the
+/// teacher (D-R33). The enrollment is checked by the service — no column.
+model AttendanceRecord {
+  lessonId      String           @map("lesson_id") @db.Uuid
+  studentUserId String           @map("student_user_id") @db.Uuid
+  status        AttendanceStatus
+  /// > 0 and only with status `late` (CHECKs in SQL).
+  minutesLate   Int?             @map("minutes_late") @db.SmallInt
+  /// The teacher's note — never shown to the student or the guardian (D-R32).
+  note          String?
+  recordedById  String?          @map("recorded_by") @db.Uuid
+  recordedAt    DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lesson     Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student    User   @relation("AttendanceStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  recordedBy User?  @relation("AttendanceRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@id([lessonId, studentUserId])
+  @@index([studentUserId])
+  @@index([recordedById])
+  @@map("attendance_records")
 }
