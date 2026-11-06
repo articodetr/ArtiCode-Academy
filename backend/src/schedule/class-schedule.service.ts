@@ -18,7 +18,8 @@ export const CLASS_SCHEDULE_AUDIT_ACTION = 'classes.schedule.changed';
 /** Class states whose weekly schedule may be edited (a completed or cancelled class is frozen — §4e.8 (3)). */
 const SCHEDULABLE_CLASS_STATUSES: readonly ClassStatus[] = ['planned', 'open', 'running'];
 
-const SLOT_SELECT = {
+/** The slot as API-088 returns it; the timetable readings of T04 extend it (timetable.service.ts). */
+export const SLOT_SELECT = {
   id: true,
   weekday: true,
   startTime: true,
@@ -39,7 +40,7 @@ type Db = Tx | PrismaService['db'];
 
 const SLOT_ORDER: Prisma.ClassScheduleOrderByWithRelationInput[] = [{ weekday: 'asc' }, { startTime: 'asc' }, { id: 'asc' }];
 
-function toSlotDto(row: SlotRow): ScheduleSlotDto {
+export function toSlotDto(row: SlotRow): ScheduleSlotDto {
   return {
     id: row.id,
     weekday: row.weekday,
