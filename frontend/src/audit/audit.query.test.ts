@@ -94,4 +94,11 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     }
     expect(AUDIT_ACTION_SUGGESTIONS).toContain('branches.')
   })
+
+  it('offers the three room events of MOD-07-T02 once each, with their family prefix (J-F06)', () => {
+    for (const event of ['rooms.created', 'rooms.updated', 'rooms.deleted']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+    }
+    expect(AUDIT_ACTION_SUGGESTIONS).toContain('rooms.')
+  })
 })

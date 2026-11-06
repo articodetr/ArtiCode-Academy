@@ -109,6 +109,19 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('admin', []), 'branches')).toBe(false)
     expect(canAccess(viewer('staff', ['branches.manage']), 'branches')).toBe(true)
   })
+
+  it('gates the rooms tab (/settings/rooms) by schedule.manage alone — the key every write of /api/rooms requires (J-F06); reads need none, the screen is management', () => {
+    const rooms = NAV_ITEMS.find((item) => item.key === 'rooms')!
+    expect(rooms.permissions).toEqual(['schedule.manage'])
+    expect(rooms.path).toBe('/settings/rooms')
+    expect(rooms.module).toBe('MOD-07')
+    expect(keysFor(viewer(null, ['schedule.manage']))).toEqual(['dashboard', 'rooms'])
+    expect(keysFor(viewer(null, ['schedule.read']))).toEqual(['dashboard'])
+    // By seed only academy_admin holds the key; the role alone grants nothing.
+    expect(canAccess(viewer('admin', []), 'rooms')).toBe(false)
+    expect(canAccess(viewer('staff'), 'rooms')).toBe(false)
+    expect(canAccess(viewer('teacher'), 'rooms')).toBe(false)
+  })
 })
 
 describe('navFor', () => {

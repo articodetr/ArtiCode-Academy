@@ -8,15 +8,17 @@ import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { ALL_ROLES, makeCatalog } from '../test/roles'
+import { makeRoomList } from '../test/rooms'
 import { SettingsPage } from './SettingsPage'
 
-/** Serves the roles tab (API-022/023) and the general tab (API-035). */
+/** Serves the roles tab (API-022/023), the general tab (API-035), the branches tab (API-080) and the rooms tab (API-084, API-080). */
 function mockSettingsApi() {
   return mockFetch((url) => {
     if (url === '/api/roles') return jsonResponse(200, { items: ALL_ROLES })
     if (url === '/api/permissions') return jsonResponse(200, makeCatalog())
     if (url === '/api/academy') return jsonResponse(200, makeAcademy())
     if (url === '/api/branches') return jsonResponse(200, { items: THREE_BRANCHES() })
+    if (url === '/api/rooms') return jsonResponse(200, makeRoomList())
     return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
   })
 }
@@ -84,6 +86,41 @@ describe('SettingsPage', () => {
     renderWithProviders(<SettingsPage section="roles" />, { auth: makeAuth({ user: makeUser({ permissions: ['users.read'] }) }), route: '/settings/roles' })
     expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
     expect(screen.queryByText(ar.rolesAdmin.subtitle)).not.toBeInTheDocument()
+  })
+
+  it('renders the rooms manager under /settings/rooms for a holder of schedule.manage, with the rooms tab between general and roles (J-F06)', async () => {
+    const fetchMock = mockSettingsApi()
+    renderWithProviders(<SettingsPage section="rooms" />, {
+      auth: makeAuth({ user: makeUser({ permissions: [...SETTINGS_ADMIN, 'schedule.manage'] }) }),
+      route: '/settings/rooms',
+      routes: { '/settings': <LocationProbe /> },
+    })
+
+    expect(screen.getByText(ar.rooms.subtitle)).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.rooms, ar.settings.tabs.roles])
+    expect(screen.getByRole('tab', { name: ar.settings.tabs.rooms })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('HALL')).toBeInTheDocument()
+    expect(screen.queryByLabelText(ar.settings.academyNameAr)).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).sort()).toEqual(['/api/branches', '/api/rooms'])
+
+    await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.general }))
+    expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings')
+  })
+
+  it('opens /settings/rooms to a custom role holding schedule.manage alone, without the other tabs, and answers 403 without the key (J-F06)', async () => {
+    mockSettingsApi()
+    const { unmount } = renderWithProviders(<SettingsPage section="rooms" />, {
+      auth: makeAuth({ user: makeUser({ role: null, roles: ['scheduler'], permissions: ['schedule.manage'] }) }),
+      route: '/settings/rooms',
+    })
+    expect(await screen.findByText('HALL')).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.getByText(ar.rooms.add)).toBeInTheDocument()
+    unmount()
+
+    renderWithProviders(<SettingsPage section="rooms" />, { auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }), route: '/settings/rooms' })
+    expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
+    expect(screen.queryByText(ar.rooms.subtitle)).not.toBeInTheDocument()
   })
 
   it('shows the general form alone (no tabs) to a holder of academy.settings.read without roles.manage', async () => {
