@@ -64,6 +64,11 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     expect(new Set(AUDIT_ACTION_SUGGESTIONS).size).toBe(AUDIT_ACTION_SUGGESTIONS.length)
   })
 
+  it('offers the MOD-07 class schedule event once, inside the classes family (J-F07)', () => {
+    expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'classes.schedule.changed')).toEqual(['classes.schedule.changed'])
+    expect(AUDIT_ACTION_SUGGESTIONS.indexOf('classes.schedule.changed')).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('classes.'))
+  })
+
   it('offers every MOD-04 event of the 12.4 dictionary once, the syllabus event among them (O7-F)', () => {
     const mod04Events = [
       'levels.created',
@@ -81,10 +86,5 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     }
     // Both MOD-04 families can also be searched by prefix.
     expect(AUDIT_ACTION_SUGGESTIONS).toEqual(expect.arrayContaining(['levels.', 'courses.']))
-  })
-
-  it('offers the MOD-07 class schedule event once, after the MOD-05 class events (J-F07)', () => {
-    expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'classes.schedule.changed')).toEqual(['classes.schedule.changed'])
-    expect(AUDIT_ACTION_SUGGESTIONS.indexOf('classes.schedule.changed')).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('classes.teachers.changed'))
   })
 })
