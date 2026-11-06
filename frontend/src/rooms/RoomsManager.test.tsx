@@ -233,6 +233,22 @@ describe('RoomsManager (J-F06)', () => {
     expect(roomReads(calls)).toHaveLength(4)
   })
 
+  it('says "no match" rather than "no rooms yet" when a server filter returns an empty list', async () => {
+    const calls: Call[] = []
+    mockFetch((url, init) => {
+      calls.push({ method: init?.method ?? 'GET', url, body: undefined })
+      if (url === '/api/branches') return jsonResponse(200, { items: TWO_BRANCHES() })
+      return jsonResponse(200, { items: url.includes('?') ? [] : THREE_ROOMS() })
+    })
+    renderManager()
+    await screen.findByText('HALL')
+
+    await pick(ar.rooms.columns.kind, ar.rooms.kinds.virtual)
+    expect(await screen.findByText(ar.rooms.noMatch)).toBeInTheDocument()
+    expect(screen.queryByText(ar.rooms.empty)).not.toBeInTheDocument()
+    expect(roomReads(calls).at(-1)).toBe('/api/rooms?kind=virtual')
+  })
+
   it('shows the load failure with a retry that reads again, and warns when the branches cannot be loaded', async () => {
     let fail = true
     const calls: Call[] = []

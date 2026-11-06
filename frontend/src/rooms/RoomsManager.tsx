@@ -71,6 +71,8 @@ export function RoomsManager() {
 
   const visible = filterRooms(list.rooms, local)
   const filtered = visible.length !== list.rooms.length
+  // A server filter can empty the list too: then "no match", not "no rooms yet" (found in the real-server run, CH-0069).
+  const serverFiltered = Boolean(list.filters.branchId || list.filters.kind)
 
   const columns: TableProps<Room>['columns'] = [
     {
@@ -223,7 +225,7 @@ export function RoomsManager() {
         loading={list.loading || busy}
         pagination={false}
         scroll={{ x: 'max-content' }}
-        locale={{ emptyText: list.rooms.length > 0 && visible.length === 0 ? t('rooms.noMatch') : t('rooms.empty') }}
+        locale={{ emptyText: visible.length === 0 && (list.rooms.length > 0 || serverFiltered) ? t('rooms.noMatch') : t('rooms.empty') }}
         footer={filtered ? () => <Typography.Text type="secondary">{t('rooms.shown', { shown: visible.length, total: list.rooms.length })}</Typography.Text> : undefined}
       />
 
