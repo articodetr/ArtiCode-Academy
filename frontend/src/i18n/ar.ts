@@ -881,7 +881,7 @@ export const ar = {
     noRoomOption: 'بلا قاعة',
     defaultTeacher: 'المعلم الرئيسي (افتراضياً)',
     defaultTeacherOption: 'المعلم الرئيسي (افتراضياً عند توليد الدروس)',
-    inactiveRoom: 'موقوفة',
+    inactiveRoomOption: '(موقوفة) {{room}}',
     noRooms: 'لا قاعات نشطة؛ يمكن حفظ الحصة بلا قاعة.',
     roomsFailed: 'تعذّر تحميل القاعات؛ يمكن حفظ الحصة بلا قاعة.',
     noTeachers: 'لم يُسند معلم إلى الفصل بعد؛ الحصة بلا معلم تُسند إلى المعلم الرئيسي عند توليد الدروس.',
@@ -925,17 +925,23 @@ export const ar = {
       room: 'الحصتان {{first}} و{{second}} تحجزان القاعة نفسها في وقت متداخل.',
       teacher: 'الحصتان {{first}} و{{second}} تُسندان إلى المعلم نفسه في وقت متداخل.',
     },
-    resource: {
-      room: 'القاعة',
-      teacher: 'المعلم',
-    },
     errors: {
       class_not_found: 'الفصل غير موجود أو غير مُسند إليك.',
       class_not_schedulable: 'لا يُعدَّل جدول فصل مكتمل أو ملغى (الحالة: {{status}}).',
       schedule_invalid: 'تغيّر الجدول في مكان آخر؛ أُعيد تحميله.',
-      schedule_conflict_request: '{{resource}} محجوز لحصة أخرى في القائمة نفسها في وقت متداخل (الحصة {{slot}}).',
-      schedule_conflict_other: '{{resource}} محجوز لفصل آخر في وقت متداخل (الحصة {{slot}}).',
-      schedule_conflict_unknown: '{{resource}} محجوز في وقت متداخل؛ راجع الحصص ثم أعد المحاولة.',
+      // One message per resource: Arabic agreement differs (القاعة محجوزة / المعلم محجوز).
+      schedule_conflict: {
+        room: {
+          request: 'القاعة محجوزة لحصة أخرى في القائمة نفسها في وقت متداخل (الحصة {{slot}}).',
+          other: 'القاعة محجوزة لفصل آخر في وقت متداخل (الحصة {{slot}}).',
+          unknown: 'القاعة محجوزة في وقت متداخل؛ راجع الحصص ثم أعد المحاولة.',
+        },
+        teacher: {
+          request: 'المعلم محجوز لحصة أخرى في القائمة نفسها في وقت متداخل (الحصة {{slot}}).',
+          other: 'المعلم محجوز لفصل آخر في وقت متداخل (الحصة {{slot}}).',
+          unknown: 'المعلم محجوز في وقت متداخل؛ راجع الحصص ثم أعد المحاولة.',
+        },
+      },
       non_working_day: 'يوم {{weekday}} خارج أيام الدوام المضبوطة في إعدادات الأكاديمية.',
       room_not_found: 'القاعة «{{name}}» لم تعد موجودة.',
       room_inactive: 'القاعة «{{name}}» موقوفة؛ اختر قاعة نشطة.',
