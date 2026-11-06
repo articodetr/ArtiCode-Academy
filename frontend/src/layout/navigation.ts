@@ -12,6 +12,7 @@ import {
   EnvironmentOutlined,
   FileTextOutlined,
   FormOutlined,
+  HomeOutlined,
   PlayCircleOutlined,
   ReadOutlined,
   SafetyCertificateOutlined,
@@ -110,6 +111,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
   // MOD-02-T06 screen: the branches tab of the settings lives under /settings/branches behind the one key the server enforces for writes.
   { key: 'branches', path: '/settings/branches', labelKey: 'nav.branches', icon: createElement(EnvironmentOutlined), permissions: ['branches.manage'], module: 'MOD-02' },
+  // J-F06 (MOD-07-T02 screen): the rooms tab of the settings lives under /settings/rooms behind the one key the server
+  // enforces for writes (`schedule.manage` — reads need no key, D-R27; by seed only academy_admin holds it).
+  { key: 'rooms', path: '/settings/rooms', labelKey: 'nav.rooms', icon: createElement(HomeOutlined), permissions: ['schedule.manage'], module: 'MOD-07' },
 ]
 
 /** Whether the viewer sees an entry: by permission when the entry names keys, by server role keys when it names those, else by the role matrix. */
