@@ -8,7 +8,8 @@
 // (withdraw / complete / cancel / reactivate), each confirmed with an optional
 // reason. The server answers with the enrollment, not the class, so the tab
 // moves the class's `enrolledCount` itself (enrolledCountDelta) and hands the
-// class back to the drawer.
+// class back to the drawer. The refresh button re-reads both the roster and
+// the class, so the seats shown beside the roster match the server too.
 import { DownOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Dropdown, Flex, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import type { MenuProps, TableProps } from 'antd'
@@ -23,6 +24,8 @@ import { StudentPicker } from '../classes/ClassPickers'
 import { SeatsBar } from '../classes/SeatsBar'
 import { describeClassesFailure, failureMessage } from '../classes/classes.errors'
 import { StatusTag } from '../components/StatusTag'
+import { directionOf } from '../i18n/language'
+import type { Direction } from '../i18n/language'
 import { useLocalized } from '../i18n/useLocalized'
 import { displayNameOf, formatDateTime } from '../users/users.format'
 import {
@@ -46,11 +49,14 @@ const STALE_CLASS_CODES = new Set(['class_full', 'class_not_enrollable'])
 /** Server codes after which the roster on screen is out of date. */
 const STALE_ROSTER_CODES = new Set(['already_enrolled', 'invalid_transition', 'enrollment_not_found'])
 
+/** «from → to» in the reading direction: arrows are not mirrored by the bidi algorithm, so RTL needs its own. */
+const TRANSITION_ARROW: Readonly<Record<Direction, string>> = { rtl: '←', ltr: '→' }
+
 interface ClassEnrollmentsTabProps {
   cls: AcademyClass
   /** The class with its `enrolledCount` moved by a write (the server returns the enrollment only). */
   onClassChanged: (cls: AcademyClass) => void
-  /** The class changed elsewhere (full, no longer enrollable): re-read it. */
+  /** The class changed elsewhere (full, no longer enrollable) or the user asked for a refresh: re-read it. */
   onStale: () => void
 }
 
@@ -237,7 +243,14 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale }: ClassEnrol
           options={ENROLLMENT_STATUSES.map((status) => ({ value: status, label: t(`labels.${status}`) }))}
           style={{ minWidth: 150 }}
         />
-        <Button icon={<ReloadOutlined />} onClick={list.reload} aria-label={t('classes.enrollments.refresh')} />
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => {
+            list.reload()
+            onStale()
+          }}
+          aria-label={t('classes.enrollments.refresh')}
+        />
       </Flex>
 
       {listFailure ? (
@@ -310,6 +323,7 @@ interface EnrollmentActionModalProps {
 
 function EnrollmentActionModal({ cls, row, action, onDone, onFailed, onCancel }: EnrollmentActionModalProps) {
   const { t } = useTranslation()
+  const { language } = useLocalized()
   const { message } = App.useApp()
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -348,7 +362,7 @@ function EnrollmentActionModal({ cls, row, action, onDone, onFailed, onCancel }:
     >
       <Typography.Paragraph>
         {t(`classes.enrollments.confirm.${action}`)}{' '}
-        <StatusTag value={row.status} /> → <StatusTag value={nextEnrollmentStatus(action, row.status) ?? row.status} />
+        <StatusTag value={row.status} /> {TRANSITION_ARROW[directionOf(language)]} <StatusTag value={nextEnrollmentStatus(action, row.status) ?? row.status} />
       </Typography.Paragraph>
       {warnFull ? (
         <Alert type="warning" showIcon message={t('classes.enrollments.confirm.reactivateFull', { enrolledCount: cls.enrolledCount, capacity: cls.capacity })} style={{ marginBottom: 12 }} />
