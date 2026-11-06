@@ -57,14 +57,20 @@ export class ClassTeachersService {
       );
       if (isEmptyTeacherPlan(plan)) return;
       await this.assertEligibleTeachers(tx, writtenTeacherIds(plan, requested));
-      await this.write(tx, classId, plan, caller.id);
+      const clearedSlots = await this.write(tx, classId, plan, caller.id);
       await this.audit.record(
         {
           action: CLASS_TEACHERS_AUDIT_ACTION,
           actorUserId: caller.id,
           entityType: CLASSES_ENTITY_TYPE,
           entityId: classId,
-          metadata: { code: klass.code, added: plan.added, removed: plan.removed, roleChanged: plan.roleChanged },
+          metadata: {
+            code: klass.code,
+            added: plan.added,
+            removed: plan.removed,
+            roleChanged: plan.roleChanged,
+            ...(clearedSlots > 0 ? { clearedSlots } : {}),
+          },
           ...ctx,
         },
         tx,
@@ -89,9 +95,19 @@ export class ClassTeachersService {
     }
   }
 
-  /** Removals, then demotions, then promotions, then inserts: at no point do two leads exist. */
-  private async write(tx: Prisma.TransactionClient, classId: string, plan: TeacherReplacementPlan, actorId: string): Promise<void> {
-    if (plan.removed.length > 0) await tx.classTeacher.deleteMany({ where: { classId, teacherUserId: { in: plan.removed } } });
+  /**
+   * Removals, then demotions, then promotions, then inserts: at no point do two
+   * leads exist. A removed teacher is also cleared from the class's weekly
+   * slots (MOD-07-T03, D-R26: the slot falls back to the lead teacher at
+   * generation time); returns how many slots that touched.
+   */
+  private async write(tx: Prisma.TransactionClient, classId: string, plan: TeacherReplacementPlan, actorId: string): Promise<number> {
+    let clearedSlots = 0;
+    if (plan.removed.length > 0) {
+      await tx.classTeacher.deleteMany({ where: { classId, teacherUserId: { in: plan.removed } } });
+      const cleared = await tx.classSchedule.updateMany({ where: { classId, teacherUserId: { in: plan.removed } }, data: { teacherUserId: null } });
+      clearedSlots = cleared.count;
+    }
     const demotions = plan.roleChanged.filter((change) => change.to === 'assistant');
     const promotions = plan.roleChanged.filter((change) => change.to === 'lead');
     for (const change of [...demotions, ...promotions]) {
@@ -106,5 +122,6 @@ export class ClassTeachersService {
         data: plan.added.map((entry) => ({ classId, teacherUserId: entry.userId, role: entry.role, assignedById: actorId })),
       });
     }
+    return clearedSlots;
   }
 }

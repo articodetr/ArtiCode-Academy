@@ -22,8 +22,9 @@ import type {
   UpdateClassDto,
 } from './classes.dto.js';
 import { classesError } from './classes.errors.js';
-import { canManageClasses } from './classes.policy.js';
-import { allowedClassActions, enrollmentStatusAfter, isClassDeletable, nextClassStatus } from './classes.status.js';
+import { visibleClassesWhere } from './classes.policy.js';
+import { allowedClassActions, closesOpenSlots, enrollmentStatusAfter, isClassDeletable, nextClassStatus } from './classes.status.js';
+import { calendarDateIn } from '../schedule/schedule.time.js';
 
 export const CLASSES_AUDIT_ACTIONS = {
   created: 'classes.created',
@@ -115,11 +116,6 @@ function toUpdateInput(data: ClassPatch): Prisma.ClassUncheckedUpdateInput {
   return input;
 }
 
-/** D-R16: without `classes.manage` only the classes the caller is assigned to (lead or assistant). */
-function visibleTo(caller: AuthPrincipal): Prisma.ClassWhereInput {
-  return canManageClasses(caller.permissions) ? {} : { teachers: { some: { teacherUserId: caller.id } } };
-}
-
 /**
  * Concurrent requests can beat the friendly checks: a duplicate code (P2002),
  * a course deleted meanwhile (P2003 on classes.course_id) or a class deleted
@@ -156,7 +152,7 @@ export class ClassesService {
     const order: SortOrder = query.order ?? (sort === 'code' ? 'asc' : 'desc');
     const limit = query.limit ?? CLASSES_PAGE_DEFAULT;
 
-    const filters: Prisma.ClassWhereInput[] = [visibleTo(caller)];
+    const filters: Prisma.ClassWhereInput[] = [visibleClassesWhere(caller)];
     if (query.status) filters.push({ status: query.status });
     if (query.courseId) filters.push({ courseId: query.courseId });
     if (query.teacherId) filters.push({ teachers: { some: { teacherUserId: query.teacherId } } });
@@ -200,7 +196,7 @@ export class ClassesService {
   }
 
   async get(id: string, caller: AuthPrincipal): Promise<ClassDto> {
-    const row = await this.prisma.db.class.findFirst({ where: { AND: [{ id }, visibleTo(caller)] }, select: CLASS_SELECT });
+    const row = await this.prisma.db.class.findFirst({ where: { AND: [{ id }, visibleClassesWhere(caller)] }, select: CLASS_SELECT });
     if (!row) throw classesError.classNotFound(id);
     return toClassDto(row);
   }
@@ -327,6 +323,19 @@ export class ClassesService {
         });
         affectedEnrollments = moved.count;
       }
+      // MOD-07-T03 (§4e.8 (3)): a completed or cancelled class stops booking its rooms and
+      // teachers — its open-ended (or later-ending) weekly slots end today in the academy's
+      // time zone, or on their own first day when that is later (CHECK ck_class_schedules_effective).
+      let closedSlots = 0;
+      if (closesOpenSlots(input.action)) {
+        const academy = await tx.academy.findFirst({ select: { timezone: true } });
+        const today = calendarDateIn(academy?.timezone ?? 'UTC');
+        closedSlots = await tx.$executeRaw`
+          UPDATE class_schedules
+          SET effective_to = GREATEST(${today}::date, effective_from)
+          WHERE class_id = ${id}::uuid
+            AND (effective_to IS NULL OR effective_to > GREATEST(${today}::date, effective_from))`;
+      }
       await this.audit.record(
         {
           action: CLASSES_AUDIT_ACTIONS.statusChanged,
@@ -340,6 +349,7 @@ export class ClassesService {
             to,
             ...(input.reason !== undefined ? { reason: input.reason } : {}),
             ...(affectedEnrollments !== null ? { affectedEnrollments } : {}),
+            ...(closedSlots > 0 ? { closedSlots } : {}),
           },
           ...ctx,
         },
