@@ -87,6 +87,10 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'classes.status.changed',
   'classes.deleted',
   'classes.teachers.changed',
+  // MOD-05-T04 (CH-0055) — first shown in the frontend with J-F04
+  'enrollments.',
+  'enrollments.created',
+  'enrollments.status.changed',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

@@ -12,8 +12,11 @@ const SEEDED: Readonly<Record<Role, string[]>> = {
   guardian: ['courses.read', 'grades.read_linked'],
 }
 
-function viewer(role: Role | null, permissions: string[] = role ? SEEDED[role] : []): NavViewer {
-  return { role, permissions }
+/** Server role keys of the UI roles (backend/src/authorization/system-roles.ts). */
+const ROLE_KEYS: Readonly<Record<Role, string>> = { admin: 'academy_admin', staff: 'staff', teacher: 'teacher', student: 'student', guardian: 'guardian' }
+
+function viewer(role: Role | null, permissions: string[] = role ? SEEDED[role] : [], roles: string[] = role ? [ROLE_KEYS[role]] : []): NavViewer {
+  return { role, roles, permissions }
 }
 
 function keysFor(user: NavViewer): string[] {
@@ -21,14 +24,31 @@ function keysFor(user: NavViewer): string[] {
 }
 
 describe('NAV_ITEMS', () => {
-  it('has unique keys and paths, and every entry is gated either by permissions or by the role matrix', () => {
+  it('has unique keys and paths, and every entry is gated by exactly one of: permissions, server role keys, the role matrix', () => {
     const keys = NAV_ITEMS.map((item) => item.key)
     const paths = NAV_ITEMS.map((item) => item.path)
     expect(new Set(keys).size).toBe(keys.length)
     expect(new Set(paths).size).toBe(paths.length)
     for (const item of NAV_ITEMS) {
-      expect(Boolean(item.permissions) !== Boolean(item.roles)).toBe(true)
+      expect([item.permissions, item.roleKeys, item.roles].filter(Boolean)).toHaveLength(1)
     }
+  })
+
+  it('gates «my classes» by the student/guardian server role keys since API-060 is ownership without a permission key (J-F04)', () => {
+    const myClasses = NAV_ITEMS.find((item) => item.key === 'myClasses')!
+    expect(myClasses.roleKeys).toEqual(['student', 'guardian'])
+    expect(myClasses.path).toBe('/my-classes')
+    expect(keysFor(viewer('student'))).toContain('myClasses')
+    expect(keysFor(viewer('guardian'))).toContain('myClasses')
+    // The server rule looks at the role keys, not the single UI role: a teacher who is also a guardian keeps the entry…
+    expect(keysFor(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']))).toContain('myClasses')
+    expect(canAccess(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']), 'myClasses')).toBe(true)
+    // …and an admin, a teacher or a custom role without those keys gets no entry (the server would answer an empty list).
+    expect(keysFor(viewer('admin'))).not.toContain('myClasses')
+    expect(keysFor(viewer('teacher'))).not.toContain('myClasses')
+    expect(canAccess(viewer(null, ['users.read'], ['auditor']), 'myClasses')).toBe(false)
+    // Permissions never open it: the entry mirrors ownership, not a key.
+    expect(canAccess(viewer(null, ['enrollments.read', 'enrollments.manage']), 'myClasses')).toBe(false)
   })
 
   it('gates the MOD-03 screens by the keys the server enforces', () => {
@@ -89,8 +109,9 @@ describe('navFor', () => {
     expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings'])
     // Staff gain the courses entry (MOD-04-T05): the seed grants them courses.read.
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'payments', 'notifications'])
-    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications'])
-    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'schedule', 'assignments', 'exams', 'certificates', 'payments', 'notifications'])
+    // Students and guardians gain «my classes» (J-F04): ownership, by their server role keys.
+    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'assignments', 'exams', 'certificates', 'payments', 'notifications'])
   })
 
   it('shows the users page to a teacher because the seed grants teachers users.read (reduced projection) (MOD-03-T15)', () => {

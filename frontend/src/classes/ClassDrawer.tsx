@@ -1,12 +1,14 @@
 // Detail drawer of one class (J-F01): reads GET /api/classes/:id (API-051) and
-// shows two tabs — details and teachers (ClassTeachersTab, API-056). For
-// holders of `classes.manage`: an edit form (smallest PATCH — API-053) and an
-// actions menu built from the mirrored state machine (classes.status.ts →
-// API-054 with an optional reason, and API-055 for a planned class), each
-// action confirmed in a modal. A teacher (`classes.read` alone) sees their
-// class read-only. Enrollments (the roster) come with J-F04.
+// shows three tabs — details, teachers (ClassTeachersTab, API-056) and, since
+// J-F04, students (ClassEnrollmentsTab, API-057..API-059) for whoever may read
+// the roster: `enrollments.read` plus `enrollments.manage` or an assignment to
+// the class (D-R16 — the server answers 404 otherwise). For holders of
+// `classes.manage`: an edit form (smallest PATCH — API-053) and an actions menu
+// built from the mirrored state machine (classes.status.ts → API-054 with an
+// optional reason, and API-055 for a planned class), each action confirmed in
+// a modal. A teacher (`classes.read` alone) sees their class read-only.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Progress, Skeleton, Space, Tabs, Typography } from 'antd'
+import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -15,10 +17,13 @@ import { changeClassStatus, deleteClass, getClass, updateClass } from '../api/cl
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
 import { StatusTag } from '../components/StatusTag'
+import { ClassEnrollmentsTab } from '../enrollments/ClassEnrollmentsTab'
+import { canReadRoster } from '../enrollments/enrollments.status'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, formatDay, localizedLabel } from '../users/users.format'
 import { ClassFormFields } from './ClassFormFields'
 import { ClassTeachersTab } from './ClassTeachersTab'
+import { SeatsBar } from './SeatsBar'
 import { describeClassesFailure, failureMessage } from './classes.errors'
 import { CLASS_STATUS_REASON_MAX_LENGTH, classFormValuesOf, planClassPatch } from './classes.form'
 import type { ClassFormValues } from './classes.form'
@@ -36,7 +41,10 @@ const ICONS: Readonly<Record<ClassMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'teachers'
+type DrawerTab = 'details' | 'teachers' | 'students'
+
+// The classes list keeps importing the bar from here (it lives in SeatsBar.tsx since J-F04).
+export { SeatsBar }
 
 interface ClassDrawerProps {
   classId: string | null
@@ -47,24 +55,10 @@ interface ClassDrawerProps {
   onDeleted: (classId: string) => void
 }
 
-/** Seats taken over capacity as a bar (shared with the list). */
-export function SeatsBar({ cls }: { cls: Pick<AcademyClass, 'enrolledCount' | 'capacity'> }) {
-  const percent = cls.capacity > 0 ? Math.round((cls.enrolledCount / cls.capacity) * 100) : 0
-  return (
-    <Progress
-      percent={percent}
-      size="small"
-      status={cls.enrolledCount >= cls.capacity ? 'exception' : 'normal'}
-      format={() => <span dir="ltr">{`${cls.enrolledCount} / ${cls.capacity}`}</span>}
-      style={{ minWidth: 120, marginBottom: 0 }}
-    />
-  )
-}
-
 export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { hasPermission } = useAuth()
+  const { user, hasPermission } = useAuth()
   const canManage = hasPermission('classes.manage')
   const [cls, setCls] = useState<AcademyClass | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -214,6 +208,16 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
               children: <ClassTeachersTab cls={cls} onUpdated={applyUpdate} />,
               disabled: editing,
             },
+            ...(canReadRoster(hasPermission, cls, user?.id)
+              ? [
+                  {
+                    key: 'students',
+                    label: t('classes.drawer.tabs.students', { count: cls.enrolledCount }),
+                    children: <ClassEnrollmentsTab cls={cls} onClassChanged={applyUpdate} onStale={reload} />,
+                    disabled: editing,
+                  },
+                ]
+              : []),
           ]}
         />
       ) : null}
