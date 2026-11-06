@@ -3,45 +3,56 @@
 // save for `academy.settings.manage`); the "roles & permissions" tab is real
 // since MOD-03-T13 and lives under /settings/roles behind `roles.manage` alone —
 // a holder of that permission reaches it even without the rest of the settings
-// (D-R06, ADR-027).
+// (D-R06, ADR-027); the "branches" tab (MOD-02-T06 screen, API-080..API-083)
+// lives under /settings/branches behind `branches.manage` alone on the same pattern.
 import { Tabs } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { GeneralSettingsForm } from '../academy/GeneralSettingsForm'
 import { useAuth } from '../auth/auth-context'
 import { RequireAccess } from '../auth/RequireAuth'
+import { BranchesManager } from '../branches/BranchesManager'
+import { MANAGE_BRANCHES_PERMISSION } from '../branches/branches.policy'
 import { PageHeader } from '../components/PageHeader'
 import { canAccess } from '../layout/navigation'
 import { RolesManager } from '../roles/RolesManager'
 
-export type SettingsSection = 'general' | 'roles'
+export type SettingsSection = 'general' | 'branches' | 'roles'
 
-const SECTION_PATHS: Readonly<Record<SettingsSection, string>> = { general: '/settings', roles: '/settings/roles' }
+const SECTION_PATHS: Readonly<Record<SettingsSection, string>> = { general: '/settings', branches: '/settings/branches', roles: '/settings/roles' }
+
+/** The permission that gates a tab other than the general one (inside the page too — a direct render still answers 403). */
+const SECTION_PERMISSIONS: Readonly<Partial<Record<SettingsSection, string>>> = { branches: MANAGE_BRANCHES_PERMISSION, roles: 'roles.manage' }
 
 export function SettingsPage({ section = 'general' }: { section?: SettingsSection }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, hasPermission } = useAuth()
   const canManageRoles = hasPermission('roles.manage')
+  const canManageBranches = hasPermission(MANAGE_BRANCHES_PERMISSION)
   // The general tab follows the gate of the /settings entry (`academy.settings.read` or `.manage` since CH-0036).
   const canSeeGeneral = user ? canAccess(user, 'settings') : false
 
   const tabs = [
     ...(canSeeGeneral ? [{ key: 'general', label: t('settings.tabs.general') }] : []),
+    ...(canManageBranches ? [{ key: 'branches', label: t('settings.tabs.branches') }] : []),
     ...(canManageRoles ? [{ key: 'roles', label: t('settings.tabs.roles') }] : []),
   ]
 
+  const subtitle = section === 'roles' ? t('rolesAdmin.subtitle') : section === 'branches' ? t('branches.subtitle') : t('settings.subtitle')
+
   const content = (
     <>
-      <PageHeader title={t('settings.title')} subtitle={section === 'roles' ? t('rolesAdmin.subtitle') : t('settings.subtitle')} />
+      <PageHeader title={t('settings.title')} subtitle={subtitle} />
       {tabs.length > 1 ? (
         <Tabs activeKey={section} items={tabs} onChange={(key) => navigate(SECTION_PATHS[key as SettingsSection])} style={{ marginBottom: 16 }} />
       ) : null}
-      {section === 'roles' ? <RolesManager /> : <GeneralSettingsForm />}
+      {section === 'roles' ? <RolesManager /> : section === 'branches' ? <BranchesManager /> : <GeneralSettingsForm />}
     </>
   )
 
-  // The roles tab is gated by its permission inside the page too, so a direct render (and the
-  // route without its guard) still answers 403 without `roles.manage` (D-R06; RequireAccess — T15).
-  return section === 'roles' ? <RequireAccess permission="roles.manage">{content}</RequireAccess> : content
+  // The roles and branches tabs are gated by their permission inside the page too, so a direct render (and the
+  // route without its guard) still answers 403 without it (D-R06; RequireAccess — T15).
+  const permission = SECTION_PERMISSIONS[section]
+  return permission ? <RequireAccess permission={permission}>{content}</RequireAccess> : content
 }
