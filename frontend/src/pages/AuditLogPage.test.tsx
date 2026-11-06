@@ -89,6 +89,39 @@ describe('AuditLogPage', () => {
     })
   })
 
+  it('suggests the syllabus event of MOD-04 and filters the list by it (O7-F, WF-05 step 7)', async () => {
+    const syllabusChanged = makeAuditItem({
+      id: '0192f0a0-0000-7000-8000-0000000000a4',
+      action: 'courses.syllabus.changed',
+      entityType: 'courses',
+      entityId: '0193a000-0000-7000-8000-00000000c001',
+      metadata: { code: 'PY101', added: 1, updated: 1, removed: 0, reordered: false, items: 3 },
+    })
+    const queries: URLSearchParams[] = []
+    mockFetch((url) => {
+      const { searchParams } = new URL(url, 'http://localhost')
+      queries.push(searchParams)
+      return jsonResponse(200, makeAuditList(searchParams.get('action') === 'courses.syllabus.changed' ? [syllabusChanged] : [suspended]))
+    })
+    renderPage()
+    await screen.findByText('users.status.changed')
+
+    await userEvent.type(screen.getByLabelText(ar.audit.filters.action), 'courses.sy')
+    const option = await waitFor(() => {
+      const found = [...document.querySelectorAll('.ant-select-item-option-content')].find((node) => node.textContent === 'courses.syllabus.changed')
+      expect(found).toBeDefined()
+      return found as HTMLElement
+    })
+    fireEvent.click(option)
+    await applyFilters()
+
+    await waitFor(() => expect(queries).toHaveLength(2))
+    expect(Object.fromEntries(queries[1]!)).toEqual({ limit: '50', action: 'courses.syllabus.changed' })
+    const [row] = bodyRows()
+    expect(within(row!).getByText('courses.syllabus.changed')).toBeInTheDocument()
+    expect(within(row!).getByText('code: PY101 · added: 1 · updated: 1 · removed: 0 · …')).toBeInTheDocument()
+  })
+
   it('refuses locally a filter the server would reject and sends nothing', async () => {
     const api = mockAuditApi({ first: makeAuditList([suspended]) })
     renderPage()
