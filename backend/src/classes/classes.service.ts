@@ -369,6 +369,8 @@ export class ClassesService {
       if (!current) throw classesError.classNotFound(id);
       const enrollmentCount = await tx.enrollment.count({ where: { classId: id } });
       if (!isClassDeletable(current.status, enrollmentCount)) throw classesError.classNotDeletable(current.status, enrollmentCount);
+      // MOD-06-T02: the lessons of a planned class go with it (Cascade); the event says how many.
+      const deletedLessons = await tx.lesson.count({ where: { classId: id } });
       await tx.class.delete({ where: { id }, select: { id: true } });
       await this.audit.record(
         {
@@ -376,7 +378,7 @@ export class ClassesService {
           actorUserId: caller.id,
           entityType: CLASSES_ENTITY_TYPE,
           entityId: id,
-          metadata: { code: current.code },
+          metadata: { code: current.code, ...(deletedLessons > 0 ? { deletedLessons } : {}) },
           ...ctx,
         },
         tx,
