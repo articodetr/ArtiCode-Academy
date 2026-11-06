@@ -16,6 +16,7 @@ import { HealthModule } from './health/health.module.js';
 import { LevelsModule } from './levels/levels.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RolesModule } from './roles/roles.module.js';
+import { ScheduleModule } from './schedule/schedule.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
@@ -56,6 +57,8 @@ import { UsersModule } from './users/users.module.js';
     EnrollmentsModule,
     // MOD-02-T06 (O8): branches of the academy.
     BranchesModule,
+    // MOD-07-T02 (O9): rooms; the weekly class schedules follow in T03.
+    ScheduleModule,
     HealthModule,
   ],
 })

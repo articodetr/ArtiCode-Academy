@@ -236,17 +236,23 @@ export class BranchesService {
     return this.getById(id);
   }
 
-  /** Deletes a branch that is not main (`409 branch_is_main`) and that nothing uses (rooms — O9). */
+  /**
+   * Deletes a branch that is not main (`409 branch_is_main`) and that no room
+   * belongs to (`409 branch_in_use { roomCount }` — MOD-07-T02; `rooms.branch_id`
+   * is Restrict, so a room created after the count still fails the delete as P2003).
+   */
   async remove(id: string, caller: AuthPrincipal, ctx: RequestContext): Promise<void> {
     const row = await this.prisma.db.branch.findUnique({ where: { id }, select: { id: true, isMain: true } });
     if (!row) throw branchesError.notFound(id);
     if (row.isMain) throw branchesError.isMain(id, 'delete');
+    await this.assertNoRooms(this.prisma.db, id);
     try {
       await this.prisma.db.$transaction(async (tx) => {
         await lockBranches(tx);
         const fresh = await tx.branch.findUnique({ where: { id }, select: { code: true, isMain: true } });
         if (!fresh) throw branchesError.notFound(id);
         if (fresh.isMain) throw branchesError.isMain(id, 'delete');
+        await this.assertNoRooms(tx, id);
         await tx.branch.delete({ where: { id }, select: { id: true } });
         await this.audit.record(
           {
@@ -263,6 +269,12 @@ export class BranchesService {
     } catch (error) {
       throw translateKnownError(error, id, null);
     }
+  }
+
+  /** Rooms keep a branch alive (MOD-07-T02): deactivate a branch that still has rooms instead of deleting it. */
+  private async assertNoRooms(db: Pick<Tx, 'room'>, branchId: string): Promise<void> {
+    const roomCount = await db.room.count({ where: { branchId } });
+    if (roomCount > 0) throw branchesError.inUse(roomCount);
   }
 
   private async getById(id: string): Promise<BranchDto> {

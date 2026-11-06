@@ -171,6 +171,8 @@ describe.skipIf(!available)('MOD-02 branches API (e2e, TEST-069)', () => {
   afterAll(async () => {
     try {
       if (prisma) {
+        // Rooms point to branches (Restrict — MOD-07-T02): the suite's rooms go first.
+        await prisma.room.deleteMany({ where: { code: { startsWith: `${TAG}-` } } });
         await prisma.branch.deleteMany({ where: { code: { startsWith: `${TAG}-` } } });
         if (originalMainId) await prisma.branch.updateMany({ where: { id: originalMainId }, data: { isMain: true, isActive: true } });
       }
@@ -310,6 +312,23 @@ describe.skipIf(!available)('MOD-02 branches API (e2e, TEST-069)', () => {
     expect(stepDown.body).toMatchObject({ isMain: false, isActive: false });
     const events = await eventsSince(m);
     expect(events.map((event) => event.metadata)).toEqual([{ code: code('X1'), fields: ['isMain', 'isActive'] }]);
+  });
+
+  it('AC5-rooms (MOD-07-T02) — a branch that still has rooms is 409 branch_in_use { roomCount } without a write or an event; once the room is gone the delete succeeds', async () => {
+    const branchId = await seedBranch('U1');
+    const room = await prisma.room.create({ data: { code: code('U1'), name: { ar: 'قاعة' }, branchId }, select: { id: true } });
+    const m = await mark();
+
+    const inUse = await api().delete(`${BRANCHES}/${branchId}`).set(bearer('manager'));
+    expect(inUse.status).toBe(409);
+    expect(inUse.body).toMatchObject({ code: 'branch_in_use', roomCount: 1 });
+    expect(await prisma.branch.count({ where: { id: branchId } })).toBe(1);
+    expect(await eventsSince(m)).toEqual([]);
+
+    await prisma.room.delete({ where: { id: room.id } });
+    await api().delete(`${BRANCHES}/${branchId}`).set(bearer('manager')).expect(204);
+    const events = await eventsSince(m);
+    expect(events.map((event) => [event.action, event.metadata])).toEqual([['branches.deleted', { code: code('U1') }]]);
   });
 
   it('AC6 — a PATCH without a difference writes nothing and records nothing; {} is 400 nothing_to_update; null clears; delete records one event', async () => {
