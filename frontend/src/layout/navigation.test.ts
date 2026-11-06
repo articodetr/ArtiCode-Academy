@@ -3,13 +3,13 @@ import type { Role } from '../auth/roles'
 import { NAV_ITEMS, canAccess, navFor } from './navigation'
 import type { NavViewer } from './navigation'
 
-/** The MOD-03/MOD-04/MOD-05/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
+/** The MOD-03/MOD-04/MOD-05/MOD-07/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
 const SEEDED: Readonly<Record<Role, string[]>> = {
-  admin: ['users.read', 'users.read_contact', 'roles.manage', 'audit.read', 'academy.settings.read', 'academy.settings.manage', 'courses.read', 'courses.manage', 'classes.read', 'classes.manage', 'classes.teachers.assign'],
-  staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read', 'classes.read', 'classes.manage'],
-  teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.manage'],
-  student: ['courses.read', 'assignments.submit'],
-  guardian: ['courses.read', 'grades.read_linked'],
+  admin: ['users.read', 'users.read_contact', 'roles.manage', 'audit.read', 'academy.settings.read', 'academy.settings.manage', 'courses.read', 'courses.manage', 'classes.read', 'classes.manage', 'classes.teachers.assign', 'schedule.read', 'schedule.manage'],
+  staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read', 'classes.read', 'classes.manage', 'schedule.read'],
+  teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.manage', 'schedule.read'],
+  student: ['courses.read', 'assignments.submit', 'schedule.read'],
+  guardian: ['courses.read', 'grades.read_linked', 'schedule.read'],
 }
 
 function viewer(role: Role | null, permissions: string[] = role ? SEEDED[role] : []): NavViewer {
@@ -56,13 +56,23 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('student', []), 'courses')).toBe(false)
   })
 
+  it('gates the schedule screen by schedule.read, schedule.manage or classes.manage since its API is real (J-F05, D-R27)', () => {
+    const schedule = NAV_ITEMS.find((item) => item.key === 'schedule')!
+    expect(schedule.permissions).toEqual(['schedule.read', 'schedule.manage', 'classes.manage'])
+    expect(keysFor(viewer(null, ['schedule.read']))).toEqual(['dashboard', 'schedule'])
+    expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard', 'schedule'])
+    expect(keysFor(viewer(null, ['schedule.manage']))).toEqual(['dashboard', 'schedule'])
+    expect(canAccess(viewer('student', []), 'schedule')).toBe(false)
+  })
+
   it('gates the classes screen by classes.read alone since every read of /api/classes requires it (J-F01, PR #26 review) — students and guardians do not hold it', () => {
     const classes = NAV_ITEMS.find((item) => item.key === 'classes')!
     expect(classes.permissions).toEqual(['classes.read'])
     expect(keysFor(viewer(null, ['classes.read']))).toEqual(['dashboard', 'classes'])
-    // A custom role holding classes.manage without classes.read would get 403 on the list — the entry stays hidden.
-    expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard'])
-    expect(keysFor(viewer(null, ['classes.manage', 'classes.teachers.assign']))).toEqual(['dashboard'])
+    // A custom role holding classes.manage without classes.read would get 403 on the list — the entry stays hidden
+    // (classes.manage does open the academy schedule — J-F05).
+    expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard', 'schedule'])
+    expect(keysFor(viewer(null, ['classes.manage', 'classes.teachers.assign']))).toEqual(['dashboard', 'schedule'])
     expect(canAccess(viewer(null, ['classes.manage']), 'classes')).toBe(false)
     expect(keysFor(viewer(null, ['classes.teachers.assign']))).toEqual(['dashboard'])
     expect(canAccess(viewer('student'), 'classes')).toBe(false)
@@ -82,7 +92,8 @@ describe('navFor', () => {
   })
 
   it('ignores the role for permission-gated entries: an admin whose role lost users.read does not see the users (or courses, classes, settings) page', () => {
-    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports'])
+    // Since J-F05 the schedule entry is permission-gated too (schedule.read / schedule.manage / classes.manage).
+    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports'])
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
