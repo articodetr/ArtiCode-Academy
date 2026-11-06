@@ -63,4 +63,23 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     }
     expect(new Set(AUDIT_ACTION_SUGGESTIONS).size).toBe(AUDIT_ACTION_SUGGESTIONS.length)
   })
+
+  it('offers every MOD-04 event of the 12.4 dictionary once, the syllabus event among them (O7-F)', () => {
+    const mod04Events = [
+      'levels.created',
+      'levels.updated',
+      'levels.deleted',
+      'levels.reordered',
+      'courses.created',
+      'courses.updated',
+      'courses.status.changed',
+      'courses.deleted',
+      'courses.syllabus.changed',
+    ]
+    for (const event of mod04Events) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+    }
+    // Both MOD-04 families can also be searched by prefix.
+    expect(AUDIT_ACTION_SUGGESTIONS).toEqual(expect.arrayContaining(['levels.', 'courses.']))
+  })
 })
