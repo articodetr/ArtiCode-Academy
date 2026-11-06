@@ -67,13 +67,13 @@ export function ClassScheduleTab({ cls }: ClassScheduleTabProps) {
         ) : null}
       </Flex>
 
-      {canManage && !editable ? <Alert type="info" showIcon message={t('classSchedule.frozen')} style={{ marginBottom: 12 }} /> : null}
+      {canManage && !editable ? <Alert type="info" showIcon title={t('classSchedule.frozen')} style={{ marginBottom: 12 }} /> : null}
 
       {error ? (
         <Alert
           type="error"
           showIcon
-          message={scheduleFailureMessage(t, describeScheduleFailure(error, cls.id))}
+          title={scheduleFailureMessage(t, describeScheduleFailure(error, cls.id))}
           action={
             <Button size="small" onClick={reload}>
               {t('classSchedule.refresh')}

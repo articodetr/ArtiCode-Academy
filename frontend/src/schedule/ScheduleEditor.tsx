@@ -123,13 +123,13 @@ export function ScheduleEditor({ cls, schedule, settings, onSaved, onStale, onCa
 
   return (
     <div data-testid="schedule-editor">
-      {failure ? <Alert type="error" showIcon message={scheduleFailureMessage(t, failure)} style={{ marginBottom: 12 }} /> : null}
+      {failure ? <Alert type="error" showIcon title={scheduleFailureMessage(t, failure)} style={{ marginBottom: 12 }} /> : null}
       {conflict ? (
-        <Alert type="warning" showIcon message={t(`classSchedule.conflict.${conflict.kind}`, { first: conflict.first + 1, second: conflict.second + 1 })} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t(`classSchedule.conflict.${conflict.kind}`, { first: conflict.first + 1, second: conflict.second + 1 })} style={{ marginBottom: 12 }} />
       ) : null}
-      {problems?.tooMany ? <Alert type="warning" showIcon message={t('classSchedule.validation.tooMany', { max: SCHEDULE_SLOTS_MAX })} style={{ marginBottom: 12 }} /> : null}
-      {roomsFailed ? <Alert type="info" showIcon message={t('classSchedule.roomsFailed')} style={{ marginBottom: 12 }} /> : null}
-      {cls.teachers.length === 0 ? <Alert type="info" showIcon message={t('classSchedule.noTeachers')} style={{ marginBottom: 12 }} /> : null}
+      {problems?.tooMany ? <Alert type="warning" showIcon title={t('classSchedule.validation.tooMany', { max: SCHEDULE_SLOTS_MAX })} style={{ marginBottom: 12 }} /> : null}
+      {roomsFailed ? <Alert type="info" showIcon title={t('classSchedule.roomsFailed')} style={{ marginBottom: 12 }} /> : null}
+      {cls.teachers.length === 0 ? <Alert type="info" showIcon title={t('classSchedule.noTeachers')} style={{ marginBottom: 12 }} /> : null}
 
       <Flex justify="flex-end" style={{ marginBottom: 12 }}>
         <Button icon={<PlusOutlined />} onClick={add} disabled={saving || full} title={full ? t('classSchedule.maxReached', { max: SCHEDULE_SLOTS_MAX }) : undefined}>

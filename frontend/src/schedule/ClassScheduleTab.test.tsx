@@ -71,7 +71,11 @@ describe('ClassScheduleTab', () => {
     })
     renderTab(SCHEDULE_READER_PERMISSIONS)
 
-    expect(await screen.findByText('10:00–11:00')).toBeInTheDocument()
+    const time = await screen.findByText('10:00–11:00')
+    // The range reads left to right in Arabic: dir="ltr" sits on a plain span, not on the
+    // Typography element whose RTL class would override it (seen reversed in the browser run).
+    expect(time).toHaveAttribute('dir', 'ltr')
+    expect(time).not.toHaveClass('ant-typography')
     expect(screen.getByText('عدد الحصص الأسبوعية: 2')).toBeInTheDocument()
     expect(screen.getByText('LAB-1 — مختبر 1')).toBeInTheDocument()
     expect(screen.getByText('المعلم: خالد المعلم')).toBeInTheDocument()
