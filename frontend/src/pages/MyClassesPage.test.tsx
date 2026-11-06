@@ -1,8 +1,11 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { MyClassList } from '../api/enrollments'
+import { RequireAccess } from '../auth/RequireAuth'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
-import { ENROLLMENT_IDS, STUDENT_IDS, makeMyClassItem, makeMyClassList } from '../test/enrollments'
+import { en } from '../i18n/en'
+import { ENROLLMENT_IDS, ROSTER_TEACHER_PERMISSIONS, STUDENT_IDS, makeMyClassItem, makeMyClassList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { MyClassesPage } from './MyClassesPage'
@@ -45,6 +48,10 @@ function bodyRows() {
 }
 
 describe('MyClassesPage', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('ar')
+  })
+
   it('shows a student their own classes from GET /api/me/classes with no student column and no contact details', async () => {
     const api = mockMyClassesApi(makeMyClassList([own, completed]))
     renderPage(['student'])
@@ -98,5 +105,39 @@ describe('MyClassesPage', () => {
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText(ar.login.errors.server)).toBeInTheDocument()
     expect(within(alert).getByText(ar.myClasses.refresh)).toBeInTheDocument()
+  })
+
+  it('keeps /my-classes closed to a user without the student or guardian role — the 403 page and no request (J-F04 test 07; the server answers by ownership anyway)', () => {
+    const api = mockMyClassesApi(makeMyClassList([own]))
+    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: ROSTER_TEACHER_PERMISSIONS })
+    for (const user of [teacher, makeUser()]) {
+      const { unmount } = renderWithProviders(
+        <RequireAccess navKey="myClasses">
+          <MyClassesPage />
+        </RequireAccess>,
+        { auth: makeAuth({ user }), route: '/my-classes' },
+      )
+      expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
+      expect(screen.queryByText(ar.myClasses.title)).not.toBeInTheDocument()
+      unmount()
+    }
+    expect(api.urls).toEqual([])
+  })
+
+  it('renders left-to-right in English with the translated texts (J-F04 test 08)', async () => {
+    mockMyClassesApi(makeMyClassList([child, own]))
+    renderPage(['guardian', 'student'])
+    expect(await screen.findByText('ليلى سعيد')).toBeInTheDocument()
+
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+    expect(document.documentElement).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText(en.myClasses.title)).toBeInTheDocument()
+    expect(screen.queryByText(ar.myClasses.title)).not.toBeInTheDocument()
+    expect(screen.getAllByText(en.myClasses.columns.student).length).toBeGreaterThan(0)
+    expect(screen.getByText(en.myClasses.relation.child)).toBeInTheDocument()
+    expect(screen.getByText(en.myClasses.relation.self)).toBeInTheDocument()
+    expect(screen.getAllByText(en.labels.running).length).toBeGreaterThan(0)
   })
 })

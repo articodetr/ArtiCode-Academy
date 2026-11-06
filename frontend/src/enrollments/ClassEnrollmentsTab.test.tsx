@@ -1,9 +1,11 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AcademyClass } from '../api/classes'
 import type { Enrollment } from '../api/enrollments'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
+import { en } from '../i18n/en'
 import { CLASS_ID, makeClass } from '../test/classes'
 import { ENROLLMENT_IDS, ROSTER_MANAGER_PERMISSIONS, ROSTER_TEACHER_PERMISSIONS, STUDENT_IDS, makeEnrollment, makeEnrollmentList, makeEnrollmentStudent, makeStudentCandidate } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
@@ -83,6 +85,10 @@ function dialogOf(hint: string): HTMLElement {
 }
 
 describe('ClassEnrollmentsTab', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('ar')
+  })
+
   it('shows an assigned teacher the roster read-only: names and statuses, no contact column, no reason, no enroll form, no actions', async () => {
     const api = mockRosterApi(() => [omar, { ...sara, withdrawalReason: null, student: { ...sara.student, email: null, username: null, phone: null } }])
     renderTab(ROSTER_TEACHER_PERMISSIONS)
@@ -249,5 +255,71 @@ describe('ClassEnrollmentsTab', () => {
     fireEvent.click(await screen.findByText(ar.labels.withdrawn, { selector: '.ant-select-item-option-content' }))
     await waitFor(() => expect(api.rosterQueries).toHaveLength(2))
     expect(Object.fromEntries(api.rosterQueries[1]!)).toEqual({ status: 'withdrawn', limit: '50' })
+  })
+
+  it('re-reads the roster AND the class on refresh, so statuses and seats show what the server holds after a change elsewhere (J-F04 test 03)', async () => {
+    let rows = [omar]
+    const api = mockRosterApi(() => rows)
+    const { onClassChanged, onStale } = renderTab(ROSTER_MANAGER_PERMISSIONS)
+    await screen.findByText('عمر خالد')
+    expect(within(screen.getByRole('table')).getByText(ar.labels.active)).toBeInTheDocument()
+
+    // Another manager withdrew Omar meanwhile: the tab must show the server's answer, not what it had loaded.
+    rows = [{ ...omar, status: 'withdrawn', withdrawnAt: '2026-11-06T08:00:00.000Z', withdrawalReason: 'نقل' }]
+    fireEvent.click(screen.getByLabelText(ar.classes.enrollments.refresh))
+
+    expect(await within(screen.getByRole('table')).findByText(ar.labels.withdrawn)).toBeInTheDocument()
+    expect(api.rosterQueries).toHaveLength(2)
+    // The seats come from the class (GET /api/classes/:id), which the drawer re-reads; nothing is moved locally.
+    expect(onStale).toHaveBeenCalledTimes(1)
+    expect(onClassChanged).not.toHaveBeenCalled()
+  })
+
+  it('shows the server refusal of an offered action (403 permission_denied) in the dialog and changes nothing — the button is no authorization (J-F04 test 07)', async () => {
+    const api = mockRosterApi(() => [omar], {
+      POST: jsonResponse(403, { statusCode: 403, code: 'permission_denied', missing: ['enrollments.manage'], message: 'Missing permission' }),
+    })
+    const { onClassChanged, onStale } = renderTab(ROSTER_MANAGER_PERMISSIONS)
+    await screen.findByText('عمر خالد')
+
+    await chooseRowAction('عمر خالد', ar.classes.enrollments.actions.withdraw)
+    const dialog = dialogOf(ar.classes.enrollments.confirm.withdraw)
+    fireEvent.click(within(dialog).getByText(ar.classes.enrollments.actions.withdraw, { selector: 'button span' }).closest('button')!)
+
+    expect(await within(dialog).findByText(/ليست لديك الصلاحية اللازمة لهذا الإجراء \(enrollments\.manage\)/)).toBeInTheDocument()
+    expect(api.writes()).toHaveLength(1)
+    expect(onClassChanged).not.toHaveBeenCalled()
+    expect(onStale).not.toHaveBeenCalled()
+    expect(api.rosterQueries).toHaveLength(1)
+
+    fireEvent.click(within(dialog).getByText(ar.common.cancel, { selector: 'button span' }).closest('button')!)
+    await waitFor(() => expect(screen.queryByText(ar.classes.enrollments.confirm.withdraw, { exact: false })).not.toBeInTheDocument())
+    expect(within(screen.getByRole('table')).getByText(ar.labels.active)).toBeInTheDocument()
+  })
+
+  it('points the transition arrow in the reading direction — ← in Arabic (RTL), → in English (LTR) — and renders the roster in English (J-F04 test 08)', async () => {
+    mockRosterApi(() => [omar])
+    renderTab(ROSTER_MANAGER_PERMISSIONS)
+    await screen.findByText('عمر خالد')
+
+    await chooseRowAction('عمر خالد', ar.classes.enrollments.actions.withdraw)
+    const arabic = screen.getByText(ar.classes.enrollments.confirm.withdraw, { exact: false })
+    expect(arabic.textContent).toContain('←')
+    expect(arabic.textContent).not.toContain('→')
+    fireEvent.click(within(dialogOf(ar.classes.enrollments.confirm.withdraw)).getByText(ar.common.cancel, { selector: 'button span' }).closest('button')!)
+    await waitFor(() => expect(screen.queryByText(ar.classes.enrollments.confirm.withdraw, { exact: false })).not.toBeInTheDocument())
+
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+    expect(document.documentElement).toHaveAttribute('dir', 'ltr')
+    expect(screen.getAllByText(en.classes.enrollments.columns.student).length).toBeGreaterThan(0)
+    expect(within(screen.getByRole('table')).getByText(en.labels.active)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText(`${en.classes.enrollments.actions.menu}: عمر خالد`))
+    fireEvent.click(await screen.findByText(en.classes.enrollments.actions.withdraw, { selector: '.ant-dropdown-menu-title-content' }))
+    const english = await screen.findByText(en.classes.enrollments.confirm.withdraw, { exact: false })
+    expect(english.textContent).toContain('→')
+    expect(english.textContent).not.toContain('←')
   })
 })
