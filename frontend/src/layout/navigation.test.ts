@@ -68,6 +68,17 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('student'), 'classes')).toBe(false)
     expect(canAccess(viewer('guardian'), 'classes')).toBe(false)
   })
+
+  it('gates the branches screen (/settings/branches) by branches.manage alone — the one key the server enforces for writes (MOD-02-T06 screen)', () => {
+    const branches = NAV_ITEMS.find((item) => item.key === 'branches')!
+    expect(branches.permissions).toEqual(['branches.manage'])
+    expect(branches.path).toBe('/settings/branches')
+    expect(keysFor(viewer(null, ['branches.manage']))).toEqual(['dashboard', 'branches'])
+    // The settings keys alone do not open the branches tab, and the role alone never does.
+    expect(keysFor(viewer(null, ['academy.settings.manage']))).toEqual(['dashboard', 'settings'])
+    expect(canAccess(viewer('admin', []), 'branches')).toBe(false)
+    expect(canAccess(viewer('staff', ['branches.manage']), 'branches')).toBe(true)
+  })
 })
 
 describe('navFor', () => {

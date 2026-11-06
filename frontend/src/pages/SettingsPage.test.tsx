@@ -1,8 +1,9 @@
-import { screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
+import { THREE_BRANCHES } from '../test/branches'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -15,6 +16,7 @@ function mockSettingsApi() {
     if (url === '/api/roles') return jsonResponse(200, { items: ALL_ROLES })
     if (url === '/api/permissions') return jsonResponse(200, makeCatalog())
     if (url === '/api/academy') return jsonResponse(200, makeAcademy())
+    if (url === '/api/branches') return jsonResponse(200, { items: THREE_BRANCHES() })
     return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
   })
 }
@@ -91,5 +93,49 @@ describe('SettingsPage', () => {
     expect(screen.getByText(ar.settings.readOnlyHint)).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: ar.settings.tabs.roles })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: ar.settings.tabs.general })).not.toBeInTheDocument()
+  })
+
+  // MOD-02-T06 screen: the branches tab under /settings/branches behind `branches.manage` alone.
+  it('shows the branches tab to a holder of branches.manage and navigates to /settings/branches', async () => {
+    const fetchMock = mockSettingsApi()
+    renderWithProviders(<SettingsPage />, {
+      auth: makeAuth({ user: makeUser({ permissions: [...SETTINGS_ADMIN, 'branches.manage'] }) }),
+      route: '/settings',
+      routes: { '/settings/branches': <LocationProbe /> },
+    })
+
+    expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.branches, ar.settings.tabs.roles])
+    await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.branches }))
+    expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings/branches')
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/academy'])
+  })
+
+  it('renders the branches manager under /settings/branches for a holder of branches.manage without touching the academy endpoint', async () => {
+    const fetchMock = mockSettingsApi()
+    renderWithProviders(<SettingsPage section="branches" />, {
+      auth: makeAuth({ user: makeUser({ permissions: [...SETTINGS_ADMIN, 'branches.manage'] }) }),
+      route: '/settings/branches',
+    })
+
+    expect(screen.getByText(ar.branches.subtitle)).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: ar.settings.tabs.branches })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('NORTH')).toBeInTheDocument()
+    expect(screen.getByText(ar.branches.add)).toBeInTheDocument()
+    expect(screen.queryByLabelText(ar.settings.academyNameAr)).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/branches'])
+  })
+
+  it('shows the 403 page under /settings/branches to a user without branches.manage, and hides the branches tab on /settings', async () => {
+    mockSettingsApi()
+    renderWithProviders(<SettingsPage section="branches" />, { auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }), route: '/settings/branches' })
+    expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
+    expect(screen.queryByText(ar.branches.subtitle)).not.toBeInTheDocument()
+    cleanup()
+
+    mockSettingsApi()
+    renderWithProviders(<SettingsPage />, { auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }), route: '/settings' })
+    expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: ar.settings.tabs.branches })).not.toBeInTheDocument()
   })
 })

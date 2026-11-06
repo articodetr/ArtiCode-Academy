@@ -68,6 +68,11 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'guardians.unlinked',
   'academy.',
   'academy.updated',
+  // MOD-02-T06 (CH-0089)
+  'branches.',
+  'branches.created',
+  'branches.updated',
+  'branches.deleted',
   // MOD-04-T02 (CH-0044)
   'levels.',
   'levels.created',
