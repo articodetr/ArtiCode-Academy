@@ -9,6 +9,7 @@ import {
   CalendarOutlined,
   CreditCardOutlined,
   DashboardOutlined,
+  EnvironmentOutlined,
   FileTextOutlined,
   FormOutlined,
   PlayCircleOutlined,
@@ -84,6 +85,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the
   // catalog keys (either one shows it; saving needs `manage`). By default only academy_admin holds them — no visible change.
   { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
+  // MOD-02-T06 screen: the branches tab of the settings lives under /settings/branches behind the one key the server enforces for writes.
+  { key: 'branches', path: '/settings/branches', labelKey: 'nav.branches', icon: createElement(EnvironmentOutlined), permissions: ['branches.manage'], module: 'MOD-02' },
 ]
 
 /** Whether the viewer sees an entry: by permission when the entry names keys, else by the role matrix. */

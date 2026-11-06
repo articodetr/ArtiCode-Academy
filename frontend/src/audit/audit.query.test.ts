@@ -82,4 +82,11 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     // Both MOD-04 families can also be searched by prefix.
     expect(AUDIT_ACTION_SUGGESTIONS).toEqual(expect.arrayContaining(['levels.', 'courses.']))
   })
+
+  it('offers the three branch events of MOD-02-T06 (CH-0089) once, and their prefix', () => {
+    for (const event of ['branches.created', 'branches.updated', 'branches.deleted']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+    }
+    expect(AUDIT_ACTION_SUGGESTIONS).toContain('branches.')
+  })
 })
