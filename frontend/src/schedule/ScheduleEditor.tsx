@@ -86,7 +86,8 @@ export function ScheduleEditor({ cls, schedule, settings, onSaved, onStale, onCa
   const roomOptionsFor = (draft: SlotDraft) => {
     const options = (rooms ?? [])
       .filter((room) => room.isActive || room.id === draft.roomId)
-      .map((room) => ({ value: room.id, label: room.isActive ? roomLabel(room, language) : `${roomLabel(room, language)} (${t('classSchedule.inactiveRoom')})` }))
+      // The marker leads the label: a narrow select cuts the end off (seen in the real-backend run).
+      .map((room) => ({ value: room.id, label: room.isActive ? roomLabel(room, language) : t('classSchedule.inactiveRoomOption', { room: roomLabel(room, language) }) }))
     // A kept slot may name a room the list does not hold (failed load): keep its label.
     if (draft.roomId !== null && !options.some((option) => option.value === draft.roomId)) options.unshift({ value: draft.roomId, label: roomLabelOf(draft.roomId) ?? draft.roomId })
     return options
@@ -107,7 +108,7 @@ export function ScheduleEditor({ cls, schedule, settings, onSaved, onStale, onCa
       message.success(t('classSchedule.saved'))
       onSaved(updated)
     } catch (caught) {
-      const described = describeScheduleFailure(caught, cls.id, { roomOf: roomLabelOf, teacherOf })
+      const described = describeScheduleFailure(caught, cls.id, { roomOf: roomLabelOf, teacherOf }, drafts)
       if (isStaleFailure(described)) {
         message.error(scheduleFailureMessage(t, described))
         onStale()

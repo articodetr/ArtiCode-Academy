@@ -883,7 +883,7 @@ export const en: Translation = {
     noRoomOption: 'No room',
     defaultTeacher: 'Lead teacher (default)',
     defaultTeacherOption: 'Lead teacher (default when lessons are generated)',
-    inactiveRoom: 'inactive',
+    inactiveRoomOption: '(inactive) {{room}}',
     noRooms: 'No active rooms; the slot can be saved without a room.',
     roomsFailed: 'The rooms could not be loaded; the slot can be saved without a room.',
     noTeachers: 'No teacher is assigned to the class yet; a slot without a teacher goes to the lead teacher when lessons are generated.',
@@ -927,17 +927,22 @@ export const en: Translation = {
       room: 'Slots {{first}} and {{second}} book the same room at overlapping times.',
       teacher: 'Slots {{first}} and {{second}} assign the same teacher at overlapping times.',
     },
-    resource: {
-      room: 'The room',
-      teacher: 'The teacher',
-    },
     errors: {
       class_not_found: 'The class does not exist or is not assigned to you.',
       class_not_schedulable: 'The schedule of a completed or cancelled class cannot be edited (status: {{status}}).',
       schedule_invalid: 'The schedule changed elsewhere; it was reloaded.',
-      schedule_conflict_request: '{{resource}} is already booked by another slot of this list at an overlapping time (slot {{slot}}).',
-      schedule_conflict_other: '{{resource}} is already booked by another class at an overlapping time (slot {{slot}}).',
-      schedule_conflict_unknown: '{{resource}} is already booked at an overlapping time; review the slots and try again.',
+      schedule_conflict: {
+        room: {
+          request: 'The room is already booked by another slot of this list at an overlapping time (slot {{slot}}).',
+          other: 'The room is already booked by another class at an overlapping time (slot {{slot}}).',
+          unknown: 'The room is already booked at an overlapping time; review the slots and try again.',
+        },
+        teacher: {
+          request: 'The teacher is already booked by another slot of this list at an overlapping time (slot {{slot}}).',
+          other: 'The teacher is already booked by another class at an overlapping time (slot {{slot}}).',
+          unknown: 'The teacher is already booked at an overlapping time; review the slots and try again.',
+        },
+      },
       non_working_day: '{{weekday}} is outside the working days set in the academy settings.',
       room_not_found: 'The room “{{name}}” no longer exists.',
       room_inactive: 'The room “{{name}}” is inactive; pick an active room.',

@@ -2,30 +2,45 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import i18n from '../i18n'
 import { CLASS_ID, TEACHER_IDS } from '../test/classes'
-import { OTHER_CLASS_ID, ROOM_IDS } from '../test/schedule'
+import { OTHER_CLASS_ID, ROOM_IDS, makeSlot } from '../test/schedule'
 import { describeScheduleFailure, isStaleFailure, scheduleFailureMessage } from './schedule.errors'
+import { newSlotDraft, slotDraftsOf } from './schedule.model'
 
 const t = (key: string, options?: Record<string, unknown>) => i18n.t(key, options)
+const english = (key: string, options?: Record<string, unknown>) => i18n.t(key, { ...options, lng: 'en' })
 
 function apiError(status: number, body: Record<string, unknown>) {
   return new ApiError(status, typeof body.message === 'string' ? body.message : 'error', { statusCode: status, ...body })
 }
 
 describe('describeScheduleFailure', () => {
-  it('names the resource, the refused row and the scope of a conflict', () => {
-    const other = describeScheduleFailure(
-      apiError(409, { code: 'schedule_conflict', kind: 'teacher', slot: { index: 1, weekday: 0 }, conflictingSlotId: 'slot-9', conflictingClassId: OTHER_CLASS_ID }),
-      CLASS_ID,
-    )
-    expect(other).toEqual({ code: 'schedule_conflict', key: 'classSchedule.errors.schedule_conflict_other', resourceKey: 'classSchedule.resource.teacher', params: { slot: '2' }, slotIndex: 1 })
+  it('finds the refused row by the values the server echoes, with one message per resource and scope', () => {
+    // The editor's list: a kept slot (row 1), then a new one (row 2).
+    const fresh = { ...newSlotDraft('new-1', { weekday: 1, effectiveFrom: '2026-11-09' }), startTime: '09:00', endTime: '10:00', roomId: ROOM_IDS[0], teacherUserId: TEACHER_IDS[0] }
+    const drafts = [...slotDraftsOf([makeSlot()]), fresh]
+    const echoed = { weekday: 1, startTime: '09:00', endTime: '10:00', roomId: ROOM_IDS[0], teacherUserId: TEACHER_IDS[0], effectiveFrom: '2026-11-09', effectiveTo: null }
+    // Seen in the real-backend run: against another class the index counts the slots the server WRITES (new ones
+    // first), so index 0 is row 2 here — the UI used to name and highlight row 1.
+    const other = describeScheduleFailure(apiError(409, { code: 'schedule_conflict', kind: 'teacher', slot: { index: 0, ...echoed }, conflictingSlotId: 'slot-9', conflictingClassId: OTHER_CLASS_ID }), CLASS_ID, {}, drafts)
+    expect(other).toEqual({ code: 'schedule_conflict', key: 'classSchedule.errors.schedule_conflict.teacher.other', params: { slot: '2' }, slotIndex: 1 })
     expect(scheduleFailureMessage(t, other)).toBe('المعلم محجوز لفصل آخر في وقت متداخل (الحصة 2).')
 
-    const request = describeScheduleFailure(apiError(409, { code: 'schedule_conflict', kind: 'room', slot: { index: 0 }, conflictingSlotId: null, conflictingClassId: CLASS_ID }), CLASS_ID)
-    expect(request.key).toBe('classSchedule.errors.schedule_conflict_request')
-    expect(scheduleFailureMessage(t, request)).toBe('القاعة محجوز لحصة أخرى في القائمة نفسها في وقت متداخل (الحصة 1).')
+    // Also seen: one shared template gave «القاعة محجوز» (wrong agreement).
+    const roomOther = describeScheduleFailure(apiError(409, { code: 'schedule_conflict', kind: 'room', slot: { index: 0, ...echoed }, conflictingSlotId: 'slot-9', conflictingClassId: OTHER_CLASS_ID }), CLASS_ID, {}, drafts)
+    expect(scheduleFailureMessage(t, roomOther)).toBe('القاعة محجوزة لفصل آخر في وقت متداخل (الحصة 2).')
+    expect(scheduleFailureMessage(english, roomOther)).toBe('The room is already booked by another class at an overlapping time (slot 2).')
 
+    // Inside the list the index is the request index: trusted when no row matches the values.
+    const request = describeScheduleFailure(apiError(409, { code: 'schedule_conflict', kind: 'room', slot: { index: 0 }, conflictingSlotId: null, conflictingClassId: CLASS_ID }), CLASS_ID)
+    expect(request).toEqual({ code: 'schedule_conflict', key: 'classSchedule.errors.schedule_conflict.room.request', params: { slot: '1' }, slotIndex: 0 })
+    expect(scheduleFailureMessage(t, request)).toBe('القاعة محجوزة لحصة أخرى في القائمة نفسها في وقت متداخل (الحصة 1).')
+
+    // Another class but no row with those values, or no slot at all: the message names no row.
+    const unmatched = describeScheduleFailure(apiError(409, { code: 'schedule_conflict', kind: 'room', slot: { index: 0, ...echoed, startTime: '07:00' }, conflictingSlotId: 'slot-9', conflictingClassId: OTHER_CLASS_ID }), CLASS_ID, {}, drafts)
+    expect(unmatched).toEqual({ code: 'schedule_conflict', key: 'classSchedule.errors.schedule_conflict.room.unknown' })
     const unknown = describeScheduleFailure(apiError(409, { code: 'schedule_conflict', kind: 'room', slot: null, conflictingSlotId: null, conflictingClassId: null }), CLASS_ID)
-    expect(unknown).toEqual({ code: 'schedule_conflict', key: 'classSchedule.errors.schedule_conflict_unknown', resourceKey: 'classSchedule.resource.room', params: { slot: '' } })
+    expect(unknown).toEqual({ code: 'schedule_conflict', key: 'classSchedule.errors.schedule_conflict.room.unknown' })
+    expect(scheduleFailureMessage(t, unknown)).toBe('القاعة محجوزة في وقت متداخل؛ راجع الحصص ثم أعد المحاولة.')
     expect(isStaleFailure(unknown)).toBe(false)
   })
 

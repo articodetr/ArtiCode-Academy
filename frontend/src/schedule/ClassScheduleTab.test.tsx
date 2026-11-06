@@ -183,13 +183,16 @@ describe('ClassScheduleTab', () => {
     expect(await screen.findByText(ar.classSchedule.empty)).toBeInTheDocument()
   })
 
-  it('shows a conflict with another class on the refused row and keeps the editor open', async () => {
+  it('shows a conflict with another class on the refused row (found by its values) and keeps the editor open', async () => {
+    const tuesday = makeSlot({ id: SLOT_IDS[1], weekday: 2, startTime: '13:00', endTime: '14:00', room: null })
     const api = mockScheduleApi({
+      schedule: makeSchedule([makeSlot(), tuesday]),
       put: jsonResponse(409, {
         statusCode: 409,
         code: 'schedule_conflict',
         kind: 'teacher',
-        slot: { index: 0, weekday: 0, startTime: '10:00', endTime: '11:30' },
+        // As the real server answers: index 0 among the WRITTEN slots (only the Tuesday slot changed), values echoed.
+        slot: { index: 0, weekday: 2, startTime: '13:00', endTime: '14:30', roomId: null, teacherUserId: TEACHER_IDS[0], effectiveFrom: '2026-11-10', effectiveTo: null },
         conflictingSlotId: SLOT_IDS[2],
         conflictingClassId: OTHER_CLASS_ID,
         message: 'booked',
@@ -198,12 +201,13 @@ describe('ClassScheduleTab', () => {
     renderTab(SCHEDULE_ADMIN_PERMISSIONS)
 
     await openEditor()
-    setValue(field('endTime', 1), '11:30')
+    setValue(field('endTime', 2), '14:30')
     fireEvent.click(screen.getByText(ar.classSchedule.save).closest('button')!)
 
     const alert = await screen.findByRole('alert')
-    expect(within(alert).getByText('المعلم محجوز لفصل آخر في وقت متداخل (الحصة 1).')).toBeInTheDocument()
-    expect(screen.getByTestId('slot-card-1')).toHaveStyle({ borderColor: '#ff4d4f' })
+    expect(within(alert).getByText('المعلم محجوز لفصل آخر في وقت متداخل (الحصة 2).')).toBeInTheDocument()
+    expect(screen.getByTestId('slot-card-2')).toHaveStyle({ borderColor: '#ff4d4f' })
+    expect(screen.getByTestId('slot-card-1')).not.toHaveStyle({ borderColor: '#ff4d4f' })
     expect(screen.getByTestId('schedule-editor')).toBeInTheDocument()
     expect(api.puts).toHaveLength(1)
     expect(screen.getByText(ar.classSchedule.save).closest('button')).toBeEnabled()
@@ -221,6 +225,22 @@ describe('ClassScheduleTab', () => {
     expect(await screen.findByText(`لا يُعدَّل جدول فصل مكتمل أو ملغى (الحالة: ${ar.labels.cancelled}).`)).toBeInTheDocument()
     await waitFor(() => expect(api.reads()).toBeGreaterThan(before))
     expect(screen.queryByTestId('schedule-editor')).not.toBeInTheDocument()
+  })
+
+  it('keeps an inactive room on its kept slot with the marker first, and offers it to no new slot', async () => {
+    mockScheduleApi({
+      schedule: makeSchedule([makeSlot({ room: { id: ROOM_IDS[1], code: 'OLD', name: null, branch: null } })]),
+      rooms: [makeRoom(), makeRoom({ id: ROOM_IDS[1], code: 'OLD', name: null, isActive: false })],
+    })
+    renderTab(SCHEDULE_ADMIN_PERMISSIONS)
+
+    await openEditor()
+    // The marker leads the label, so a narrow select never cuts it off (seen in the real-backend run).
+    expect(await screen.findByText('(موقوفة) OLD')).toBeInTheDocument()
+    fireEvent.click(screen.getByText(ar.classSchedule.addSlot).closest('button')!)
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: field('room', 2) }))
+    await screen.findByText('LAB-1 — مختبر 1', { selector: '.ant-select-item-option-content' })
+    expect(screen.queryByText(/OLD/, { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument()
   })
 
   it('offers only the class teachers, and reports a class the caller may not see with a reload button', async () => {
