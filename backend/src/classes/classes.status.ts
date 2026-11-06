@@ -43,6 +43,16 @@ export function enrollmentStatusAfter(action: ClassStatusAction): EnrollmentStat
   return ENROLLMENT_EFFECT[action] ?? null;
 }
 
+/**
+ * MOD-07-T03 (§4e.8 (3)): a completed or cancelled class must stop booking its
+ * rooms and teachers, so the same two actions close the class's open-ended
+ * weekly slots (`effective_to` = today in the academy's time zone) in the same
+ * transaction. `restore` does not reopen them.
+ */
+export function closesOpenSlots(action: ClassStatusAction): boolean {
+  return action === 'complete' || action === 'cancel';
+}
+
 /** Only a planned class without any enrollment (whatever its status) may be deleted. */
 export function isClassDeletable(status: ClassStatus, enrollmentCount: number): boolean {
   return status === 'planned' && enrollmentCount === 0;

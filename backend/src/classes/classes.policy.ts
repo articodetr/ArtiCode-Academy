@@ -4,6 +4,9 @@
 // (teachers by seed) sees only the classes the user is assigned to in
 // `class_teachers`. Students and guardians hold neither key: they read their
 // own classes through `GET /api/me/classes` (T05).
+import type { AuthPrincipal } from '../auth/principal.js';
+import type { Prisma } from '../generated/prisma/client.js';
+
 export const READ_CLASSES_PERMISSION = 'classes.read';
 export const MANAGE_CLASSES_PERMISSION = 'classes.manage';
 /** `PUT /api/classes/:id/teachers` (T03). */
@@ -23,4 +26,14 @@ export const ELIGIBLE_USER_STATUSES = ['invited', 'active'] as const;
 /** True when the caller sees every class, not only the assigned ones. */
 export function canManageClasses(permissions: readonly string[]): boolean {
   return permissions.includes(MANAGE_CLASSES_PERMISSION);
+}
+
+/**
+ * D-R16 as a Prisma filter: without `classes.manage` only the classes the
+ * caller is assigned to (lead or assistant). Shared by the classes queries and
+ * the class schedule reads of MOD-07 (moved here from classes.service.ts in
+ * MOD-07-T03 so both modules use one rule).
+ */
+export function visibleClassesWhere(caller: Pick<AuthPrincipal, 'id' | 'permissions'>): Prisma.ClassWhereInput {
+  return canManageClasses(caller.permissions) ? {} : { teachers: { some: { teacherUserId: caller.id } } };
 }
