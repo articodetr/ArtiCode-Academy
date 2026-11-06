@@ -13,6 +13,7 @@ import { validateEnv } from './config/env.schema.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
+import { LessonsModule } from './lessons/lessons.module.js';
 import { LevelsModule } from './levels/levels.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RolesModule } from './roles/roles.module.js';
@@ -59,6 +60,8 @@ import { UsersModule } from './users/users.module.js';
     BranchesModule,
     // MOD-07-T02 (O9): rooms; the weekly class schedules follow in T03.
     ScheduleModule,
+    // MOD-06-T02: lessons (attendance and «my lessons» follow in T03/T04).
+    LessonsModule,
     HealthModule,
   ],
 })
