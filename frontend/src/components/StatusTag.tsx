@@ -28,6 +28,10 @@ const COLORS: Record<string, string> = {
   overdue: 'red',
   live: 'magenta',
   recorded: 'purple',
+  // MOD-06 delivery modes (J-F09); recorded above
+  in_person: 'geekblue',
+  live_online: 'magenta',
+  hybrid: 'cyan',
   inApp: 'blue',
   email: 'cyan',
   sms: 'geekblue',
