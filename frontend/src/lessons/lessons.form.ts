@@ -1,0 +1,117 @@
+// Lesson form ↔ API bodies (J-F09), on the pattern of classes/classes.form.ts:
+// the create body carries only what was filled in (the server defaults the
+// teacher to the class's lead teacher and the delivery mode to in_person); the
+// PATCH body carries only fields whose value differs from the loaded lesson
+// (null clears the optional links and the description); a localized text
+// travels as a whole object and keeps a Turkish text the form does not edit;
+// nothing changed → null (no request). Local rules mirror
+// backend/src/lessons/lessons.dto.ts — the server decides.
+import { MEETING_URL_PATTERN } from '../api/lessons'
+import type { CreateLessonInput, DeliveryMode, Lesson, UpdateLessonInput } from '../api/lessons'
+import { localizedOf, sameLabel } from '../courses/courses.form'
+import { localPartsOf, rangeOf } from './lessons.format'
+
+/**
+ * Value of the teacher Select meaning "no teacher" (`teacherUserId: null`), as
+ * opposed to leaving it empty on creation (= the class's lead teacher — D-R33 (3)).
+ */
+export const NO_TEACHER = '__none__'
+
+export interface LessonFormValues {
+  /** Creation only: the class is fixed afterwards. */
+  classId?: string
+  titleAr: string
+  titleEn?: string
+  descriptionAr?: string
+  descriptionEn?: string
+  deliveryMode: DeliveryMode
+  /** `YYYY-MM-DD` and `HH:MM` from the native inputs, in the browser's zone. */
+  date: string
+  startTime: string
+  endTime: string
+  roomId?: string
+  /** A teacher of the class, NO_TEACHER, or empty (creation: the default lead teacher). */
+  teacherUserId?: string
+  syllabusItemId?: string
+  meetingUrl?: string
+}
+
+const text = (value: string | undefined) => (value ?? '').trim()
+
+/** The native inputs carry minutes only: an instant the form did not touch comes back truncated to its minute, which is no change. */
+function sameMinute(a: string, b: string): boolean {
+  const minute = (value: string) => Math.floor(new Date(value).getTime() / 60_000)
+  return minute(a) === minute(b)
+}
+
+/** True for a blank value or an `https://` link without spaces (`MEETING_URL_PATTERN`). */
+export function isMeetingUrlValid(value: string | undefined): boolean {
+  const trimmed = text(value)
+  return trimmed === '' || MEETING_URL_PATTERN.test(trimmed)
+}
+
+/** Initial form values of a loaded lesson (null → empty; no teacher → NO_TEACHER). */
+export function lessonFormValuesOf(lesson: Lesson): LessonFormValues {
+  const start = localPartsOf(lesson.startsAt)
+  const end = localPartsOf(lesson.endsAt)
+  return {
+    classId: lesson.class.id,
+    titleAr: lesson.title.ar,
+    titleEn: lesson.title.en ?? '',
+    descriptionAr: lesson.description?.ar ?? '',
+    descriptionEn: lesson.description?.en ?? '',
+    deliveryMode: lesson.deliveryMode,
+    date: start.date,
+    startTime: start.time,
+    endTime: end.time,
+    roomId: lesson.room?.id,
+    teacherUserId: lesson.teacher?.userId ?? NO_TEACHER,
+    syllabusItemId: lesson.syllabusItem?.id,
+    meetingUrl: lesson.meetingUrl ?? '',
+  }
+}
+
+export function buildCreateLessonInput(values: LessonFormValues): CreateLessonInput {
+  const range = rangeOf(values.date, values.startTime, values.endTime)
+  const input: CreateLessonInput = {
+    title: localizedOf(values.titleAr, values.titleEn) ?? { ar: text(values.titleAr) },
+    deliveryMode: values.deliveryMode,
+    startsAt: range?.startsAt ?? '',
+    endsAt: range?.endsAt ?? '',
+  }
+  const description = localizedOf(values.descriptionAr, values.descriptionEn)
+  if (description) input.description = description
+  if (values.roomId) input.roomId = values.roomId
+  if (values.teacherUserId === NO_TEACHER) input.teacherUserId = null
+  else if (values.teacherUserId) input.teacherUserId = values.teacherUserId
+  if (values.syllabusItemId) input.syllabusItemId = values.syllabusItemId
+  const meetingUrl = text(values.meetingUrl)
+  if (meetingUrl) input.meetingUrl = meetingUrl
+  return input
+}
+
+/** The smallest PATCH body (API-096), or null when nothing changed. */
+export function planLessonPatch(lesson: Lesson, values: LessonFormValues): UpdateLessonInput | null {
+  const body: UpdateLessonInput = {}
+  const title = localizedOf(values.titleAr, values.titleEn, lesson.title.tr)
+  if (title && !sameLabel(title, lesson.title)) body.title = title
+  const description = localizedOf(values.descriptionAr, values.descriptionEn, lesson.description?.tr)
+  if (!sameLabel(description, lesson.description)) body.description = description
+  if (values.deliveryMode !== lesson.deliveryMode) body.deliveryMode = values.deliveryMode
+  const range = rangeOf(values.date, values.startTime, values.endTime)
+  if (range) {
+    if (!sameMinute(range.startsAt, lesson.startsAt)) body.startsAt = range.startsAt
+    if (!sameMinute(range.endsAt, lesson.endsAt)) body.endsAt = range.endsAt
+  }
+  const roomId = values.roomId || null
+  if (roomId !== (lesson.room?.id ?? null)) body.roomId = roomId
+  if (values.teacherUserId !== undefined) {
+    const teacherUserId = values.teacherUserId === NO_TEACHER || values.teacherUserId === '' ? null : values.teacherUserId
+    if (teacherUserId !== (lesson.teacher?.userId ?? null)) body.teacherUserId = teacherUserId
+  }
+  const syllabusItemId = values.syllabusItemId || null
+  if (syllabusItemId !== (lesson.syllabusItem?.id ?? null)) body.syllabusItemId = syllabusItemId
+  const meetingUrl = text(values.meetingUrl) || null
+  if (meetingUrl !== lesson.meetingUrl) body.meetingUrl = meetingUrl
+  return Object.keys(body).length > 0 ? body : null
+}

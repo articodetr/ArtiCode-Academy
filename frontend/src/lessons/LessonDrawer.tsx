@@ -1,0 +1,431 @@
+// Detail drawer of one lesson (J-F09): reads GET /api/lessons/:id (API-094)
+// and shows the lesson with its class, course, time, place, teacher, syllabus
+// item, meeting link and attendance counts. For holders of `lessons.manage`
+// (within the class visibility the server enforces): an edit form (smallest
+// PATCH — API-096; time, room and teacher only while scheduled) and an
+// actions menu built from the mirrored state machine (lessons.status.ts →
+// API-097 with an optional reason, and API-098 for a scheduled lesson without
+// attendance), each action confirmed in a modal. Recording attendance comes
+// with the attendance screen (API-099/100 — MOD-06-T03): the summary here
+// only shows the server's counts.
+import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LinkOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tag, Typography } from 'antd'
+import type { MenuProps } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { getClass } from '../api/classes'
+import type { AcademyClass } from '../api/classes'
+import { LESSON_STATUS_REASON_MAX_LENGTH, changeLessonStatus, deleteLesson, getLesson, updateLesson } from '../api/lessons'
+import type { Lesson } from '../api/lessons'
+import { useAuth } from '../auth/auth-context'
+import { StatusTag } from '../components/StatusTag'
+import { useLocalized } from '../i18n/useLocalized'
+import { formatDateTime, localizedLabel } from '../users/users.format'
+import { LessonFormFields } from './LessonFormFields'
+import { describeLessonsFailure, failureMessage } from './lessons.errors'
+import { lessonFormValuesOf, planLessonPatch } from './lessons.form'
+import type { LessonFormValues } from './lessons.form'
+import { durationMinutes, formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, syllabusItemLabel } from './lessons.format'
+import { availableLessonActions, isClassOpenForLessons, isDangerousLessonAction, lessonEditability } from './lessons.status'
+import type { LessonMenuAction } from './lessons.status'
+
+const ICONS: Readonly<Record<LessonMenuAction, ReactNode>> = {
+  complete: <CheckCircleOutlined />,
+  cancel: <StopOutlined />,
+  restore: <UndoOutlined />,
+  delete: <DeleteOutlined />,
+}
+
+/** Form fields the edit form renders; a server error naming another field is shown as a message instead. */
+const EDIT_FIELDS = new Set(['titleAr', 'titleEn', 'descriptionAr', 'descriptionEn', 'deliveryMode', 'date', 'startTime', 'endTime', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl'])
+
+interface LessonDrawerProps {
+  lessonId: string | null
+  onClose: () => void
+  /** The lesson the server returned after an edit or a status change. */
+  onUpdated: (lesson: Lesson) => void
+  /** A scheduled lesson was deleted. */
+  onDeleted: (lessonId: string) => void
+}
+
+export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: LessonDrawerProps) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('lessons.manage')
+  const [lesson, setLesson] = useState<Lesson | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadTick, setReloadTick] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [pending, setPending] = useState<LessonMenuAction | null>(null)
+
+  useEffect(() => {
+    if (!lessonId) return
+    const controller = new AbortController()
+    getLesson(lessonId, controller.signal)
+      .then((loaded) => {
+        if (controller.signal.aborted) return
+        setLesson(loaded)
+        setLoadError(null)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        setLoadError(failureMessage(t, describeLessonsFailure(error)))
+      })
+    return () => controller.abort()
+  }, [lessonId, reloadTick, t])
+
+  const reload = useCallback(() => setReloadTick((tick) => tick + 1), [])
+
+  const close = () => {
+    setLesson(null)
+    setLoadError(null)
+    setEditing(false)
+    setPending(null)
+    onClose()
+  }
+
+  const applyUpdate = (updated: Lesson) => {
+    setLesson(updated)
+    onUpdated(updated)
+  }
+
+  const editability = lesson ? lessonEditability(lesson, canManage) : { editable: false, timingLocked: true }
+  const actions = lesson && !editing ? availableLessonActions(lesson, canManage) : []
+  const menu: MenuProps['items'] = actions.map((action) => ({
+    key: action,
+    label: t(`lessons.actions.${action}`),
+    icon: ICONS[action],
+    danger: isDangerousLessonAction(action),
+  }))
+
+  const title = lesson ? lessonTitle(lesson, language) : t('lessons.drawer.title')
+
+  return (
+    <Drawer
+      open={lessonId !== null}
+      onClose={close}
+      title={
+        lesson ? (
+          <Space wrap>
+            <span>{title}</span>
+            <StatusTag value={lesson.status} />
+          </Space>
+        ) : (
+          title
+        )
+      }
+      // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport.
+      size="min(760px, 100vw)"
+      destroyOnHidden
+      extra={
+        lesson && !editing && (editability.editable || menu.length > 0) ? (
+          <Space>
+            {editability.editable ? (
+              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                {t('common.edit')}
+              </Button>
+            ) : null}
+            {menu.length > 0 ? (
+              <Dropdown trigger={['click']} destroyOnHidden menu={{ items: menu, onClick: ({ key }) => setPending(key as LessonMenuAction) }}>
+                <Button icon={<DownOutlined />} iconPlacement="end">
+                  {t('lessons.actions.menu')}
+                </Button>
+              </Dropdown>
+            ) : null}
+          </Space>
+        ) : null
+      }
+    >
+      {loadError ? (
+        <Alert
+          type="error"
+          showIcon
+          title={loadError}
+          action={
+            <Button size="small" onClick={reload}>
+              {t('lessons.refresh')}
+            </Button>
+          }
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+
+      {!lesson && !loadError ? <Skeleton active paragraph={{ rows: 8 }} data-testid="lesson-loading" /> : null}
+
+      {lesson && canManage && !isClassOpenForLessons(lesson.class.status) ? <Alert type="warning" showIcon title={t('lessons.drawer.classClosed')} style={{ marginBottom: 16 }} /> : null}
+
+      {lesson ? (
+        editing ? (
+          <LessonEditForm
+            // Remount per server version so the form starts from what the server holds (KI-049).
+            key={`${lesson.id}:${lesson.updatedAt}`}
+            lesson={lesson}
+            timingLocked={editability.timingLocked}
+            onSaved={(updated) => {
+              applyUpdate(updated)
+              setEditing(false)
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <LessonDetails lesson={lesson} />
+        )
+      ) : null}
+
+      {lesson && pending ? (
+        <LessonActionModal
+          // Mounted per action, so the reason never carries over to the next one.
+          lesson={lesson}
+          action={pending}
+          onDone={(updated) => {
+            setPending(null)
+            if (updated) applyUpdate(updated)
+            else {
+              onDeleted(lesson.id)
+              close()
+            }
+          }}
+          onStale={reload}
+          onCancel={() => setPending(null)}
+        />
+      ) : null}
+    </Drawer>
+  )
+}
+
+function LessonDetails({ lesson }: { lesson: Lesson }) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const dash = '—'
+
+  return (
+    <>
+      <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
+        <Descriptions.Item label={t('lessons.fields.class')}>
+          <Space wrap>
+            <Typography.Text dir="ltr" strong>
+              {lesson.class.code}
+            </Typography.Text>
+            <span>{localizedLabel(lesson.class.name, language)}</span>
+            {!isClassOpenForLessons(lesson.class.status) ? <StatusTag value={lesson.class.status} /> : null}
+          </Space>
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.columns.course')}>
+          {localizedLabel(lesson.class.course.name, language)} (<span dir="ltr">{lesson.class.course.code}</span>)
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.date')}>{formatLessonDay(lesson.startsAt, language)}</Descriptions.Item>
+        <Descriptions.Item label={t('common.time')}>
+          <Space wrap>
+            <Typography.Text dir="ltr">{formatLessonTimes(lesson.startsAt, lesson.endsAt, language)}</Typography.Text>
+            <Typography.Text type="secondary">{t('lessons.drawer.minutes', { count: durationMinutes(lesson.startsAt, lesson.endsAt) })}</Typography.Text>
+          </Space>
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.deliveryMode')}>
+          <StatusTag value={lesson.deliveryMode} />
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.room')}>
+          {lesson.room ? (
+            <Space wrap>
+              <Typography.Text dir="ltr">{lessonRoomLabel(lesson.room, language)}</Typography.Text>
+              <Typography.Text type="secondary">{lesson.room.branch ? lesson.room.branch.code : t('lessons.drawer.site')}</Typography.Text>
+            </Space>
+          ) : (
+            <Typography.Text type="secondary">{t('lessons.drawer.noRoom')}</Typography.Text>
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.meetingUrl')}>
+          {lesson.meetingUrl ? (
+            <Typography.Link href={lesson.meetingUrl} target="_blank" rel="noopener noreferrer" dir="ltr">
+              <LinkOutlined /> {lesson.meetingUrl}
+            </Typography.Link>
+          ) : (
+            dash
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.teacher')}>{lesson.teacher?.fullName ?? <Typography.Text type="secondary">{t('lessons.drawer.noTeacher')}</Typography.Text>}</Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.syllabusItem')}>
+          {lesson.syllabusItem ? syllabusItemLabel(lesson.syllabusItem, language) : <Typography.Text type="secondary">{t('lessons.drawer.noSyllabusItem')}</Typography.Text>}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.descriptionAr')}>
+          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{lesson.description?.ar || dash}</Typography.Paragraph>
+        </Descriptions.Item>
+        {lesson.description?.en ? (
+          <Descriptions.Item label={t('lessons.fields.descriptionEn')}>
+            <Typography.Paragraph dir="ltr" style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+              {lesson.description.en}
+            </Typography.Paragraph>
+          </Descriptions.Item>
+        ) : null}
+        {lesson.status === 'cancelled' ? <Descriptions.Item label={t('lessons.fields.cancellationReason')}>{lesson.cancellationReason || dash}</Descriptions.Item> : null}
+        <Descriptions.Item label={t('lessons.fields.origin')}>
+          <Tag>{lesson.scheduleId ? t('lessons.drawer.generated') : t('lessons.drawer.manual')}</Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.createdAt')}>{formatDateTime(lesson.createdAt, language)}</Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.updatedAt')}>{formatDateTime(lesson.updatedAt, language)}</Descriptions.Item>
+      </Descriptions>
+      <LessonAttendanceSummary lesson={lesson} />
+    </>
+  )
+}
+
+/** The attendance counts the server computes; recording them is the attendance screen's job (MOD-06-T03). */
+export function LessonAttendanceSummary({ lesson }: { lesson: Pick<Lesson, 'attendance' | 'attendanceTakenAt'> }) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const { attendance } = lesson
+  return (
+    <Card size="small" title={t('lessons.attendance.title')} data-testid="lesson-attendance">
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+        {lesson.attendanceTakenAt ? t('lessons.attendance.takenAt', { date: formatDateTime(lesson.attendanceTakenAt, language) }) : t('lessons.attendance.notTaken')}
+      </Typography.Paragraph>
+      <Space wrap>
+        <Tag>{`${t('lessons.attendance.recorded')}: ${attendance.recorded}`}</Tag>
+        <Tag color="green">{`${t('lessons.attendance.present')}: ${attendance.present}`}</Tag>
+        <Tag color="red">{`${t('lessons.attendance.absent')}: ${attendance.absent}`}</Tag>
+        <Tag color="gold">{`${t('lessons.attendance.late')}: ${attendance.late}`}</Tag>
+        <Tag color="blue">{`${t('lessons.attendance.excused')}: ${attendance.excused}`}</Tag>
+      </Space>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8, fontSize: 12 }}>
+        {t('lessons.attendance.comingSoon')}
+      </Typography.Paragraph>
+    </Card>
+  )
+}
+
+interface LessonActionModalProps {
+  lesson: Lesson
+  action: LessonMenuAction
+  /** The lesson after a status change, or null after a deletion. */
+  onDone: (lesson: Lesson | null) => void
+  /** The lesson changed elsewhere meanwhile: re-read it. */
+  onStale: () => void
+  onCancel: () => void
+}
+
+function LessonActionModal({ lesson, action, onDone, onStale, onCancel }: LessonActionModalProps) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const { message } = App.useApp()
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const name = lessonTitle(lesson, language)
+
+  const confirm = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      if (action === 'delete') {
+        await deleteLesson(lesson.id)
+        message.success(t('lessons.done.delete'))
+        onDone(null)
+        return
+      }
+      const trimmed = reason.trim()
+      const updated = await changeLessonStatus(lesson.id, trimmed ? { action, reason: trimmed } : { action })
+      message.success(t(`lessons.done.${action}`))
+      onDone(updated)
+    } catch (caught) {
+      const failure = describeLessonsFailure(caught)
+      setError(failureMessage(t, failure))
+      if (['invalid_transition', 'lesson_not_deletable', 'lesson_not_started', 'class_closed'].some((code) => failure.key.endsWith(code))) onStale()
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title={t('lessons.confirm.title', { action: t(`lessons.actions.${action}`), name })}
+      okText={t(`lessons.actions.${action}`)}
+      okButtonProps={{ danger: isDangerousLessonAction(action) }}
+      cancelText={t('common.cancel')}
+      confirmLoading={busy}
+      onOk={() => void confirm()}
+      onCancel={() => {
+        if (!busy) onCancel()
+      }}
+    >
+      <Typography.Paragraph>{t(`lessons.confirm.${action}`)}</Typography.Paragraph>
+      {action !== 'delete' ? (
+        <Form layout="vertical">
+          <Form.Item label={t('lessons.confirm.reason')} extra={action === 'cancel' ? t('lessons.confirm.reasonStored') : t('lessons.confirm.reasonAudit')} htmlFor="lesson-status-reason">
+            <Input.TextArea id="lesson-status-reason" rows={2} maxLength={LESSON_STATUS_REASON_MAX_LENGTH} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} />
+          </Form.Item>
+        </Form>
+      ) : null}
+      {error ? <Alert type="error" showIcon title={error} /> : null}
+    </Modal>
+  )
+}
+
+interface LessonEditFormProps {
+  lesson: Lesson
+  timingLocked: boolean
+  onSaved: (lesson: Lesson) => void
+  onCancel: () => void
+}
+
+/**
+ * The edit form of one edit session. It owns its form so every session starts
+ * from the lesson as the server holds it (KI-049), and reads the class once
+ * for the teacher options (a teacher who lost the assignment stays selectable
+ * as the current value).
+ */
+function LessonEditForm({ lesson, timingLocked, onSaved, onCancel }: LessonEditFormProps) {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  // Untyped so setFields accepts the string[] name paths of the error mapper.
+  const [form] = Form.useForm()
+  const [saving, setSaving] = useState(false)
+  const [klass, setKlass] = useState<AcademyClass | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getClass(lesson.class.id, controller.signal)
+      .then((loaded) => {
+        if (!controller.signal.aborted) setKlass(loaded)
+      })
+      .catch(() => {
+        // Without the class (e.g. no classes.read) the teacher select offers the current teacher only.
+      })
+    return () => controller.abort()
+  }, [lesson.class.id])
+
+  const save = async (values: LessonFormValues) => {
+    const body = planLessonPatch(lesson, values)
+    if (!body) {
+      message.info(t('lessons.drawer.nothingChanged'))
+      onCancel()
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateLesson(lesson.id, body)
+      message.success(t('lessons.drawer.saved'))
+      onSaved(updated)
+    } catch (caught) {
+      const failure = describeLessonsFailure(caught)
+      const text = failureMessage(t, failure)
+      if (failure.field && EDIT_FIELDS.has(failure.field[0] ?? '')) form.setFields([{ name: failure.field, errors: [text] }])
+      else message.error(text)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Form form={form} layout="vertical" requiredMark={false} initialValues={lessonFormValuesOf(lesson)} onFinish={(values) => void save(values as LessonFormValues)} disabled={saving}>
+      <LessonFormFields form={form} mode="edit" klass={klass} lesson={lesson} timingLocked={timingLocked} />
+      <Flex gap={8} justify="flex-end">
+        <Button onClick={onCancel} disabled={saving}>
+          {t('common.cancel')}
+        </Button>
+        <Button type="primary" htmlType="submit" loading={saving}>
+          {t('common.save')}
+        </Button>
+      </Flex>
+    </Form>
+  )
+}
