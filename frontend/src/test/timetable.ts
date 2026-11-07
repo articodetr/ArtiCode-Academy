@@ -1,7 +1,8 @@
-// Fixtures for the schedule screen (MOD-07 — J-F05): the shapes of API-090/091
+// Fixtures for the schedule screen (MOD-07 — J-F05; moved from test/schedule.ts by J-F08): the shapes of API-090/091
 // and API-084 as the backend returns them, plus permission sets.
 import type { Room, RoomList } from '../api/rooms'
-import type { AcademySchedule, MySchedule, MyScheduleItem, TimetableSlot } from '../api/schedule'
+import type { AcademySchedule, MySchedule, MyScheduleItem, TimetableBranchOption, TimetableSlot } from '../api/timetable'
+import { makeAcademy } from './academy'
 import { CLASS_COURSE_ID, CLASS_ID } from './classes'
 
 export const SLOT_ID = '0193c000-0000-7000-8000-00000000a001'
@@ -87,4 +88,16 @@ export function makeMyItem(overrides: Partial<MyScheduleItem> = {}): MyScheduleI
 
 export function makeMySchedule(items: MyScheduleItem[], on = '2026-11-08'): MySchedule {
   return { on, items }
+}
+
+// ---- J-F08 (weekly calendar) ----------------------------------------------
+
+/** The GET /api/academy body with its weekly-schedule settings (API-035 since MOD-02-T03). */
+export function makeTimetableAcademy(scheduling: { weekStartsOn?: number | null; workingDays?: number[] | null } = {}, timezone = 'Asia/Riyadh') {
+  return { ...makeAcademy({ timezone }), settings: { scheduling: { weekStartsOn: scheduling.weekStartsOn ?? null, workingDays: scheduling.workingDays ?? null } } }
+}
+
+/** A `BranchDto` (API-080) as the branch filter reads it. */
+export function makeBranchOption(overrides: Partial<TimetableBranchOption> = {}): TimetableBranchOption {
+  return { id: BRANCH_ID, code: 'IST', name: { ar: 'فرع إسطنبول', en: 'Istanbul branch' }, timezone: null, isMain: false, isActive: true, ...overrides }
 }
