@@ -1,0 +1,999 @@
+/*
+ * Weekly calendar of /schedule (J-F08). The design language follows the
+ * reference agreed for J-F08: a white rounded surface, pastel slot cards
+ * placed by time, a deep-purple accent for the selected day/date, a compact
+ * month calendar and an "upcoming" list beside the week. Logical properties
+ * (inline-start/end) keep Arabic RTL and English LTR mirrored. Text colours on
+ * the pastel tones meet WCAG AA (4.5:1) — the tones below were checked.
+ */
+.tt {
+  --tt-accent: #6a4fe0;
+  --tt-accent-strong: #5a40cf;
+  --tt-accent-soft: #eee9fd;
+  --tt-accent-wash: #f7f5fe;
+  --tt-accent-ink: #4b36b8;
+  --tt-ink: #25204a;
+  --tt-text: #3f3b5f;
+  --tt-muted: #6f6a8c;
+  --tt-line: #ece9f5;
+  --tt-hourline: #f3f1f9;
+  --tt-surface: #ffffff;
+  --tt-axis: 56px;
+  container-type: inline-size;
+  color: var(--tt-text);
+}
+
+.tt-tone-0 {
+  --tt-tone-bg: #dcf0f7;
+  --tt-tone-ink: #0d4f69;
+  --tt-tone-sub: #2c6b84;
+}
+
+.tt-tone-1 {
+  --tt-tone-bg: #efe5f8;
+  --tt-tone-ink: #4c2a72;
+  --tt-tone-sub: #6d4b90;
+}
+
+.tt-tone-2 {
+  --tt-tone-bg: #fbedf3;
+  --tt-tone-ink: #7b2b4f;
+  --tt-tone-sub: #95506e;
+}
+
+.tt-tone-3 {
+  --tt-tone-bg: #e5e9fb;
+  --tt-tone-ink: #26357f;
+  --tt-tone-sub: #4a5799;
+}
+
+/* ---- surface and layout ---------------------------------------------- */
+
+.tt-surface {
+  background: var(--tt-surface);
+  border-radius: 20px;
+  padding: 20px 24px 24px;
+  box-shadow:
+    0 1px 2px rgba(37, 32, 74, 0.05),
+    0 18px 40px -28px rgba(76, 54, 184, 0.35);
+}
+
+.tt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.tt-toolbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tt-toolbar__range {
+  margin: 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--tt-ink);
+}
+
+.tt-toolbar__end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tt-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: var(--tt-accent-wash);
+}
+
+.tt-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@container (min-width: 1040px) {
+  .tt-layout {
+    grid-template-columns: minmax(0, 1fr) 288px;
+  }
+}
+
+.tt-side {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+  min-width: 0;
+}
+
+@container (min-width: 640px) and (max-width: 1039.98px) {
+  .tt-side {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.tt-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--tt-muted);
+}
+
+/* ---- week grid --------------------------------------------------------- */
+
+.tt-grid {
+  position: relative;
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.tt-grid__inner {
+  min-width: calc(var(--tt-axis) + var(--tt-days) * 104px);
+}
+
+.tt-grid__head,
+.tt-grid__body {
+  display: grid;
+  grid-template-columns: var(--tt-axis) repeat(var(--tt-days), minmax(0, 1fr));
+}
+
+.tt-grid__head {
+  align-items: center;
+  padding-bottom: 14px;
+}
+
+.tt-grid__corner {
+  font-size: 11px;
+  color: var(--tt-muted);
+  text-align: center;
+}
+
+.tt-dayhead {
+  appearance: none;
+  height: 40px;
+  margin: 0 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--tt-muted);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    background-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.tt-dayhead:hover {
+  background: var(--tt-accent-soft);
+}
+
+.tt-grid.is-single .tt-dayhead {
+  justify-self: center;
+  min-width: 200px;
+  padding: 0 28px;
+}
+
+.tt-dayhead:focus-visible,
+.tt-strip__day:focus-visible,
+.tt-month__day:focus-visible,
+.tt-upcoming__button:focus-visible {
+  outline: 2px solid var(--tt-accent);
+  outline-offset: 2px;
+}
+
+.tt-dayhead__num {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--tt-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-dayhead__name {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-dayhead.is-today:not(.is-selected) .tt-dayhead__num {
+  color: var(--tt-accent-ink);
+}
+
+.tt-dayhead.is-today:not(.is-selected) {
+  box-shadow: inset 0 -2px 0 var(--tt-accent);
+}
+
+.tt-dayhead.is-selected {
+  background: var(--tt-accent);
+  color: #fff;
+  box-shadow: 0 8px 18px -10px rgba(106, 79, 224, 0.9);
+}
+
+.tt-dayhead.is-selected .tt-dayhead__num {
+  color: #fff;
+}
+
+.tt-dayhead.is-off:not(.is-selected) .tt-dayhead__name {
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+}
+
+.tt-grid__body {
+  position: relative;
+}
+
+.tt-axis {
+  position: relative;
+}
+
+.tt-axis__hour {
+  position: absolute;
+  inset-inline: 0 10px;
+  transform: translateY(-50%);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--tt-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tt-col {
+  position: relative;
+  border-inline-start: 1px solid var(--tt-line);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--tt-hourline) 0,
+    var(--tt-hourline) 1px,
+    transparent 1px,
+    transparent var(--tt-hour)
+  );
+}
+
+.tt-col:last-child {
+  border-inline-end: 1px solid var(--tt-line);
+}
+
+.tt-col.is-selected {
+  background-color: #fcfbff;
+}
+
+.tt-col.is-off {
+  background-color: #fbfafd;
+}
+
+.tt-col__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tt-slot {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 3px 4px 4px;
+  min-height: 24px;
+  /* The card adapts to its real width (a seven-day week, slots side by side). */
+  container-type: inline-size;
+}
+
+.tt-now {
+  position: absolute;
+  inset-inline: 0;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--tt-accent);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.tt-now::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tt-accent);
+}
+
+.tt-grid__overlay {
+  position: absolute;
+  inset-block: 54px 0;
+  inset-inline: var(--tt-axis) 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 48px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tt-empty {
+  pointer-events: auto;
+  max-width: 360px;
+  padding: 20px 24px;
+  border: 1px dashed #d8d1f5;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  text-align: center;
+  box-shadow: 0 12px 30px -24px rgba(37, 32, 74, 0.5);
+}
+
+.tt-empty__title {
+  margin: 8px 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tt-ink);
+}
+
+.tt-empty__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tt-muted);
+}
+
+.tt-empty__icon {
+  font-size: 26px;
+  color: var(--tt-accent);
+}
+
+/* ---- slot card --------------------------------------------------------- */
+
+.tt-event {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--tt-tone-bg);
+  color: var(--tt-tone-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    box-shadow 0.15s,
+    transform 0.15s;
+}
+
+.tt-event:hover {
+  box-shadow: 0 10px 22px -14px rgba(37, 32, 74, 0.55);
+  transform: translateY(-1px);
+}
+
+.tt-event:focus-visible {
+  outline: 2px solid var(--tt-accent);
+  outline-offset: 2px;
+}
+
+.tt-event__title {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--tt-tone-ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tt-event__sub,
+.tt-event__meta {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--tt-tone-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-event__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tt-event__meta .anticon {
+  font-size: 11px;
+  flex: none;
+}
+
+.tt-event__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The title, class and time keep their size; the secondary lines give way first in a short card. */
+.tt-event > * {
+  flex-shrink: 0;
+}
+
+.tt-event > .tt-event__meta,
+.tt-event > .tt-event__relations {
+  flex-shrink: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tt-event__relations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.tt-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--tt-tone-ink, var(--tt-accent-ink));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-event__time {
+  margin-top: auto;
+  padding-top: 2px;
+  font-size: 12px;
+  color: var(--tt-tone-sub);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-event.is-compact {
+  padding: 6px 10px;
+}
+
+.tt-event.is-compact .tt-event__title {
+  -webkit-line-clamp: 1;
+}
+
+.tt-event.is-tiny {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+}
+
+.tt-event.is-tiny .tt-event__title {
+  -webkit-line-clamp: 1;
+  font-size: 12px;
+}
+
+.tt-event.is-tiny .tt-event__time {
+  margin: 0;
+  padding: 0;
+  font-size: 11px;
+}
+
+/* Overlapping slots side by side: the course (wrapping) and a compact time that may wrap after its dash. */
+.tt-event.is-narrow {
+  padding: 7px 8px;
+}
+
+.tt-event.is-narrow .tt-event__title {
+  font-size: 12.5px;
+  -webkit-line-clamp: 2;
+}
+
+.tt-event.is-narrow.is-compact .tt-event__title,
+.tt-event.is-narrow.is-tiny .tt-event__title {
+  -webkit-line-clamp: 1;
+}
+
+.tt-event.is-narrow .tt-event__time {
+  font-size: 11px;
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
+/* A card narrower than its usual content: tighter padding, the course and the time only. */
+@container (max-width: 96px) {
+  .tt-slot .tt-event:not(.is-card) {
+    padding: 6px 7px;
+  }
+
+  .tt-slot .tt-event:not(.is-card) .tt-event__title {
+    font-size: 12px;
+  }
+
+  .tt-slot .tt-event:not(.is-card) .tt-event__meta,
+  .tt-slot .tt-event:not(.is-card) .tt-event__relations {
+    display: none;
+  }
+
+  .tt-slot .tt-event:not(.is-card) .tt-event__time {
+    font-size: 11px;
+    white-space: normal;
+  }
+}
+
+/* A sliver (several slots side by side in a seven-day week): the course alone; the time is its
+   position and height, its accessible name and its details. */
+@container (max-width: 64px) {
+  .tt-slot .tt-event:not(.is-card) {
+    padding: 5px;
+  }
+
+  .tt-slot .tt-event:not(.is-card) .tt-event__title {
+    font-size: 11px;
+    -webkit-line-clamp: 4;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+
+  .tt-slot .tt-event:not(.is-card) .tt-event__sub,
+  .tt-slot .tt-event:not(.is-card) .tt-event__time {
+    display: none;
+  }
+}
+
+.tt-event.is-card {
+  height: auto;
+  padding: 14px 16px;
+  gap: 4px;
+  border-radius: 14px;
+}
+
+.tt-event.is-card .tt-event__title {
+  font-size: 15px;
+}
+
+.tt-event.is-card .tt-event__time {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+/* ---- month calendar ---------------------------------------------------- */
+
+.tt-month {
+  padding: 14px 12px 8px;
+  border: 1px solid var(--tt-line);
+  border-radius: 16px;
+  background: var(--tt-surface);
+}
+
+.tt-month__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 4px 8px;
+}
+
+.tt-month__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tt-text);
+}
+
+.tt-month__grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  table-layout: fixed;
+}
+
+.tt-month__grid th {
+  padding: 2px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tt-muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tt-month__cell {
+  padding: 0;
+  text-align: center;
+}
+
+.tt-month__cell.in-band {
+  background: var(--tt-accent-soft);
+}
+
+.tt-month__cell.band-start {
+  border-start-start-radius: 999px;
+  border-end-start-radius: 999px;
+}
+
+.tt-month__cell.band-end {
+  border-start-end-radius: 999px;
+  border-end-end-radius: 999px;
+}
+
+.tt-month__day {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tt-accent-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.tt-month__day:hover {
+  background: #e3dcfb;
+}
+
+.tt-month__day.is-today {
+  box-shadow: inset 0 0 0 1.5px var(--tt-accent);
+}
+
+.tt-month__day.is-selected {
+  background: var(--tt-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---- upcoming ---------------------------------------------------------- */
+
+.tt-upcoming__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--tt-ink);
+}
+
+.tt-upcoming__hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--tt-muted);
+}
+
+.tt-upcoming__list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 6px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--tt-line);
+  border-radius: 16px;
+}
+
+.tt-upcoming__item + .tt-upcoming__item {
+  border-top: 1px solid var(--tt-line);
+}
+
+.tt-upcoming__button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.tt-upcoming__button:hover {
+  background: var(--tt-accent-wash);
+}
+
+.tt-tile {
+  flex: none;
+  width: 54px;
+  height: 58px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--tt-tone-bg);
+  color: var(--tt-tone-ink);
+  text-align: center;
+}
+
+.tt-tile__day {
+  padding: 2px 0;
+  background: var(--tt-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.tt-tile__num {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-upcoming__body {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.tt-upcoming__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tt-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-upcoming__meta {
+  font-size: 12.5px;
+  color: var(--tt-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e7f6ee;
+  color: #1d6b43;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.tt-live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---- mobile ------------------------------------------------------------ */
+
+.tt-mobile .tt-surface {
+  padding: 14px 12px 16px;
+  border-radius: 18px;
+}
+
+.tt-toolbar--phone {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.tt-toolbar__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tt-toolbar--phone .tt-toolbar__range {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  text-align: center;
+}
+
+.tt-mobile .tt-filters > * {
+  flex: 1 1 100%;
+}
+
+.tt-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.tt-strip__day {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--tt-accent-wash);
+  color: var(--tt-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tt-strip__name {
+  font-size: 11px;
+  color: var(--tt-muted);
+  white-space: nowrap;
+}
+
+.tt-strip__num {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-strip__day.is-today .tt-strip__num {
+  color: var(--tt-accent-ink);
+}
+
+.tt-strip__day.is-selected {
+  background: var(--tt-accent);
+  color: #fff;
+}
+
+.tt-strip__day.is-selected .tt-strip__name,
+.tt-strip__day.is-selected .tt-strip__num {
+  color: #fff;
+}
+
+.tt-strip__day.is-off:not(.is-selected) {
+  opacity: 0.6;
+}
+
+.tt-strip__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.tt-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.tt-timeline__item {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.tt-timeline__time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-timeline__start {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tt-ink);
+}
+
+.tt-timeline__end {
+  font-size: 12px;
+  color: var(--tt-muted);
+}
+
+.tt-timeline__now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tt-accent-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tt-timeline__now::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: var(--tt-accent);
+  border-radius: 2px;
+}
+
+.tt-agenda {
+  display: grid;
+  gap: 18px;
+}
+
+.tt-agenda__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tt-ink);
+}
+
+.tt-agenda__head.is-today {
+  color: var(--tt-accent-ink);
+}
+
+.tt-agenda__count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tt-muted);
+}
+
+.tt-agenda__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tt-agenda__none {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--tt-accent-wash);
+  font-size: 13px;
+  color: var(--tt-muted);
+}
+
+.tt-mobile-empty {
+  padding: 28px 16px;
+  border: 1px dashed #d8d1f5;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.tt-mobile .tt-empty {
+  max-width: none;
+  margin-bottom: 4px;
+}
