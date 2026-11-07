@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { setAccessToken } from '../auth/token-store'
 import { jsonResponse, mockFetch } from '../test/http'
-import { makeAcademySchedule, makeMySchedule, makeSlot } from '../test/schedule'
-import { academySchedulePath, getAcademySchedule, getMySchedule, mySchedulePath } from './schedule'
+import { makeAcademySchedule, makeMySchedule, makeSlot } from '../test/timetable'
+import { academySchedulePath, getAcademySchedule, getMySchedule, mySchedulePath } from './timetable'
 
-describe('schedule API (API-090/091)', () => {
+describe('timetable API (API-090/091)', () => {
   it('builds the academy schedule path from the given filters only', () => {
     expect(academySchedulePath()).toBe('/api/schedule')
     expect(academySchedulePath({ on: undefined, classId: undefined })).toBe('/api/schedule')

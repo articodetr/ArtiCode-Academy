@@ -1,6 +1,7 @@
-// Maps a failed schedule request to a translation key (J-F05). The timetable
-// readings have no codes of their own beyond validation and the guards:
-// permission_denied (with the missing keys), 400 validation, network/server.
+// Maps a failed schedule request to a translation key (J-F05; moved from
+// schedule/schedule.errors.ts by J-F08). The timetable readings have no codes
+// of their own beyond validation and the guards: permission_denied (with the
+// missing keys), 400 validation, network/server.
 import { ApiError } from '../api/client'
 import type { UsersFailure } from '../users/users.errors'
 

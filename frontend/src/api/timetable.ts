@@ -1,5 +1,6 @@
-// Timetable readings (MOD-07-T04 — J-F05): API-090 GET /api/schedule (the
-// academy's weekly schedule, `schedule.manage` or `classes.manage`) and
+// Timetable readings (MOD-07-T04 — J-F05; moved here from api/schedule.ts by
+// J-F08 to match backend/src/schedule/timetable.*): API-090 GET /api/schedule
+// (the academy's weekly schedule, `schedule.manage` or `classes.manage`) and
 // API-091 GET /api/me/schedule (`schedule.read` by ownership). Types mirror
 // backend/src/schedule/timetable.dto.ts; every call goes through apiRequest
 // (Bearer header, refresh-and-retry on 401). Times are local wall-clock
@@ -151,4 +152,26 @@ export function getAcademySchedule(params: AcademyScheduleParams = {}, signal?: 
 /** API-091: `schedule.read`; the caller's own classes as student, guardian or teacher. */
 export function getMySchedule(params: MyScheduleParams = {}, signal?: AbortSignal): Promise<MySchedule> {
   return apiRequest<MySchedule>(mySchedulePath(params), { signal })
+}
+
+/**
+ * The fields of `BranchDto` (API-080) the branch filter of the academy
+ * schedule needs (J-F08). The full branches client comes with the branches
+ * screen (J-F03); this reading stays here so the two do not collide.
+ */
+export interface TimetableBranchOption {
+  id: string
+  code: string
+  name: LocalizedLabel
+  /** IANA zone; null = the academy's. */
+  timezone: string | null
+  isMain: boolean
+  isActive: boolean
+}
+
+export const BRANCHES_PATH = '/api/branches'
+
+/** API-080: every signed-in user (inactive branches for `branches.manage` only); the main branch first, then by code. */
+export function listTimetableBranches(signal?: AbortSignal): Promise<{ items: TimetableBranchOption[] }> {
+  return apiRequest<{ items: TimetableBranchOption[] }>(BRANCHES_PATH, { signal })
 }
