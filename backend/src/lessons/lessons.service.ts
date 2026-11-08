@@ -94,6 +94,24 @@ export interface LessonRequest {
   scheduleId?: string | null;
 }
 
+/**
+ * Plans the lessons to create INSIDE the creating transaction, after the class
+ * row is locked and its status checked (MOD-07-T05 reads the slots and the
+ * existing lessons there, so two generations of the same range serialise and
+ * never duplicate). An empty result creates nothing and records nothing.
+ */
+export type LessonRequestsPlanner = (tx: Prisma.TransactionClient, klass: { code: string; status: ClassStatus; courseId: string }) => Promise<readonly LessonRequest[]>;
+
+export interface CreateLessonsOptions {
+  /**
+   * Whose rule opens the class: `lessons` (default) — the caller must see the
+   * class's lessons (D-R16: `classes.manage` or an assigned teacher);
+   * `schedule` — the caller acts under `schedule.manage` (API-092), which
+   * covers every class as `PUT /api/classes/:id/schedule` does.
+   */
+  authority?: 'lessons' | 'schedule';
+}
+
 function toLessonDto(row: LessonRow, counts: AttendanceCounts): LessonDto {
   return {
     id: row.id,
@@ -277,20 +295,36 @@ export class LessonsService {
    * teacher at creation), every syllabus item belongs to the class's course
    * (404/422), every room exists and is active (404/422). A double booking of a
    * room or a teacher — among the created lessons or with existing ones — is
-   * refused by the EXCLUDE constraints (`lesson_conflict`).
+   * refused by the EXCLUDE constraints (`lesson_conflict`). `requests` may be
+   * a planner that runs inside the transaction under the class-row lock
+   * (MOD-07-T05); when it plans nothing, nothing is written or recorded.
    */
-  async createLessons(classId: string, requests: readonly LessonRequest[], caller: AuthPrincipal, ctx: RequestContext): Promise<LessonDto[]> {
-    for (const request of requests) this.assertRange(request.startsAt, request.endsAt);
+  async createLessons(
+    classId: string,
+    requests: readonly LessonRequest[] | LessonRequestsPlanner,
+    caller: AuthPrincipal,
+    ctx: RequestContext,
+    options: CreateLessonsOptions = {},
+  ): Promise<LessonDto[]> {
+    if (typeof requests !== 'function') for (const request of requests) this.assertRange(request.startsAt, request.endsAt);
     const bookings: Booking[] = [];
     for (let attempt = 1; ; attempt++) {
       bookings.length = 0;
       try {
         return await this.prisma.db.$transaction(async (tx) => {
-          const klass = await this.lockClass(tx, classId, caller);
+          const klass = await this.lockClass(tx, classId, caller, options.authority ?? 'lessons');
           if (!isClassOpenForLessons(klass.status)) throw lessonsError.classClosed(classId, klass.status);
+          let planned: readonly LessonRequest[] = [];
+          if (typeof requests === 'function') {
+            planned = await requests(tx, klass);
+            for (const request of planned) this.assertRange(request.startsAt, request.endsAt);
+            if (planned.length === 0) return [];
+          } else {
+            planned = requests;
+          }
           const lead = await tx.classTeacher.findFirst({ where: { classId, role: 'lead' }, select: { teacherUserId: true } });
           const inputs: LessonInput[] = [];
-          for (const request of requests) {
+          for (const request of planned) {
             const teacherUserId = request.teacherUserId === undefined ? (lead?.teacherUserId ?? null) : request.teacherUserId;
             if (teacherUserId !== null && request.teacherUserId !== undefined) await this.assertTeacherAssigned(tx, classId, teacherUserId);
             const syllabusItemId = request.syllabusItemId ?? null;
@@ -493,13 +527,20 @@ export class LessonsService {
    * the class's own actions) and applies the visibility rule: without
    * `classes.manage` the caller must be one of the class's teachers — an
    * unknown or invisible class is 404 before any other detail is revealed.
+   * Under the `schedule` authority (API-092) the visibility rule is skipped:
+   * `schedule.manage` covers every class, as the weekly schedule itself does.
    */
-  private async lockClass(tx: Tx, classId: string, caller: AuthPrincipal): Promise<{ code: string; status: ClassStatus; courseId: string }> {
+  private async lockClass(
+    tx: Tx,
+    classId: string,
+    caller: AuthPrincipal,
+    authority: NonNullable<CreateLessonsOptions['authority']> = 'lessons',
+  ): Promise<{ code: string; status: ClassStatus; courseId: string }> {
     const locked = await tx.$queryRaw<{ code: string; status: ClassStatus; courseId: string }[]>`
       SELECT code, status, course_id AS "courseId" FROM classes WHERE id = ${classId}::uuid FOR NO KEY UPDATE`;
     const klass = locked[0];
     if (!klass) throw lessonsError.classNotFound(classId);
-    if (!seesEveryClass(caller)) {
+    if (authority === 'lessons' && !seesEveryClass(caller)) {
       const assigned = await tx.classTeacher.findFirst({ where: { classId, teacherUserId: caller.id }, select: { classId: true } });
       if (!assigned) throw lessonsError.classNotFound(classId);
     }
