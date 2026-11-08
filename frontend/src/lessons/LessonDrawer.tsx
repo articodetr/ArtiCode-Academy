@@ -40,6 +40,9 @@ const ICONS: Readonly<Record<LessonMenuAction, ReactNode>> = {
 /** Form fields the edit form renders; a server error naming another field is shown as a message instead. */
 const EDIT_FIELDS = new Set(['titleAr', 'titleEn', 'descriptionAr', 'descriptionEn', 'deliveryMode', 'date', 'startTime', 'endTime', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl'])
 
+/** The lesson or its class changed elsewhere (or the lesson is gone): the edit form closes and the drawer re-reads the lesson. */
+const STALE_EDIT_CODES = ['lesson_locked', 'class_closed', 'lesson_not_found'].map((code) => `lessons.errors.${code}`)
+
 interface LessonDrawerProps {
   lessonId: string | null
   onClose: () => void
@@ -71,7 +74,13 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
-        setLoadError(failureMessage(t, describeLessonsFailure(error)))
+        const failure = describeLessonsFailure(error)
+        // A lesson that is gone (or out of reach) no longer shows its last known details.
+        if (failure.key === 'lessons.errors.lesson_not_found') {
+          setLesson(null)
+          setEditing(false)
+        }
+        setLoadError(failureMessage(t, failure))
       })
     return () => controller.abort()
   }, [lessonId, reloadTick, t])
@@ -166,6 +175,10 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
             onSaved={(updated) => {
               applyUpdate(updated)
               setEditing(false)
+            }}
+            onStale={() => {
+              setEditing(false)
+              reload()
             }}
             onCancel={() => setEditing(false)}
           />
@@ -365,6 +378,8 @@ interface LessonEditFormProps {
   lesson: Lesson
   timingLocked: boolean
   onSaved: (lesson: Lesson) => void
+  /** The server refused the save because the lesson changed elsewhere: close the form and re-read the lesson. */
+  onStale: () => void
   onCancel: () => void
 }
 
@@ -372,27 +387,30 @@ interface LessonEditFormProps {
  * The edit form of one edit session. It owns its form so every session starts
  * from the lesson as the server holds it (KI-049), and reads the class once
  * for the teacher options (a teacher who lost the assignment stays selectable
- * as the current value).
+ * as the current value) — only with `classes.read`, which GET /api/classes/:id
+ * requires; without it the select offers the current teacher and «no teacher».
  */
-function LessonEditForm({ lesson, timingLocked, onSaved, onCancel }: LessonEditFormProps) {
+function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel }: LessonEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
+  const canReadClass = useAuth().hasPermission('classes.read')
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const [klass, setKlass] = useState<AcademyClass | null>(null)
 
   useEffect(() => {
+    if (!canReadClass) return
     const controller = new AbortController()
     getClass(lesson.class.id, controller.signal)
       .then((loaded) => {
         if (!controller.signal.aborted) setKlass(loaded)
       })
       .catch(() => {
-        // Without the class (e.g. no classes.read) the teacher select offers the current teacher only.
+        // Without the class the teacher select offers the current teacher only.
       })
     return () => controller.abort()
-  }, [lesson.class.id])
+  }, [canReadClass, lesson.class.id])
 
   const save = async (values: LessonFormValues) => {
     const body = planLessonPatch(lesson, values)
@@ -409,6 +427,11 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onCancel }: LessonEditF
     } catch (caught) {
       const failure = describeLessonsFailure(caught)
       const text = failureMessage(t, failure)
+      if (STALE_EDIT_CODES.includes(failure.key)) {
+        message.error(text)
+        onStale()
+        return
+      }
       if (failure.field && EDIT_FIELDS.has(failure.field[0] ?? '')) form.setFields([{ name: failure.field, errors: [text] }])
       else message.error(text)
       setSaving(false)

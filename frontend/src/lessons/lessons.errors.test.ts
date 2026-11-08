@@ -20,8 +20,16 @@ describe('describeLessonsFailure', () => {
       params: { maxHours: '12' },
     })
     expect(describeLessonsFailure(apiError(409, { code: 'lesson_not_deletable', status: 'scheduled', attendanceCount: 3 }))).toEqual({ key: 'lessons.errors.lesson_not_deletable', params: { attendanceCount: '3' } })
-    expect(describeLessonsFailure(apiError(409, { code: 'lesson_locked', status: 'completed', fields: ['startsAt', 'roomId'] }))).toEqual({ key: 'lessons.errors.lesson_locked', params: { list: '(startsAt, roomId)' } })
+    expect(describeLessonsFailure(apiError(409, { code: 'lesson_locked', status: 'completed', fields: ['startsAt', 'roomId'] }))).toEqual({ key: 'lessons.errors.lesson_locked', lockedFields: ['startsAt', 'roomId'] })
     expect(describeLessonsFailure(apiError(403, { code: 'permission_denied', missing: ['lessons.manage'] }))).toEqual({ key: 'lessons.errors.permission_denied', params: { list: '(lessons.manage)' } })
+  })
+
+  it('names the fields of lesson_locked by their labels, keeping an unknown name as the server sent it', () => {
+    const sep = ar.lessons.errors.listSeparator
+    const locked = (fields: string[]) => failureMessage(t, describeLessonsFailure(apiError(409, { code: 'lesson_locked', status: 'completed', fields })))
+    expect(locked(['startsAt', 'roomId'])).toBe(ar.lessons.errors.lesson_locked.replace('{{list}}', `(${ar.lessons.patchFields.startsAt}${sep}${ar.lessons.patchFields.roomId})`))
+    expect(locked(['teacherUserId', 'futureField'])).toBe(ar.lessons.errors.lesson_locked.replace('{{list}}', `(${ar.lessons.patchFields.teacherUserId}${sep}futureField)`))
+    expect(locked([])).toBe(ar.lessons.errors.lesson_locked.replace('{{list}}', '').trim())
   })
 
   it('splits lesson_conflict by the booked resource and points at its field', () => {

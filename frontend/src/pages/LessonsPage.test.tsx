@@ -28,13 +28,15 @@ const loops = makeLesson({
 })
 const created = makeLesson({ id: 'new-1', title: { ar: 'الدوال' } })
 
-/** Serves the lessons list (recording its queries), the pickers, the detail and POST /api/classes/:id/lessons. */
+/** Serves the lessons list (recording its queries), the pickers, the detail and POST /api/classes/:id/lessons; `paths` records every request. */
 function mockLessonsApi(list: LessonList | Response, createResponse: Response = jsonResponse(201, created)) {
   const queries: URLSearchParams[] = []
   const posts: { url: string; body: unknown }[] = []
+  const paths: string[] = []
   mockFetch((url, init) => {
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
+    paths.push(`${method} ${parsed.pathname}`)
     if (parsed.pathname === '/api/lessons' && method === 'GET') {
       queries.push(parsed.searchParams)
       return list instanceof Response ? list : jsonResponse(200, list)
@@ -54,7 +56,7 @@ function mockLessonsApi(list: LessonList | Response, createResponse: Response = 
     if (parsed.pathname.endsWith('/syllabus')) return jsonResponse(200, makeSyllabus())
     return jsonResponse(404, { statusCode: 404, code: 'lesson_not_found', message: 'nope' })
   })
-  return { queries, posts }
+  return { queries, posts, paths }
 }
 
 function renderPage(permissions: string[]) {
@@ -102,7 +104,9 @@ describe('LessonsPage', () => {
 
     expect(await screen.findByText(ar.lessons.learnerHint)).toBeInTheDocument()
     await waitFor(() => expect(api.queries).toHaveLength(1))
-    expect(await screen.findByText(ar.lessons.emptyFiltered)).toBeInTheDocument()
+    // The default «from today» is not a filter: the empty list is the plain «nothing from today on in your classes».
+    expect(await screen.findByText(ar.lessons.emptyAssigned)).toBeInTheDocument()
+    expect(screen.queryByText(ar.lessons.emptyFiltered)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.lessons.addLesson)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(ar.lessons.columns.class)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.lessons.readOnlyHint)).not.toBeInTheDocument()
@@ -137,6 +141,43 @@ describe('LessonsPage', () => {
     expect(last.get('order')).toBe('desc')
     expect(last.get('classId')).toBe(CLASS_ID)
     expect(last.get('cursor')).toBeNull()
+  })
+
+  it('says «no lessons from today on» under the default filters, and «nothing matches» once a filter is set or «from» is cleared', async () => {
+    const api = mockLessonsApi(makeLessonList([]))
+    renderPage(LESSON_STAFF_PERMISSIONS)
+
+    expect(await screen.findByText(ar.lessons.empty)).toBeInTheDocument()
+    expect(screen.queryByText(ar.lessons.emptyFiltered)).not.toBeInTheDocument()
+
+    // A cleared «from» widens the list beyond the default: an empty answer is then «nothing matches».
+    fireEvent.change(screen.getByLabelText(ar.lessons.filters.from), { target: { value: '' } })
+    await waitFor(() => expect(api.queries.at(-1)?.get('from')).toBeNull())
+    expect(await screen.findByText(ar.lessons.emptyFiltered)).toBeInTheDocument()
+
+    // Today again = the default.
+    fireEvent.change(screen.getByLabelText(ar.lessons.filters.from), { target: { value: todayIso() } })
+    await waitFor(() => expect(api.queries.at(-1)?.get('from')).toBe(dayStartInstant(todayIso())!))
+    expect(await screen.findByText(ar.lessons.empty)).toBeInTheDocument()
+
+    fireEvent.mouseDown(screen.getByLabelText(ar.lessons.columns.status))
+    fireEvent.click(await screen.findByText(ar.labels.cancelled, { selector: '.ant-select-item-option-content' }))
+    await waitFor(() => expect(api.queries.at(-1)?.get('status')).toBe('cancelled'))
+    expect(await screen.findByText(ar.lessons.emptyFiltered)).toBeInTheDocument()
+  })
+
+  it('keeps the class filter and the add button behind classes.read: classes.manage alone gets no picker and a disabled button with the reason', async () => {
+    const api = mockLessonsApi(makeLessonList([variables]))
+    renderPage(['lessons.read', 'lessons.manage', 'classes.manage'])
+    await screen.findByText('PY-101-A')
+
+    expect(screen.queryByLabelText(ar.lessons.columns.class)).not.toBeInTheDocument()
+    const add = screen.getByText(ar.lessons.addLesson).closest('button')!
+    expect(add).toBeDisabled()
+    await userEvent.hover(add.parentElement!)
+    expect(await screen.findByText(ar.lessons.hints.needsClassesRead)).toBeInTheDocument()
+    // GET /api/classes would answer 403 without classes.read: the page never asks.
+    expect(api.paths.filter((path) => path.startsWith('GET /api/classes'))).toEqual([])
   })
 
   it('pages with the server cursor and back to the first page', async () => {

@@ -9,7 +9,10 @@ import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { DELIVERY_MODES, LESSON_TEXT_MAX_LENGTH, MAX_LESSON_HOURS } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
+import { useAuth } from '../auth/auth-context'
+import { useLocalized } from '../i18n/useLocalized'
 import { RoomPicker } from '../timetable/TimetablePickers'
+import { localizedLabel } from '../users/users.format'
 import { LessonClassPicker, LessonTeacherSelect, SyllabusItemSelect } from './LessonPickers'
 import { isMeetingUrlValid } from './lessons.form'
 import { rangeOf, rangeProblem } from './lessons.format'
@@ -30,7 +33,16 @@ interface LessonFormFieldsProps {
 
 export function LessonFormFields({ form, mode, klass, lesson, timingLocked = false, onClassChange }: LessonFormFieldsProps) {
   const { t } = useTranslation()
+  const { language } = useLocalized()
+  // GET /api/classes(/:id) needs classes.read at the controller: without it the class list and the class's teachers stay unknown.
+  const canReadClasses = useAuth().hasPermission('classes.read')
   const courseId = klass?.course.id ?? lesson?.class.course.id
+
+  /** An English text needs the Arabic one: the server requires `ar` in every localized object, so an English text alone would be dropped. */
+  const arabicFirst = (arField: string) => ({
+    validator: (_: unknown, value: string | undefined) =>
+      !value?.trim() || (form.getFieldValue(arField) as string | undefined)?.trim() ? Promise.resolve() : Promise.reject(new Error(t('lessons.validation.arabicFirst'))),
+  })
 
   const validateEnd = (_: unknown, endTime: string | undefined) => {
     const date = form.getFieldValue('date') as string | undefined
@@ -47,8 +59,22 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
   return (
     <>
       {mode === 'create' ? (
-        <Form.Item name="classId" label={t('lessons.fields.class')} extra={t('lessons.hints.class')} rules={[{ required: true, message: t('lessons.validation.classRequired') }]}>
-          <LessonClassPicker placeholder={t('lessons.pickers.classPlaceholder')} onChange={(_value, item) => onClassChange?.(item)} style={{ maxWidth: 480 }} />
+        <Form.Item
+          name="classId"
+          label={t('lessons.fields.class')}
+          extra={canReadClasses ? t('lessons.hints.class') : t('lessons.hints.needsClassesRead')}
+          rules={[{ required: true, message: t('lessons.validation.classRequired') }]}
+        >
+          {canReadClasses ? (
+            <LessonClassPicker placeholder={t('lessons.pickers.classPlaceholder')} onChange={(_value, item) => onClassChange?.(item)} style={{ maxWidth: 480 }} />
+          ) : (
+            <Select
+              disabled
+              placeholder={t('lessons.pickers.classPlaceholder')}
+              options={klass ? [{ value: klass.id, label: `${klass.code} — ${localizedLabel(klass.name, language)}` }] : []}
+              style={{ maxWidth: 480 }}
+            />
+          )}
         </Form.Item>
       ) : null}
       <Row gutter={12}>
@@ -62,7 +88,7 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="titleEn" label={t('lessons.fields.titleEn')} rules={[{ max: LESSON_TEXT_MAX_LENGTH }]}>
+          <Form.Item name="titleEn" label={t('lessons.fields.titleEn')} dependencies={['titleAr']} rules={[{ max: LESSON_TEXT_MAX_LENGTH }, arabicFirst('titleAr')]}>
             <Input dir="ltr" maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
         </Col>
@@ -93,8 +119,12 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
       </Row>
       <Row gutter={12}>
         <Col xs={24} md={12}>
-          <Form.Item name="teacherUserId" label={t('lessons.fields.teacher')} extra={mode === 'create' ? t('lessons.hints.teacher') : undefined}>
-            <LessonTeacherSelect mode={mode} teachers={klass?.teachers ?? []} current={lesson?.teacher} disabled={timingLocked || (mode === 'create' && !klass)} />
+          <Form.Item
+            name="teacherUserId"
+            label={t('lessons.fields.teacher')}
+            extra={mode === 'create' ? t('lessons.hints.teacher') : canReadClasses ? undefined : t('lessons.hints.teacherNeedsClassesRead')}
+          >
+            <LessonTeacherSelect mode={mode} teachers={klass?.teachers ?? null} current={lesson?.teacher} disabled={timingLocked || (mode === 'create' && !klass)} />
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
@@ -130,7 +160,12 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="descriptionEn" label={t('lessons.fields.descriptionEn')} rules={[{ max: LESSON_TEXT_MAX_LENGTH }]}>
+          <Form.Item
+            name="descriptionEn"
+            label={t('lessons.fields.descriptionEn')}
+            dependencies={['descriptionAr']}
+            rules={[{ max: LESSON_TEXT_MAX_LENGTH }, arabicFirst('descriptionAr')]}
+          >
             <Input.TextArea rows={2} dir="ltr" maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
         </Col>
