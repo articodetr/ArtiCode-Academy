@@ -1086,8 +1086,8 @@ export const en: Translation = {
     readOnlyHint: 'This page shows only the lessons of the classes assigned to you.',
     learnerHint: 'Your lessons as a student or guardian will appear in “My lessons” once that view is ready; this list shows only the lessons of the classes you teach.',
     refresh: 'Refresh',
-    empty: 'No lessons yet',
-    emptyAssigned: 'No lessons in the classes assigned to you',
+    empty: 'No lessons from today on',
+    emptyAssigned: 'No lessons from today on in the classes assigned to you',
     emptyFiltered: 'No lessons match the filters',
     filters: {
       allClasses: 'All classes',
@@ -1148,6 +1148,8 @@ export const en: Translation = {
       time: 'In your device’s time zone; up to 12 hours, and an end time earlier than the start means the next day',
       meetingUrl: 'A link starting with https:// (for online lessons)',
       timingLocked: 'Time, room and teacher cannot change for a completed lesson; title, description, syllabus item, delivery mode and link still can',
+      needsClassesRead: 'Adding a lesson needs the classes.read permission to choose its class',
+      teacherNeedsClassesRead: 'Listing the teachers of the class needs the classes.read permission; the current teacher and “no teacher” stay available',
     },
     teacherOptions: {
       default: 'The class’s lead teacher (default)',
@@ -1170,6 +1172,7 @@ export const en: Translation = {
       rangeEmpty: 'The end time must be after the start time',
       rangeTooLong: 'A lesson lasts at most {{maxHours}} hours',
       meetingUrl: 'The link must start with https:// and contain no spaces',
+      arabicFirst: 'Enter the Arabic text first; an English text alone is not saved',
     },
     pickers: {
       classPlaceholder: 'Search a class by code or name',
@@ -1207,6 +1210,17 @@ export const en: Translation = {
       excused: 'Excused',
       comingSoon: 'Recording and correcting attendance come with the attendance screen (MOD-06-T03).',
     },
+    patchFields: {
+      title: 'title',
+      description: 'description',
+      deliveryMode: 'delivery mode',
+      startsAt: 'start time',
+      endsAt: 'end time',
+      roomId: 'room',
+      teacherUserId: 'teacher',
+      syllabusItemId: 'syllabus item',
+      meetingUrl: 'meeting link',
+    },
     actions: {
       menu: 'Lesson actions',
       complete: 'Complete lesson',
@@ -1243,6 +1257,7 @@ export const en: Translation = {
       lesson_conflict_room: 'The room is booked by another lesson overlapping this time; change the time or the room.',
       lesson_conflict_teacher: 'The teacher has another lesson overlapping this time; change the time or the teacher.',
       lesson_locked: 'The lesson status changed and these fields can no longer be edited {{list}}',
+      listSeparator: ', ',
       lesson_not_started: 'A lesson cannot be completed before its start time.',
       invalid_transition: 'The lesson status changed elsewhere; it was reloaded.',
       lesson_not_deletable: 'Only a scheduled lesson without any attendance record can be deleted ({{attendanceCount}} record(s)); cancel it instead.',
