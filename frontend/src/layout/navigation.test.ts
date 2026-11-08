@@ -81,7 +81,8 @@ describe('NAV_ITEMS', () => {
     expect(schedule.permissions).toEqual(['schedule.read', 'schedule.manage', 'classes.manage'])
     expect(keysFor(viewer(null, ['schedule.read']))).toEqual(['dashboard', 'schedule'])
     expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard', 'schedule'])
-    expect(keysFor(viewer(null, ['schedule.manage']))).toEqual(['dashboard', 'schedule'])
+    // schedule.manage also opens the rooms tab (J-F06).
+    expect(keysFor(viewer(null, ['schedule.manage']))).toEqual(['dashboard', 'schedule', 'rooms'])
     expect(canAccess(viewer('student', []), 'schedule')).toBe(false)
   })
 
@@ -115,8 +116,9 @@ describe('NAV_ITEMS', () => {
     expect(rooms.permissions).toEqual(['schedule.manage'])
     expect(rooms.path).toBe('/settings/rooms')
     expect(rooms.module).toBe('MOD-07')
-    expect(keysFor(viewer(null, ['schedule.manage']))).toEqual(['dashboard', 'rooms'])
-    expect(keysFor(viewer(null, ['schedule.read']))).toEqual(['dashboard'])
+    // The schedule entry comes from J-F05 (schedule.read, schedule.manage or classes.manage).
+    expect(keysFor(viewer(null, ['schedule.manage']))).toEqual(['dashboard', 'schedule', 'rooms'])
+    expect(keysFor(viewer(null, ['schedule.read']))).toEqual(['dashboard', 'schedule'])
     // By seed only academy_admin holds the key; the role alone grants nothing.
     expect(canAccess(viewer('admin', []), 'rooms')).toBe(false)
     expect(canAccess(viewer('staff'), 'rooms')).toBe(false)
@@ -141,7 +143,7 @@ describe('navFor', () => {
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
-    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings'])
+    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'rooms'])
     // Staff gain the courses entry (MOD-04-T05): the seed grants them courses.read.
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'payments', 'notifications'])
     // Students and guardians gain «my classes» (J-F04): ownership, by their server role keys.
