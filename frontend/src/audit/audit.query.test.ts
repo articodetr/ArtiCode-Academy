@@ -82,4 +82,9 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     // Both MOD-04 families can also be searched by prefix.
     expect(AUDIT_ACTION_SUGGESTIONS).toEqual(expect.arrayContaining(['levels.', 'courses.']))
   })
+
+  it('offers the attendance event of MOD-06-T03 once, and its family by prefix (J-F10)', () => {
+    expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'attendance.recorded')).toEqual(['attendance.recorded'])
+    expect(AUDIT_ACTION_SUGGESTIONS).toEqual(expect.arrayContaining(['attendance.', 'lessons.']))
+  })
 })
