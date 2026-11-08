@@ -292,6 +292,33 @@ describe.skipIf(!available)('MOD-07 class schedule (e2e, TEST-072)', () => {
     ]);
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
     expect(ok.body.slots).toHaveLength(3);
+
+    // KI-072: `slot.index` of a conflict with another class is the slot's position in the request,
+    // also when kept slots precede it — a created slot in the middle, then a kept slot changed into the conflict.
+    const kept = (ok.body.slots as SlotBody[]).map((entry) => ({
+      id: entry.id,
+      weekday: entry.weekday,
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      roomId: entry.room?.id ?? null,
+      teacherUserId: entry.teacher?.userId ?? null,
+      effectiveFrom: entry.effectiveFrom,
+      effectiveTo: entry.effectiveTo,
+    }));
+    expect(kept.map((entry) => [entry.weekday, entry.startTime, entry.effectiveTo])).toEqual([
+      [0, '10:00', '2025-12-31'],
+      [0, '11:00', null],
+      [1, '10:00', null],
+    ]);
+    const m3 = await mark();
+    const created = await put(b, [kept[0]!, slot({ roomId: roomActive }), kept[1]!, kept[2]!]);
+    expect(created.status).toBe(409);
+    expect(created.body).toMatchObject({ code: 'schedule_conflict', kind: 'room', conflictingSlotId: held.id, conflictingClassId: a, slot: { index: 1, weekday: 0, startTime: '10:00', effectiveFrom: '2026-01-01' } });
+    const updated = await put(b, [kept[1]!, kept[2]!, { ...kept[0]!, effectiveTo: null }]);
+    expect(updated.status).toBe(409);
+    expect(updated.body).toMatchObject({ code: 'schedule_conflict', kind: 'room', conflictingSlotId: held.id, conflictingClassId: a, slot: { index: 2, weekday: 0, startTime: '10:00', effectiveFrom: '2020-01-01', effectiveTo: null } });
+    expect(await storedSlots(b)).toHaveLength(3);
+    expect(await eventsSince(m3)).toEqual([]);
   });
 
   it('AC4 — a weekday outside settings.scheduling.workingDays is 422 non_working_day; without the setting every weekday is accepted', async () => {
