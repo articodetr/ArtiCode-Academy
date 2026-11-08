@@ -425,7 +425,11 @@ describe.skipIf(!available)('MOD-06 attendance (e2e, TEST-078)', () => {
     const asB = { [id('s1')]: 'late:3', [id('s2')]: 'present:null' };
     expect([asA, asB]).toContainEqual(state); // one batch wholly after the other, never interleaved
     const events = (await eventsSince(m)).filter((event) => event.entityId === lessons['L4']);
-    expect(events.map((event) => [event.metadata!['created'], event.metadata!['updated']]).sort()).toEqual([
+    const counts = (event: { metadata: unknown }) => {
+      const metadata = event.metadata as Record<string, unknown>;
+      return [metadata['created'], metadata['updated']];
+    };
+    expect(events.map(counts).sort()).toEqual([
       [0, 2],
       [2, 0],
     ]);
