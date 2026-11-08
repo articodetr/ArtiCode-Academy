@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { setAccessToken } from '../auth/token-store'
 import { CLASS_ID, TEACHER_IDS } from '../test/classes'
 import { jsonResponse, mockFetch } from '../test/http'
-import { ROOM_IDS, SLOT_IDS, makeSchedule, makeSlot } from '../test/schedule'
-import { classSchedulePath, getClassSchedule, replaceClassSchedule } from './schedule'
+import { ROOM_IDS, SLOT_IDS, makeGeneratedLessons, makeSchedule, makeSlot } from '../test/schedule'
+import { classSchedulePath, generateClassLessons, generateLessonsPath, getClassSchedule, replaceClassSchedule } from './schedule'
 
 describe('class schedule API (API-088/API-089)', () => {
   beforeEach(() => {
@@ -41,5 +41,18 @@ describe('class schedule API (API-088/API-089)', () => {
     expect(url).toBe(`/api/classes/${CLASS_ID}/schedule`)
     expect(init?.method).toBe('PUT')
     expect(JSON.parse(String(init?.body))).toEqual(body)
+  })
+
+  it('generates lessons with ONE POST of { from, to } and returns the server counts (API-092, J-F16)', async () => {
+    const answered = makeGeneratedLessons({ created: 11, existing: 2 })
+    const fetchMock = mockFetch(() => jsonResponse(200, answered))
+    expect(generateLessonsPath('a/b')).toBe('/api/classes/a%2Fb/schedule/generate')
+    await expect(generateClassLessons(CLASS_ID, { from: '2026-11-15', to: '2026-12-31' })).resolves.toEqual(answered)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toBe(`/api/classes/${CLASS_ID}/schedule/generate`)
+    expect(init?.method).toBe('POST')
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer access-1')
+    expect(JSON.parse(String(init?.body))).toEqual({ from: '2026-11-15', to: '2026-12-31' })
   })
 })

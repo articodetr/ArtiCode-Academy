@@ -1,8 +1,8 @@
 // Fixtures for the weekly class schedule (MOD-07 — J-F07): the shapes of
 // API-084 (rooms) and API-088/API-089 (class schedule) as the backend returns
-// them, plus the permission sets the tests use.
+// them, plus the permission sets the tests use; since J-F16 the API-092 answer.
 import type { Room } from '../api/rooms'
-import type { ClassSchedule, ScheduleSlot } from '../api/schedule'
+import type { ClassSchedule, GeneratedLessons, ScheduleSlot } from '../api/schedule'
 import { CLASS_ADMIN_PERMISSIONS, CLASS_ID, CLASS_MANAGER_PERMISSIONS, TEACHER_IDS } from './classes'
 
 export const SLOT_IDS = ['0193c000-0000-7000-8000-00000000a001', '0193c000-0000-7000-8000-00000000a002', '0193c000-0000-7000-8000-00000000a003'] as const
@@ -51,4 +51,15 @@ export function makeSlot(overrides: Partial<ScheduleSlot> = {}): ScheduleSlot {
 
 export function makeSchedule(slots: ScheduleSlot[] = [makeSlot()], classId: string = CLASS_ID): ClassSchedule {
   return { classId, slots }
+}
+
+/** An existing lesson a generated one would double-book (J-F16). */
+export const LESSON_ID = '0193d000-0000-7000-8000-00000000d001'
+
+/**
+ * The API-092 answer of the contract's example (two slots, 13 lessons created);
+ * `lessons` stays empty — the tab shows the counts only (J-F16).
+ */
+export function makeGeneratedLessons(overrides: Partial<GeneratedLessons> = {}): GeneratedLessons {
+  return { classId: CLASS_ID, from: '2026-11-15', to: '2026-12-31', slots: 2, occurrences: 13, created: 13, existing: 0, offDays: 0, lessons: [], ...overrides }
 }
