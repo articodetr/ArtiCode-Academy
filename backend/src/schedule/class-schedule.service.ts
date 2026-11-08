@@ -89,9 +89,20 @@ function toColumns(values: Partial<SlotValues>): Prisma.ClassScheduleUncheckedUp
   return data;
 }
 
-/** The slot as the error body shows it (the request's values, never ids of other classes' people). */
+/**
+ * The slot as the error body shows it: its position in the request's `slots`
+ * list and the request's values (never ids of other classes' people). The
+ * index is always the request index — for a conflict found after the write
+ * too, not the position among the written rows (KI-072).
+ */
 function slotDetail(values: SlotValues, index: number): Record<string, unknown> {
   return { index, ...values };
+}
+
+/** A slot the transaction writes (created, or kept with a changed value) with its position in the request. */
+interface WrittenSlot {
+  index: number;
+  values: SlotValues;
 }
 
 /** Attempts of the replace transaction when PostgreSQL reports a write conflict or a deadlock (KI-071). */
@@ -161,7 +172,7 @@ export class ClassScheduleService {
       effectiveTo: slot.effectiveTo ?? null,
     }));
     const workingDays = await this.workingDays();
-    const written: SlotValues[] = [];
+    const written: WrittenSlot[] = [];
 
     // A true tie on an EXCLUDE constraint — two requests inserting mutually
     // conflicting slots at the same instant — ends for the loser with a
@@ -191,7 +202,9 @@ export class ClassScheduleService {
           const conflict = findRequestConflict(final);
           if (conflict) throw scheduleError.scheduleConflict(conflict.kind, slotDetail(final[conflict.second]!, conflict.second), null, classId);
 
-          written.push(...plan.create, ...plan.update.map((change) => ({ ...existingOf(rows.find((row) => row.id === change.id)!), ...change })));
+          // The slots the constraints will check, each with its request index: created ones and kept ones with a changed value.
+          const updatedIds = new Set(plan.update.map((change) => change.id));
+          written.push(...final.flatMap((values, index) => (requested[index]!.id === undefined || updatedIds.has(requested[index]!.id) ? [{ index, values }] : [])));
           if (plan.remove.length > 0) await tx.classSchedule.deleteMany({ where: { classId, id: { in: plan.remove } } });
           for (const change of plan.update) {
             const { id, ...values } = change;
@@ -263,11 +276,12 @@ export class ClassScheduleService {
 
   /**
    * After a 23P01 from `ex_class_schedules_room` / `ex_class_schedules_teacher`:
-   * the first written slot that overlaps a slot of another class on the same
-   * resource (same weekday, half-open times, inclusive effective ranges).
+   * the first written slot (in request order) that overlaps a slot of another
+   * class on the same resource (same weekday, half-open times, inclusive
+   * effective ranges), named by its request index (KI-072).
    */
-  private async conflictWithOtherClass(classId: string, kind: ConflictKind, written: readonly SlotValues[]): Promise<Error> {
-    for (const [index, slot] of written.entries()) {
+  private async conflictWithOtherClass(classId: string, kind: ConflictKind, written: readonly WrittenSlot[]): Promise<Error> {
+    for (const { index, values: slot } of written) {
       const resource = kind === 'room' ? slot.roomId : slot.teacherUserId;
       if (resource === null) continue;
       const other = await this.prisma.db.classSchedule.findFirst({
