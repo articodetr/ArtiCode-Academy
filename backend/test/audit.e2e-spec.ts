@@ -1,8 +1,9 @@
 // TEST-030 — MOD-03-T10 audit coverage of every writer route of T02..T09 and
 // the filters of GET /api/audit-logs (API-011) against the live development
 // database; since CH-0051 (MOD-04-T07 backend half, task C2) also every writer
-// route of MOD-04 T02..T04 (levels, courses, syllabus). Skipped when no
-// database is reachable. Fixtures carry a unique suffix and are deleted at the
+// route of MOD-04 T02..T04 (levels, courses, syllabus); since CH-0104
+// (MOD-06-T05) also every writer route of MOD-06 T02/T03 (lessons,
+// attendance). Skipped when no database is reachable. Fixtures carry a unique suffix and are deleted at the
 // end (their audit rows stay with a NULL actor — the log is append-only by
 // design, KI-032).
 //
@@ -37,9 +38,13 @@ const USERS = '/api/users';
 const AUDIT = '/api/audit-logs';
 const LEVELS = '/api/levels';
 const COURSES = '/api/courses';
+const CLASSES = '/api/classes';
+const LESSONS = '/api/lessons';
 /** MOD-04 fixture codes (upper case, within LEVEL_CODE_PATTERN / COURSE_CODE_PATTERN). */
 const LEVEL_PREFIX = `T${RUN.toUpperCase()}`;
 const COURSE_PREFIX = `C${RUN.toUpperCase()}`;
+/** MOD-06 fixture class code (the class and its enrollment are created with Prisma — MOD-05 events are not this suite's subject). */
+const CLASS_PREFIX = `L${RUN.toUpperCase()}`;
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 async function canConnect(url: string): Promise<boolean> {
@@ -90,6 +95,8 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   let customRoleId = '';
   /** MOD-04 fixtures created through the API by the admin. */
   const mod04 = { levelA: '', levelB: '', courseA: '', courseB: '' };
+  /** MOD-06 fixtures: the class (Prisma, on courseA) and the lessons created through the API by the admin. */
+  const mod06 = { classId: '', classCode: '', lesson1: '', lesson2: '' };
 
   // E-mail addresses are stored lower-case (CHECK ck_users_email_lowercase).
   const email = (name: string) => `${name.toLowerCase()}-${RUN}@example.test`;
@@ -176,12 +183,17 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     await createUser('admin', [superuser]);
     await createUser('auditor', [auditor]);
     await createUser('plain');
+    // Enrolled in the MOD-06 class; holds the seeded student role, never acts (the name "student" belongs to the T02 block).
+    await createUser('enrolled', [(await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } })).id]);
     for (const name of ['admin', 'auditor', 'plain']) tokens[name] = await login(email(name));
   });
 
   afterAll(async () => {
     try {
-      // Courses first: their level is Restrict.
+      // MOD-06 first: the enrollment (Restrict on the class), then the class (its lessons and attendance cascade) — a course is Restrict on classes.
+      await prisma.enrollment.deleteMany({ where: { class: { code: { startsWith: CLASS_PREFIX } } } });
+      await prisma.class.deleteMany({ where: { code: { startsWith: CLASS_PREFIX } } });
+      // Courses next: their level is Restrict.
       await prisma.course.deleteMany({ where: { code: { startsWith: COURSE_PREFIX } } });
       await prisma.level.deleteMany({ where: { code: { startsWith: LEVEL_PREFIX } } });
     } finally {
@@ -529,6 +541,100 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     await api().put(`${LEVELS}/order`).set(bearer('admin')).send({ levelIds: order }).expect(200);
     await api().patch(course).set(bearer('admin')).send({ summary: { ar: 'ملخص T07' } }).expect(200);
     await api().put(`${course}/syllabus`).set(bearer('admin')).send({ items: sameItems }).expect(200);
+    expect(await since(m)).toEqual([]);
+  });
+
+  it('MOD-06-T02/T03 — lesson create, update, attendance, complete, cancel and delete record one event each', async () => {
+    const admin = fx['admin']!;
+    const lessonEvent = (action: string, entityType: 'classes' | 'lessons', entityId: string, metadata: Record<string, unknown>): ExpectedEvent => ({
+      action,
+      actorUserId: admin,
+      entityType,
+      entityId,
+      metadata,
+    });
+    // The class (open, on the published courseA) and one active enrollment are fixtures, not steps of this suite.
+    const klass = await prisma.class.create({
+      data: { courseId: mod04.courseA, code: `${CLASS_PREFIX}-A`, name: { ar: 'فصل T05' }, capacity: 5, status: 'open' },
+      select: { id: true, code: true },
+    });
+    mod06.classId = klass.id;
+    mod06.classCode = klass.code;
+    await prisma.enrollment.create({ data: { classId: klass.id, studentUserId: fx['enrolled']!, status: 'active' }, select: { id: true } });
+    const item = await prisma.courseSyllabusItem.findFirstOrThrow({ where: { courseId: mod04.courseA }, orderBy: { sortOrder: 'asc' }, select: { id: true } });
+    const base = { classId: klass.id, code: klass.code };
+    const newLesson = (title: string, day: string) =>
+      api()
+        .post(`${CLASSES}/${klass.id}/lessons`)
+        .set(bearer('admin'))
+        .send({ title: { ar: title }, startsAt: `${day}T08:00:00Z`, endsAt: `${day}T09:00:00Z` });
+
+    let m = await mark();
+    const l1 = await api()
+      .post(`${CLASSES}/${klass.id}/lessons`)
+      .set(bearer('admin'))
+      .send({ title: { ar: 'درس T05 أ' }, startsAt: '2026-01-05T08:00:00Z', endsAt: '2026-01-05T09:00:00Z', syllabusItemId: item.id })
+      .expect(201);
+    mod06.lesson1 = l1.body.id;
+    await expectEvents(m, [lessonEvent('lessons.created', 'classes', klass.id, { ...base, count: 1, lessonIds: [mod06.lesson1] })]);
+
+    m = await mark();
+    await api().patch(`${LESSONS}/${mod06.lesson1}`).set(bearer('admin')).send({ title: { ar: 'درس T05 أ معدَّل' } }).expect(200);
+    await expectEvents(m, [lessonEvent('lessons.updated', 'lessons', mod06.lesson1, { ...base, fields: ['title'] })]);
+
+    m = await mark();
+    await api()
+      .put(`${LESSONS}/${mod06.lesson1}/attendance`)
+      .set(bearer('admin'))
+      .send({ records: [{ studentId: fx['enrolled'], status: 'late', minutesLate: 5 }] })
+      .expect(200);
+    await expectEvents(m, [
+      lessonEvent('attendance.recorded', 'lessons', mod06.lesson1, { ...base, created: 1, updated: 0, counts: { recorded: 1, present: 0, absent: 0, late: 1, excused: 0 } }),
+    ]);
+
+    m = await mark();
+    await api().post(`${LESSONS}/${mod06.lesson1}/status`).set(bearer('admin')).send({ action: 'complete' }).expect(200);
+    await expectEvents(m, [lessonEvent('lessons.status.changed', 'lessons', mod06.lesson1, { ...base, action: 'complete', from: 'scheduled', to: 'completed' })]);
+
+    m = await mark();
+    const l2 = await newLesson('درس T05 ب', '2027-01-05').expect(201);
+    mod06.lesson2 = l2.body.id;
+    await api().post(`${LESSONS}/${mod06.lesson2}/status`).set(bearer('admin')).send({ action: 'cancel', reason: 'عطلة' }).expect(200);
+    await expectEvents(m, [
+      lessonEvent('lessons.created', 'classes', klass.id, { ...base, count: 1, lessonIds: [mod06.lesson2] }),
+      lessonEvent('lessons.status.changed', 'lessons', mod06.lesson2, { ...base, action: 'cancel', from: 'scheduled', to: 'cancelled', reason: 'عطلة' }),
+    ]);
+
+    m = await mark();
+    const l3 = await newLesson('درس T05 ج', '2027-02-05').expect(201);
+    await api().delete(`${LESSONS}/${l3.body.id}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [
+      lessonEvent('lessons.created', 'classes', klass.id, { ...base, count: 1, lessonIds: [l3.body.id] }),
+      lessonEvent('lessons.deleted', 'lessons', l3.body.id, { ...base, startsAt: '2027-02-05T08:00:00.000Z' }),
+    ]);
+  });
+
+  it('MOD-06 — rejected requests and writes without a difference record nothing', async () => {
+    const lesson1 = `${LESSONS}/${mod06.lesson1}`;
+    const lessons = `${CLASSES}/${mod06.classId}/lessons`;
+    const valid = { title: { ar: 'درس' }, startsAt: '2027-03-01T10:00:00Z', endsAt: '2027-03-01T11:00:00Z' };
+
+    const m = await mark();
+    // Validation, permission and business-rule refusals.
+    expect((await api().post(lessons).set(bearer('admin')).send({ ...valid, endsAt: '2027-03-01T09:00:00Z' }).expect(400)).body.code).toBe('time_range_invalid');
+    expect((await api().post(lessons).set(bearer('plain')).send(valid).expect(403)).body.code).toBe('permission_denied');
+    expect((await api().patch(lesson1).set(bearer('admin')).send({ startsAt: '2026-01-05T07:00:00Z' }).expect(409)).body.code).toBe('lesson_locked');
+    expect((await api().delete(lesson1).set(bearer('admin')).expect(409)).body.code).toBe('lesson_not_deletable');
+    expect((await api().post(`${lesson1}/status`).set(bearer('admin')).send({ action: 'cancel' }).expect(409)).body.code).toBe('invalid_transition');
+    expect(
+      (await api().put(`${LESSONS}/${mod06.lesson2}/attendance`).set(bearer('admin')).send({ records: [{ studentId: fx['enrolled'], status: 'present' }] }).expect(409)).body.code,
+    ).toBe('attendance_closed');
+    expect((await api().put(`${lesson1}/attendance`).set(bearer('admin')).send({ records: [{ studentId: fx['plain'], status: 'present' }] }).expect(422)).body.code).toBe('not_enrolled');
+    await api().put(`${lesson1}/attendance`).set(bearer('admin')).send({ records: [{ studentId: fx['enrolled'], status: 'present', minutesLate: 3 }] }).expect(400);
+    await api().put(`${lesson1}/attendance`).set(bearer('plain')).send({ records: [{ studentId: fx['enrolled'], status: 'present' }] }).expect(403);
+    // Writes identical to the stored state: 200, nothing written, nothing recorded.
+    await api().patch(lesson1).set(bearer('admin')).send({ title: { ar: 'درس T05 أ معدَّل' } }).expect(200);
+    await api().put(`${lesson1}/attendance`).set(bearer('admin')).send({ records: [{ studentId: fx['enrolled'], status: 'late', minutesLate: 5 }] }).expect(200);
     expect(await since(m)).toEqual([]);
   });
 
