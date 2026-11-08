@@ -3,12 +3,23 @@
 // Codes: backend/src/lessons/lessons.errors.ts (all 18, the two attendance
 // codes included for MOD-06-T03) plus the auth/permission guards.
 import { ApiError } from '../api/client'
+import { failureMessage as usersFailureMessage } from '../users/users.errors'
 import type { UsersFailure } from '../users/users.errors'
 
-export { failureMessage } from '../users/users.errors'
+/** A users failure plus, for `lesson_locked`, the refused fields as the server names them. */
+export interface LessonsFailure extends UsersFailure {
+  lockedFields?: string[]
+}
 
-/** Same shape as a users failure, so `failureMessage()` renders both. */
-export type LessonsFailure = UsersFailure
+/** The PATCH fields of API-096 (`LESSON_PATCH_FIELDS` of lessons.changes.ts) — each has a `lessons.patchFields.*` label. */
+const PATCH_FIELDS = new Set(['title', 'description', 'deliveryMode', 'startsAt', 'endsAt', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl'])
+
+/** The failure's text; `lesson_locked` lists the refused fields by their translated labels, not their API names. */
+export function failureMessage(t: (key: string, options?: Record<string, unknown>) => string, failure: LessonsFailure): string {
+  if (!failure.lockedFields?.length) return usersFailureMessage(t, failure)
+  const names = failure.lockedFields.map((field) => (PATCH_FIELDS.has(field) ? t(`lessons.patchFields.${field}`) : field))
+  return usersFailureMessage(t, { ...failure, params: { ...failure.params, list: `(${names.join(t('lessons.errors.listSeparator'))})` } })
+}
 
 const KNOWN_CODES = new Set([
   'lesson_not_found',
@@ -46,9 +57,12 @@ const FIELD_OF_CODE: Readonly<Record<string, string[]>> = {
   time_range_invalid: ['endTime'],
 }
 
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
 function stringList(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined
-  const items = value.filter((item): item is string => typeof item === 'string')
+  const items = strings(value)
   return items.length > 0 ? items.join(', ') : undefined
 }
 
@@ -66,8 +80,9 @@ export function describeLessonsFailure(error: unknown): LessonsFailure {
     const field = FIELD_OF_CODE[error.code]
     if (field) failure.field = field
     if (error.code === 'lesson_conflict') failure.field = body.resource === 'teacher' ? ['teacherUserId'] : ['roomId']
+    if (error.code === 'lesson_locked' && strings(body.fields).length > 0) failure.lockedFields = strings(body.fields)
     const params: Record<string, string> = {}
-    const list = stringList(body.missing) ?? stringList(body.fields) ?? stringList(body.studentIds)
+    const list = stringList(body.missing) ?? stringList(body.studentIds)
     if (list) params.list = `(${list})`
     if (typeof body.attendanceCount === 'number') params.attendanceCount = String(body.attendanceCount)
     if (typeof body.maxHours === 'number') params.maxHours = String(body.maxHours)

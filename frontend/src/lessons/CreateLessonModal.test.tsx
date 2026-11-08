@@ -94,6 +94,26 @@ describe('CreateLessonModal', () => {
     expect(posts).toEqual([])
   })
 
+  it('refuses an English description without the Arabic one (it would be dropped) and sends nothing', async () => {
+    const posts = mockCreateApi()
+    const { dialog, onCreated } = await renderOpen()
+    await chooseClass(dialog)
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'الدوال')
+    fillTimes(dialog, '2026-11-12', '10:00', '11:00')
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.descriptionEn), 'Defining functions')
+    submit(dialog)
+
+    expect(await within(dialog).findByText(ar.lessons.validation.arabicFirst)).toBeInTheDocument()
+    expect(posts).toEqual([])
+    expect(onCreated).not.toHaveBeenCalled()
+
+    // With the Arabic text the same English text travels with it.
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.descriptionAr), 'تعريف الدوال')
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect((posts[0] as { description: unknown }).description).toEqual({ ar: 'تعريف الدوال', en: 'Defining functions' })
+  })
+
   it('sends the whole body: localized texts, NO_TEACHER as null, room, syllabus item, mode and link', async () => {
     const posts = mockCreateApi()
     const { dialog, onCreated } = await renderOpen()

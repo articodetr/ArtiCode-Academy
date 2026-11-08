@@ -926,8 +926,8 @@ export const ar = {
     readOnlyHint: 'تعرض هذه الصفحة دروس الفصول المُسندة إليك فقط.',
     learnerHint: 'دروسك كطالب أو ولي أمر ستظهر في «دروسي» عند اكتمال واجهتها؛ هذه القائمة تعرض دروس الفصول التي تدرّسها فقط.',
     refresh: 'تحديث',
-    empty: 'لا دروس بعد',
-    emptyAssigned: 'لا دروس في الفصول المُسندة إليك',
+    empty: 'لا دروس من اليوم فصاعداً',
+    emptyAssigned: 'لا دروس من اليوم فصاعداً في الفصول المُسندة إليك',
     emptyFiltered: 'لا دروس تطابق المرشّحات',
     filters: {
       allClasses: 'كل الفصول',
@@ -988,6 +988,8 @@ export const ar = {
       time: 'بتوقيت جهازك؛ المدة حتى 12 ساعة، ووقت انتهاء أبكر من البدء يعني اليوم التالي',
       meetingUrl: 'رابط يبدأ بـ https:// (للدروس عبر الإنترنت)',
       timingLocked: 'الوقت والقاعة والمعلم لا تتغير لدرس مكتمل؛ يبقى العنوان والوصف وبند المنهج ونمط التقديم والرابط',
+      needsClassesRead: 'إضافة درس تحتاج صلاحية قراءة الفصول (classes.read) لاختيار فصله',
+      teacherNeedsClassesRead: 'قائمة معلمي الفصل تحتاج صلاحية قراءة الفصول (classes.read)؛ يبقى المعلم الحالي أو «بلا معلم»',
     },
     teacherOptions: {
       default: 'المعلم الرئيسي للفصل (افتراضي)',
@@ -1010,6 +1012,7 @@ export const ar = {
       rangeEmpty: 'وقت الانتهاء يجب أن يكون بعد وقت البدء',
       rangeTooLong: 'مدة الدرس لا تتجاوز {{maxHours}} ساعة',
       meetingUrl: 'الرابط يجب أن يبدأ بـ https:// وبلا مسافات',
+      arabicFirst: 'أدخل النص العربي أولاً؛ النص الإنجليزي وحده لا يُحفظ',
     },
     pickers: {
       classPlaceholder: 'ابحث عن فصل بالرمز أو الاسم',
@@ -1047,6 +1050,17 @@ export const ar = {
       excused: 'بعذر',
       comingSoon: 'تسجيل الحضور وتصحيحه يأتيان مع واجهة الحضور (MOD-06-T03).',
     },
+    patchFields: {
+      title: 'العنوان',
+      description: 'الوصف',
+      deliveryMode: 'نمط التقديم',
+      startsAt: 'وقت البدء',
+      endsAt: 'وقت الانتهاء',
+      roomId: 'القاعة',
+      teacherUserId: 'المعلم',
+      syllabusItemId: 'بند المنهج',
+      meetingUrl: 'رابط الاجتماع',
+    },
     actions: {
       menu: 'إجراءات الدرس',
       complete: 'إنهاء الدرس',
@@ -1083,6 +1097,7 @@ export const ar = {
       lesson_conflict_room: 'القاعة محجوزة بدرس آخر يتداخل مع هذا الوقت؛ غيّر الوقت أو القاعة.',
       lesson_conflict_teacher: 'للمعلم درس آخر يتداخل مع هذا الوقت؛ غيّر الوقت أو المعلم.',
       lesson_locked: 'تغيّرت حالة الدرس فلم تعد هذه الحقول قابلة للتعديل {{list}}',
+      listSeparator: '، ',
       lesson_not_started: 'لا يُكمَل الدرس قبل وقت بدئه.',
       invalid_transition: 'تغيّرت حالة الدرس في مكان آخر؛ أُعيد تحميله.',
       lesson_not_deletable: 'لا يُحذف إلا درس مجدول بلا أي سجل حضور ({{attendanceCount}} سجل)؛ ألغِ الدرس بدلاً من ذلك.',

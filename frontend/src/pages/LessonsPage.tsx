@@ -6,7 +6,7 @@
 // they cannot use. Students and guardians hold `lessons.read` without any
 // assignment: their own lessons come with «my lessons» (API-101, MOD-06-T04).
 import { LinkOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Flex, Select, Space, Table, Typography } from 'antd'
+import { Alert, App, Button, Card, Flex, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +21,7 @@ import { CreateLessonModal } from '../lessons/CreateLessonModal'
 import { LessonDrawer } from '../lessons/LessonDrawer'
 import { describeLessonsFailure, failureMessage } from '../lessons/lessons.errors'
 import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle } from '../lessons/lessons.format'
-import { LESSON_PAGE_SIZES, useLessonsList } from '../lessons/useLessonsList'
+import { LESSON_PAGE_SIZES, defaultLessonFilters, hasActiveLessonFilters, useLessonsList } from '../lessons/useLessonsList'
 import type { LessonsListFilters } from '../lessons/useLessonsList'
 import { ClassPicker } from '../timetable/TimetablePickers'
 import { isCalendarDate } from '../timetable/timetable.dates'
@@ -38,9 +38,12 @@ export function LessonsPage() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('lessons.manage')
   const seesEveryClass = hasPermission('classes.manage')
-  const canPickClass = hasPermission('classes.read') || seesEveryClass
+  // GET /api/classes needs classes.read at the controller (classes.manage alone gets 403): the class filter and the
+  // class picker of a new lesson follow it.
+  const canPickClass = hasPermission('classes.read')
   const canPickTeacher = seesEveryClass && hasPermission('users.read')
-  const list = useLessonsList()
+  const [defaults] = useState(() => defaultLessonFilters())
+  const list = useLessonsList(defaults)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -126,7 +129,7 @@ export function LessonsPage() {
   ]
 
   const failure = list.error ? describeLessonsFailure(list.error) : null
-  const filtered = Boolean(list.filters.classId || list.filters.teacherId || list.filters.status || list.filters.from || list.filters.to)
+  const filtered = hasActiveLessonFilters(list.filters, defaults)
   const emptyText = filtered ? t('lessons.emptyFiltered') : seesEveryClass ? t('lessons.empty') : t('lessons.emptyAssigned')
 
   return (
@@ -136,9 +139,14 @@ export function LessonsPage() {
         subtitle={t('lessons.subtitle')}
         extra={
           canManage ? (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-              {t('lessons.addLesson')}
-            </Button>
+            // A disabled button swallows the pointer events, so the hint sits on a wrapper.
+            <Tooltip title={canPickClass ? undefined : t('lessons.hints.needsClassesRead')}>
+              <span style={{ display: 'inline-block' }}>
+                <Button type="primary" icon={<PlusOutlined />} disabled={!canPickClass} onClick={() => setCreating(true)}>
+                  {t('lessons.addLesson')}
+                </Button>
+              </span>
+            </Tooltip>
           ) : null
         }
       />

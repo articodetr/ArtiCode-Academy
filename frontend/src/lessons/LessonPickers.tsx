@@ -51,8 +51,11 @@ export function LessonClassPicker(props: PickerProps<AcademyClass>) {
 }
 
 interface LessonTeacherSelectProps {
-  /** The class's teachers (lead first); empty until the class is chosen or loaded. */
-  teachers: readonly ClassTeacher[]
+  /**
+   * The class's teachers (lead first); null while unknown — the class is not
+   * chosen or loaded yet, or the caller lacks `classes.read` to read it.
+   */
+  teachers: readonly ClassTeacher[] | null
   /** Edit only: the lesson's current teacher, kept as an option even when no longer assigned (a snapshot — D-R33 (3)). */
   current?: Lesson['teacher']
   /** Creation: an empty value means the class's lead teacher (the server default). */
@@ -66,12 +69,14 @@ interface LessonTeacherSelectProps {
 
 export function LessonTeacherSelect({ teachers, current, mode, value, onChange, disabled, id, ...rest }: LessonTeacherSelectProps) {
   const { t } = useTranslation()
-  const options: { value: string; label: string }[] = teachers.map((teacher) => ({
+  const known = teachers ?? []
+  const options: { value: string; label: string }[] = known.map((teacher) => ({
     value: teacher.userId,
     label: `${teacher.fullName} — ${t(`lessons.teacherOptions.${teacher.role}`)}`,
   }))
-  if (current && !teachers.some((teacher) => teacher.userId === current.userId)) {
-    options.push({ value: current.userId, label: `${current.fullName} — ${t('lessons.teacherOptions.unassigned')}` })
+  if (current && !known.some((teacher) => teacher.userId === current.userId)) {
+    // «No longer assigned» only when the class's teachers are known; otherwise just the name.
+    options.push({ value: current.userId, label: teachers ? `${current.fullName} — ${t('lessons.teacherOptions.unassigned')}` : current.fullName })
   }
   options.push({ value: NO_TEACHER, label: t('lessons.teacherOptions.none') })
   return (

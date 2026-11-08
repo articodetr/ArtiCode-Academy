@@ -26,6 +26,16 @@ export function defaultLessonFilters(now: Date = new Date()): LessonsListFilters
   return { classId: undefined, teacherId: undefined, status: undefined, from: todayIso(now), to: undefined, order: 'asc', limit: 20 }
 }
 
+/**
+ * True when the list is narrowed beyond its defaults — a class, a teacher, a
+ * status, an end day, or a start day other than the default one (cleared
+ * included). The default «from today» alone is not a filter, so an empty list
+ * then says «no lessons from today on», not «nothing matches the filters».
+ */
+export function hasActiveLessonFilters(filters: LessonsListFilters, defaults: LessonsListFilters): boolean {
+  return Boolean(filters.classId || filters.teacherId || filters.status || filters.to) || filters.from !== defaults.from
+}
+
 const loadLessons: KeysetLoader<Lesson, LessonsListFilters> = (filters, cursor, signal) =>
   listLessons(
     {

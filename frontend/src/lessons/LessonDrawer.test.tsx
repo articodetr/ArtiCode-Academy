@@ -25,20 +25,34 @@ const NOW = Math.floor(Date.now() / 60_000) * 60_000
 const pastLesson = (overrides: Partial<Lesson> = {}) => makeLesson({ startsAt: new Date(NOW - 2 * HOUR).toISOString(), endsAt: new Date(NOW - HOUR).toISOString(), ...overrides })
 const futureLesson = (overrides: Partial<Lesson> = {}) => makeLesson({ startsAt: new Date(NOW + 7 * 24 * HOUR).toISOString(), endsAt: new Date(NOW + 7 * 24 * HOUR + HOUR).toISOString(), ...overrides })
 
-/** GET /api/lessons/:id returns `detail()` (re-read on every call), the pickers answer, writes answer with `writes[method]`. */
+/**
+ * GET /api/lessons/:id returns `detail()` (re-read on every call), the pickers answer, writes answer with
+ * `writes[method]`; `classReads` records the GET /api/classes/:id of the edit form.
+ */
 function mockLessonApi(detail: () => Lesson, writes: Partial<Record<string, Response>> = {}) {
   const calls: Call[] = []
+  const classReads: string[] = []
   mockFetch((url, init) => {
     const method = init?.method ?? 'GET'
     const parsed = new URL(url, 'http://localhost')
-    if (parsed.pathname === `/api/classes/${CLASS_ID}`) return jsonResponse(200, makeClass())
+    if (parsed.pathname === `/api/classes/${CLASS_ID}`) {
+      classReads.push(parsed.pathname)
+      return jsonResponse(200, makeClass())
+    }
     if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom()]))
     if (parsed.pathname.endsWith('/syllabus')) return jsonResponse(200, makeSyllabus())
     calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
     if (method === 'GET') return jsonResponse(200, detail())
     return writes[method] ?? jsonResponse(500, { statusCode: 500, message: 'unexpected' })
   })
-  return calls
+  return Object.assign(calls, { classReads })
+}
+
+async function editTitle(text: string) {
+  fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+  const title = await screen.findByLabelText(ar.lessons.fields.titleAr)
+  await userEvent.clear(title)
+  await userEvent.type(title, text)
 }
 
 function renderDrawer(permissions: string[]) {
@@ -204,6 +218,82 @@ describe('LessonDrawer', () => {
     expect(calls.filter((call) => call.method === 'PATCH')).toEqual([{ method: 'PATCH', url: `/api/lessons/${LESSON_ID}`, body: { title: { ar: 'الأنواع', en: 'Variables and data types' } } }])
     expect(await screen.findByText(ar.lessons.drawer.saved)).toBeInTheDocument()
     expect(await screen.findByText('الأنواع')).toBeInTheDocument()
+  })
+
+  it('refuses to keep an English description once its Arabic text is cleared (the PATCH would clear both) and sends nothing', async () => {
+    const calls = mockLessonApi(() => futureLesson({ description: { ar: 'مقدمة', en: 'Intro' } }))
+    const { onUpdated } = renderDrawer(LESSON_ADMIN_PERMISSIONS)
+    await screen.findByText('مقدمة')
+
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    await userEvent.clear(await screen.findByLabelText(ar.lessons.fields.descriptionAr))
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+
+    expect(await screen.findByText(ar.lessons.validation.arabicFirst)).toBeInTheDocument()
+    expect(calls.filter((call) => call.method !== 'GET')).toEqual([])
+    expect(onUpdated).not.toHaveBeenCalled()
+  })
+
+  it('closes the edit form on lesson_locked, names the locked fields in words and re-reads the lesson', async () => {
+    const calls = mockLessonApi(() => futureLesson(), {
+      PATCH: jsonResponse(409, { statusCode: 409, code: 'lesson_locked', status: 'completed', fields: ['startsAt', 'roomId'], message: 'nope' }),
+    })
+    renderDrawer(LESSON_ADMIN_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+    const reads = () => calls.filter((call) => call.method === 'GET').length
+
+    await editTitle('الأنواع')
+    const before = reads()
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+
+    const names = `(${ar.lessons.patchFields.startsAt}${ar.lessons.errors.listSeparator}${ar.lessons.patchFields.roomId})`
+    expect(await screen.findByText(ar.lessons.errors.lesson_locked.replace('{{list}}', names))).toBeInTheDocument()
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect(screen.queryByText(ar.common.save)).not.toBeInTheDocument()
+    expect(await screen.findByText('PY-101-A')).toBeInTheDocument()
+    expect(calls.filter((call) => call.method === 'PATCH')).toHaveLength(1)
+  })
+
+  it('closes the edit form when the lesson is gone and shows the not-found message instead of its last details', async () => {
+    let gone = false
+    const notFound = () => jsonResponse(404, { statusCode: 404, code: 'lesson_not_found', lessonId: LESSON_ID, message: 'No lesson' })
+    mockFetch((url, init) => {
+      const method = init?.method ?? 'GET'
+      const parsed = new URL(url, 'http://localhost')
+      if (parsed.pathname === `/api/classes/${CLASS_ID}`) return jsonResponse(200, makeClass())
+      if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom()]))
+      if (parsed.pathname.endsWith('/syllabus')) return jsonResponse(200, makeSyllabus())
+      if (method === 'PATCH') {
+        gone = true
+        return notFound()
+      }
+      return gone ? notFound() : jsonResponse(200, futureLesson())
+    })
+    renderDrawer(LESSON_ADMIN_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+
+    await editTitle('الأنواع')
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+
+    // The re-read answers 404: the drawer keeps only the message and its retry button.
+    expect(await screen.findByText(ar.lessons.refresh)).toBeInTheDocument()
+    expect(screen.queryByText('PY-101-A')).not.toBeInTheDocument()
+    expect(screen.queryByText(ar.common.save)).not.toBeInTheDocument()
+    expect(screen.queryByText(ar.common.edit)).not.toBeInTheDocument()
+    expect(screen.getAllByText(ar.lessons.errors.lesson_not_found).length).toBeGreaterThan(0)
+  })
+
+  it('edits without classes.read: never reads the class, offers the current teacher by name and «no teacher», and says why', async () => {
+    const calls = mockLessonApi(() => futureLesson())
+    renderDrawer(['lessons.read', 'lessons.manage'])
+    await screen.findByText('PY-101-A')
+
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    expect(await screen.findByText(ar.lessons.hints.teacherNeedsClassesRead)).toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByLabelText(ar.lessons.fields.teacher))
+    const options = await screen.findAllByText(/خالد المعلم|بلا معلم/, { selector: '.ant-select-item-option-content' })
+    expect(options.map((option) => option.textContent)).toEqual(['خالد المعلم', ar.lessons.teacherOptions.none])
+    expect(calls.classReads).toEqual([])
   })
 
   it('locks time, room and teacher of a completed lesson in the edit form and sends nothing when nothing changed', async () => {
