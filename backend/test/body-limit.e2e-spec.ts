@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { validateEnv } from '../src/config/env.schema.js';
 import { ReplaceSyllabusDto, SYLLABUS_ITEMS_MAX, SYLLABUS_MINUTES_MAX } from '../src/courses/syllabus.dto.js';
+import { ATTENDANCE_BATCH_MAX, ATTENDANCE_NOTE_MAX_LENGTH, MINUTES_LATE_MAX, RecordAttendanceDto } from '../src/lessons/attendance.dto.js';
 import { LOCALIZED_TEXT_MAX_LENGTH } from '../src/roles/roles.dto.js';
 
 @Controller('courses/:id/syllabus')
@@ -19,6 +20,15 @@ class SyllabusProbeController {
   @Put()
   replace(@Body() body: ReplaceSyllabusDto): { items: number } {
     return { items: body.items.length };
+  }
+}
+
+// MOD-06-T03 (API-100): PUT /lessons/:id/attendance with the real RecordAttendanceDto.
+@Controller('lessons/:id/attendance')
+class AttendanceProbeController {
+  @Put()
+  record(@Body() body: RecordAttendanceDto): { records: number } {
+    return { records: body.records.length };
   }
 }
 
@@ -37,6 +47,19 @@ class ProbeController {
 
 const KB = 1024;
 const SYLLABUS_PATH = `/api/courses/${randomUUID()}/syllabus`;
+const ATTENDANCE_PATH = `/api/lessons/${randomUUID()}/attendance`;
+
+/** The largest attendance batch the DTO accepts: 500 late students with the longest note in three-byte letters. */
+function largestAttendance(): { records: unknown[] } {
+  return {
+    records: Array.from({ length: ATTENDANCE_BATCH_MAX }, () => ({
+      studentId: randomUUID(),
+      status: 'late',
+      minutesLate: MINUTES_LATE_MAX,
+      note: '漢'.repeat(ATTENDANCE_NOTE_MAX_LENGTH),
+    })),
+  };
+}
 
 /** The largest syllabus the DTO accepts with Arabic, English and Turkish text (two-byte letters for ar and tr). */
 function largestSyllabus(): { items: unknown[] } {
@@ -68,7 +91,7 @@ describe('JSON body limits (KI-050, TEST-064)', () => {
           validate: () => validateEnv({ SWAGGER_ENABLED: 'false' }),
         }),
       ],
-      controllers: [SyllabusProbeController, ProbeController],
+      controllers: [SyllabusProbeController, AttendanceProbeController, ProbeController],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>(APP_CREATE_OPTIONS);
     configureApp(app);
@@ -100,6 +123,19 @@ describe('JSON body limits (KI-050, TEST-064)', () => {
 
   it('the larger limit has a ceiling: a syllabus body above 512 KB is 413', async () => {
     await api().put(SYLLABUS_PATH).send({ items: [], pad: 'x'.repeat(530 * KB) }).expect(413);
+  });
+
+  it('MOD-06-T03: the largest valid attendance batch is above 100 KB and below 1 MB, PUT /lessons/:id/attendance reads and validates it, every other route and method keeps its limit', async () => {
+    const attendance = largestAttendance();
+    const attendanceBytes = Buffer.byteLength(JSON.stringify(attendance));
+    expect(attendanceBytes).toBeGreaterThan(512 * KB);
+    expect(attendanceBytes).toBeLessThan(1024 * KB);
+    const res = await api().put(ATTENDANCE_PATH).send(attendance).expect(200);
+    expect(res.body).toEqual({ records: ATTENDANCE_BATCH_MAX });
+    await api().post(ATTENDANCE_PATH).send(attendance).expect(413);
+    await api().put('/api/probe').send(attendance).expect(413);
+    await api().put(SYLLABUS_PATH).send(attendance).expect(413); // above the syllabus route's 512 KB
+    await api().put(ATTENDANCE_PATH).send({ records: [], pad: 'x'.repeat(1030 * KB) }).expect(413);
   });
 
   it('bodies stay JSON only (ADR-026): a valid syllabus sent as text/plain is not read', async () => {
