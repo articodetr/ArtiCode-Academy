@@ -5,22 +5,28 @@
 // is frozen — the server answers `class_not_schedulable`); the editor is
 // mounted per session and saves the whole list as ONE PUT only on a diff. The
 // week order and the working days come from the academy's scheduling settings.
-import { EditOutlined } from '@ant-design/icons'
+// Since J-F16 the same managers generate the class's lessons from its slots
+// (GenerateLessonsPanel on API-092) once the schedule has at least one slot;
+// while the panel is open the header offers no other action.
+import { EditOutlined, ScheduleOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Flex, Skeleton, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
 import { StatusTag } from '../components/StatusTag'
+import { GenerateLessonsPanel } from './GenerateLessonsPanel'
 import { ScheduleEditor } from './ScheduleEditor'
 import { ScheduleWeekView } from './ScheduleWeekView'
 import { describeScheduleFailure, scheduleFailureMessage } from './schedule.errors'
-import { isSchedulable } from './schedule.model'
+import { defaultGenerationRange } from './schedule.generation'
+import type { GenerationRange } from './schedule.generation'
+import { isSchedulable, todayCalendarDate } from './schedule.model'
 import { useClassSchedule } from './useClassSchedule'
 import { useSchedulingSettings } from './useSchedulingSettings'
 
 interface ClassScheduleTabProps {
-  cls: Pick<AcademyClass, 'id' | 'code' | 'status' | 'teachers'>
+  cls: Pick<AcademyClass, 'id' | 'code' | 'status' | 'teachers' | 'startsOn' | 'endsOn'>
 }
 
 export function ClassScheduleTab({ cls }: ClassScheduleTabProps) {
@@ -30,7 +36,11 @@ export function ClassScheduleTab({ cls }: ClassScheduleTabProps) {
   const { schedule, loading, error, reload, replace } = useClassSchedule(cls.id)
   const { settings } = useSchedulingSettings()
   const [editing, setEditing] = useState(false)
+  // The range of the open «generate lessons» panel (null = closed); it outlives a detour through the editor.
+  const [generation, setGeneration] = useState<GenerationRange | null>(null)
   const editable = canManage && isSchedulable(cls.status)
+  const generatable = editable && schedule !== null && schedule.slots.length > 0
+  const generating = generatable && generation !== null
 
   if (editing && schedule) {
     // Mounted per edit session, so the drafts always start from the server's list.
@@ -60,10 +70,17 @@ export function ClassScheduleTab({ cls }: ClassScheduleTabProps) {
           <StatusTag value={cls.status} />
           {schedule ? <Typography.Text type="secondary">{t('classSchedule.summary', { count: schedule.slots.length })}</Typography.Text> : null}
         </Space>
-        {editable ? (
-          <Button icon={<EditOutlined />} onClick={() => setEditing(true)} disabled={!schedule}>
-            {t('classSchedule.edit')}
-          </Button>
+        {editable && !generating ? (
+          <Space wrap>
+            {generatable ? (
+              <Button icon={<ScheduleOutlined />} onClick={() => setGeneration(defaultGenerationRange(cls, todayCalendarDate()))}>
+                {t('classSchedule.generate.open')}
+              </Button>
+            ) : null}
+            <Button icon={<EditOutlined />} onClick={() => setEditing(true)} disabled={!schedule}>
+              {t('classSchedule.edit')}
+            </Button>
+          </Space>
         ) : null}
       </Flex>
 
@@ -84,6 +101,17 @@ export function ClassScheduleTab({ cls }: ClassScheduleTabProps) {
       ) : null}
 
       {loading && !schedule ? <Skeleton active paragraph={{ rows: 4 }} data-testid="schedule-loading" /> : null}
+
+      {schedule && generation && generating ? (
+        <GenerateLessonsPanel
+          cls={cls}
+          schedule={schedule}
+          range={generation}
+          onRangeChange={setGeneration}
+          onEditSchedule={() => setEditing(true)}
+          onClose={() => setGeneration(null)}
+        />
+      ) : null}
 
       {schedule ? (
         schedule.slots.length === 0 ? (
