@@ -5,19 +5,23 @@
 // PATCH — API-096; time, room and teacher only while scheduled) and an
 // actions menu built from the mirrored state machine (lessons.status.ts →
 // API-097 with an optional reason, and API-098 for a scheduled lesson without
-// attendance), each action confirmed in a modal. Recording attendance comes
-// with the attendance screen (API-099/100 — MOD-06-T03): the summary here
-// only shows the server's counts.
+// attendance), each action confirmed in a modal. Holders of `attendance.read`
+// get a second tab with the attendance sheet (J-F10 — API-099/100,
+// attendance/AttendanceSheetTab.tsx); a saved sheet updates the counts of the
+// summary here and of the row in the list. The edit form lives in the details
+// tab, so unsaved attendance rows survive an edit of the lesson.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LinkOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tag, Typography } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { AttendanceSheet } from '../api/attendance'
 import { getClass } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { LESSON_STATUS_REASON_MAX_LENGTH, changeLessonStatus, deleteLesson, getLesson, updateLesson } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
+import { AttendanceSheetTab } from '../attendance/AttendanceSheetTab'
 import { useAuth } from '../auth/auth-context'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -43,6 +47,9 @@ const EDIT_FIELDS = new Set(['titleAr', 'titleEn', 'descriptionAr', 'description
 /** The lesson or its class changed elsewhere (or the lesson is gone): the edit form closes and the drawer re-reads the lesson. */
 const STALE_EDIT_CODES = ['lesson_locked', 'class_closed', 'lesson_not_found'].map((code) => `lessons.errors.${code}`)
 
+/** The tabs of the drawer for holders of `attendance.read`; anyone else sees the details alone. */
+type DrawerTab = 'details' | 'attendance'
+
 interface LessonDrawerProps {
   lessonId: string | null
   onClose: () => void
@@ -57,11 +64,13 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('lessons.manage')
+  const canReadAttendance = hasPermission('attendance.read')
   const [lesson, setLesson] = useState<Lesson | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<LessonMenuAction | null>(null)
+  const [tab, setTab] = useState<DrawerTab>('details')
 
   useEffect(() => {
     if (!lessonId) return
@@ -92,12 +101,18 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
     setLoadError(null)
     setEditing(false)
     setPending(null)
+    setTab('details')
     onClose()
   }
 
   const applyUpdate = (updated: Lesson) => {
     setLesson(updated)
     onUpdated(updated)
+  }
+
+  /** The counts and the first-recording stamp the server answered with the saved sheet (no optimistic counts). */
+  const applyAttendance = (sheet: AttendanceSheet) => {
+    if (lesson && lesson.id === sheet.lessonId) applyUpdate({ ...lesson, attendance: sheet.counts, attendanceTakenAt: sheet.attendanceTakenAt })
   }
 
   const editability = lesson ? lessonEditability(lesson, canManage) : { editable: false, timingLocked: true }
@@ -110,6 +125,28 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
   }))
 
   const title = lesson ? lessonTitle(lesson, language) : t('lessons.drawer.title')
+
+  /** The details of the lesson, or its edit form while editing. */
+  const detailsPane = (current: Lesson) =>
+    editing ? (
+      <LessonEditForm
+        // Remount per server version so the form starts from what the server holds (KI-049).
+        key={`${current.id}:${current.updatedAt}`}
+        lesson={current}
+        timingLocked={editability.timingLocked}
+        onSaved={(updated) => {
+          applyUpdate(updated)
+          setEditing(false)
+        }}
+        onStale={() => {
+          setEditing(false)
+          reload()
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    ) : (
+      <LessonDetails lesson={current} onOpenAttendance={canReadAttendance ? () => setTab('attendance') : undefined} />
+    )
 
   return (
     <Drawer
@@ -132,7 +169,13 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
         lesson && !editing && (editability.editable || menu.length > 0) ? (
           <Space>
             {editability.editable ? (
-              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditing(true)
+                  setTab('details')
+                }}
+              >
                 {t('common.edit')}
               </Button>
             ) : null}
@@ -166,24 +209,23 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
       {lesson && canManage && !isClassOpenForLessons(lesson.class.status) ? <Alert type="warning" showIcon title={t('lessons.drawer.classClosed')} style={{ marginBottom: 16 }} /> : null}
 
       {lesson ? (
-        editing ? (
-          <LessonEditForm
-            // Remount per server version so the form starts from what the server holds (KI-049).
-            key={`${lesson.id}:${lesson.updatedAt}`}
-            lesson={lesson}
-            timingLocked={editability.timingLocked}
-            onSaved={(updated) => {
-              applyUpdate(updated)
-              setEditing(false)
-            }}
-            onStale={() => {
-              setEditing(false)
-              reload()
-            }}
-            onCancel={() => setEditing(false)}
+        canReadAttendance ? (
+          <Tabs
+            activeKey={tab}
+            onChange={(key) => setTab(key as DrawerTab)}
+            items={[
+              { key: 'details', label: t('attendance.drawerTabs.details'), children: detailsPane(lesson) },
+              {
+                key: 'attendance',
+                label: t('attendance.drawerTabs.sheet'),
+                // Re-read when the lesson is cancelled or restored here (that decides whether it accepts attendance);
+                // completing it keeps the sheet and its unsaved rows.
+                children: <AttendanceSheetTab key={`${lesson.id}:${lesson.status === 'cancelled'}`} lesson={lesson} onSaved={applyAttendance} onLessonStale={reload} />,
+              },
+            ]}
           />
         ) : (
-          <LessonDetails lesson={lesson} />
+          detailsPane(lesson)
         )
       ) : null}
 
@@ -208,7 +250,7 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
   )
 }
 
-function LessonDetails({ lesson }: { lesson: Lesson }) {
+function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAttendance?: () => void }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const dash = '—'
@@ -278,13 +320,13 @@ function LessonDetails({ lesson }: { lesson: Lesson }) {
         <Descriptions.Item label={t('lessons.fields.createdAt')}>{formatDateTime(lesson.createdAt, language)}</Descriptions.Item>
         <Descriptions.Item label={t('lessons.fields.updatedAt')}>{formatDateTime(lesson.updatedAt, language)}</Descriptions.Item>
       </Descriptions>
-      <LessonAttendanceSummary lesson={lesson} />
+      <LessonAttendanceSummary lesson={lesson} onOpenSheet={onOpenAttendance} />
     </>
   )
 }
 
-/** The attendance counts the server computes; recording them is the attendance screen's job (MOD-06-T03). */
-export function LessonAttendanceSummary({ lesson }: { lesson: Pick<Lesson, 'attendance' | 'attendanceTakenAt'> }) {
+/** The attendance counts the server computes; the sheet (J-F10) records them — `onOpenSheet` switches to its tab. */
+export function LessonAttendanceSummary({ lesson, onOpenSheet }: { lesson: Pick<Lesson, 'attendance' | 'attendanceTakenAt'>; onOpenSheet?: () => void }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { attendance } = lesson
@@ -300,9 +342,11 @@ export function LessonAttendanceSummary({ lesson }: { lesson: Pick<Lesson, 'atte
         <Tag color="gold">{`${t('lessons.attendance.late')}: ${attendance.late}`}</Tag>
         <Tag color="blue">{`${t('lessons.attendance.excused')}: ${attendance.excused}`}</Tag>
       </Space>
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8, fontSize: 12 }}>
-        {t('lessons.attendance.comingSoon')}
-      </Typography.Paragraph>
+      {onOpenSheet ? (
+        <Button type="link" size="small" onClick={onOpenSheet} style={{ paddingInline: 0, marginTop: 8 }}>
+          {t('attendance.openSheet')}
+        </Button>
+      ) : null}
     </Card>
   )
 }
