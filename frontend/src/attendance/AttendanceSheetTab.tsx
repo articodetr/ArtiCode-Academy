@@ -8,11 +8,16 @@
 // not active or completed (withdrawn after the lesson, cancelled…) stays
 // listed read-only — the server refuses them with `not_enrolled`. Its times
 // (the lesson's start, when the sheet and each record were written) are in the
-// lesson's `timeZone`, as everywhere in the drawer (D-R41 — J-F28).
+// lesson's `timeZone`, as everywhere in the drawer (D-R41 — J-F28). Since
+// J-F40 (KI-058) the editor reports through `onUnsavedChange` whether a row
+// differs from the server's record — the save would send it — so the drawer
+// keeps it on Escape, a mask click, the close button, a browser back/forward
+// and a reload; a row changed back holds nothing, a read-only sheet never
+// holds, and the saved answer starts a clean session.
 import { ReloadOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Flex, Input, InputNumber, Popconfirm, Radio, Skeleton, Space, Table, Tag, Typography, theme } from 'antd'
 import type { TableProps } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ATTENDANCE_BATCH_MAX, ATTENDANCE_NOTE_MAX_LENGTH, ATTENDANCE_STATUSES, MINUTES_LATE_MAX, recordAttendance } from '../api/attendance'
 import type { AttendanceItem, AttendanceSheet, AttendanceStatus } from '../api/attendance'
@@ -33,9 +38,11 @@ interface AttendanceSheetTabProps {
   onSaved: (sheet: AttendanceSheet) => void
   /** The lesson changed elsewhere (cancelled, not started, gone): the drawer re-reads it. */
   onLessonStale: () => void
+  /** Whether a row holds a change the save would send (KI-058): reported on every change, false once saved or left. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function AttendanceSheetTab({ lesson, onSaved, onLessonStale }: AttendanceSheetTabProps) {
+export function AttendanceSheetTab({ lesson, onSaved, onLessonStale, onUnsavedChange }: AttendanceSheetTabProps) {
   const { t } = useTranslation()
   const canRecord = useAuth().hasPermission('attendance.record')
   const { sheet, error, loading, version, reload, replace } = useAttendanceSheet(lesson.id)
@@ -75,6 +82,7 @@ export function AttendanceSheetTab({ lesson, onSaved, onLessonStale }: Attendanc
           }}
           onGone={onLessonStale}
           onReload={reload}
+          onUnsavedChange={onUnsavedChange}
         />
       ) : null}
     </div>
@@ -91,9 +99,10 @@ interface AttendanceEditorProps {
   onStale: () => void
   onGone: () => void
   onReload: () => void
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStale, onGone, onReload }: AttendanceEditorProps) {
+function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStale, onGone, onReload, onUnsavedChange }: AttendanceEditorProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -113,6 +122,15 @@ function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStal
   }))
   const unrecorded = editable ? unrecordedItems(sheet.items, drafts) : []
   const nameOf = (studentId: string) => sheet.items.find((item) => item.student.id === studentId)?.student.fullName ?? studentId
+
+  // KI-058: rows the save would send are unsaved work — compared with the server's records, so a row
+  // changed back holds nothing; a read-only sheet never holds. False when the editor leaves: the saved
+  // answer (or a reload) starts a new session, keyed by the sheet's version (KI-049).
+  const unsaved = editable && planAttendanceSave(sheet.items, drafts) !== null
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+    return () => onUnsavedChange?.(false)
+  }, [unsaved, onUnsavedChange])
 
   const update = (studentId: string, draft: AttendanceDraft) => setDrafts((previous) => new Map(previous).set(studentId, draft))
   const revert = (studentId: string) =>
