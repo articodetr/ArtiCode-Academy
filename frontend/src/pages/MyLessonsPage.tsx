@@ -7,13 +7,14 @@
 // included — the teacher by name only, the room and meeting link, and that
 // student's own attendance status and lateness (never the teacher's note: the
 // DTO does not carry it). The student and class filters read «my classes»
-// (API-060 — the same ownership). A user without an owned enrollment (a
-// teacher, an admin) gets an empty list from the server; the page says why.
+// (API-060 — the same ownership). The route opens to the holders of the
+// `student` or `guardian` server role key only (nav entry `myLessons`, like
+// «my classes»); a learner without an owned enrollment gets an empty list, and
+// the page says why.
 import { LinkOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Flex, Segmented, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 import { LESSON_STATUSES } from '../api/lessons'
 import type { MyLessonItem } from '../api/myLessons'
 import { useAuth } from '../auth/auth-context'
@@ -29,7 +30,6 @@ import {
   MY_LESSON_VIEWS,
   attendanceCellOf,
   classOptionsOf,
-  isLearner,
   isNarrowed,
   myLessonKey,
   showsStudents,
@@ -62,9 +62,8 @@ function AttendanceCell({ item }: { item: MyLessonItem }) {
 export function MyLessonsPage() {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { user, hasPermission } = useAuth()
+  const { user } = useAuth()
   const roleKeys = user?.roles ?? []
-  const learner = isLearner(roleKeys)
   const list = useMyLessons()
   const myClasses = useMyClasses()
   const { filters } = list
@@ -161,16 +160,14 @@ export function MyLessonsPage() {
   }
 
   const failure = list.error ? describeLessonsFailure(list.error) : null
-  const noEnrollment = learner && !myClasses.loading && !myClasses.error && myClasses.items.length === 0
-  const emptyText = !learner
-    ? t('myLessons.empty.notLearner')
-    : isNarrowed(filters)
-      ? t('myLessons.empty.filtered')
-      : noEnrollment
-        ? t('myLessons.empty.noEnrollment')
-        : filters.view === 'range'
-          ? t('myLessons.empty.all')
-          : t(`myLessons.empty.${filters.view}`)
+  const noEnrollment = !myClasses.loading && !myClasses.error && myClasses.items.length === 0
+  const emptyText = isNarrowed(filters)
+    ? t('myLessons.empty.filtered')
+    : noEnrollment
+      ? t('myLessons.empty.noEnrollment')
+      : filters.view === 'range'
+        ? t('myLessons.empty.all')
+        : t(`myLessons.empty.${filters.view}`)
 
   const selectStudent = (studentId: string | undefined) => {
     // A class the newly chosen student is not enrolled in would match nothing: drop it.
@@ -181,16 +178,6 @@ export function MyLessonsPage() {
   return (
     <>
       <PageHeader title={t('myLessons.title')} subtitle={t('myLessons.subtitle')} />
-
-      {!learner ? (
-        <Alert
-          type="info"
-          showIcon
-          title={t('myLessons.notLearnerHint')}
-          description={hasPermission('lessons.read') ? <Link to="/lessons">{t('myLessons.teachingLink')}</Link> : undefined}
-          style={{ marginBottom: 16 }}
-        />
-      ) : null}
 
       <Card>
         <Flex gap={12} wrap align="center" style={{ marginBottom: 16 }}>
@@ -258,7 +245,7 @@ export function MyLessonsPage() {
           />
         </Flex>
 
-        {myClasses.error && learner ? <Alert type="warning" showIcon title={t('myLessons.optionsFailed')} style={{ marginBottom: 16 }} /> : null}
+        {myClasses.error ? <Alert type="warning" showIcon title={t('myLessons.optionsFailed')} style={{ marginBottom: 16 }} /> : null}
 
         {failure ? (
           <Alert

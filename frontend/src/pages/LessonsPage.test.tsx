@@ -98,9 +98,13 @@ describe('LessonsPage', () => {
     expect(screen.queryByLabelText(ar.lessons.columns.teacher)).not.toBeInTheDocument()
   })
 
-  it('tells a student that «my lessons» is still to come, with no add button and no class filter', async () => {
+  it('points a student to «my lessons» (J-F11), with no add button and no class filter; without the student/guardian role the hint has no link', async () => {
     const api = mockLessonsApi(makeLessonList([]))
-    renderPage(LESSON_LEARNER_PERMISSIONS)
+    const { unmount } = renderWithProviders(<LessonsPage />, {
+      auth: makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: LESSON_LEARNER_PERMISSIONS }) }),
+      route: '/lessons',
+      routes: { '/my-lessons': <p>my lessons page</p> },
+    })
 
     expect(await screen.findByText(ar.lessons.learnerHint)).toBeInTheDocument()
     await waitFor(() => expect(api.queries).toHaveLength(1))
@@ -110,6 +114,14 @@ describe('LessonsPage', () => {
     expect(screen.queryByText(ar.lessons.addLesson)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(ar.lessons.columns.class)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.lessons.readOnlyHint)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText(ar.lessons.myLessonsLink))
+    expect(await screen.findByText('my lessons page')).toBeInTheDocument()
+    unmount()
+
+    // A custom role holding lessons.read without those role keys keeps the hint; a link would only meet the 403 page.
+    renderWithProviders(<LessonsPage />, { auth: makeAuth({ user: makeUser({ role: null, roles: ['auditor'], permissions: ['lessons.read'] }) }), route: '/lessons' })
+    expect(await screen.findByText(ar.lessons.learnerHint)).toBeInTheDocument()
+    expect(screen.queryByText(ar.lessons.myLessonsLink)).not.toBeInTheDocument()
   })
 
   it('gives staff every filter but no add button; status, order, class and dates re-query from the first page', async () => {

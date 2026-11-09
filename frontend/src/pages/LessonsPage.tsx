@@ -3,13 +3,15 @@
 // modal for holders of `lessons.manage`. Holders of `lessons.read` without
 // `classes.manage` (teachers by seed) receive only the lessons of the classes
 // they are assigned to (D-R16) — the server decides, the page only hides what
-// they cannot use. Students and guardians hold `lessons.read` without any
-// assignment: their own lessons come with «my lessons» (API-101, MOD-06-T04).
+// they cannot use. Students hold `lessons.read` without any assignment: their
+// own lessons — and a guardian's children's — are in «my lessons» (/my-lessons,
+// API-101 — J-F11), which the hint links to for the holders of those role keys.
 import { LinkOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Flex, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { LESSON_STATUSES } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import { useAuth } from '../auth/auth-context'
@@ -17,6 +19,7 @@ import { TeacherPicker } from '../classes/ClassPickers'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
+import { canAccess } from '../layout/navigation'
 import { CreateLessonModal } from '../lessons/CreateLessonModal'
 import { LessonDrawer } from '../lessons/LessonDrawer'
 import { describeLessonsFailure, failureMessage } from '../lessons/lessons.errors'
@@ -35,9 +38,11 @@ export function LessonsPage() {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   const canManage = hasPermission('lessons.manage')
   const seesEveryClass = hasPermission('classes.manage')
+  // «My lessons» opens to the `student`/`guardian` role keys (its nav entry decides — J-F11).
+  const seesMyLessons = user ? canAccess(user, 'myLessons') : false
   // GET /api/classes needs classes.read at the controller (classes.manage alone gets 403): the class filter and the
   // class picker of a new lesson follow it.
   const canPickClass = hasPermission('classes.read')
@@ -151,7 +156,15 @@ export function LessonsPage() {
         }
       />
 
-      {!seesEveryClass ? <Alert type="info" showIcon title={canPickClass ? t('lessons.readOnlyHint') : t('lessons.learnerHint')} style={{ marginBottom: 16 }} /> : null}
+      {!seesEveryClass ? (
+        <Alert
+          type="info"
+          showIcon
+          title={canPickClass ? t('lessons.readOnlyHint') : t('lessons.learnerHint')}
+          description={seesMyLessons ? <Link to="/my-lessons">{t('lessons.myLessonsLink')}</Link> : undefined}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
 
       <Card>
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>
