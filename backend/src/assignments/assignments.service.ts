@@ -12,7 +12,7 @@ import { toLocalizedText } from '../roles/roles.dto.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { isEmptyAssignmentPatch, latePolicyProblem, planAssignmentUpdate, toDecimalText } from './assignments.changes.js';
 import type { AssignmentPatch, AssignmentValues } from './assignments.changes.js';
-import { ASSIGNMENTS_PAGE_DEFAULT, ASSIGNMENT_SORT_FIELD, toInstructionsText } from './assignments.dto.js';
+import { ASSIGNMENTS_PAGE_DEFAULT, toInstructionsText } from './assignments.dto.js';
 import type {
   AssignmentDto,
   AssignmentListDto,
@@ -23,6 +23,7 @@ import type {
   UpdateAssignmentDto,
 } from './assignments.dto.js';
 import { assignmentsError } from './assignments.errors.js';
+import { ASSIGNMENT_SORT_FIELD, afterDueCursor, dueCursorKey, dueOrderBy } from './assignments.keyset.js';
 import { isClassOpenForAssignments, seesEveryClass, visibleAssignmentsWhere } from './assignments.policy.js';
 import { actionNeedsOpenClass, allowedAssignmentActions, isAssignmentDeletable, lockedAssignmentFields, nextAssignmentStatus } from './assignments.status.js';
 
@@ -38,9 +39,6 @@ export const ASSIGNMENTS_ENTITY_TYPE = 'assignments';
 
 /** The academy's time zone for `AssignmentDto.timeZone` (D-R41), or UTC while the academy row is missing. */
 const FALLBACK_TIME_ZONE = 'UTC';
-
-/** Cursor key of a row without a due date (sorted last in both orders). */
-const NO_DUE_DATE_KEY = '';
 
 const ASSIGNMENT_SELECT = {
   id: true,
@@ -168,21 +166,13 @@ export class AssignmentsService {
     if (query.dueTo) filters.push({ dueAt: { lte: toInstant(query.dueTo) } });
     if (query.cursor) {
       const cursor = decodeKeysetCursor(query.cursor, ASSIGNMENT_SORT_FIELD, order, true, () => assignmentsError.cursorInvalid());
-      const key = cursor.key as string;
-      const cmp = order === 'asc' ? 'gt' : 'lt';
-      if (key === NO_DUE_DATE_KEY) {
-        // Inside the trailing group without a due date: by id only.
-        filters.push({ dueAt: null, id: { [cmp]: cursor.id } });
-      } else {
-        if (!Number.isFinite(Date.parse(key))) throw assignmentsError.cursorInvalid();
-        const at = new Date(key);
-        // Later due dates, the same due date with a later id, then every row without a due date (NULLS LAST in both orders).
-        filters.push({ OR: [{ dueAt: { [cmp]: at } }, { dueAt: at, id: { [cmp]: cursor.id } }, { dueAt: null }] });
-      }
+      const after = afterDueCursor(cursor.key as string, cursor.id, order);
+      if (after === null) throw assignmentsError.cursorInvalid();
+      filters.push(after);
     }
     const rows = await this.prisma.db.assignment.findMany({
       where: { AND: filters },
-      orderBy: [{ dueAt: { sort: order, nulls: 'last' } }, { id: order }],
+      orderBy: dueOrderBy(order),
       take: limit + 1,
       select: ASSIGNMENT_SELECT,
     });
@@ -190,7 +180,7 @@ export class AssignmentsService {
     const last = page.at(-1);
     const nextCursor =
       rows.length > limit && last
-        ? encodeKeysetCursor({ sort: ASSIGNMENT_SORT_FIELD, order, key: last.dueAt ? toIso(last.dueAt) : NO_DUE_DATE_KEY, id: last.id })
+        ? encodeKeysetCursor({ sort: ASSIGNMENT_SORT_FIELD, order, key: dueCursorKey(last.dueAt), id: last.id })
         : null;
     return { items: await this.toDtos(this.prisma.db, page), nextCursor };
   }

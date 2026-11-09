@@ -14,8 +14,6 @@ import type { AssignmentStatusAction } from './assignments.status.js';
 export const ASSIGNMENTS_PAGE_DEFAULT = 20;
 export const ASSIGNMENTS_PAGE_MAX = 100;
 export const ASSIGNMENT_STATUSES = Object.values(AssignmentStatus) as AssignmentStatus[];
-/** The list is keyset-paginated on `(due_at NULLS LAST, id)`; the sort key is fixed. */
-export const ASSIGNMENT_SORT_FIELD = 'dueAt';
 /** `numeric(6,2)`. */
 export const MAX_SCORE_LIMIT = 9999.99;
 /** `numeric(5,2)`. */
