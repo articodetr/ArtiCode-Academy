@@ -16,12 +16,14 @@ import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ATTENDANCE_STATUSES } from '../api/attendance'
 import type { AttendanceSheet } from '../api/attendance'
 import { getClass } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { LESSON_STATUS_REASON_MAX_LENGTH, changeLessonStatus, deleteLesson, getLesson, updateLesson } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import { AttendanceSheetTab } from '../attendance/AttendanceSheetTab'
+import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { useAuth } from '../auth/auth-context'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -337,10 +339,9 @@ export function LessonAttendanceSummary({ lesson, onOpenSheet }: { lesson: Pick<
       </Typography.Paragraph>
       <Space wrap>
         <Tag>{`${t('lessons.attendance.recorded')}: ${attendance.recorded}`}</Tag>
-        <Tag color="green">{`${t('lessons.attendance.present')}: ${attendance.present}`}</Tag>
-        <Tag color="red">{`${t('lessons.attendance.absent')}: ${attendance.absent}`}</Tag>
-        <Tag color="gold">{`${t('lessons.attendance.late')}: ${attendance.late}`}</Tag>
-        <Tag color="blue">{`${t('lessons.attendance.excused')}: ${attendance.excused}`}</Tag>
+        {ATTENDANCE_STATUSES.map((status) => (
+          <Tag key={status} color={ATTENDANCE_STATUS_COLORS[status]}>{`${t(`lessons.attendance.${status}`)}: ${attendance[status]}`}</Tag>
+        ))}
       </Space>
       {onOpenSheet ? (
         <Button type="link" size="small" onClick={onOpenSheet} style={{ paddingInline: 0, marginTop: 8 }}>

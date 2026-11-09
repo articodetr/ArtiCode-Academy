@@ -21,10 +21,8 @@ import { formatDateTime } from '../users/users.format'
 import { changedItems, currentDraft, draftProblem, isBatchTooLarge, isRecordableItem, markAllPresent, planAttendanceSave, unrecordedItems, withStatus } from './attendance.changes'
 import type { AttendanceDraft } from './attendance.changes'
 import { describeAttendanceFailure, failureMessage } from './attendance.errors'
+import { ATTENDANCE_STATUS_COLORS } from './attendance.format'
 import { useAttendanceSheet } from './useAttendanceSheet'
-
-/** The colours of the lesson's attendance summary, per status. */
-const ATTENDANCE_STATUS_COLORS: Readonly<Record<AttendanceStatus, string>> = { present: 'green', absent: 'red', late: 'gold', excused: 'blue' }
 
 interface AttendanceSheetTabProps {
   lesson: Pick<Lesson, 'id'>

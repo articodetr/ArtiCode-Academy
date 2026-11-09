@@ -17,15 +17,16 @@ import type { TableProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { LESSON_STATUSES } from '../api/lessons'
 import type { MyLessonItem } from '../api/myLessons'
+import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useMyClasses } from '../enrollments/useMyClasses'
 import { useLocalized } from '../i18n/useLocalized'
+import { DateFilter } from '../lessons/DateFilter'
 import { describeLessonsFailure, failureMessage } from '../lessons/lessons.errors'
 import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, syllabusItemLabel } from '../lessons/lessons.format'
 import {
-  ATTENDANCE_COLORS,
   MY_LESSON_PAGE_SIZES,
   MY_LESSON_VIEWS,
   attendanceCellOf,
@@ -34,14 +35,10 @@ import {
   myLessonKey,
   showsStudents,
   studentOptionsOf,
-} from '../myLessons/myLessons.view'
-import type { MyLessonView, MyLessonsFilters } from '../myLessons/myLessons.view'
-import { useMyLessons } from '../myLessons/useMyLessons'
+} from '../lessons/myLessons.view'
+import type { MyLessonView, MyLessonsFilters } from '../lessons/myLessons.view'
+import { useMyLessons } from '../lessons/useMyLessons'
 import { displayNameOf, formatDateTime, localizedLabel } from '../users/users.format'
-
-function DateFilter({ value, onChange, label }: { value: string | undefined; onChange: (value: string | undefined) => void; label: string }) {
-  return <input type="date" aria-label={label} className="ant-input" value={value ?? ''} onChange={(event) => onChange(event.target.value || undefined)} style={{ width: 170 }} />
-}
 
 function AttendanceCell({ item }: { item: MyLessonItem }) {
   const { t } = useTranslation()
@@ -50,7 +47,7 @@ function AttendanceCell({ item }: { item: MyLessonItem }) {
   if (cell.kind === 'recorded') {
     const label = t(`lessons.attendance.${cell.status}`)
     return (
-      <Tag color={ATTENDANCE_COLORS[cell.status]} title={item.attendance ? t('myLessons.attendance.recordedAt', { date: formatDateTime(item.attendance.recordedAt, language) }) : undefined}>
+      <Tag color={ATTENDANCE_STATUS_COLORS[cell.status]} title={item.attendance ? t('myLessons.attendance.recordedAt', { date: formatDateTime(item.attendance.recordedAt, language) }) : undefined}>
         {cell.minutesLate !== null ? `${label} · ${t('myLessons.attendance.minutes', { count: cell.minutesLate })}` : label}
       </Tag>
     )
