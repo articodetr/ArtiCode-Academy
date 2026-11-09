@@ -7,6 +7,7 @@ import {
   lockedPermissions,
   planRolePatch,
   roleEditability,
+  roleFormHasChanges,
   roleFormValuesOf,
   unreachablePermissions,
 } from './roles.policy'
@@ -97,5 +98,51 @@ describe('buildCreateRoleInput', () => {
       description: { ar: 'وصف', en: 'Desc' },
       permissions: [],
     })
+  })
+})
+
+describe('roleFormHasChanges (KI-057 — J-F39)', () => {
+  it('holds nothing for an existing role while the form equals the saved values, or was changed back', () => {
+    const values = roleFormValuesOf(LIBRARIAN_ROLE)
+    expect(roleFormHasChanges(LIBRARIAN_ROLE, values)).toBe(false)
+    // Spaces around a text and the order of the ticked keys are no change: the save would send nothing.
+    expect(roleFormHasChanges(LIBRARIAN_ROLE, { ...values, labelAr: ' أمين المكتبة ', labelEn: 'Librarian  ' })).toBe(false)
+    expect(roleFormHasChanges(REGISTRAR_ROLE, { ...roleFormValuesOf(REGISTRAR_ROLE), permissions: ['users.read', 'courses.read', 'courses.manage'] })).toBe(false)
+  })
+
+  it('holds what the smallest PATCH would send: a ticked or unticked key, a changed label, a cleared description', () => {
+    const values = roleFormValuesOf(LIBRARIAN_ROLE)
+    expect(roleFormHasChanges(LIBRARIAN_ROLE, { ...values, permissions: ['courses.read', 'users.read'] })).toBe(true)
+    expect(roleFormHasChanges(LIBRARIAN_ROLE, { ...values, permissions: [] })).toBe(true)
+    expect(roleFormHasChanges(LIBRARIAN_ROLE, { ...values, labelEn: 'Head librarian' })).toBe(true)
+    expect(roleFormHasChanges(LIBRARIAN_ROLE, { ...values, descriptionAr: '', descriptionEn: '' })).toBe(true)
+    // A system role shows its permission set only.
+    expect(roleFormHasChanges(TEACHER_ROLE, { permissions: ['courses.read', 'exams.read'] })).toBe(true)
+    expect(roleFormHasChanges(TEACHER_ROLE, { permissions: [...TEACHER_ROLE.permissions] })).toBe(false)
+  })
+
+  it('holds what the save would refuse instead of sending: an emptied Arabic label, an English description without its Arabic text', () => {
+    const values = roleFormValuesOf(LIBRARIAN_ROLE)
+    expect(planRolePatch(LIBRARIAN_ROLE, { ...values, labelAr: '  ' })).toBeNull()
+    expect(roleFormHasChanges(LIBRARIAN_ROLE, { ...values, labelAr: '  ' })).toBe(true)
+    expect(planRolePatch(REGISTRAR_ROLE, { ...roleFormValuesOf(REGISTRAR_ROLE), descriptionEn: 'Enrols students' })).toBeNull()
+    expect(roleFormHasChanges(REGISTRAR_ROLE, { ...roleFormValuesOf(REGISTRAR_ROLE), descriptionEn: 'Enrols students' })).toBe(true)
+  })
+
+  it('never holds anything for academy_admin, which the editor only shows', () => {
+    expect(roleFormHasChanges(ADMIN_ROLE, roleFormValuesOf(ADMIN_ROLE))).toBe(false)
+    expect(roleFormHasChanges(ADMIN_ROLE, { ...roleFormValuesOf(ADMIN_ROLE), labelAr: '', permissions: [] })).toBe(false)
+  })
+
+  it('holds for a new role anything the POST would send, or an English text without its Arabic one — and nothing for an untouched or blank form', () => {
+    expect(roleFormHasChanges(null, { permissions: [] })).toBe(false)
+    expect(roleFormHasChanges(null, { key: '  ', labelAr: ' ', labelEn: '', descriptionAr: '', descriptionEn: ' ', permissions: [] })).toBe(false)
+
+    expect(roleFormHasChanges(null, { key: 'L', permissions: [] })).toBe(true)
+    expect(roleFormHasChanges(null, { labelAr: 'أمين', permissions: [] })).toBe(true)
+    expect(roleFormHasChanges(null, { descriptionAr: 'وصف', permissions: [] })).toBe(true)
+    expect(roleFormHasChanges(null, { permissions: ['exams.read'] })).toBe(true)
+    expect(roleFormHasChanges(null, { labelEn: 'Librarian', permissions: [] })).toBe(true)
+    expect(roleFormHasChanges(null, { descriptionEn: 'Runs the library', permissions: [] })).toBe(true)
   })
 })
