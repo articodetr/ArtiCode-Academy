@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { HeaderBrand, SiderAcademyName } from './AcademyBrand'
 import { navFor } from './navigation'
 import './AppLayout.css'
 
@@ -77,9 +78,7 @@ export function AppLayout() {
           <span className="app-brand__title" style={{ color: token.colorPrimary }}>
             {collapsed ? 'AC' : t('common.appName')}
           </span>
-          {collapsed ? null : (
-            <span className="app-brand__sub">{t('common.academyName')}</span>
-          )}
+          {collapsed ? null : <SiderAcademyName />}
         </div>
         <Menu
           mode="inline"
@@ -98,9 +97,8 @@ export function AppLayout() {
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
-          <Typography.Text strong className="app-header__title">
-            {t('common.academyName')}
-          </Typography.Text>
+          {/* The academy's name and logo from API-035 (J-F13); the static name until they arrive. */}
+          <HeaderBrand />
 
           <div className="app-header__actions">
             <Tag color="gold" style={{ margin: 0 }}>
