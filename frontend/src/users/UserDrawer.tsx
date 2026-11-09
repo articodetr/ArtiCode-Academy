@@ -14,6 +14,9 @@
 // first; an editor opened without a change, or changed back, holds nothing.
 // The account-actions modal sits on top and takes Escape itself (its Cancel).
 // The roles the users page already read reach the roles tab (PR #62, note 1).
+// Since J-F27 the same unsaved work also holds a browser back/forward, which
+// asks the same question (NavigationBlocker), and a reload or a tab close gets
+// the browser's own prompt (useUnsavedChangesGuard — KI-055).
 import { EditOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, Popconfirm, Space, Spin, Tabs, Tag, Typography } from 'antd'
 import type { TabsProps } from 'antd'
@@ -28,6 +31,8 @@ import type { Role } from '../api/roles'
 import { getUser, updateUser } from '../api/users'
 import type { UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
+import { NavigationBlocker } from '../common/NavigationBlocker'
+import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import type { Language } from '../i18n/language'
@@ -64,7 +69,6 @@ const NOTHING_UNSAVED: Readonly<Record<EditorPart, boolean>> = { details: false,
 
 export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null, onClose, onUpdated }: UserDrawerProps) {
   const { t } = useTranslation()
-  const { modal } = App.useApp()
   const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<EditorPart, boolean>>>(NOTHING_UNSAVED)
 
   // One stable reporter per editor (the editors report from an effect that depends on it).
@@ -80,21 +84,10 @@ export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null,
     onClose()
   }
 
-  /** The close button (Escape and the mask too when nothing is unsaved): asks first while an editor holds unsaved work. */
-  const requestClose = () => {
-    if (!unsaved) {
-      close()
-      return
-    }
-    modal.confirm({
-      title: t('common.unsaved.title'),
-      content: t('common.unsaved.content'),
-      okText: t('common.unsaved.ok'),
-      okButtonProps: { danger: true },
-      cancelText: t('common.unsaved.cancel'),
-      onOk: close,
-    })
-  }
+  // The close button (Escape and the mask too when nothing is unsaved) asks first while an editor
+  // holds unsaved work, and so does a browser back/forward (NavigationBlocker below) — one question
+  // (common.unsaved.*); a reload or a tab close gets the browser's own prompt (KI-055).
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
 
   return (
     <Drawer
@@ -108,6 +101,7 @@ export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null,
       width={600}
       destroyOnHidden
     >
+      <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
       {userId ? (
         // Keyed so a different user (or projection) starts from a fresh body: no stale detail, no half-edited form.
         <UserDrawerBody

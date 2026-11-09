@@ -66,7 +66,7 @@ describe('ClassDrawer — weekly schedule tab', () => {
     fireEvent.click(document.querySelector('.ant-drawer-mask')!)
     expect(onClose).not.toHaveBeenCalled()
     // Nothing at all happens: no «discard?» question either (that is the close button's).
-    expect(screen.queryByText(ar.classes.drawer.discard.title)).not.toBeInTheDocument()
+    expect(screen.queryByText(ar.common.unsaved.title)).not.toBeInTheDocument()
     const editor = screen.getByTestId('schedule-editor')
     expect(within(editor).getByText('الحصة 2')).toBeInTheDocument()
 
@@ -106,6 +106,6 @@ describe('ClassDrawer — weekly schedule tab', () => {
     expect(within(editor).queryByText('الحصة 2')).not.toBeInTheDocument()
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText(ar.classes.drawer.discard.title)).not.toBeInTheDocument()
+    expect(screen.queryByText(ar.common.unsaved.title)).not.toBeInTheDocument()
   })
 })

@@ -73,4 +73,17 @@ describe('classes.form', () => {
     const bare = makeClass({ name: { ar: 'فصل' }, notes: null, startsOn: null, endsOn: null })
     expect(classFormHasChanges(bare, { ...classFormValuesOf(bare), nameEn: undefined, notes: undefined, startsOn: undefined })).toBe(false)
   })
+
+  it('compares the capacity as a number: the same number is clean, another number or an emptied input is unsaved (PR #74 review)', () => {
+    // The InputNumber hands the form a number (null once emptied); the class holds a number (AcademyClass.capacity).
+    const cls = makeClass({ capacity: 20 })
+    const initial = classFormValuesOf(cls)
+    expect(initial.capacity).toBe(20)
+    expect(classFormHasChanges(cls, { ...initial, capacity: 20 })).toBe(false)
+    expect(classFormHasChanges(cls, { ...initial, capacity: 21 })).toBe(true)
+    // 0 is a number like any other, not an empty input.
+    expect(classFormHasChanges(cls, { ...initial, capacity: 0 })).toBe(true)
+    expect(classFormHasChanges(cls, { ...initial, capacity: null })).toBe(true)
+    expect(classFormHasChanges(cls, { ...initial, capacity: undefined })).toBe(true)
+  })
 })

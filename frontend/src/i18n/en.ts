@@ -29,7 +29,8 @@ export const en: Translation = {
     room: 'Room',
     total: 'Total',
     notImplemented: 'This action is not implemented yet (prototype).',
-    // KI-054 (J-F23): the «discard?» question of a drawer that holds unsaved work — the wording of classes.drawer.discard.*.
+    // KI-054 (J-F23): the «discard?» question of a drawer that holds unsaved work, asked by its close button and,
+    // since J-F27 (KI-055), by a browser back/forward; the class drawer's too since then (classes.drawer.discard.* is gone).
     unsaved: {
       title: 'Discard unsaved changes?',
       content: 'An editor in this drawer is still open and its changes are not saved. Closing the drawer discards them.',
@@ -746,12 +747,6 @@ export const en: Translation = {
         details: 'Details',
         teachers: 'Teachers ({{count}})',
         students: 'Students ({{count}})',
-      },
-      discard: {
-        title: 'Discard unsaved changes?',
-        content: 'An editor in this drawer is still open and its changes are not saved. Closing the drawer discards them.',
-        ok: 'Discard and close',
-        cancel: 'Keep editing',
       },
     },
     enrollments: {

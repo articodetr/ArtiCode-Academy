@@ -61,12 +61,12 @@ const pressEscape = () => fireEvent.keyDown(document.body, { key: 'Escape' })
 const closeButton = () => document.querySelector<HTMLButtonElement>('.ant-drawer-close')!
 const mask = () => document.querySelector<HTMLElement>('.ant-drawer-mask')!
 /** Escape and the mask do nothing at all while an editor is open: no close and no «discard?» question either. */
-const expectNoDiscardQuestion = () => expect(screen.queryByText(ar.classes.drawer.discard.title)).not.toBeInTheDocument()
+const expectNoDiscardQuestion = () => expect(screen.queryByText(ar.common.unsaved.title)).not.toBeInTheDocument()
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */
 async function openDiscardDialog(): Promise<HTMLElement> {
   fireEvent.click(closeButton())
-  const titles = await screen.findAllByText(ar.classes.drawer.discard.title)
+  const titles = await screen.findAllByText(ar.common.unsaved.title)
   return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
 }
 
@@ -103,13 +103,13 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
     expect(screen.getByLabelText(ar.classes.fields.capacity)).toHaveValue('25')
 
     const first = await openDiscardDialog()
-    expect(within(first).getByText(ar.classes.drawer.discard.content)).toBeInTheDocument()
-    fireEvent.click(within(first).getByText(ar.classes.drawer.discard.cancel).closest('button')!)
+    expect(within(first).getByText(ar.common.unsaved.content)).toBeInTheDocument()
+    fireEvent.click(within(first).getByText(ar.common.unsaved.cancel).closest('button')!)
     await waitFor(() => expect(screen.getByLabelText(ar.classes.fields.capacity)).toHaveValue('25'))
     expect(onClose).not.toHaveBeenCalled()
 
     const second = await openDiscardDialog()
-    fireEvent.click(within(second).getByText(ar.classes.drawer.discard.ok).closest('button')!)
+    fireEvent.click(within(second).getByText(ar.common.unsaved.ok).closest('button')!)
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(writes).toEqual([])
   })
@@ -203,7 +203,7 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     const dialog = await openDiscardDialog()
-    fireEvent.click(within(dialog).getByText(ar.classes.drawer.discard.cancel).closest('button')!)
+    fireEvent.click(within(dialog).getByText(ar.common.unsaved.cancel).closest('button')!)
     expect(onClose).not.toHaveBeenCalled()
     expect(enroll).toBeEnabled()
 

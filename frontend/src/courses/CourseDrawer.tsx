@@ -8,6 +8,9 @@
 // while the edit form or the syllabus editor holds unsaved work, Escape and a
 // mask click no longer close the drawer, and the close button asks first; an
 // editor opened without a change, or changed back, holds nothing.
+// Since J-F27 the same unsaved work also holds a browser back/forward, which
+// asks the same question (NavigationBlocker), and a reload or a tab close gets
+// the browser's own prompt (useUnsavedChangesGuard — KI-055).
 import { DeleteOutlined, DownOutlined, EditOutlined, InboxOutlined, RocketOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -18,6 +21,8 @@ import { changeCourseStatus, deleteCourse, getCourse, updateCourse } from '../ap
 import type { Course } from '../api/courses'
 import type { Level } from '../api/levels'
 import { useAuth } from '../auth/auth-context'
+import { NavigationBlocker } from '../common/NavigationBlocker'
+import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
@@ -57,7 +62,7 @@ interface CourseDrawerProps {
 export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }: CourseDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('courses.manage')
   const [course, setCourse] = useState<Course | null>(null)
@@ -107,21 +112,10 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
     onClose()
   }
 
-  /** The close button (Escape and the mask too when nothing is unsaved): asks first while an editor holds unsaved work. */
-  const requestClose = () => {
-    if (!unsaved) {
-      close()
-      return
-    }
-    modal.confirm({
-      title: t('common.unsaved.title'),
-      content: t('common.unsaved.content'),
-      okText: t('common.unsaved.ok'),
-      okButtonProps: { danger: true },
-      cancelText: t('common.unsaved.cancel'),
-      onOk: close,
-    })
-  }
+  // The close button (Escape and the mask too when nothing is unsaved) asks first while an editor
+  // holds unsaved work, and so does a browser back/forward (NavigationBlocker below) — one question
+  // (common.unsaved.*); a reload or a tab close gets the browser's own prompt (KI-055).
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
 
   const applyUpdate = (updated: Course) => {
     setCourse(updated)
@@ -247,6 +241,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
         ) : null
       }
     >
+      <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
       {loadError ? (
         <Alert
           type="error"
