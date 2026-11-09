@@ -10,7 +10,7 @@
 // while the panel is open the header offers no other action.
 import { EditOutlined, ScheduleOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Flex, Skeleton, Space, Typography } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
@@ -29,7 +29,7 @@ interface ClassScheduleTabProps {
   cls: Pick<AcademyClass, 'id' | 'code' | 'status' | 'teachers' | 'startsOn' | 'endsOn'>
 }
 
-export function ClassScheduleTab({ cls }: ClassScheduleTabProps) {
+export function ClassScheduleTab({ cls, onEditingChange }: ClassScheduleTabProps & { onEditingChange?: (open: boolean) => void }) {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('schedule.manage')
@@ -42,6 +42,11 @@ export function ClassScheduleTab({ cls }: ClassScheduleTabProps) {
   const generatable = editable && schedule !== null && schedule.slots.length > 0
   const generating = generatable && generation !== null
 
+  // KI-052: while the editor is open the class drawer keeps Escape and a mask click from dropping its drafts.
+  useEffect(() => {
+    onEditingChange?.(editing)
+    return () => onEditingChange?.(false)
+  }, [editing, onEditingChange])
   if (editing && schedule) {
     // Mounted per edit session, so the drafts always start from the server's list.
     return (

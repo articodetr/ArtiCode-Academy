@@ -8,10 +8,17 @@
 // built from the mirrored state machine (classes.status.ts → API-054 with an
 // optional reason, and API-055 for a planned class), each action confirmed in
 // a modal. A teacher (`classes.read` alone) sees their class read-only.
+// Since J-F15: an action the server refuses because it became stale
+// (isStaleClassAction — PR #26 review, note 3) closes its dialog, re-reads the
+// class and shows the message; and while an editor holds unsaved work (the edit
+// form, the teachers editor, a student picked in the enroll form, the weekly
+// schedule editor — each tab reports it through `onEditingChange`) Escape and
+// a mask click no longer close the drawer, and the close button asks first
+// (KI-052).
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { changeClassStatus, deleteClass, getClass, updateClass } from '../api/classes'
@@ -26,7 +33,7 @@ import { formatDateTime, formatDay, localizedLabel } from '../users/users.format
 import { ClassFormFields } from './ClassFormFields'
 import { ClassTeachersTab } from './ClassTeachersTab'
 import { SeatsBar } from './SeatsBar'
-import { describeClassesFailure, failureMessage } from './classes.errors'
+import { describeClassesFailure, failureMessage, isStaleClassAction } from './classes.errors'
 import { CLASS_STATUS_REASON_MAX_LENGTH, classFormValuesOf, planClassPatch } from './classes.form'
 import type { ClassFormValues } from './classes.form'
 import { availableClassActions, isDangerousClassAction, movesEnrollments } from './classes.status'
@@ -45,6 +52,11 @@ const DASH = '—'
 
 type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule'
 
+/** The tabs whose editors report unsaved work (KI-052); the details edit form is the drawer's own `editing`. */
+type EditorTab = Exclude<DrawerTab, 'details'>
+
+const NO_OPEN_EDITOR: Readonly<Record<EditorTab, boolean>> = { teachers: false, students: false, schedule: false }
+
 // The classes list keeps importing the bar from here (it lives in SeatsBar.tsx since J-F04).
 export { SeatsBar }
 
@@ -60,6 +72,7 @@ interface ClassDrawerProps {
 export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
+  const { modal } = App.useApp()
   const { user, hasPermission } = useAuth()
   const canManage = hasPermission('classes.manage')
   const [cls, setCls] = useState<AcademyClass | null>(null)
@@ -68,6 +81,15 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
   const [tab, setTab] = useState<DrawerTab>('details')
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<ClassMenuAction | null>(null)
+  const [openEditors, setOpenEditors] = useState<Readonly<Record<EditorTab, boolean>>>(NO_OPEN_EDITOR)
+
+  // One stable reporter per tab (the tabs report from an effect that depends on it).
+  const reportEditing = useMemo(() => {
+    const reporter = (editor: EditorTab) => (open: boolean) => setOpenEditors((current) => (current[editor] === open ? current : { ...current, [editor]: open }))
+    return { teachers: reporter('teachers'), students: reporter('students'), schedule: reporter('schedule') }
+  }, [])
+  // KI-052: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
+  const editorOpen = editing || openEditors.teachers || openEditors.students || openEditors.schedule
 
   useEffect(() => {
     if (!classId) return
@@ -93,7 +115,24 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
     setTab('details')
     setEditing(false)
     setPending(null)
+    setOpenEditors(NO_OPEN_EDITOR)
     onClose()
+  }
+
+  /** The close button (Escape and the mask too when no editor is open): asks first while an editor holds unsaved work. */
+  const requestClose = () => {
+    if (!editorOpen) {
+      close()
+      return
+    }
+    modal.confirm({
+      title: t('classes.drawer.discard.title'),
+      content: t('classes.drawer.discard.content'),
+      okText: t('classes.drawer.discard.ok'),
+      okButtonProps: { danger: true },
+      cancelText: t('classes.drawer.discard.cancel'),
+      onOk: close,
+    })
   }
 
   const applyUpdate = (updated: AcademyClass) => {
@@ -159,7 +198,11 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
   return (
     <Drawer
       open={classId !== null}
-      onClose={close}
+      onClose={requestClose}
+      // KI-052: an open editor turns off the Escape key and the mask click; an open
+      // Select or Dropdown still closes on Escape (it sits on top of the drawer).
+      keyboard={!editorOpen}
+      mask={{ closable: !editorOpen }}
       title={name}
       size="large"
       destroyOnHidden
@@ -207,7 +250,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
             {
               key: 'teachers',
               label: t('classes.drawer.tabs.teachers', { count: cls.teachers.length }),
-              children: <ClassTeachersTab cls={cls} onUpdated={applyUpdate} />,
+              children: <ClassTeachersTab cls={cls} onUpdated={applyUpdate} onEditingChange={reportEditing.teachers} />,
               disabled: editing,
             },
             ...(canReadRoster(hasPermission, cls, user?.id)
@@ -215,7 +258,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
                   {
                     key: 'students',
                     label: t('classes.drawer.tabs.students', { count: cls.enrolledCount }),
-                    children: <ClassEnrollmentsTab cls={cls} onClassChanged={applyUpdate} onStale={reload} />,
+                    children: <ClassEnrollmentsTab cls={cls} onClassChanged={applyUpdate} onStale={reload} onEditingChange={reportEditing.students} />,
                     disabled: editing,
                   },
                 ]
@@ -223,7 +266,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
             {
               key: 'schedule',
               label: t('classSchedule.tab'),
-              children: <ClassScheduleTab cls={cls} />,
+              children: <ClassScheduleTab cls={cls} onEditingChange={reportEditing.schedule} />,
               disabled: editing,
             },
           ]}
@@ -243,7 +286,10 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
               close()
             }
           }}
-          onStale={reload}
+          onStale={() => {
+            setPending(null)
+            reload()
+          }}
           onCancel={() => setPending(null)}
         />
       ) : null}
@@ -256,7 +302,7 @@ interface ClassActionModalProps {
   action: ClassMenuAction
   /** The class after a status change, or null after a deletion. */
   onDone: (cls: AcademyClass | null) => void
-  /** The class changed elsewhere meanwhile: re-read it. */
+  /** The action became stale (isStaleClassAction — the message is already shown): close the dialog and re-read the class. */
   onStale: () => void
   onCancel: () => void
 }
@@ -286,8 +332,15 @@ function ClassActionModal({ cls, action, onDone, onStale, onCancel }: ClassActio
       onDone(updated)
     } catch (caught) {
       const failure = describeClassesFailure(caught)
-      setError(failureMessage(t, failure))
-      if (failure.key.endsWith('invalid_transition') || failure.key.endsWith('class_not_deletable')) onStale()
+      const text = failureMessage(t, failure)
+      if (isStaleClassAction(failure)) {
+        // The same action cannot succeed again: leave the dialog (PR #26 review, note 3).
+        message.error(text)
+        onStale()
+        return
+      }
+      // Retryable (network, 5xx, 429, 400) or refused (403): the dialog stays open with the message.
+      setError(text)
       setBusy(false)
     }
   }

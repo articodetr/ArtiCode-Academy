@@ -55,6 +55,25 @@ const FIELD_OF_CODE: Readonly<Record<string, string[]>> = {
 /** Codes whose `userId` detail names one user of the request (a teacher of the list, or the student being enrolled). */
 const USER_CODES = new Set(['not_a_teacher', 'not_a_student', 'user_not_eligible', 'user_not_found'])
 
+/**
+ * Codes after which a class action confirmed in the drawer (API-054/API-055) is
+ * out of date (owner's review of PR #26, note 3 — J-F15): the class moved to
+ * another status (`invalid_transition`), can no longer be deleted
+ * (`class_not_deletable`), or is gone or no longer visible to the caller
+ * (`class_not_found`). The same action cannot succeed again, so the drawer
+ * closes the dialog, re-reads the class and shows the message. Every other
+ * failure keeps the dialog open with the message: the same action can be
+ * retried (network, 5xx, 429 `rate_limited`, a 400 on the reason) or cancelled
+ * (403 `permission_denied` / `origin_forbidden`, anything else).
+ */
+const STALE_ACTION_CODES = new Set(['invalid_transition', 'class_not_deletable', 'class_not_found'])
+
+const CLASSES_ERROR_PREFIX = 'classes.errors.'
+
+export function isStaleClassAction(failure: ClassesFailure): boolean {
+  return failure.key.startsWith(CLASSES_ERROR_PREFIX) && STALE_ACTION_CODES.has(failure.key.slice(CLASSES_ERROR_PREFIX.length))
+}
+
 function stringList(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined
   const items = value.filter((item): item is string => typeof item === 'string')

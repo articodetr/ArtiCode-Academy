@@ -8,7 +8,7 @@
 // full name, as the server's list does after the save (J-F14).
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Empty, Flex, List, Select, Space, Tag, Typography } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CLASS_TEACHER_ROLES, replaceClassTeachers } from '../api/classes'
 import type { AcademyClass, ClassTeacherRole } from '../api/classes'
@@ -25,15 +25,22 @@ interface ClassTeachersTabProps {
   cls: AcademyClass
   /** The class the server returned after the replacement. */
   onUpdated: (cls: AcademyClass) => void
+  /** Whether the editor is open (KI-052): the class drawer then keeps Escape and a mask click from dropping the draft. */
+  onEditingChange?: (open: boolean) => void
 }
 
-export function ClassTeachersTab({ cls, onUpdated }: ClassTeachersTabProps) {
+export function ClassTeachersTab({ cls, onUpdated, onEditingChange }: ClassTeachersTabProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
   const canAssign = hasPermission('classes.teachers.assign')
   const canSearch = hasPermission('users.read')
   const [editing, setEditing] = useState(false)
+
+  useEffect(() => {
+    onEditingChange?.(editing)
+    return () => onEditingChange?.(false)
+  }, [editing, onEditingChange])
 
   if (editing) {
     // Mounted per edit session, so the draft always starts from the server's list.
