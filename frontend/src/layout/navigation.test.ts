@@ -198,6 +198,28 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('staff'), 'assignments')).toBe(false)
     expect(canAccess(viewer('admin', []), 'assignments')).toBe(false)
   })
+
+  it('gates «my assignments» by the student/guardian server role keys since API-112 is ownership without a permission key (J-F42, D-R40)', () => {
+    const myAssignments = NAV_ITEMS.find((item) => item.key === 'myAssignments')!
+    expect(myAssignments.roleKeys).toEqual(['student', 'guardian'])
+    expect(myAssignments.path).toBe('/my-assignments')
+    expect(myAssignments.module).toBe('MOD-08')
+    expect(canAccess(viewer('student'), 'myAssignments')).toBe(true)
+    // A guardian sees it too — to read the children's assignments (they hold no assignments.submit).
+    expect(canAccess(viewer('guardian'), 'myAssignments')).toBe(true)
+    // A teacher keeps «assignments» (the classes they teach) and gets no «my assignments»…
+    expect(keysFor(viewer('teacher'))).toContain('assignments')
+    expect(keysFor(viewer('teacher'))).not.toContain('myAssignments')
+    // …unless they also hold a learner role key: a teacher who is also a guardian sees both, «my assignments» right after «assignments».
+    const teacherGuardian = keysFor(viewer('teacher', [...SEEDED.teacher, ...SEEDED.guardian], ['teacher', 'guardian']))
+    expect(teacherGuardian.indexOf('myAssignments')).toBe(teacherGuardian.indexOf('assignments') + 1)
+    // Staff, an admin and a custom role without those keys get no entry (the server would answer an empty list).
+    expect(canAccess(viewer('staff'), 'myAssignments')).toBe(false)
+    expect(canAccess(viewer('admin'), 'myAssignments')).toBe(false)
+    expect(canAccess(viewer(null, ['assignments.read'], ['auditor']), 'myAssignments')).toBe(false)
+    // Permissions never open it, not even the submit key: the entry mirrors ownership.
+    expect(canAccess(viewer(null, ['assignments.read', 'assignments.submit', 'assignments.grade']), 'myAssignments')).toBe(false)
+  })
 })
 
 describe('navFor', () => {
@@ -223,9 +245,10 @@ describe('navFor', () => {
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'payments', 'notifications'])
     // Students and guardians gain «my classes» (J-F04) and «my lessons» (J-F11): ownership, by their server role keys.
     // Students keep the lessons entry through lessons.read (an empty list there — their own lessons are in «my lessons», API-101).
-    // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted.
-    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'exams', 'certificates', 'payments', 'notifications'])
-    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'exams', 'certificates', 'payments', 'notifications'])
+    // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted — and gain
+    // «my assignments» (J-F42, API-112) in its place, by their server role keys.
+    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'myAssignments', 'exams', 'certificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'exams', 'certificates', 'payments', 'notifications'])
   })
 
   it('shows the users page to a teacher because the seed grants teachers users.read (reduced projection) (MOD-03-T15)', () => {
