@@ -156,7 +156,7 @@ export function LevelsManager({ state, onChanged }: LevelsManagerProps) {
         </Space>
       </Flex>
 
-      {error ? <Alert type="error" showIcon message={failureMessage(t, describeCoursesFailure(error))} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert type="error" showIcon title={failureMessage(t, describeCoursesFailure(error))} style={{ marginBottom: 16 }} /> : null}
 
       <Table<Level>
         rowKey="id"

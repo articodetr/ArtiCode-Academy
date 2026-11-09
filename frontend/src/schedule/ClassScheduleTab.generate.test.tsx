@@ -11,6 +11,7 @@ import { CLASS_ID, makeClass } from '../test/classes'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { LESSON_ID, OTHER_CLASS_ID, ROOM_IDS, SCHEDULE_ADMIN_PERMISSIONS, SCHEDULE_READER_PERMISSIONS, makeGeneratedLessons, makeRoom, makeSchedule } from '../test/schedule'
+import { normalizeSpaces } from '../test/text'
 import { formatDay } from '../users/users.format'
 import { ClassScheduleTab } from './ClassScheduleTab'
 
@@ -117,7 +118,7 @@ describe('ClassScheduleTab — generate lessons (J-F16)', () => {
 
     await waitFor(() => expect(api.posts).toEqual([{ from: '2099-01-04', to: '2099-02-28' }]))
     const result = await screen.findByTestId('generation-result')
-    expect(within(result).getByText(`نتيجة التوليد: من ${formatDay('2099-01-04', 'ar')} إلى ${formatDay('2099-02-28', 'ar')}`)).toBeInTheDocument()
+    expect(within(result).getByText(normalizeSpaces(`نتيجة التوليد: من ${formatDay('2099-01-04', 'ar')} إلى ${formatDay('2099-02-28', 'ar')}`))).toBeInTheDocument()
     expect(countOf(result, g.result.slots)).toBe('2')
     expect(countOf(result, g.result.occurrences)).toBe('16')
     expect(countOf(result, g.result.created)).toBe('13')

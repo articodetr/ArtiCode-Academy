@@ -7,6 +7,7 @@ import { en } from '../i18n/en'
 import { makeClass, makeClassList, makeTeacherCandidate } from '../test/classes'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { normalizeSpaces } from '../test/text'
 import {
   BRANCH_ID,
   ROOM_ID,
@@ -23,7 +24,7 @@ import {
   makeTimetableAcademy,
 } from '../test/timetable'
 import { makeUserList } from '../test/users'
-import { formatDate, formatDateRange, formatLongDate } from '../timetable/timetable.format'
+import { formatDate, formatDateRange, formatLongDate, timeRange } from '../timetable/timetable.format'
 import { SchedulePage } from './SchedulePage'
 
 // Sunday 2026-11-08, 10:30 in Riyadh (07:30Z) — the academy's zone in these tests.
@@ -157,7 +158,7 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     const today = within(grid()).getByRole('button', { name: formatLongDate('2026-11-08', 'ar') })
     expect(today).toHaveAttribute('aria-pressed', 'true')
     expect(today).toHaveAttribute('aria-current', 'date')
-    expect(rangeHeading()).toHaveTextContent(formatDateRange('2026-11-08', '2026-11-12', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatDateRange('2026-11-08', '2026-11-12', 'ar')))
 
     fireEvent.click(screen.getByText(ar.schedule.tabs.mine))
     await waitFor(() => expect(dates(api.mineQueries)).toEqual(WEEK))
@@ -169,7 +170,7 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     renderPage(SCHEDULE_MANAGER_PERMISSIONS)
     await waitFor(() => expect(api.academyQueries).toHaveLength(7))
 
-    const tuesdaySlot = () => within(grid()).queryByLabelText(new RegExp(`^أساسيات بايثون.*${formatLongDate('2026-11-10', 'ar')}`))
+    const tuesdaySlot = () => within(grid()).queryByLabelText(new RegExp(`^أساسيات بايثون.*${normalizeSpaces(formatLongDate('2026-11-10', 'ar'))}`))
     await waitFor(() => expect(tuesdaySlot()).toBeInTheDocument())
     await pickOption(ar.schedule.columns.room, 'LAB-1 — مختبر 1')
     await waitFor(() => expect(api.academyQueries.filter((query) => query.get('roomId') === ROOM_ID)).toHaveLength(7))
@@ -208,20 +209,20 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
 
     fireEvent.click(screen.getByLabelText(ar.schedule.calendar.nextWeek))
     await waitFor(() => expect(dates(api.academyQueries).slice(7)).toEqual(['2026-11-15', '2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21']))
-    expect(rangeHeading()).toHaveTextContent(formatDateRange('2026-11-15', '2026-11-19', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatDateRange('2026-11-15', '2026-11-19', 'ar')))
 
     fireEvent.click(screen.getByText(ar.schedule.calendar.today))
-    expect(rangeHeading()).toHaveTextContent(formatDateRange('2026-11-08', '2026-11-12', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatDateRange('2026-11-08', '2026-11-12', 'ar')))
 
     fireEvent.click(screen.getByText(ar.schedule.calendar.dayView))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-08', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-08', 'ar')))
     expect(screen.getByRole('region', { name: formatLongDate('2026-11-08', 'ar') })).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText(ar.schedule.calendar.nextDay))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-09', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-09', 'ar')))
 
     const month = screen.getByRole('region', { name: ar.schedule.month.label })
-    fireEvent.click(within(month).getByLabelText(formatLongDate('2026-11-25', 'ar')))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-25', 'ar'))
+    fireEvent.click(within(month).getByLabelText(normalizeSpaces(formatLongDate('2026-11-25', 'ar'))))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-25', 'ar')))
     await waitFor(() => expect(dates(api.academyQueries)).toContain('2026-11-28'))
   })
 
@@ -286,13 +287,13 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     expect(drawer).toHaveTextContent(ar.schedule.details.title)
     expect(drawer).toHaveTextContent('PY-101-A')
     expect(drawer).toHaveTextContent('بايثون — الفصل أ')
-    expect(drawer).toHaveTextContent(formatLongDate('2026-11-08', 'ar'))
-    expect(drawer).toHaveTextContent('10:00 – 11:30')
+    expect(drawer).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-08', 'ar')))
+    expect(drawer).toHaveTextContent(normalizeSpaces(timeRange('10:00', '11:30')))
     expect(drawer).toHaveTextContent(`Asia/Riyadh (${ar.schedule.details.academyZone})`)
     expect(drawer).toHaveTextContent('خالد المعلم')
     expect(drawer).toHaveTextContent('LAB-1 — مختبر 1')
     expect(drawer).toHaveTextContent('IST — فرع إسطنبول')
-    expect(drawer).toHaveTextContent(`${formatDate('2026-01-01', 'ar')} – ${formatDate('2026-12-20', 'ar')}`)
+    expect(drawer).toHaveTextContent(normalizeSpaces(`${formatDate('2026-01-01', 'ar')} – ${formatDate('2026-12-20', 'ar')}`))
     expect(drawer).toHaveTextContent(ar.schedule.details.recurring)
   })
 
@@ -304,7 +305,7 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
       const region = await screen.findByRole('region', { name: en.schedule.calendar.grid })
       expect(await within(region).findByRole('button', { name: /^Python Basics, class PY-101-A, .*, 10:00 to 11:30, room LAB-1 — Lab 1, teacher خالد المعلم$/ })).toBeInTheDocument()
       expect(within(region).getByRole('button', { name: formatLongDate('2026-11-08', 'en') })).toHaveTextContent('08Sun')
-      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(formatDateRange('2026-11-08', '2026-11-12', 'en'))
+      expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(normalizeSpaces(formatDateRange('2026-11-08', '2026-11-12', 'en')))
       expect(screen.getByText(en.schedule.tabs.academy)).toBeInTheDocument()
       expect(screen.getByText(en.schedule.calendar.today).closest('button')).toBeInTheDocument()
     } finally {
@@ -344,19 +345,19 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
 
     fireEvent.click(screen.getByText(ar.schedule.calendar.dayView))
     await pickOption(ar.schedule.filters.weekday, ar.days.tue)
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-10', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-10', 'ar')))
     expect(await tuesdaySlot('2026-11-10')).toBeInTheDocument()
 
     // A week at a time, Tuesday to Tuesday.
     fireEvent.click(screen.getByLabelText(ar.schedule.calendar.nextWeek))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-17', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-17', 'ar')))
     // «Today» (Sunday the 8th) comes back to the Tuesday of this week — not to an empty Sunday — and is then done.
     fireEvent.click(screen.getByText(ar.schedule.calendar.today))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-10', 'ar'))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-10', 'ar')))
     expect(screen.getByText(ar.schedule.calendar.today).closest('button')).toBeDisabled()
     // Thursday the 26th picked in the month calendar lands on the Tuesday of its week.
-    fireEvent.click(within(screen.getByRole('region', { name: ar.schedule.month.label })).getByLabelText(formatLongDate('2026-11-26', 'ar')))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-24', 'ar'))
+    fireEvent.click(within(screen.getByRole('region', { name: ar.schedule.month.label })).getByLabelText(normalizeSpaces(formatLongDate('2026-11-26', 'ar'))))
+    expect(rangeHeading()).toHaveTextContent(normalizeSpaces(formatLongDate('2026-11-24', 'ar')))
     expect(await tuesdaySlot('2026-11-24')).toBeInTheDocument()
     expect(screen.queryByText(ar.schedule.calendar.emptyDay)).not.toBeInTheDocument()
     // Once the filter was set, only Tuesdays were asked.

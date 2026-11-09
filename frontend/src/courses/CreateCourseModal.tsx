@@ -62,7 +62,7 @@ export function CreateCourseModal({ open, levels, onClose, onCreated }: CreateCo
       width={760}
       destroyOnHidden
     >
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       <Form form={form} layout="vertical" requiredMark={false} onFinish={(values) => void submit(values as CourseFormValues)} disabled={saving}>
         <CourseFormFields form={form} levels={levels} />
       </Form>

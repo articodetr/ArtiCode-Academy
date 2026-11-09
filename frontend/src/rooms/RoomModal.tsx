@@ -103,7 +103,7 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
       destroyOnHidden
       width={640}
     >
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       <Form
         form={form}
         layout="vertical"

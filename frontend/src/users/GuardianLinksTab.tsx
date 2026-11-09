@@ -90,7 +90,7 @@ export function GuardianLinksTab({ user, side }: GuardianLinksTabProps) {
   }
 
   if (loadError) {
-    return <Alert type="error" showIcon message={t('users.links.loadFailed')} description={failureMessage(t, describeUsersFailure(loadError))} />
+    return <Alert type="error" showIcon title={t('users.links.loadFailed')} description={failureMessage(t, describeUsersFailure(loadError))} />
   }
   if (!items) {
     return (
@@ -105,7 +105,7 @@ export function GuardianLinksTab({ user, side }: GuardianLinksTabProps) {
   return (
     <>
       {actionError ? (
-        <Alert type="error" showIcon closable message={actionError} onClose={() => setActionError(null)} style={{ marginBottom: 16 }} />
+        <Alert type="error" showIcon closable={{ onClose: () => setActionError(null) }} title={actionError} style={{ marginBottom: 16 }} />
       ) : null}
 
       {canLink && !adding ? (
@@ -294,7 +294,7 @@ function LinkForm({ user, side, linkedIds, onCancel, onLinked }: LinkFormProps) 
 
   return (
     <Card size="small" title={t(`users.links.add.${side}`)} style={{ marginBottom: 16 }}>
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       <Form<LinkFormValues> form={form} layout="vertical" requiredMark={false} onFinish={onFinish} disabled={submitting}>
         <Form.Item
           name="otherId"

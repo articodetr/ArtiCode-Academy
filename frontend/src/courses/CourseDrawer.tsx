@@ -213,7 +213,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
         <Alert
           type="error"
           showIcon
-          message={loadError}
+          title={loadError}
           action={
             <Button size="small" onClick={reload}>
               {t('courses.refresh')}
@@ -253,7 +253,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
         destroyOnHidden
       >
         {pending ? <Typography.Paragraph>{t(`courses.confirm.${pending}`)}</Typography.Paragraph> : null}
-        {actionError ? <Alert type="error" showIcon message={actionError} /> : null}
+        {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
       </Modal>
     </Drawer>
   )

@@ -78,7 +78,7 @@ export function ProfilePage() {
       />
 
       {user.mustChangePassword ? (
-        <Alert type="warning" showIcon message={t('profile.mustChangePassword')} style={{ marginBottom: 16 }} />
+        <Alert type="warning" showIcon title={t('profile.mustChangePassword')} style={{ marginBottom: 16 }} />
       ) : null}
 
       <Row gutter={[16, 16]}>
@@ -118,7 +118,7 @@ export function ProfilePage() {
         <Col xs={24} xl={12}>
           <Card title={t('profile.changePassword')}>
             {passwordError ? (
-              <Alert type="error" showIcon message={passwordError} style={{ marginBottom: 16 }} />
+              <Alert type="error" showIcon title={passwordError} style={{ marginBottom: 16 }} />
             ) : null}
             <Form<PasswordFormValues>
               form={form}

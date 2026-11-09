@@ -128,7 +128,7 @@ export function UsersPage() {
         }
       />
 
-      {!contact ? <Alert type="info" showIcon message={t('users.reducedHint')} style={{ marginBottom: 16 }} /> : null}
+      {!contact ? <Alert type="info" showIcon title={t('users.reducedHint')} style={{ marginBottom: 16 }} /> : null}
 
       <Card>
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>
@@ -180,7 +180,7 @@ export function UsersPage() {
           <Alert
             type="error"
             showIcon
-            message={failureMessage(t, failure)}
+            title={failureMessage(t, failure)}
             action={
               <Button size="small" onClick={() => (failure.key.endsWith('cursor_invalid') ? list.setFilters({}) : list.reload())}>
                 {t('users.refresh')}

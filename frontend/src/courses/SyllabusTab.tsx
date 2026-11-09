@@ -81,7 +81,7 @@ export function SyllabusTab({ courseId, canManage }: SyllabusTabProps) {
       <Alert
         type="error"
         showIcon
-        message={loadError}
+        title={loadError}
         action={
           <Button size="small" onClick={reload}>
             {t('courses.refresh')}
@@ -92,7 +92,7 @@ export function SyllabusTab({ courseId, canManage }: SyllabusTabProps) {
   }
   if (!syllabus) return <Skeleton active paragraph={{ rows: 4 }} />
 
-  const noticeAlert = notice ? <Alert type="error" showIcon message={notice} closable onClose={() => setNotice(null)} style={{ marginBottom: 12 }} /> : null
+  const noticeAlert = notice ? <Alert type="error" showIcon title={notice} closable={{ onClose: () => setNotice(null) }} style={{ marginBottom: 12 }} /> : null
 
   if (editing) {
     return (

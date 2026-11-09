@@ -172,7 +172,7 @@ export function AuditLogPage() {
           <Alert
             type="error"
             showIcon
-            message={failureMessage(t, failure)}
+            title={failureMessage(t, failure)}
             action={
               <Button size="small" onClick={log.reload}>
                 {t('audit.refresh')}

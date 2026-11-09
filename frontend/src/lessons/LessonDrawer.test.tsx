@@ -8,6 +8,7 @@ import { makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ADMIN_PERMISSIONS, LESSON_ID, LESSON_STAFF_PERMISSIONS, makeLesson } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { normalizeSpaces } from '../test/text'
 import { makeRoom, makeRoomList } from '../test/timetable'
 import { LessonDrawer } from './LessonDrawer'
 import { lessonFormValuesOf } from './lessons.form'
@@ -90,8 +91,8 @@ describe('LessonDrawer', () => {
     expect(await screen.findByText('مقدمة إلى الأنواع')).toBeInTheDocument()
     expect(screen.getByText('PY-101-A')).toBeInTheDocument()
     expect(screen.getByText(/أساسيات بايثون/)).toBeInTheDocument()
-    expect(screen.getByText(formatLessonDay(lesson.startsAt, 'ar'))).toBeInTheDocument()
-    expect(screen.getByText(formatLessonTimes(lesson.startsAt, lesson.endsAt, 'ar'))).toBeInTheDocument()
+    expect(screen.getByText(normalizeSpaces(formatLessonDay(lesson.startsAt, 'ar')))).toBeInTheDocument()
+    expect(screen.getByText(normalizeSpaces(formatLessonTimes(lesson.startsAt, lesson.endsAt, 'ar')))).toBeInTheDocument()
     expect(screen.getByText('90 دقيقة')).toBeInTheDocument()
     expect(screen.getByText(ar.labels.in_person)).toBeInTheDocument()
     expect(screen.getByText('LAB-1 — مختبر 1')).toBeInTheDocument()
@@ -312,7 +313,7 @@ describe('LessonDrawer', () => {
     expect(mark.closest('.ant-input-affix-wrapper')).toContainElement(end)
     const values = lessonFormValuesOf(lesson)
     const range = rangeOf(values.date, values.startTime, values.endTime)!
-    expect(screen.getByText(ar.lessons.hints.endsNextDay.replace('{{date}}', formatLessonDay(range.endsAt, 'ar')).replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt))))).toBeInTheDocument()
+    expect(screen.getByText(normalizeSpaces(ar.lessons.hints.endsNextDay.replace('{{date}}', formatLessonDay(range.endsAt, 'ar')).replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt)))))).toBeInTheDocument()
   })
 
   it('words a missing delivery mode itself in the edit form and sends nothing (J-F19)', async () => {

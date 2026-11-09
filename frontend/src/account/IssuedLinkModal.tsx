@@ -53,7 +53,7 @@ export function IssuedLinkModal({ kind, issued, onClose }: IssuedLinkModalProps)
     >
       {issued ? (
         <>
-          <Alert type="warning" showIcon message={t('account.issued.onceHint')} style={{ marginBottom: 16 }} />
+          <Alert type="warning" showIcon title={t('account.issued.onceHint')} style={{ marginBottom: 16 }} />
           <Space.Compact style={{ width: '100%' }}>
             <Input
               ref={inputRef}

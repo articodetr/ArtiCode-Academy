@@ -31,7 +31,7 @@ export function NewPasswordForm({ submitLabel, submittingLabel, submitting, disa
       onFinish={(values) => void onSubmit(values.password)}
       disabled={submitting || disabled}
     >
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
 
       <Form.Item
         name="password"

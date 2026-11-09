@@ -9,6 +9,7 @@ import { CLASS_ID, TEACHER_IDS, makeClass, makeClassTeacher } from '../test/clas
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { OTHER_CLASS_ID, ROOM_IDS, SCHEDULE_ADMIN_PERMISSIONS, SCHEDULE_READER_PERMISSIONS, SLOT_IDS, makeRoom, makeSchedule, makeSlot } from '../test/schedule'
+import { normalizeSpaces } from '../test/text'
 import { formatDay } from '../users/users.format'
 import { ClassScheduleTab } from './ClassScheduleTab'
 
@@ -79,11 +80,11 @@ describe('ClassScheduleTab', () => {
     expect(screen.getByText('عدد الحصص الأسبوعية: 2')).toBeInTheDocument()
     expect(screen.getByText('LAB-1 — مختبر 1')).toBeInTheDocument()
     expect(screen.getByText('المعلم: خالد المعلم')).toBeInTheDocument()
-    expect(screen.getByText(ar.classSchedule.effectiveFrom.replace('{{from}}', formatDay('2026-11-10', 'ar')))).toBeInTheDocument()
+    expect(screen.getByText(normalizeSpaces(ar.classSchedule.effectiveFrom.replace('{{from}}', formatDay('2026-11-10', 'ar'))))).toBeInTheDocument()
     expect(screen.getByText('13:00–14:30')).toBeInTheDocument()
     expect(screen.getByText(ar.classSchedule.noRoom)).toBeInTheDocument()
     expect(screen.getByText(`المعلم: ${ar.classSchedule.defaultTeacher}`)).toBeInTheDocument()
-    expect(screen.getByText(ar.classSchedule.effectiveRange.replace('{{from}}', formatDay('2026-11-10', 'ar')).replace('{{to}}', formatDay('2026-12-20', 'ar')))).toBeInTheDocument()
+    expect(screen.getByText(normalizeSpaces(ar.classSchedule.effectiveRange.replace('{{from}}', formatDay('2026-11-10', 'ar')).replace('{{to}}', formatDay('2026-12-20', 'ar'))))).toBeInTheDocument()
     const headings = within(screen.getByTestId('schedule-week')).getAllByRole('heading', { level: 5 }).map((heading) => heading.textContent)
     expect(headings).toEqual([ar.classSchedule.weekdays[0], ar.classSchedule.weekdays[2]])
     expect(screen.queryByText(ar.classSchedule.edit)).not.toBeInTheDocument()

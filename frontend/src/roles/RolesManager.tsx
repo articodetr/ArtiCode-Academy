@@ -129,7 +129,7 @@ export function RolesManager() {
           <Alert
             type="error"
             showIcon
-            message={t('rolesAdmin.loadFailed')}
+            title={t('rolesAdmin.loadFailed')}
             description={failureMessage(t, failure)}
             action={
               <Button size="small" onClick={roles.reload}>

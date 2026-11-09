@@ -79,7 +79,7 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
       destroyOnHidden
       width={640}
     >
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       <Form
         key={level ? `${level.id}:${level.updatedAt}` : 'new'}
         form={form}

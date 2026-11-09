@@ -87,7 +87,7 @@ export function LoginPage() {
           <Alert
             type="error"
             showIcon
-            message={t(failure.key, { minutes: failure.retryAfterMinutes ?? '' })}
+            title={t(failure.key, { minutes: failure.retryAfterMinutes ?? '' })}
             style={{ marginBottom: 16 }}
           />
         ) : null}

@@ -201,7 +201,7 @@ export function RoomsManager() {
         <Alert
           type="error"
           showIcon
-          message={t('rooms.loadFailed')}
+          title={t('rooms.loadFailed')}
           description={failureMessage(t, describeRoomsFailure(list.error))}
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={list.reload} loading={list.loading}>
@@ -211,7 +211,7 @@ export function RoomsManager() {
           style={{ marginBottom: 16 }}
         />
       ) : null}
-      {branchesState.error ? <Alert type="warning" showIcon message={t('rooms.branchesFailed')} style={{ marginBottom: 16 }} /> : null}
+      {branchesState.error ? <Alert type="warning" showIcon title={t('rooms.branchesFailed')} style={{ marginBottom: 16 }} /> : null}
 
       <Table<Room>
         rowKey="id"

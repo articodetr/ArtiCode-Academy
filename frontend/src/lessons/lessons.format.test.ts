@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeSpaces } from '../test/text'
 import { withTimeZone } from '../test/time-zone'
 import {
   NEXT_DAY_MARK,
@@ -91,9 +92,9 @@ describe('lessons.format', () => {
     const end = new Date(2026, 10, 10, 11, 30).toISOString()
     expect(formatClock(start, 'ar')).toBe('09:05')
     expect(formatClock(end, 'en')).toBe('11:30')
-    expect(formatLessonTimes(start, end, 'ar')).toBe('09:05 – 11:30')
+    expect(normalizeSpaces(formatLessonTimes(start, end, 'ar'))).toBe('09:05 – 11:30')
     const nextDay = new Date(2026, 10, 11, 1, 0).toISOString()
-    expect(formatLessonTimes(new Date(2026, 10, 10, 22, 0).toISOString(), nextDay, 'en')).toBe('22:00 – 01:00 (+1)')
+    expect(normalizeSpaces(formatLessonTimes(new Date(2026, 10, 10, 22, 0).toISOString(), nextDay, 'en'))).toBe('22:00 – 01:00 (+1)')
     expect(formatClock('garbage', 'ar')).toBe('garbage')
   })
 

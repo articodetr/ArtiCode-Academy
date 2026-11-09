@@ -11,6 +11,7 @@ import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ID_2, LESSON_LEARNER_PERMISSIONS, LESSON_TEACHER_PERMISSIONS } from '../test/lessons'
 import { CHILD_ONE, CHILD_TWO, SELF_STUDENT, makeMyLesson, makeMyLessonList } from '../test/myLessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { normalizeSpaces } from '../test/text'
 import { MyLessonsPage } from './MyLessonsPage'
 
 const FUTURE = { startsAt: '2030-01-15T09:00:00.000Z', endsAt: '2030-01-15T10:00:00.000Z' }
@@ -92,8 +93,8 @@ describe('MyLessonsPage', () => {
     const rows = bodyRows()
     expect(rows).toHaveLength(2)
     const [first, second] = rows as [HTMLElement, HTMLElement]
-    expect(within(first).getByText(formatLessonDay(attended.startsAt, 'ar'))).toBeInTheDocument()
-    expect(within(first).getByText(formatLessonTimes(attended.startsAt, attended.endsAt, 'ar'))).toBeInTheDocument()
+    expect(within(first).getByText(normalizeSpaces(formatLessonDay(attended.startsAt, 'ar')))).toBeInTheDocument()
+    expect(within(first).getByText(normalizeSpaces(formatLessonTimes(attended.startsAt, attended.endsAt, 'ar')))).toBeInTheDocument()
     expect(within(first).getByText('1. المتغيرات')).toBeInTheDocument()
     expect(within(first).getByText(ar.labels.live_online)).toBeInTheDocument()
     expect(within(first).getByText('PY-101-A')).toBeInTheDocument()

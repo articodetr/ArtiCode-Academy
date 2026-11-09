@@ -75,7 +75,7 @@ export function UserRolesTab({ user, onSaved }: UserRolesTabProps) {
   }, [form, heldKey, roles])
 
   if (loadError) {
-    return <Alert type="error" showIcon message={t('users.rolesTab.loadFailed')} description={failureMessage(t, describeUsersFailure(loadError))} />
+    return <Alert type="error" showIcon title={t('users.rolesTab.loadFailed')} description={failureMessage(t, describeUsersFailure(loadError))} />
   }
   if (!roles) {
     return (
@@ -127,11 +127,11 @@ export function UserRolesTab({ user, onSaved }: UserRolesTabProps) {
       disabled={saving || readOnly}
     >
       {user.deletedAt ? (
-        <Alert type="info" showIcon message={t('users.rolesTab.readOnlyDeleted')} style={{ marginBottom: 16 }} />
+        <Alert type="info" showIcon title={t('users.rolesTab.readOnlyDeleted')} style={{ marginBottom: 16 }} />
       ) : outOfReach.length > 0 ? (
-        <Alert type="warning" showIcon message={t('users.rolesTab.outOfReach', { list: `(${outOfReach.join(', ')})` })} style={{ marginBottom: 16 }} />
+        <Alert type="warning" showIcon title={t('users.rolesTab.outOfReach', { list: `(${outOfReach.join(', ')})` })} style={{ marginBottom: 16 }} />
       ) : null}
-      {saveError ? <Alert type="error" showIcon message={saveError} style={{ marginBottom: 16 }} /> : null}
+      {saveError ? <Alert type="error" showIcon title={saveError} style={{ marginBottom: 16 }} /> : null}
 
       <Form.Item
         name="roleKeys"

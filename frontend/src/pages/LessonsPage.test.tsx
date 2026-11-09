@@ -9,6 +9,7 @@ import { makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ADMIN_PERMISSIONS, LESSON_ID_2, LESSON_LEARNER_PERMISSIONS, LESSON_STAFF_PERMISSIONS, LESSON_TEACHER_PERMISSIONS, makeLesson, makeLessonList } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { normalizeSpaces } from '../test/text'
 import { makeRoom, makeRoomList } from '../test/timetable'
 import { makeUserList } from '../test/users'
 import { LessonsPage } from './LessonsPage'
@@ -77,8 +78,8 @@ describe('LessonsPage', () => {
     expect(Object.fromEntries(api.queries[0]!)).toEqual({ from: dayStartInstant(todayIso())!, order: 'asc', limit: '20' })
     const rows = bodyRows()
     expect(rows).toHaveLength(2)
-    expect(within(rows[0]!).getByText(formatLessonDay(variables.startsAt, 'ar'))).toBeInTheDocument()
-    expect(within(rows[0]!).getByText(formatLessonTimes(variables.startsAt, variables.endsAt, 'ar'))).toBeInTheDocument()
+    expect(within(rows[0]!).getByText(normalizeSpaces(formatLessonDay(variables.startsAt, 'ar')))).toBeInTheDocument()
+    expect(within(rows[0]!).getByText(normalizeSpaces(formatLessonTimes(variables.startsAt, variables.endsAt, 'ar')))).toBeInTheDocument()
     expect(within(rows[0]!).getByText(ar.labels.in_person)).toBeInTheDocument()
     expect(within(rows[0]!).getByText('PY-101-A')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('بايثون — الفصل أ')).toBeInTheDocument()

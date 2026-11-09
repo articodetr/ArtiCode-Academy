@@ -47,7 +47,7 @@ interface UserDrawerProps {
 export function UserDrawer({ userId, includeDeleted = false, onClose, onUpdated }: UserDrawerProps) {
   const { t } = useTranslation()
   return (
-    <Drawer open={userId !== null} onClose={onClose} title={t('users.detail.title')} width={600} destroyOnHidden>
+    <Drawer open={userId !== null} onClose={onClose} title={t('users.detail.title')} size={600} destroyOnHidden>
       {userId ? (
         // Keyed so a different user (or projection) starts from a fresh body: no stale detail, no half-edited form.
         <UserDrawerBody key={`${userId}:${includeDeleted}`} userId={userId} includeDeleted={includeDeleted} onUpdated={onUpdated} />
@@ -99,7 +99,7 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
       <Alert
         type="error"
         showIcon
-        message={t('users.detail.loadFailed')}
+        title={t('users.detail.loadFailed')}
         description={failureMessage(t, describeUsersFailure(loadError))}
       />
     )
@@ -203,10 +203,10 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
       />
 
       {actionError ? (
-        <Alert type="error" showIcon closable message={actionError} onClose={() => setActionError(null)} style={{ marginTop: 16 }} />
+        <Alert type="error" showIcon closable={{ onClose: () => setActionError(null) }} title={actionError} style={{ marginTop: 16 }} />
       ) : null}
 
-      {!contact ? <Alert type="info" showIcon message={t('users.reducedHint')} style={{ marginTop: 16 }} /> : null}
+      {!contact ? <Alert type="info" showIcon title={t('users.reducedHint')} style={{ marginTop: 16 }} /> : null}
 
       <Tabs activeKey={activeKey} onChange={setTab} items={tabs} style={{ marginTop: 8 }} />
 
@@ -268,7 +268,7 @@ function UserEditForm({ user, contact, onSaved, onCancel }: UserEditFormProps) {
       onFinish={(values) => void onSave(values)}
       disabled={saving}
     >
-      {saveError ? <Alert type="error" showIcon message={saveError} style={{ marginBottom: 16 }} /> : null}
+      {saveError ? <Alert type="error" showIcon title={saveError} style={{ marginBottom: 16 }} /> : null}
       <IdentityFields contact={contact} mode="edit" />
       {user.studentProfile ? (
         <>

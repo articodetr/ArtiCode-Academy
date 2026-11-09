@@ -25,7 +25,7 @@ interface CreateUserWizardProps {
 export function CreateUserWizard({ open, onClose, onCreated }: CreateUserWizardProps) {
   const { t } = useTranslation()
   return (
-    <Modal open={open} onCancel={onClose} title={t('users.create.title')} footer={null} width={640} maskClosable={false} destroyOnHidden>
+    <Modal open={open} onCancel={onClose} title={t('users.create.title')} footer={null} width={640} mask={{ closable: false }} destroyOnHidden>
       <WizardBody onClose={onClose} onCreated={onCreated} />
     </Modal>
   )
@@ -100,7 +100,7 @@ function WizardBody({ onClose, onCreated }: Omit<CreateUserWizardProps, 'open'>)
     <>
       <Steps size="small" current={step} items={steps.map((key) => ({ title: t(STEP_TITLES[key]) }))} style={{ marginBottom: 24 }} />
 
-      {failure ? <Alert type="error" showIcon message={failure} style={{ marginBottom: 16 }} /> : null}
+      {failure ? <Alert type="error" showIcon title={failure} style={{ marginBottom: 16 }} /> : null}
 
       <Form<CreateUserFormValues>
         form={form}
@@ -125,7 +125,7 @@ function WizardBody({ onClose, onCreated }: Omit<CreateUserWizardProps, 'open'>)
 
         {current === 'identity' ? (
           <>
-            <Alert type="info" showIcon message={t('users.create.identifierHint')} style={{ marginBottom: 16 }} />
+            <Alert type="info" showIcon title={t('users.create.identifierHint')} style={{ marginBottom: 16 }} />
             <IdentityFields contact={contact} mode="create" />
           </>
         ) : null}
@@ -134,7 +134,7 @@ function WizardBody({ onClose, onCreated }: Omit<CreateUserWizardProps, 'open'>)
           <>
             {profile === 'student' ? <StudentProfileFields withNotes /> : null}
             {profile === 'employee' ? <EmployeeProfileFields /> : null}
-            {profile === null ? <Alert type="info" showIcon message={t('users.create.noDetails')} style={{ marginBottom: 16 }} /> : null}
+            {profile === null ? <Alert type="info" showIcon title={t('users.create.noDetails')} style={{ marginBottom: 16 }} /> : null}
             {canAssignRoles ? (
               <Form.Item
                 name="roleKeys"

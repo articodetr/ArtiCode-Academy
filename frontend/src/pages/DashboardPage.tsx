@@ -52,7 +52,7 @@ export function DashboardPage() {
 
       <ServerStatusCard />
 
-      <Alert type="info" showIcon message={t('common.demoBanner')} style={{ marginBottom: 24 }} />
+      <Alert type="info" showIcon title={t('common.demoBanner')} style={{ marginBottom: 24 }} />
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} xl={6}>

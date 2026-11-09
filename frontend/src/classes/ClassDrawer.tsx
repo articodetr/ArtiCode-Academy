@@ -229,7 +229,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
         <Alert
           type="error"
           showIcon
-          message={loadError}
+          title={loadError}
           action={
             <Button size="small" onClick={reload}>
               {t('classes.refresh')}
@@ -360,7 +360,7 @@ function ClassActionModal({ cls, action, onDone, onStale, onCancel }: ClassActio
     >
       <Typography.Paragraph>{t(`classes.confirm.${action}`)}</Typography.Paragraph>
       {movesEnrollments(action) && cls.enrolledCount > 0 ? (
-        <Alert type="warning" showIcon message={t(`classes.confirm.enrollments.${action}`, { count: cls.enrolledCount })} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t(`classes.confirm.enrollments.${action}`, { count: cls.enrolledCount })} style={{ marginBottom: 12 }} />
       ) : null}
       {action !== 'delete' ? (
         <Form layout="vertical">
@@ -376,7 +376,7 @@ function ClassActionModal({ cls, action, onDone, onStale, onCancel }: ClassActio
           </Form.Item>
         </Form>
       ) : null}
-      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {error ? <Alert type="error" showIcon title={error} /> : null}
     </Modal>
   )
 }

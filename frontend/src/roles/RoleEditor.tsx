@@ -42,7 +42,7 @@ export function RoleEditor({ target, groups, onClose, onSaved }: RoleEditorProps
   const title = target?.mode === 'edit' ? (roleEditability(target.role).permissions ? t('rolesAdmin.editor.editTitle') : t('rolesAdmin.editor.viewTitle')) : t('rolesAdmin.editor.createTitle')
   const bodyKey = target?.mode === 'edit' ? `${target.role.id}:${target.role.updatedAt}` : 'create'
   return (
-    <Drawer open={target !== null} onClose={onClose} title={title} width={720} destroyOnHidden>
+    <Drawer open={target !== null} onClose={onClose} title={title} size={720} destroyOnHidden>
       {target ? (
         // Keyed so another role (or a fresh server copy of the same role) starts from a clean form.
         <RoleEditorBody key={bodyKey} target={target} groups={groups} onClose={onClose} onSaved={onSaved} />
@@ -125,14 +125,14 @@ function RoleEditorBody({ target, groups, onClose, onSaved }: RoleEditorBodyProp
     <>
       {role ? <RoleHeader role={role} /> : null}
 
-      {readOnly ? <Alert type="info" showIcon message={t('rolesAdmin.editor.adminReadOnly')} style={{ marginBottom: 16 }} /> : null}
+      {readOnly ? <Alert type="info" showIcon title={t('rolesAdmin.editor.adminReadOnly')} style={{ marginBottom: 16 }} /> : null}
       {role && role.isSystem && !readOnly ? (
-        <Alert type="info" showIcon message={t('rolesAdmin.editor.systemLabelsHint')} style={{ marginBottom: 16 }} />
+        <Alert type="info" showIcon title={t('rolesAdmin.editor.systemLabelsHint')} style={{ marginBottom: 16 }} />
       ) : null}
       {editability.permissions && locked.size > 0 ? (
-        <Alert type="warning" showIcon message={t('rolesAdmin.editor.unreachableHint')} style={{ marginBottom: 16 }} />
+        <Alert type="warning" showIcon title={t('rolesAdmin.editor.unreachableHint')} style={{ marginBottom: 16 }} />
       ) : null}
-      {failure ? <Alert type="error" showIcon message={failure} style={{ marginBottom: 16 }} /> : null}
+      {failure ? <Alert type="error" showIcon title={failure} style={{ marginBottom: 16 }} /> : null}
 
       <Form<RoleFormValues>
         form={form}

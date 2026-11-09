@@ -7,6 +7,7 @@ import { ATTENDANCE_STAFF_PERMISSIONS, ATTENDANCE_TEACHER_PERMISSIONS, STUDENT_I
 import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ID } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { normalizeSpaces } from '../test/text'
 import { formatDateTime } from '../users/users.format'
 import { AttendanceSheetTab } from './AttendanceSheetTab'
 
@@ -185,7 +186,7 @@ describe('AttendanceSheetTab', () => {
     for (const [sheet, text] of cases) {
       mockSheetApi(() => sheet)
       const { unmount } = renderTab(ATTENDANCE_TEACHER_PERMISSIONS)
-      expect(await screen.findByText(text)).toBeInTheDocument()
+      expect(await screen.findByText(normalizeSpaces(text))).toBeInTheDocument()
       expect(within(row('يوسف الطالب')).queryByLabelText(ar.lessons.attendance.absent)).not.toBeInTheDocument()
       expect(screen.queryByText(ar.attendance.save)).not.toBeInTheDocument()
       unmount()

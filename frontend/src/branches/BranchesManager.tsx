@@ -194,7 +194,7 @@ export function BranchesManager() {
         <Alert
           type="error"
           showIcon
-          message={t('branches.loadFailed')}
+          title={t('branches.loadFailed')}
           description={failureMessage(t, describeBranchesFailure(error))}
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={reload} loading={loading}>

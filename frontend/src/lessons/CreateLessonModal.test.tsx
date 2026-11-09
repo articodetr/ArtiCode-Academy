@@ -7,6 +7,7 @@ import { SYLLABUS_ITEM_IDS, makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ADMIN_PERMISSIONS, makeLesson } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { normalizeSpaces } from '../test/text'
 import { ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
 import { CreateLessonModal } from './CreateLessonModal'
 import { durationMinutes, formatLessonDay, rangeOf } from './lessons.format'
@@ -161,7 +162,7 @@ describe('CreateLessonModal', () => {
     const endMark = () => within(dialog).getByTestId('lesson-end-mark')
     const sentence = (date: string, start: string, end: string) => {
       const range = rangeOf(date, start, end)!
-      return ar.lessons.hints.endsNextDay.replace('{{date}}', formatLessonDay(range.endsAt, 'ar')).replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt)))
+      return normalizeSpaces(ar.lessons.hints.endsNextDay.replace('{{date}}', formatLessonDay(range.endsAt, 'ar')).replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt))))
     }
 
     // The owner's typo: 13:00 → 01:00 is a valid 12-hour night lesson, so it must not pass unseen.

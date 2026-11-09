@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
+import { normalizeSpaces } from '../test/text'
 import { SYSTEM_ROLE_KEYS, displayNameOf, formatDateTime, formatDay, localizedLabel, roleFilterKeys, roleLabel, roleLabelsOf } from './users.format'
 
 const t = (key: string, options?: Record<string, unknown>) => i18n.t(key, options)
@@ -76,7 +77,7 @@ describe('date formatting', () => {
   })
 
   it('formats a calendar day in UTC so the day never shifts, with Latin digits in Arabic', () => {
-    expect(formatDay('2012-05-01', 'en')).toBe('1 May 2012')
+    expect(normalizeSpaces(formatDay('2012-05-01', 'en'))).toBe('1 May 2012')
     const arabic = formatDay('2012-05-01', 'ar')
     expect(arabic).toContain('2012')
     expect(arabic).toContain('1')

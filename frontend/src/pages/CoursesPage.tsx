@@ -112,7 +112,7 @@ export function CoursesPage() {
         <Alert
           type="error"
           showIcon
-          message={failureMessage(t, failure)}
+          title={failureMessage(t, failure)}
           action={
             <Button size="small" onClick={() => (failure.key.endsWith('cursor_invalid') ? list.setFilters({}) : list.reload())}>
               {t('courses.refresh')}
@@ -168,7 +168,7 @@ export function CoursesPage() {
         }
       />
 
-      {!canManage ? <Alert type="info" showIcon message={t('courses.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
+      {!canManage ? <Alert type="info" showIcon title={t('courses.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
       {canManage ? (
         <Tabs
           activeKey={tab}

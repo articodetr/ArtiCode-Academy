@@ -131,7 +131,7 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
         destroyOnHidden
       >
         {pending ? <Typography.Paragraph>{t(`users.status.hints.${pending}`)}</Typography.Paragraph> : null}
-        {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+        {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
         <Form<ReasonFormValues> form={form} layout="vertical" requiredMark={false} disabled={busy}>
           <Form.Item
             name="reason"

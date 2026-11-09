@@ -65,7 +65,7 @@ export function ClassTeachersTab({ cls, onUpdated, onEditingChange }: ClassTeach
           </Button>
         </Flex>
       ) : null}
-      {canAssign && !canSearch ? <Alert type="info" showIcon message={t('classes.teachers.searchNeedsUsersRead')} style={{ marginBottom: 12 }} /> : null}
+      {canAssign && !canSearch ? <Alert type="info" showIcon title={t('classes.teachers.searchNeedsUsersRead')} style={{ marginBottom: 12 }} /> : null}
       {cls.teachers.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('classes.teachers.empty')} />
       ) : (
@@ -149,8 +149,8 @@ function TeachersEditor({ cls, onSaved, onCancel }: TeachersEditorProps) {
 
   return (
     <>
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} /> : null}
-      {problems && problems.leadCount > 1 ? <Alert type="warning" showIcon message={t('classes.teachers.oneLead')} style={{ marginBottom: 12 }} /> : null}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} /> : null}
+      {problems && problems.leadCount > 1 ? <Alert type="warning" showIcon title={t('classes.teachers.oneLead')} style={{ marginBottom: 12 }} /> : null}
       <TeacherPicker
         key={pickerKey}
         onChange={(_value, candidate) => add(candidate)}

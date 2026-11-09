@@ -74,7 +74,7 @@ export function InvitationPage() {
   } else if (dead) {
     body = (
       <>
-        <Alert type="error" showIcon message={t('account.invitation.loadFailed')} description={t(dead.key)} />
+        <Alert type="error" showIcon title={t('account.invitation.loadFailed')} description={t(dead.key)} />
         <Flex justify="center" style={{ marginTop: 16 }}>
           <Button onClick={retry}>{t('account.invitation.retry')}</Button>
         </Flex>

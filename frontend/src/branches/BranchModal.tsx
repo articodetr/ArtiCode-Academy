@@ -96,7 +96,7 @@ export function BranchModal({ open, branch, onClose, onSaved }: BranchModalProps
       destroyOnHidden
       width={680}
     >
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       <Form
         key={branch ? `${branch.id}:${branch.updatedAt}` : 'new'}
         form={form}

@@ -35,7 +35,7 @@ export function MyClassesPage() {
       title: t('myClasses.columns.class'),
       key: 'class',
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text strong>{localizedLabel(row.class.name, language)}</Typography.Text>
           <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
             {row.class.code}
@@ -59,7 +59,7 @@ export function MyClassesPage() {
       title: t('myClasses.columns.enrollmentStatus'),
       key: 'enrollmentStatus',
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <StatusTag value={row.enrollmentStatus} />
           {row.enrollmentStatus === 'completed' && row.completedAt ? (
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -113,7 +113,7 @@ export function MyClassesPage() {
           <Alert
             type="error"
             showIcon
-            message={failureMessage(t, failure)}
+            title={failureMessage(t, failure)}
             action={
               <Button size="small" onClick={my.reload}>
                 {t('myClasses.refresh')}

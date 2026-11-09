@@ -146,7 +146,7 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onEditingCha
       title: t('classes.enrollments.columns.student'),
       key: 'student',
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Space size={4} wrap>
             <Typography.Text strong={row.student.deletedAt === null} delete={row.student.deletedAt !== null}>
               {displayNameOf(row.student)}
@@ -200,16 +200,16 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onEditingCha
         <SeatsBar cls={cls} />
       </Flex>
 
-      {!canManage ? <Alert type="info" showIcon message={t('classes.enrollments.readOnlyHint')} style={{ marginBottom: 12 }} /> : null}
+      {!canManage ? <Alert type="info" showIcon title={t('classes.enrollments.readOnlyHint')} style={{ marginBottom: 12 }} /> : null}
 
       {canManage ? (
         <div style={{ marginBottom: 12 }}>
           {!enrollable ? (
-            <Alert type="info" showIcon message={t('classes.enrollments.notEnrollable', { status: t(`labels.${cls.status}`) })} />
+            <Alert type="info" showIcon title={t('classes.enrollments.notEnrollable', { status: t(`labels.${cls.status}`) })} />
           ) : !seatFree ? (
-            <Alert type="warning" showIcon message={t('classes.enrollments.full', { enrolledCount: cls.enrolledCount, capacity: cls.capacity })} />
+            <Alert type="warning" showIcon title={t('classes.enrollments.full', { enrolledCount: cls.enrolledCount, capacity: cls.capacity })} />
           ) : !canSearch ? (
-            <Alert type="info" showIcon message={t('classes.enrollments.searchNeedsUsersRead')} />
+            <Alert type="info" showIcon title={t('classes.enrollments.searchNeedsUsersRead')} />
           ) : (
             <Flex gap={8} wrap>
               <StudentPicker
@@ -230,7 +230,7 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onEditingCha
               </Button>
             </Flex>
           )}
-          {enrollError ? <Alert type="error" showIcon message={enrollError} style={{ marginTop: 8 }} /> : null}
+          {enrollError ? <Alert type="error" showIcon title={enrollError} style={{ marginTop: 8 }} /> : null}
         </div>
       ) : null}
 
@@ -266,7 +266,7 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onEditingCha
         <Alert
           type="error"
           showIcon
-          message={failureMessage(t, listFailure)}
+          title={failureMessage(t, listFailure)}
           action={
             <Button size="small" onClick={() => (listFailure.key.endsWith('cursor_invalid') ? list.setFilters({}) : list.reload())}>
               {t('classes.enrollments.refresh')}
@@ -374,7 +374,7 @@ function EnrollmentActionModal({ cls, row, action, onDone, onFailed, onCancel }:
         <StatusTag value={row.status} /> {TRANSITION_ARROW[directionOf(language)]} <StatusTag value={nextEnrollmentStatus(action, row.status) ?? row.status} />
       </Typography.Paragraph>
       {warnFull ? (
-        <Alert type="warning" showIcon message={t('classes.enrollments.confirm.reactivateFull', { enrolledCount: cls.enrolledCount, capacity: cls.capacity })} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={t('classes.enrollments.confirm.reactivateFull', { enrolledCount: cls.enrolledCount, capacity: cls.capacity })} style={{ marginBottom: 12 }} />
       ) : null}
       <Form layout="vertical">
         <Form.Item label={t('classes.enrollments.confirm.reason')} extra={t('classes.enrollments.confirm.reasonHint')} htmlFor="enrollment-status-reason">
@@ -388,7 +388,7 @@ function EnrollmentActionModal({ cls, row, action, onDone, onFailed, onCancel }:
           />
         </Form.Item>
       </Form>
-      {error ? <Alert type="error" showIcon message={error} /> : null}
+      {error ? <Alert type="error" showIcon title={error} /> : null}
     </Modal>
   )
 }

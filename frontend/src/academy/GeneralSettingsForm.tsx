@@ -36,7 +36,7 @@ export function GeneralSettingsForm() {
         <Alert
           type="error"
           showIcon
-          message={t('settings.loadFailed')}
+          title={t('settings.loadFailed')}
           description={failureMessage(t, failure)}
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={state.reload} loading={state.loading}>
@@ -102,7 +102,7 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
 
   return (
     <Form<GeneralSettingsFormValues> form={form} layout="vertical" initialValues={settingsFormValuesOf(academy)} onFinish={submit} disabled={!canManage || saving}>
-      {!canManage ? <Alert type="info" showIcon message={t('settings.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
+      {!canManage ? <Alert type="info" showIcon title={t('settings.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
 
       <Form.Item label={t('settings.slug')} htmlFor="academy-slug">
         <Input id="academy-slug" value={academy.slug} dir="ltr" readOnly />

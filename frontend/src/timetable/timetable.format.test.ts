@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import i18n from '../i18n'
+import { normalizeSpaces } from '../test/text'
 import { makeRoom } from '../test/timetable'
 import {
   dayNumber,
@@ -75,19 +76,19 @@ describe('calendar dates', () => {
     expect(arabic).toContain('2026')
     expect(arabic).not.toMatch(ARABIC_INDIC_DIGITS)
     expect(formatLongDate('2026-11-08', 'en')).toMatch(/Sunday.*8.*November.*2026/)
-    expect(formatDate('2026-12-31', 'en')).toBe('31 December 2026')
-    expect(formatDayMonth('2026-11-01', 'en')).toBe('1 November')
-    expect(formatMonthTitle({ year: 2026, month: 11 }, 'en')).toBe('November 2026')
+    expect(normalizeSpaces(formatDate('2026-12-31', 'en'))).toBe('31 December 2026')
+    expect(normalizeSpaces(formatDayMonth('2026-11-01', 'en'))).toBe('1 November')
+    expect(normalizeSpaces(formatMonthTitle({ year: 2026, month: 11 }, 'en'))).toBe('November 2026')
     expect(formatMonthTitle({ year: 2026, month: 11 }, 'ar')).toContain('نوفمبر')
   })
 
   it('writes the range of the shown week once per month', () => {
-    const sameMonth = formatDateRange('2026-11-01', '2026-11-07', 'en')
+    const sameMonth = normalizeSpaces(formatDateRange('2026-11-01', '2026-11-07', 'en'))
     expect(sameMonth).toMatch(/^1\s?[–-]\s?7 November 2026$/)
-    const acrossMonths = formatDateRange('2026-11-29', '2026-12-05', 'en')
+    const acrossMonths = normalizeSpaces(formatDateRange('2026-11-29', '2026-12-05', 'en'))
     expect(acrossMonths).toContain('29 November')
     expect(acrossMonths).toContain('5 December 2026')
-    expect(formatDateRange('2026-11-08', '2026-11-08', 'en')).toBe('8 November 2026')
+    expect(normalizeSpaces(formatDateRange('2026-11-08', '2026-11-08', 'en'))).toBe('8 November 2026')
     const arabic = formatDateRange('2026-11-01', '2026-11-07', 'ar')
     expect(arabic.match(/نوفمبر/g)).toHaveLength(1)
     expect(arabic).not.toMatch(ARABIC_INDIC_DIGITS)
