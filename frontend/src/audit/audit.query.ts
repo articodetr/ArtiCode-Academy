@@ -119,6 +119,10 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'assignments.updated',
   'assignments.status.changed',
   'assignments.deleted',
+  // MOD-08-T03 (CH-0117) — first offered with J-F41 (CH-0155)
+  'assignments.submitted',
+  'assignments.graded',
+  'assignments.returned',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

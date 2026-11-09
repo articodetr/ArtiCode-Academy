@@ -113,4 +113,11 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
       expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('assignments.'))
     }
   })
+
+  it('offers the three submission events of MOD-08-T03 once each, after their family prefix (J-F41)', () => {
+    for (const event of ['assignments.submitted', 'assignments.graded', 'assignments.returned']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+      expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('assignments.'))
+    }
+  })
 })

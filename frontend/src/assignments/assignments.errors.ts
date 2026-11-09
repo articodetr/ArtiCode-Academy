@@ -1,8 +1,11 @@
 // Maps a failed assignments request to a translation key (and, where the
 // backend code points at one input, the form field that should carry the
-// message). Codes: the T02 part of backend/src/assignments/assignments.errors.ts
-// (API-102..API-107) plus the auth/permission guards; the submission codes of
-// T03/T04 join with their screens. Unit-tested in assignments.errors.test.ts.
+// message). Codes: backend/src/assignments/assignments.errors.ts — the T02 part
+// (API-102..API-107) and, since J-F41, the T03 part (API-108..API-111): the
+// review codes point at the grading form's fields (`score_out_of_range` →
+// score, `feedback_required` → feedback); the codes of a student's submission
+// (API-109) are worded now for «my assignments» (MOD-08-T04) — plus the
+// auth/permission guards. Unit-tested in assignments.errors.test.ts.
 import { ApiError } from '../api/client'
 import { failureMessage as usersFailureMessage } from '../users/users.errors'
 import type { UsersFailure } from '../users/users.errors'
@@ -26,6 +29,14 @@ const KNOWN_CODES = new Set([
   'assignment_not_deletable',
   'nothing_to_update',
   'cursor_invalid',
+  // T03 (API-108..API-111)
+  'submission_not_found',
+  'assignment_closed',
+  'not_enrolled',
+  'attempts_exhausted',
+  'score_out_of_range',
+  'feedback_required',
+  'submission_invalid',
   'permission_denied',
   'origin_forbidden',
   'rate_limited',
@@ -38,6 +49,9 @@ const FIELD_OF_CODE: Readonly<Record<string, string[]>> = {
   lesson_not_found: ['lessonId'],
   lesson_mismatch: ['lessonId'],
   late_penalty_invalid: ['latePenaltyPercent'],
+  // The grading form of the review panel (SubmissionReviewPanel).
+  score_out_of_range: ['score'],
+  feedback_required: ['feedback'],
 }
 
 /** The failure's text; `assignment_locked` lists the refused fields by their translated labels, not their API names. */
@@ -64,6 +78,11 @@ export function describeAssignmentsFailure(error: unknown): AssignmentsFailure {
     }
     const missing = strings(body.missing)
     if (missing.length > 0) failure.params = { list: `(${missing.join(', ')})` }
+    // The limits the server names: the max score of `score_out_of_range`, the effective allowance of `attempts_exhausted`.
+    if (error.code === 'score_out_of_range' && typeof body.maxScore === 'number') failure.params = { max: String(body.maxScore) }
+    if (error.code === 'attempts_exhausted' && typeof body.maxAttempts === 'number' && typeof body.attempts === 'number') {
+      failure.params = { allowed: String(body.maxAttempts), attempts: String(body.attempts) }
+    }
     return failure
   }
   if (error.status === 400) return { key: 'assignments.errors.validation', params: { message: error.message } }
