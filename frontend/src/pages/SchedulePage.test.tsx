@@ -334,6 +334,25 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     expect(screen.getByRole('combobox', { name: ar.schedule.columns.room })).toBeInTheDocument()
   })
 
+  // ---- J-F37 (KI-056): the open filters panel of a phone ----
+
+  it('keeps the minimum widths of the filters side by side, and drops them on a phone, where each filter takes the panel’s width (KI-056)', async () => {
+    const filterNames = [ar.schedule.filters.branch, ar.schedule.columns.room, ar.schedule.columns.teacher, ar.schedule.columns.class, ar.schedule.filters.weekday]
+    const inlineMinWidths = () => filterNames.map((name) => screen.getByRole('combobox', { name }).closest<HTMLElement>('.ant-select')!.style.minWidth)
+    mockApi()
+    const desktop = renderPage(SCHEDULE_MANAGER_PERMISSIONS)
+    await screen.findByRole('combobox', { name: ar.schedule.filters.branch })
+    expect(inlineMinWidths()).toEqual(['190px', '190px', '190px', '220px', '150px'])
+    desktop.unmount()
+
+    // The class filter's 220 px once beat the phone rule and pushed the panel past a 320 px screen.
+    stubPhoneViewport()
+    renderPage(SCHEDULE_MANAGER_PERMISSIONS)
+    fireEvent.click(await screen.findByText(ar.schedule.filters.toggle))
+    await screen.findByRole('combobox', { name: ar.schedule.filters.branch })
+    expect(inlineMinWidths()).toEqual(['', '', '', '', ''])
+  })
+
   // ---- J-F18: the owner's note 4 on PR #46 — the day view with a weekday filter ----
 
   it('keeps the day view on the filtered weekday: the arrows, «today» and the month calendar land on that weekday of their week', async () => {

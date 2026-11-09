@@ -169,6 +169,8 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const modeSwitch =
     canReadAcademy && canReadMine ? (
       <Segmented<TimetableMode>
+        className="tt-mode-switch"
+        classNames={{ item: 'tt-mode-switch__item' }}
         aria-label={t('schedule.calendar.modeSwitch')}
         value={mode}
         onChange={(next) => {
@@ -214,19 +216,23 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   )
 
   const toolbar = phone ? (
-    // Phones: the date between its arrows on one row, the actions on the next.
+    // Phones: the date between its arrows on one row, the actions on the next in two groups that wrap
+    // as a whole — the view switch and refresh take a line of their own when the row is too narrow (KI-056).
     <div className="tt-toolbar tt-toolbar--phone">
       <div className="tt-toolbar__row">
         {previousButton}
         {range}
         {nextButton}
       </div>
-      <div className="tt-toolbar__row">
-        {todayButton}
-        <Button icon={<CalendarOutlined />} aria-label={t('schedule.calendar.pickDate')} aria-expanded={monthOpen} onClick={() => setMonthOpen((value) => !value)} />
-        <span style={{ flex: 1 }} />
-        {viewSwitch}
-        {refresh}
+      <div className="tt-toolbar__row tt-toolbar__row--actions">
+        <div className="tt-toolbar__group">
+          {todayButton}
+          <Button icon={<CalendarOutlined />} aria-label={t('schedule.calendar.pickDate')} aria-expanded={monthOpen} onClick={() => setMonthOpen((value) => !value)} />
+        </div>
+        <div className="tt-toolbar__group tt-toolbar__group--end">
+          {viewSwitch}
+          {refresh}
+        </div>
       </div>
     </div>
   ) : (
@@ -260,6 +266,7 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
         canPickClass={canPickClass}
         branches={branches.items}
         weekStartsOn={settings.weekStartsOn}
+        phone={phone}
       />
     ) : null
 
