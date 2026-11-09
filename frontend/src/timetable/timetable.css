@@ -619,12 +619,27 @@
   font-size: 13px;
 }
 
-/* A short card that cannot hold the course over the time (the slot's box minus its padding under
-   6 + 17.6 + 2 + 20.9 + 6 px: about 45 minutes at 64 px per hour) keeps the course — the time is its
-   position and height, its accessible name and its details (J-F17). A wide card holds both on one row. */
+/* A short card that cannot hold the course over the time with the usual spacing (the slot's box minus
+   its padding under 6 + 17.6 + 2 + 20.9 + 6 px: 41–55 minutes at 64 px per hour, 51–68 at 52) tightens
+   instead of dropping the time (J-F22 — the owner's note 1 on #61: J-F17 hid the time here, so such a
+   card showed less than a shorter one and a long week lost the time of every one-hour slot). With
+   2 + 16.2 + 2 + 13.2 + 2 px the course and the time fit from a 44 px slot, the smallest compact card;
+   one row would not do in a week column, where a course name pushes the time out. The time does not
+   wrap after its dash here: there is no room for a second line. A wide card holds both on one row. */
 @container tt-slot (max-height: 52.49px) and (max-width: 279.98px) {
+  .tt-slot .tt-event.is-compact {
+    padding-block: 2px;
+  }
+
+  .tt-slot .tt-event.is-compact .tt-event__title {
+    line-height: 1.2;
+  }
+
   .tt-slot .tt-event.is-compact .tt-event__time {
-    display: none;
+    padding-top: 0;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
   }
 }
 
@@ -658,8 +673,7 @@
    or not at all, like the lines of a narrower card. */
 @container tt-slot (min-width: 280px) {
   .tt-slot .tt-event.is-compact:not(.is-narrow),
-  .tt-slot .tt-event.is-regular:not(.is-narrow),
-  .tt-slot .tt-event.is-full:not(.is-narrow) {
+  .tt-slot .tt-event.is-regular:not(.is-narrow) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto minmax(0, 1fr);
