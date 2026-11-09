@@ -1,6 +1,8 @@
 // Users list (MOD-03-T11): GET /api/users with search, filters and keyset
 // pagination; a detail/edit drawer and a creation wizard. Actions are shown by
 // permission (`hasPermission`) — the server remains the security boundary.
+// Since J-F12 custom roles carry their server labels in the roles column and
+// in the role filter (GET /api/roles once per visit — useRoleLabels()).
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Checkbox, Flex, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -14,10 +16,11 @@ import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { CreateUserWizard } from '../users/CreateUserWizard'
 import { UserDrawer } from '../users/UserDrawer'
+import { useRoleLabels } from '../users/useRoleLabels'
 import { PAGE_SIZES, useUsersList } from '../users/useUsersList'
 import type { UsersListFilters } from '../users/useUsersList'
 import { describeUsersFailure, failureMessage } from '../users/users.errors'
-import { SYSTEM_ROLE_KEYS, displayNameOf, formatDateTime, roleLabel } from '../users/users.format'
+import { displayNameOf, formatDateTime, roleFilterKeys, roleLabel } from '../users/users.format'
 
 export function UsersPage() {
   const { t } = useTranslation()
@@ -28,6 +31,7 @@ export function UsersPage() {
   const contact = hasPermission('users.read_contact')
   const canSeeDeleted = hasPermission('users.deactivate')
   const list = useUsersList()
+  const roles = useRoleLabels()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -76,7 +80,7 @@ export function UsersPage() {
         <Space size={[4, 4]} wrap>
           {row.roles.map((key) => (
             <Tag key={key} color="blue">
-              {roleLabel(key, t)}
+              {roleLabel(key, t, roles.labels)}
             </Tag>
           ))}
         </Space>
@@ -151,7 +155,7 @@ export function UsersPage() {
             aria-label={t('users.role')}
             value={list.filters.role}
             onChange={(value) => list.setFilters({ role: value })}
-            options={SYSTEM_ROLE_KEYS.map((key) => ({ value: key, label: roleLabel(key, t) }))}
+            options={roleFilterKeys(roles.keys).map((key) => ({ value: key, label: roleLabel(key, t, roles.labels) }))}
             style={{ minWidth: 160 }}
           />
           <Select<UsersListFilters['sort']>

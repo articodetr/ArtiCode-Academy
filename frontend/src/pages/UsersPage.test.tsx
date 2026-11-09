@@ -1,25 +1,37 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import type { RoleList } from '../api/roles'
 import type { UserDetail, UserList } from '../api/users'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { ADMIN_PERMISSIONS, READ_ONLY_PERMISSIONS, makeListItem, makeUserDetail, makeUserList, reduced } from '../test/users'
+import { ADMIN_PERMISSIONS, READ_ONLY_PERMISSIONS, ROLE_LABELS, makeListItem, makeRoleList, makeUserDetail, makeUserList, reduced } from '../test/users'
 import { UsersPage } from './UsersPage'
 
 const sara = makeListItem()
 const omar = makeListItem({ id: '0192f0a0-0000-7000-8000-000000000002', fullName: 'عمر خالد', email: 'omar@test.local', username: 'omar', phone: null, status: 'invited', roles: ['student'] })
+/** Holds the custom role `librarian` of the fixture roles (API-022) besides a system role. */
+const layla = makeListItem({ id: '0192f0a0-0000-7000-8000-000000000004', fullName: 'ليلى حسن', email: 'layla@test.local', username: 'layla', roles: ['librarian', 'teacher'] })
+
+/** The labels of the five system roles as the role filter lists them, in menu order. */
+const SYSTEM_ROLE_OPTIONS = [ar.roles.admin, ar.roles.staff, ar.roles.teacher, ar.roles.guardian, ar.roles.student]
 
 /**
- * Serves GET /api/users from `pages` keyed by cursor ('first' = no cursor) and
- * GET /api/users/:id from `detail`; records every list query for assertions.
+ * Serves GET /api/users from `pages` keyed by cursor ('first' = no cursor),
+ * GET /api/users/:id from `detail` and GET /api/roles from `roles`; records
+ * every list query and every roles request for assertions.
  */
-function mockUsersApi(pages: Record<string, UserList | Response>, detail: UserDetail = makeUserDetail()) {
+function mockUsersApi(pages: Record<string, UserList | Response>, detail: UserDetail = makeUserDetail(), roles: RoleList | Response = makeRoleList()) {
   const queries: URLSearchParams[] = []
+  const rolesRequests: string[] = []
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
+    if (parsed.pathname === '/api/roles' && method === 'GET') {
+      rolesRequests.push(url)
+      return roles instanceof Response ? roles : jsonResponse(200, roles)
+    }
     if (parsed.pathname === '/api/users' && method === 'GET') {
       queries.push(parsed.searchParams)
       const page = pages[parsed.searchParams.get('cursor') ?? 'first']
@@ -29,7 +41,7 @@ function mockUsersApi(pages: Record<string, UserList | Response>, detail: UserDe
     if (parsed.pathname.startsWith('/api/users/') && method === 'GET') return jsonResponse(200, detail)
     return jsonResponse(404, { statusCode: 404, code: 'user_not_found', message: 'User not found' })
   })
-  return { queries, fetchMock, lastQuery: () => queries[queries.length - 1] }
+  return { queries, rolesRequests, fetchMock, lastQuery: () => queries[queries.length - 1] }
 }
 
 function renderPage(permissions: string[] = ADMIN_PERMISSIONS) {
@@ -46,6 +58,13 @@ async function selectOption(comboboxName: string, optionLabel: string) {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: comboboxName }))
   const option = await screen.findByText(optionLabel, { selector: '.ant-select-item-option-content' })
   fireEvent.click(option)
+}
+
+/** Opens the role filter and returns the texts of its options, in order (the only open dropdown). */
+async function roleFilterOptions() {
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.users.role }))
+  await screen.findByText(ar.roles.admin, { selector: '.ant-select-item-option-content' })
+  return Array.from(document.querySelectorAll('.ant-select-item-option-content'), (option) => option.textContent)
 }
 
 describe('UsersPage', () => {
@@ -169,5 +188,42 @@ describe('UsersPage', () => {
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(ar.users.create.title)).toBeInTheDocument()
     expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.teacher}`) })).toBeInTheDocument()
+  })
+
+  it('shows a custom role by its server label in the list and offers it in the role filter, from one GET /api/roles (J-F12)', async () => {
+    const api = mockUsersApi({ first: makeUserList([layla, sara]) })
+    renderPage()
+
+    expect(await screen.findByText(ROLE_LABELS.librarian.ar)).toBeInTheDocument()
+    const [row] = bodyRows()
+    expect(within(row).getByText(ROLE_LABELS.librarian.ar)).toBeInTheDocument()
+    expect(within(row).getByText(ar.roles.teacher)).toBeInTheDocument()
+    expect(within(row).queryByText('librarian')).not.toBeInTheDocument()
+
+    expect(await roleFilterOptions()).toEqual([...SYSTEM_ROLE_OPTIONS, ROLE_LABELS.librarian.ar])
+    fireEvent.click(screen.getByText(ROLE_LABELS.librarian.ar, { selector: '.ant-select-item-option-content' }))
+    await waitFor(() => expect(api.lastQuery().get('role')).toBe('librarian'))
+    // Every row, re-render and list request reuses the labels: one roles request for the visit.
+    expect(api.rolesRequests).toEqual(['/api/roles'])
+  })
+
+  it('keeps the raw key and the five system roles in the filter when GET /api/roles fails, with no error on the page (J-F12)', async () => {
+    const api = mockUsersApi({ first: makeUserList([layla]) }, undefined, jsonResponse(500, { statusCode: 500, message: 'Internal server error' }))
+    renderPage()
+
+    await screen.findByText(layla.fullName)
+    await waitFor(() => expect(api.rolesRequests).toHaveLength(1))
+    expect(within(bodyRows()[0]).getByText('librarian')).toBeInTheDocument()
+    expect(await roleFilterOptions()).toEqual(SYSTEM_ROLE_OPTIONS)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('asks for no roles without users.read (the permission of GET /api/roles) and shows the raw key (J-F12)', async () => {
+    const api = mockUsersApi({ first: makeUserList([reduced(layla)]) })
+    renderPage([])
+
+    await screen.findByText(layla.fullName)
+    expect(within(bodyRows()[0]).getByText('librarian')).toBeInTheDocument()
+    expect(api.rolesRequests).toEqual([])
   })
 })
