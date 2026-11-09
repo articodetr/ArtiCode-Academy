@@ -199,4 +199,65 @@ describe('useTimetable', () => {
     expect(result.current.byDate.get(SUNDAY)).toHaveLength(1)
     expect(calls).toEqual([minePath(SUNDAY), minePath(SUNDAY), minePath(MONDAY)])
   })
+
+  // ---- J-F22: the owner's note 1 on PR #65 ------------------------------------
+
+  it('asks a date that keeps failing exactly once more when the inputs change — then keeps the failure, never in a loop', async () => {
+    const calls = record((url) =>
+      url.searchParams.get('on') === SUNDAY
+        ? jsonResponse(503, { statusCode: 503, message: 'Service Unavailable' })
+        : jsonResponse(200, makeMySchedule([makeMyItem({ weekday: 1 })], url.searchParams.get('on')!)),
+    )
+    const { result, rerender } = renderHook(({ dates }) => useTimetable('mine', {}, dates, true), { initialProps: { dates: [SUNDAY] } })
+    await waitFor(() => expect(result.current.failed).toBe(true))
+
+    // New inputs that still show Sunday: asked again once — and it fails again.
+    rerender({ dates: [SUNDAY, MONDAY] })
+    expect(result.current.failed).toBe(false)
+    await waitFor(() => expect(result.current.failed).toBe(true))
+    await waitFor(() => expect(result.current.pending.size).toBe(0))
+    expect(result.current.byDate.get(MONDAY)).toHaveLength(1)
+
+    // Renders and time pass under the same inputs: nothing is asked again.
+    rerender({ dates: [SUNDAY, MONDAY] })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(result.current.failed).toBe(true)
+    expect((result.current.error as ApiError).status).toBe(503)
+    expect(calls).toEqual([minePath(SUNDAY), minePath(SUNDAY), minePath(MONDAY)])
+  })
+
+  it('aborts a request still running on reload, asks again and ignores the late answer of the old one', async () => {
+    const calls: string[] = []
+    const answers: Array<ReturnType<typeof deferred>> = []
+    const signals: Array<AbortSignal | null | undefined> = []
+    mockFetch((raw, init) => {
+      calls.push(new URL(raw, 'http://localhost').searchParams.get('on')!)
+      signals.push(init?.signal)
+      const answer = deferred()
+      answers.push(answer)
+      return answer.promise
+    })
+    const dates = [SUNDAY]
+    const { result } = renderHook(() => useTimetable('mine', {}, dates, true))
+    await waitFor(() => expect(calls).toEqual([SUNDAY]))
+
+    // The reload belongs to a new round: the running request of the old round is aborted and Sunday asked again.
+    act(() => result.current.reload())
+    await waitFor(() => expect(calls).toEqual([SUNDAY, SUNDAY]))
+    expect(signals[0]?.aborted).toBe(true)
+    expect(signals[1]?.aborted).toBe(false)
+
+    // The new answer is shown; the old one, landing late, changes nothing.
+    answers[1]!.resolve(jsonResponse(200, makeMySchedule([makeMyItem()], SUNDAY)))
+    await waitFor(() => expect(result.current.byDate.get(SUNDAY)).toHaveLength(1))
+    answers[0]!.resolve(jsonResponse(200, makeMySchedule([makeMyItem(), makeMyItem({ id: 'stale', startTime: '12:00', endTime: '13:00' })], SUNDAY)))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(result.current.byDate.get(SUNDAY)).toHaveLength(1)
+    expect(result.current.pending.size).toBe(0)
+    expect(calls).toEqual([SUNDAY, SUNDAY])
+  })
 })

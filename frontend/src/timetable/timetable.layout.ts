@@ -42,18 +42,19 @@ export function verticalBox(startMinutes: number, endMinutes: number, range: Hou
 
 /**
  * How a card of the grid is laid out by its height: `tiny` = one row (the course and the time),
- * `compact` = a one-line course over the time, `regular` and `full` = a course on up to two lines.
- * Between the course and the time a card shows as many WHOLE secondary lines (class code, why it is
- * in «my schedule», room, teacher) as its real height and width allow — timetable.css, J-F17.
+ * `compact` = a one-line course over the time (tightened in a short card so the time always fits —
+ * J-F22), `regular` = a course on up to two lines. Between the course and the time a card shows as many
+ * WHOLE secondary lines (class code, why it is in «my schedule», room, teacher) as its real height and
+ * width allow — timetable.css, J-F17. (A fourth density, `full` from 124 px, was laid out exactly like
+ * `regular` since J-F17 and was folded into it in J-F22 — the owner's note 2 on #61.)
  */
-export type CardDensity = 'tiny' | 'compact' | 'regular' | 'full'
+export type CardDensity = 'tiny' | 'compact' | 'regular'
 
 /** The density a card of `height` px can afford. */
 export function densityOf(height: number): CardDensity {
   if (height < 44) return 'tiny'
   if (height < 84) return 'compact'
-  if (height < 124) return 'regular'
-  return 'full'
+  return 'regular'
 }
 
 /**

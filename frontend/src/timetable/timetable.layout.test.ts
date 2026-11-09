@@ -29,7 +29,22 @@ describe('hour range and boxes', () => {
     expect(densityOf(26)).toBe('tiny')
     expect(densityOf(48)).toBe('compact')
     expect(densityOf(96)).toBe('regular')
-    expect(densityOf(128)).toBe('full')
+    expect(densityOf(128)).toBe('regular')
+  })
+
+  it('has three densities: one row under 44 px, a one-line course over the time under 84 px, else up to two lines (J-F22)', () => {
+    expect(densityOf(43.99)).toBe('tiny')
+    expect(densityOf(44)).toBe('compact')
+    // A one-hour slot of a long week (52 px per hour) and of an ordinary one (64): both compact — the
+    // short ones keep their time in a tightened card (timetable.css; browser-checked, jsdom has no
+    // container queries).
+    expect(densityOf(52)).toBe('compact')
+    expect(densityOf(64)).toBe('compact')
+    expect(densityOf(83.99)).toBe('compact')
+    expect(densityOf(84)).toBe('regular')
+    // The former `full` (from 124 px) was laid out exactly like `regular`: folded into it.
+    expect(densityOf(124)).toBe('regular')
+    expect(densityOf(24 * 64)).toBe('regular')
   })
 })
 
