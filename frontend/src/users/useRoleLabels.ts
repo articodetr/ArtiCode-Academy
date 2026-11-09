@@ -3,7 +3,11 @@
 // the role filter of that page — never one request per row. API-022 requires
 // `users.read`, so nothing is requested without it; then, and after any
 // failure, the labels stay empty and roleLabel() shows the raw key. This is a
-// decoration: it never shows an error of its own.
+// decoration: it never shows an error of its own. Since J-F23 the roles read
+// are handed out as `items` too, so the user drawer's roles tab reuses them
+// instead of asking API-022 a second time in the same visit (PR #62 review,
+// note 1); `items` stays null until they are read, and without the permission
+// or after a failure, and the tab then reads them itself.
 import { useEffect, useMemo, useState } from 'react'
 import { listRoles } from '../api/roles'
 import type { Role } from '../api/roles'
@@ -15,13 +19,19 @@ import type { RoleLabels } from './users.format'
 /** The permission API-022 requires (READ_ROLES_PERMISSION in backend/src/roles/roles.policy.ts). */
 export const ROLE_LABELS_PERMISSION = 'users.read'
 
+/** The role labels of the page and the roles of API-022 they were built from. */
+export interface PageRoles extends RoleLabels {
+  /** The roles as API-022 returned them; null while loading, without `users.read` and after a failure. */
+  items: readonly Role[] | null
+}
+
 const NO_ROLES: readonly Role[] = []
 
-export function useRoleLabels(): RoleLabels {
+export function useRoleLabels(): PageRoles {
   const { hasPermission } = useAuth()
   const { language } = useLocalized()
   const allowed = hasPermission(ROLE_LABELS_PERMISSION)
-  const [roles, setRoles] = useState<readonly Role[]>(NO_ROLES)
+  const [roles, setRoles] = useState<readonly Role[] | null>(null)
 
   useEffect(() => {
     if (!allowed) return
@@ -36,6 +46,6 @@ export function useRoleLabels(): RoleLabels {
   }, [allowed])
 
   // A permission lost after loading hides what was read under it.
-  const shown = allowed ? roles : NO_ROLES
-  return useMemo(() => roleLabelsOf(shown, language), [shown, language])
+  const shown = allowed ? roles : null
+  return useMemo(() => ({ ...roleLabelsOf(shown ?? NO_ROLES, language), items: shown }), [shown, language])
 }

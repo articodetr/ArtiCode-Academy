@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeUserDetail } from '../test/users'
-import { editFormValuesOf, planUserPatch } from './users.patch'
+import { editFormValuesOf, planUserPatch, userFormHasChanges } from './users.patch'
 
 const CONTACT = { contact: true }
 
@@ -87,5 +87,26 @@ describe('planUserPatch', () => {
     const guardian = makeUserDetail({ studentProfile: null, guardians: [], roles: [{ key: 'guardian', label: { ar: 'ولي أمر' } }] })
     const values = { ...editFormValuesOf(guardian), studentProfile: { studentNumber: 'S-1' } }
     expect(planUserPatch(guardian, values, CONTACT)).toBeNull()
+  })
+})
+
+describe('userFormHasChanges (KI-054 — J-F23)', () => {
+  const user = makeUserDetail()
+
+  it('holds nothing for the stored values, a change typed back, or one the save would not send either', () => {
+    expect(userFormHasChanges(user, editFormValuesOf(user), CONTACT)).toBe(false)
+    expect(userFormHasChanges(user, { ...editFormValuesOf(user), displayName: '  ' }, CONTACT)).toBe(false)
+    expect(userFormHasChanges(user, { ...editFormValuesOf(user), email: ' OMAR@test.local ' }, CONTACT)).toBe(false)
+  })
+
+  it('holds a field that differs from the stored user, in the identity or the profile', () => {
+    expect(userFormHasChanges(user, { ...editFormValuesOf(user), displayName: 'عمر' }, CONTACT)).toBe(true)
+    expect(userFormHasChanges(user, { ...editFormValuesOf(user), studentProfile: { ...editFormValuesOf(user).studentProfile, studentNumber: '' } }, CONTACT)).toBe(true)
+  })
+
+  it('holds an emptied full name, which the PATCH never sends', () => {
+    const values = { ...editFormValuesOf(user), fullName: '   ' }
+    expect(planUserPatch(user, values, CONTACT)).toBeNull()
+    expect(userFormHasChanges(user, values, CONTACT)).toBe(true)
   })
 })

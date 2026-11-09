@@ -1,6 +1,7 @@
 // The course fields shared by the creation modal and the edit form of the
 // course drawer (MOD-04-T05). Rendered inside the caller's <Form>; local rules
-// mirror the server (CreateCourseDto/UpdateCourseDto) — the server decides.
+// mirror the server (CreateCourseDto/UpdateCourseDto) — the server decides —
+// and every rule words its own message (J-F23: no antd default text).
 import { Col, Form, Input, InputNumber, Row, Select, Tag } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +18,8 @@ interface CourseFormFieldsProps {
 export function CourseFormFields({ form, levels }: CourseFormFieldsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
+  /** The length rule of every text field, worded by the courses dictionary (J-F23). */
+  const maxLength = { max: COURSE_TEXT_MAX_LENGTH, message: t('courses.validation.maxLength', { max: COURSE_TEXT_MAX_LENGTH }) }
 
   /** An English text needs the Arabic one (the server requires `ar` in every localized object). */
   const arabicFirst = (arField: string) => ({
@@ -50,32 +53,32 @@ export function CourseFormFields({ form, levels }: CourseFormFieldsProps) {
           <Form.Item
             name="nameAr"
             label={t('courses.fields.nameAr')}
-            rules={[{ required: true, whitespace: true, message: t('courses.validation.nameArRequired') }, { max: COURSE_TEXT_MAX_LENGTH }]}
+            rules={[{ required: true, whitespace: true, message: t('courses.validation.nameArRequired') }, maxLength]}
           >
             <Input />
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="nameEn" label={t('courses.fields.nameEn')} rules={[{ max: COURSE_TEXT_MAX_LENGTH }]}>
+          <Form.Item name="nameEn" label={t('courses.fields.nameEn')} rules={[maxLength]}>
             <Input dir="ltr" />
           </Form.Item>
         </Col>
       </Row>
       <Row gutter={12}>
         <Col xs={24} md={12}>
-          <Form.Item name="summaryAr" label={t('courses.fields.summaryAr')} rules={[{ max: COURSE_TEXT_MAX_LENGTH }]}>
+          <Form.Item name="summaryAr" label={t('courses.fields.summaryAr')} rules={[maxLength]}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="summaryEn" label={t('courses.fields.summaryEn')} dependencies={['summaryAr']} rules={[{ max: COURSE_TEXT_MAX_LENGTH }, arabicFirst('summaryAr')]}>
+          <Form.Item name="summaryEn" label={t('courses.fields.summaryEn')} dependencies={['summaryAr']} rules={[maxLength, arabicFirst('summaryAr')]}>
             <Input.TextArea rows={2} dir="ltr" />
           </Form.Item>
         </Col>
       </Row>
       <Row gutter={12}>
         <Col xs={24} md={12}>
-          <Form.Item name="descriptionAr" label={t('courses.fields.descriptionAr')} rules={[{ max: COURSE_TEXT_MAX_LENGTH }]}>
+          <Form.Item name="descriptionAr" label={t('courses.fields.descriptionAr')} rules={[maxLength]}>
             <Input.TextArea rows={3} />
           </Form.Item>
         </Col>
@@ -84,7 +87,7 @@ export function CourseFormFields({ form, levels }: CourseFormFieldsProps) {
             name="descriptionEn"
             label={t('courses.fields.descriptionEn')}
             dependencies={['descriptionAr']}
-            rules={[{ max: COURSE_TEXT_MAX_LENGTH }, arabicFirst('descriptionAr')]}
+            rules={[maxLength, arabicFirst('descriptionAr')]}
           >
             <Input.TextArea rows={3} dir="ltr" />
           </Form.Item>

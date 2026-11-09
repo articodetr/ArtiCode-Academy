@@ -29,6 +29,13 @@ export const en: Translation = {
     room: 'Room',
     total: 'Total',
     notImplemented: 'This action is not implemented yet (prototype).',
+    // KI-054 (J-F23): the «discard?» question of a drawer that holds unsaved work — the wording of classes.drawer.discard.*.
+    unsaved: {
+      title: 'Discard unsaved changes?',
+      content: 'An editor in this drawer is still open and its changes are not saved. Closing the drawer discards them.',
+      ok: 'Discard and close',
+      cancel: 'Keep editing',
+    },
   },
   roles: {
     admin: 'Academy admin',
@@ -522,6 +529,7 @@ export const en: Translation = {
       nameArRequired: 'The Arabic name is required',
       arabicFirst: 'Enter the Arabic text first',
       ageRange: 'The maximum age is below the minimum age',
+      maxLength: 'At most {{max}} characters',
     },
     create: {
       title: 'New course',

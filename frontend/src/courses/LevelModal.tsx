@@ -3,6 +3,7 @@
 // (no request when nothing changed). A taken code lands on the code field;
 // any other refusal shows inside the modal. The parent mounts it per session
 // (a form instance kept across sessions would bring back an earlier level's values).
+// Every length rule words its own message (courses.validation.maxLength — J-F23).
 import { Alert, App, Col, Form, Input, Modal, Row, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +33,8 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The length rule of every text field, worded by the courses dictionary (J-F23). */
+  const maxLength = { max: COURSE_TEXT_MAX_LENGTH, message: t('courses.validation.maxLength', { max: COURSE_TEXT_MAX_LENGTH }) }
 
   const arabicFirst = (arField: string) => ({
     validator: (_: unknown, value: string | undefined) =>
@@ -111,20 +114,20 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
             <Form.Item
               name="nameAr"
               label={t('courses.levels.fields.nameAr')}
-              rules={[{ required: true, whitespace: true, message: t('courses.levels.validation.nameArRequired') }, { max: COURSE_TEXT_MAX_LENGTH }]}
+              rules={[{ required: true, whitespace: true, message: t('courses.levels.validation.nameArRequired') }, maxLength]}
             >
               <Input />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="nameEn" label={t('courses.levels.fields.nameEn')} rules={[{ max: COURSE_TEXT_MAX_LENGTH }]}>
+            <Form.Item name="nameEn" label={t('courses.levels.fields.nameEn')} rules={[maxLength]}>
               <Input dir="ltr" />
             </Form.Item>
           </Col>
         </Row>
         <Row gutter={12}>
           <Col xs={24} md={12}>
-            <Form.Item name="descriptionAr" label={t('courses.levels.fields.descriptionAr')} rules={[{ max: COURSE_TEXT_MAX_LENGTH }]}>
+            <Form.Item name="descriptionAr" label={t('courses.levels.fields.descriptionAr')} rules={[maxLength]}>
               <Input.TextArea rows={2} />
             </Form.Item>
           </Col>
@@ -133,7 +136,7 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
               name="descriptionEn"
               label={t('courses.levels.fields.descriptionEn')}
               dependencies={['descriptionAr']}
-              rules={[{ max: COURSE_TEXT_MAX_LENGTH }, arabicFirst('descriptionAr')]}
+              rules={[maxLength, arabicFirst('descriptionAr')]}
             >
               <Input.TextArea rows={2} dir="ltr" />
             </Form.Item>

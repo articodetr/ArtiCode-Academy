@@ -5,7 +5,9 @@
 // "make primary" (PATCH, API-032) and the unlink confirmation (DELETE, API-033).
 // Every write addresses the student's path; the same person is refused locally
 // before any request (AC3). The list is re-read from the server after a write —
-// the primary-first order is the server's.
+// the primary-first order is the server's. Since J-F23 a party picked in the
+// link form and not linked yet is reported through `onUnsavedChange`, so the
+// user drawer keeps it on Escape (KI-054); the open form alone holds nothing.
 import { UserAddOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Checkbox, Flex, Form, List, Popconfirm, Select, Space, Spin, Tag, Typography } from 'antd'
 import { useEffect, useRef, useState } from 'react'
@@ -24,9 +26,11 @@ import type { LinkFormValues, LinkSide } from './users.guardians'
 interface GuardianLinksTabProps {
   user: UserDetail
   side: LinkSide
+  /** Whether the link form holds a party picked but not linked yet (KI-054): the user drawer then keeps Escape and a mask click from dropping it. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function GuardianLinksTab({ user, side }: GuardianLinksTabProps) {
+export function GuardianLinksTab({ user, side, onUnsavedChange }: GuardianLinksTabProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { language } = useLocalized()
@@ -120,6 +124,7 @@ export function GuardianLinksTab({ user, side }: GuardianLinksTabProps) {
           side={side}
           linkedIds={items.map((item) => item.user.id)}
           onCancel={() => setAdding(false)}
+          onUnsavedChange={onUnsavedChange}
           onLinked={() => {
             setAdding(false)
             message.success(t('users.links.linked'))
@@ -213,13 +218,15 @@ interface LinkFormProps {
   linkedIds: string[]
   onCancel: () => void
   onLinked: () => void
+  /** Whether a party is picked and not linked yet: reported while mounted, false once left. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
 const SEARCH_MIN_LENGTH = 2
 const SEARCH_DELAY_MS = 250
 const SEARCH_LIMIT = 10
 
-function LinkForm({ user, side, linkedIds, onCancel, onLinked }: LinkFormProps) {
+function LinkForm({ user, side, linkedIds, onCancel, onLinked, onUnsavedChange }: LinkFormProps) {
   const { t } = useTranslation()
   const [form] = Form.useForm<LinkFormValues>()
   const [candidates, setCandidates] = useState<UserListItem[]>([])
@@ -229,6 +236,14 @@ function LinkForm({ user, side, linkedIds, onCancel, onLinked }: LinkFormProps) 
   const [error, setError] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestId = useRef(0)
+  // The search is the work of this form: a picked party is unsaved until it is linked (KI-054).
+  // Read from onValuesChange, not Form.useWatch, whose watchers report a task later.
+  const [holdsInput, setHoldsInput] = useState(false)
+
+  useEffect(() => {
+    onUnsavedChange?.(holdsInput)
+    return () => onUnsavedChange?.(false)
+  }, [holdsInput, onUnsavedChange])
 
   useEffect(
     () => () => {
@@ -295,7 +310,14 @@ function LinkForm({ user, side, linkedIds, onCancel, onLinked }: LinkFormProps) 
   return (
     <Card size="small" title={t(`users.links.add.${side}`)} style={{ marginBottom: 16 }}>
       {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
-      <Form<LinkFormValues> form={form} layout="vertical" requiredMark={false} onFinish={onFinish} disabled={submitting}>
+      <Form<LinkFormValues>
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        onValuesChange={(_changed, values) => setHoldsInput(typeof values.otherId === 'string' && values.otherId !== '')}
+        onFinish={onFinish}
+        disabled={submitting}
+      >
         <Form.Item
           name="otherId"
           label={t(`users.links.party.${side}`)}

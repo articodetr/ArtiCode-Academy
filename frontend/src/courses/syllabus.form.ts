@@ -4,7 +4,7 @@
 // index). An existing item keeps a Turkish text the form does not show. The
 // unchanged list is not sent (AC1) — the server would write nothing anyway.
 import type { SyllabusItem, SyllabusItemInput } from '../api/syllabus'
-import { localizedOf, sameLabel } from './courses.form'
+import { englishWithoutArabic, localizedOf, sameLabel } from './courses.form'
 
 export interface SyllabusDraft {
   /** Present for an item the server already holds. */
@@ -66,6 +66,17 @@ export function planSyllabusReplacement(saved: readonly SyllabusItem[], drafts: 
       )
     })
   return unchanged ? null : items
+}
+
+/**
+ * Whether the syllabus editor holds unsaved work (KI-054 — J-F23): the list
+ * differs from the stored syllabus by the comparison the save uses
+ * (planSyllabusReplacement), or an item holds an English description without
+ * its Arabic text (dropped by the save, refused by the form). Changing an item
+ * back, or adding an item and removing it again, counts as no change.
+ */
+export function syllabusHasChanges(saved: readonly SyllabusItem[], drafts: readonly SyllabusDraft[]): boolean {
+  return drafts.some((draft) => englishWithoutArabic(draft.descriptionAr, draft.descriptionEn)) || planSyllabusReplacement(saved, drafts) !== null
 }
 
 /** Sum of the estimates (an item without one counts 0). */

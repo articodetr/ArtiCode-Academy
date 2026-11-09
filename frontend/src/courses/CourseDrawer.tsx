@@ -4,10 +4,14 @@
 // an actions menu built from the mirrored state machine (courses.status.ts →
 // API-046, and API-047 for a draft), each action confirmed in a modal.
 // Everyone else sees the published course read-only.
+// Since J-F23 (KI-054, the rule of the class drawer's KI-052 after J-F21):
+// while the edit form or the syllabus editor holds unsaved work, Escape and a
+// mask click no longer close the drawer, and the close button asks first; an
+// editor opened without a change, or changed back, holds nothing.
 import { DeleteOutlined, DownOutlined, EditOutlined, InboxOutlined, RocketOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { changeCourseStatus, deleteCourse, getCourse, updateCourse } from '../api/courses'
@@ -19,7 +23,7 @@ import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CourseFormFields } from './CourseFormFields'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
-import { courseFormValuesOf, planCoursePatch } from './courses.form'
+import { courseFormHasChanges, courseFormValuesOf, planCoursePatch } from './courses.form'
 import type { CourseFormValues } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction } from './courses.status'
 import type { CourseMenuAction } from './courses.status'
@@ -37,6 +41,9 @@ const DASH = '—'
 
 type DrawerTab = 'details' | 'syllabus'
 
+/** The editors of the drawer that report unsaved work (KI-054): the edit form and the syllabus editor. */
+const NOTHING_UNSAVED: Readonly<Record<DrawerTab, boolean>> = { details: false, syllabus: false }
+
 interface CourseDrawerProps {
   courseId: string | null
   levels: Level[]
@@ -50,7 +57,7 @@ interface CourseDrawerProps {
 export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }: CourseDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('courses.manage')
   const [course, setCourse] = useState<Course | null>(null)
@@ -61,6 +68,15 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
   const [pending, setPending] = useState<CourseMenuAction | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<DrawerTab, boolean>>>(NOTHING_UNSAVED)
+
+  // One stable reporter per editor (the editors report from an effect that depends on it).
+  const reportUnsaved = useMemo(() => {
+    const reporter = (part: DrawerTab) => (unsaved: boolean) => setUnsavedParts((current) => (current[part] === unsaved ? current : { ...current, [part]: unsaved }))
+    return { details: reporter('details'), syllabus: reporter('syllabus') }
+  }, [])
+  // KI-054: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
+  const unsaved = (editing && unsavedParts.details) || unsavedParts.syllabus
 
   useEffect(() => {
     if (!courseId) return
@@ -87,7 +103,24 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
     setEditing(false)
     setPending(null)
     setActionError(null)
+    setUnsavedParts(NOTHING_UNSAVED)
     onClose()
+  }
+
+  /** The close button (Escape and the mask too when nothing is unsaved): asks first while an editor holds unsaved work. */
+  const requestClose = () => {
+    if (!unsaved) {
+      close()
+      return
+    }
+    modal.confirm({
+      title: t('common.unsaved.title'),
+      content: t('common.unsaved.content'),
+      okText: t('common.unsaved.ok'),
+      okButtonProps: { danger: true },
+      cancelText: t('common.unsaved.cancel'),
+      onOk: close,
+    })
   }
 
   const applyUpdate = (updated: Course) => {
@@ -144,6 +177,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
           setEditing(false)
         }}
         onCancel={() => setEditing(false)}
+        onUnsavedChange={reportUnsaved.details}
       />
     ) : (
       <Descriptions column={1} bordered size="small">
@@ -176,7 +210,11 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
   return (
     <Drawer
       open={courseId !== null}
-      onClose={close}
+      onClose={requestClose}
+      // KI-054: unsaved work turns off the Escape key and the mask click; an open
+      // Select or Dropdown still closes on Escape (it sits on top of the drawer).
+      keyboard={!unsaved}
+      mask={{ closable: !unsaved }}
       title={name}
       size="large"
       destroyOnHidden
@@ -231,7 +269,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
           onChange={(key) => setTab(key as DrawerTab)}
           items={[
             { key: 'details', label: t('courses.drawer.tabs.details'), children: details },
-            { key: 'syllabus', label: t('courses.drawer.tabs.syllabus'), children: <SyllabusTab courseId={course.id} canManage={canManage} />, disabled: editing },
+            { key: 'syllabus', label: t('courses.drawer.tabs.syllabus'), children: <SyllabusTab courseId={course.id} canManage={canManage} onUnsavedChange={reportUnsaved.syllabus} />, disabled: editing },
           ]}
         />
       ) : null}
@@ -264,6 +302,8 @@ interface CourseEditFormProps {
   levels: Level[]
   onSaved: (course: Course) => void
   onCancel: () => void
+  /** Whether a field holds a change (KI-054): reported on every edit, false once the form is left. */
+  onUnsavedChange: (unsaved: boolean) => void
 }
 
 /**
@@ -272,12 +312,14 @@ interface CourseEditFormProps {
  * sessions would merge the values typed in a cancelled session over the new
  * initial values (rc-field-form keeps unmounted values — CH-0049).
  */
-function CourseEditForm({ course, levels, onSaved, onCancel }: CourseEditFormProps) {
+function CourseEditForm({ course, levels, onSaved, onCancel, onUnsavedChange }: CourseEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => () => onUnsavedChange(false), [onUnsavedChange])
 
   const save = async (values: CourseFormValues) => {
     const body = planCoursePatch(course, values)
@@ -306,6 +348,8 @@ function CourseEditForm({ course, levels, onSaved, onCancel }: CourseEditFormPro
       layout="vertical"
       requiredMark={false}
       initialValues={courseFormValuesOf(course)}
+      // A change changed back holds nothing (KI-054 — the J-F21 rule): compared with the stored course.
+      onValuesChange={(_changed, values) => onUnsavedChange(courseFormHasChanges(course, values as CourseFormValues))}
       onFinish={(values) => void save(values as CourseFormValues)}
       disabled={saving}
     >

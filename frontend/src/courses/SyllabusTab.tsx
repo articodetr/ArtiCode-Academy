@@ -3,6 +3,9 @@
 // editor (add / edit / delete / move up-down) that saves the complete list in
 // ONE PUT (API-049) — only when it differs from the stored syllabus (AC1).
 // The list shown always comes from the server's answer, never from the form.
+// Since J-F23 an editor whose list differs from the stored one reports it
+// through `onUnsavedChange`, so the course drawer keeps it on Escape (KI-054),
+// and every length rule words its own message (courses.validation.maxLength).
 import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Col, Empty, Flex, Form, Input, InputNumber, Row, Skeleton, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -14,15 +17,17 @@ import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { COURSE_TEXT_MAX_LENGTH } from './courses.form'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
-import { emptySyllabusDraft, planSyllabusReplacement, syllabusDraftsOf, totalMinutes } from './syllabus.form'
+import { emptySyllabusDraft, planSyllabusReplacement, syllabusDraftsOf, syllabusHasChanges, totalMinutes } from './syllabus.form'
 import type { SyllabusFormValues } from './syllabus.form'
 
 interface SyllabusTabProps {
   courseId: string
   canManage: boolean
+  /** Whether the editor's list differs from the stored syllabus (KI-054): the course drawer then keeps Escape and a mask click from dropping it. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function SyllabusTab({ courseId, canManage }: SyllabusTabProps) {
+export function SyllabusTab({ courseId, canManage, onUnsavedChange }: SyllabusTabProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -98,7 +103,13 @@ export function SyllabusTab({ courseId, canManage }: SyllabusTabProps) {
     return (
       <>
         {noticeAlert}
-        <SyllabusEditor items={syllabus.items} saving={saving} onSubmit={(values) => void save(values)} onCancel={() => setEditing(false)} />
+        <SyllabusEditor
+          items={syllabus.items}
+          saving={saving}
+          onSubmit={(values) => void save(values)}
+          onCancel={() => setEditing(false)}
+          onUnsavedChange={onUnsavedChange}
+        />
       </>
     )
   }
@@ -156,6 +167,8 @@ interface SyllabusEditorProps {
   saving: boolean
   onSubmit: (values: SyllabusFormValues) => void
   onCancel: () => void
+  /** Whether the list differs from the stored syllabus: reported on every edit, false once the editor is left. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
 /**
@@ -163,15 +176,22 @@ interface SyllabusEditorProps {
  * from the stored syllabus: a form instance kept across sessions would merge
  * the values typed in a cancelled session over the new initial values.
  */
-function SyllabusEditor({ items, saving, onSubmit, onCancel }: SyllabusEditorProps) {
+function SyllabusEditor({ items, saving, onSubmit, onCancel, onUnsavedChange }: SyllabusEditorProps) {
   const { t } = useTranslation()
   const [form] = Form.useForm<SyllabusFormValues>()
+  /** The length rule of every text field, worded by the courses dictionary (J-F23). */
+  const maxLength = { max: COURSE_TEXT_MAX_LENGTH, message: t('courses.validation.maxLength', { max: COURSE_TEXT_MAX_LENGTH }) }
+
+  useEffect(() => () => onUnsavedChange?.(false), [onUnsavedChange])
+
   return (
     <Form<SyllabusFormValues>
       form={form}
       layout="vertical"
       requiredMark={false}
       initialValues={{ items: syllabusDraftsOf(items) }}
+      // The comparison the save uses: an item changed back, or added and removed again, holds nothing (KI-054).
+      onValuesChange={() => onUnsavedChange?.(syllabusHasChanges(items, (form.getFieldValue('items') as SyllabusFormValues['items']) ?? []))}
       onFinish={onSubmit}
       disabled={saving}
     >
@@ -229,7 +249,7 @@ function SyllabusEditor({ items, saving, onSubmit, onCancel }: SyllabusEditorPro
                         label={t('courses.syllabus.fields.titleAr')}
                         rules={[
                           { required: true, whitespace: true, message: t('courses.syllabus.validation.titleArRequired') },
-                          { max: COURSE_TEXT_MAX_LENGTH },
+                          maxLength,
                         ]}
                       >
                         <Input />
@@ -240,13 +260,13 @@ function SyllabusEditor({ items, saving, onSubmit, onCancel }: SyllabusEditorPro
                         name={[field.name, 'titleEn']}
                         label={t('courses.syllabus.fields.titleEn')}
                         dependencies={[['items', field.name, 'titleAr']]}
-                        rules={[{ max: COURSE_TEXT_MAX_LENGTH }, arabicFirst('titleAr')]}
+                        rules={[maxLength, arabicFirst('titleAr')]}
                       >
                         <Input dir="ltr" />
                       </Form.Item>
                     </Col>
                     <Col xs={24} md={12}>
-                      <Form.Item name={[field.name, 'descriptionAr']} label={t('courses.syllabus.fields.descriptionAr')} rules={[{ max: COURSE_TEXT_MAX_LENGTH }]}>
+                      <Form.Item name={[field.name, 'descriptionAr']} label={t('courses.syllabus.fields.descriptionAr')} rules={[maxLength]}>
                         <Input.TextArea rows={2} />
                       </Form.Item>
                     </Col>
@@ -255,7 +275,7 @@ function SyllabusEditor({ items, saving, onSubmit, onCancel }: SyllabusEditorPro
                         name={[field.name, 'descriptionEn']}
                         label={t('courses.syllabus.fields.descriptionEn')}
                         dependencies={[['items', field.name, 'descriptionAr']]}
-                        rules={[{ max: COURSE_TEXT_MAX_LENGTH }, arabicFirst('descriptionAr')]}
+                        rules={[maxLength, arabicFirst('descriptionAr')]}
                       >
                         <Input.TextArea rows={2} dir="ltr" />
                       </Form.Item>
