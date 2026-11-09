@@ -2,10 +2,11 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { MyClassList } from '../api/enrollments'
 import type { MyLessonList } from '../api/myLessons'
+import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { RequireAccess } from '../auth/RequireAuth'
 import { ar } from '../i18n/ar'
 import { dayStartInstant, formatLessonDay, formatLessonTimes } from '../lessons/lessons.format'
-import { todayStartInstant } from '../myLessons/myLessons.view'
+import { todayStartInstant } from '../lessons/myLessons.view'
 import { ENROLLMENT_IDS, makeMyClassItem, makeMyClassList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ID_2, LESSON_LEARNER_PERMISSIONS, LESSON_TEACHER_PERMISSIONS } from '../test/lessons'
@@ -101,7 +102,8 @@ describe('MyLessonsPage', () => {
     expect(within(first).getByText('خالد المعلم')).toBeInTheDocument()
     expect(within(first).getByText('LAB-1 — مختبر 1')).toBeInTheDocument()
     expect(within(first).getByText(ar.labels.completed)).toBeInTheDocument()
-    expect(within(first).getByText(`${ar.lessons.attendance.late} · 10 د`)).toBeInTheDocument()
+    // The attendance tag takes the colour of the lesson drawer and the attendance sheet (one map — J-F25).
+    expect(within(first).getByText(`${ar.lessons.attendance.late} · 10 د`)).toHaveClass(`ant-tag-${ATTENDANCE_STATUS_COLORS.late}`)
     const link = within(first).getByText(ar.lessons.drawer.openMeeting).closest('a')!
     expect(link).toHaveAttribute('href', 'https://meet.example.com/a')
     expect(link).toHaveAttribute('target', '_blank')
@@ -210,6 +212,24 @@ describe('MyLessonsPage', () => {
     expect(last.get('from')).toBe(dayStartInstant('2026-11-01')!)
     expect(last.get('cursor')).toBeNull()
     expect(await screen.findByText(ar.myLessons.empty.filtered)).toBeInTheDocument()
+  })
+
+  it('treats a malformed day as no day: the list stays unfiltered and nothing is sent (J-F25)', async () => {
+    const api = mockMyLessonsApi(makeMyLessonList([]))
+    renderPage(['student'])
+    expect(await screen.findByText(ar.myLessons.empty.upcoming)).toBeInTheDocument()
+    fireEvent.click(screen.getByText(ar.myLessons.views.range))
+    await waitFor(() => expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'asc', limit: '20' }))
+    expect(await screen.findByText(ar.myLessons.empty.all)).toBeInTheDocument()
+
+    // A browser without a native date field hands the typed text over as it is.
+    const from = screen.getByLabelText(ar.lessons.filters.from) as HTMLInputElement
+    from.type = 'text'
+    fireEvent.change(from, { target: { value: '2026-02-30' } })
+    expect(from).toHaveValue('')
+    expect(screen.getByText(ar.myLessons.empty.all)).toBeInTheDocument()
+    expect(screen.queryByText(ar.myLessons.empty.filtered)).not.toBeInTheDocument()
+    expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'asc', limit: '20' })
   })
 
   it('pages with the server cursor (limit counts lessons) and back to the first page', async () => {

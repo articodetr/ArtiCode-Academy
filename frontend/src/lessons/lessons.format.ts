@@ -9,6 +9,7 @@ import { MAX_LESSON_HOURS } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import type { ScheduleRoom } from '../api/timetable'
 import type { Language } from '../i18n/language'
+import { isCalendarDate } from '../timetable/timetable.dates'
 import { localizedLabel } from '../users/users.format'
 
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -88,6 +89,16 @@ export function rangeProblem(startsAt: string, endsAt: string, maxHours: number 
 export function durationMinutes(startsAt: string, endsAt: string): number {
   const span = new Date(endsAt).getTime() - new Date(startsAt).getTime()
   return Number.isNaN(span) || span < 0 ? 0 : Math.round(span / 60_000)
+}
+
+/**
+ * The value a day filter of the two lessons lists keeps (DateFilter — J-F25): a
+ * real `YYYY-MM-DD` day, else undefined. A malformed value reaches the filter
+ * only from a browser that renders the date input as a plain text field; kept,
+ * it would count as a narrowing filter while the request sends nothing.
+ */
+export function dateFilterValue(raw: string): string | undefined {
+  return isCalendarDate(raw) ? raw : undefined
 }
 
 /** The first instant of a local calendar day as ISO 8601 (the `from` filter), or undefined for a blank or malformed input. */

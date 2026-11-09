@@ -21,18 +21,14 @@ import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { canAccess } from '../layout/navigation'
 import { CreateLessonModal } from '../lessons/CreateLessonModal'
+import { DateFilter } from '../lessons/DateFilter'
 import { LessonDrawer } from '../lessons/LessonDrawer'
 import { describeLessonsFailure, failureMessage } from '../lessons/lessons.errors'
 import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle } from '../lessons/lessons.format'
 import { LESSON_PAGE_SIZES, defaultLessonFilters, hasActiveLessonFilters, useLessonsList } from '../lessons/useLessonsList'
 import type { LessonsListFilters } from '../lessons/useLessonsList'
 import { ClassPicker } from '../timetable/TimetablePickers'
-import { isCalendarDate } from '../timetable/timetable.dates'
 import { localizedLabel } from '../users/users.format'
-
-function DateFilter({ value, onChange, label }: { value: string | undefined; onChange: (value: string | undefined) => void; label: string }) {
-  return <input type="date" aria-label={label} className="ant-input" value={value ?? ''} onChange={(event) => onChange(isCalendarDate(event.target.value) ? event.target.value : undefined)} style={{ width: 170 }} />
-}
 
 export function LessonsPage() {
   const { t } = useTranslation()

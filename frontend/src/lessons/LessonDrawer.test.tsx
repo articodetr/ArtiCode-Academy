@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Lesson } from '../api/lessons'
+import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { ar } from '../i18n/ar'
 import { CLASS_ID, makeClass } from '../test/classes'
 import { makeSyllabus } from '../test/courses'
@@ -102,8 +103,11 @@ describe('LessonDrawer', () => {
     const attendance = screen.getByTestId('lesson-attendance')
     expect(within(attendance).getByText(ar.lessons.attendance.notTaken)).toBeInTheDocument()
     expect(within(attendance).getByText(`${ar.lessons.attendance.recorded}: 4`)).toBeInTheDocument()
-    expect(within(attendance).getByText(`${ar.lessons.attendance.present}: 3`)).toBeInTheDocument()
-    expect(within(attendance).getByText(`${ar.lessons.attendance.absent}: 1`)).toBeInTheDocument()
+    // The counts take the colours of the attendance sheet and «my lessons» (one map — J-F25).
+    expect(within(attendance).getByText(`${ar.lessons.attendance.present}: 3`)).toHaveClass(`ant-tag-${ATTENDANCE_STATUS_COLORS.present}`)
+    expect(within(attendance).getByText(`${ar.lessons.attendance.absent}: 1`)).toHaveClass(`ant-tag-${ATTENDANCE_STATUS_COLORS.absent}`)
+    expect(within(attendance).getByText(`${ar.lessons.attendance.late}: 0`)).toHaveClass(`ant-tag-${ATTENDANCE_STATUS_COLORS.late}`)
+    expect(within(attendance).getByText(`${ar.lessons.attendance.excused}: 0`)).toHaveClass(`ant-tag-${ATTENDANCE_STATUS_COLORS.excused}`)
     expect(screen.queryByText(ar.common.edit)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.lessons.actions.menu)).not.toBeInTheDocument()
   })

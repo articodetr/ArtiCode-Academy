@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { withTimeZone } from '../test/time-zone'
 import {
   NEXT_DAY_MARK,
+  dateFilterValue,
   dayEndInstant,
   dayStartInstant,
   durationMinutes,
@@ -84,6 +85,13 @@ describe('lessons.format', () => {
     expect(dayEndInstant('2026-11-10')).toBe(new Date(new Date(2026, 10, 11, 0, 0).getTime() - 1).toISOString())
     expect(dayStartInstant(undefined)).toBeUndefined()
     expect(dayEndInstant('')).toBeUndefined()
+  })
+
+  it('keeps a real day for a day filter and treats a blank or malformed value as empty (J-F25)', () => {
+    expect(dateFilterValue('2026-11-10')).toBe('2026-11-10')
+    expect(dateFilterValue('2028-02-29')).toBe('2028-02-29')
+    // What a browser that renders the date input as a plain text field can hand over.
+    for (const raw of ['', '2026-02-30', '2026-13-01', '2026-11-7', '10/11/2026', 'غداً']) expect(dateFilterValue(raw)).toBeUndefined()
   })
 
   it('formats times with Latin digits and a 24-hour clock in both languages, marking a next-day end', () => {
