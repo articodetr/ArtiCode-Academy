@@ -88,3 +88,16 @@ export function planClassPatch(cls: AcademyClass, values: ClassFormValues): Upda
   if (notes !== cls.notes) body.notes = notes
   return Object.keys(body).length > 0 ? body : null
 }
+
+/** The fields of the edit form (the course is fixed after creation). */
+const EDIT_FIELDS = ['code', 'nameAr', 'nameEn', 'capacity', 'startsOn', 'endsOn', 'notes'] as const
+
+/**
+ * Whether the edit form holds anything else than the class's own values (KI-052 — PR #66
+ * review, note 1): typed values count even while invalid (an emptied required name is
+ * unsaved work too), and changing a field back to its value counts as no change.
+ */
+export function classFormHasChanges(cls: AcademyClass, values: ClassFormValues): boolean {
+  const initial = classFormValuesOf(cls)
+  return EDIT_FIELDS.some((field) => (values[field] ?? '') !== (initial[field] ?? ''))
+}

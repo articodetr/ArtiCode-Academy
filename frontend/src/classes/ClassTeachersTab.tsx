@@ -4,8 +4,9 @@
 // (API-012 `role=teacher`, needs `users.read`), change a role, remove — and save
 // it as ONE `PUT /api/classes/:id/teachers` with the whole list, only when it
 // differs from the server's. At most one lead and no ineligible user are
-// refused here first; the server stays the boundary. A draft row shows the
-// full name, as the server's list does after the save (J-F14).
+// refused here first; the server stays the boundary. The search and a draft
+// row show the full name, as the server's list does after the save (J-F14,
+// and the search since J-F21).
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Empty, Flex, List, Select, Space, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
@@ -25,22 +26,20 @@ interface ClassTeachersTabProps {
   cls: AcademyClass
   /** The class the server returned after the replacement. */
   onUpdated: (cls: AcademyClass) => void
-  /** Whether the editor is open (KI-052): the class drawer then keeps Escape and a mask click from dropping the draft. */
-  onEditingChange?: (open: boolean) => void
+  /**
+   * Whether the editor's draft differs from the server's list (KI-052): the class drawer then
+   * keeps Escape and a mask click from dropping it. An editor without a change holds nothing (J-F21).
+   */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function ClassTeachersTab({ cls, onUpdated, onEditingChange }: ClassTeachersTabProps) {
+export function ClassTeachersTab({ cls, onUpdated, onUnsavedChange }: ClassTeachersTabProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
   const canAssign = hasPermission('classes.teachers.assign')
   const canSearch = hasPermission('users.read')
   const [editing, setEditing] = useState(false)
-
-  useEffect(() => {
-    onEditingChange?.(editing)
-    return () => onEditingChange?.(false)
-  }, [editing, onEditingChange])
 
   if (editing) {
     // Mounted per edit session, so the draft always starts from the server's list.
@@ -52,6 +51,7 @@ export function ClassTeachersTab({ cls, onUpdated, onEditingChange }: ClassTeach
           setEditing(false)
         }}
         onCancel={() => setEditing(false)}
+        onUnsavedChange={onUnsavedChange}
       />
     )
   }
@@ -95,9 +95,11 @@ interface TeachersEditorProps {
   cls: AcademyClass
   onSaved: (cls: AcademyClass) => void
   onCancel: () => void
+  /** Whether the draft differs from the server's list: reported while mounted, false once left. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-function TeachersEditor({ cls, onSaved, onCancel }: TeachersEditorProps) {
+function TeachersEditor({ cls, onSaved, onCancel, onUnsavedChange }: TeachersEditorProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [drafts, setDrafts] = useState<TeacherDraft[]>(() => teacherDraftsOf(cls.teachers))
@@ -109,6 +111,13 @@ function TeachersEditor({ cls, onSaved, onCancel }: TeachersEditorProps) {
 
   const problems = teacherListProblems(drafts)
   const full = drafts.length >= CLASS_TEACHERS_MAX
+  // The draft is unsaved work only while it differs from the server's list (PR #66 review, note 1).
+  const unsaved = planTeachersReplacement(cls.teachers, drafts) !== null
+
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+    return () => onUnsavedChange?.(false)
+  }, [unsaved, onUnsavedChange])
 
   const refusalOf = (candidate: UserListItem): string | undefined => {
     const refusal = candidateRefusal(candidate, drafts)

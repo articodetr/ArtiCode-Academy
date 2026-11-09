@@ -60,29 +60,54 @@ const countOf = (result: HTMLElement, label: string) => within(result).getByText
 const refusal = (status: number, body: Record<string, unknown>): Answer => () => jsonResponse(status, { statusCode: status, message: 'refused', ...body })
 
 describe('ClassScheduleTab — generate lessons (J-F16)', () => {
-  it('offers «توليد الدروس» only to a schedule manager of a planned, open or running class that has slots', async () => {
-    mockGenerationApi()
-    const reader = renderTab(SCHEDULE_READER_PERMISSIONS)
-    await screen.findByText('10:00–11:00')
-    expect(screen.queryByText(g.open)).not.toBeInTheDocument()
-    reader.unmount()
+  // «توليد الدروس» is offered only to a schedule manager of a planned, open or running class that has slots;
+  // one screen per test, so a failure names it (PR #60 review, note 5).
+  describe('the «توليد الدروس» button', () => {
+    it('is not offered to a schedule reader', async () => {
+      mockGenerationApi()
+      renderTab(SCHEDULE_READER_PERMISSIONS)
+      await screen.findByText('10:00–11:00')
+      expect(screen.queryByText(g.open)).not.toBeInTheDocument()
+    })
 
-    const frozen = renderTab(SCHEDULE_ADMIN_PERMISSIONS, makeClass({ ...FUTURE_CLASS, status: 'completed' }))
-    await screen.findByText('10:00–11:00')
+    it('is not offered for a frozen (completed) class', async () => {
+      mockGenerationApi()
+      renderTab(SCHEDULE_ADMIN_PERMISSIONS, makeClass({ ...FUTURE_CLASS, status: 'completed' }))
+      await screen.findByText('10:00–11:00')
+      expect(screen.getByText(ar.classSchedule.frozen)).toBeInTheDocument()
+      expect(screen.queryByText(g.open)).not.toBeInTheDocument()
+    })
+
+    it('is not offered for a schedule without slots, whose editor stays available', async () => {
+      mockGenerationApi({ schedule: makeSchedule([]) })
+      renderTab(SCHEDULE_ADMIN_PERMISSIONS)
+      await screen.findByText(ar.classSchedule.empty)
+      expect(screen.queryByText(g.open)).not.toBeInTheDocument()
+      expect(button(ar.classSchedule.edit)).toBeEnabled()
+    })
+
+    it('is offered for a running class with slots', async () => {
+      mockGenerationApi()
+      renderTab(SCHEDULE_ADMIN_PERMISSIONS, makeClass({ ...FUTURE_CLASS, status: 'running' }))
+      expect(await screen.findByText(g.open)).toBeInTheDocument()
+    })
+  })
+
+  it('closes the panel for good once the schedule can no longer generate: back to a schedulable class it stays closed (PR #60 review, note 2)', async () => {
+    mockGenerationApi()
+    const planned = makeClass(FUTURE_CLASS)
+    const view = renderTab(SCHEDULE_ADMIN_PERMISSIONS, planned)
+    await openPanel()
+
+    // The class is cancelled meanwhile (the drawer hands the new class down): no panel on a frozen class…
+    view.rerender(<ClassScheduleTab cls={{ ...planned, status: 'cancelled' }} />)
+    await waitFor(() => expect(screen.queryByTestId('generate-lessons')).not.toBeInTheDocument())
     expect(screen.getByText(ar.classSchedule.frozen)).toBeInTheDocument()
-    expect(screen.queryByText(g.open)).not.toBeInTheDocument()
-    frozen.unmount()
 
-    mockGenerationApi({ schedule: makeSchedule([]) })
-    const empty = renderTab(SCHEDULE_ADMIN_PERMISSIONS)
-    await screen.findByText(ar.classSchedule.empty)
-    expect(screen.queryByText(g.open)).not.toBeInTheDocument()
-    expect(button(ar.classSchedule.edit)).toBeEnabled()
-    empty.unmount()
-
-    mockGenerationApi()
-    renderTab(SCHEDULE_ADMIN_PERMISSIONS, makeClass({ ...FUTURE_CLASS, status: 'running' }))
+    // …and restored, it offers the button again instead of reopening the old panel by itself.
+    view.rerender(<ClassScheduleTab cls={{ ...planned, status: 'planned' }} />)
     expect(await screen.findByText(g.open)).toBeInTheDocument()
+    expect(screen.queryByTestId('generate-lessons')).not.toBeInTheDocument()
   })
 
   it('starts from the class dates, refuses locally what the server would refuse, then sends ONE POST and shows the counts it answered', async () => {

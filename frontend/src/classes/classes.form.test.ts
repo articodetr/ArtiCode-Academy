@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeClass } from '../test/classes'
-import { CLASS_CODE_PATTERN, buildCreateClassInput, classFormValuesOf, invalidDateRange, normaliseClassCode, planClassPatch } from './classes.form'
+import { CLASS_CODE_PATTERN, buildCreateClassInput, classFormHasChanges, classFormValuesOf, invalidDateRange, normaliseClassCode, planClassPatch } from './classes.form'
 
 describe('classes.form', () => {
   it('normalises codes like the server and mirrors its pattern', () => {
@@ -57,5 +57,20 @@ describe('classes.form', () => {
     const cls = makeClass({ startsOn: null, endsOn: null })
     const body = planClassPatch(cls, { ...classFormValuesOf(cls), courseId: 'other', endsOn: '2027-01-31' })
     expect(body).toEqual({ endsOn: '2027-01-31' })
+  })
+  it('counts a field holding anything else than the class value as a change, a field changed back as none (J-F21, KI-052)', () => {
+    const cls = makeClass({ notes: 'مسائي' })
+    const initial = classFormValuesOf(cls)
+    expect(classFormHasChanges(cls, initial)).toBe(false)
+    expect(classFormHasChanges(cls, { ...initial, capacity: 25 })).toBe(true)
+    expect(classFormHasChanges(cls, { ...initial, notes: 'صباحي' })).toBe(true)
+    // Changed back to the class value: nothing to lose.
+    expect(classFormHasChanges(cls, { ...initial, capacity: cls.capacity })).toBe(false)
+    // Unsaved even while invalid or blank: the user is typing.
+    expect(classFormHasChanges(cls, { ...initial, nameAr: '' })).toBe(true)
+    expect(classFormHasChanges(cls, { ...initial, capacity: null })).toBe(true)
+    // An empty optional input may come back undefined: still the class's own (empty) value.
+    const bare = makeClass({ name: { ar: 'فصل' }, notes: null, startsOn: null, endsOn: null })
+    expect(classFormHasChanges(bare, { ...classFormValuesOf(bare), nameEn: undefined, notes: undefined, startsOn: undefined })).toBe(false)
   })
 })

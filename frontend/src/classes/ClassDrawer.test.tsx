@@ -166,7 +166,7 @@ describe('ClassDrawer', () => {
     expect(screen.queryByText('الطلاب (3)')).not.toBeInTheDocument()
   })
 
-  it('closes the dialog on invalid_transition, shows the message and re-reads the class, whose menu then offers what is valid now (PR #26 note 3)', async () => {
+  it('closes the dialog on invalid_transition, shows the message and re-reads the class, whose menu then offers what is valid now and whose list row follows (PR #26 note 3, PR #66 note 4)', async () => {
     // The class was opened elsewhere: the drawer still shows it planned, the server holds it open.
     let detail = makeClass()
     const calls = mockClassApi(() => detail, {
@@ -191,7 +191,9 @@ describe('ClassDrawer', () => {
     const items = await screen.findAllByRole('menuitem')
     expect(items.map((item) => item.textContent)).toEqual([ar.classes.actions.start, ar.classes.actions.cancel])
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1)
-    expect(onUpdated).not.toHaveBeenCalled()
+    // The re-read class goes to the list too, so its row shows «open» without a refresh (J-F21).
+    expect(onUpdated).toHaveBeenCalledTimes(1)
+    expect(onUpdated).toHaveBeenCalledWith(expect.objectContaining({ id: CLASS_ID, status: 'open' }))
   })
 
   it('closes the dialog on class_not_deletable too, with the count, re-reads the class and keeps the drawer open', async () => {

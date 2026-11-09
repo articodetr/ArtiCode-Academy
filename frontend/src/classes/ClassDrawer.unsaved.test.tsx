@@ -1,6 +1,7 @@
 // KI-052 (J-F15): while an editor of the class drawer holds unsaved work, Escape
 // and a mask click no longer close the drawer, and the close button asks before
-// discarding it. The weekly schedule editor's case sits in
+// discarding it; since J-F21 an editor without a change (or changed back) holds
+// nothing (PR #66 review, note 1). The weekly schedule editor's case sits in
 // ClassDrawer.schedule.test.tsx with the schedule fixtures.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -111,6 +112,52 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
     fireEvent.click(within(second).getByText(ar.classes.drawer.discard.ok).closest('button')!)
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(writes).toEqual([])
+  })
+
+  it('holds nothing while the edit form is open without a change: Escape closes at once (J-F21 — PR #66 review, note 1)', async () => {
+    mockDrawerApi()
+    const { onClose } = renderDrawer()
+    await screen.findByText('PY-101-A')
+
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    await screen.findByLabelText(ar.classes.fields.capacity)
+    pressEscape()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expectNoDiscardQuestion()
+  })
+
+  it('lets go of a change changed back: Escape keeps the form while it differs and closes once it matches the class again (J-F21)', async () => {
+    const { writes } = mockDrawerApi()
+    const { onClose } = renderDrawer()
+    await screen.findByText('PY-101-A')
+
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    const capacity = await screen.findByLabelText(ar.classes.fields.capacity)
+    await userEvent.clear(capacity)
+    await userEvent.type(capacity, '25')
+    pressEscape()
+    expect(onClose).not.toHaveBeenCalled()
+
+    // The class holds 20 seats: typed back, nothing is left to lose.
+    await userEvent.clear(capacity)
+    await userEvent.type(capacity, '20')
+    pressEscape()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expectNoDiscardQuestion()
+    expect(writes).toEqual([])
+  })
+
+  it('holds nothing while the teachers editor matches the server list: the close button closes without asking (J-F21)', async () => {
+    mockDrawerApi()
+    const { onClose } = renderDrawer()
+    await screen.findByText('PY-101-A')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'المعلمون (1)' }))
+    fireEvent.click((await screen.findByText(ar.classes.teachers.edit)).closest('button')!)
+    await screen.findByLabelText(`${ar.classes.teachers.remove}: خالد المعلم`)
+    fireEvent.click(closeButton())
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expectNoDiscardQuestion()
   })
 
   it('keeps the teachers draft on Escape; once the editor is left, Escape closes the drawer as before', async () => {
