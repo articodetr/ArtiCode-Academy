@@ -61,6 +61,24 @@ describe('WeekGrid', () => {
     expect(card('10:00', '12:00').closest('li')!.style.width).toBe('50%')
     expect(card('10:30', '11:30').closest('li')!.style.width).toBe('50%')
     expect(card('10:30', '11:30')).toHaveClass('is-narrow')
+    // Beside another slot a card keeps the course and the time only.
+    expect(card('10:30', '11:30').querySelector('.tt-event__extras')).toBeNull()
+  })
+
+  it('renders the secondary lines in the order they give way — class, room, teacher — each name and code in its own <bdi> (J-F17)', () => {
+    const latin = entryOfSlot(makeSlot({ id: 'latin', startTime: '09:00', endTime: '10:30', teacher: { userId: '0193b000-0000-7000-8000-00000000f002', fullName: 'Mehmet Yılmaz' } }))
+    renderGrid([gridDay('2026-11-08', [latin, at('short', '13:00', '13:30')]), gridDay('2026-11-09', [])])
+    // A 90-minute card renders every line; timetable.css shows the ones its real size holds, each whole.
+    const lines = Array.from(card('09:00', '10:30').querySelectorAll('.tt-event__info > *'))
+    expect(lines.map((line) => line.className)).toEqual(['tt-event__sub', 'tt-event__meta is-room', 'tt-event__meta is-teacher'])
+    expect(lines[0].querySelector('bdi')).toHaveTextContent(/^PY-101-A$/)
+    // The room and the teacher are two items, never one run of mixed text cut by one ellipsis.
+    expect(lines[1].querySelector('bdi')).toHaveTextContent(/^LAB-1$/)
+    expect(lines[1].querySelectorAll('bdi')).toHaveLength(1)
+    expect(lines[2].querySelector('bdi')).toHaveTextContent(/^Mehmet Yılmaz$/)
+    // A one-line (30-minute) card shows the course and the time only.
+    expect(card('13:00', '13:30')).toHaveClass('is-tiny')
+    expect(card('13:00', '13:30').querySelector('.tt-event__extras')).toBeNull()
   })
 
   it('shows the empty card or the loading state over the grid', () => {

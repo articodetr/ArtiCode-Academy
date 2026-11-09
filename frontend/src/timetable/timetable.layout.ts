@@ -40,7 +40,12 @@ export function verticalBox(startMinutes: number, endMinutes: number, range: Hou
   return { top: ((startMinutes - origin) / 60) * hourHeight, height: ((endMinutes - startMinutes) / 60) * hourHeight }
 }
 
-/** How much a card shows: `tiny` = one line, `compact` = title + class + time, `regular` adds relations, `full` adds teacher and room. */
+/**
+ * How a card of the grid is laid out by its height: `tiny` = one row (the course and the time),
+ * `compact` = a one-line course over the time, `regular` and `full` = a course on up to two lines.
+ * Between the course and the time a card shows as many WHOLE secondary lines (class code, why it is
+ * in «my schedule», room, teacher) as its real height and width allow — timetable.css, J-F17.
+ */
 export type CardDensity = 'tiny' | 'compact' | 'regular' | 'full'
 
 /** The density a card of `height` px can afford. */
@@ -49,6 +54,17 @@ export function densityOf(height: number): CardDensity {
   if (height < 84) return 'compact'
   if (height < 124) return 'regular'
   return 'full'
+}
+
+/**
+ * Where the "now" marker of the phone's day timeline goes, as an index into the day's slots (sorted by
+ * start): before the first slot that has not started yet, else after the last one — so it stays on
+ * screen while the day's last slot runs (J-F17). `null` = no marker (the day is not today).
+ */
+export function nowMarkerIndex(items: ReadonlyArray<{ startMinutes: number }>, nowMinutes: number | null): number | null {
+  if (nowMinutes === null) return null
+  const next = items.findIndex((item) => item.startMinutes > nowMinutes)
+  return next === -1 ? items.length : next
 }
 
 export interface LaidOut<T> {

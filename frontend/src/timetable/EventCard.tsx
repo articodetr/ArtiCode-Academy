@@ -1,9 +1,13 @@
 // One weekly slot on the calendar (J-F08): a pastel card (one tone per course)
-// with the course, the class code, the time range and — as its height allows —
-// the class name, teacher, room and, in «my schedule», why the caller sees it.
-// The whole card is a button that opens the details; its accessible name says
-// everything the abridged text may leave out. Times sit in a `dir="ltr"` span
-// so Arabic never reverses `09:00 – 10:30`.
+// with the course, the time range and — as its space allows — the class code,
+// why the caller sees it («my schedule»), the room and the teacher. In the grid
+// those secondary lines are all rendered and timetable.css shows each one
+// whole or not at all, by the card's real height AND width (J-F17): a wide
+// card puts them on one line beside the course and the time. The whole card is
+// a button that opens the details; its accessible name says everything the
+// abridged text may leave out. Times sit in a `dir="ltr"` span so Arabic never
+// reverses `09:00 – 10:30`; names and codes sit in `<bdi>` so a Latin name
+// never scrambles an Arabic line (or the reverse).
 import { EnvironmentOutlined, UserOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { Language } from '../i18n/language'
@@ -34,9 +38,11 @@ export function EventCard({ entry, date, language, density, academyTimeZone, onO
   const course = localizedLabel(entry.class.course.name, language)
   const teacher = entry.teacher ? personName(entry.teacher) : t('schedule.noTeacher')
   const room = entry.room ? roomLabel(entry.room, language) : null
+  const roomName = entry.room?.name ? localizedLabel(entry.room.name, language) : null
   const relations = entry.relations.map((relation) => relationLabel(t, relation))
   const otherZone = entry.timeZone !== academyTimeZone ? entry.timeZone : null
-  const showSub = !narrow && (density === 'regular' || density === 'full' || density === 'card')
+  // A one-line card and a card beside overlapping slots show the course and the time only.
+  const showExtras = density === 'card' || (!narrow && density !== 'tiny')
   const label = slotLabel(t, language, {
     courseName: course,
     classCode: entry.class.code,
@@ -60,49 +66,42 @@ export function EventCard({ entry, date, language, density, academyTimeZone, onO
       data-start={entry.startMinutes}
     >
       <span className="tt-event__title">{course}</span>
-      {showSub ? (
-        <span className="tt-event__sub">
-          <bdi>{entry.class.code}</bdi>
-        </span>
-      ) : null}
-      {density === 'card' ? (
-        <>
-          <span className="tt-event__meta">
-            <UserOutlined aria-hidden="true" />
-            <span className="tt-event__text">{teacher}</span>
-          </span>
-          {room ? (
-            <span className="tt-event__meta">
-              <EnvironmentOutlined aria-hidden="true" />
-              <span className="tt-event__text">
-                <bdi>{room}</bdi>
+      {showExtras ? (
+        // In DOM order = the order the lines give way in a short card (the last first).
+        <span className="tt-event__extras">
+          <span className="tt-event__info">
+            <span className="tt-event__sub">
+              <bdi>{entry.class.code}</bdi>
+            </span>
+            {relations.length > 0 ? (
+              <span className="tt-event__relations">
+                {relations.map((text) => (
+                  <span key={text} className="tt-chip">
+                    {text}
+                  </span>
+                ))}
               </span>
-            </span>
-          ) : null}
-        </>
-      ) : null}
-      {density === 'full' && !narrow ? (
-        // One line in the grid: the room's code, then the teacher.
-        <span className="tt-event__meta">
-          {entry.room ? <EnvironmentOutlined aria-hidden="true" /> : <UserOutlined aria-hidden="true" />}
-          <span className="tt-event__text">
+            ) : null}
             {entry.room ? (
-              <>
-                <bdi>{entry.room.code}</bdi> · {teacher}
-              </>
-            ) : (
-              teacher
-            )}
-          </span>
-        </span>
-      ) : null}
-      {relations.length > 0 && !narrow && (density === 'regular' || density === 'full' || density === 'card') ? (
-        <span className="tt-event__relations">
-          {relations.map((text) => (
-            <span key={text} className="tt-chip">
-              {text}
+              <span className="tt-event__meta is-room">
+                <EnvironmentOutlined aria-hidden="true" />
+                {/* The grid shows the room's code; a free-standing card its code and name. Each is
+                    its own isolate: one ellipsis over a Latin code and an Arabic name cuts the name's
+                    first letters instead of its end. */}
+                <bdi className="tt-event__code">{entry.room.code}</bdi>
+                {density === 'card' && roomName ? (
+                  <>
+                    <span aria-hidden="true">—</span>
+                    <bdi className="tt-event__text">{roomName}</bdi>
+                  </>
+                ) : null}
+              </span>
+            ) : null}
+            <span className="tt-event__meta is-teacher">
+              <UserOutlined aria-hidden="true" />
+              <bdi className="tt-event__text">{teacher}</bdi>
             </span>
-          ))}
+          </span>
         </span>
       ) : null}
       <span className="tt-event__time">
