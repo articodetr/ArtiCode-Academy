@@ -27,9 +27,11 @@ interface CreateLessonModalProps {
 export function CreateLessonModal({ open, onClose, onCreated, initialClass }: CreateLessonModalProps) {
   const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
-  // The form lives in the body, mounted per open session; the modal only submits it.
+  // The form lives in the body, mounted per open session; the modal only submits it. The body hands its submit over
+  // when it mounts and takes it back when it unmounts, so a reopened modal never holds the previous session's form
+  // (until the new body is ready the OK button is disabled — J-F19).
   const [submit, setSubmit] = useState<(() => void) | null>(null)
-  const onReady = useCallback((fn: () => void) => setSubmit(() => fn), [])
+  const onReady = useCallback((fn: (() => void) | null) => setSubmit(() => fn), [])
 
   return (
     <Modal
@@ -54,7 +56,8 @@ export function CreateLessonModal({ open, onClose, onCreated, initialClass }: Cr
 interface CreateLessonBodyProps {
   initialClass?: AcademyClass
   onSaving: (saving: boolean) => void
-  onReady: (submit: () => void) => void
+  /** This session's submit on mount, null on unmount. */
+  onReady: (submit: (() => void) | null) => void
   onCreated: (lesson: Lesson) => void
 }
 
@@ -66,9 +69,11 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // Hands the modal's OK button this session's form (onReady is stable; the form instance too).
+  // Hands the modal's OK button this session's form (onReady is stable; the form instance too), and takes it back
+  // when the session ends — the next session's first frame then shows a disabled OK, never a stale one.
   useEffect(() => {
     onReady(() => form.submit())
+    return () => onReady(null)
   }, [form, onReady])
 
   const submit = async (values: LessonFormValues) => {

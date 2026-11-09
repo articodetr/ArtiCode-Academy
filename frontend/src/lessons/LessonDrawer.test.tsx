@@ -10,7 +10,8 @@ import { LESSON_ADMIN_PERMISSIONS, LESSON_ID, LESSON_STAFF_PERMISSIONS, makeLess
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { makeRoom, makeRoomList } from '../test/timetable'
 import { LessonDrawer } from './LessonDrawer'
-import { formatLessonDay, formatLessonTimes } from './lessons.format'
+import { lessonFormValuesOf } from './lessons.form'
+import { durationMinutes, formatLessonDay, formatLessonTimes, rangeOf } from './lessons.format'
 
 interface Call {
   method: string
@@ -294,6 +295,37 @@ describe('LessonDrawer', () => {
     const options = await screen.findAllByText(/خالد المعلم|بلا معلم/, { selector: '.ant-select-item-option-content' })
     expect(options.map((option) => option.textContent)).toEqual(['خالد المعلم', ar.lessons.teacherOptions.none])
     expect(calls.classReads).toEqual([])
+  })
+
+  it('marks the end of an overnight lesson (+1) in the edit form, with its end day and length (J-F19)', async () => {
+    const start = new Date(NOW + 7 * 24 * HOUR)
+    start.setHours(22, 0, 0, 0)
+    const lesson = futureLesson({ startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 3 * HOUR).toISOString() })
+    mockLessonApi(() => lesson)
+    renderDrawer(LESSON_ADMIN_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    const end = await screen.findByLabelText(ar.lessons.fields.endTime)
+    const mark = screen.getByTestId('lesson-end-mark')
+    expect(mark).toHaveTextContent('(+1)')
+    expect(mark.closest('.ant-input-affix-wrapper')).toContainElement(end)
+    const values = lessonFormValuesOf(lesson)
+    const range = rangeOf(values.date, values.startTime, values.endTime)!
+    expect(screen.getByText(ar.lessons.hints.endsNextDay.replace('{{date}}', formatLessonDay(range.endsAt, 'ar')).replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt))))).toBeInTheDocument()
+  })
+
+  it('words a missing delivery mode itself in the edit form and sends nothing (J-F19)', async () => {
+    // Defensive: the select has no clear button, so only a lesson without a mode reaches the rule.
+    const calls = mockLessonApi(() => futureLesson({ deliveryMode: undefined as unknown as Lesson['deliveryMode'] }))
+    renderDrawer(LESSON_ADMIN_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    fireEvent.click((await screen.findByText(ar.common.save)).closest('button')!)
+    expect(await screen.findByText(ar.lessons.validation.deliveryModeRequired)).toBeInTheDocument()
+    expect(screen.queryByText(/يرجى إدخال/)).not.toBeInTheDocument()
+    expect(calls.filter((call) => call.method !== 'GET')).toEqual([])
   })
 
   it('locks time, room and teacher of a completed lesson in the edit form and sends nothing when nothing changed', async () => {
