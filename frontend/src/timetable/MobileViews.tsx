@@ -11,6 +11,7 @@ import { EventCard } from './EventCard'
 import { weekdayOf } from './timetable.dates'
 import type { CalendarDate } from './timetable.dates'
 import { formatDayMonth, formatLongDate, weekdayKey } from './timetable.format'
+import { nowMarkerIndex } from './timetable.layout'
 import type { TimetableEntry } from './timetable.model'
 import type { GridDay } from './WeekGrid'
 
@@ -71,8 +72,8 @@ interface DayTimelineProps {
 export function DayTimeline({ date, entries, nowMinutes, language, academyTimeZone, onOpen, empty }: DayTimelineProps) {
   const { t } = useTranslation()
   if (entries.length === 0) return <>{empty}</>
-  // The "now" marker sits before the first slot that has not started yet.
-  const nowIndex = nowMinutes === null ? -1 : entries.findIndex((entry) => entry.startMinutes > nowMinutes)
+  // The "now" marker sits before the first slot that has not started yet, else after the last one.
+  const nowIndex = nowMarkerIndex(entries, nowMinutes)
   const items: ReactNode[] = []
   entries.forEach((entry, index) => {
     if (index === nowIndex) items.push(<NowMarker key="now" label={t('schedule.calendar.now')} />)
@@ -86,7 +87,7 @@ export function DayTimeline({ date, entries, nowMinutes, language, academyTimeZo
       </li>,
     )
   })
-  if (nowMinutes !== null && nowIndex === -1 && entries.every((entry) => entry.endMinutes <= nowMinutes)) items.push(<NowMarker key="now" label={t('schedule.calendar.now')} />)
+  if (nowIndex === entries.length) items.push(<NowMarker key="now" label={t('schedule.calendar.now')} />)
   return (
     <ol className="tt-timeline" aria-label={formatLongDate(date, language)}>
       {items}

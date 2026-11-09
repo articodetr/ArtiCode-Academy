@@ -295,8 +295,9 @@
   box-sizing: border-box;
   padding: 3px 4px 4px;
   min-height: 24px;
-  /* The card adapts to its real width (a seven-day week, slots side by side). */
-  container-type: inline-size;
+  /* The card adapts to its real size: its width (a seven-day week, slots side by side, the day view)
+     and, since J-F17, its height. */
+  container: tt-slot / size;
 }
 
 .tt-now {
@@ -435,16 +436,50 @@
   white-space: nowrap;
 }
 
-/* The title, class and time keep their size; the secondary lines give way first in a short card. */
+/* A room's code keeps its place (at most the line beside its icon); the room's name gives way first. */
+.tt-event__code {
+  flex: none;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The course and the time keep their size; the secondary lines share what is left between them. */
 .tt-event > * {
   flex-shrink: 0;
 }
 
-.tt-event > .tt-event__meta,
-.tt-event > .tt-event__relations {
-  flex-shrink: 1;
+/* The secondary lines (J-F17) show whole or not at all. They sit in a column that wraps inside the
+   space left between the course and the time: a line that does not fit moves to a second column
+   outside the card, where the overflow hides it, so a short card never shows half a chip or half a
+   line — whatever the course's title wraps to. The zero-height first item lets even the first line
+   leave. Lines give way from the last (the teacher) to the first (the class code). */
+.tt-event > .tt-event__extras {
+  flex: 1 1 0;
   min-height: 0;
+  margin-top: -2px;
+  display: flex;
+  flex-flow: column wrap;
+  align-content: flex-start;
+  row-gap: 2px;
   overflow: hidden;
+}
+
+.tt-event__extras::before {
+  content: '';
+  width: 100%;
+  height: 0;
+}
+
+.tt-event__info {
+  display: contents;
+}
+
+.tt-event__info > * {
+  box-sizing: border-box;
+  width: 100%;
+  flex: none;
 }
 
 .tt-event__relations {
@@ -582,6 +617,101 @@
 .tt-event.is-card .tt-event__time {
   margin-top: 4px;
   font-size: 13px;
+}
+
+/* A short card that cannot hold the course over the time (the slot's box minus its padding under
+   6 + 17.6 + 2 + 20.9 + 6 px: about 45 minutes at 64 px per hour) keeps the course — the time is its
+   position and height, its accessible name and its details (J-F17). A wide card holds both on one row. */
+@container tt-slot (max-height: 52.49px) and (max-width: 279.98px) {
+  .tt-slot .tt-event.is-compact .tt-event__time {
+    display: none;
+  }
+}
+
+/* A free-standing card grows with its lines and shows them all: the class, the teacher, the room, then why. */
+.tt-event.is-card > .tt-event__extras {
+  flex: none;
+  margin-top: 0;
+  flex-wrap: nowrap;
+  row-gap: 4px;
+  overflow: visible;
+}
+
+.tt-event.is-card .tt-event__extras::before {
+  content: none;
+}
+
+.tt-event.is-card .is-teacher {
+  order: 1;
+}
+
+.tt-event.is-card .is-room {
+  order: 2;
+}
+
+.tt-event.is-card .tt-event__relations {
+  order: 3;
+}
+
+/* A wide card (the day view, a wide screen — J-F17): the time beside the course and the secondary lines
+   on one row under them, so even an hour shows the class, the room and the teacher. The row shows whole
+   or not at all, like the lines of a narrower card. */
+@container tt-slot (min-width: 280px) {
+  .tt-slot .tt-event.is-compact:not(.is-narrow),
+  .tt-slot .tt-event.is-regular:not(.is-narrow),
+  .tt-slot .tt-event.is-full:not(.is-narrow) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'title time'
+      'extras extras';
+    column-gap: 12px;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) .tt-event__title {
+    grid-area: title;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) .tt-event__time {
+    grid-area: time;
+    margin: 0;
+    padding-top: 1px;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) > .tt-event__extras {
+    grid-area: extras;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) .tt-event__info {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) .tt-event__info > * {
+    width: auto;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) .is-room {
+    order: 1;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) .is-teacher {
+    order: 2;
+  }
+
+  .tt-slot .tt-event:not(.is-tiny, .is-card, .is-narrow) .tt-event__relations {
+    order: 3;
+    flex-wrap: nowrap;
+    margin-top: 0;
+    overflow: hidden;
+  }
 }
 
 /* ---- month calendar ---------------------------------------------------- */

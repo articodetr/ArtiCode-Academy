@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { clockMinutes } from './timetable.dates'
-import { densityOf, hourHeightOf, hourRangeOf, hoursOf, layoutDay, verticalBox, visibleWeekdays } from './timetable.layout'
+import { densityOf, hourHeightOf, hourRangeOf, hoursOf, layoutDay, nowMarkerIndex, verticalBox, visibleWeekdays } from './timetable.layout'
 
 function slot(id: string, start: string, end: string) {
   return { id, startMinutes: clockMinutes(start), endMinutes: clockMinutes(end) }
@@ -63,5 +63,25 @@ describe('visible days', () => {
 
   it('shows the filtered weekday alone', () => {
     expect(visibleWeekdays(fromSaturday, { workingDays: [0, 1, 2, 3, 4], showAll: true, busy: new Set([1]), selected: 1, onlyWeekday: 3 })).toEqual([3])
+  })
+})
+
+describe('the now marker of the phone timeline (J-F17)', () => {
+  const day = [slot('a', '09:00', '10:00'), slot('b', '11:00', '12:30'), slot('c', '14:00', '15:30')]
+
+  it('sits before the first slot that has not started yet', () => {
+    expect(nowMarkerIndex(day, clockMinutes('08:00'))).toBe(0)
+    // During a slot: right after it (it has started), before the next one.
+    expect(nowMarkerIndex(day, clockMinutes('09:30'))).toBe(1)
+    expect(nowMarkerIndex(day, clockMinutes('10:30'))).toBe(1)
+    // A slot that starts now has started.
+    expect(nowMarkerIndex(day, clockMinutes('11:00'))).toBe(2)
+  })
+
+  it('stays after the last slot while it runs and once the day is over; no marker on another day', () => {
+    expect(nowMarkerIndex(day, clockMinutes('14:45'))).toBe(3)
+    expect(nowMarkerIndex(day, clockMinutes('20:00'))).toBe(3)
+    expect(nowMarkerIndex(day, null)).toBeNull()
+    expect(nowMarkerIndex([], clockMinutes('10:00'))).toBe(0)
   })
 })
