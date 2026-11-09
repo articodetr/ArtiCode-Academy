@@ -6,6 +6,7 @@
 //   custom roles accept everything and can be deleted while nobody holds them
 //   a save is the full permission set, computed as a diff → nothing to send when equal
 //   no key may be granted that the caller lacks (learner baseline excepted — ADR-030)
+//   the editor holds unsaved work while the form differs from the saved values (KI-057)
 import type { CreateRoleInput, LocalizedLabel, Role, UpdateRoleInput } from '../api/roles'
 import { SYSTEM_ROLE_KEYS } from '../users/users.format'
 
@@ -176,4 +177,46 @@ export function planRolePatch(current: Role, values: RoleFormValues): UpdateRole
   }
 
   return Object.keys(body).length === 0 ? null : body
+}
+
+/** An emptied text field: `undefined` is a field the form does not show. */
+const isBlank = (value: string | undefined) => typeof value === 'string' && value.trim() === ''
+
+/**
+ * An English text typed without its Arabic one: localizedOf() drops it (the
+ * server requires `ar`) and the form refuses it on save, yet it is typed work.
+ * (The twin of englishWithoutArabic() in courses/courses.form.ts.)
+ */
+const isEnglishWithoutArabic = (ar: string | undefined, en: string | undefined) => (en ?? '').trim() !== '' && (ar ?? '').trim() === ''
+
+/**
+ * Whether the role editor holds unsaved work (KI-057 — J-F39, the rule of
+ * J-F23's courseFormHasChanges()). Always compared with the saved values, so a
+ * change changed back holds nothing, and spaces around a text are no change
+ * (the save trims them):
+ * - an existing role: the smallest PATCH is non-empty (planRolePatch()), or —
+ *   custom roles, whose texts the form shows — the form holds what the save
+ *   would refuse instead of sending: an emptied Arabic label, an English
+ *   description without its Arabic text;
+ * - a new role (`null`): anything buildCreateRoleInput() would send — a key, an
+ *   Arabic label, a description, a ticked permission — or an English label or
+ *   description typed without its Arabic text;
+ * - academy_admin, which the editor only shows: never.
+ */
+export function roleFormHasChanges(role: Role | null, values: RoleFormValues): boolean {
+  if (role) {
+    const editability = roleEditability(role)
+    if (!editability.metadata && !editability.permissions) return false
+    if (editability.metadata && (isBlank(values.labelAr) || isEnglishWithoutArabic(values.descriptionAr, values.descriptionEn))) return true
+    return planRolePatch(role, values) !== null
+  }
+  const input = buildCreateRoleInput(values)
+  return (
+    input.key !== '' ||
+    input.label.ar !== '' ||
+    input.description !== undefined ||
+    input.permissions.length > 0 ||
+    isEnglishWithoutArabic(values.labelAr, values.labelEn) ||
+    isEnglishWithoutArabic(values.descriptionAr, values.descriptionEn)
+  )
 }

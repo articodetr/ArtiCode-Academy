@@ -3,12 +3,23 @@
 // one. `academy_admin` is read-only (AC1); the other system roles expose their
 // permission set only; custom roles expose everything. What the list shows
 // after a save is the role the server returned (AC2).
+// Since J-F39 (KI-057 — the guard of the class, user and course drawers:
+// KI-052, KI-054, KI-055): while the form holds unsaved work — compared with
+// the saved values through roleFormHasChanges(), so a change changed back
+// holds nothing — Escape and a mask click no longer close the drawer, the close
+// button asks first (common.unsaved.*), a browser back/forward asks the same
+// question (NavigationBlocker), and a reload or a tab close gets the browser's
+// own prompt (useUnsavedChangesGuard). The footer's Cancel is an explicit
+// discard and closes at once, as an edit form's Cancel does in those drawers;
+// academy_admin, shown read-only, never holds anything.
 import { Alert, App, Button, Descriptions, Drawer, Flex, Form, Input, Space, Tag, Typography } from 'antd'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createRole, updateRole } from '../api/roles'
 import type { PermissionGroup, Role } from '../api/roles'
 import { useAuth } from '../auth/auth-context'
+import { NavigationBlocker } from '../common/NavigationBlocker'
+import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { isValidRoleKey } from '../users/users.validation'
@@ -22,6 +33,7 @@ import {
   lockedPermissions,
   planRolePatch,
   roleEditability,
+  roleFormHasChanges,
   roleFormValuesOf,
 } from './roles.policy'
 import type { RoleFormValues } from './roles.policy'
@@ -39,13 +51,36 @@ interface RoleEditorProps {
 
 export function RoleEditor({ target, groups, onClose, onSaved }: RoleEditorProps) {
   const { t } = useTranslation()
+  // KI-057: whether the form holds unsaved work — reported by the body on every change.
+  const [unsaved, setUnsaved] = useState(false)
+
+  const close = () => {
+    setUnsaved(false)
+    onClose()
+  }
+
+  // The close button (Escape and the mask too when nothing is unsaved) asks first while the form
+  // holds unsaved work, and so does a browser back/forward (NavigationBlocker below) — one question
+  // (common.unsaved.*); a reload or a tab close gets the browser's own prompt (KI-055).
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
+
   const title = target?.mode === 'edit' ? (roleEditability(target.role).permissions ? t('rolesAdmin.editor.editTitle') : t('rolesAdmin.editor.viewTitle')) : t('rolesAdmin.editor.createTitle')
   const bodyKey = target?.mode === 'edit' ? `${target.role.id}:${target.role.updatedAt}` : 'create'
   return (
-    <Drawer open={target !== null} onClose={onClose} title={title} width={720} destroyOnHidden>
+    <Drawer
+      open={target !== null}
+      onClose={requestClose}
+      // KI-057: unsaved work turns off the Escape key and the mask click.
+      keyboard={!unsaved}
+      mask={{ closable: !unsaved }}
+      title={title}
+      width={720}
+      destroyOnHidden
+    >
+      <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
       {target ? (
         // Keyed so another role (or a fresh server copy of the same role) starts from a clean form.
-        <RoleEditorBody key={bodyKey} target={target} groups={groups} onClose={onClose} onSaved={onSaved} />
+        <RoleEditorBody key={bodyKey} target={target} groups={groups} onClose={close} onSaved={onSaved} onUnsavedChange={setUnsaved} />
       ) : null}
     </Drawer>
   )
@@ -54,11 +89,14 @@ export function RoleEditor({ target, groups, onClose, onSaved }: RoleEditorProps
 interface RoleEditorBodyProps {
   target: EditorTarget
   groups: PermissionGroup[]
+  /** The footer's Cancel / Close: an explicit discard, closes at once. */
   onClose: () => void
   onSaved: (role: Role, mode: EditorTarget['mode']) => void
+  /** Whether the form holds unsaved work (KI-057): reported on every change, false once saved or left. */
+  onUnsavedChange: (unsaved: boolean) => void
 }
 
-function RoleEditorBody({ target, groups, onClose, onSaved }: RoleEditorBodyProps) {
+function RoleEditorBody({ target, groups, onClose, onSaved, onUnsavedChange }: RoleEditorBodyProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { user } = useAuth()
@@ -80,6 +118,9 @@ function RoleEditorBody({ target, groups, onClose, onSaved }: RoleEditorBodyProp
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
+  // KI-057: the body left (the parent closed the drawer, or gave it another target) — nothing is held any more.
+  useEffect(() => () => onUnsavedChange(false), [onUnsavedChange])
+
   const fail = (error: unknown) => {
     const described = describeRolesFailure(error)
     const text = failureMessage(t, described)
@@ -99,6 +140,8 @@ function RoleEditorBody({ target, groups, onClose, onSaved }: RoleEditorBodyProp
       try {
         const saved = await updateRole(role.id, patch)
         message.success(t('rolesAdmin.saved', { name: localizedLabel(saved.label, language) }))
+        // Saved: nothing is left to lose, even before the parent closes the drawer.
+        onUnsavedChange(false)
         onSaved(saved, 'edit')
       } catch (error) {
         fail(error)
@@ -111,6 +154,7 @@ function RoleEditorBody({ target, groups, onClose, onSaved }: RoleEditorBodyProp
     try {
       const created = await createRole(buildCreateRoleInput(values))
       message.success(t('rolesAdmin.created', { name: localizedLabel(created.label, language) }))
+      onUnsavedChange(false)
       onSaved(created, 'create')
     } catch (error) {
       fail(error)
@@ -139,6 +183,9 @@ function RoleEditorBody({ target, groups, onClose, onSaved }: RoleEditorBodyProp
         layout="vertical"
         requiredMark={false}
         initialValues={role ? roleFormValuesOf(role) : { permissions: [] }}
+        // KI-057: compared with the saved values on every change, so a change changed back holds nothing.
+        // onValuesChange is synchronous; Form.useWatch would report a MessageChannel task late, after an Escape.
+        onValuesChange={(_changed, values) => onUnsavedChange(roleFormHasChanges(role, values))}
         onFinish={(values) => void submit(values)}
         disabled={saving}
       >
