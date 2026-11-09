@@ -44,3 +44,26 @@ describe('describeAssignmentsFailure', () => {
     expect(describeAssignmentsFailure(new TypeError('fetch failed')).key).toBe('login.errors.network')
   })
 })
+
+describe('describeAssignmentsFailure — the T03 codes (J-F41)', () => {
+  it('points the review codes at the grading form fields, with the max score the server names', () => {
+    const range = describeAssignmentsFailure(apiError(400, { code: 'score_out_of_range', score: 25, maxScore: 20 }))
+    expect(range).toEqual({ key: 'assignments.errors.score_out_of_range', field: ['score'], params: { max: '20' } })
+    expect(failureMessage(t, range)).toBe('الدرجة من 0 إلى 20.')
+    const feedback = describeAssignmentsFailure(apiError(400, { code: 'feedback_required' }))
+    expect(feedback).toEqual({ key: 'assignments.errors.feedback_required', field: ['feedback'] })
+    expect(failureMessage(t, feedback)).toBe('الإعادة للتعديل تحتاج تغذية راجعة.')
+  })
+
+  it('words the read and submission codes, attempts_exhausted with the effective allowance', () => {
+    const gone = describeAssignmentsFailure(apiError(404, { code: 'submission_not_found', submissionId: 's-1' }))
+    expect(isAssignmentsFailure(gone, 'submission_not_found')).toBe(true)
+    expect(failureMessage(t, gone)).toBe('التسليم غير موجود أو ليس في فصل مُسند إليك.')
+    expect(failureMessage(t, describeAssignmentsFailure(apiError(409, { code: 'attempts_exhausted', maxAttempts: 3, attempts: 3 })))).toBe('لم تبقَ محاولات لهذا الواجب (3 من 3).')
+    for (const code of ['assignment_closed', 'not_enrolled', 'submission_invalid']) {
+      const failure = describeAssignmentsFailure(apiError(code === 'not_enrolled' ? 403 : code === 'assignment_closed' ? 409 : 400, { code, reason: 'past_due', dueAt: null, classId: 'c-1' }))
+      expect(failure.key).toBe(`assignments.errors.${code}`)
+      expect(failure.field).toBeUndefined()
+    }
+  })
+})

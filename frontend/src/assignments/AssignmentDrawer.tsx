@@ -4,15 +4,18 @@
 // lesson's day) in the assignment's own `timeZone` (D-R41), named when it is
 // not this device's; the lifecycle instants as every drawer shows them —
 // plus the submission counts against the class's active enrollments as
-// read-only tags (the submissions sheet and grading come with T03). For
-// holders of `assignments.manage` (within the class visibility the server
-// enforces): an edit form (smallest PATCH — API-105; the grading rules locked
-// once a submission exists; no edit of a closed assignment or of an
-// assignment of a closed class) and an actions menu built from the mirrored
-// state machine (assignments.status.ts → API-106 with an optional reason, and
-// API-107 for a draft without submissions), each action confirmed in a modal.
+// read-only tags above the tabs. For holders of `assignments.manage` (within
+// the class visibility the server enforces): an edit form (smallest PATCH —
+// API-105; the grading rules locked once a submission exists; no edit of a
+// closed assignment or of an assignment of a closed class) and an actions menu
+// built from the mirrored state machine (assignments.status.ts → API-106 with
+// an optional reason, and API-107 for a draft without submissions), each
+// action confirmed in a modal. Since J-F41 a second tab holds the submissions
+// roster (AssignmentSubmissionsTab — API-108) and its review panel
+// (API-110/API-111); a review's answer carries the attempt only, so the drawer
+// then reads the assignment again for its counts and hands it to the list.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LockOutlined, UndoOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tag, Typography } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -24,6 +27,7 @@ import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { AssignmentFormFields } from './AssignmentFormFields'
+import { AssignmentSubmissionsTab } from './AssignmentSubmissionsTab'
 import { describeAssignmentsFailure, failureMessage, isAssignmentsFailure } from './assignments.errors'
 import { assignmentTitle, formatZonedDateTime, formatZonedDay } from './assignments.format'
 import { assignmentFormValuesOf } from './assignments.form'
@@ -50,6 +54,9 @@ const STALE_EDIT_CODES = ['class_closed', 'assignment_not_found']
 /** A status action refused because the assignment or its class changed elsewhere: the drawer re-reads it. */
 const STALE_ACTION_CODES = ['invalid_transition', 'assignment_not_deletable', 'class_closed', 'assignment_not_found']
 
+/** The tabs of the drawer for holders of `assignments.read` (everyone who reaches it — API-103 needs the key too). */
+type DrawerTab = 'details' | 'submissions'
+
 interface AssignmentDrawerProps {
   assignmentId: string | null
   onClose: () => void
@@ -64,11 +71,14 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('assignments.manage')
+  // API-108 needs the same key and class visibility as API-103: whoever reads the assignment reads its roster.
+  const canReadSubmissions = hasPermission('assignments.read')
   const [assignment, setAssignment] = useState<Assignment | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<AssignmentMenuAction | null>(null)
+  const [tab, setTab] = useState<DrawerTab>('details')
 
   useEffect(() => {
     if (!assignmentId) return
@@ -99,12 +109,29 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
     setLoadError(null)
     setEditing(false)
     setPending(null)
+    setTab('details')
     onClose()
   }
 
   const applyUpdate = (updated: Assignment) => {
     setAssignment(updated)
     onUpdated(updated)
+  }
+
+  /**
+   * After a review (J-F41): the answer of API-111 carries the reviewed attempt only — not the assignment's
+   * `submissions` counts — so the drawer reads the assignment again (API-103), shows its counts and hands it
+   * to the list row, as a write's answer would. A failed read re-reads the drawer the usual way.
+   */
+  const refreshCounts = () => {
+    if (!assignmentId) return
+    getAssignment(assignmentId)
+      .then((fresh) => {
+        // The drawer may show another assignment by now; the list row is right either way.
+        setAssignment((current) => (current && current.id === fresh.id ? fresh : current))
+        onUpdated(fresh)
+      })
+      .catch(() => reload())
   }
 
   const editability = assignment ? assignmentEditability(assignment, canManage) : { editable: false, gradingLocked: false }
@@ -118,6 +145,29 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
 
   const title = assignment ? assignmentTitle(assignment, language) : t('assignments.drawer.title')
   const classOpen = assignment ? isClassOpenForAssignments(assignment.class.status) : true
+
+  /** The details of the assignment, or its edit form while editing. */
+  const detailsPane = (current: Assignment) =>
+    editing ? (
+      <AssignmentEditForm
+        // Remount per server version so the form starts from what the server holds (KI-049).
+        key={`${current.id}:${current.updatedAt}`}
+        assignment={current}
+        gradingLocked={editability.gradingLocked}
+        onSaved={(updated) => {
+          applyUpdate(updated)
+          setEditing(false)
+        }}
+        onStale={() => {
+          setEditing(false)
+          reload()
+        }}
+        onRefresh={reload}
+        onCancel={() => setEditing(false)}
+      />
+    ) : (
+      <AssignmentDetails assignment={current} />
+    )
 
   return (
     <Drawer
@@ -140,7 +190,13 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
         assignment && !editing && (editability.editable || menu.length > 0) ? (
           <Space>
             {editability.editable ? (
-              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditing(true)
+                  setTab('details')
+                }}
+              >
                 {t('common.edit')}
               </Button>
             ) : null}
@@ -175,29 +231,28 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
       {assignment && canManage && classOpen && assignment.status === 'closed' ? <Alert type="info" showIcon title={t('assignments.drawer.closedHint')} style={{ marginBottom: 16 }} /> : null}
 
       {assignment ? (
-        editing ? (
-          <AssignmentEditForm
-            // Remount per server version so the form starts from what the server holds (KI-049).
-            key={`${assignment.id}:${assignment.updatedAt}`}
-            assignment={assignment}
-            gradingLocked={editability.gradingLocked}
-            onSaved={(updated) => {
-              applyUpdate(updated)
-              setEditing(false)
-            }}
-            onStale={() => {
-              setEditing(false)
-              reload()
-            }}
-            onRefresh={reload}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <>
-            <AssignmentDetails assignment={assignment} />
+        <>
+          {/* The server's counts above both tabs: after a review they follow the re-read of API-103 (refreshCounts). */}
+          <div style={{ marginBottom: 16 }}>
             <AssignmentSubmissionsSummary assignment={assignment} />
-          </>
-        )
+          </div>
+          {canReadSubmissions ? (
+            <Tabs
+              activeKey={tab}
+              onChange={(key) => setTab(key as DrawerTab)}
+              items={[
+                { key: 'details', label: t('assignments.drawer.tabs.details'), children: detailsPane(assignment) },
+                {
+                  key: 'submissions',
+                  label: t('assignments.drawer.tabs.submissions'),
+                  children: <AssignmentSubmissionsTab key={assignment.id} assignment={assignment} onReviewed={refreshCounts} onAssignmentStale={reload} />,
+                },
+              ]}
+            />
+          ) : (
+            detailsPane(assignment)
+          )}
+        </>
       ) : null}
 
       {assignment && pending ? (
