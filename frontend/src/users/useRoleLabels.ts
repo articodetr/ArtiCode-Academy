@@ -7,7 +7,9 @@
 // are handed out as `items` too, so the user drawer's roles tab reuses them
 // instead of asking API-022 a second time in the same visit (PR #62 review,
 // note 1); `items` stays null until they are read, and without the permission
-// or after a failure, and the tab then reads them itself.
+// or after a failure, and the tab then reads them itself. With `enabled` false
+// it asks nothing at all — the profile page reads the labels only for a user
+// who holds a custom role (J-F36).
 import { useEffect, useMemo, useState } from 'react'
 import { listRoles } from '../api/roles'
 import type { Role } from '../api/roles'
@@ -27,10 +29,10 @@ export interface PageRoles extends RoleLabels {
 
 const NO_ROLES: readonly Role[] = []
 
-export function useRoleLabels(): PageRoles {
+export function useRoleLabels(enabled = true): PageRoles {
   const { hasPermission } = useAuth()
   const { language } = useLocalized()
-  const allowed = hasPermission(ROLE_LABELS_PERMISSION)
+  const allowed = enabled && hasPermission(ROLE_LABELS_PERMISSION)
   const [roles, setRoles] = useState<readonly Role[] | null>(null)
 
   useEffect(() => {

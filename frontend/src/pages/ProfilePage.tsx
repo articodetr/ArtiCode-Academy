@@ -4,17 +4,19 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { changePassword } from '../api/auth'
-import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
+import { uiRoleFor } from '../auth/roles'
 import { PageHeader } from '../components/PageHeader'
+import { ProfilePermissions } from '../profile/ProfilePermissions'
+import { PASSWORD_MIN_LENGTH, passwordChangeFailure, requestFailure } from '../profile/profile.errors'
+import { useRoleLabels } from '../users/useRoleLabels'
+import { roleLabel } from '../users/users.format'
 
 interface PasswordFormValues {
   currentPassword: string
   newPassword: string
   confirmPassword: string
 }
-
-const PASSWORD_MIN_LENGTH = 10
 
 /** The signed-in user's own page: identity, roles, permissions, sessions and password. */
 export function ProfilePage() {
@@ -26,6 +28,10 @@ export function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
+  // System roles are translated; a custom role needs its server label (API-022,
+  // `users.read`), so the roles are read only for a user who holds one (J-F36).
+  const holdsCustomRole = user?.roles.some((key) => uiRoleFor(key) === null) ?? false
+  const roleLabels = useRoleLabels(holdsCustomRole)
 
   if (!user) return null
 
@@ -38,13 +44,8 @@ export function ProfilePage() {
       message.success(t('profile.passwordChanged'))
       await reloadUser()
     } catch (error) {
-      if (error instanceof ApiError && error.code === 'password_invalid') {
-        setPasswordError(t('profile.errors.password_invalid'))
-      } else if (error instanceof ApiError && (error.code === 'password_weak' || error.status === 400)) {
-        setPasswordError(t('profile.errors.password_weak', { min: PASSWORD_MIN_LENGTH }))
-      } else {
-        setPasswordError(t('login.errors.generic'))
-      }
+      const failure = passwordChangeFailure(error)
+      setPasswordError(t(failure.key, failure.values))
     } finally {
       setSaving(false)
     }
@@ -54,6 +55,10 @@ export function ProfilePage() {
     setSigningOut(true)
     try {
       await (everywhere ? logoutAll() : logout())
+    } catch (error) {
+      // Said instead of left as an unhandled rejection; the provider decides what remains of the session.
+      const failure = requestFailure(error)
+      message.error(t(failure.key, failure.values))
     } finally {
       setSigningOut(false)
       navigate('/login', { replace: true })
@@ -78,7 +83,7 @@ export function ProfilePage() {
       />
 
       {user.mustChangePassword ? (
-        <Alert type="warning" showIcon message={t('profile.mustChangePassword')} style={{ marginBottom: 16 }} />
+        <Alert type="warning" showIcon title={t('profile.mustChangePassword')} style={{ marginBottom: 16 }} />
       ) : null}
 
       <Row gutter={[16, 16]}>
@@ -94,7 +99,7 @@ export function ProfilePage() {
                 ) : (
                   user.roles.map((role) => (
                     <Tag key={role} color="blue">
-                      {role}
+                      {roleLabel(role, t, roleLabels.labels)}
                     </Tag>
                   ))
                 )}
@@ -103,22 +108,14 @@ export function ProfilePage() {
           </Card>
 
           <Card title={t('profile.permissions', { count: user.permissions.length })} style={{ marginTop: 16 }}>
-            {user.permissions.length === 0 ? (
-              <Typography.Text type="secondary">{t('profile.noPermissions')}</Typography.Text>
-            ) : (
-              <Space size={[4, 8]} wrap>
-                {user.permissions.map((permission) => (
-                  <Tag key={permission}>{permission}</Tag>
-                ))}
-              </Space>
-            )}
+            <ProfilePermissions permissions={user.permissions} />
           </Card>
         </Col>
 
         <Col xs={24} xl={12}>
           <Card title={t('profile.changePassword')}>
             {passwordError ? (
-              <Alert type="error" showIcon message={passwordError} style={{ marginBottom: 16 }} />
+              <Alert type="error" showIcon title={passwordError} style={{ marginBottom: 16 }} />
             ) : null}
             <Form<PasswordFormValues>
               form={form}
