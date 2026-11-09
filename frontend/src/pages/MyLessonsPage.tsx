@@ -10,7 +10,10 @@
 // (API-060 — the same ownership). The route opens to the holders of the
 // `student` or `guardian` server role key only (nav entry `myLessons`, like
 // «my classes»); a learner without an owned enrollment gets an empty list, and
-// the page says why.
+// the page says why. Each row shows its times in the lesson's own `timeZone`,
+// and «today» and the range days are the academy's days (D-R41 — J-F28); a
+// note says so when a zone differs from this device's. The list waits for the
+// academy's zone (the shared API-035 reading), as /lessons does.
 import { LinkOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Flex, Segmented, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -24,8 +27,9 @@ import { StatusTag } from '../components/StatusTag'
 import { useMyClasses } from '../enrollments/useMyClasses'
 import { useLocalized } from '../i18n/useLocalized'
 import { DateFilter } from '../lessons/DateFilter'
+import { LessonWhen, LessonZoneNote } from '../lessons/LessonZone'
 import { describeLessonsFailure, failureMessage } from '../lessons/lessons.errors'
-import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, syllabusItemLabel } from '../lessons/lessons.format'
+import { formatLessonDateTime, lessonRoomLabel, lessonTitle, syllabusItemLabel } from '../lessons/lessons.format'
 import {
   MY_LESSON_PAGE_SIZES,
   MY_LESSON_VIEWS,
@@ -37,8 +41,9 @@ import {
   studentOptionsOf,
 } from '../lessons/myLessons.view'
 import type { MyLessonView, MyLessonsFilters } from '../lessons/myLessons.view'
+import { useAcademyZone } from '../lessons/useAcademyZone'
 import { useMyLessons } from '../lessons/useMyLessons'
-import { displayNameOf, formatDateTime, localizedLabel } from '../users/users.format'
+import { displayNameOf, localizedLabel } from '../users/users.format'
 
 function AttendanceCell({ item }: { item: MyLessonItem }) {
   const { t } = useTranslation()
@@ -47,7 +52,10 @@ function AttendanceCell({ item }: { item: MyLessonItem }) {
   if (cell.kind === 'recorded') {
     const label = t(`lessons.attendance.${cell.status}`)
     return (
-      <Tag color={ATTENDANCE_STATUS_COLORS[cell.status]} title={item.attendance ? t('myLessons.attendance.recordedAt', { date: formatDateTime(item.attendance.recordedAt, language) }) : undefined}>
+      <Tag
+        color={ATTENDANCE_STATUS_COLORS[cell.status]}
+        title={item.attendance ? t('myLessons.attendance.recordedAt', { date: formatLessonDateTime(item.attendance.recordedAt, language, item.timeZone) }) : undefined}
+      >
         {cell.minutesLate !== null ? `${label} · ${t('myLessons.attendance.minutes', { count: cell.minutesLate })}` : label}
       </Tag>
     )
@@ -58,10 +66,24 @@ function AttendanceCell({ item }: { item: MyLessonItem }) {
 
 export function MyLessonsPage() {
   const { t } = useTranslation()
+  const zone = useAcademyZone()
+  // Keyed by the zone, so «today» is always the academy's day of the reading on screen.
+  if (zone.settled) return <MyLessonsScreen key={zone.timeZone} dayZone={zone.timeZone} />
+  return (
+    <>
+      <PageHeader title={t('myLessons.title')} subtitle={t('myLessons.subtitle')} />
+      <Card loading />
+    </>
+  )
+}
+
+/** The page once the zone of its days is known: the academy's, or this device's when the academy could not be read. */
+function MyLessonsScreen({ dayZone }: { dayZone: string }) {
+  const { t } = useTranslation()
   const { language } = useLocalized()
   const { user } = useAuth()
   const roleKeys = user?.roles ?? []
-  const list = useMyLessons()
+  const list = useMyLessons(dayZone)
   const myClasses = useMyClasses()
   const { filters } = list
   const students = studentOptionsOf(myClasses.items)
@@ -74,15 +96,7 @@ export function MyLessonsPage() {
     {
       title: t('lessons.columns.when'),
       key: 'when',
-      render: (_, row) => (
-        <span>
-          <Typography.Text>{formatLessonDay(row.startsAt, language)}</Typography.Text>
-          <br />
-          <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-            {formatLessonTimes(row.startsAt, row.endsAt, language)}
-          </Typography.Text>
-        </span>
-      ),
+      render: (_, row) => <LessonWhen startsAt={row.startsAt} endsAt={row.endsAt} timeZone={row.timeZone} />,
     },
     {
       title: t('lessons.columns.lesson'),
@@ -241,6 +255,8 @@ export function MyLessonsPage() {
             aria-label={t('myLessons.refresh')}
           />
         </Flex>
+
+        <LessonZoneNote timeZones={list.items.map((row) => row.timeZone)} dayZone={dayZone} />
 
         {myClasses.error ? <Alert type="warning" showIcon title={t('myLessons.optionsFailed')} style={{ marginBottom: 16 }} /> : null}
 

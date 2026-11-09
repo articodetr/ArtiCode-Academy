@@ -6,7 +6,8 @@
 // needs `lessons.read` and follows the class visibility (D-R16/D-R32: a
 // holder of `classes.manage` sees every lesson, anyone else the lessons of
 // the classes they teach); writing needs `lessons.manage` with the same
-// visibility — the server decides. Instants are ISO 8601 in UTC.
+// visibility — the server decides. Instants are ISO 8601 in UTC; each lesson
+// names the IANA zone it is shown in (`timeZone` — D-R41).
 import { CLASSES_PATH } from './classes'
 import { apiRequest } from './client'
 import type { ScheduleClass, ScheduleRoom, ScheduleTeacher } from './timetable'
@@ -63,6 +64,12 @@ export interface Lesson {
   endsAt: string
   status: LessonStatus
   room: ScheduleRoom | null
+  /**
+   * IANA zone the lesson is displayed in: the room's branch when it has one,
+   * else the academy's (D-R41 — as `timeZone` in API-090/091). The screens show
+   * and take its times in this zone (J-F28).
+   */
+  timeZone: string
   /** The lesson's own teacher (a snapshot — D-R33 (3)); null = none. */
   teacher: ScheduleTeacher | null
   syllabusItem: LessonSyllabusItem | null

@@ -1,68 +1,115 @@
 // Pure helpers of the lessons screens (J-F09): instants ↔ the native date and
 // time inputs, the range rule of lessons.time.ts, and the labels the list and
-// the drawer render. Everything here reads the browser's local time, the
-// display included: D-R33 (5) names the academy's (or the room's branch's)
-// zone as the display zone, and moving the list and the drawer there is an
-// open product decision for the owner (J-F19 — master doc 08, MOD-06). No
-// React, no i18next instance.
+// the drawer render. Every wall-clock value here belongs to a named IANA zone
+// (D-R41 — J-F28): a lesson's own `timeZone` (its room's branch, else the
+// academy's — the server decides) for its times, shown and typed; the
+// academy's for «today», the day filters and a lesson not created yet. The
+// browser's zone is read in one place only, deviceTimeZone(), which the
+// screens name beside a lesson zone that differs from it. Conversions go
+// through the timetable's zonedInstant() (DST-safe, a mirror of the server's).
+// No React, no i18next instance.
 import { MAX_LESSON_HOURS } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import type { ScheduleRoom } from '../api/timetable'
 import type { Language } from '../i18n/language'
-import { isCalendarDate } from '../timetable/timetable.dates'
+import { addDays, calendarDateIn, clockOfMinutes, isCalendarDate, isTimeZone, minutesNowIn, zonedInstant } from '../timetable/timetable.dates'
+import { deviceTimeZone } from '../timetable/timetable.settings'
 import { localizedLabel } from '../users/users.format'
 
-const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/
-const CLOCK_TIME = /^\d{2}:\d{2}$/
-const DAY_MS = 24 * 60 * 60 * 1000
+const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/
+const EMPTY = '—'
 
 /** The mark of an end on the next day, after the end time (list, drawer and the form's end time — J-F19). */
 export const NEXT_DAY_MARK = '(+1)'
 
-const pad = (value: number) => String(value).padStart(2, '0')
+/** Where the zone of the shown or typed times comes from — the screens say it beside the zone's name. */
+export type LessonZoneSource = 'lesson' | 'academy' | 'device'
 
-/** The instant as the browser's local `YYYY-MM-DD` and `HH:MM` (the values of the native inputs). */
-export function localPartsOf(iso: string): { date: string; time: string } {
-  const value = new Date(iso)
-  if (Number.isNaN(value.getTime())) return { date: '', time: '' }
-  return {
-    date: `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`,
-    time: `${pad(value.getHours())}:${pad(value.getMinutes())}`,
-  }
-}
-
-/** Today as the browser's local `YYYY-MM-DD` — the default «from» of the lessons list. */
-export function todayIso(now: Date = new Date()): string {
-  return localPartsOf(now.toISOString()).date
-}
-
-/** A local date and time → ISO 8601 instant (UTC, `Z`), or undefined when either is missing or malformed. */
-export function toInstant(date: string | undefined, time: string | undefined): string | undefined {
-  if (!date || !time || !CALENDAR_DATE.test(date) || !CLOCK_TIME.test(time)) return undefined
-  const value = new Date(`${date}T${time}:00`)
-  return Number.isNaN(value.getTime()) ? undefined : value.toISOString()
-}
-
-/** The calendar day after a `YYYY-MM-DD` date (plain calendar arithmetic, no time zone involved). */
-function nextCalendarDate(date: string): string {
-  const [year = 0, month = 1, day = 1] = date.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10)
+export interface LessonZone {
+  /** IANA name. */
+  timeZone: string
+  /** `lesson` = the lesson's own (D-R41); `academy` = API-035 `timezone`; `device` = this device's, when the academy could not be read. */
+  source: LessonZoneSource
 }
 
 /**
- * The lesson's range from the form's day and two clock times: an end time at
- * or before the start time means the lesson ends on the next day (a 22:00 →
- * 01:00 session) — `nextDay` says that it rolled over, so the form can mark it
- * beside the end time (J-F19). The end is the typed time on the next calendar
- * day, not 24 hours after the same-day time: on a night the clock changes
- * (DST) those differ by an hour. Undefined when a part is missing.
+ * The academy's zone (API-035 `timezone`) — the zone of «today», of the day
+ * filters and of the times typed for a new lesson — or this device's when the
+ * academy could not be read (as the timetable falls back).
  */
-export function rangeOf(date: string | undefined, startTime: string | undefined, endTime: string | undefined): { startsAt: string; endsAt: string; nextDay: boolean } | undefined {
-  const startsAt = toInstant(date, startTime)
-  const sameDayEnd = toInstant(date, endTime)
+export function academyZoneOf(academy: { timezone?: unknown } | null): LessonZone {
+  const zone = academy?.timezone
+  return isTimeZone(zone) ? { timeZone: zone, source: 'academy' } : { timeZone: deviceTimeZone(), source: 'device' }
+}
+
+const canonicalZones = new Map<string, string>()
+
+/** The name Intl resolves a zone to, so an alias (Etc/UTC, Asia/Kolkata) compares equal to its canonical name. */
+function canonicalZone(timeZone: string): string {
+  let canonical = canonicalZones.get(timeZone)
+  if (canonical === undefined) {
+    try {
+      canonical = new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone
+    } catch {
+      canonical = timeZone
+    }
+    canonicalZones.set(timeZone, canonical)
+  }
+  return canonical
+}
+
+/** True when the two names denote one zone. */
+export function sameTimeZone(a: string, b: string): boolean {
+  return a === b || canonicalZone(a) === canonicalZone(b)
+}
+
+/** True when `timeZone` is not this device's zone: the screens then name both zones (D-R41). */
+export function differsFromDevice(timeZone: string, device: string = deviceTimeZone()): boolean {
+  return !sameTimeZone(timeZone, device)
+}
+
+/** The instant as `YYYY-MM-DD` and `HH:MM` on the wall clock of `timeZone` (the values of the native inputs). */
+export function zonedPartsOf(iso: string, timeZone: string): { date: string; time: string } {
+  const instant = new Date(iso).getTime()
+  if (Number.isNaN(instant)) return { date: '', time: '' }
+  return { date: calendarDateIn(timeZone, instant), time: clockOfMinutes(minutesNowIn(timeZone, instant)) }
+}
+
+/** Today in `timeZone` as `YYYY-MM-DD` — the default «from» of the lessons list (the academy's day — D-R41). */
+export function todayIn(timeZone: string, now: Date = new Date()): string {
+  return calendarDateIn(timeZone, now.getTime())
+}
+
+/**
+ * A wall-clock date and time in `timeZone` → ISO 8601 instant (UTC, `Z`), or
+ * undefined when either is missing or malformed. A time a DST gap skips moves
+ * forward; one that occurs twice resolves as zonedInstant() says.
+ */
+export function toInstant(date: string | undefined, time: string | undefined, timeZone: string): string | undefined {
+  if (!date || !time || !isCalendarDate(date) || !CLOCK_TIME.test(time)) return undefined
+  return new Date(zonedInstant(date, time, timeZone)).toISOString()
+}
+
+/**
+ * The lesson's range from the form's day and two clock times in `timeZone`: an
+ * end time at or before the start time means the lesson ends on the next day
+ * (a 22:00 → 01:00 session) — `nextDay` says that it rolled over, so the form
+ * can mark it beside the end time (J-F19). The end is the typed time on the
+ * next calendar day of that zone, not 24 hours after the same-day time: on a
+ * night the zone's clock changes (DST) those differ by an hour. Undefined
+ * when a part is missing.
+ */
+export function rangeOf(
+  date: string | undefined,
+  startTime: string | undefined,
+  endTime: string | undefined,
+  timeZone: string,
+): { startsAt: string; endsAt: string; nextDay: boolean } | undefined {
+  const startsAt = toInstant(date, startTime, timeZone)
+  const sameDayEnd = toInstant(date, endTime, timeZone)
   if (!date || !startsAt || !sameDayEnd) return undefined
   const nextDay = new Date(sameDayEnd).getTime() <= new Date(startsAt).getTime()
-  const endsAt = nextDay ? toInstant(nextCalendarDate(date), endTime) : sameDayEnd
+  const endsAt = nextDay ? toInstant(addDays(date, 1), endTime, timeZone) : sameDayEnd
   return endsAt ? { startsAt, endsAt, nextDay } : undefined
 }
 
@@ -71,9 +118,14 @@ export function rangeOf(date: string | undefined, startTime: string | undefined,
  * missing part, an end after the start, or an end equal to the start — which
  * the form refuses as an empty range rather than a 24-hour lesson.
  */
-export function nextDayRangeOf(date: string | undefined, startTime: string | undefined, endTime: string | undefined): { startsAt: string; endsAt: string } | undefined {
+export function nextDayRangeOf(
+  date: string | undefined,
+  startTime: string | undefined,
+  endTime: string | undefined,
+  timeZone: string,
+): { startsAt: string; endsAt: string } | undefined {
   if (startTime === endTime) return undefined
-  const range = rangeOf(date, startTime, endTime)
+  const range = rangeOf(date, startTime, endTime, timeZone)
   return range?.nextDay ? { startsAt: range.startsAt, endsAt: range.endsAt } : undefined
 }
 
@@ -101,15 +153,19 @@ export function dateFilterValue(raw: string): string | undefined {
   return isCalendarDate(raw) ? raw : undefined
 }
 
-/** The first instant of a local calendar day as ISO 8601 (the `from` filter), or undefined for a blank or malformed input. */
-export function dayStartInstant(date: string | undefined): string | undefined {
-  return toInstant(date, '00:00')
+/** The first instant of a calendar day in `timeZone` as ISO 8601 (the `from` filter), or undefined for a blank or malformed input. */
+export function dayStartInstant(date: string | undefined, timeZone: string): string | undefined {
+  return toInstant(date, '00:00', timeZone)
 }
 
-/** The last millisecond of a local calendar day as ISO 8601 (the `to` filter — the server compares inclusively). */
-export function dayEndInstant(date: string | undefined): string | undefined {
-  const start = toInstant(date, '00:00')
-  return start ? new Date(new Date(start).getTime() + DAY_MS - 1).toISOString() : undefined
+/**
+ * The last millisecond of a calendar day in `timeZone` as ISO 8601 (the `to`
+ * filter — the server compares inclusively): one before the next day starts,
+ * so a 23- or 25-hour day (DST) keeps its whole length.
+ */
+export function dayEndInstant(date: string | undefined, timeZone: string): string | undefined {
+  if (!date || !isCalendarDate(date)) return undefined
+  return new Date(zonedInstant(addDays(date, 1), '00:00', timeZone) - 1).toISOString()
 }
 
 function intlLocale(language: Language): string {
@@ -117,26 +173,54 @@ function intlLocale(language: Language): string {
   return language === 'ar' ? 'ar-u-nu-latn' : 'en-GB'
 }
 
-/** `HH:MM` (24 h, Latin digits) of an instant in the browser's zone. */
-export function formatClock(iso: string, language: Language): string {
-  const value = new Date(iso)
-  if (Number.isNaN(value.getTime())) return iso
-  return new Intl.DateTimeFormat(intlLocale(language), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(value)
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+/** A formatter in `timeZone` — an unknown name reads as UTC, as zonedInstant() does, so what is shown and what is typed agree. */
+function formatter(language: Language, timeZone: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const zone = isTimeZone(timeZone) ? timeZone : 'UTC'
+  const key = `${language}|${zone}|${JSON.stringify(options)}`
+  let value = formatters.get(key)
+  if (!value) {
+    value = new Intl.DateTimeFormat(intlLocale(language), { ...options, timeZone: zone })
+    formatters.set(key, value)
+  }
+  return value
 }
 
-/** `10:00 – 11:30` (always left-to-right); a lesson ending on another day shows that day after the end time. */
-export function formatLessonTimes(startsAt: string, endsAt: string, language: Language): string {
-  const start = localPartsOf(startsAt)
-  const end = localPartsOf(endsAt)
-  const range = `${formatClock(startsAt, language)} – ${formatClock(endsAt, language)}`
+/** `HH:MM` (24 h, Latin digits) of an instant on the wall clock of `timeZone`. */
+export function formatClock(iso: string, language: Language, timeZone: string): string {
+  const value = new Date(iso)
+  if (Number.isNaN(value.getTime())) return iso
+  return formatter(language, timeZone, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(value)
+}
+
+/** `10:00 – 11:30` in `timeZone` (render it in a plain `dir="ltr"` span); a lesson ending on another day of that zone shows NEXT_DAY_MARK. */
+export function formatLessonTimes(startsAt: string, endsAt: string, language: Language, timeZone: string): string {
+  const start = zonedPartsOf(startsAt, timeZone)
+  const end = zonedPartsOf(endsAt, timeZone)
+  const range = `${formatClock(startsAt, language, timeZone)} – ${formatClock(endsAt, language, timeZone)}`
   return start.date === end.date || !end.date ? range : `${range} ${NEXT_DAY_MARK}`
 }
 
-/** The lesson's day, localized (medium date style). */
-export function formatLessonDay(iso: string, language: Language): string {
+/** The lesson's day in `timeZone`, localized (medium date style). */
+export function formatLessonDay(iso: string, language: Language, timeZone: string): string {
   const value = new Date(iso)
   if (Number.isNaN(value.getTime())) return iso
-  return new Intl.DateTimeFormat(intlLocale(language), { dateStyle: 'medium' }).format(value)
+  return formatter(language, timeZone, { dateStyle: 'medium' }).format(value)
+}
+
+/**
+ * A timestamp of the lesson — its creation, its last change, when its
+ * attendance was recorded — in `timeZone`, styled as users.format's
+ * formatDateTime (medium date, short time): every time a lesson screen shows
+ * is in the lesson's zone, so its zone hint holds for all of them. A missing
+ * value shows a dash.
+ */
+export function formatLessonDateTime(iso: string | null | undefined, language: Language, timeZone: string): string {
+  if (!iso) return EMPTY
+  const value = new Date(iso)
+  if (Number.isNaN(value.getTime())) return iso
+  return formatter(language, timeZone, { dateStyle: 'medium', timeStyle: 'short' }).format(value)
 }
 
 /** `LAB-1 — مختبر 1` (the name when it has one), as the schedule screen. */

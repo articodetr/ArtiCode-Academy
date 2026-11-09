@@ -9,7 +9,11 @@
 // get a second tab with the attendance sheet (J-F10 — API-099/100,
 // attendance/AttendanceSheetTab.tsx); a saved sheet updates the counts of the
 // summary here and of the row in the list. The edit form lives in the details
-// tab, so unsaved attendance rows survive an edit of the lesson.
+// tab, so unsaved attendance rows survive an edit of the lesson. Every time it
+// shows — the lesson's own, its creation and last change, when its attendance
+// was recorded — is in the lesson's `timeZone`, named in its own row beside
+// this device's zone when they differ, and the edit form takes the day and
+// the times in that zone (D-R41 — J-F28).
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LinkOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -27,12 +31,13 @@ import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { useAuth } from '../auth/auth-context'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
-import { formatDateTime, localizedLabel } from '../users/users.format'
+import { localizedLabel } from '../users/users.format'
 import { LessonFormFields } from './LessonFormFields'
+import { LessonZoneValue } from './LessonZone'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
 import { lessonFormValuesOf, planLessonPatch } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
-import { durationMinutes, formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, syllabusItemLabel } from './lessons.format'
+import { durationMinutes, formatLessonDateTime, formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, syllabusItemLabel } from './lessons.format'
 import { availableLessonActions, isClassOpenForLessons, isDangerousLessonAction, lessonEditability } from './lessons.status'
 import type { LessonMenuAction } from './lessons.status'
 
@@ -272,12 +277,16 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
         <Descriptions.Item label={t('lessons.columns.course')}>
           {localizedLabel(lesson.class.course.name, language)} (<span dir="ltr">{lesson.class.course.code}</span>)
         </Descriptions.Item>
-        <Descriptions.Item label={t('lessons.fields.date')}>{formatLessonDay(lesson.startsAt, language)}</Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.date')}>{formatLessonDay(lesson.startsAt, language, lesson.timeZone)}</Descriptions.Item>
         <Descriptions.Item label={t('common.time')}>
           <Space wrap>
-            <Typography.Text dir="ltr">{formatLessonTimes(lesson.startsAt, lesson.endsAt, language)}</Typography.Text>
+            {/* A plain span: antd Typography's RTL class would override dir and reverse the range. */}
+            <span dir="ltr">{formatLessonTimes(lesson.startsAt, lesson.endsAt, language, lesson.timeZone)}</span>
             <Typography.Text type="secondary">{t('lessons.drawer.minutes', { count: durationMinutes(lesson.startsAt, lesson.endsAt) })}</Typography.Text>
           </Space>
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.timeZone')}>
+          <LessonZoneValue timeZone={lesson.timeZone} />
         </Descriptions.Item>
         <Descriptions.Item label={t('lessons.fields.deliveryMode')}>
           <StatusTag value={lesson.deliveryMode} />
@@ -319,8 +328,8 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
         <Descriptions.Item label={t('lessons.fields.origin')}>
           <Tag>{lesson.scheduleId ? t('lessons.drawer.generated') : t('lessons.drawer.manual')}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label={t('lessons.fields.createdAt')}>{formatDateTime(lesson.createdAt, language)}</Descriptions.Item>
-        <Descriptions.Item label={t('lessons.fields.updatedAt')}>{formatDateTime(lesson.updatedAt, language)}</Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.createdAt')}>{formatLessonDateTime(lesson.createdAt, language, lesson.timeZone)}</Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.updatedAt')}>{formatLessonDateTime(lesson.updatedAt, language, lesson.timeZone)}</Descriptions.Item>
       </Descriptions>
       <LessonAttendanceSummary lesson={lesson} onOpenSheet={onOpenAttendance} />
     </>
@@ -328,14 +337,16 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
 }
 
 /** The attendance counts the server computes; the sheet (J-F10) records them — `onOpenSheet` switches to its tab. */
-export function LessonAttendanceSummary({ lesson, onOpenSheet }: { lesson: Pick<Lesson, 'attendance' | 'attendanceTakenAt'>; onOpenSheet?: () => void }) {
+export function LessonAttendanceSummary({ lesson, onOpenSheet }: { lesson: Pick<Lesson, 'attendance' | 'attendanceTakenAt' | 'timeZone'>; onOpenSheet?: () => void }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { attendance } = lesson
   return (
     <Card size="small" title={t('lessons.attendance.title')} data-testid="lesson-attendance">
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-        {lesson.attendanceTakenAt ? t('lessons.attendance.takenAt', { date: formatDateTime(lesson.attendanceTakenAt, language) }) : t('lessons.attendance.notTaken')}
+        {lesson.attendanceTakenAt
+          ? t('lessons.attendance.takenAt', { date: formatLessonDateTime(lesson.attendanceTakenAt, language, lesson.timeZone) })
+          : t('lessons.attendance.notTaken')}
       </Typography.Paragraph>
       <Space wrap>
         <Tag>{`${t('lessons.attendance.recorded')}: ${attendance.recorded}`}</Tag>
@@ -434,6 +445,9 @@ interface LessonEditFormProps {
  * for the teacher options (a teacher who lost the assignment stays selectable
  * as the current value) — only with `classes.read`, which GET /api/classes/:id
  * requires; without it the select offers the current teacher and «no teacher».
+ * The day and the times are read in the lesson's zone as loaded (D-R41), even
+ * when the room changes: the server may then answer with another zone (the
+ * room's branch), and the drawer shows that answer — no request of its own.
  */
 function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel }: LessonEditFormProps) {
   const { t } = useTranslation()
@@ -485,7 +499,7 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel }: Le
 
   return (
     <Form form={form} layout="vertical" requiredMark={false} initialValues={lessonFormValuesOf(lesson)} onFinish={(values) => void save(values as LessonFormValues)} disabled={saving}>
-      <LessonFormFields form={form} mode="edit" klass={klass} lesson={lesson} timingLocked={timingLocked} />
+      <LessonFormFields form={form} mode="edit" zone={{ timeZone: lesson.timeZone, source: 'lesson' }} klass={klass} lesson={lesson} timingLocked={timingLocked} />
       <Flex gap={8} justify="flex-end">
         <Button onClick={onCancel} disabled={saving}>
           {t('common.cancel')}

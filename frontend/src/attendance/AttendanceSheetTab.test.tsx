@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AttendanceSheet } from '../api/attendance'
 import { ar } from '../i18n/ar'
 import { ATTENDANCE_STAFF_PERMISSIONS, ATTENDANCE_TEACHER_PERMISSIONS, STUDENT_IDS, fourStudents, makeAttendanceRecord, makeAttendanceSheet } from '../test/attendance'
+import { formatLessonDateTime } from '../lessons/lessons.format'
 import { jsonResponse, mockFetch } from '../test/http'
-import { LESSON_ID } from '../test/lessons'
+import { FAR_TIME_ZONE, LESSON_ID, LESSON_TIME_ZONE } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { formatDateTime } from '../users/users.format'
 import { AttendanceSheetTab } from './AttendanceSheetTab'
@@ -36,10 +37,11 @@ function mockSheetApi(get: () => AttendanceSheet | Response, put?: (body: unknow
   return calls
 }
 
-function renderTab(permissions: string[]) {
+/** `timeZone` = the lesson's (D-R41): the sheet shows its times in it. */
+function renderTab(permissions: string[], timeZone: string = LESSON_TIME_ZONE) {
   const onSaved = vi.fn()
   const onLessonStale = vi.fn()
-  const view = renderWithProviders(<AttendanceSheetTab lesson={{ id: LESSON_ID }} onSaved={onSaved} onLessonStale={onLessonStale} />, {
+  const view = renderWithProviders(<AttendanceSheetTab lesson={{ id: LESSON_ID, timeZone }} onSaved={onSaved} onLessonStale={onLessonStale} />, {
     auth: makeAuth({ user: makeUser({ permissions }) }),
     route: '/lessons',
   })
@@ -179,7 +181,7 @@ describe('AttendanceSheetTab', () => {
   it('keeps a lesson that has not started, a cancelled lesson and a cancelled class read-only even for a teacher, saying why', async () => {
     const closed = makeAttendanceSheet({ recordable: false, closedReason: 'not_started', attendanceTakenAt: null })
     const cases: [AttendanceSheet, string][] = [
-      [closed, ar.attendance.closed.not_started.replace('{{time}}', formatDateTime(closed.startsAt, 'ar'))],
+      [closed, ar.attendance.closed.not_started.replace('{{time}}', formatLessonDateTime(closed.startsAt, 'ar', LESSON_TIME_ZONE))],
       [makeAttendanceSheet({ recordable: false, closedReason: 'cancelled', lessonStatus: 'cancelled' }), ar.attendance.closed.cancelled],
       [makeAttendanceSheet({ recordable: false, closedReason: 'class_cancelled' }), ar.attendance.closed.class_cancelled],
     ]
@@ -191,6 +193,19 @@ describe('AttendanceSheetTab', () => {
       expect(screen.queryByText(ar.attendance.save)).not.toBeInTheDocument()
       unmount()
     }
+  })
+
+  it('says when a lesson that has not started opens — and when the sheet and each record were written — in the lesson’s zone, not the browser’s (D-R41 — J-F28)', async () => {
+    // 10:00 UTC on the 10th is midnight of the 11th in UTC+14.
+    const closed = makeAttendanceSheet({ recordable: false, closedReason: 'not_started' })
+    mockSheetApi(() => closed)
+    renderTab(ATTENDANCE_TEACHER_PERMISSIONS, FAR_TIME_ZONE)
+    const opensAt = formatLessonDateTime(closed.startsAt, 'ar', FAR_TIME_ZONE)
+    expect(opensAt).not.toBe(formatDateTime(closed.startsAt, 'ar'))
+    expect(await screen.findByText(ar.attendance.closed.not_started.replace('{{time}}', opensAt))).toBeInTheDocument()
+    expect(screen.getByText(ar.lessons.attendance.takenAt.replace('{{date}}', formatLessonDateTime(closed.attendanceTakenAt, 'ar', FAR_TIME_ZONE)))).toBeInTheDocument()
+    // Yousef's record (written 10:05 UTC) — under his name, after who wrote it.
+    expect(within(row('يوسف الطالب')).getByText(formatLessonDateTime('2026-11-10T10:05:00.000Z', 'ar', FAR_TIME_ZONE), { exact: false })).toBeInTheDocument()
   })
 
   it('re-reads the sheet and asks the drawer to re-read the lesson when the server says it no longer takes attendance', async () => {

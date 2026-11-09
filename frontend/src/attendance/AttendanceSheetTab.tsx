@@ -6,7 +6,9 @@
 // screen shows the server's answer only (no optimistic rows), then the lesson's
 // counts follow it in the drawer and the list. A student whose enrollment is
 // not active or completed (withdrawn after the lesson, cancelled…) stays
-// listed read-only — the server refuses them with `not_enrolled`.
+// listed read-only — the server refuses them with `not_enrolled`. Its times
+// (the lesson's start, when the sheet and each record were written) are in the
+// lesson's `timeZone`, as everywhere in the drawer (D-R41 — J-F28).
 import { ReloadOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Flex, Input, InputNumber, Popconfirm, Radio, Skeleton, Space, Table, Tag, Typography, theme } from 'antd'
 import type { TableProps } from 'antd'
@@ -17,7 +19,7 @@ import type { AttendanceItem, AttendanceSheet, AttendanceStatus } from '../api/a
 import type { Lesson } from '../api/lessons'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
-import { formatDateTime } from '../users/users.format'
+import { formatLessonDateTime } from '../lessons/lessons.format'
 import { changedItems, currentDraft, draftProblem, isBatchTooLarge, isRecordableItem, markAllPresent, planAttendanceSave, unrecordedItems, withStatus } from './attendance.changes'
 import type { AttendanceDraft } from './attendance.changes'
 import { describeAttendanceFailure, failureMessage } from './attendance.errors'
@@ -25,7 +27,8 @@ import { ATTENDANCE_STATUS_COLORS } from './attendance.format'
 import { useAttendanceSheet } from './useAttendanceSheet'
 
 interface AttendanceSheetTabProps {
-  lesson: Pick<Lesson, 'id'>
+  /** The lesson's id, and its zone for the times the sheet shows. */
+  lesson: Pick<Lesson, 'id' | 'timeZone'>
   /** The sheet the server answered after a save: its counts update the lesson in the drawer and in the list. */
   onSaved: (sheet: AttendanceSheet) => void
   /** The lesson changed elsewhere (cancelled, not started, gone): the drawer re-reads it. */
@@ -59,6 +62,7 @@ export function AttendanceSheetTab({ lesson, onSaved, onLessonStale }: Attendanc
           // One edit session per server version of the sheet (KI-049): a save or a reload starts from the server's state.
           key={`${sheet.lessonId}:${version}`}
           sheet={sheet}
+          timeZone={lesson.timeZone}
           canRecord={canRecord}
           loading={loading}
           onSaved={(saved) => {
@@ -79,6 +83,8 @@ export function AttendanceSheetTab({ lesson, onSaved, onLessonStale }: Attendanc
 
 interface AttendanceEditorProps {
   sheet: AttendanceSheet
+  /** The lesson's zone (D-R41). */
+  timeZone: string
   canRecord: boolean
   loading: boolean
   onSaved: (sheet: AttendanceSheet) => void
@@ -87,7 +93,7 @@ interface AttendanceEditorProps {
   onReload: () => void
 }
 
-function AttendanceEditor({ sheet, canRecord, loading, onSaved, onStale, onGone, onReload }: AttendanceEditorProps) {
+function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStale, onGone, onReload }: AttendanceEditorProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -183,7 +189,7 @@ function AttendanceEditor({ sheet, canRecord, loading, onSaved, onStale, onGone,
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {t('attendance.recordedBy', { name: item.record.recordedBy?.fullName ?? '—' })}
               <br />
-              {formatDateTime(item.record.updatedAt, language)}
+              {formatLessonDateTime(item.record.updatedAt, language, timeZone)}
             </Typography.Text>
           ) : null}
         </Space>
@@ -294,12 +300,17 @@ function AttendanceEditor({ sheet, canRecord, loading, onSaved, onStale, onGone,
           ))}
         </Space>
         <Typography.Text type="secondary">
-          {sheet.attendanceTakenAt ? t('lessons.attendance.takenAt', { date: formatDateTime(sheet.attendanceTakenAt, language) }) : t('lessons.attendance.notTaken')}
+          {sheet.attendanceTakenAt ? t('lessons.attendance.takenAt', { date: formatLessonDateTime(sheet.attendanceTakenAt, language, timeZone) }) : t('lessons.attendance.notTaken')}
         </Typography.Text>
       </Flex>
 
       {!sheet.recordable && sheet.closedReason ? (
-        <Alert type="warning" showIcon title={t(`attendance.closed.${sheet.closedReason}`, { time: formatDateTime(sheet.startsAt, language) })} style={{ marginBottom: 12 }} />
+        <Alert
+          type="warning"
+          showIcon
+          title={t(`attendance.closed.${sheet.closedReason}`, { time: formatLessonDateTime(sheet.startsAt, language, timeZone) })}
+          style={{ marginBottom: 12 }}
+        />
       ) : null}
       {sheet.recordable && !canRecord ? <Alert type="info" showIcon title={t('attendance.readOnly')} style={{ marginBottom: 12 }} /> : null}
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} /> : null}
