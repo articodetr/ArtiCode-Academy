@@ -51,6 +51,7 @@ interface RoleGatedItem extends NavItemBase {
   roles: readonly Role[] | 'everyone'
   permissions?: undefined
   roleKeys?: undefined
+  exceptRoleKeysOnly?: undefined
 }
 
 /**
@@ -60,6 +61,14 @@ interface RoleGatedItem extends NavItemBase {
  */
 interface PermissionGatedItem extends NavItemBase {
   permissions: readonly string[]
+  /**
+   * Hidden from a viewer every one of whose server role keys is in this list,
+   * whatever the permissions (J-F38): learners hold `assignments.read` by seed
+   * but are assigned to no class, so API-102 answers them an empty list (D-R16,
+   * D-R40) — their own assignments come through ownership instead. A viewer
+   * holding any other role key (a teacher who is also a guardian) keeps the entry.
+   */
+  exceptRoleKeysOnly?: readonly string[]
   roles?: undefined
   roleKeys?: undefined
 }
@@ -75,6 +84,7 @@ interface RoleKeyGatedItem extends NavItemBase {
   roleKeys: readonly string[]
   roles?: undefined
   permissions?: undefined
+  exceptRoleKeysOnly?: undefined
 }
 
 export type NavItem = RoleGatedItem | PermissionGatedItem | RoleKeyGatedItem
@@ -107,7 +117,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // `student` or `guardian` server role, like «my classes» (a teacher who is also a guardian keeps it; a teacher or an admin
   // alone gets no entry — the server would answer an empty list, and the lessons they teach are on /lessons).
   { key: 'myLessons', path: '/my-lessons', labelKey: 'nav.myLessons', icon: createElement(PlaySquareOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-06' },
-  { key: 'assignments', path: '/assignments', labelKey: 'nav.assignments', icon: createElement(FileTextOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-08' },
+  // MOD-08 (J-F38): the assignments API is real — gated by the one key every read of `/api/assignments` requires
+  // (`assignments.read` at controller level; `assignments.manage` only adds writes), with the learners excepted (roadmap
+  // §4g T06): students and guardians hold the key by seed but are assigned to no class, so the list would stay empty —
+  // their own assignments come with «my assignments» (API-112, MOD-08-T04). Staff hold no assignments.* key (matrix 7.2).
+  {
+    key: 'assignments',
+    path: '/assignments',
+    labelKey: 'nav.assignments',
+    icon: createElement(FileTextOutlined),
+    permissions: ['assignments.read'],
+    exceptRoleKeysOnly: ['student', 'guardian'],
+    module: 'MOD-08',
+  },
   { key: 'exams', path: '/exams', labelKey: 'nav.exams', icon: createElement(FormOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-09' },
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },
   { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
@@ -124,9 +146,20 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'rooms', path: '/settings/rooms', labelKey: 'nav.rooms', icon: createElement(HomeOutlined), permissions: ['schedule.manage'], module: 'MOD-07' },
 ]
 
-/** Whether the viewer sees an entry: by permission when the entry names keys, by server role keys when it names those, else by the role matrix. */
+/** True when the viewer holds at least one server role key and every one of them is in `keys`. */
+function holdsOnly(viewer: NavViewer, keys: readonly string[]): boolean {
+  return viewer.roles.length > 0 && viewer.roles.every((key) => keys.includes(key))
+}
+
+/**
+ * Whether the viewer sees an entry: by permission when the entry names keys (unless every role key the viewer holds
+ * is one the entry excepts), by server role keys when it names those, else by the role matrix.
+ */
 export function sees(item: NavItem, viewer: NavViewer): boolean {
-  if (item.permissions) return item.permissions.some((key) => viewer.permissions.includes(key))
+  if (item.permissions) {
+    if (item.exceptRoleKeysOnly && holdsOnly(viewer, item.exceptRoleKeysOnly)) return false
+    return item.permissions.some((key) => viewer.permissions.includes(key))
+  }
   if (item.roleKeys) return item.roleKeys.some((key) => viewer.roles.includes(key))
   if (item.roles === 'everyone') return true
   return viewer.role !== null && item.roles.includes(viewer.role)
