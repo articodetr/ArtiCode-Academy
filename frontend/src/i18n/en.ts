@@ -1144,7 +1144,8 @@ export const en: Translation = {
     // Still used by the dashboard prototype (mockLessons).
     type: 'Type',
     readOnlyHint: 'This page shows only the lessons of the classes assigned to you.',
-    learnerHint: 'Your lessons as a student or guardian will appear in “My lessons” once that view is ready; this list shows only the lessons of the classes you teach.',
+    learnerHint: 'Your lessons as a student or guardian are in “My lessons”; this list shows only the lessons of the classes you teach.',
+    myLessonsLink: 'Open “My lessons”',
     refresh: 'Refresh',
     empty: 'No lessons from today on',
     emptyAssigned: 'No lessons from today on in the classes assigned to you',
@@ -1748,8 +1749,6 @@ export const en: Translation = {
   myLessons: {
     title: 'My lessons',
     subtitle: 'Lessons of the classes you or the students linked to you are enrolled in, with the attendance of each lesson',
-    notLearnerHint: 'This page shows the lessons of the classes you, or the students linked to you as guardian, are enrolled in; your account holds neither the student nor the guardian role, so there are no lessons for you here.',
-    teachingLink: 'The lessons of the classes you teach or manage are on the “Lessons” page',
     optionsFailed: 'Your classes could not be loaded, so the student and class filters have no options right now.',
     limitNote: 'The page size counts lessons; a lesson shared by two students linked to you shows in two rows.',
     refresh: 'Refresh',
@@ -1779,7 +1778,6 @@ export const en: Translation = {
       recordedAt: 'Recorded on {{date}}',
     },
     empty: {
-      notLearner: 'No lessons for you here',
       noEnrollment: 'No active or completed enrollments for you or the students linked to you yet',
       upcoming: 'No lessons today or in the coming days',
       past: 'No past lessons',

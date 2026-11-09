@@ -14,6 +14,7 @@ import {
   FormOutlined,
   HomeOutlined,
   PlayCircleOutlined,
+  PlaySquareOutlined,
   ReadOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
@@ -65,7 +66,7 @@ interface PermissionGatedItem extends NavItemBase {
 
 /**
  * A screen served by ownership, without a permission key (J-F04 — «my classes»,
- * API-060): shown to a user holding ANY of these server role keys — the rule the
+ * API-060; J-F11 — «my lessons», API-101): shown to a user holding ANY of these server role keys — the rule the
  * server applies (`seesChildren()` looks at the `guardian` key, a student's
  * enrollments follow the `student` role), not the single UI role, so a teacher
  * who is also a guardian still sees it.
@@ -100,8 +101,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), permissions: ['schedule.read', 'schedule.manage', 'classes.manage'], module: 'MOD-07' },
   // MOD-06 (J-F09): the lessons API is real — gated by the one key every read of `/api/lessons` requires (`lessons.read` at
   // controller level; `lessons.manage` only adds writes). Staff gain the entry (the seed grants them lessons.read); a student
-  // holds it too but is assigned to no class, so the server answers an empty list until «my lessons» (API-101, MOD-06-T04).
+  // holds it too but is assigned to no class, so the server answers an empty list there — their own lessons are in «my lessons».
   { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], module: 'MOD-06' },
+  // MOD-06 (J-F11): «my lessons» (API-101) needs no permission key — ownership, the API-060 rule; shown to whoever holds the
+  // `student` or `guardian` server role, like «my classes» (a teacher who is also a guardian keeps it; a teacher or an admin
+  // alone gets no entry — the server would answer an empty list, and the lessons they teach are on /lessons).
+  { key: 'myLessons', path: '/my-lessons', labelKey: 'nav.myLessons', icon: createElement(PlaySquareOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-06' },
   { key: 'assignments', path: '/assignments', labelKey: 'nav.assignments', icon: createElement(FileTextOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-08' },
   { key: 'exams', path: '/exams', labelKey: 'nav.exams', icon: createElement(FormOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-09' },
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },

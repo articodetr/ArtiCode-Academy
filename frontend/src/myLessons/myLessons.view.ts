@@ -16,9 +16,6 @@ export type MyLessonView = (typeof MY_LESSON_VIEWS)[number]
 /** Lessons per page (`limit` counts lessons — a page can hold more rows). */
 export const MY_LESSON_PAGE_SIZES = [20, 50, 100] as const
 
-/** The roles that own lessons here: the server reads the `student` enrollments and the `guardian` links. */
-const LEARNER_ROLE_KEYS: readonly string[] = ['student', 'guardian']
-
 export interface MyLessonsFilters {
   view: MyLessonView
   /** The caller or one of their children; blank = every owned student. */
@@ -64,11 +61,6 @@ export function isNarrowed(filters: MyLessonsFilters): boolean {
 /** A row is a lesson × a student: the lesson id alone repeats for a guardian with two children in the class. */
 export function myLessonKey(item: Pick<MyLessonItem, 'id' | 'student'>): string {
   return `${item.id}:${item.student.id}`
-}
-
-/** True for a holder of the `student` or `guardian` role key — the only callers API-101 can return lessons to. */
-export function isLearner(roleKeys: readonly string[]): boolean {
-  return roleKeys.some((key) => LEARNER_ROLE_KEYS.includes(key))
 }
 
 /** The student column matters to a guardian, or whenever the server returned a child's lesson. */

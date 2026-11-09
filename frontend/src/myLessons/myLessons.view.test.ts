@@ -5,7 +5,6 @@ import {
   attendanceCellOf,
   classOptionsOf,
   defaultMyLessonsFilters,
-  isLearner,
   isNarrowed,
   myLessonKey,
   myLessonsQuery,
@@ -58,11 +57,8 @@ describe('my lessons — rows, roles and filter options', () => {
     expect(myLessonKey(one)).not.toBe(myLessonKey(two))
   })
 
-  it('learners are the student and guardian role keys; the student column follows the guardian role or a child row', () => {
-    expect(isLearner(['student'])).toBe(true)
-    expect(isLearner(['teacher', 'guardian'])).toBe(true)
-    expect(isLearner(['teacher'])).toBe(false)
-    expect(isLearner(['academy_admin'])).toBe(false)
+  // Who may open the page at all is the nav entry's rule (`myLessons`, roleKeys student/guardian — layout/navigation.test.ts).
+  it('the student column follows the guardian role or a child row', () => {
     expect(showsStudents(['student'], [makeMyLesson()])).toBe(false)
     expect(showsStudents(['guardian'], [])).toBe(true)
     expect(showsStudents(['student'], [makeMyLesson({ relation: 'child' })])).toBe(true)

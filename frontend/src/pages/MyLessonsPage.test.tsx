@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { MyClassList } from '../api/enrollments'
 import type { MyLessonList } from '../api/myLessons'
+import { RequireAccess } from '../auth/RequireAuth'
 import { ar } from '../i18n/ar'
 import { dayStartInstant, formatLessonDay, formatLessonTimes } from '../lessons/lessons.format'
 import { todayStartInstant } from '../myLessons/myLessons.view'
@@ -36,11 +37,13 @@ const childTwoOther = makeMyClassItem({
 type LessonsAnswer = MyLessonList | Response
 type LessonsHandler = LessonsAnswer | ((query: URLSearchParams) => LessonsAnswer)
 
-/** Serves API-101 (recording its queries) and API-060 (the filter options). */
+/** Serves API-101 (recording its queries) and API-060 (the filter options); `paths` records every request. */
 function mockMyLessonsApi(lessons: LessonsHandler, classes: MyClassList | Response = makeMyClassList([selfClass])) {
   const queries: URLSearchParams[] = []
+  const paths: string[] = []
   mockFetch((url) => {
     const parsed = new URL(url, 'http://localhost')
+    paths.push(parsed.pathname)
     if (parsed.pathname === '/api/me/lessons') {
       queries.push(parsed.searchParams)
       const answer = typeof lessons === 'function' ? lessons(parsed.searchParams) : lessons
@@ -49,16 +52,25 @@ function mockMyLessonsApi(lessons: LessonsHandler, classes: MyClassList | Respon
     if (parsed.pathname === '/api/me/classes') return classes instanceof Response ? classes : jsonResponse(200, classes)
     return jsonResponse(404, { statusCode: 404, message: 'nope' })
   })
-  return { queries }
+  return { queries, paths }
 }
 
 function renderPage(roles: string[], permissions: string[] = LESSON_LEARNER_PERMISSIONS) {
-  const role = roles.includes('teacher') ? 'teacher' : roles.includes('guardian') ? 'guardian' : 'student'
+  const role = roles.includes('guardian') ? 'guardian' : 'student'
   return renderWithProviders(<MyLessonsPage />, {
     auth: makeAuth({ user: makeUser({ id: SELF_STUDENT.id, role, roles, permissions }) }),
     route: '/my-lessons',
-    routes: { '/lessons': <p>lessons page</p> },
   })
+}
+
+/** The page behind the router's own gate (`guarded('myLessons')` in app/router.tsx). */
+function renderGuarded(user: ReturnType<typeof makeUser>) {
+  return renderWithProviders(
+    <RequireAccess navKey="myLessons">
+      <MyLessonsPage />
+    </RequireAccess>,
+    { auth: makeAuth({ user }), route: '/my-lessons' },
+  )
 }
 
 function bodyRows() {
@@ -103,7 +115,6 @@ describe('MyLessonsPage', () => {
     // A student alone needs neither the student column nor the student filter.
     expect(screen.queryByRole('columnheader', { name: ar.myLessons.columns.student })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(ar.myLessons.filters.student)).not.toBeInTheDocument()
-    expect(screen.queryByText(ar.myLessons.notLearnerHint)).not.toBeInTheDocument()
   })
 
   it('shows the description of a lesson in its expanded row', async () => {
@@ -145,24 +156,33 @@ describe('MyLessonsPage', () => {
     expect(api.queries.at(-1)?.get('classId')).toBeNull() // Omar is not: dropped
   })
 
-  it('tells a teacher without enrollments why the list is empty — no error, a link to the lessons page', async () => {
-    const api = mockMyLessonsApi(makeMyLessonList([]), makeMyClassList([]))
-    renderPage(['teacher'], LESSON_TEACHER_PERMISSIONS)
+  it('keeps /my-lessons closed to a user without the student or guardian role — the 403 page and no request; a teacher who is also a guardian gets in (J-F11)', async () => {
+    const api = mockMyLessonsApi(makeMyLessonList([attended]))
+    // A teacher holding lessons.read (the lessons they teach are on /lessons), an admin, and a custom role holding the read keys.
+    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: LESSON_TEACHER_PERMISSIONS })
+    const custom = makeUser({ role: null, roles: ['auditor'], permissions: ['lessons.read', 'attendance.read'] })
+    for (const user of [teacher, makeUser(), custom]) {
+      const { unmount } = renderGuarded(user)
+      expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
+      expect(screen.queryByText(ar.myLessons.title)).not.toBeInTheDocument()
+      unmount()
+    }
+    expect(api.paths).toEqual([])
 
-    expect(await screen.findByText(ar.myLessons.notLearnerHint)).toBeInTheDocument()
-    await waitFor(() => expect(api.queries).toHaveLength(1))
-    expect(await screen.findByText(ar.myLessons.empty.notLearner)).toBeInTheDocument()
-    expect(screen.queryByText(ar.login.errors.generic)).not.toBeInTheDocument()
-    expect(screen.queryByText(ar.myLessons.optionsFailed)).not.toBeInTheDocument()
-    fireEvent.click(screen.getByText(ar.myLessons.teachingLink))
-    expect(await screen.findByText('lessons page')).toBeInTheDocument()
+    // The gate reads the server role keys, not the single UI role (the API-060 rule).
+    renderGuarded(makeUser({ role: 'teacher', roles: ['teacher', 'guardian'], permissions: LESSON_TEACHER_PERMISSIONS }))
+    expect(await screen.findByText('المتغيرات وأنواع البيانات')).toBeInTheDocument()
+    expect(screen.queryByText(ar.errors.forbidden)).not.toBeInTheDocument()
+    expect(api.paths).toContain('/api/me/lessons')
   })
 
-  it('tells a student without any enrollment that there is nothing yet', async () => {
-    mockMyLessonsApi(makeMyLessonList([]), makeMyClassList([]))
+  it('tells a student without any enrollment that there is nothing yet — no error and no options warning', async () => {
+    const api = mockMyLessonsApi(makeMyLessonList([]), makeMyClassList([]))
     renderPage(['student'])
     expect(await screen.findByText(ar.myLessons.empty.noEnrollment)).toBeInTheDocument()
-    expect(screen.queryByText(ar.myLessons.notLearnerHint)).not.toBeInTheDocument()
+    expect(api.queries).toHaveLength(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(ar.myLessons.optionsFailed)).not.toBeInTheDocument()
   })
 
   it('switches views and filters: past, a custom range and a status re-query from the first page', async () => {
