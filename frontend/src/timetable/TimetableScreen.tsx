@@ -5,9 +5,11 @@
 // caller cannot use. "Today" and "now" are the academy's (API-035 time zone);
 // the week starts on the academy's first day and shows its working days,
 // never hiding a day that holds a slot. Every shown date is read on its own,
-// so a slot appears exactly on the dates its effective period covers. Weekly
-// slots are recurring entries, not confirmed lessons (MOD-06) — the page says
-// so. Reading only: writing a class's slots belongs to the class screen.
+// so a slot appears exactly on the dates its effective period covers. A
+// weekday filter keeps the selection on that weekday of its own week (J-F18),
+// so the day view never shows another, empty day. Weekly slots are recurring
+// entries, not confirmed lessons (MOD-06) — the page says so. Reading only:
+// writing a class's slots belongs to the class screen.
 import { CalendarOutlined, FilterOutlined, LeftOutlined, ReloadOutlined, RightOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Alert, Badge, Button, ConfigProvider, Segmented, Spin, Switch, Tooltip } from 'antd'
 import { useMemo, useState, useSyncExternalStore } from 'react'
@@ -19,7 +21,7 @@ import { useLocalized } from '../i18n/useLocalized'
 import { MiniMonth } from './MiniMonth'
 import { DayTimeline, WeekAgenda, WeekStrip } from './MobileViews'
 import { SlotDrawer } from './SlotDrawer'
-import { addDays, calendarDateIn, datesFrom, minutesNowIn, monthOf, weekDatesOf, weekdayOf } from './timetable.dates'
+import { addDays, calendarDateIn, datesFrom, minutesNowIn, monthOf, weekDatesOf, weekdayInWeek, weekdayOf } from './timetable.dates'
 import type { CalendarDate, CalendarMonth } from './timetable.dates'
 import { describeScheduleFailure, failureMessage } from './timetable.errors'
 import { formatDateRange, formatLongDate, weekdayOrder } from './timetable.format'
@@ -88,11 +90,17 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const [mode, setMode] = useState<TimetableMode>(canReadAcademy ? 'academy' : 'mine')
   const [viewChoice, setViewChoice] = useState<TimetableView | null>(null)
   const view: TimetableView = viewChoice ?? (phone ? 'day' : 'week')
+  const [filters, setFilters] = useState<AcademyFilters>({})
+  const onlyWeekday = mode === 'academy' ? filters.weekday : undefined
+  // With a weekday filter every selection is that weekday of its own week — the
+  // day the week view shows alone — so "today", the month calendar, the week
+  // strip and the arrows all land on a day the filter shows (J-F18).
+  const onFilteredDay = (date: CalendarDate) => (onlyWeekday === undefined ? date : weekdayInWeek(date, onlyWeekday, settings.weekStartsOn))
+  const home = onFilteredDay(today)
   const [picked, setPicked] = useState<CalendarDate | null>(null)
-  const selected = picked ?? today
+  const selected = picked === null ? home : onFilteredDay(picked)
   const [shownMonth, setShownMonth] = useState<CalendarMonth | null>(null)
   const month = shownMonth ?? monthOf(selected)
-  const [filters, setFilters] = useState<AcademyFilters>({})
   const [showAllDays, setShowAllDays] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [monthOpen, setMonthOpen] = useState(false)
@@ -100,7 +108,6 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const branches = useTimetableBranches(canReadAcademy && mode === 'academy')
 
   const activeFilters = mode === 'academy' ? filters : NO_FILTERS
-  const onlyWeekday = mode === 'academy' ? filters.weekday : undefined
   const weekDates = weekDatesOf(selected, settings.weekStartsOn)
   const upcomingDates = datesFrom(today, UPCOMING_DAYS)
   // The whole week is read in both views (the day view's strip marks busy days), plus the next seven days.
@@ -132,10 +139,11 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const upcomingLoading = !settingsReady || upcomingDates.some((date) => data.pending.has(date))
   const failure = data.failed ? describeScheduleFailure(data.error) : null
 
-  const select = (date: CalendarDate) => {
+  const pick = (date: CalendarDate) => {
     setPicked(date)
     setShownMonth(null)
   }
+  const select = (date: CalendarDate) => pick(onFilteredDay(date))
   const step = view === 'week' || onlyWeekday !== undefined ? 7 : 1
   const go = (direction: 1 | -1) => select(addDays(selected, direction * step))
   const goToday = () => {
@@ -144,11 +152,12 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   }
   const changeFilters = (patch: Partial<AcademyFilters>) => {
     setFilters((current) => ({ ...current, ...patch }))
-    // A weekday filter moves the selection to that day of the shown week.
-    if (patch.weekday !== undefined) {
-      const target = weekDates.find((date) => weekdayOf(date) === patch.weekday)
-      if (target) select(target)
-    }
+    // A weekday filter moves the selection to that day of the shown week; clearing it stays on the day shown.
+    if ('weekday' in patch) pick(patch.weekday === undefined ? selected : weekdayInWeek(selected, patch.weekday, settings.weekStartsOn))
+  }
+  const clearFilters = () => {
+    setFilters({})
+    if (filters.weekday !== undefined) pick(selected)
   }
   const open = (entry: TimetableEntry, date: CalendarDate) => setOpened({ entry, date })
 
@@ -192,7 +201,7 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   )
 
   const todayButton = (
-    <Button onClick={goToday} disabled={selected === today}>
+    <Button onClick={goToday} disabled={selected === home}>
       {t('schedule.calendar.today')}
     </Button>
   )
@@ -246,7 +255,7 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
       <TimetableFilters
         filters={filters}
         onChange={changeFilters}
-        onClear={() => setFilters({})}
+        onClear={clearFilters}
         canPickTeacher={canPickTeacher}
         canPickClass={canPickClass}
         branches={branches.items}

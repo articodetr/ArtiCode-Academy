@@ -8,11 +8,11 @@ import { Select } from 'antd'
 import { useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { Branch } from '../api/branches'
 import { listClasses } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { listRooms } from '../api/rooms'
 import type { Room } from '../api/rooms'
-import type { TimetableBranchOption } from '../api/timetable'
 import { RemoteSelect } from '../components/RemoteSelect'
 import type { RemoteOption } from '../components/RemoteSelect'
 import { useLocalized } from '../i18n/useLocalized'
@@ -58,7 +58,7 @@ export function RoomPicker({ branchId, ...props }: PickerProps<Room> & { branchI
 }
 
 interface BranchSelectProps {
-  branches: TimetableBranchOption[]
+  branches: Branch[]
   value?: string
   onChange: (value: string | undefined) => void
   style?: CSSProperties

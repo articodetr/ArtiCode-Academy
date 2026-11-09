@@ -1,8 +1,10 @@
 // Fixtures for the schedule screen (MOD-07 — J-F05; moved from test/schedule.ts by J-F08): the shapes of API-090/091
 // and API-084 as the backend returns them, plus permission sets.
+import type { Branch } from '../api/branches'
 import type { Room, RoomList } from '../api/rooms'
-import type { AcademySchedule, MySchedule, MyScheduleItem, TimetableBranchOption, TimetableSlot } from '../api/timetable'
+import type { AcademySchedule, MySchedule, MyScheduleItem, TimetableSlot } from '../api/timetable'
 import { makeAcademy } from './academy'
+import { makeBranch } from './branches'
 import { CLASS_COURSE_ID, CLASS_ID } from './classes'
 
 export const SLOT_ID = '0193c000-0000-7000-8000-00000000a001'
@@ -97,7 +99,7 @@ export function makeTimetableAcademy(scheduling: { weekStartsOn?: number | null;
   return { ...makeAcademy({ timezone }), settings: { scheduling: { weekStartsOn: scheduling.weekStartsOn ?? null, workingDays: scheduling.workingDays ?? null } } }
 }
 
-/** A `BranchDto` (API-080) as the branch filter reads it. */
-export function makeBranchOption(overrides: Partial<TimetableBranchOption> = {}): TimetableBranchOption {
-  return { id: BRANCH_ID, code: 'IST', name: { ar: 'فرع إسطنبول', en: 'Istanbul branch' }, timezone: null, isMain: false, isActive: true, ...overrides }
+/** The Istanbul branch as API-080 returns it (a whole `BranchDto` of api/branches.ts — J-F18), offered by the branch filter. */
+export function makeBranchOption(overrides: Partial<Branch> = {}): Branch {
+  return makeBranch({ id: BRANCH_ID, code: 'IST', name: { ar: 'فرع إسطنبول', en: 'Istanbul branch' }, address: null, phone: null, timezone: null, isMain: false, isActive: true, ...overrides })
 }

@@ -4,7 +4,7 @@
 // to the server, which does the filtering; the date is the calendar's own.
 import { Button, Select } from 'antd'
 import { useTranslation } from 'react-i18next'
-import type { TimetableBranchOption } from '../api/timetable'
+import type { Branch } from '../api/branches'
 import { TeacherPicker } from '../classes/ClassPickers'
 import { weekdayKey, weekdayOrder } from './timetable.format'
 import { BranchSelect, ClassPicker, RoomPicker } from './TimetablePickers'
@@ -16,7 +16,7 @@ interface TimetableFiltersProps {
   onClear: () => void
   canPickTeacher: boolean
   canPickClass: boolean
-  branches: TimetableBranchOption[]
+  branches: Branch[]
   weekStartsOn: number
 }
 
