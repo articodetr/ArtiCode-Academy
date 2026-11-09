@@ -952,8 +952,25 @@
   border-radius: 18px;
 }
 
+/* The mode switch of the page header («Academy schedule | My schedule» is 241 px in English) narrows
+   with a 320 px phone instead of scrolling the page (KI-056): its holder and the switch never exceed
+   the page, its items may shrink, and a label then ends in antd's ellipsis — the item's title and its
+   accessible name keep the whole label. Nothing shrinks while the switch fits. */
+.tt-mobile div:has(> .tt-mode-switch),
+.tt-mobile .tt-mode-switch {
+  max-width: 100%;
+}
+
+.tt-mobile .tt-mode-switch__item {
+  min-width: 0;
+}
+
+/* KI-056 (J-F37): from 320 px up every control stays inside the card and the page never scrolls sideways.
+   The column holds its two rows on one line: a wrapping column (the `flex-wrap` of .tt-toolbar) is as
+   wide as its widest row, so the actions row once stretched the date row too and pushed its arrow out. */
 .tt-toolbar--phone {
   flex-direction: column;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: 10px;
 }
@@ -964,15 +981,49 @@
   gap: 8px;
 }
 
+/* Today with the date picker, the view switch with refresh: the second group takes a line of its own,
+   still at the end, when the row cannot hold both (under 251 px of row in Arabic, 262 px in English). */
+.tt-toolbar__row--actions {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+.tt-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tt-toolbar__group--end {
+  margin-inline-start: auto;
+}
+
+/* The date gives way to its arrows: it wraps onto a second, balanced line instead of pushing them out —
+   never an ellipsis, so the month and the year stay readable. */
 .tt-toolbar--phone .tt-toolbar__range {
   flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 16px;
   text-align: center;
+  text-wrap: balance;
+  overflow-wrap: break-word;
 }
 
+/* A narrow phone (the calendar under 260 px — 320 and 360 px screens): a pixel less spares a long English
+   date a line or two (Wednesday at 320 px: three lines instead of four). */
+@container (max-width: 259.98px) {
+  .tt-toolbar--phone .tt-toolbar__range {
+    font-size: 15px;
+  }
+}
+
+/* KI-056: on a phone each filter takes a whole line of the panel and never more — it may shrink below its
+   content, so a long chosen label ends in the select's own ellipsis instead of widening the panel. The
+   desktop minimum widths are not set on a phone (TimetableFilters `phone`): an inline style beats this rule. */
 .tt-mobile .tt-filters > * {
   flex: 1 1 100%;
+  min-width: 0;
 }
 
 .tt-strip {
