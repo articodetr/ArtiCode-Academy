@@ -4,9 +4,10 @@
 // resource (room or teacher — Arabic agreement differs: القاعة محجوزة / المعلم
 // محجوز) and per scope (the other booking sits in the same list, in another
 // class, or is unknown) and names the refused row of the editor. Against
-// another class the server's `slot.index` counts the slots it writes (new ones
-// first), not the editor's rows (KI-053), so the row is found by the values the
-// server echoes in `slot`.
+// another class the server's `slot.index` counted the slots it writes (new ones
+// first), not the editor's rows, until CH-0106 fixed it (the owner's KI-072);
+// the row is found by the values the server echoes in `slot`, which stays
+// right either way.
 import { ApiError } from '../api/client'
 import { toSlotInput } from './schedule.model'
 import type { SlotDraft } from './schedule.model'
@@ -76,8 +77,9 @@ interface EchoedSlot {
 /**
  * The editor row the server refused: the first draft whose values equal the
  * echoed slot; else, for a conflict inside the list only, the echoed index
- * (the request index). Against another class the index counts the slots the
- * server writes, new ones first (KI-053), so it is never trusted there.
+ * (the request index). Against another class the index counted the slots the
+ * server writes, new ones first, until CH-0106 (KI-072), so it is not trusted
+ * there.
  */
 export function refusedRow(slot: EchoedSlot | null, drafts: readonly SlotDraft[], scope: ConflictScope): number | undefined {
   if (!slot) return undefined
