@@ -48,6 +48,15 @@ export function defaultRoleFor(drafts: readonly TeacherDraft[]): ClassTeacherRol
   return drafts.some((draft) => draft.role === 'lead') ? 'assistant' : 'lead'
 }
 
+/**
+ * A search result added to the draft. It is named by `fullName`, the only name
+ * `ClassTeacherDto` carries, so the row keeps its name once saved — the display
+ * name stays in the search results, where API-012 returns it (J-F14).
+ */
+export function teacherDraftOf(candidate: Pick<UserListItem, 'id' | 'fullName'>, drafts: readonly TeacherDraft[]): TeacherDraft {
+  return { userId: candidate.id, fullName: candidate.fullName, role: defaultRoleFor(drafts) }
+}
+
 export type CandidateRefusal = 'already_listed' | 'not_a_teacher' | 'not_eligible'
 
 /** Why a search result cannot be added (shown disabled, never sent); null when it can. */

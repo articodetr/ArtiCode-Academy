@@ -186,4 +186,41 @@ describe('ClassesPage', () => {
     fireEvent.click(within(alert).getByText(ar.classes.refresh).closest('button')!)
     await waitFor(() => expect(api.queries.length).toBe(2))
   })
+
+  it('keeps «next» off after a failed page: the rows stay behind the error, the cursor of the page before is not offered again (PR #26 note 4)', async () => {
+    const cursors: (string | null)[] = []
+    mockFetch((url) => {
+      const parsed = new URL(url, 'http://localhost')
+      if (parsed.pathname === '/api/courses') return jsonResponse(200, makeCourseList([published]))
+      if (parsed.pathname === '/api/users') return jsonResponse(200, makeUserList([]))
+      const cursor = parsed.searchParams.get('cursor')
+      cursors.push(cursor)
+      return cursor ? jsonResponse(500, { statusCode: 500, message: 'boom' }) : jsonResponse(200, makeClassList([pyA], 'c2'))
+    })
+    renderPage(CLASS_ADMIN_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+    const next = screen.getByText(ar.classes.pagination.next).closest('button')!
+    await waitFor(() => expect(next).toBeEnabled())
+    fireEvent.click(next)
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(ar.login.errors.server)).toBeInTheDocument()
+    expect(screen.getByText('PY-101-A')).toBeInTheDocument()
+    expect(screen.getByText(ar.classes.pagination.next).closest('button')).toBeDisabled()
+    expect(screen.getByText(ar.classes.pagination.previous).closest('button')).toBeEnabled()
+    expect(cursors).toEqual([null, 'c2'])
+  })
+
+  it('caps the search at the 100 characters API-050 accepts for q (PR #26 note 5)', async () => {
+    const api = mockClassesApi(makeClassList([pyA]))
+    renderPage(CLASS_READER_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+
+    const search = screen.getByRole('searchbox', { name: ar.common.search })
+    expect(search).toHaveAttribute('maxlength', '100')
+    await userEvent.click(search)
+    await userEvent.paste('x'.repeat(150))
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(api.queries.at(-1)?.get('q')).toBe('x'.repeat(100)))
+  })
 })

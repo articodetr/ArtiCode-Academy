@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TEACHER_IDS, makeClassTeacher, makeTeacherCandidate } from '../test/classes'
-import { candidateRefusal, defaultRoleFor, planTeachersReplacement, teacherDraftsOf, teacherListProblems } from './classes.teachers'
+import { candidateRefusal, defaultRoleFor, planTeachersReplacement, teacherDraftOf, teacherDraftsOf, teacherListProblems } from './classes.teachers'
 
 const lead = makeClassTeacher()
 const assistant = makeClassTeacher({ userId: TEACHER_IDS[1], fullName: 'منى', role: 'assistant' })
@@ -34,6 +34,12 @@ describe('classes.teachers', () => {
     expect(defaultRoleFor([])).toBe('lead')
     expect(defaultRoleFor(teacherDraftsOf([assistant]))).toBe('lead')
     expect(defaultRoleFor(teacherDraftsOf([lead]))).toBe('assistant')
+  })
+
+  it('adds a search result under its full name — the one ClassTeacherDto carries — never its display name (PR #26 note 6)', () => {
+    const titled = makeTeacherCandidate({ displayName: 'أ. منى' })
+    expect(teacherDraftOf(titled, [])).toEqual({ userId: TEACHER_IDS[1], fullName: 'منى المساعدة', role: 'lead' })
+    expect(teacherDraftOf(titled, teacherDraftsOf([lead]))).toEqual({ userId: TEACHER_IDS[1], fullName: 'منى المساعدة', role: 'assistant' })
   })
 
   it('refuses a candidate already listed, without the teacher role, or neither invited nor active', () => {

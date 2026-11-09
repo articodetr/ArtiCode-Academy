@@ -54,7 +54,8 @@ export function useCoursesList(initialFilters: CoursesListFilters = DEFAULT_COUR
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
-        setPage((current) => ({ ...current, key: requestKey, error }))
+        // The rows stay behind the error message; the cursor of the page before does not (J-F14).
+        setPage((current) => ({ ...current, key: requestKey, nextCursor: null, error }))
       })
     return () => controller.abort()
   }, [filters, cursor, reloadTick, requestKey])

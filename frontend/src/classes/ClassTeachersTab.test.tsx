@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AcademyClass } from '../api/classes'
 import { ar } from '../i18n/ar'
@@ -44,6 +45,12 @@ async function openSearch() {
 
 function option(name: string): HTMLElement {
   return screen.getByText(name, { selector: '.ant-select-item-option-content' }).closest('.ant-select-item-option') as HTMLElement
+}
+
+/** Holds the class as ClassDrawer does: after a save the tab shows what the server returned. */
+function StatefulTab({ initial }: { initial: AcademyClass }) {
+  const [cls, setCls] = useState(initial)
+  return <ClassTeachersTab cls={cls} onUpdated={setCls} />
 }
 
 describe('ClassTeachersTab', () => {
@@ -123,5 +130,32 @@ describe('ClassTeachersTab', () => {
     expect(within(alert).getByText('حساب «خالد المعلم» ليس مدعواً ولا نشطاً.')).toBeInTheDocument()
     expect(api.puts).toEqual([{ url: `/api/classes/${CLASS_ID}/teachers`, body: { teachers: [{ userId: TEACHER_IDS[0], role: 'lead' }] } }])
     expect(onUpdated).not.toHaveBeenCalled()
+  })
+
+  it('names an added teacher by the full name the server lists, so the row keeps its name after the save (PR #26 note 6)', async () => {
+    const titled = makeTeacherCandidate({ displayName: 'أ. منى' })
+    const saved = makeClass({ teachers: [makeClassTeacher(), makeClassTeacher({ userId: titled.id, fullName: titled.fullName, role: 'assistant' })] })
+    mockFetch((url, init) => {
+      if (new URL(url, 'http://localhost').pathname === '/api/users') return jsonResponse(200, makeUserList([titled]))
+      if (init?.method === 'PUT') return jsonResponse(200, saved)
+      return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
+    })
+    renderWithProviders(<StatefulTab initial={makeClass()} />, { auth: makeAuth({ user: makeUser({ permissions: CLASS_ADMIN_PERMISSIONS }) }), route: '/classes' })
+
+    // The search shows the display name, as API-012 returns it…
+    await openSearch()
+    await waitFor(() => expect(option('أ. منى')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('أ. منى', { selector: '.ant-select-item-option-content' }))
+
+    // …the draft row the full name, as API-056 will after the save.
+    expect(await screen.findByRole('combobox', { name: `${ar.classes.teachers.role}: منى المساعدة` })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: `${ar.classes.teachers.role}: أ. منى` })).not.toBeInTheDocument()
+    expect(screen.getByText('منى المساعدة')).toBeInTheDocument()
+    fireEvent.click(screen.getByText(ar.classes.teachers.save).closest('button')!)
+
+    expect(await screen.findByText(ar.classes.teachers.saved)).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText(ar.classes.teachers.save)).not.toBeInTheDocument())
+    expect(screen.getByText('منى المساعدة')).toBeInTheDocument()
+    expect(screen.getByText(ar.classes.teacherRoles.assistant)).toBeInTheDocument()
   })
 })

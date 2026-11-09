@@ -1,7 +1,10 @@
 // State of a keyset-paginated table (ADR-028): filters, a stack of cursors
 // ("next" pushes the server's `nextCursor`, "back" pops) and the page on
 // screen. Any filter change restarts from the first page; in-flight requests
-// are aborted and stale answers dropped. The same logic as users/useUsersList
+// are aborted and stale answers dropped. A failed load keeps the rows on
+// screen behind the error but drops their `nextCursor` — it belongs to the
+// page before (or to other filters), so «next» stays off until a page loads
+// (owner's review of PR #26, J-F14). The same logic as users/useUsersList
 // and courses/useCoursesList, written once for the screens that follow
 // (classes first — J-F01).
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -42,7 +45,8 @@ export function useKeysetList<T extends { id: string }, F extends object>(load: 
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
-        setPage((current) => ({ ...current, key: requestKey, error }))
+        // Rows of the previous page stay behind the error message; their cursor does not.
+        setPage((current) => ({ ...current, key: requestKey, nextCursor: null, error }))
       })
     return () => controller.abort()
   }, [load, filters, cursor, requestKey])
