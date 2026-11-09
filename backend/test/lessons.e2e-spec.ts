@@ -45,6 +45,7 @@ const LESSON_KEYS = [
   'status',
   'syllabusItem',
   'teacher',
+  'timeZone',
   'title',
   'updatedAt',
 ];
@@ -59,6 +60,7 @@ interface LessonBody {
   endsAt: string;
   status: string;
   room: { id: string; code: string } | null;
+  timeZone: string;
   teacher: { userId: string; fullName: string } | null;
   syllabusItem: { id: string; sortOrder: number } | null;
   scheduleId: string | null;
@@ -94,6 +96,8 @@ describe.skipIf(!available)('MOD-06 lessons (e2e, TEST-077)', () => {
   let roomA: string;
   let roomB: string;
   let roomInactive: string;
+  let roomBranch: string;
+  let academyTimeZone: string;
   const createdUserIds: string[] = [];
   const createdRoleIds: string[] = [];
   const fx: Record<string, string> = {};
@@ -184,6 +188,10 @@ describe.skipIf(!available)('MOD-06 lessons (e2e, TEST-077)', () => {
     roomA = (await prisma.room.create({ data: { code: code('RA'), name: { ar: 'قاعة أ' } }, select: { id: true } })).id;
     roomB = (await prisma.room.create({ data: { code: code('RB'), name: { ar: 'قاعة ب' } }, select: { id: true } })).id;
     roomInactive = (await prisma.room.create({ data: { code: code('RX'), name: { ar: 'قاعة موقوفة' }, isActive: false }, select: { id: true } })).id;
+    // D-R41: a room in a branch with its own zone, and the academy's zone for every other lesson.
+    const branchId = (await prisma.branch.create({ data: { code: code('BR'), name: { ar: 'فرع برلين' }, timezone: 'Europe/Berlin' }, select: { id: true } })).id;
+    roomBranch = (await prisma.room.create({ data: { code: code('RZ'), name: { ar: 'قاعة الفرع' }, branchId }, select: { id: true } })).id;
+    academyTimeZone = (await prisma.academy.findFirstOrThrow({ select: { timezone: true } })).timezone;
 
     const teacherRoleId = (await prisma.role.findUniqueOrThrow({ where: { key: 'teacher' }, select: { id: true } })).id;
     const studentRoleId = (await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } })).id;
@@ -210,6 +218,7 @@ describe.skipIf(!available)('MOD-06 lessons (e2e, TEST-077)', () => {
         await prisma.class.deleteMany({ where: { code: { startsWith: PREFIX } } });
         await prisma.course.deleteMany({ where: { code: { startsWith: PREFIX } } });
         await prisma.room.deleteMany({ where: { code: { startsWith: PREFIX } } });
+        await prisma.branch.deleteMany({ where: { code: { startsWith: PREFIX } } });
       }
     } finally {
       if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
@@ -234,6 +243,7 @@ describe.skipIf(!available)('MOD-06 lessons (e2e, TEST-077)', () => {
       endsAt: '2026-11-10T11:30:00.000Z',
       status: 'scheduled',
       room: { id: roomA, code: code('RA') },
+      timeZone: academyTimeZone, // D-R41: no branch on the room → the academy's zone
       teacher: { userId: id('teacher'), fullName: 'Test teacher' }, // the lead teacher by default
       syllabusItem: { id: itemA1, sortOrder: 1 },
       scheduleId: null,
@@ -501,6 +511,20 @@ describe.skipIf(!available)('MOD-06 lessons (e2e, TEST-077)', () => {
     }
     expect(ours((await list({ classId: otherCourseId }).expect(200)).body.items)).toEqual([]);
   });
+
+  it('D-R41 — timeZone is the room’s branch zone, else the academy’s, on create, read and list', async () => {
+    const inBranch = await create(classes['A']!, lesson({ roomId: roomBranch, startsAt: '2026-11-20T10:00:00Z', endsAt: '2026-11-20T11:00:00Z' }));
+    expect(inBranch.status, JSON.stringify(inBranch.body)).toBe(201);
+    expect((inBranch.body as LessonBody).timeZone).toBe('Europe/Berlin');
+    const noRoom = await create(classes['A']!, lesson({ startsAt: '2026-11-20T12:00:00Z', endsAt: '2026-11-20T13:00:00Z' }));
+    expect(noRoom.status, JSON.stringify(noRoom.body)).toBe(201);
+    expect((noRoom.body as LessonBody).timeZone).toBe(academyTimeZone);
+    expect(((await get(inBranch.body.id).expect(200)).body as LessonBody).timeZone).toBe('Europe/Berlin');
+    const listed = ours((await list({ classId: classes['A']!, from: '2026-11-20T00:00:00Z' }).expect(200)).body.items);
+    const zones = new Map(listed.map((entry) => [entry.id, entry.timeZone]));
+    expect([zones.get(inBranch.body.id), zones.get(noRoom.body.id)]).toEqual(['Europe/Berlin', academyTimeZone]);
+    expect((await api().get('/api/docs-json').expect(200)).body.components.schemas.LessonDto.properties.timeZone).toMatchObject({ type: 'string' });
+  }, 20_000);
 
   it(
     'documents the routes in OpenAPI',

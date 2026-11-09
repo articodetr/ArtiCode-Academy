@@ -104,6 +104,9 @@ export class MyLessonItemDto {
   @ApiProperty({ type: ScheduleRoomDto, nullable: true })
   room: ScheduleRoomDto | null;
 
+  @ApiProperty({ example: 'Europe/Istanbul', description: 'IANA time zone the lesson is displayed in: the room’s branch when it has one, else the academy’s (D-R41 — as `timeZone` in API-090/091)' })
+  timeZone: string;
+
   @ApiProperty({ type: MyClassTeacherDto, nullable: true, description: 'The lesson’s teacher by name only (no id, no contact fields); null = none' })
   teacher: MyClassTeacherDto | null;
 

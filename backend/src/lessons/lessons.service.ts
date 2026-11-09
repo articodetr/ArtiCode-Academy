@@ -10,6 +10,7 @@ import type { AttendanceStatus, ClassStatus, DeliveryMode } from '../generated/p
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { isWriteConflict } from '../schedule/class-schedule.service.js';
+import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { isEmptyLessonPatch, mergedRange, planLessonUpdate } from './lessons.changes.js';
 import type { LessonPatch, LessonValues } from './lessons.changes.js';
 import { LESSONS_PAGE_DEFAULT, LESSON_SORT_FIELD } from './lessons.dto.js';
@@ -34,6 +35,9 @@ const CLASSES_ENTITY_TYPE = 'classes';
 /** Attempts of a writing transaction when PostgreSQL reports a write conflict or a deadlock (KI-071). */
 const WRITE_CONFLICT_ATTEMPTS = 2;
 
+/** The academy's time zone for `LessonDto.timeZone` (D-R41), or UTC while the academy row is missing (the readiness check reports that state). */
+const FALLBACK_TIME_ZONE = 'UTC';
+
 const LESSON_SELECT = {
   id: true,
   classId: true,
@@ -54,7 +58,7 @@ const LESSON_SELECT = {
   updatedAt: true,
   class: { select: { id: true, code: true, name: true, status: true, courseId: true, course: { select: { id: true, code: true, name: true } } } },
   syllabusItem: { select: { id: true, sortOrder: true, title: true } },
-  room: { select: { id: true, code: true, name: true, branch: { select: { id: true, code: true, name: true } } } },
+  room: { select: { id: true, code: true, name: true, branch: { select: { id: true, code: true, name: true, timezone: true } } } },
   teacher: { select: { id: true, fullName: true } },
 } satisfies Prisma.LessonSelect;
 
@@ -112,7 +116,7 @@ export interface CreateLessonsOptions {
   authority?: 'lessons' | 'schedule';
 }
 
-function toLessonDto(row: LessonRow, counts: AttendanceCounts): LessonDto {
+function toLessonDto(row: LessonRow, counts: AttendanceCounts, academyTimeZone: string): LessonDto {
   return {
     id: row.id,
     class: {
@@ -136,6 +140,8 @@ function toLessonDto(row: LessonRow, counts: AttendanceCounts): LessonDto {
           branch: row.room.branch ? { id: row.room.branch.id, code: row.room.branch.code, name: readLocalizedText(row.room.branch.name) ?? { ar: row.room.branch.code } } : null,
         }
       : null,
+    // D-R41: the lesson is displayed in its room's branch zone, else the academy's (like API-090/091).
+    timeZone: displayTimeZone(row.room?.branch?.timezone, academyTimeZone),
     teacher: row.teacher ? { userId: row.teacher.id, fullName: row.teacher.fullName } : null,
     syllabusItem: row.syllabusItem
       ? { id: row.syllabusItem.id, sortOrder: row.syllabusItem.sortOrder, title: readLocalizedText(row.syllabusItem.title) ?? { ar: '' } }
@@ -259,13 +265,14 @@ export class LessonsService {
     const last = page.at(-1);
     const nextCursor = rows.length > limit && last ? encodeKeysetCursor({ sort: LESSON_SORT_FIELD, order, key: toIso(last.startsAt), id: last.id }) : null;
     const counts = await this.attendanceCounts(this.prisma.db, page.map((row) => row.id));
-    return { items: page.map((row) => toLessonDto(row, counts)), nextCursor };
+    const timeZone = await this.academyTimeZone(this.prisma.db);
+    return { items: page.map((row) => toLessonDto(row, counts, timeZone)), nextCursor };
   }
 
   async get(id: string, caller: AuthPrincipal): Promise<LessonDto> {
     const row = await this.prisma.db.lesson.findFirst({ where: { AND: [{ id }, visibleLessonsWhere(caller)] }, select: LESSON_SELECT });
     if (!row) throw lessonsError.lessonNotFound(id);
-    return toLessonDto(row, await this.attendanceCounts(this.prisma.db, [id]));
+    return toLessonDto(row, await this.attendanceCounts(this.prisma.db, [id]), await this.academyTimeZone(this.prisma.db));
   }
 
   /** `POST /api/classes/:id/lessons` — one lesson by hand (API-095). */
@@ -378,7 +385,8 @@ export class LessonsService {
             tx,
           );
           const rows = await tx.lesson.findMany({ where: { id: { in: ids } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], select: LESSON_SELECT });
-          return rows.map((row) => toLessonDto(row, {}));
+          const timeZone = await this.academyTimeZone(tx);
+          return rows.map((row) => toLessonDto(row, {}, timeZone));
         });
       } catch (error) {
         const resource = lessonExclusionOf(error);
@@ -409,7 +417,7 @@ export class LessonsService {
           const row = await this.lockLesson(tx, id, caller, 'NO KEY UPDATE');
           const current = valuesOf(row);
           const plan = planLessonUpdate(current, patch);
-          if (plan.fields.length === 0) return toLessonDto(row, await this.attendanceCounts(tx, [id]));
+          if (plan.fields.length === 0) return toLessonDto(row, await this.attendanceCounts(tx, [id]), await this.academyTimeZone(tx));
           if (!isClassOpenForLessons(row.class.status)) throw lessonsError.classClosed(row.classId, row.class.status);
           const locked = lockedFields(row.status, plan.fields);
           if (locked.length > 0) throw lessonsError.lessonLocked(row.status, locked);
@@ -603,7 +611,13 @@ export class LessonsService {
 
   private async read(db: Db, id: string): Promise<LessonDto> {
     const row = await db.lesson.findUniqueOrThrow({ where: { id }, select: LESSON_SELECT });
-    return toLessonDto(row, await this.attendanceCounts(db, [id]));
+    return toLessonDto(row, await this.attendanceCounts(db, [id]), await this.academyTimeZone(db));
+  }
+
+  /** The academy's time zone for `LessonDto.timeZone` (D-R41); UTC while the academy row is missing. */
+  private async academyTimeZone(db: Db): Promise<string> {
+    const academy = await db.academy.findFirst({ select: { timezone: true } });
+    return academy?.timezone ?? FALLBACK_TIME_ZONE;
   }
 
   /** Attendance records per lesson and status for a page of lessons (one grouped query). */

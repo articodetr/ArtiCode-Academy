@@ -29,7 +29,7 @@ const PASSWORD = 'Correct-Horse-Battery-9';
 const USER_AGENT = 'TEST-079 supertest';
 const CLASSES = '/api/classes';
 const MY_LESSONS = '/api/me/lessons';
-const ITEM_KEYS = ['attendance', 'class', 'deliveryMode', 'description', 'endsAt', 'id', 'meetingUrl', 'relation', 'room', 'startsAt', 'status', 'student', 'syllabusItem', 'teacher', 'title'];
+const ITEM_KEYS = ['attendance', 'class', 'deliveryMode', 'description', 'endsAt', 'id', 'meetingUrl', 'relation', 'room', 'startsAt', 'status', 'student', 'syllabusItem', 'teacher', 'timeZone', 'title'];
 const SECRET_KEY = /hash|password/i;
 const FORBIDDEN_KEYS = new Set(['email', 'username', 'phone', 'emailVerifiedAt', 'lastLoginAt', 'lockedUntil', 'note', 'recordedBy', 'recordedById', 'cancellationReason', 'userId', 'createdBy', 'createdById']);
 
@@ -77,6 +77,7 @@ describe.skipIf(!available)('MOD-06 my lessons (e2e, TEST-079)', () => {
   let prisma: PrismaClient;
   let passwords: PasswordService;
   let courseId: string;
+  let academyTimeZone: string;
   const createdUserIds: string[] = [];
   const createdRoleIds: string[] = [];
   const fx: Record<string, string> = {};
@@ -149,6 +150,7 @@ describe.skipIf(!available)('MOD-06 my lessons (e2e, TEST-079)', () => {
     await app.init();
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL! }) });
     passwords = new PasswordService();
+    academyTimeZone = (await prisma.academy.findFirstOrThrow({ select: { timezone: true } })).timezone;
 
     courseId = (
       await prisma.course.create({
@@ -242,6 +244,7 @@ describe.skipIf(!available)('MOD-06 my lessons (e2e, TEST-079)', () => {
       status: 'scheduled',
       meetingUrl: 'https://meet.example.com/l1',
       room: null,
+      timeZone: academyTimeZone, // D-R41: no room → the academy's zone
       teacher: { fullName: 'Test teacher', displayName: null },
       syllabusItem: { sortOrder: 1, title: { ar: 'البند 1' } },
       class: { id: classes['A'], code: code('A'), status: 'open', course: { id: courseId, code: code('CRS') } },

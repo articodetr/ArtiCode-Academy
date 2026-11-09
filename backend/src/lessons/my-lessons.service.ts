@@ -5,6 +5,7 @@ import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.
 import type { SortOrder } from '../common/keyset-cursor.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { LESSON_SORT_FIELD, LESSONS_PAGE_DEFAULT } from './lessons.dto.js';
 import { lessonsError } from './lessons.errors.js';
 import { toInstant, toIso } from './lessons.time.js';
@@ -26,7 +27,7 @@ const MY_LESSON_SELECT = {
   endsAt: true,
   status: true,
   meetingUrl: true,
-  room: { select: { id: true, code: true, name: true, branch: { select: { id: true, code: true, name: true } } } },
+  room: { select: { id: true, code: true, name: true, branch: { select: { id: true, code: true, name: true, timezone: true } } } },
   teacher: { select: { fullName: true, displayName: true } },
   syllabusItem: { select: { id: true, sortOrder: true, title: true } },
   class: { select: { id: true, code: true, name: true, status: true, course: { select: { id: true, code: true, name: true } } } },
@@ -34,6 +35,9 @@ const MY_LESSON_SELECT = {
 
 // The student's own record: status and lateness, never the note or who wrote it (D-R32).
 const MY_RECORD_SELECT = { lessonId: true, studentUserId: true, status: true, minutesLate: true, recordedAt: true } satisfies Prisma.AttendanceRecordSelect;
+
+/** The academy's time zone for `timeZone` (D-R41), or UTC while the academy row is missing. */
+const FALLBACK_TIME_ZONE = 'UTC';
 
 type MyLessonRow = Prisma.LessonGetPayload<{ select: typeof MY_LESSON_SELECT }>;
 type MyRecordRow = Prisma.AttendanceRecordGetPayload<{ select: typeof MY_RECORD_SELECT }>;
@@ -46,7 +50,7 @@ function toAttendance(row: MyRecordRow | undefined): MyLessonAttendanceDto | nul
   return row ? { status: row.status, minutesLate: row.minutesLate, recordedAt: toIso(row.recordedAt) } : null;
 }
 
-function toItem(row: MyLessonRow, ownership: LessonOwnership, record: MyRecordRow | undefined): MyLessonItemDto {
+function toItem(row: MyLessonRow, ownership: LessonOwnership, record: MyRecordRow | undefined, academyTimeZone: string): MyLessonItemDto {
   return {
     id: row.id,
     title: readLocalizedText(row.title) ?? { ar: '' },
@@ -64,6 +68,8 @@ function toItem(row: MyLessonRow, ownership: LessonOwnership, record: MyRecordRo
           branch: row.room.branch ? { id: row.room.branch.id, code: row.room.branch.code, name: readLocalizedText(row.room.branch.name) ?? { ar: row.room.branch.code } } : null,
         }
       : null,
+    // D-R41: displayed in the room's branch zone, else the academy's (like API-090/091).
+    timeZone: displayTimeZone(row.room?.branch?.timezone, academyTimeZone),
     teacher: row.teacher ? { fullName: row.teacher.fullName, displayName: row.teacher.displayName } : null,
     syllabusItem: row.syllabusItem ? { id: row.syllabusItem.id, sortOrder: row.syllabusItem.sortOrder, title: readLocalizedText(row.syllabusItem.title) ?? { ar: '' } } : null,
     class: {
@@ -131,6 +137,8 @@ export class MyLessonsService {
         ? []
         : await this.prisma.db.attendanceRecord.findMany({ where: { lessonId: { in: page.map((row) => row.id) }, studentUserId: { in: studentIds } }, select: MY_RECORD_SELECT });
     const byKey = new Map(records.map((row) => [recordKey(row.lessonId, row.studentUserId), row]));
-    return { items: expanded.map(({ lesson, ownership }) => toItem(lesson, ownership, byKey.get(recordKey(lesson.id, ownership.student.id)))), nextCursor };
+    const academy = await this.prisma.db.academy.findFirst({ select: { timezone: true } });
+    const timeZone = academy?.timezone ?? FALLBACK_TIME_ZONE;
+    return { items: expanded.map(({ lesson, ownership }) => toItem(lesson, ownership, byKey.get(recordKey(lesson.id, ownership.student.id)), timeZone)), nextCursor };
   }
 }

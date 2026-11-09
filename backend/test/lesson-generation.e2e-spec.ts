@@ -44,6 +44,7 @@ interface GeneratedLesson {
   title: Record<string, string>;
   scheduleId: string | null;
   room: { id: string } | null;
+  timeZone: string;
   teacher: { userId: string } | null;
 }
 
@@ -231,6 +232,8 @@ describe.skipIf(!available)('MOD-07 lesson generation (e2e, TEST-074)', () => {
       ['2026-03-29T08:00:00.000Z', '2026-03-29T09:00:00.000Z', roomBerlin, id('teacher2'), sunday!.id], // CEST (+2) — the clocks moved that morning
       [academyInstant('2026-03-31', '09:00'), academyInstant('2026-03-31', '10:30'), roomSite, id('teacher'), tuesday!.id],
     ]);
+    // D-R41: each generated lesson is displayed in its room's branch zone, else the academy's.
+    expect(lessons.map((lesson) => lesson.timeZone)).toEqual([DST_ZONE, academyTimeZone, DST_ZONE, academyTimeZone]);
     expect(lessons[0]).toMatchObject({ title: { ar: 'فصل A', en: 'Class A' }, status: 'scheduled', deliveryMode: 'in_person', class: { id: classId }, syllabusItem: null, attendance: { recorded: 0 } });
 
     const events = await eventsSince(m);
