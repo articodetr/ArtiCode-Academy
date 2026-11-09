@@ -135,6 +135,17 @@ export const ar = {
     noRoles: 'بلا دور',
     permissions: 'الصلاحيات ({{count}})',
     noPermissions: 'لا صلاحيات ممنوحة بعد',
+    // Headings of the permission areas without a menu entry (J-F36); the other areas reuse `nav.*`
+    permissionModules: {
+      guardians: 'أولياء الأمور',
+      enrollments: 'التسجيلات',
+      recordings: 'التسجيلات المرئية',
+      attendance: 'الحضور',
+      questions: 'بنوك الأسئلة',
+      grades: 'الدرجات',
+      invoices: 'الفواتير',
+      fee_plans: 'خطط الرسوم',
+    },
     changePassword: 'تغيير كلمة المرور',
     currentPassword: 'كلمة المرور الحالية',
     newPassword: 'كلمة المرور الجديدة',

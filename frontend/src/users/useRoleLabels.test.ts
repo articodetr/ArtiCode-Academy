@@ -9,11 +9,11 @@ import { makeAuth, makeUser } from '../test/render'
 import { ROLE_LABELS, ROLE_OPTIONS, makeRoleList } from '../test/users'
 import { useRoleLabels } from './useRoleLabels'
 
-/** Mounts the hook for a signed-in user holding `permissions`. */
-function renderLabels(permissions: string[]) {
+/** Mounts the hook for a signed-in user holding `permissions`; `enabled` as the profile page passes it. */
+function renderLabels(permissions: string[], enabled?: boolean) {
   const auth = makeAuth({ user: makeUser({ permissions }) })
   const wrapper = ({ children }: { children: ReactNode }) => createElement(AuthContext, { value: auth }, children)
-  return renderHook(() => useRoleLabels(), { wrapper })
+  return renderHook(() => useRoleLabels(enabled), { wrapper })
 }
 
 /** Answers every request with `handler` and records the paths asked for. */
@@ -46,6 +46,15 @@ describe('useRoleLabels (J-F12)', () => {
     expect(api.paths).toEqual([])
     expect(result.current.labels.size).toBe(0)
     expect(result.current.keys).toEqual([])
+  })
+
+  it('asks nothing when disabled, even with users.read (the profile page of a user without a custom role — J-F36)', async () => {
+    const api = record(() => jsonResponse(200, makeRoleList()))
+    const { result } = renderLabels(['users.read'], false)
+
+    await act(async () => {})
+    expect(api.paths).toEqual([])
+    expect(result.current.labels.size).toBe(0)
   })
 
   it('stays empty without throwing when the request fails', async () => {

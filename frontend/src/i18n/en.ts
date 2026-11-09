@@ -137,6 +137,17 @@ export const en: Translation = {
     noRoles: 'No role',
     permissions: 'Permissions ({{count}})',
     noPermissions: 'No permissions granted yet',
+    // Headings of the permission areas without a menu entry (J-F36); the other areas reuse `nav.*`
+    permissionModules: {
+      guardians: 'Guardians',
+      enrollments: 'Enrollments',
+      recordings: 'Lesson recordings',
+      attendance: 'Attendance',
+      questions: 'Question banks',
+      grades: 'Grades',
+      invoices: 'Invoices',
+      fee_plans: 'Fee plans',
+    },
     changePassword: 'Change password',
     currentPassword: 'Current password',
     newPassword: 'New password',

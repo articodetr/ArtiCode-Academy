@@ -3,7 +3,9 @@
 // the role filter of that page — never one request per row. API-022 requires
 // `users.read`, so nothing is requested without it; then, and after any
 // failure, the labels stay empty and roleLabel() shows the raw key. This is a
-// decoration: it never shows an error of its own.
+// decoration: it never shows an error of its own. With `enabled` false it asks
+// nothing at all — the profile page reads the labels only for a user who
+// holds a custom role (J-F36).
 import { useEffect, useMemo, useState } from 'react'
 import { listRoles } from '../api/roles'
 import type { Role } from '../api/roles'
@@ -17,10 +19,10 @@ export const ROLE_LABELS_PERMISSION = 'users.read'
 
 const NO_ROLES: readonly Role[] = []
 
-export function useRoleLabels(): RoleLabels {
+export function useRoleLabels(enabled = true): RoleLabels {
   const { hasPermission } = useAuth()
   const { language } = useLocalized()
-  const allowed = hasPermission(ROLE_LABELS_PERMISSION)
+  const allowed = enabled && hasPermission(ROLE_LABELS_PERMISSION)
   const [roles, setRoles] = useState<readonly Role[]>(NO_ROLES)
 
   useEffect(() => {
