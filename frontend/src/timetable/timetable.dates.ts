@@ -193,13 +193,24 @@ function offsetAt(instant: number, timeZone: string): number {
 
 /**
  * The instant (epoch ms) of a wall-clock time on a calendar date in a zone:
- * 10:00 on 2026-11-08 in Asia/Riyadh is 07:00Z. A repeated time (DST ends)
- * resolves to its first occurrence; a time a DST gap skips, to an instant
- * next to the gap (no slot sits in those night hours in practice).
+ * 10:00 on 2026-11-08 in Asia/Riyadh is 07:00Z. A manual mirror of
+ * `zonedInstant()` in backend/src/schedule/lesson-generation.plan.ts — keep
+ * them in sync — so a slot's occurrence here, a lesson the server generates
+ * from it and a time typed in the lesson forms (D-R41 — J-F28) are the same
+ * instant. Two offset probes settle the ordinary case and both sides of a
+ * daylight-saving change: a time a DST gap skips moves forward by the gap
+ * (02:30 → 03:30 in Europe/Berlin and in America/New_York); a time that
+ * occurs twice resolves as the probes settle it — the later occurrence east of
+ * UTC (02:30 CET in Europe/Berlin), the first one west of it (01:30 EDT in
+ * America/New_York), as on the server.
  */
 export function zonedInstant(date: CalendarDate, time: string, timeZone: string): number {
-  const day = utcOf(date)
-  const wall = day.getTime() + clockMinutes(time) * 60_000
+  const wall = utcOf(date).getTime() + clockMinutes(time) * 60_000
   const first = wall - offsetAt(wall, timeZone)
-  return wall - offsetAt(first, timeZone)
+  const offsetAtFirst = offsetAt(first, timeZone)
+  const second = wall - offsetAtFirst
+  if (second === first) return first
+  if (offsetAt(second, timeZone) === offsetAtFirst) return second
+  // A gap: neither probe round-trips — the later instant (the wall time moved forward by the gap).
+  return Math.max(first, second)
 }

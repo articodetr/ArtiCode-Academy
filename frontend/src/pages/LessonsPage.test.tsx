@@ -1,17 +1,33 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import type { Academy } from '../api/academy'
 import type { LessonList } from '../api/lessons'
 import { ar } from '../i18n/ar'
-import { dayEndInstant, dayStartInstant, formatLessonDay, formatLessonTimes, rangeOf, todayIso } from '../lessons/lessons.format'
+import { dayEndInstant, dayStartInstant, formatLessonDay, formatLessonTimes, rangeOf, todayIn } from '../lessons/lessons.format'
+import { makeAcademy } from '../test/academy'
 import { CLASS_ID, makeClass, makeClassList, makeTeacherCandidate } from '../test/classes'
 import { makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
-import { LESSON_ADMIN_PERMISSIONS, LESSON_ID_2, LESSON_LEARNER_PERMISSIONS, LESSON_STAFF_PERMISSIONS, LESSON_TEACHER_PERMISSIONS, makeLesson, makeLessonList } from '../test/lessons'
+import {
+  FAR_TIME_ZONE,
+  LESSON_ADMIN_PERMISSIONS,
+  LESSON_ID_2,
+  LESSON_LEARNER_PERMISSIONS,
+  LESSON_STAFF_PERMISSIONS,
+  LESSON_TEACHER_PERMISSIONS,
+  LESSON_TIME_ZONE,
+  makeLesson,
+  makeLessonList,
+} from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { makeRoom, makeRoomList } from '../test/timetable'
+import { deviceTimeZone } from '../timetable/timetable.settings'
 import { makeUserList } from '../test/users'
 import { LessonsPage } from './LessonsPage'
+
+/** The first instant of today in a zone — the default «from» of the list. */
+const todayStart = (zone: string) => dayStartInstant(todayIn(zone), zone)!
 
 const variables = makeLesson()
 const loops = makeLesson({
@@ -28,8 +44,12 @@ const loops = makeLesson({
 })
 const created = makeLesson({ id: 'new-1', title: { ar: 'الدوال' } })
 
-/** Serves the lessons list (recording its queries), the pickers, the detail and POST /api/classes/:id/lessons; `paths` records every request. */
-function mockLessonsApi(list: LessonList | Response, createResponse: Response = jsonResponse(201, created)) {
+/**
+ * Serves the academy (API-035 — its zone is the zone of the filter days, makeAcademy()'s Asia/Riyadh by default), the
+ * lessons list (recording its queries), the pickers, the detail and POST /api/classes/:id/lessons; `paths` records
+ * every request.
+ */
+function mockLessonsApi(list: LessonList | Response, createResponse: Response = jsonResponse(201, created), academy: Academy | Response | Promise<Response> = makeAcademy()) {
   const queries: URLSearchParams[] = []
   const posts: { url: string; body: unknown }[] = []
   const paths: string[] = []
@@ -37,6 +57,7 @@ function mockLessonsApi(list: LessonList | Response, createResponse: Response = 
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
     paths.push(`${method} ${parsed.pathname}`)
+    if (parsed.pathname === '/api/academy') return academy instanceof Response || academy instanceof Promise ? academy : jsonResponse(200, academy)
     if (parsed.pathname === '/api/lessons' && method === 'GET') {
       queries.push(parsed.searchParams)
       return list instanceof Response ? list : jsonResponse(200, list)
@@ -74,11 +95,11 @@ describe('LessonsPage', () => {
     renderPage(LESSON_TEACHER_PERMISSIONS)
 
     expect(await screen.findByText('المتغيرات وأنواع البيانات')).toBeInTheDocument()
-    expect(Object.fromEntries(api.queries[0]!)).toEqual({ from: dayStartInstant(todayIso())!, order: 'asc', limit: '20' })
+    expect(Object.fromEntries(api.queries[0]!)).toEqual({ from: todayStart(LESSON_TIME_ZONE), order: 'asc', limit: '20' })
     const rows = bodyRows()
     expect(rows).toHaveLength(2)
-    expect(within(rows[0]!).getByText(formatLessonDay(variables.startsAt, 'ar'))).toBeInTheDocument()
-    expect(within(rows[0]!).getByText(formatLessonTimes(variables.startsAt, variables.endsAt, 'ar'))).toBeInTheDocument()
+    expect(within(rows[0]!).getByText(formatLessonDay(variables.startsAt, 'ar', LESSON_TIME_ZONE))).toBeInTheDocument()
+    expect(within(rows[0]!).getByText(formatLessonTimes(variables.startsAt, variables.endsAt, 'ar', LESSON_TIME_ZONE))).toBeInTheDocument()
     expect(within(rows[0]!).getByText(ar.labels.in_person)).toBeInTheDocument()
     expect(within(rows[0]!).getByText('PY-101-A')).toBeInTheDocument()
     expect(within(rows[0]!).getByText('بايثون — الفصل أ')).toBeInTheDocument()
@@ -147,7 +168,8 @@ describe('LessonsPage', () => {
     fireEvent.change(screen.getByLabelText(ar.lessons.filters.from), { target: { value: '' } })
     await waitFor(() => expect(api.queries.at(-1)?.get('from')).toBeNull())
     fireEvent.change(screen.getByLabelText(ar.lessons.filters.to), { target: { value: '2026-11-30' } })
-    await waitFor(() => expect(api.queries.at(-1)?.get('to')).toBe(dayEndInstant('2026-11-30')!))
+    // The last millisecond of the 30th in the academy's zone (Asia/Riyadh, UTC+3).
+    await waitFor(() => expect(api.queries.at(-1)?.get('to')).toBe('2026-11-30T20:59:59.999Z'))
     const last = api.queries.at(-1)!
     expect(last.get('status')).toBe('cancelled')
     expect(last.get('order')).toBe('desc')
@@ -168,8 +190,8 @@ describe('LessonsPage', () => {
     expect(await screen.findByText(ar.lessons.emptyFiltered)).toBeInTheDocument()
 
     // Today again = the default.
-    fireEvent.change(screen.getByLabelText(ar.lessons.filters.from), { target: { value: todayIso() } })
-    await waitFor(() => expect(api.queries.at(-1)?.get('from')).toBe(dayStartInstant(todayIso())!))
+    fireEvent.change(screen.getByLabelText(ar.lessons.filters.from), { target: { value: todayIn(LESSON_TIME_ZONE) } })
+    await waitFor(() => expect(api.queries.at(-1)?.get('from')).toBe(todayStart(LESSON_TIME_ZONE)))
     expect(await screen.findByText(ar.lessons.empty)).toBeInTheDocument()
 
     fireEvent.mouseDown(screen.getByLabelText(ar.lessons.columns.status))
@@ -233,11 +255,74 @@ describe('LessonsPage', () => {
     const before = api.queries.length
     fireEvent.click(within(dialog).getByText(ar.lessons.create.submit).closest('button')!)
 
-    const range = rangeOf('2026-11-12', '09:00', '10:30')!
+    // Typed in the academy's zone (Asia/Riyadh): 09:00 is 06:00 UTC.
+    const range = rangeOf('2026-11-12', '09:00', '10:30', LESSON_TIME_ZONE)!
+    expect(range).toMatchObject({ startsAt: '2026-11-12T06:00:00.000Z', endsAt: '2026-11-12T07:30:00.000Z' })
     await waitFor(() => expect(api.posts).toEqual([{ url: `/api/classes/${CLASS_ID}/lessons`, body: { title: { ar: 'الدوال' }, deliveryMode: 'in_person', startsAt: range.startsAt, endsAt: range.endsAt } }]))
     expect(await screen.findByText('تم إنشاء الدرس «الدوال»')).toBeInTheDocument()
     await waitFor(() => expect(api.queries.length).toBeGreaterThan(before))
     // The drawer opens on the created lesson.
     expect(await screen.findByText(ar.lessons.fields.origin)).toBeInTheDocument()
+  })
+
+  it('shows each row in its own zone, names a zone that is not the device’s under its time, says so once above the table, and reads the filter days in the academy’s zone (D-R41 — J-F28)', async () => {
+    const device = deviceTimeZone()
+    expect(device).not.toBe(FAR_TIME_ZONE)
+    // 10:00–11:30 UTC: 00:00–01:30 on the 11th in UTC+14; the second lesson sits in the device's own zone.
+    const far = makeLesson({ timeZone: FAR_TIME_ZONE })
+    const local = makeLesson({ id: LESSON_ID_2, title: { ar: 'الحلقات' }, timeZone: device })
+    const api = mockLessonsApi(makeLessonList([far, local]), undefined, makeAcademy({ timezone: FAR_TIME_ZONE }))
+    renderPage(LESSON_STAFF_PERMISSIONS)
+
+    expect(await screen.findByText('المتغيرات وأنواع البيانات')).toBeInTheDocument()
+    // «From today» is the academy's today, from its midnight (10:00 UTC the day before).
+    expect(api.queries[0]!.get('from')).toBe(todayStart(FAR_TIME_ZONE))
+    expect(screen.getByLabelText(ar.lessons.filters.from)).toHaveValue(todayIn(FAR_TIME_ZONE))
+    const [farRow, localRow] = bodyRows() as [HTMLElement, HTMLElement]
+    expect(within(farRow).getByText('00:00 – 01:30')).toBeInTheDocument()
+    expect(within(farRow).getByText(formatLessonDay(far.startsAt, 'ar', FAR_TIME_ZONE))).toBeInTheDocument()
+    expect(within(farRow).getByTestId('lesson-row-zone')).toHaveTextContent(FAR_TIME_ZONE)
+    expect(within(localRow).getByText(formatLessonTimes(local.startsAt, local.endsAt, 'ar', device))).toBeInTheDocument()
+    expect(within(localRow).queryByTestId('lesson-row-zone')).not.toBeInTheDocument()
+    // One note for the page: the rows' zones against the device's, and the zone of the filter days.
+    const note = screen.getByTestId('lesson-zone-note')
+    expect(note).toHaveTextContent(ar.lessons.zone.rows.replace('{{zone}}', device))
+    expect(note).toHaveTextContent(ar.lessons.zone.days.replace('{{zone}}', FAR_TIME_ZONE))
+
+    fireEvent.change(screen.getByLabelText(ar.lessons.filters.to), { target: { value: '2026-11-30' } })
+    await waitFor(() => expect(api.queries.at(-1)?.get('to')).toBe('2026-11-30T09:59:59.999Z'))
+    expect(api.queries.at(-1)?.get('to')).toBe(dayEndInstant('2026-11-30', FAR_TIME_ZONE))
+  })
+
+  it('says nothing about zones when the academy and every lesson are in the device’s zone', async () => {
+    const device = deviceTimeZone()
+    mockLessonsApi(makeLessonList([makeLesson({ timeZone: device })]), undefined, makeAcademy({ timezone: device }))
+    renderPage(LESSON_STAFF_PERMISSIONS)
+    expect(await screen.findByText('المتغيرات وأنواع البيانات')).toBeInTheDocument()
+    expect(screen.queryByTestId('lesson-zone-note')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('lesson-row-zone')).not.toBeInTheDocument()
+  })
+
+  it('waits for the academy’s zone before its first request, and reads the days in the device’s zone when the academy cannot be read', async () => {
+    let release: (response: Response) => void = () => {}
+    const academy = new Promise<Response>((resolve) => {
+      release = resolve
+    })
+    const api = mockLessonsApi(makeLessonList([]), undefined, academy)
+    const { unmount } = renderPage(LESSON_STAFF_PERMISSIONS)
+    await waitFor(() => expect(api.paths).toContain('GET /api/academy'))
+    // No list request in the device's zone first: one request, with the academy's «today».
+    expect(api.queries).toHaveLength(0)
+    release(jsonResponse(200, makeAcademy({ timezone: FAR_TIME_ZONE })))
+    await waitFor(() => expect(api.queries).toHaveLength(1))
+    expect(api.queries[0]!.get('from')).toBe(todayStart(FAR_TIME_ZONE))
+    unmount()
+
+    const failed = mockLessonsApi(makeLessonList([]), undefined, jsonResponse(503, { statusCode: 503, code: 'academy_not_configured', message: 'nope' }))
+    renderPage(LESSON_STAFF_PERMISSIONS)
+    await waitFor(() => expect(failed.queries).toHaveLength(1))
+    expect(failed.queries[0]!.get('from')).toBe(todayStart(deviceTimeZone()))
+    expect(await screen.findByText(ar.lessons.empty)).toBeInTheDocument()
+    expect(screen.queryByTestId('lesson-zone-note')).not.toBeInTheDocument()
   })
 })

@@ -1208,11 +1208,22 @@ export const en: Translation = {
       origin: 'Origin',
       createdAt: 'Created',
       updatedAt: 'Last updated',
+      timeZone: 'Time zone',
+    },
+    // D-R41 (J-F28): a lesson's times are in its own zone; “today” and the filter days in the academy's.
+    zone: {
+      device: 'your device: {{zone}}',
+      rows: 'Each lesson’s times are in its own time zone (its room’s branch, else the academy’s); the zone is named under the time when it differs from your device’s ({{zone}}).',
+      days: '“Today” and the days you pick in the filters are the academy’s ({{zone}}).',
+      lessonInput: 'Times in the lesson’s time zone: {{zone}}',
+      academyInput: 'Times in the academy’s time zone: {{zone}}',
+      deviceInput: 'Times in your device’s time zone ({{zone}}); the academy’s could not be read',
+      followsRoom: 'The lesson’s time zone follows its room’s branch: once saved it may be shown in another zone; the saved time itself does not change.',
     },
     hints: {
       class: 'A planned, open or running class; the class of a lesson cannot change after creation',
       teacher: 'Defaults to the class’s lead teacher at creation; one of the class’s teachers',
-      time: 'In your device’s time zone; up to 12 hours, and an end time earlier than the start means the next day',
+      time: 'Up to 12 hours, and an end time earlier than the start means the next day',
       endsNextDay: 'The lesson ends on the next day ({{date}}) and lasts {{minutes}} min',
       meetingUrl: 'A link starting with https:// (for online lessons)',
       timingLocked: 'Time, room and teacher cannot change for a completed lesson; title, description, syllabus item, delivery mode and link still can',

@@ -22,7 +22,19 @@ export const LESSON_LEARNER_PERMISSIONS = ['lessons.read', 'courses.read', 'sche
 
 export const EMPTY_ATTENDANCE: AttendanceCounts = { recorded: 0, present: 0, absent: 0, late: 0, excused: 0 }
 
-/** A scheduled in-person lesson of PY-101-A on 2026-11-10 10:00–11:30 UTC in LAB-1 with the lead teacher and the first syllabus item. */
+/** The academy's zone of makeAcademy() — a lesson whose room has no branch is shown in it (D-R41). */
+export const LESSON_TIME_ZONE = 'Asia/Riyadh'
+
+/**
+ * A zone no test machine runs in (UTC+14 all year, no DST), for the tests that
+ * prove a lesson's times follow its `timeZone` and not the browser's (J-F28).
+ */
+export const FAR_TIME_ZONE = 'Pacific/Kiritimati'
+
+/**
+ * A scheduled in-person lesson of PY-101-A on 2026-11-10 10:00–11:30 UTC in LAB-1 (the academy's own site, so in the
+ * academy's zone) with the lead teacher and the first syllabus item.
+ */
 export function makeLesson(overrides: Partial<Lesson> = {}): Lesson {
   return {
     id: LESSON_ID,
@@ -40,6 +52,7 @@ export function makeLesson(overrides: Partial<Lesson> = {}): Lesson {
     endsAt: '2026-11-10T11:30:00.000Z',
     status: 'scheduled',
     room: { id: ROOM_ID, code: 'LAB-1', name: { ar: 'مختبر 1', en: 'Lab 1' }, branch: null },
+    timeZone: LESSON_TIME_ZONE,
     teacher: { userId: TEACHER_IDS[0], fullName: 'خالد المعلم' },
     syllabusItem: { id: SYLLABUS_ITEM_IDS[0], sortOrder: 0, title: { ar: 'المتغيرات', en: 'Variables' } },
     scheduleId: null,

@@ -4,12 +4,14 @@
 // PATCH body carries only fields whose value differs from the loaded lesson
 // (null clears the optional links and the description); a localized text
 // travels as a whole object and keeps a Turkish text the form does not edit;
-// nothing changed → null (no request). Local rules mirror
+// nothing changed → null (no request). The day and the two times are a wall
+// clock in one zone (D-R41 — J-F28): the lesson's own `timeZone` when editing,
+// the academy's for a new lesson (it has no zone yet). Local rules mirror
 // backend/src/lessons/lessons.dto.ts — the server decides.
 import { MEETING_URL_PATTERN } from '../api/lessons'
 import type { CreateLessonInput, DeliveryMode, Lesson, UpdateLessonInput } from '../api/lessons'
 import { localizedOf, sameLabel } from '../courses/courses.form'
-import { localPartsOf, rangeOf } from './lessons.format'
+import { rangeOf, zonedPartsOf } from './lessons.format'
 
 /**
  * Value of the teacher Select meaning "no teacher" (`teacherUserId: null`), as
@@ -25,7 +27,7 @@ export interface LessonFormValues {
   descriptionAr?: string
   descriptionEn?: string
   deliveryMode: DeliveryMode
-  /** `YYYY-MM-DD` and `HH:MM` from the native inputs, in the browser's zone. */
+  /** `YYYY-MM-DD` and `HH:MM` from the native inputs, on the wall clock of the form's zone (the lesson's, or the academy's for a new one). */
   date: string
   startTime: string
   endTime: string
@@ -50,10 +52,10 @@ export function isMeetingUrlValid(value: string | undefined): boolean {
   return trimmed === '' || MEETING_URL_PATTERN.test(trimmed)
 }
 
-/** Initial form values of a loaded lesson (null → empty; no teacher → NO_TEACHER). */
+/** Initial form values of a loaded lesson — its day and times in its own zone (`timeZone` — D-R41); null → empty; no teacher → NO_TEACHER. */
 export function lessonFormValuesOf(lesson: Lesson): LessonFormValues {
-  const start = localPartsOf(lesson.startsAt)
-  const end = localPartsOf(lesson.endsAt)
+  const start = zonedPartsOf(lesson.startsAt, lesson.timeZone)
+  const end = zonedPartsOf(lesson.endsAt, lesson.timeZone)
   return {
     classId: lesson.class.id,
     titleAr: lesson.title.ar,
@@ -71,8 +73,9 @@ export function lessonFormValuesOf(lesson: Lesson): LessonFormValues {
   }
 }
 
-export function buildCreateLessonInput(values: LessonFormValues): CreateLessonInput {
-  const range = rangeOf(values.date, values.startTime, values.endTime)
+/** The create body; the day and times are read in `timeZone` (the academy's — a new lesson has no zone of its own yet). */
+export function buildCreateLessonInput(values: LessonFormValues, timeZone: string): CreateLessonInput {
+  const range = rangeOf(values.date, values.startTime, values.endTime, timeZone)
   const input: CreateLessonInput = {
     title: localizedOf(values.titleAr, values.titleEn) ?? { ar: text(values.titleAr) },
     deliveryMode: values.deliveryMode,
@@ -90,7 +93,14 @@ export function buildCreateLessonInput(values: LessonFormValues): CreateLessonIn
   return input
 }
 
-/** The smallest PATCH body (API-096), or null when nothing changed. */
+/**
+ * The smallest PATCH body (API-096), or null when nothing changed. The typed
+ * day and times are read in the lesson's own zone; an instant is sent only
+ * when the fields it depends on were edited AND it moved — the start on the
+ * day or the start time, the end on any of the three (the next-day rule ties
+ * it to the start) — so a lesson whose time occurs twice on a night the clock
+ * goes back keeps its instant when only its title changes.
+ */
 export function planLessonPatch(lesson: Lesson, values: LessonFormValues): UpdateLessonInput | null {
   const body: UpdateLessonInput = {}
   const title = localizedOf(values.titleAr, values.titleEn, lesson.title.tr)
@@ -98,9 +108,12 @@ export function planLessonPatch(lesson: Lesson, values: LessonFormValues): Updat
   const description = localizedOf(values.descriptionAr, values.descriptionEn, lesson.description?.tr)
   if (!sameLabel(description, lesson.description)) body.description = description
   if (values.deliveryMode !== lesson.deliveryMode) body.deliveryMode = values.deliveryMode
-  const range = rangeOf(values.date, values.startTime, values.endTime)
+  const loaded = lessonFormValuesOf(lesson)
+  const startEdited = values.date !== loaded.date || values.startTime !== loaded.startTime
+  const endEdited = startEdited || values.endTime !== loaded.endTime
+  const range = endEdited ? rangeOf(values.date, values.startTime, values.endTime, lesson.timeZone) : undefined
   if (range) {
-    if (!sameMinute(range.startsAt, lesson.startsAt)) body.startsAt = range.startsAt
+    if (startEdited && !sameMinute(range.startsAt, lesson.startsAt)) body.startsAt = range.startsAt
     if (!sameMinute(range.endsAt, lesson.endsAt)) body.endsAt = range.endsAt
   }
   const roomId = values.roomId || null

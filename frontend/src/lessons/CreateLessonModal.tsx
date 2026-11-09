@@ -4,7 +4,12 @@
 // clean form. A server error that names a field (teacher not assigned, room
 // inactive, syllabus item of another course, time range, conflict) is shown
 // on that field; anything else above the form. `initialClass` lets a class
-// screen open the modal for one class (the picker is then pre-filled).
+// screen open the modal for one class (the picker is then pre-filled). The day
+// and the times are read in the academy's zone (D-R41 — J-F28): the server
+// gives a lesson its zone from its room only once it exists, and a branch's
+// zone is not known here without a request, so the academy's — already in the
+// shared API-035 store — is the one rule; the form names it, and the drawer
+// that opens on the created lesson shows the server's `timeZone`.
 import { Alert, Form, Modal } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +20,7 @@ import { LessonFormFields } from './LessonFormFields'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
 import { buildCreateLessonInput } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
+import { useAcademyZone } from './useAcademyZone'
 
 interface CreateLessonModalProps {
   open: boolean
@@ -68,6 +74,8 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
   const [klass, setKlass] = useState<AcademyClass | null>(initialClass ?? null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // The academy's zone, or this device's when the academy could not be read — the form says which.
+  const { timeZone, source } = useAcademyZone()
 
   // Hands the modal's OK button this session's form (onReady is stable; the form instance too), and takes it back
   // when the session ends — the next session's first frame then shows a disabled OK, never a stale one.
@@ -83,7 +91,7 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
     onSaving(true)
     setError(null)
     try {
-      const created = await createLesson(classId, buildCreateLessonInput(values))
+      const created = await createLesson(classId, buildCreateLessonInput(values, timeZone))
       onCreated(created)
     } catch (caught) {
       const failure = describeLessonsFailure(caught)
@@ -110,6 +118,7 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
         <LessonFormFields
           form={form}
           mode="create"
+          zone={{ timeZone, source }}
           klass={klass}
           onClassChange={(next) => {
             setKlass(next ?? null)

@@ -1,26 +1,35 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import type { Academy } from '../api/academy'
 import { ar } from '../i18n/ar'
+import { makeAcademy } from '../test/academy'
 import { CLASS_ID, TEACHER_IDS, makeClass, makeClassList, makeClassTeacher } from '../test/classes'
 import { SYLLABUS_ITEM_IDS, makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
-import { LESSON_ADMIN_PERMISSIONS, makeLesson } from '../test/lessons'
+import { FAR_TIME_ZONE, LESSON_ADMIN_PERMISSIONS, LESSON_TIME_ZONE, makeLesson } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
+import { BRANCH_ID, ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
+import { deviceTimeZone } from '../timetable/timetable.settings'
 import { CreateLessonModal } from './CreateLessonModal'
 import { durationMinutes, formatLessonDay, rangeOf } from './lessons.format'
 
 const twoTeachers = makeClass({ teachers: [makeClassTeacher(), makeClassTeacher({ userId: TEACHER_IDS[1], fullName: 'منى المساعدة', role: 'assistant' })] })
+/** A room of a branch: the server would show a lesson there in the branch's zone (D-R41). */
+const branchRoom = makeRoom({ id: 'room-branch', code: 'BR-1', name: { ar: 'قاعة الفرع' }, branchId: BRANCH_ID, branch: { id: BRANCH_ID, code: 'IST', name: { ar: 'فرع إسطنبول' } } })
 
-/** Serves the class picker (an open and a completed class), the rooms, the syllabus and POST /api/classes/:id/lessons. */
-function mockCreateApi(createResponse: Response = jsonResponse(201, makeLesson({ id: 'new-1' }))) {
+/**
+ * Serves the academy (API-035 — the zone the times are read in, makeAcademy()'s Asia/Riyadh by default), the class
+ * picker (an open and a completed class), the rooms, the syllabus and POST /api/classes/:id/lessons.
+ */
+function mockCreateApi(createResponse: Response = jsonResponse(201, makeLesson({ id: 'new-1' })), academy: Academy | Response = makeAcademy()) {
   const posts: unknown[] = []
   mockFetch((url, init) => {
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
+    if (parsed.pathname === '/api/academy') return academy instanceof Response ? academy : jsonResponse(200, academy)
     if (parsed.pathname === '/api/classes') return jsonResponse(200, makeClassList([twoTeachers, makeClass({ id: 'closed-1', code: 'OLD-A', name: { ar: 'فصل قديم' }, status: 'completed' })]))
-    if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom()]))
+    if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom(), branchRoom]))
     if (parsed.pathname.endsWith('/syllabus')) return jsonResponse(200, makeSyllabus())
     if (parsed.pathname === `/api/classes/${CLASS_ID}/lessons` && method === 'POST') {
       posts.push(JSON.parse(String(init?.body)))
@@ -31,11 +40,20 @@ function mockCreateApi(createResponse: Response = jsonResponse(201, makeLesson({
   return posts
 }
 
-async function renderOpen() {
+/** The line above the day and the times: which zone they are read in, and this device's when it differs. */
+function zoneHint(source: 'academyInput' | 'deviceInput', zone: string): string {
+  const device = deviceTimeZone()
+  const named = ar.lessons.zone[source].replace('{{zone}}', zone)
+  return zone === device ? named : `${named} — ${ar.lessons.zone.device.replace('{{zone}}', device)}`
+}
+
+/** Opens the modal and waits until the academy's zone is read (`zone` = what the hint then names). */
+async function renderOpen(zone: string = LESSON_TIME_ZONE, source: 'academyInput' | 'deviceInput' = 'academyInput') {
   const onCreated = vi.fn()
   const onClose = vi.fn()
   renderWithProviders(<CreateLessonModal open onClose={onClose} onCreated={onCreated} />, { auth: makeAuth({ user: makeUser({ permissions: LESSON_ADMIN_PERMISSIONS }) }), route: '/lessons' })
   const dialog = (await screen.findByText(ar.lessons.create.title)).closest('[role="dialog"]') as HTMLElement
+  await waitFor(() => expect(within(dialog).getByTestId('lesson-zone-hint')).toHaveTextContent(zoneHint(source, zone)))
   return { dialog, onCreated, onClose }
 }
 
@@ -136,14 +154,14 @@ describe('CreateLessonModal', () => {
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.meetingUrl), 'https://meet.example.com/f')
     submit(dialog)
 
-    const range = rangeOf('2026-11-12', '22:00', '00:30')!
+    // 22:00 → 00:30 of the next day in the academy's zone (Asia/Riyadh, UTC+3).
     await waitFor(() =>
       expect(posts).toEqual([
         {
           title: { ar: 'الدوال', en: 'Functions' },
           deliveryMode: 'hybrid',
-          startsAt: range.startsAt,
-          endsAt: range.endsAt,
+          startsAt: '2026-11-12T19:00:00.000Z',
+          endsAt: '2026-11-12T21:30:00.000Z',
           description: { ar: 'تعريف الدوال' },
           roomId: ROOM_ID,
           teacherUserId: null,
@@ -160,8 +178,10 @@ describe('CreateLessonModal', () => {
     const { dialog } = await renderOpen()
     const endMark = () => within(dialog).getByTestId('lesson-end-mark')
     const sentence = (date: string, start: string, end: string) => {
-      const range = rangeOf(date, start, end)!
-      return ar.lessons.hints.endsNextDay.replace('{{date}}', formatLessonDay(range.endsAt, 'ar')).replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt)))
+      const range = rangeOf(date, start, end, LESSON_TIME_ZONE)!
+      return ar.lessons.hints.endsNextDay
+        .replace('{{date}}', formatLessonDay(range.endsAt, 'ar', LESSON_TIME_ZONE))
+        .replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt)))
     }
 
     // The owner's typo: 13:00 → 01:00 is a valid 12-hour night lesson, so it must not pass unseen.
@@ -218,5 +238,51 @@ describe('CreateLessonModal', () => {
     submit(dialog)
     expect(await within(dialog).findByText(ar.lessons.errors.lesson_conflict_room)).toBeInTheDocument()
     expect(onCreated).not.toHaveBeenCalled()
+  })
+
+  it('reads the typed day and times in the academy’s zone and names it beside the device’s — never the browser’s zone (D-R41 — J-F28)', async () => {
+    expect(deviceTimeZone()).not.toBe(FAR_TIME_ZONE)
+    const posts = mockCreateApi(undefined, makeAcademy({ timezone: FAR_TIME_ZONE }))
+    const { dialog } = await renderOpen(FAR_TIME_ZONE)
+    // «Times in the academy's time zone: Pacific/Kiritimati — your device: …».
+    expect(within(dialog).getByTestId('lesson-zone-hint')).toHaveTextContent(ar.lessons.zone.device.replace('{{zone}}', deviceTimeZone()))
+    await chooseClass(dialog)
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'درس')
+    fillTimes(dialog, '2026-11-12', '23:00', '00:30')
+    // The next day of the academy's zone, whose midnight is 10:00 UTC.
+    await waitFor(() => expect(within(dialog).getByTestId('lesson-end-mark')).toHaveTextContent('(+1)'))
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    // 23:00 on the 12th in UTC+14 is 09:00 UTC on the 12th; 00:30 on the 13th is 10:30 UTC.
+    expect(posts[0]).toMatchObject({ startsAt: '2026-11-12T09:00:00.000Z', endsAt: '2026-11-12T10:30:00.000Z' })
+  })
+
+  it('reads the times in the device’s zone when the academy cannot be read, and says so', async () => {
+    const posts = mockCreateApi(undefined, jsonResponse(503, { statusCode: 503, code: 'academy_not_configured', message: 'nope' }))
+    const { dialog } = await renderOpen(deviceTimeZone(), 'deviceInput')
+    expect(within(dialog).getByTestId('lesson-zone-hint')).not.toHaveTextContent(ar.lessons.zone.device.replace('{{zone}}', deviceTimeZone()))
+    await chooseClass(dialog)
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'درس')
+    fillTimes(dialog, '2026-11-12', '09:00', '10:30')
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    const range = rangeOf('2026-11-12', '09:00', '10:30', deviceTimeZone())!
+    expect(posts[0]).toMatchObject({ startsAt: range.startsAt, endsAt: range.endsAt })
+  })
+
+  it('says under the room that a room of a branch may show the lesson in that branch’s zone once created (D-R41)', async () => {
+    mockCreateApi()
+    const { dialog } = await renderOpen()
+    const room = within(dialog).getByLabelText(ar.lessons.fields.room)
+    expect(within(dialog).queryByText(ar.lessons.zone.followsRoom)).not.toBeInTheDocument()
+
+    fireEvent.mouseDown(room)
+    fireEvent.click(await screen.findByText('BR-1 — قاعة الفرع (IST)', { selector: '.ant-select-item-option-content' }))
+    expect(await within(dialog).findByText(ar.lessons.zone.followsRoom)).toBeInTheDocument()
+
+    // A room of the academy's own site keeps the academy's zone: nothing to say.
+    fireEvent.mouseDown(room)
+    fireEvent.click(await screen.findByText('LAB-1 — مختبر 1', { selector: '.ant-select-item-option-content' }))
+    await waitFor(() => expect(within(dialog).queryByText(ar.lessons.zone.followsRoom)).not.toBeInTheDocument())
   })
 })

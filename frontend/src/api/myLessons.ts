@@ -40,6 +40,8 @@ export interface MyLessonItem {
   meetingUrl: string | null
   /** `ScheduleRoomDto` — the same shape as a lesson's room. */
   room: Lesson['room']
+  /** IANA zone the lesson is displayed in: the room's branch when it has one, else the academy's (D-R41 — as API-093). */
+  timeZone: string
   /** The lesson's teacher by name only (no id, no contact fields); null = none. */
   teacher: MyClassTeacher | null
   syllabusItem: LessonSyllabusItem | null

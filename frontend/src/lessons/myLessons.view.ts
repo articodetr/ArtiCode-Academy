@@ -2,13 +2,15 @@
 // parameters, the row key (a lesson repeats once per owned student), the
 // student and class filter options read from «my classes» (API-060 — the same
 // ownership: `active`/`completed` enrollments, children while the caller holds
-// `guardian`), and the attendance cell. No React, no i18next instance.
+// `guardian`), and the attendance cell. «Today» and the range days are days of
+// the academy's zone (D-R41 — J-F28), as on /lessons. No React, no i18next
+// instance.
 import type { AttendanceStatus } from '../api/attendance'
 import type { MyClassItem, MyClassRelation, MyClassStudent } from '../api/enrollments'
 import type { LessonSortOrder, LessonStatus } from '../api/lessons'
 import type { ListMyLessonsParams, MyLessonItem } from '../api/myLessons'
 import type { LocalizedLabel } from '../api/users'
-import { dayEndInstant, dayStartInstant, todayIso } from './lessons.format'
+import { dayEndInstant, dayStartInstant, todayIn } from './lessons.format'
 
 export const MY_LESSON_VIEWS = ['upcoming', 'past', 'range'] as const
 export type MyLessonView = (typeof MY_LESSON_VIEWS)[number]
@@ -22,7 +24,7 @@ export interface MyLessonsFilters {
   studentId: string | undefined
   classId: string | undefined
   status: LessonStatus | undefined
-  /** `range` view only: local calendar days (`YYYY-MM-DD`); blank = open-ended. */
+  /** `range` view only: calendar days (`YYYY-MM-DD`) of the academy's zone; blank = open-ended. */
   from: string | undefined
   to: string | undefined
   /** `range` view only — `upcoming` is always oldest first and `past` newest first. */
@@ -34,23 +36,24 @@ export function defaultMyLessonsFilters(): MyLessonsFilters {
   return { view: 'upcoming', studentId: undefined, classId: undefined, status: undefined, from: undefined, to: undefined, order: 'asc', limit: 20 }
 }
 
-/** The first instant of the browser's current day (ISO 8601, `Z`). */
-export function todayStartInstant(now: Date = new Date()): string {
-  return dayStartInstant(todayIso(now)) ?? now.toISOString()
+/** The first instant of the current day in `dayZone` (ISO 8601, `Z`) — the academy's day (D-R41). */
+export function todayStartInstant(dayZone: string, now: Date = new Date()): string {
+  return dayStartInstant(todayIn(dayZone, now), dayZone) ?? now.toISOString()
 }
 
 /**
- * API-101 parameters of the filters at `now`. `upcoming` = lessons starting
- * today or later, oldest first (today's lessons stay there all day, so a
- * running lesson and its meeting link remain at the top); `past` = lessons
- * that started before today, newest first; `range` = the chosen days (both
- * inclusive) in the chosen order. The cursor is added by the caller.
+ * API-101 parameters of the filters at `now`, with the days of `dayZone` (the
+ * academy's). `upcoming` = lessons starting today or later, oldest first
+ * (today's lessons stay there all day, so a running lesson and its meeting
+ * link remain at the top); `past` = lessons that started before today, newest
+ * first; `range` = the chosen days (both inclusive) in the chosen order. The
+ * cursor is added by the caller.
  */
-export function myLessonsQuery(filters: MyLessonsFilters, now: Date = new Date()): ListMyLessonsParams {
+export function myLessonsQuery(filters: MyLessonsFilters, dayZone: string, now: Date = new Date()): ListMyLessonsParams {
   const base: ListMyLessonsParams = { classId: filters.classId, studentId: filters.studentId, status: filters.status, limit: filters.limit }
-  if (filters.view === 'upcoming') return { ...base, from: todayStartInstant(now), order: 'asc' }
-  if (filters.view === 'past') return { ...base, to: new Date(new Date(todayStartInstant(now)).getTime() - 1).toISOString(), order: 'desc' }
-  return { ...base, from: dayStartInstant(filters.from), to: dayEndInstant(filters.to), order: filters.order }
+  if (filters.view === 'upcoming') return { ...base, from: todayStartInstant(dayZone, now), order: 'asc' }
+  if (filters.view === 'past') return { ...base, to: new Date(new Date(todayStartInstant(dayZone, now)).getTime() - 1).toISOString(), order: 'desc' }
+  return { ...base, from: dayStartInstant(filters.from, dayZone), to: dayEndInstant(filters.to, dayZone), order: filters.order }
 }
 
 /** True when a filter beyond the view narrows the list (the empty text then says so). */

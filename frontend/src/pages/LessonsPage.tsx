@@ -6,6 +6,11 @@
 // they cannot use. Students hold `lessons.read` without any assignment: their
 // own lessons — and a guardian's children's — are in «my lessons» (/my-lessons,
 // API-101 — J-F11), which the hint links to for the holders of those role keys.
+// Each row shows its times in the lesson's own `timeZone` and «today» and the
+// day filters are the academy's days (D-R41 — J-F28); a note says so when a
+// zone differs from this device's. The list waits for the academy's zone (the
+// shared API-035 reading, usually already loaded by the header), so its first
+// request already carries the academy's «today».
 import { LinkOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Flex, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -23,14 +28,30 @@ import { canAccess } from '../layout/navigation'
 import { CreateLessonModal } from '../lessons/CreateLessonModal'
 import { DateFilter } from '../lessons/DateFilter'
 import { LessonDrawer } from '../lessons/LessonDrawer'
+import { LessonWhen, LessonZoneNote } from '../lessons/LessonZone'
 import { describeLessonsFailure, failureMessage } from '../lessons/lessons.errors'
-import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle } from '../lessons/lessons.format'
+import { lessonRoomLabel, lessonTitle } from '../lessons/lessons.format'
+import { useAcademyZone } from '../lessons/useAcademyZone'
 import { LESSON_PAGE_SIZES, defaultLessonFilters, hasActiveLessonFilters, useLessonsList } from '../lessons/useLessonsList'
 import type { LessonsListFilters } from '../lessons/useLessonsList'
 import { ClassPicker } from '../timetable/TimetablePickers'
 import { localizedLabel } from '../users/users.format'
 
 export function LessonsPage() {
+  const { t } = useTranslation()
+  const zone = useAcademyZone()
+  // Keyed by the zone: the default «from today» is computed once, in the academy's zone.
+  if (zone.settled) return <LessonsScreen key={zone.timeZone} dayZone={zone.timeZone} />
+  return (
+    <>
+      <PageHeader title={t('lessons.title')} subtitle={t('lessons.subtitle')} />
+      <Card loading />
+    </>
+  )
+}
+
+/** The page once the zone of its days is known: the academy's, or this device's when the academy could not be read. */
+function LessonsScreen({ dayZone }: { dayZone: string }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -43,8 +64,8 @@ export function LessonsPage() {
   // class picker of a new lesson follow it.
   const canPickClass = hasPermission('classes.read')
   const canPickTeacher = seesEveryClass && hasPermission('users.read')
-  const [defaults] = useState(() => defaultLessonFilters())
-  const list = useLessonsList(defaults)
+  const [defaults] = useState(() => defaultLessonFilters(dayZone))
+  const list = useLessonsList(defaults, dayZone)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -52,15 +73,7 @@ export function LessonsPage() {
     {
       title: t('lessons.columns.when'),
       key: 'when',
-      render: (_, row) => (
-        <span>
-          <Typography.Text>{formatLessonDay(row.startsAt, language)}</Typography.Text>
-          <br />
-          <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-            {formatLessonTimes(row.startsAt, row.endsAt, language)}
-          </Typography.Text>
-        </span>
-      ),
+      render: (_, row) => <LessonWhen startsAt={row.startsAt} endsAt={row.endsAt} timeZone={row.timeZone} />,
     },
     {
       title: t('lessons.columns.lesson'),
@@ -207,6 +220,8 @@ export function LessonsPage() {
           />
           <Button icon={<ReloadOutlined />} onClick={list.reload} aria-label={t('lessons.refresh')} />
         </Flex>
+
+        <LessonZoneNote timeZones={list.items.map((row) => row.timeZone)} dayZone={dayZone} />
 
         {failure ? (
           <Alert
