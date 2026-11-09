@@ -5,7 +5,7 @@ import type { UserDetail } from '../api/users'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { ADMIN_PERMISSIONS, makeUserDetail, reduced } from '../test/users'
+import { ADMIN_PERMISSIONS, ROLE_LABELS, makeUserDetail, reduced } from '../test/users'
 import { UserDrawer } from './UserDrawer'
 
 /** GET returns `detail`; PATCH is answered by `patch` (default: echo the merged body). */
@@ -58,6 +58,18 @@ describe('UserDrawer', () => {
     expect(within(dialog).getByRole('tab', { name: ar.users.tabs.guardians })).toBeInTheDocument()
     expect(within(dialog).queryByRole('tab', { name: ar.users.tabs.students })).not.toBeInTheDocument()
     expect(within(dialog).queryByText('خالد محمود')).not.toBeInTheDocument()
+  })
+
+  it('shows a custom role by its server label in the header, from the detail itself — no GET /api/roles (J-F12)', async () => {
+    const api = mockDetailApi(makeUserDetail({ roles: [{ key: 'librarian', label: ROLE_LABELS.librarian }, { key: 'student', label: ROLE_LABELS.student }] }))
+    renderDrawer()
+
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByRole('heading', { level: 4, name: 'عمر خالد' })
+    expect(within(dialog).getByText(ROLE_LABELS.librarian.ar)).toBeInTheDocument()
+    expect(within(dialog).getByText(ROLE_LABELS.student.ar)).toBeInTheDocument()
+    expect(within(dialog).queryByText('librarian')).not.toBeInTheDocument()
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/roles'))).toBe(false)
   })
 
   it('shows the reduced projection without contact rows, the edit button only with users.update and the roles tab only with users.roles.assign', async () => {

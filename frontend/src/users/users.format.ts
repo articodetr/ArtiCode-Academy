@@ -1,5 +1,6 @@
 // Pure presentation helpers of the users screens (MOD-03-T11): role labels,
 // localized text, dates. No React, no i18next instance — callers pass `t`.
+import type { Role } from '../api/roles'
 import type { LocalizedLabel, UserStatus, UserSummary } from '../api/users'
 import { uiRoleFor } from '../auth/roles'
 import type { Language } from '../i18n/language'
@@ -9,15 +10,41 @@ export const SYSTEM_ROLE_KEYS = ['academy_admin', 'staff', 'teacher', 'guardian'
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string
 
-/** Translated name of a system role; a custom role shows its key until T13 brings its labels. */
-export function roleLabel(key: string, t: Translate): string {
+/**
+ * Name of a role: the five system roles are translated (`roles.*`), any other
+ * key shows its server label from `labels` (API-022 through `useRoleLabels()`
+ * — J-F12), else the raw key (labels not loaded, not allowed, or failed).
+ */
+export function roleLabel(key: string, t: Translate, labels?: ReadonlyMap<string, string>): string {
   const ui = uiRoleFor(key)
-  return ui ? t(`roles.${ui}`) : key
+  if (ui) return t(`roles.${ui}`)
+  return labels?.get(key) || key
 }
 
 /** Picks the active language from `{ ar, en?, tr? }`, falling back to the mandatory Arabic. */
 export function localizedLabel(label: LocalizedLabel, language: Language): string {
   return label[language] || label.ar
+}
+
+/** The roles of API-022 as the users screens show them (J-F12). */
+export interface RoleLabels {
+  /** Server label of each role in the active language (Arabic when that language is missing), by key. */
+  labels: ReadonlyMap<string, string>
+  /** Role keys in the server order: system roles first, then custom roles by key. */
+  keys: readonly string[]
+}
+
+export function roleLabelsOf(roles: readonly Pick<Role, 'key' | 'label'>[], language: Language): RoleLabels {
+  return {
+    labels: new Map(roles.map((role) => [role.key, localizedLabel(role.label, language)])),
+    keys: roles.map((role) => role.key),
+  }
+}
+
+/** Keys offered by the role filter of the users page: the five system roles in menu order, then every other role of API-022 in server order. */
+export function roleFilterKeys(serverKeys: readonly string[]): string[] {
+  const system = new Set<string>(SYSTEM_ROLE_KEYS)
+  return [...SYSTEM_ROLE_KEYS, ...serverKeys.filter((key) => !system.has(key))]
 }
 
 /** Tag colours for the account statuses of API-012 (`labels.*` carries the texts). */
