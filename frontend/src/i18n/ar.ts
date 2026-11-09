@@ -87,7 +87,7 @@ export const ar = {
     planned: 'مخطَّط',
     running: 'جارٍ',
     withdrawn: 'منسحب',
-    // MOD-06 delivery modes (J-F09); `recorded` above
+    // MOD-06 delivery modes (J-F09): the tag and the form's select (J-F19); `recorded` above
     in_person: 'حضوري',
     live_online: 'مباشر عبر الإنترنت',
     hybrid: 'مدمج',
@@ -1142,7 +1142,6 @@ export const ar = {
     addLesson: 'إضافة درس',
     // Still used by the dashboard prototype (mockLessons).
     type: 'النوع',
-    duration: 'المدة (دقيقة)',
     readOnlyHint: 'تعرض هذه الصفحة دروس الفصول المُسندة إليك فقط.',
     learnerHint: 'دروسك كطالب أو ولي أمر ستظهر في «دروسي» عند اكتمال واجهتها؛ هذه القائمة تعرض دروس الفصول التي تدرّسها فقط.',
     refresh: 'تحديث',
@@ -1175,12 +1174,6 @@ export const ar = {
       previous: 'السابق',
       next: 'التالي',
     },
-    deliveryModes: {
-      in_person: 'حضوري',
-      live_online: 'مباشر عبر الإنترنت',
-      recorded: 'مسجّل',
-      hybrid: 'مدمج',
-    },
     fields: {
       class: 'الفصل',
       titleAr: 'العنوان (عربي)',
@@ -1191,12 +1184,10 @@ export const ar = {
       date: 'التاريخ',
       startTime: 'وقت البدء',
       endTime: 'وقت الانتهاء',
-      duration: 'المدة',
       room: 'القاعة',
       teacher: 'المعلم',
       syllabusItem: 'بند المنهج',
       meetingUrl: 'رابط الاجتماع',
-      status: 'الحالة',
       cancellationReason: 'سبب الإلغاء',
       origin: 'المصدر',
       createdAt: 'أُنشئ في',
@@ -1206,6 +1197,7 @@ export const ar = {
       class: 'فصل مخطَّط أو مفتوح أو جارٍ؛ لا يتغير فصل الدرس بعد إنشائه',
       teacher: 'افتراضياً المعلم الرئيسي للفصل وقت الإنشاء؛ المعلم من معلمي الفصل',
       time: 'بتوقيت جهازك؛ المدة حتى 12 ساعة، ووقت انتهاء أبكر من البدء يعني اليوم التالي',
+      endsNextDay: 'ينتهي الدرس في اليوم التالي ({{date}})، ومدته {{minutes}} دقيقة',
       meetingUrl: 'رابط يبدأ بـ https:// (للدروس عبر الإنترنت)',
       timingLocked: 'الوقت والقاعة والمعلم لا تتغير لدرس مكتمل؛ يبقى العنوان والوصف وبند المنهج ونمط التقديم والرابط',
       needsClassesRead: 'إضافة درس تحتاج صلاحية قراءة الفصول (classes.read) لاختيار فصله',
@@ -1233,6 +1225,8 @@ export const ar = {
       rangeTooLong: 'مدة الدرس لا تتجاوز {{maxHours}} ساعة',
       meetingUrl: 'الرابط يجب أن يبدأ بـ https:// وبلا مسافات',
       arabicFirst: 'أدخل النص العربي أولاً؛ النص الإنجليزي وحده لا يُحفظ',
+      maxLength: 'الحد الأقصى {{max}} حرفاً',
+      deliveryModeRequired: 'اختر نمط التقديم',
     },
     pickers: {
       classPlaceholder: 'ابحث عن فصل بالرمز أو الاسم',
@@ -1251,7 +1245,6 @@ export const ar = {
       noRoom: 'بلا قاعة',
       noTeacher: 'بلا معلم',
       noSyllabusItem: 'بلا بند',
-      noDescription: '—',
       openMeeting: 'فتح رابط الاجتماع',
       generated: 'مولَّد من الجدول الأسبوعي',
       manual: 'أُنشئ يدوياً',

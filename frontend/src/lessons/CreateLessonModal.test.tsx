@@ -9,7 +9,7 @@ import { LESSON_ADMIN_PERMISSIONS, makeLesson } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
 import { CreateLessonModal } from './CreateLessonModal'
-import { rangeOf } from './lessons.format'
+import { durationMinutes, formatLessonDay, rangeOf } from './lessons.format'
 
 const twoTeachers = makeClass({ teachers: [makeClassTeacher(), makeClassTeacher({ userId: TEACHER_IDS[1], fullName: 'منى المساعدة', role: 'assistant' })] })
 
@@ -131,7 +131,8 @@ describe('CreateLessonModal', () => {
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.syllabusItem))
     fireEvent.click(await screen.findByText('2. الشروط', { selector: '.ant-select-item-option-content' }))
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.deliveryMode))
-    fireEvent.click(await screen.findByText(ar.lessons.deliveryModes.hybrid, { selector: '.ant-select-item-option-content' }))
+    // The select words the modes as the list's tag does (`labels.*` — J-F19).
+    fireEvent.click(await screen.findByText(ar.labels.hybrid, { selector: '.ant-select-item-option-content' }))
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.meetingUrl), 'https://meet.example.com/f')
     submit(dialog)
 
@@ -152,6 +153,55 @@ describe('CreateLessonModal', () => {
       ]),
     )
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1))
+  })
+
+  it('marks an end time that rolls over to the next day — (+1), the end day and the length — and drops the mark once the end is after the start (J-F19)', async () => {
+    const posts = mockCreateApi()
+    const { dialog } = await renderOpen()
+    const endMark = () => within(dialog).getByTestId('lesson-end-mark')
+    const sentence = (date: string, start: string, end: string) => {
+      const range = rangeOf(date, start, end)!
+      return ar.lessons.hints.endsNextDay.replace('{{date}}', formatLessonDay(range.endsAt, 'ar')).replace('{{minutes}}', String(durationMinutes(range.startsAt, range.endsAt)))
+    }
+
+    // The owner's typo: 13:00 → 01:00 is a valid 12-hour night lesson, so it must not pass unseen.
+    fillTimes(dialog, '2026-11-12', '13:00', '01:00')
+    await waitFor(() => expect(endMark()).toHaveTextContent('(+1)'))
+    expect(within(dialog).getByText(sentence('2026-11-12', '13:00', '01:00'))).toBeInTheDocument()
+    expect(sentence('2026-11-12', '13:00', '01:00')).toContain('720')
+
+    // The mark sits beside the end time, inside the input's own box.
+    expect(endMark().closest('.ant-input-affix-wrapper')).toContainElement(within(dialog).getByLabelText(ar.lessons.fields.endTime))
+
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.endTime), { target: { value: '14:00' } })
+    await waitFor(() => expect(endMark().textContent).toBe(''))
+    expect(within(dialog).queryByText(/ينتهي الدرس في اليوم التالي/)).not.toBeInTheDocument()
+
+    // An end equal to the start is refused as empty, not marked as a 24-hour lesson.
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.endTime), { target: { value: '13:00' } })
+    await waitFor(() => expect(endMark().textContent).toBe(''))
+    expect(posts).toEqual([])
+  })
+
+  it('words every refusal itself — the required fields and texts over 200 characters — never with antd’s default text (J-F19)', async () => {
+    const posts = mockCreateApi()
+    const { dialog } = await renderOpen()
+    submit(dialog)
+    for (const text of [ar.lessons.validation.classRequired, ar.lessons.validation.titleArRequired, ar.lessons.validation.dateRequired, ar.lessons.validation.startRequired, ar.lessons.validation.endRequired]) {
+      expect(await within(dialog).findByText(text)).toBeInTheDocument()
+    }
+
+    const tooLong = 'أ'.repeat(201)
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.titleAr), { target: { value: tooLong } })
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.titleEn), { target: { value: 'a'.repeat(201) } })
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.descriptionAr), { target: { value: tooLong } })
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.descriptionEn), { target: { value: 'b'.repeat(201) } })
+    submit(dialog)
+    const maxLength = ar.lessons.validation.maxLength.replace('{{max}}', '200')
+    await waitFor(() => expect(within(dialog).getAllByText(maxLength)).toHaveLength(4))
+    // antd's own wording (ar_EG: «يرجى إدخال …», «… يصل إلى … أحرف») never shows.
+    expect(within(dialog).queryByText(/يرجى إدخال|يصل إلى/)).not.toBeInTheDocument()
+    expect(posts).toEqual([])
   })
 
   it('shows a server refusal on the field it names (teacher not assigned, room conflict) and keeps the dialog open', async () => {

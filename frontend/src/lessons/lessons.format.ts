@@ -1,7 +1,10 @@
 // Pure helpers of the lessons screens (J-F09): instants ↔ the native date and
-// time inputs (browser local time — the academy's time zone is for display
-// only, D-R33 (5)), the range rule of lessons.time.ts, and the labels the
-// list and the drawer render. No React, no i18next instance.
+// time inputs, the range rule of lessons.time.ts, and the labels the list and
+// the drawer render. Everything here reads the browser's local time, the
+// display included: D-R33 (5) names the academy's (or the room's branch's)
+// zone as the display zone, and moving the list and the drawer there is an
+// open product decision for the owner (J-F19 — master doc 08, MOD-06). No
+// React, no i18next instance.
 import { MAX_LESSON_HOURS } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import type { ScheduleRoom } from '../api/timetable'
@@ -11,6 +14,9 @@ import { localizedLabel } from '../users/users.format'
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/
 const CLOCK_TIME = /^\d{2}:\d{2}$/
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** The mark of an end on the next day, after the end time (list, drawer and the form's end time — J-F19). */
+export const NEXT_DAY_MARK = '(+1)'
 
 const pad = (value: number) => String(value).padStart(2, '0')
 
@@ -36,19 +42,38 @@ export function toInstant(date: string | undefined, time: string | undefined): s
   return Number.isNaN(value.getTime()) ? undefined : value.toISOString()
 }
 
+/** The calendar day after a `YYYY-MM-DD` date (plain calendar arithmetic, no time zone involved). */
+function nextCalendarDate(date: string): string {
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10)
+}
+
 /**
  * The lesson's range from the form's day and two clock times: an end time at
  * or before the start time means the lesson ends on the next day (a 22:00 →
- * 01:00 session). Undefined when a part is missing.
+ * 01:00 session) — `nextDay` says that it rolled over, so the form can mark it
+ * beside the end time (J-F19). The end is the typed time on the next calendar
+ * day, not 24 hours after the same-day time: on a night the clock changes
+ * (DST) those differ by an hour. Undefined when a part is missing.
  */
-export function rangeOf(date: string | undefined, startTime: string | undefined, endTime: string | undefined): { startsAt: string; endsAt: string } | undefined {
+export function rangeOf(date: string | undefined, startTime: string | undefined, endTime: string | undefined): { startsAt: string; endsAt: string; nextDay: boolean } | undefined {
   const startsAt = toInstant(date, startTime)
-  const end = toInstant(date, endTime)
-  if (!startsAt || !end) return undefined
-  let endMs = new Date(end).getTime()
-  const startMs = new Date(startsAt).getTime()
-  if (endMs <= startMs) endMs += DAY_MS
-  return { startsAt, endsAt: new Date(endMs).toISOString() }
+  const sameDayEnd = toInstant(date, endTime)
+  if (!date || !startsAt || !sameDayEnd) return undefined
+  const nextDay = new Date(sameDayEnd).getTime() <= new Date(startsAt).getTime()
+  const endsAt = nextDay ? toInstant(nextCalendarDate(date), endTime) : sameDayEnd
+  return endsAt ? { startsAt, endsAt, nextDay } : undefined
+}
+
+/**
+ * The range the form marks as ending on the next day (J-F19), or undefined: a
+ * missing part, an end after the start, or an end equal to the start — which
+ * the form refuses as an empty range rather than a 24-hour lesson.
+ */
+export function nextDayRangeOf(date: string | undefined, startTime: string | undefined, endTime: string | undefined): { startsAt: string; endsAt: string } | undefined {
+  if (startTime === endTime) return undefined
+  const range = rangeOf(date, startTime, endTime)
+  return range?.nextDay ? { startsAt: range.startsAt, endsAt: range.endsAt } : undefined
 }
 
 /** Why a range is refused (mirror of `timeRangeProblem()`): `empty` when the end is not after the start, `too_long` beyond 12 hours. */
@@ -93,7 +118,7 @@ export function formatLessonTimes(startsAt: string, endsAt: string, language: La
   const start = localPartsOf(startsAt)
   const end = localPartsOf(endsAt)
   const range = `${formatClock(startsAt, language)} – ${formatClock(endsAt, language)}`
-  return start.date === end.date || !end.date ? range : `${range} (+1)`
+  return start.date === end.date || !end.date ? range : `${range} ${NEXT_DAY_MARK}`
 }
 
 /** The lesson's day, localized (medium date style). */

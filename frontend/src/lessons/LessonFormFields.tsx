@@ -1,9 +1,14 @@
 // The lesson fields shared by the creation modal and the edit form of the
 // lesson drawer (J-F09). Rendered inside the caller's <Form>; local rules
 // mirror the server (CreateLessonDto/UpdateLessonDto, lessons.time.ts) — the
-// server decides. The class is chosen on creation only; the teacher comes from
-// the class's teachers and the syllabus item from the class's course.
-import { Alert, Col, Form, Input, Row, Select } from 'antd'
+// server decides — and every rule words its own message (J-F19: no antd
+// default text). The class is chosen on creation only; the teacher comes from
+// the class's teachers and the syllabus item from the class's course. An end
+// time earlier than the start rolls the lesson over to the next day: the end
+// time then carries NEXT_DAY_MARK and the hint names the end day and the
+// length, so a typo such as 13:00 → 01:00 (a 12-hour night) does not pass
+// unseen (J-F19).
+import { Alert, Col, Form, Input, Row, Select, Typography } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
@@ -15,7 +20,7 @@ import { RoomPicker } from '../timetable/TimetablePickers'
 import { localizedLabel } from '../users/users.format'
 import { LessonClassPicker, LessonTeacherSelect, SyllabusItemSelect } from './LessonPickers'
 import { isMeetingUrlValid } from './lessons.form'
-import { rangeOf, rangeProblem } from './lessons.format'
+import { NEXT_DAY_MARK, durationMinutes, formatLessonDay, nextDayRangeOf, rangeOf, rangeProblem } from './lessons.format'
 
 interface LessonFormFieldsProps {
   form: FormInstance
@@ -37,6 +42,14 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
   // GET /api/classes(/:id) needs classes.read at the controller: without it the class list and the class's teachers stay unknown.
   const canReadClasses = useAuth().hasPermission('classes.read')
   const courseId = klass?.course.id ?? lesson?.class.course.id
+  // The day and the two times as typed, for the next-day mark beside the end time.
+  const watchedDate = Form.useWatch('date', form) as string | undefined
+  const watchedStart = Form.useWatch('startTime', form) as string | undefined
+  const watchedEnd = Form.useWatch('endTime', form) as string | undefined
+  const nextDay = nextDayRangeOf(watchedDate, watchedStart, watchedEnd)
+
+  /** The length rule of every text field, worded by the lessons dictionary. */
+  const maxLength = { max: LESSON_TEXT_MAX_LENGTH, message: t('lessons.validation.maxLength', { max: LESSON_TEXT_MAX_LENGTH }) }
 
   /** An English text needs the Arabic one: the server requires `ar` in every localized object, so an English text alone would be dropped. */
   const arabicFirst = (arField: string) => ({
@@ -82,13 +95,13 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
           <Form.Item
             name="titleAr"
             label={t('lessons.fields.titleAr')}
-            rules={[{ required: true, whitespace: true, message: t('lessons.validation.titleArRequired') }, { max: LESSON_TEXT_MAX_LENGTH }]}
+            rules={[{ required: true, whitespace: true, message: t('lessons.validation.titleArRequired') }, maxLength]}
           >
             <Input maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="titleEn" label={t('lessons.fields.titleEn')} dependencies={['titleAr']} rules={[{ max: LESSON_TEXT_MAX_LENGTH }, arabicFirst('titleAr')]}>
+          <Form.Item name="titleEn" label={t('lessons.fields.titleEn')} dependencies={['titleAr']} rules={[maxLength, arabicFirst('titleAr')]}>
             <Input dir="ltr" maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
         </Col>
@@ -110,10 +123,20 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
             name="endTime"
             label={t('lessons.fields.endTime')}
             dependencies={['date', 'startTime']}
-            extra={t('lessons.hints.time')}
+            extra={
+              <>
+                {t('lessons.hints.time')}
+                {nextDay ? (
+                  <Typography.Text type="warning" style={{ display: 'block' }}>
+                    {t('lessons.hints.endsNextDay', { date: formatLessonDay(nextDay.endsAt, language), minutes: durationMinutes(nextDay.startsAt, nextDay.endsAt) })}
+                  </Typography.Text>
+                ) : null}
+              </>
+            }
             rules={[{ required: true, message: t('lessons.validation.endRequired') }, { validator: validateEnd }]}
           >
-            <Input type="time" dir="ltr" disabled={timingLocked} />
+            {/* The suffix stays mounted (empty on the same day): adding or removing an antd suffix remounts the input and drops its focus. */}
+            <Input type="time" dir="ltr" disabled={timingLocked} suffix={<span data-testid="lesson-end-mark">{nextDay ? NEXT_DAY_MARK : ''}</span>} />
           </Form.Item>
         </Col>
       </Row>
@@ -135,8 +158,9 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
       </Row>
       <Row gutter={12}>
         <Col xs={24} md={12}>
-          <Form.Item name="deliveryMode" label={t('lessons.fields.deliveryMode')} rules={[{ required: true }]}>
-            <Select options={DELIVERY_MODES.map((mode) => ({ value: mode, label: t(`lessons.deliveryModes.${mode}`) }))} />
+          <Form.Item name="deliveryMode" label={t('lessons.fields.deliveryMode')} rules={[{ required: true, message: t('lessons.validation.deliveryModeRequired') }]}>
+            {/* The same `labels.*` words as the StatusTag of the list and the drawer. */}
+            <Select options={DELIVERY_MODES.map((mode) => ({ value: mode, label: t(`labels.${mode}`) }))} />
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
@@ -155,7 +179,7 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
       </Form.Item>
       <Row gutter={12}>
         <Col xs={24} md={12}>
-          <Form.Item name="descriptionAr" label={t('lessons.fields.descriptionAr')} rules={[{ max: LESSON_TEXT_MAX_LENGTH }]}>
+          <Form.Item name="descriptionAr" label={t('lessons.fields.descriptionAr')} rules={[maxLength]}>
             <Input.TextArea rows={2} maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
         </Col>
@@ -164,7 +188,7 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
             name="descriptionEn"
             label={t('lessons.fields.descriptionEn')}
             dependencies={['descriptionAr']}
-            rules={[{ max: LESSON_TEXT_MAX_LENGTH }, arabicFirst('descriptionAr')]}
+            rules={[maxLength, arabicFirst('descriptionAr')]}
           >
             <Input.TextArea rows={2} dir="ltr" maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>

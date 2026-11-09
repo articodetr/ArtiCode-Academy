@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SYLLABUS_ITEM_IDS } from '../test/courses'
 import { makeLesson } from '../test/lessons'
+import { withTimeZone } from '../test/time-zone'
 import { ROOM_ID } from '../test/timetable'
 import { NO_TEACHER, buildCreateLessonInput, isMeetingUrlValid, lessonFormValuesOf, planLessonPatch } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
@@ -90,6 +91,16 @@ describe('lessons.form', () => {
     // Instants with seconds (created through the API) survive the minute-only inputs untouched.
     const withSeconds = makeLesson({ startsAt: '2026-11-10T10:00:17.250Z', endsAt: '2026-11-10T11:30:42.000Z' })
     expect(planLessonPatch(withSeconds, lessonFormValuesOf(withSeconds))).toBeNull()
+  })
+
+  it('edits only the title of an overnight lesson on a night the clock changes (DST): its end does not move by an hour (J-F19)', () => {
+    withTimeZone('Europe/Berlin', () => {
+      expect(new Date('2026-07-01T12:00:00Z').getTimezoneOffset()).toBe(-120)
+      // 2026-10-25 22:00 → 2026-10-26 01:00 in Berlin (CET, +01:00), the evening the clocks went back.
+      const overnight = makeLesson({ startsAt: '2026-10-25T21:00:00.000Z', endsAt: '2026-10-26T00:00:00.000Z' })
+      expect(lessonFormValuesOf(overnight)).toMatchObject({ date: '2026-10-25', startTime: '22:00', endTime: '01:00' })
+      expect(planLessonPatch(overnight, { ...lessonFormValuesOf(overnight), titleAr: 'الأنواع' })).toEqual({ title: { ar: 'الأنواع', en: 'Variables and data types' } })
+    })
   })
 
   it('accepts a blank or https meeting link only', () => {

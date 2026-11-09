@@ -89,7 +89,7 @@ export const en: Translation = {
     planned: 'Planned',
     running: 'Running',
     withdrawn: 'Withdrawn',
-    // MOD-06 delivery modes (J-F09); `recorded` above
+    // MOD-06 delivery modes (J-F09): the tag and the form's select (J-F19); `recorded` above
     in_person: 'In person',
     live_online: 'Live online',
     hybrid: 'Hybrid',
@@ -1142,7 +1142,6 @@ export const en: Translation = {
     addLesson: 'Add lesson',
     // Still used by the dashboard prototype (mockLessons).
     type: 'Type',
-    duration: 'Duration (min)',
     readOnlyHint: 'This page shows only the lessons of the classes assigned to you.',
     learnerHint: 'Your lessons as a student or guardian will appear in “My lessons” once that view is ready; this list shows only the lessons of the classes you teach.',
     refresh: 'Refresh',
@@ -1175,12 +1174,6 @@ export const en: Translation = {
       previous: 'Previous',
       next: 'Next',
     },
-    deliveryModes: {
-      in_person: 'In person',
-      live_online: 'Live online',
-      recorded: 'Recorded',
-      hybrid: 'Hybrid',
-    },
     fields: {
       class: 'Class',
       titleAr: 'Title (Arabic)',
@@ -1191,12 +1184,10 @@ export const en: Translation = {
       date: 'Date',
       startTime: 'Start time',
       endTime: 'End time',
-      duration: 'Duration',
       room: 'Room',
       teacher: 'Teacher',
       syllabusItem: 'Syllabus item',
       meetingUrl: 'Meeting link',
-      status: 'Status',
       cancellationReason: 'Cancellation reason',
       origin: 'Origin',
       createdAt: 'Created',
@@ -1206,6 +1197,7 @@ export const en: Translation = {
       class: 'A planned, open or running class; the class of a lesson cannot change after creation',
       teacher: 'Defaults to the class’s lead teacher at creation; one of the class’s teachers',
       time: 'In your device’s time zone; up to 12 hours, and an end time earlier than the start means the next day',
+      endsNextDay: 'The lesson ends on the next day ({{date}}) and lasts {{minutes}} min',
       meetingUrl: 'A link starting with https:// (for online lessons)',
       timingLocked: 'Time, room and teacher cannot change for a completed lesson; title, description, syllabus item, delivery mode and link still can',
       needsClassesRead: 'Adding a lesson needs the classes.read permission to choose its class',
@@ -1233,6 +1225,8 @@ export const en: Translation = {
       rangeTooLong: 'A lesson lasts at most {{maxHours}} hours',
       meetingUrl: 'The link must start with https:// and contain no spaces',
       arabicFirst: 'Enter the Arabic text first; an English text alone is not saved',
+      maxLength: 'At most {{max}} characters',
+      deliveryModeRequired: 'Choose the delivery mode',
     },
     pickers: {
       classPlaceholder: 'Search a class by code or name',
@@ -1251,7 +1245,6 @@ export const en: Translation = {
       noRoom: 'No room',
       noTeacher: 'No teacher',
       noSyllabusItem: 'No item',
-      noDescription: '—',
       openMeeting: 'Open the meeting link',
       generated: 'Generated from the weekly schedule',
       manual: 'Created by hand',
