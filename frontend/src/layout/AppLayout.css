@@ -16,6 +16,9 @@
 
 .app-brand__sub {
   font-size: 12px;
+  /* One line is kept while the name is still empty (the first read — J-F24), so the product name above does not move when it arrives. */
+  line-height: 1.5;
+  min-height: 1.5em;
   opacity: 0.65;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -83,12 +86,23 @@
   .app-header {
     padding: 0 12px;
   }
-  .app-header__title {
-    display: none;
-  }
-  /* Only a logo is left of the brand on a phone; without one the actions start the header, as before J-F13. */
+  /*
+   * Only a logo is left of the brand on a phone; without one the actions start the header, as before J-F13.
+   * The name stays readable by screen readers — the logo's alt is empty (J-F24) — so it is visually hidden,
+   * never display: none; without a logo the whole brand leaves the flow the same way.
+   */
+  .app-header__title,
   .app-header__brand--no-logo {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .app-header__logo {
     max-height: 28px;

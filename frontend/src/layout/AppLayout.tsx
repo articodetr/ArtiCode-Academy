@@ -97,7 +97,7 @@ export function AppLayout() {
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
-          {/* The academy's name and logo from API-035 (J-F13); the static name until they arrive. */}
+          {/* The academy's name and logo from API-035 (J-F13); no name until they arrive, the static one after a failure (J-F24). */}
           <HeaderBrand />
 
           <div className="app-header__actions">
