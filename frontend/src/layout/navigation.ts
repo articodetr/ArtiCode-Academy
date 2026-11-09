@@ -10,6 +10,7 @@ import {
   CreditCardOutlined,
   DashboardOutlined,
   EnvironmentOutlined,
+  FileDoneOutlined,
   FileTextOutlined,
   FormOutlined,
   HomeOutlined,
@@ -75,7 +76,7 @@ interface PermissionGatedItem extends NavItemBase {
 
 /**
  * A screen served by ownership, without a permission key (J-F04 — «my classes»,
- * API-060; J-F11 — «my lessons», API-101): shown to a user holding ANY of these server role keys — the rule the
+ * API-060; J-F11 — «my lessons», API-101; J-F42 — «my assignments», API-112): shown to a user holding ANY of these server role keys — the rule the
  * server applies (`seesChildren()` looks at the `guardian` key, a student's
  * enrollments follow the `student` role), not the single UI role, so a teacher
  * who is also a guardian still sees it.
@@ -130,6 +131,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
     exceptRoleKeysOnly: ['student', 'guardian'],
     module: 'MOD-08',
   },
+  // MOD-08 (J-F42): «my assignments» (API-112) needs no permission key — ownership, the API-060 rule (D-R40); shown to whoever
+  // holds the `student` or `guardian` server role, like «my lessons» (a teacher who is also a guardian keeps it next to
+  // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
+  // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
+  { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
   { key: 'exams', path: '/exams', labelKey: 'nav.exams', icon: createElement(FormOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-09' },
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },
   { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
