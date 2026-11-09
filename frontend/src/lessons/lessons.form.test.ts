@@ -3,7 +3,7 @@ import { SYLLABUS_ITEM_IDS } from '../test/courses'
 import { FAR_TIME_ZONE, LESSON_TIME_ZONE, makeLesson } from '../test/lessons'
 import { withTimeZone } from '../test/time-zone'
 import { ROOM_ID } from '../test/timetable'
-import { NO_TEACHER, buildCreateLessonInput, isMeetingUrlValid, lessonFormValuesOf, planLessonPatch } from './lessons.form'
+import { NO_TEACHER, buildCreateLessonInput, isMeetingUrlValid, lessonFormHasChanges, lessonFormValuesOf, planLessonPatch } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
 
 const BERLIN = 'Europe/Berlin'
@@ -142,6 +142,38 @@ describe('lessons.form', () => {
     expect(lessonFormValuesOf(first)).toMatchObject({ date: '2026-10-25', startTime: '02:30', endTime: '03:30' })
     expect(planLessonPatch(first, { ...lessonFormValuesOf(first), titleAr: 'الأنواع' })).toEqual({ title: { ar: 'الأنواع', en: 'Variables and data types' } })
     expect(planLessonPatch(first, { ...lessonFormValuesOf(first), endTime: '04:00' })).toEqual({ endsAt: '2026-10-25T03:00:00.000Z' })
+  })
+
+  it('holds nothing while the edit form matches the lesson: opened untouched, changed back, or only spaces around a text (KI-058 — J-F40)', () => {
+    expect(lessonFormHasChanges(lesson, values())).toBe(false)
+    expect(lessonFormHasChanges(lesson, values({ titleEn: ' Variables and data types ', descriptionAr: 'مقدمة ', meetingUrl: ' https://meet.example.com/a' }))).toBe(false)
+    // Typed away and back: the loaded wall clock again.
+    expect(lessonFormHasChanges(lesson, values({ startTime: '13:00', endTime: '14:30' }))).toBe(false)
+    // Instants with seconds, or a time that occurs twice in the lesson's zone, opened untouched.
+    const withSeconds = makeLesson({ startsAt: '2026-11-10T10:00:17.250Z', endsAt: '2026-11-10T11:30:42.000Z' })
+    expect(lessonFormHasChanges(withSeconds, lessonFormValuesOf(withSeconds))).toBe(false)
+    const repeated = makeLesson({ startsAt: '2026-11-01T06:30:00.000Z', endsAt: '2026-11-01T07:30:00.000Z', timeZone: NEW_YORK })
+    expect(lessonFormHasChanges(repeated, lessonFormValuesOf(repeated))).toBe(false)
+  })
+
+  it('holds what the smallest PATCH would send, and what the save would refuse instead of sending (KI-058 — J-F40)', () => {
+    for (const sent of [{ titleAr: 'الأنواع' }, { descriptionEn: 'Intro' }, { deliveryMode: 'recorded' as const }, { endTime: '15:00' }, { roomId: undefined }, { syllabusItemId: undefined }, { teacherUserId: NO_TEACHER }, { meetingUrl: '' }]) {
+      expect(planLessonPatch(lesson, values(sent))).not.toBeNull()
+      expect(lessonFormHasChanges(lesson, values(sent))).toBe(true)
+    }
+    // An emptied Arabic title (an English title alone included), day or time: planLessonPatch() sends nothing, the form refuses to save.
+    for (const refused of [{ titleAr: ' ' }, { titleAr: '', titleEn: 'Types' }, { date: '' }, { startTime: '' }, { endTime: '' }]) {
+      expect(planLessonPatch(lesson, values(refused))).toBeNull()
+      expect(lessonFormHasChanges(lesson, values(refused))).toBe(true)
+    }
+    // An English description without its Arabic text, on a lesson without a description: nothing to send, yet typed work.
+    const plain = makeLesson()
+    const english = { ...lessonFormValuesOf(plain), descriptionEn: 'Intro' }
+    expect(planLessonPatch(plain, english)).toBeNull()
+    expect(lessonFormHasChanges(plain, english)).toBe(true)
+    // Both description texts emptied: the PATCH clears a stored description; there is nothing to clear on a lesson without one.
+    expect(lessonFormHasChanges(lesson, values({ descriptionAr: '', descriptionEn: '' }))).toBe(true)
+    expect(lessonFormHasChanges(plain, { ...lessonFormValuesOf(plain), descriptionAr: ' ', descriptionEn: '' })).toBe(false)
   })
 
   it('accepts a blank or https meeting link only', () => {

@@ -37,16 +37,20 @@ function mockSheetApi(get: () => AttendanceSheet | Response, put?: (body: unknow
   return calls
 }
 
-/** `timeZone` = the lesson's (D-R41): the sheet shows its times in it. */
+/** `timeZone` = the lesson's (D-R41): the sheet shows its times in it. `onUnsavedChange` is what the drawer hears (KI-058). */
 function renderTab(permissions: string[], timeZone: string = LESSON_TIME_ZONE) {
   const onSaved = vi.fn()
   const onLessonStale = vi.fn()
-  const view = renderWithProviders(<AttendanceSheetTab lesson={{ id: LESSON_ID, timeZone }} onSaved={onSaved} onLessonStale={onLessonStale} />, {
+  const onUnsavedChange = vi.fn()
+  const view = renderWithProviders(<AttendanceSheetTab lesson={{ id: LESSON_ID, timeZone }} onSaved={onSaved} onLessonStale={onLessonStale} onUnsavedChange={onUnsavedChange} />, {
     auth: makeAuth({ user: makeUser({ permissions }) }),
     route: '/lessons',
   })
-  return { ...view, onSaved, onLessonStale }
+  return { ...view, onSaved, onLessonStale, onUnsavedChange }
 }
+
+/** The last flag the sheet reported to the drawer. */
+const lastReported = (onUnsavedChange: ReturnType<typeof vi.fn>) => onUnsavedChange.mock.calls.at(-1)?.[0] as boolean | undefined
 
 const row = (name: string) => screen.getByText(name).closest('tr') as HTMLElement
 const findRow = async (name: string) => (await screen.findByText(name)).closest('tr') as HTMLElement
@@ -275,5 +279,51 @@ describe('AttendanceSheetTab', () => {
     fireEvent.click(screen.getByText(ar.attendance.reload).closest('button')!)
     expect(await screen.findByText('يوسف الطالب')).toBeInTheDocument()
     expect(calls.filter((call) => call.method === 'GET')).toHaveLength(2)
+  })
+
+  it('tells the drawer whether a row would be sent (KI-058): on a change, not once changed back, not after the saved answer, not after it leaves', async () => {
+    mockSheetApi(
+      () => makeAttendanceSheet(),
+      () => jsonResponse(200, makeAttendanceSheet()),
+    )
+    const { onUnsavedChange, unmount } = renderTab(ATTENDANCE_TEACHER_PERMISSIONS)
+    const yousef = await findRow('يوسف الطالب')
+    expect(lastReported(onUnsavedChange)).toBe(false)
+
+    fireEvent.click(within(yousef).getByLabelText(ar.lessons.attendance.absent))
+    expect(lastReported(onUnsavedChange)).toBe(true)
+    fireEvent.click(within(yousef).getByText(ar.attendance.revert).closest('button')!)
+    expect(lastReported(onUnsavedChange)).toBe(false)
+    // A note on a row without a status is nothing the save sends (the sheet says so too).
+    await userEvent.type(noteOf('سارة الطالبة'), 'تأخرت')
+    expect(screen.getByText(ar.attendance.noChanges)).toBeInTheDocument()
+    expect(lastReported(onUnsavedChange)).toBe(false)
+
+    fireEvent.click(within(row('سارة الطالبة')).getByLabelText(ar.lessons.attendance.present))
+    expect(lastReported(onUnsavedChange)).toBe(true)
+    fireEvent.click(saveButton())
+    expect(await screen.findByText(ar.attendance.saved)).toBeInTheDocument()
+    // The saved answer starts a new edit session (KI-049): nothing is held.
+    await waitFor(() => expect(lastReported(onUnsavedChange)).toBe(false))
+
+    fireEvent.click(within(row('عمر الخريج')).getByLabelText(ar.lessons.attendance.excused))
+    expect(lastReported(onUnsavedChange)).toBe(true)
+    unmount()
+    expect(lastReported(onUnsavedChange)).toBe(false)
+  })
+
+  it('never tells the drawer a read-only sheet holds anything: staff, and a lesson that takes no attendance', async () => {
+    mockSheetApi(() => makeAttendanceSheet())
+    const staff = renderTab(ATTENDANCE_STAFF_PERMISSIONS)
+    expect(await screen.findByText(ar.attendance.readOnly)).toBeInTheDocument()
+    expect(staff.onUnsavedChange).toHaveBeenCalled()
+    expect(staff.onUnsavedChange.mock.calls.every(([unsaved]) => unsaved === false)).toBe(true)
+    staff.unmount()
+
+    mockSheetApi(() => makeAttendanceSheet({ recordable: false, closedReason: 'cancelled', lessonStatus: 'cancelled' }))
+    const teacher = renderTab(ATTENDANCE_TEACHER_PERMISSIONS)
+    expect(await screen.findByText(ar.attendance.closed.cancelled)).toBeInTheDocument()
+    expect(teacher.onUnsavedChange).toHaveBeenCalled()
+    expect(teacher.onUnsavedChange.mock.calls.every(([unsaved]) => unsaved === false)).toBe(true)
   })
 })

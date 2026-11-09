@@ -7,10 +7,11 @@
 // nothing changed → null (no request). The day and the two times are a wall
 // clock in one zone (D-R41 — J-F28): the lesson's own `timeZone` when editing,
 // the academy's for a new lesson (it has no zone yet). Local rules mirror
-// backend/src/lessons/lessons.dto.ts — the server decides.
+// backend/src/lessons/lessons.dto.ts — the server decides. The edit form holds
+// unsaved work while lessonFormHasChanges() says so (KI-058 — J-F40).
 import { MEETING_URL_PATTERN } from '../api/lessons'
 import type { CreateLessonInput, DeliveryMode, Lesson, UpdateLessonInput } from '../api/lessons'
-import { localizedOf, sameLabel } from '../courses/courses.form'
+import { englishWithoutArabic, localizedOf, sameLabel } from '../courses/courses.form'
 import { rangeOf, zonedPartsOf } from './lessons.format'
 
 /**
@@ -127,4 +128,29 @@ export function planLessonPatch(lesson: Lesson, values: LessonFormValues): Updat
   const meetingUrl = text(values.meetingUrl) || null
   if (meetingUrl !== lesson.meetingUrl) body.meetingUrl = meetingUrl
   return Object.keys(body).length > 0 ? body : null
+}
+
+/** An emptied field: `undefined` is a field the form does not show. */
+const isBlank = (value: string | undefined) => typeof value === 'string' && value.trim() === ''
+
+/**
+ * Whether the edit form of the lesson drawer holds unsaved work (KI-058 —
+ * J-F40, the rule of J-F23's courseFormHasChanges()), always compared with the
+ * lesson as loaded, so a field changed back holds nothing and spaces around a
+ * text are no change (the save trims them): the smallest PATCH
+ * is non-empty (planLessonPatch()), or the form holds what the save would
+ * refuse instead of sending — an emptied Arabic title (an English title alone
+ * included), an English description without its Arabic text (planLessonPatch()
+ * sends nothing for either), an emptied day or time (rangeOf() then reads no
+ * range, so no instant is sent).
+ */
+export function lessonFormHasChanges(lesson: Lesson, values: LessonFormValues): boolean {
+  return (
+    isBlank(values.titleAr) ||
+    englishWithoutArabic(values.descriptionAr, values.descriptionEn) ||
+    isBlank(values.date) ||
+    isBlank(values.startTime) ||
+    isBlank(values.endTime) ||
+    planLessonPatch(lesson, values) !== null
+  )
 }
