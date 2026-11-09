@@ -106,4 +106,11 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'attendance.recorded')).toEqual(['attendance.recorded'])
     expect(AUDIT_ACTION_SUGGESTIONS).toEqual(expect.arrayContaining(['attendance.', 'lessons.']))
   })
+
+  it('offers the four assignment events of MOD-08-T02 once each, after their family prefix (J-F38)', () => {
+    for (const event of ['assignments.created', 'assignments.updated', 'assignments.status.changed', 'assignments.deleted']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+      expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('assignments.'))
+    }
+  })
 })

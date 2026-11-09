@@ -3,13 +3,33 @@ import type { Role } from '../auth/roles'
 import { NAV_ITEMS, canAccess, navFor } from './navigation'
 import type { NavViewer } from './navigation'
 
-/** The MOD-03/MOD-04/MOD-05/MOD-06/MOD-07/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
+/** The MOD-03/MOD-04/MOD-05/MOD-06/MOD-07/MOD-08/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
 const SEEDED: Readonly<Record<Role, string[]>> = {
-  admin: ['users.read', 'users.read_contact', 'roles.manage', 'audit.read', 'academy.settings.read', 'academy.settings.manage', 'courses.read', 'courses.manage', 'classes.read', 'classes.manage', 'classes.teachers.assign', 'schedule.read', 'schedule.manage', 'lessons.read', 'lessons.manage'],
+  admin: [
+    'users.read',
+    'users.read_contact',
+    'roles.manage',
+    'audit.read',
+    'academy.settings.read',
+    'academy.settings.manage',
+    'courses.read',
+    'courses.manage',
+    'classes.read',
+    'classes.manage',
+    'classes.teachers.assign',
+    'schedule.read',
+    'schedule.manage',
+    'lessons.read',
+    'lessons.manage',
+    'assignments.read',
+    'assignments.manage',
+    'assignments.grade',
+  ],
+  // Staff hold no assignments.* key (matrix 7.2).
   staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read', 'classes.read', 'classes.manage', 'schedule.read', 'lessons.read'],
-  teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.read', 'lessons.manage', 'schedule.read'],
-  student: ['courses.read', 'assignments.submit', 'schedule.read', 'lessons.read'],
-  guardian: ['courses.read', 'grades.read_linked', 'schedule.read', 'attendance.read'],
+  teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.read', 'lessons.manage', 'schedule.read', 'assignments.read', 'assignments.manage', 'assignments.grade'],
+  student: ['courses.read', 'assignments.read', 'assignments.submit', 'schedule.read', 'lessons.read'],
+  guardian: ['courses.read', 'assignments.read', 'grades.read_linked', 'schedule.read', 'attendance.read'],
 }
 
 /** Server role keys of the UI roles (backend/src/authorization/system-roles.ts). */
@@ -156,6 +176,28 @@ describe('NAV_ITEMS', () => {
     // Permissions never open it: the entry mirrors ownership, not a key.
     expect(canAccess(viewer(null, ['lessons.read', 'lessons.manage', 'attendance.read', 'attendance.record']), 'myLessons')).toBe(false)
   })
+
+  it('gates the assignments screen by assignments.read with the learners excepted (J-F38, roadmap §4g T06) — the route follows the same rule', () => {
+    const assignments = NAV_ITEMS.find((item) => item.key === 'assignments')!
+    expect(assignments.permissions).toEqual(['assignments.read'])
+    expect(assignments.exceptRoleKeysOnly).toEqual(['student', 'guardian'])
+    expect(assignments.module).toBe('MOD-08')
+    expect(keysFor(viewer(null, ['assignments.read']))).toEqual(['dashboard', 'assignments'])
+    // A custom role holding assignments.manage without assignments.read would get 403 on the list — the entry stays hidden.
+    expect(keysFor(viewer(null, ['assignments.manage']))).toEqual(['dashboard'])
+    expect(canAccess(viewer('admin'), 'assignments')).toBe(true)
+    expect(canAccess(viewer('teacher'), 'assignments')).toBe(true)
+    // Students and guardians hold assignments.read by seed but teach no class (an empty list — D-R16, D-R40), so no entry and the 403 page…
+    expect(canAccess(viewer('student'), 'assignments')).toBe(false)
+    expect(canAccess(viewer('guardian'), 'assignments')).toBe(false)
+    expect(canAccess(viewer('student', [...SEEDED.student, ...SEEDED.guardian], ['student', 'guardian']), 'assignments')).toBe(false)
+    // …while any other role key keeps it: a teacher who is also a guardian, or a custom role holding the key.
+    expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.guardian], ['teacher', 'guardian']), 'assignments')).toBe(true)
+    expect(canAccess(viewer(null, ['assignments.read'], ['auditor']), 'assignments')).toBe(true)
+    // Staff hold no assignments.* key, and a role that lost the key loses the entry.
+    expect(canAccess(viewer('staff'), 'assignments')).toBe(false)
+    expect(canAccess(viewer('admin', []), 'assignments')).toBe(false)
+  })
 })
 
 describe('navFor', () => {
@@ -169,9 +211,10 @@ describe('navFor', () => {
     expect(keysFor(viewer(null, []))).toEqual(['dashboard'])
   })
 
-  it('ignores the role for permission-gated entries: an admin whose role lost users.read does not see the users (or courses, classes, lessons, settings) page', () => {
-    // Since J-F05 the schedule entry is permission-gated too (schedule.read / schedule.manage / classes.manage), and since J-F09 the lessons entry (lessons.read).
-    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports'])
+  it('ignores the role for permission-gated entries: an admin whose role lost users.read does not see the users (or courses, classes, lessons, assignments, settings) page', () => {
+    // Since J-F05 the schedule entry is permission-gated too (schedule.read / schedule.manage / classes.manage), since J-F09 the
+    // lessons entry (lessons.read) and since J-F38 the assignments entry (assignments.read).
+    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'exams', 'certificates', 'payments', 'notifications', 'reports'])
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
@@ -180,8 +223,9 @@ describe('navFor', () => {
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'payments', 'notifications'])
     // Students and guardians gain «my classes» (J-F04) and «my lessons» (J-F11): ownership, by their server role keys.
     // Students keep the lessons entry through lessons.read (an empty list there — their own lessons are in «my lessons», API-101).
-    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications'])
-    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications'])
+    // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted.
+    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'exams', 'certificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'exams', 'certificates', 'payments', 'notifications'])
   })
 
   it('shows the users page to a teacher because the seed grants teachers users.read (reduced projection) (MOD-03-T15)', () => {
