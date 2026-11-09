@@ -33,6 +33,8 @@ describe('useRoleLabels (J-F12)', () => {
 
     await waitFor(() => expect(result.current.labels.get('librarian')).toBe(ROLE_LABELS.librarian.ar))
     expect(result.current.keys).toEqual(ROLE_OPTIONS.map((role) => role.key))
+    // The roles themselves too, for the drawer's roles tab (J-F23 — PR #62 review, note 1).
+    expect(result.current.items).toEqual(ROLE_OPTIONS)
     rerender()
     rerender()
     expect(api.paths).toEqual(['/api/roles'])
@@ -46,6 +48,7 @@ describe('useRoleLabels (J-F12)', () => {
     expect(api.paths).toEqual([])
     expect(result.current.labels.size).toBe(0)
     expect(result.current.keys).toEqual([])
+    expect(result.current.items).toBeNull()
   })
 
   it('stays empty without throwing when the request fails', async () => {
@@ -56,6 +59,7 @@ describe('useRoleLabels (J-F12)', () => {
     await act(async () => {})
     expect(result.current.labels.size).toBe(0)
     expect(result.current.keys).toEqual([])
+    expect(result.current.items).toBeNull()
   })
 
   it('aborts the request when the page unmounts', async () => {

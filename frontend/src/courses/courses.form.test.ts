@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { makeCourse } from '../test/courses'
 import { describeCoursesFailure } from './courses.errors'
-import { buildCreateCourseInput, courseFormValuesOf, invalidAgeRange, localizedOf, planCoursePatch } from './courses.form'
+import { buildCreateCourseInput, courseFormHasChanges, courseFormValuesOf, englishWithoutArabic, invalidAgeRange, localizedOf, planCoursePatch } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction, nextCourseStatus } from './courses.status'
 
 describe('course form helpers', () => {
@@ -65,5 +65,30 @@ describe('course errors', () => {
     expect(describeCoursesFailure(new ApiError(400, 'name.ar must be longer'))).toEqual({ key: 'courses.errors.validation', params: { message: 'name.ar must be longer' } })
     expect(describeCoursesFailure(new ApiError(500, 'boom'))).toEqual({ key: 'login.errors.server' })
     expect(describeCoursesFailure(new TypeError('offline'))).toEqual({ key: 'login.errors.network' })
+  })
+})
+
+describe('courseFormHasChanges (KI-054 — J-F23)', () => {
+  const course = makeCourse({ summary: { ar: 'ملخص' } })
+
+  it('holds nothing for the stored values or a change typed back', () => {
+    expect(courseFormHasChanges(course, courseFormValuesOf(course))).toBe(false)
+    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), code: 'py-101', nameEn: 'Python Basics ' })).toBe(false)
+  })
+
+  it('holds a field that differs from the stored course, text or number', () => {
+    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), nameEn: 'Python 3' })).toBe(true)
+    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), sessionsCount: null })).toBe(true)
+  })
+
+  it('holds what the save refuses instead of sending: an emptied code or Arabic name, English without its Arabic text', () => {
+    const values = courseFormValuesOf(course)
+    expect(planCoursePatch(course, { ...values, nameAr: ' ' })).toBeNull()
+    expect(courseFormHasChanges(course, { ...values, nameAr: ' ' })).toBe(true)
+    expect(courseFormHasChanges(course, { ...values, code: '' })).toBe(true)
+    expect(planCoursePatch(course, { ...values, descriptionEn: 'English only' })).toBeNull()
+    expect(courseFormHasChanges(course, { ...values, descriptionEn: 'English only' })).toBe(true)
+    expect(englishWithoutArabic('', ' ')).toBe(false)
+    expect(englishWithoutArabic('عربي', 'English')).toBe(false)
   })
 })

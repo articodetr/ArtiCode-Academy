@@ -119,3 +119,29 @@ export function planCoursePatch(course: Course, values: CourseFormValues): Updat
   }
   return Object.keys(body).length > 0 ? body : null
 }
+
+/**
+ * An English text typed without its Arabic text: localizedOf() drops it (the
+ * server requires `ar`) and the form refuses it on save, yet it is typed work.
+ */
+export function englishWithoutArabic(ar: string | undefined, en: string | undefined): boolean {
+  return (en ?? '').trim() !== '' && (ar ?? '').trim() === ''
+}
+
+/**
+ * Whether the edit form of the course drawer holds unsaved work (KI-054 — J-F23,
+ * the rule of J-F21's classFormHasChanges()): the smallest PATCH is non-empty,
+ * or the form holds what the save would refuse instead of sending — an emptied
+ * code or Arabic name, an English summary or description without its Arabic
+ * text. A field changed back to its stored value counts as no change.
+ */
+export function courseFormHasChanges(course: Course, values: CourseFormValues): boolean {
+  const blank = (value: string | undefined) => typeof value === 'string' && value.trim() === ''
+  return (
+    blank(values.code) ||
+    blank(values.nameAr) ||
+    englishWithoutArabic(values.summaryAr, values.summaryEn) ||
+    englishWithoutArabic(values.descriptionAr, values.descriptionEn) ||
+    planCoursePatch(course, values) !== null
+  )
+}

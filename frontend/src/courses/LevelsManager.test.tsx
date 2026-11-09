@@ -139,4 +139,20 @@ describe('LevelsManager (MOD-04-T06)', () => {
     await waitFor(() => expect(calls.filter((call) => call.method === 'GET')).toHaveLength(2))
     await waitFor(() => expect(screen.getByLabelText(`${ar.courses.levels.delete}: INT`)).toBeDisabled())
   })
+
+  it('words the length limit of a level name in its own message and sends nothing (J-F23)', async () => {
+    const { calls } = mockLevelsApi(THREE_LEVELS(), () => jsonResponse(500, {}))
+    renderManager()
+    await screen.findByText('INT')
+
+    fireEvent.click(screen.getByText(ar.courses.levels.add).closest('button')!)
+    const dialog = (await screen.findByText(ar.courses.levels.createTitle)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.levels.fields.code), 'pro')
+    fireEvent.change(within(dialog).getByLabelText(ar.courses.levels.fields.nameEn), { target: { value: 'a'.repeat(201) } })
+    fireEvent.change(within(dialog).getByLabelText(ar.courses.levels.fields.nameAr), { target: { value: 'محترف' } })
+    fireEvent.click(within(dialog).getByText(ar.courses.levels.create).closest('button')!)
+
+    expect(await within(dialog).findByText('الحد الأقصى 200 حرفاً')).toBeInTheDocument()
+    expect(writesOf(calls)).toEqual([])
+  })
 })

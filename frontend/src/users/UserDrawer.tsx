@@ -7,16 +7,24 @@
 // shown once in IssuedLinkModal. Since MOD-03-T14 the header carries the
 // account-actions menu (API-027/API-028) and the body is tabbed: details,
 // roles (`users.roles.assign`, API-034) and guardians / students (API-029..033).
+// Since J-F23 (KI-054, the rule of the class drawer's KI-052 after J-F21):
+// while an editor holds unsaved work — a change in the edit form, a roles
+// selection that differs from the held roles, a party picked in a link form —
+// Escape and a mask click no longer close the drawer, and the close button asks
+// first; an editor opened without a change, or changed back, holds nothing.
+// The account-actions modal sits on top and takes Escape itself (its Cancel).
+// The roles the users page already read reach the roles tab (PR #62, note 1).
 import { EditOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, Popconfirm, Space, Spin, Tabs, Tag, Typography } from 'antd'
 import type { TabsProps } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { IssuedLinkModal } from '../account/IssuedLinkModal'
 import type { IssuedLinkKind } from '../account/IssuedLinkModal'
 import { issueInvitation, issuePasswordReset } from '../api/account'
 import type { IssuedLink } from '../api/account'
+import type { Role } from '../api/roles'
 import { getUser, updateUser } from '../api/users'
 import type { UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
@@ -31,7 +39,8 @@ import { describeUsersFailure, failureMessage } from './users.errors'
 import { displayNameOf, formatDateTime, formatDay, localizedLabel } from './users.format'
 import type { Translate } from './users.format'
 import { linkSidesOf } from './users.guardians'
-import { editFormValuesOf, planUserPatch } from './users.patch'
+import type { LinkSide } from './users.guardians'
+import { editFormValuesOf, planUserPatch, userFormHasChanges } from './users.patch'
 import type { EditUserFormValues } from './users.patch'
 
 interface UserDrawerProps {
@@ -39,18 +48,76 @@ interface UserDrawerProps {
   userId: string | null
   /** The row came from a list that includes deleted users (the server then needs `users.deactivate`). */
   includeDeleted?: boolean
+  /** The roles of API-022 the page already read (J-F23): the roles tab uses them instead of a second read. */
+  loadedRoles?: readonly Role[] | null
   onClose: () => void
   /** Called with the detail returned by a successful write so the list can refresh its row. */
   onUpdated: (user: UserDetail) => void
 }
 
-export function UserDrawer({ userId, includeDeleted = false, onClose, onUpdated }: UserDrawerProps) {
+/** The editors of the drawer that report unsaved work (KI-054): the edit form and one per tab. */
+type EditorPart = 'details' | 'roles' | LinkSide
+
+type UnsavedReporters = Readonly<Record<EditorPart, (unsaved: boolean) => void>>
+
+const NOTHING_UNSAVED: Readonly<Record<EditorPart, boolean>> = { details: false, roles: false, guardians: false, students: false }
+
+export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null, onClose, onUpdated }: UserDrawerProps) {
   const { t } = useTranslation()
+  const { modal } = App.useApp()
+  const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<EditorPart, boolean>>>(NOTHING_UNSAVED)
+
+  // One stable reporter per editor (the editors report from an effect that depends on it).
+  const reportUnsaved = useMemo<UnsavedReporters>(() => {
+    const reporter = (part: EditorPart) => (unsaved: boolean) => setUnsavedParts((current) => (current[part] === unsaved ? current : { ...current, [part]: unsaved }))
+    return { details: reporter('details'), roles: reporter('roles'), guardians: reporter('guardians'), students: reporter('students') }
+  }, [])
+  // KI-054: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
+  const unsaved = unsavedParts.details || unsavedParts.roles || unsavedParts.guardians || unsavedParts.students
+
+  const close = () => {
+    setUnsavedParts(NOTHING_UNSAVED)
+    onClose()
+  }
+
+  /** The close button (Escape and the mask too when nothing is unsaved): asks first while an editor holds unsaved work. */
+  const requestClose = () => {
+    if (!unsaved) {
+      close()
+      return
+    }
+    modal.confirm({
+      title: t('common.unsaved.title'),
+      content: t('common.unsaved.content'),
+      okText: t('common.unsaved.ok'),
+      okButtonProps: { danger: true },
+      cancelText: t('common.unsaved.cancel'),
+      onOk: close,
+    })
+  }
+
   return (
-    <Drawer open={userId !== null} onClose={onClose} title={t('users.detail.title')} width={600} destroyOnHidden>
+    <Drawer
+      open={userId !== null}
+      onClose={requestClose}
+      // KI-054: unsaved work turns off the Escape key and the mask click; a modal, Select or
+      // Dropdown open on top still closes on Escape (it sits above the drawer).
+      keyboard={!unsaved}
+      mask={{ closable: !unsaved }}
+      title={t('users.detail.title')}
+      width={600}
+      destroyOnHidden
+    >
       {userId ? (
         // Keyed so a different user (or projection) starts from a fresh body: no stale detail, no half-edited form.
-        <UserDrawerBody key={`${userId}:${includeDeleted}`} userId={userId} includeDeleted={includeDeleted} onUpdated={onUpdated} />
+        <UserDrawerBody
+          key={`${userId}:${includeDeleted}`}
+          userId={userId}
+          includeDeleted={includeDeleted}
+          loadedRoles={loadedRoles}
+          reportUnsaved={reportUnsaved}
+          onUpdated={onUpdated}
+        />
       ) : null}
     </Drawer>
   )
@@ -59,13 +126,15 @@ export function UserDrawer({ userId, includeDeleted = false, onClose, onUpdated 
 interface UserDrawerBodyProps {
   userId: string
   includeDeleted: boolean
+  loadedRoles: readonly Role[] | null
+  reportUnsaved: UnsavedReporters
   onUpdated: (user: UserDetail) => void
 }
 
 const DETAILS_TAB = 'details'
 const ROLES_TAB = 'roles'
 
-function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyProps) {
+function UserDrawerBody({ userId, includeDeleted, loadedRoles, reportUnsaved, onUpdated }: UserDrawerBodyProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { hasPermission } = useAuth()
@@ -148,6 +217,7 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
         setEditing(false)
       }}
       onCancel={() => setEditing(false)}
+      onUnsavedChange={reportUnsaved.details}
     />
   ) : (
     <UserDetails user={user} contact={contact} />
@@ -155,8 +225,20 @@ function UserDrawerBody({ userId, includeDeleted, onUpdated }: UserDrawerBodyPro
 
   const tabs: TabsProps['items'] = [
     { key: DETAILS_TAB, label: t('users.tabs.details'), children: details },
-    ...(canAssignRoles ? [{ key: ROLES_TAB, label: t('users.tabs.roles'), children: <UserRolesTab user={user} onSaved={applyUpdate} /> }] : []),
-    ...linkSidesOf(user).map((side) => ({ key: side, label: t(`users.tabs.${side}`), children: <GuardianLinksTab user={user} side={side} /> })),
+    ...(canAssignRoles
+      ? [
+          {
+            key: ROLES_TAB,
+            label: t('users.tabs.roles'),
+            children: <UserRolesTab user={user} onSaved={applyUpdate} loadedRoles={loadedRoles} onUnsavedChange={reportUnsaved.roles} />,
+          },
+        ]
+      : []),
+    ...linkSidesOf(user).map((side) => ({
+      key: side,
+      label: t(`users.tabs.${side}`),
+      children: <GuardianLinksTab user={user} side={side} onUnsavedChange={reportUnsaved[side]} />,
+    })),
   ]
   // A tab can disappear after a write (the student role removed, …): fall back to the details.
   const activeKey = tabs.some((item) => item.key === tab) ? tab : DETAILS_TAB
@@ -221,6 +303,8 @@ interface UserEditFormProps {
   /** Called with the detail returned by a successful PATCH. */
   onSaved: (user: UserDetail) => void
   onCancel: () => void
+  /** Whether a field holds a change (KI-054): reported on every edit, false once the form is left. */
+  onUnsavedChange: (unsaved: boolean) => void
 }
 
 /**
@@ -229,13 +313,15 @@ interface UserEditFormProps {
  * would merge the values typed in a cancelled session over the new initial
  * values, and saving would send them (rc-field-form keeps unmounted values — KI-049).
  */
-function UserEditForm({ user, contact, onSaved, onCancel }: UserEditFormProps) {
+function UserEditForm({ user, contact, onSaved, onCancel, onUnsavedChange }: UserEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  useEffect(() => () => onUnsavedChange(false), [onUnsavedChange])
 
   const onSave = async (values: EditUserFormValues) => {
     const patch = planUserPatch(user, values, { contact })
@@ -265,6 +351,8 @@ function UserEditForm({ user, contact, onSaved, onCancel }: UserEditFormProps) {
       layout="vertical"
       requiredMark={false}
       initialValues={editFormValuesOf(user)}
+      // A change changed back holds nothing (KI-054 — the J-F21 rule): compared with the stored user.
+      onValuesChange={(_changed, values) => onUnsavedChange(userFormHasChanges(user, values, { contact }))}
       onFinish={(values) => void onSave(values)}
       disabled={saving}
     >

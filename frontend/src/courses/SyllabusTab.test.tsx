@@ -144,4 +144,15 @@ describe('SyllabusTab (MOD-04-T06)', () => {
     expect(await screen.findByText('2 بند · 60 دقيقة تقديرياً')).toBeInTheDocument()
     expect(screen.queryByTestId('syllabus-item-editor')).not.toBeInTheDocument()
   })
+
+  it('words the length limit of an item title in its own message and sends nothing (J-F23)', async () => {
+    const { calls } = mockSyllabusApi(makeSyllabus())
+    renderTab(true)
+    await startEditing()
+    fireEvent.change(within(editorCards()[0]!).getByLabelText(ar.courses.syllabus.fields.titleAr), { target: { value: 'ع'.repeat(201) } })
+    fireEvent.click(screen.getByText(ar.courses.syllabus.save).closest('button')!)
+
+    expect(await within(editorCards()[0]!).findByText('الحد الأقصى 200 حرفاً')).toBeInTheDocument()
+    expect(puts(calls)).toEqual([])
+  })
 })
