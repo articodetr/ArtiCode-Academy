@@ -4,9 +4,10 @@
 // are aborted and stale answers dropped. A failed load keeps the rows on
 // screen behind the error but drops their `nextCursor` — it belongs to the
 // page before (or to other filters), so «next» stays off until a page loads
-// (owner's review of PR #26, J-F14). The same logic as users/useUsersList
-// and courses/useCoursesList, written once for the screens that follow
-// (classes first — J-F01).
+// (owner's review of PR #26, J-F14). Written once for the classes screen
+// (J-F01) from the logic of the users and courses lists; since J-F31 every
+// keyset list runs on it, users/useUsersList, courses/useCoursesList and
+// audit/useAuditLog included.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 export interface KeysetPage<T> {
@@ -85,6 +86,7 @@ export function useKeysetList<T extends { id: string }, F extends object>(load: 
       nextCursor: page.nextCursor,
       loading,
       error: page.error,
+      /** 1-based number of the page on screen. */
       pageNumber: cursors.length,
       canGoBack: cursors.length > 1,
       next,
