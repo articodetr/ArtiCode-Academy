@@ -727,6 +727,12 @@ export const en: Translation = {
         teachers: 'Teachers ({{count}})',
         students: 'Students ({{count}})',
       },
+      discard: {
+        title: 'Discard unsaved changes?',
+        content: 'An editor in this drawer is still open and its changes are not saved. Closing the drawer discards them.',
+        ok: 'Discard and close',
+        cancel: 'Keep editing',
+      },
     },
     enrollments: {
       seats: 'Active enrollments / capacity',

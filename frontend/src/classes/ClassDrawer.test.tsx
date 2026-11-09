@@ -166,20 +166,99 @@ describe('ClassDrawer', () => {
     expect(screen.queryByText('الطلاب (3)')).not.toBeInTheDocument()
   })
 
-  it('shows invalid_transition in the dialog and re-reads the class', async () => {
-    const calls = mockClassApi(() => makeClass(), {
+  it('closes the dialog on invalid_transition, shows the message and re-reads the class, whose menu then offers what is valid now (PR #26 note 3)', async () => {
+    // The class was opened elsewhere: the drawer still shows it planned, the server holds it open.
+    let detail = makeClass()
+    const calls = mockClassApi(() => detail, {
       POST: jsonResponse(409, { statusCode: 409, code: 'invalid_transition', from: 'open', action: 'open', allowed: ['start', 'cancel'], message: 'nope' }),
     })
-    renderDrawer(CLASS_MANAGER_PERMISSIONS)
+    const { onUpdated } = renderDrawer(CLASS_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+    const reads = () => calls.filter((call) => call.method === 'GET').length
+    const before = reads()
+    detail = makeClass({ status: 'open' })
+
+    await chooseAction(ar.classes.actions.open)
+    const dialog = dialogOf(ar.classes.confirm.open)
+    fireEvent.click(within(dialog).getByText(ar.classes.actions.open, { selector: 'button span' }).closest('button')!)
+
+    const shown = await screen.findByText(ar.classes.errors.invalid_transition)
+    expect(shown.closest('[role="dialog"]')).toBeNull()
+    expect(screen.queryByText(ar.classes.confirm.open)).not.toBeInTheDocument()
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect(await screen.findByText(ar.labels.open)).toBeInTheDocument()
+    fireEvent.click(screen.getByText(ar.classes.actions.menu).closest('button')!)
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.map((item) => item.textContent)).toEqual([ar.classes.actions.start, ar.classes.actions.cancel])
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1)
+    expect(onUpdated).not.toHaveBeenCalled()
+  })
+
+  it('closes the dialog on class_not_deletable too, with the count, re-reads the class and keeps the drawer open', async () => {
+    const calls = mockClassApi(() => makeClass(), {
+      DELETE: jsonResponse(409, { statusCode: 409, code: 'class_not_deletable', status: 'planned', enrollmentCount: 2, message: 'no' }),
+    })
+    const { onDeleted, onClose } = renderDrawer(CLASS_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+    const reads = () => calls.filter((call) => call.method === 'GET').length
+    const before = reads()
+
+    await chooseAction(ar.classes.actions.delete)
+    const dialog = dialogOf(ar.classes.confirm.delete)
+    fireEvent.click(within(dialog).getByText(ar.classes.actions.delete, { selector: 'button span' }).closest('button')!)
+
+    const shown = await screen.findByText(ar.classes.errors.class_not_deletable.replace('{{enrollmentCount}}', '2'))
+    expect(shown.closest('[role="dialog"]')).toBeNull()
+    expect(screen.queryByText(ar.classes.confirm.delete)).not.toBeInTheDocument()
+    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    expect(onDeleted).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByText('PY-101-A')).toBeInTheDocument()
+  })
+
+  it('keeps the dialog open on a network failure or a server error, so the same action can be retried', async () => {
+    const answers: Array<() => Response> = [
+      () => {
+        throw new TypeError('Failed to fetch')
+      },
+      () => jsonResponse(503, { statusCode: 503, message: 'down' }),
+      () => jsonResponse(200, makeClass({ status: 'open' })),
+    ]
+    const calls: Call[] = []
+    mockFetch((url, init) => {
+      const method = init?.method ?? 'GET'
+      calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      if (method === 'GET') return jsonResponse(200, makeClass())
+      return answers.shift()!()
+    })
+    const { onUpdated } = renderDrawer(CLASS_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101-A')
     const reads = () => calls.filter((call) => call.method === 'GET').length
     const before = reads()
 
     await chooseAction(ar.classes.actions.open)
     const dialog = dialogOf(ar.classes.confirm.open)
-    fireEvent.click(within(dialog).getByText(ar.classes.actions.open, { selector: 'button span' }).closest('button')!)
+    const confirm = () => fireEvent.click(within(dialog).getByText(ar.classes.actions.open, { selector: 'button span' }).closest('button')!)
+    await userEvent.type(within(dialog).getByLabelText(ar.classes.confirm.reason), 'بداية الفصل')
 
-    expect(await within(dialog).findByText(ar.classes.errors.invalid_transition)).toBeInTheDocument()
-    await waitFor(() => expect(reads()).toBeGreaterThan(before))
+    confirm()
+    expect(await within(dialog).findByText(ar.login.errors.network)).toBeInTheDocument()
+    // The reason the user typed stays for the retry.
+    expect(within(dialog).getByLabelText(ar.classes.confirm.reason)).toHaveValue('بداية الفصل')
+    await waitFor(() => expect(within(dialog).getByText(ar.classes.actions.open, { selector: 'button span' }).closest('button')).not.toHaveClass('ant-btn-loading'))
+
+    confirm()
+    expect(await within(dialog).findByText(ar.login.errors.server)).toBeInTheDocument()
+    await waitFor(() => expect(within(dialog).getByText(ar.classes.actions.open, { selector: 'button span' }).closest('button')).not.toHaveClass('ant-btn-loading'))
+
+    confirm()
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1))
+    expect(reads()).toBe(before)
+    expect(calls.filter((call) => call.method === 'POST').map((call) => call.body)).toEqual([
+      { action: 'open', reason: 'بداية الفصل' },
+      { action: 'open', reason: 'بداية الفصل' },
+      { action: 'open', reason: 'بداية الفصل' },
+    ])
+    expect(await screen.findByText(ar.classes.done.open)).toBeInTheDocument()
   })
 })

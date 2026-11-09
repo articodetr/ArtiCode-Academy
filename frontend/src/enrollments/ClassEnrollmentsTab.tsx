@@ -13,7 +13,7 @@
 import { DownOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Dropdown, Flex, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import type { MenuProps, TableProps } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { ENROLLMENT_STATUSES, changeEnrollmentStatus, enrollStudent } from '../api/enrollments'
@@ -58,6 +58,8 @@ interface ClassEnrollmentsTabProps {
   onClassChanged: (cls: AcademyClass) => void
   /** The class changed elsewhere (full, no longer enrollable) or the user asked for a refresh: re-read it. */
   onStale: () => void
+  /** Whether the enroll form holds a student picked but not enrolled yet (KI-052): the class drawer then keeps Escape and a mask click from dropping it. */
+  onEditingChange?: (open: boolean) => void
 }
 
 /** The timestamp that explains the current status. */
@@ -74,7 +76,7 @@ function sinceOf(row: Enrollment): string | null {
   }
 }
 
-export function ClassEnrollmentsTab({ cls, onClassChanged, onStale }: ClassEnrollmentsTabProps) {
+export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onEditingChange }: ClassEnrollmentsTabProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -131,6 +133,13 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale }: ClassEnrol
   const filtered = Boolean(search.trim() || list.filters.status)
   const enrollable = isEnrollableClass(cls.status)
   const seatFree = hasFreeSeat(cls.capacity, cls.enrolledCount)
+  // KI-052: a student picked in the (shown) enroll form but not enrolled yet is unsaved input.
+  const holdsInput = candidate !== undefined && canManage && enrollable && seatFree && canSearch
+
+  useEffect(() => {
+    onEditingChange?.(holdsInput)
+    return () => onEditingChange?.(false)
+  }, [holdsInput, onEditingChange])
 
   const columns: TableProps<Enrollment>['columns'] = [
     {

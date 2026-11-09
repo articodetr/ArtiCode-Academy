@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { ar } from '../i18n/ar'
 import i18n from '../i18n'
-import { describeClassesFailure, failureMessage } from './classes.errors'
+import { describeClassesFailure, failureMessage, isStaleClassAction } from './classes.errors'
 
 const t = (key: string, options?: Record<string, unknown>) => i18n.t(key, options)
 const apiError = (status: number, body: Record<string, unknown>) => new ApiError(status, String(body.message ?? 'x'), body)
@@ -35,6 +35,23 @@ describe('describeClassesFailure', () => {
       'للطالب تسجيل سابق في هذا الفصل (ملغى)؛ أعد تفعيله من القائمة بدلاً من تسجيله مجدداً.',
     )
     expect(describeClassesFailure(apiError(404, { code: 'enrollment_not_found', enrollmentId: 'e-1' }))).toEqual({ key: 'classes.errors.enrollment_not_found' })
+  })
+
+  it('calls a class action stale (dialog closes, class re-read) for invalid_transition, class_not_deletable and class_not_found only (J-F15 — PR #26 note 3)', () => {
+    const stale = (status: number, body: Record<string, unknown>) => isStaleClassAction(describeClassesFailure(apiError(status, body)))
+    expect(stale(409, { code: 'invalid_transition', from: 'open', action: 'open', allowed: ['start', 'cancel'] })).toBe(true)
+    expect(stale(409, { code: 'class_not_deletable', status: 'planned', enrollmentCount: 1 })).toBe(true)
+    expect(stale(404, { code: 'class_not_found', classId: 'c' })).toBe(true)
+    // Retryable or refused: the dialog stays open with the message.
+    expect(stale(400, { message: 'reason must be shorter than or equal to 500 characters' })).toBe(false)
+    expect(stale(403, { code: 'permission_denied', missing: ['classes.manage'] })).toBe(false)
+    expect(stale(403, { code: 'origin_forbidden' })).toBe(false)
+    expect(stale(429, { code: 'rate_limited' })).toBe(false)
+    expect(stale(503, {})).toBe(false)
+    expect(stale(418, {})).toBe(false)
+    expect(isStaleClassAction(describeClassesFailure(new TypeError('fetch failed')))).toBe(false)
+    // Another module's code of the same name is not a class action.
+    expect(isStaleClassAction({ key: 'courses.errors.invalid_transition' })).toBe(false)
   })
 
   it('falls back to validation, server, network and generic messages', () => {
