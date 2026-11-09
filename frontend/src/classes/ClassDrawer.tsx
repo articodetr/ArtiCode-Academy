@@ -10,15 +10,19 @@
 // a modal. A teacher (`classes.read` alone) sees their class read-only.
 // Since J-F15: an action the server refuses because it became stale
 // (isStaleClassAction — PR #26 review, note 3) closes its dialog, re-reads the
-// class and shows the message; and while an editor holds unsaved work (the edit
-// form, the teachers editor, a student picked in the enroll form, the weekly
-// schedule editor — each tab reports it through `onEditingChange`) Escape and
-// a mask click no longer close the drawer, and the close button asks first
-// (KI-052).
+// class and shows the message; and while an editor holds unsaved work (a
+// change in the edit form, a teachers draft that differs from the server's
+// list, a student picked in the enroll form, weekly slots that differ from the
+// server's — each tab reports it through `onUnsavedChange`) Escape and a mask
+// click no longer close the drawer, and the close button asks first (KI-052).
+// Since J-F21 an editor opened without a change, or changed back, holds nothing
+// (PR #66 review, note 1), and every re-read of the class — a stale action, a
+// stale roster, the retry button — hands it to `onUpdated` too, so the list row
+// follows (note 4).
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { changeClassStatus, deleteClass, getClass, updateClass } from '../api/classes'
@@ -34,7 +38,7 @@ import { ClassFormFields } from './ClassFormFields'
 import { ClassTeachersTab } from './ClassTeachersTab'
 import { SeatsBar } from './SeatsBar'
 import { describeClassesFailure, failureMessage, isStaleClassAction } from './classes.errors'
-import { CLASS_STATUS_REASON_MAX_LENGTH, classFormValuesOf, planClassPatch } from './classes.form'
+import { CLASS_STATUS_REASON_MAX_LENGTH, classFormHasChanges, classFormValuesOf, planClassPatch } from './classes.form'
 import type { ClassFormValues } from './classes.form'
 import { availableClassActions, isDangerousClassAction, movesEnrollments } from './classes.status'
 import type { ClassMenuAction } from './classes.status'
@@ -52,10 +56,10 @@ const DASH = '—'
 
 type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule'
 
-/** The tabs whose editors report unsaved work (KI-052); the details edit form is the drawer's own `editing`. */
+/** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself. */
 type EditorTab = Exclude<DrawerTab, 'details'>
 
-const NO_OPEN_EDITOR: Readonly<Record<EditorTab, boolean>> = { teachers: false, students: false, schedule: false }
+const NOTHING_UNSAVED: Readonly<Record<EditorTab, boolean>> = { teachers: false, students: false, schedule: false }
 
 // The classes list keeps importing the bar from here (it lives in SeatsBar.tsx since J-F04).
 export { SeatsBar }
@@ -81,15 +85,22 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
   const [tab, setTab] = useState<DrawerTab>('details')
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<ClassMenuAction | null>(null)
-  const [openEditors, setOpenEditors] = useState<Readonly<Record<EditorTab, boolean>>>(NO_OPEN_EDITOR)
+  const [unsavedTabs, setUnsavedTabs] = useState<Readonly<Record<EditorTab, boolean>>>(NOTHING_UNSAVED)
+  const [detailsUnsaved, setDetailsUnsaved] = useState(false)
 
   // One stable reporter per tab (the tabs report from an effect that depends on it).
-  const reportEditing = useMemo(() => {
-    const reporter = (editor: EditorTab) => (open: boolean) => setOpenEditors((current) => (current[editor] === open ? current : { ...current, [editor]: open }))
+  const reportUnsaved = useMemo(() => {
+    const reporter = (editor: EditorTab) => (unsaved: boolean) => setUnsavedTabs((current) => (current[editor] === unsaved ? current : { ...current, [editor]: unsaved }))
     return { teachers: reporter('teachers'), students: reporter('students'), schedule: reporter('schedule') }
   }, [])
   // KI-052: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
-  const editorOpen = editing || openEditors.teachers || openEditors.students || openEditors.schedule
+  const unsaved = (editing && detailsUnsaved) || unsavedTabs.teachers || unsavedTabs.students || unsavedTabs.schedule
+
+  // The load below hands every re-read to the list; a ref, so a new `onUpdated` never restarts the load.
+  const onUpdatedRef = useRef(onUpdated)
+  useEffect(() => {
+    onUpdatedRef.current = onUpdated
+  }, [onUpdated])
 
   useEffect(() => {
     if (!classId) return
@@ -99,6 +110,8 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
         if (controller.signal.aborted) return
         setCls(loaded)
         setLoadError(null)
+        // A re-read (stale action, stale roster, retry) refreshes the list row too (PR #66 review, note 4).
+        if (reloadTick > 0) onUpdatedRef.current(loaded)
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
@@ -115,13 +128,14 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
     setTab('details')
     setEditing(false)
     setPending(null)
-    setOpenEditors(NO_OPEN_EDITOR)
+    setUnsavedTabs(NOTHING_UNSAVED)
+    setDetailsUnsaved(false)
     onClose()
   }
 
-  /** The close button (Escape and the mask too when no editor is open): asks first while an editor holds unsaved work. */
+  /** The close button (Escape and the mask too when nothing is unsaved): asks first while an editor holds unsaved work. */
   const requestClose = () => {
-    if (!editorOpen) {
+    if (!unsaved) {
       close()
       return
     }
@@ -162,6 +176,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
           setEditing(false)
         }}
         onCancel={() => setEditing(false)}
+        onUnsavedChange={setDetailsUnsaved}
       />
     ) : (
       <Descriptions column={1} bordered size="small">
@@ -199,10 +214,10 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
     <Drawer
       open={classId !== null}
       onClose={requestClose}
-      // KI-052: an open editor turns off the Escape key and the mask click; an open
+      // KI-052: unsaved work turns off the Escape key and the mask click; an open
       // Select or Dropdown still closes on Escape (it sits on top of the drawer).
-      keyboard={!editorOpen}
-      mask={{ closable: !editorOpen }}
+      keyboard={!unsaved}
+      mask={{ closable: !unsaved }}
       title={name}
       size="large"
       destroyOnHidden
@@ -250,7 +265,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
             {
               key: 'teachers',
               label: t('classes.drawer.tabs.teachers', { count: cls.teachers.length }),
-              children: <ClassTeachersTab cls={cls} onUpdated={applyUpdate} onEditingChange={reportEditing.teachers} />,
+              children: <ClassTeachersTab cls={cls} onUpdated={applyUpdate} onUnsavedChange={reportUnsaved.teachers} />,
               disabled: editing,
             },
             ...(canReadRoster(hasPermission, cls, user?.id)
@@ -258,7 +273,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
                   {
                     key: 'students',
                     label: t('classes.drawer.tabs.students', { count: cls.enrolledCount }),
-                    children: <ClassEnrollmentsTab cls={cls} onClassChanged={applyUpdate} onStale={reload} onEditingChange={reportEditing.students} />,
+                    children: <ClassEnrollmentsTab cls={cls} onClassChanged={applyUpdate} onStale={reload} onUnsavedChange={reportUnsaved.students} />,
                     disabled: editing,
                   },
                 ]
@@ -266,7 +281,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
             {
               key: 'schedule',
               label: t('classSchedule.tab'),
-              children: <ClassScheduleTab cls={cls} onEditingChange={reportEditing.schedule} />,
+              children: <ClassScheduleTab cls={cls} onUnsavedChange={reportUnsaved.schedule} />,
               disabled: editing,
             },
           ]}
@@ -385,6 +400,8 @@ interface ClassEditFormProps {
   cls: AcademyClass
   onSaved: (cls: AcademyClass) => void
   onCancel: () => void
+  /** Whether a field holds a change (KI-052): reported on every edit, false once the form is left. */
+  onUnsavedChange: (unsaved: boolean) => void
 }
 
 /**
@@ -392,12 +409,14 @@ interface ClassEditFormProps {
  * from the class as the server holds it (a form instance kept across sessions
  * merges the values of a cancelled session — KI-049).
  */
-function ClassEditForm({ cls, onSaved, onCancel }: ClassEditFormProps) {
+function ClassEditForm({ cls, onSaved, onCancel, onUnsavedChange }: ClassEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => () => onUnsavedChange(false), [onUnsavedChange])
 
   const save = async (values: ClassFormValues) => {
     const body = planClassPatch(cls, values)
@@ -426,6 +445,7 @@ function ClassEditForm({ cls, onSaved, onCancel }: ClassEditFormProps) {
       layout="vertical"
       requiredMark={false}
       initialValues={classFormValuesOf(cls)}
+      onValuesChange={(_changed, values) => onUnsavedChange(classFormHasChanges(cls, values as ClassFormValues))}
       onFinish={(values) => void save(values as ClassFormValues)}
       disabled={saving}
     >

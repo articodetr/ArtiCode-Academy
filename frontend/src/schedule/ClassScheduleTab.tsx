@@ -7,10 +7,13 @@
 // week order and the working days come from the academy's scheduling settings.
 // Since J-F16 the same managers generate the class's lessons from its slots
 // (GenerateLessonsPanel on API-092) once the schedule has at least one slot;
-// while the panel is open the header offers no other action.
+// while the panel is open the header offers no other action. Since J-F21 a
+// schedule that can no longer generate closes the panel for good, and the
+// panel holds nothing for the class drawer's unsaved-work guard (only the
+// editor's drafts do — PR #60 review, notes 1 and 2).
 import { EditOutlined, ScheduleOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Flex, Skeleton, Space, Typography } from 'antd'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
@@ -27,9 +30,14 @@ import { useSchedulingSettings } from './useSchedulingSettings'
 
 interface ClassScheduleTabProps {
   cls: Pick<AcademyClass, 'id' | 'code' | 'status' | 'teachers' | 'startsOn' | 'endsOn'>
+  /**
+   * Whether the editor's drafts differ from the server's slots (KI-052): the class drawer then keeps
+   * Escape and a mask click from dropping them. The «generate lessons» panel reports nothing (J-F21).
+   */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function ClassScheduleTab({ cls, onEditingChange }: ClassScheduleTabProps & { onEditingChange?: (open: boolean) => void }) {
+export function ClassScheduleTab({ cls, onUnsavedChange }: ClassScheduleTabProps) {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('schedule.manage')
@@ -40,13 +48,18 @@ export function ClassScheduleTab({ cls, onEditingChange }: ClassScheduleTabProps
   const [generation, setGeneration] = useState<GenerationRange | null>(null)
   const editable = canManage && isSchedulable(cls.status)
   const generatable = editable && schedule !== null && schedule.slots.length > 0
-  const generating = generatable && generation !== null
+  // The open panel with what it shows; null while closed or while the schedule cannot generate.
+  const panel = generatable && schedule && generation ? { schedule, range: generation } : null
 
-  // KI-052: while the editor is open the class drawer keeps Escape and a mask click from dropping its drafts.
-  useEffect(() => {
-    onEditingChange?.(editing)
-    return () => onEditingChange?.(false)
-  }, [editing, onEditingChange])
+  // A schedule that can no longer generate (every slot removed, the class completed or cancelled)
+  // closes the panel for good, so a slot added later does not reopen it (PR #60 review, note 2).
+  // Adjusted in the render that sees the change — React's pattern for state that follows a value.
+  const [wasGeneratable, setWasGeneratable] = useState(generatable)
+  if (wasGeneratable !== generatable) {
+    setWasGeneratable(generatable)
+    if (!generatable) setGeneration(null)
+  }
+
   if (editing && schedule) {
     // Mounted per edit session, so the drafts always start from the server's list.
     return (
@@ -63,6 +76,7 @@ export function ClassScheduleTab({ cls, onEditingChange }: ClassScheduleTabProps
           reload()
         }}
         onCancel={() => setEditing(false)}
+        onUnsavedChange={onUnsavedChange}
       />
     )
   }
@@ -75,7 +89,7 @@ export function ClassScheduleTab({ cls, onEditingChange }: ClassScheduleTabProps
           <StatusTag value={cls.status} />
           {schedule ? <Typography.Text type="secondary">{t('classSchedule.summary', { count: schedule.slots.length })}</Typography.Text> : null}
         </Space>
-        {editable && !generating ? (
+        {editable && !panel ? (
           <Space wrap>
             {generatable ? (
               <Button icon={<ScheduleOutlined />} onClick={() => setGeneration(defaultGenerationRange(cls, todayCalendarDate()))}>
@@ -107,11 +121,11 @@ export function ClassScheduleTab({ cls, onEditingChange }: ClassScheduleTabProps
 
       {loading && !schedule ? <Skeleton active paragraph={{ rows: 4 }} data-testid="schedule-loading" /> : null}
 
-      {schedule && generation && generating ? (
+      {panel ? (
         <GenerateLessonsPanel
           cls={cls}
-          schedule={schedule}
-          range={generation}
+          schedule={panel.schedule}
+          range={panel.range}
           onRangeChange={setGeneration}
           onEditSchedule={() => setEditing(true)}
           onClose={() => setGeneration(null)}

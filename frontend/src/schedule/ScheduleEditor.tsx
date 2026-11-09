@@ -34,11 +34,13 @@ interface ScheduleEditorProps {
   /** The server's schedule or the class changed meanwhile: leave the editor and re-read. */
   onStale: () => void
   onCancel: () => void
+  /** Whether the drafts differ from the server's slots (KI-052): reported while mounted, false once left. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
 const DANGER_BORDER = '#ff4d4f'
 
-export function ScheduleEditor({ cls, schedule, settings, onSaved, onStale, onCancel }: ScheduleEditorProps) {
+export function ScheduleEditor({ cls, schedule, settings, onSaved, onStale, onCancel, onUnsavedChange }: ScheduleEditorProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -66,6 +68,13 @@ export function ScheduleEditor({ cls, schedule, settings, onSaved, onStale, onCa
   const order = orderedWeekdays(settings.weekStartsOn)
   const problems = draftListProblems(drafts, settings.workingDays)
   const full = drafts.length >= SCHEDULE_SLOTS_MAX
+  // The drafts are unsaved work only while they differ from the server's slots (PR #66 review, note 1).
+  const unsaved = planScheduleReplacement(schedule.slots, drafts) !== null
+
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+    return () => onUnsavedChange?.(false)
+  }, [unsaved, onUnsavedChange])
 
   const add = () => {
     if (full) return

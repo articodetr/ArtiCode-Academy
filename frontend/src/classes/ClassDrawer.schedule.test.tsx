@@ -76,4 +76,36 @@ describe('ClassDrawer — weekly schedule tab', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(writes).toEqual([])
   })
+
+  it('lets the drawer go while the schedule editor matches the server: a new slot holds it, removing that slot again lets Escape close (J-F21 — PR #66 review, note 1)', async () => {
+    mockFetch((url, init) => {
+      const parsed = new URL(url, 'http://localhost')
+      if ((init?.method ?? 'GET') !== 'GET') return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
+      if (parsed.pathname === `/api/classes/${CLASS_ID}`) return jsonResponse(200, makeClass())
+      if (parsed.pathname === `/api/classes/${CLASS_ID}/schedule`) return jsonResponse(200, makeSchedule())
+      if (parsed.pathname === '/api/academy') return jsonResponse(200, makeAcademy())
+      if (parsed.pathname === '/api/rooms') return jsonResponse(200, { items: [makeRoom()] })
+      return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
+    })
+    const onClose = vi.fn()
+    renderWithProviders(<ClassDrawer classId={CLASS_ID} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
+      auth: makeAuth({ user: makeUser({ permissions: SCHEDULE_ADMIN_PERMISSIONS }) }),
+      route: '/classes',
+    })
+    await screen.findByText('PY-101-A')
+    const pressEscape = () => fireEvent.keyDown(document.body, { key: 'Escape' })
+
+    fireEvent.click(screen.getByRole('tab', { name: ar.classSchedule.tab }))
+    fireEvent.click((await screen.findByText(ar.classSchedule.edit)).closest('button')!)
+    const editor = await screen.findByTestId('schedule-editor')
+    fireEvent.click(within(editor).getByText(ar.classSchedule.addSlot).closest('button')!)
+    pressEscape()
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.click(within(editor).getByLabelText(`${ar.classSchedule.removeSlot}: 2`))
+    expect(within(editor).queryByText('الحصة 2')).not.toBeInTheDocument()
+    pressEscape()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(ar.classes.drawer.discard.title)).not.toBeInTheDocument()
+  })
 })

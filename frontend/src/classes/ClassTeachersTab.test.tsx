@@ -132,7 +132,7 @@ describe('ClassTeachersTab', () => {
     expect(onUpdated).not.toHaveBeenCalled()
   })
 
-  it('names an added teacher by the full name the server lists, so the row keeps its name after the save (PR #26 note 6)', async () => {
+  it('names a teacher by the full name the server lists, in the search and in the draft, so the row keeps its name after the save (PR #26 note 6, PR #64 note 3)', async () => {
     const titled = makeTeacherCandidate({ displayName: 'أ. منى' })
     const saved = makeClass({ teachers: [makeClassTeacher(), makeClassTeacher({ userId: titled.id, fullName: titled.fullName, role: 'assistant' })] })
     mockFetch((url, init) => {
@@ -142,12 +142,13 @@ describe('ClassTeachersTab', () => {
     })
     renderWithProviders(<StatefulTab initial={makeClass()} />, { auth: makeAuth({ user: makeUser({ permissions: CLASS_ADMIN_PERMISSIONS }) }), route: '/classes' })
 
-    // The search shows the display name, as API-012 returns it…
+    // The search shows the full name, not the display name API-012 also returns (J-F21)…
     await openSearch()
-    await waitFor(() => expect(option('أ. منى')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('أ. منى', { selector: '.ant-select-item-option-content' }))
+    await waitFor(() => expect(option('منى المساعدة')).toBeInTheDocument())
+    expect(screen.queryByText('أ. منى', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('منى المساعدة', { selector: '.ant-select-item-option-content' }))
 
-    // …the draft row the full name, as API-056 will after the save.
+    // …and so does the draft row, as API-056 will after the save.
     expect(await screen.findByRole('combobox', { name: `${ar.classes.teachers.role}: منى المساعدة` })).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: `${ar.classes.teachers.role}: أ. منى` })).not.toBeInTheDocument()
     expect(screen.getByText('منى المساعدة')).toBeInTheDocument()

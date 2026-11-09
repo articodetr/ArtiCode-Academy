@@ -59,7 +59,7 @@ interface ClassEnrollmentsTabProps {
   /** The class changed elsewhere (full, no longer enrollable) or the user asked for a refresh: re-read it. */
   onStale: () => void
   /** Whether the enroll form holds a student picked but not enrolled yet (KI-052): the class drawer then keeps Escape and a mask click from dropping it. */
-  onEditingChange?: (open: boolean) => void
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
 /** The timestamp that explains the current status. */
@@ -76,7 +76,7 @@ function sinceOf(row: Enrollment): string | null {
   }
 }
 
-export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onEditingChange }: ClassEnrollmentsTabProps) {
+export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onUnsavedChange }: ClassEnrollmentsTabProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -137,9 +137,9 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onEditingCha
   const holdsInput = candidate !== undefined && canManage && enrollable && seatFree && canSearch
 
   useEffect(() => {
-    onEditingChange?.(holdsInput)
-    return () => onEditingChange?.(false)
-  }, [holdsInput, onEditingChange])
+    onUnsavedChange?.(holdsInput)
+    return () => onUnsavedChange?.(false)
+  }, [holdsInput, onUnsavedChange])
 
   const columns: TableProps<Enrollment>['columns'] = [
     {

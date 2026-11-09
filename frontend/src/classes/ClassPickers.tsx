@@ -57,7 +57,8 @@ export function TeacherPicker({ refusalOf, ...props }: TeacherPickerProps) {
   )
   const toOption = (candidate: UserListItem): RemoteOption => {
     const refusal = refusalOf?.(candidate)
-    return { value: candidate.id, label: displayNameOf(candidate), disabled: refusal !== undefined, title: refusal }
+    // The full name, as the teachers list of a class names them (PR #64 review, note 3).
+    return { value: candidate.id, label: candidate.fullName, disabled: refusal !== undefined, title: refusal }
   }
   return <RemoteSelect<UserListItem> fetchOptions={fetchOptions} toOption={toOption} emptyText={t('classes.pickers.noTeachers')} {...props} />
 }
