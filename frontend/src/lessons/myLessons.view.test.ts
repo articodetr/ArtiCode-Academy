@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayEndInstant, dayStartInstant } from './lessons.format'
+import { LESSON_TIME_ZONE } from '../test/lessons'
 import { CHILD_ONE, CHILD_TWO, SELF_STUDENT, makeMyLesson } from '../test/myLessons'
 import {
   attendanceCellOf,
@@ -13,29 +13,32 @@ import {
   todayStartInstant,
 } from './myLessons.view'
 
-// A local afternoon, so "today" is the same calendar day in every time zone the tests run in.
-const NOW = new Date(2026, 10, 10, 15, 30)
+// 22:30 UTC on the 10th: already the 11th (01:30) in the academy's zone, Asia/Riyadh (UTC+3) — «today» is the academy's day (D-R41 — J-F28).
+const NOW = new Date(Date.UTC(2026, 10, 10, 22, 30))
+const ZONE = LESSON_TIME_ZONE
 
 const classA = { id: 'class-a', code: 'PY-101-A', name: { ar: 'بايثون أ' } }
 const classB = { id: 'class-b', code: 'AR-201', name: { ar: 'عربي متقدم' } }
 
 describe('my lessons — views and parameters', () => {
-  it('upcoming = from the start of today, oldest first; the other filters pass through', () => {
+  it('upcoming = from the start of the academy’s today, oldest first; the other filters pass through', () => {
     const filters = { ...defaultMyLessonsFilters(), studentId: 's-1', classId: 'c-1', status: 'cancelled' as const, limit: 50 as const }
-    expect(myLessonsQuery(filters, NOW)).toEqual({ classId: 'c-1', studentId: 's-1', status: 'cancelled', limit: 50, from: dayStartInstant('2026-11-10'), order: 'asc' })
-    expect(todayStartInstant(NOW)).toBe(new Date(2026, 10, 10).toISOString())
+    expect(myLessonsQuery(filters, ZONE, NOW)).toEqual({ classId: 'c-1', studentId: 's-1', status: 'cancelled', limit: 50, from: '2026-11-10T21:00:00.000Z', order: 'asc' })
+    expect(todayStartInstant(ZONE, NOW)).toBe('2026-11-10T21:00:00.000Z')
+    // In UTC that same instant is still the 10th.
+    expect(todayStartInstant('UTC', NOW)).toBe('2026-11-10T00:00:00.000Z')
   })
 
-  it('past = everything that started before today, newest first (no overlap with upcoming)', () => {
-    const query = myLessonsQuery({ ...defaultMyLessonsFilters(), view: 'past' }, NOW)
-    expect(query).toEqual({ classId: undefined, studentId: undefined, status: undefined, limit: 20, to: new Date(new Date(2026, 10, 10).getTime() - 1).toISOString(), order: 'desc' })
+  it('past = everything that started before the academy’s today, newest first (no overlap with upcoming)', () => {
+    const query = myLessonsQuery({ ...defaultMyLessonsFilters(), view: 'past' }, ZONE, NOW)
+    expect(query).toEqual({ classId: undefined, studentId: undefined, status: undefined, limit: 20, to: '2026-11-10T20:59:59.999Z', order: 'desc' })
     expect(query.from).toBeUndefined()
   })
 
-  it('range = the chosen local days, both inclusive, in the chosen order; blank ends stay open', () => {
+  it('range = the chosen days of the academy’s zone, both inclusive, in the chosen order; blank ends stay open', () => {
     const range = { ...defaultMyLessonsFilters(), view: 'range' as const, from: '2026-11-01', to: '2026-11-30', order: 'desc' as const }
-    expect(myLessonsQuery(range, NOW)).toMatchObject({ from: dayStartInstant('2026-11-01'), to: dayEndInstant('2026-11-30'), order: 'desc' })
-    expect(myLessonsQuery({ ...range, from: undefined, to: undefined }, NOW)).toMatchObject({ from: undefined, to: undefined, order: 'desc' })
+    expect(myLessonsQuery(range, ZONE, NOW)).toMatchObject({ from: '2026-10-31T21:00:00.000Z', to: '2026-11-30T20:59:59.999Z', order: 'desc' })
+    expect(myLessonsQuery({ ...range, from: undefined, to: undefined }, ZONE, NOW)).toMatchObject({ from: undefined, to: undefined, order: 'desc' })
   })
 
   it('a narrowed list is one with a student, class, status or range day', () => {

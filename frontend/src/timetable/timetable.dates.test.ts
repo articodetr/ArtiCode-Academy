@@ -111,4 +111,18 @@ describe('time zones', () => {
     // 01:30 happens twice that night: the first occurrence (still EDT).
     expect(zonedInstant('2026-11-01', '01:30', 'America/New_York')).toBe(Date.UTC(2026, 10, 1, 5, 30))
   })
+
+  it('resolves the DST gap and overlap as the server’s lesson generation does: a skipped time moves forward in every zone (J-F28)', () => {
+    // The same cases as backend/src/schedule/lesson-generation.plan.spec.ts (TEST-074).
+    // Europe/Berlin: 02:00 → 03:00 on 2026-03-29, 03:00 → 02:00 on 2026-10-25.
+    expect(zonedInstant('2026-03-29', '10:00', 'Europe/Berlin')).toBe(Date.UTC(2026, 2, 29, 8, 0))
+    expect(zonedInstant('2026-10-25', '10:00', 'Europe/Berlin')).toBe(Date.UTC(2026, 9, 25, 9, 0))
+    // 02:30 does not exist on 2026-03-29: moved forward by the gap (03:30 CEST).
+    expect(zonedInstant('2026-03-29', '02:30', 'Europe/Berlin')).toBe(Date.UTC(2026, 2, 29, 1, 30))
+    // 02:30 exists twice on 2026-10-25: the later occurrence (02:30 CET).
+    expect(zonedInstant('2026-10-25', '02:30', 'Europe/Berlin')).toBe(Date.UTC(2026, 9, 25, 1, 30))
+    // America/New_York: 02:00 → 03:00 on 2026-03-08 — 02:30 moves forward to 03:30 EDT, not back to 01:30 EST.
+    expect(zonedInstant('2026-03-08', '02:30', 'America/New_York')).toBe(Date.UTC(2026, 2, 8, 7, 30))
+    expect(zonedInstant('2026-03-08', '09:00', 'America/New_York')).toBe(Date.UTC(2026, 2, 8, 13, 0))
+  })
 })

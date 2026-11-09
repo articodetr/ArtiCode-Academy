@@ -7,25 +7,42 @@
 // time earlier than the start rolls the lesson over to the next day: the end
 // time then carries NEXT_DAY_MARK and the hint names the end day and the
 // length, so a typo such as 13:00 → 01:00 (a 12-hour night) does not pass
-// unseen (J-F19).
+// unseen (J-F19). The day and the times are a wall clock in `zone` (D-R41 —
+// J-F28): the lesson's own zone when editing, the academy's for a new lesson —
+// a line above them names it, with this device's zone when they differ. The
+// server decides a lesson's zone from its room's branch, so choosing a room of
+// another branch (or of none) adds a note under the room: once saved, the
+// lesson may be shown in another zone — the times typed here are still read
+// in the zone named above, and the drawer then shows the server's answer.
 import { Alert, Col, Form, Input, Row, Select, Typography } from 'antd'
 import type { FormInstance } from 'antd'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { DELIVERY_MODES, LESSON_TEXT_MAX_LENGTH, MAX_LESSON_HOURS } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
+import type { Room } from '../api/rooms'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
 import { RoomPicker } from '../timetable/TimetablePickers'
+import { deviceTimeZone } from '../timetable/timetable.settings'
 import { localizedLabel } from '../users/users.format'
 import { LessonClassPicker, LessonTeacherSelect, SyllabusItemSelect } from './LessonPickers'
 import { isMeetingUrlValid } from './lessons.form'
-import { NEXT_DAY_MARK, durationMinutes, formatLessonDay, nextDayRangeOf, rangeOf, rangeProblem } from './lessons.format'
+import { NEXT_DAY_MARK, differsFromDevice, durationMinutes, formatLessonDay, nextDayRangeOf, rangeOf, rangeProblem } from './lessons.format'
+import type { LessonZone } from './lessons.format'
+
+/** The branch of a room; null = the academy's own site (or no room). */
+function branchIdOf(room: { branch: { id: string } | null } | null | undefined): string | null {
+  return room?.branch?.id ?? null
+}
 
 interface LessonFormFieldsProps {
   form: FormInstance
   /** `create` shows the class picker; `edit` keeps the class fixed. */
   mode: 'create' | 'edit'
+  /** The zone the day and the times are read in: `{ lesson.timeZone, 'lesson' }` when editing, the academy's (useAcademyZone()) for a new lesson. */
+  zone: LessonZone
   /** The class the lesson belongs to — chosen in the picker (create) or loaded (edit); null until known. */
   klass: AcademyClass | null
   /** Edit only: the lesson, so a teacher or syllabus item no longer offered stays selectable. */
@@ -36,7 +53,7 @@ interface LessonFormFieldsProps {
   onClassChange?: (klass: AcademyClass | undefined) => void
 }
 
-export function LessonFormFields({ form, mode, klass, lesson, timingLocked = false, onClassChange }: LessonFormFieldsProps) {
+export function LessonFormFields({ form, mode, zone, klass, lesson, timingLocked = false, onClassChange }: LessonFormFieldsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   // GET /api/classes(/:id) needs classes.read at the controller: without it the class list and the class's teachers stay unknown.
@@ -46,7 +63,13 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
   const watchedDate = Form.useWatch('date', form) as string | undefined
   const watchedStart = Form.useWatch('startTime', form) as string | undefined
   const watchedEnd = Form.useWatch('endTime', form) as string | undefined
-  const nextDay = nextDayRangeOf(watchedDate, watchedStart, watchedEnd)
+  const nextDay = nextDayRangeOf(watchedDate, watchedStart, watchedEnd, zone.timeZone)
+  // The room as last chosen in the picker — its branch is known only from there, without a request; null = untouched.
+  const [roomChoice, setRoomChoice] = useState<{ id: string | undefined; room: Room | undefined } | null>(null)
+  // The server takes the lesson's zone from its room's branch (D-R41): a room of another branch (or none) may change it.
+  const followsRoom =
+    roomChoice !== null && roomChoice.id !== (mode === 'edit' ? lesson?.room?.id : undefined) && branchIdOf(roomChoice.room) !== (mode === 'edit' ? branchIdOf(lesson?.room) : null)
+  const device = deviceTimeZone()
 
   /** The length rule of every text field, worded by the lessons dictionary. */
   const maxLength = { max: LESSON_TEXT_MAX_LENGTH, message: t('lessons.validation.maxLength', { max: LESSON_TEXT_MAX_LENGTH }) }
@@ -62,7 +85,7 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
     const startTime = form.getFieldValue('startTime') as string | undefined
     if (!date || !startTime || !endTime) return Promise.resolve()
     if (endTime === startTime) return Promise.reject(new Error(t('lessons.validation.rangeEmpty')))
-    const range = rangeOf(date, startTime, endTime)
+    const range = rangeOf(date, startTime, endTime, zone.timeZone)
     const problem = range ? rangeProblem(range.startsAt, range.endsAt) : null
     if (problem === 'too_long') return Promise.reject(new Error(t('lessons.validation.rangeTooLong', { maxHours: MAX_LESSON_HOURS })))
     if (problem === 'empty') return Promise.reject(new Error(t('lessons.validation.rangeEmpty')))
@@ -107,6 +130,10 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
         </Col>
       </Row>
       {timingLocked ? <Alert type="info" showIcon title={t('lessons.hints.timingLocked')} style={{ marginBottom: 16 }} /> : null}
+      <Typography.Paragraph type="secondary" data-testid="lesson-zone-hint" style={{ marginBottom: 8 }}>
+        {t(`lessons.zone.${zone.source}Input`, { zone: zone.timeZone })}
+        {differsFromDevice(zone.timeZone, device) ? ` — ${t('lessons.zone.device', { zone: device })}` : ''}
+      </Typography.Paragraph>
       <Row gutter={12}>
         <Col xs={24} md={8}>
           <Form.Item name="date" label={t('lessons.fields.date')} rules={[{ required: true, message: t('lessons.validation.dateRequired') }]}>
@@ -128,7 +155,7 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
                 {t('lessons.hints.time')}
                 {nextDay ? (
                   <Typography.Text type="warning" style={{ display: 'block' }}>
-                    {t('lessons.hints.endsNextDay', { date: formatLessonDay(nextDay.endsAt, language), minutes: durationMinutes(nextDay.startsAt, nextDay.endsAt) })}
+                    {t('lessons.hints.endsNextDay', { date: formatLessonDay(nextDay.endsAt, language, zone.timeZone), minutes: durationMinutes(nextDay.startsAt, nextDay.endsAt) })}
                   </Typography.Text>
                 ) : null}
               </>
@@ -151,8 +178,8 @@ export function LessonFormFields({ form, mode, klass, lesson, timingLocked = fal
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="roomId" label={t('lessons.fields.room')}>
-            <RoomPicker allowClear placeholder={t('lessons.drawer.noRoom')} disabled={timingLocked} />
+          <Form.Item name="roomId" label={t('lessons.fields.room')} extra={followsRoom ? t('lessons.zone.followsRoom') : undefined}>
+            <RoomPicker allowClear placeholder={t('lessons.drawer.noRoom')} disabled={timingLocked} onChange={(value, room) => setRoomChoice({ id: value || undefined, room })} />
           </Form.Item>
         </Col>
       </Row>
