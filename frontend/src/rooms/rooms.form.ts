@@ -6,7 +6,7 @@
 // Turkish text the form does not show), nothing changed → null. The list
 // helpers filter the short server list locally (API-084 has no text search).
 import type { Branch } from '../api/branches'
-import type { CreateRoomInput, Room, RoomKind, UpdateRoomInput } from '../api/rooms'
+import type { CreateRoomInput, Room, RoomBranch, RoomKind, UpdateRoomInput } from '../api/rooms'
 import { localizedOf, normaliseCourseCode, sameLabel } from '../courses/courses.form'
 import type { Language } from '../i18n/language'
 import { localizedLabel } from '../users/users.format'
@@ -112,10 +112,19 @@ export function filterRooms(rooms: readonly Room[], filters: LocalRoomFilters): 
   })
 }
 
+/** How the rooms screen names a branch — the table, the filter and the picker alike: its code and its name in the active language. */
+export function branchLabel(branch: Pick<RoomBranch, 'code' | 'name'>, language: Language): string {
+  return `${branch.code} — ${localizedLabel(branch.name, language)}`
+}
+
 export interface BranchOption {
   value: string
   label: string
-  /** True for an inactive branch kept only because the room already belongs to it. */
+  /**
+   * True for an inactive branch kept only because the room already belongs to
+   * it; false for the fallback built from the room's own branch, whose state
+   * RoomDto does not carry.
+   */
   inactive: boolean
 }
 
@@ -123,10 +132,16 @@ export interface BranchOption {
  * The branches a room may be moved to: the active ones (the server refuses an
  * inactive branch with `branch_inactive`), plus the room's current branch when
  * it is inactive — so the form still shows where the room is, and leaving it
- * there sends nothing.
+ * there sends nothing. When the list lacks the current branch — API-080 failed
+ * (an empty list), or the branch is inactive and the caller cannot list
+ * inactive branches (that takes `branches.manage`) — its option is built from
+ * the room's own `branch` (RoomDto: id, code, name), so the picker names it
+ * instead of showing its raw id (J-F20).
  */
-export function branchOptionsFor(branches: readonly Branch[], currentBranchId: string | null, language: Language): BranchOption[] {
-  return branches
-    .filter((branch) => branch.isActive || branch.id === currentBranchId)
-    .map((branch) => ({ value: branch.id, label: `${branch.code} — ${localizedLabel(branch.name, language)}`, inactive: !branch.isActive }))
+export function branchOptionsFor(branches: readonly Branch[], current: RoomBranch | null, language: Language): BranchOption[] {
+  const options = branches
+    .filter((branch) => branch.isActive || branch.id === current?.id)
+    .map((branch) => ({ value: branch.id, label: branchLabel(branch, language), inactive: !branch.isActive }))
+  if (current && !options.some((option) => option.value === current.id)) options.push({ value: current.id, label: branchLabel(current, language), inactive: false })
+  return options
 }
