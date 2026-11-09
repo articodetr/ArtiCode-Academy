@@ -9,7 +9,7 @@ import { Alert, App, Button, Card, Flex, Input, Select, Space, Table, Typography
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CLASS_STATUSES } from '../api/classes'
+import { CLASS_SEARCH_MAX_LENGTH, CLASS_STATUSES } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
 import { ClassDrawer, SeatsBar } from '../classes/ClassDrawer'
@@ -106,6 +106,7 @@ export function ClassesPage() {
             allowClear
             placeholder={t('classes.searchPlaceholder')}
             aria-label={t('common.search')}
+            maxLength={CLASS_SEARCH_MAX_LENGTH}
             defaultValue={list.filters.q}
             onSearch={(value) => list.setFilters({ q: value })}
             style={{ maxWidth: 320 }}

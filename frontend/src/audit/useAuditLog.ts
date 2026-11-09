@@ -37,8 +37,9 @@ export function useAuditLog(initialFilters: AuditFilters = DEFAULT_AUDIT_FILTERS
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
-        // Keep the rows of the previous page on screen behind the error message.
-        setPage((current) => ({ ...current, key: requestKey, error }))
+        // Keep the rows of the previous page on screen behind the error message,
+        // but not their cursor: «next» would push a cursor of another page (J-F14).
+        setPage((current) => ({ ...current, key: requestKey, nextCursor: null, error }))
       })
     return () => controller.abort()
   }, [filters, cursor, reloadTick, requestKey])

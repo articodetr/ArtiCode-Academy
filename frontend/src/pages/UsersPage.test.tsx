@@ -106,7 +106,10 @@ describe('UsersPage', () => {
     renderPage()
     await screen.findByText(sara.fullName)
 
-    await userEvent.type(screen.getByRole('searchbox', { name: ar.common.search }), 'sara{enter}')
+    const search = screen.getByRole('searchbox', { name: ar.common.search })
+    // API-012 accepts q of 1–200 characters (PR #26 note 5 — J-F14).
+    expect(search).toHaveAttribute('maxlength', '200')
+    await userEvent.type(search, 'sara{enter}')
     await waitFor(() => expect(api.lastQuery().get('q')).toBe('sara'))
 
     await selectOption(ar.common.status, ar.labels.suspended)

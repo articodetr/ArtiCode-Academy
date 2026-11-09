@@ -44,7 +44,11 @@ export interface CourseList {
   nextCursor: string | null
 }
 
+/** Upper bound of `q` on API-042 (`ListCoursesQueryDto`: 1–100 characters after trim). */
+export const COURSE_SEARCH_MAX_LENGTH = 100
+
 export interface ListCoursesParams {
+  /** Code or Arabic/English name substring; at most COURSE_SEARCH_MAX_LENGTH characters. */
   q?: string
   /** Any status for `courses.manage`; others only `published` (anything else is 403). */
   status?: CourseStatus

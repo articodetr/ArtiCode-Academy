@@ -108,7 +108,11 @@ export interface UserDetail extends UserSummary {
   students: GuardianLink[]
 }
 
+/** Upper bound of `q` on API-012 (`ListUsersQueryDto`: 1–200 characters after trim). */
+export const USER_SEARCH_MAX_LENGTH = 200
+
 export interface ListUsersParams {
+  /** Name substring (and e-mail/username with `users.read_contact`); at most USER_SEARCH_MAX_LENGTH characters. */
   q?: string
   status?: UserStatus
   role?: string

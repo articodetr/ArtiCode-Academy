@@ -8,7 +8,7 @@ import { Alert, App, Button, Card, Checkbox, Flex, Input, Select, Space, Table, 
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { USER_STATUSES } from '../api/users'
+import { USER_SEARCH_MAX_LENGTH, USER_STATUSES } from '../api/users'
 import type { UserListItem } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
@@ -136,6 +136,7 @@ export function UsersPage() {
             allowClear
             placeholder={contact ? t('users.searchByNameOrContact') : t('users.searchByName')}
             aria-label={t('common.search')}
+            maxLength={USER_SEARCH_MAX_LENGTH}
             defaultValue={list.filters.q}
             onSearch={(value) => list.setFilters({ q: value })}
             style={{ maxWidth: 320 }}

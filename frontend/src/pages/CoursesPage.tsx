@@ -8,7 +8,7 @@ import { Alert, App, Button, Card, Flex, Input, Select, Space, Table, Tabs, Typo
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { COURSE_STATUSES } from '../api/courses'
+import { COURSE_SEARCH_MAX_LENGTH, COURSE_STATUSES } from '../api/courses'
 import type { Course } from '../api/courses'
 import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
@@ -70,6 +70,7 @@ export function CoursesPage() {
           allowClear
           placeholder={t('courses.searchPlaceholder')}
           aria-label={t('common.search')}
+          maxLength={COURSE_SEARCH_MAX_LENGTH}
           defaultValue={list.filters.q}
           onSearch={(value) => list.setFilters({ q: value })}
           style={{ maxWidth: 320 }}

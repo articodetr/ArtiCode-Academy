@@ -72,6 +72,8 @@ describe('CoursesPage', () => {
     await waitFor(() => expect(api.queries.at(-1)?.get('status')).toBe('draft'))
 
     const search = screen.getByRole('searchbox', { name: ar.common.search })
+    // API-042 accepts q of 1–100 characters (PR #26 note 5 — J-F14).
+    expect(search).toHaveAttribute('maxlength', '100')
     await userEvent.type(search, 'web{Enter}')
     await waitFor(() => expect(api.queries.at(-1)?.get('q')).toBe('web'))
     expect(api.queries.at(-1)?.get('status')).toBe('draft')

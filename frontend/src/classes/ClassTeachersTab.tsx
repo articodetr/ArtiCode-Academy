@@ -4,7 +4,8 @@
 // (API-012 `role=teacher`, needs `users.read`), change a role, remove — and save
 // it as ONE `PUT /api/classes/:id/teachers` with the whole list, only when it
 // differs from the server's. At most one lead and no ineligible user are
-// refused here first; the server stays the boundary.
+// refused here first; the server stays the boundary. A draft row shows the
+// full name, as the server's list does after the save (J-F14).
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Empty, Flex, List, Select, Space, Tag, Typography } from 'antd'
 import { useState } from 'react'
@@ -14,10 +15,10 @@ import type { AcademyClass, ClassTeacherRole } from '../api/classes'
 import type { UserListItem } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
-import { displayNameOf, formatDateTime } from '../users/users.format'
+import { formatDateTime } from '../users/users.format'
 import { TeacherPicker } from './ClassPickers'
 import { describeClassesFailure, failureMessage } from './classes.errors'
-import { CLASS_TEACHERS_MAX, candidateRefusal, defaultRoleFor, planTeachersReplacement, teacherDraftsOf, teacherListProblems } from './classes.teachers'
+import { CLASS_TEACHERS_MAX, candidateRefusal, planTeachersReplacement, teacherDraftOf, teacherDraftsOf, teacherListProblems } from './classes.teachers'
 import type { TeacherDraft } from './classes.teachers'
 
 interface ClassTeachersTabProps {
@@ -109,7 +110,7 @@ function TeachersEditor({ cls, onSaved, onCancel }: TeachersEditorProps) {
 
   const add = (candidate: UserListItem | undefined) => {
     if (!candidate || candidateRefusal(candidate, drafts) || full) return
-    setDrafts((current) => [...current, { userId: candidate.id, fullName: displayNameOf(candidate), role: defaultRoleFor(current) }])
+    setDrafts((current) => [...current, teacherDraftOf(candidate, current)])
     setPickerKey((key) => key + 1)
   }
 
