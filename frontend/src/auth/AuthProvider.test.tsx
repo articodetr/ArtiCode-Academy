@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
 import { AuthProvider } from './AuthProvider'
@@ -15,7 +15,11 @@ function renderProvider() {
   const ref: { current: AuthContextValue | null } = { current: null }
   function Capture() {
     const value = useAuth()
-    useEffect(() => {
+    // A layout effect, never a passive one (KI-059): it runs inside the commit that writes
+    // `data-status`, so a test that waited for the DOM reads the value of that same commit. Outside
+    // act() (the refresh answer lands while waitFor runs) React flushes passive effects in a later
+    // Scheduler task, and waitFor can resolve before it — the read then saw the loading value.
+    useLayoutEffect(() => {
       ref.current = value
     })
     return (
