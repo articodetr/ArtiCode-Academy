@@ -2,6 +2,8 @@
 // Reads ONE JSON object from stdin: { baseUrl, admin: { identifier, password }, teacher, student }
 // and calls the real endpoints exactly as Swagger's "Authorize" + "Try it out" would.
 // Never prints passwords or tokens. Never calls process.exit() after reading stdin (Windows libuv assertion).
+// Evidence rows: classes and a course coded `ACC-MOD07-…`; the branch and the two rooms are coded `A7BR-`, `A7RB-`,
+// `A7RS-` + `yyMMddHHmm`, because branch and room codes take 16 characters at most (LEVEL_CODE_PATTERN).
 class Stop extends Error {}
 
 const chunks = [];
@@ -15,6 +17,8 @@ const DAY_MS = 86_400_000;
 const BRANCH_ZONE = 'Europe/Berlin';
 const results = [];
 const stamp = (iso) => new Date(iso).toLocaleString('en-GB', { timeZone: 'Etc/GMT-3', hour12: false });
+/** The server's reason for a refusal: the stable `code` and the validation message(s), for FAIL lines. */
+const why = (r) => [r.body?.code, Array.isArray(r.body?.message) ? r.body.message.join('; ') : r.body?.message].filter(Boolean).join(': ') || `HTTP ${r.status}`;
 function record(step, ok, evidence) {
   results.push({ step, ok, evidence });
   console.log(`${ok === true ? 'PASS' : ok === false ? 'FAIL' : 'SKIP'}  ${step}: ${evidence}`);
@@ -88,17 +92,18 @@ try {
 
   const academy = await call('GET', '/api/academy', tokens.admin);
   const academyZone = academy.body?.timezone ?? 'UTC';
-  const stampCode = new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '');
+  // yyMMddHHmm — short enough for the 16-character branch/room codes below.
+  const stampCode = new Date().toISOString().slice(2, 16).replace(/[-T:]/g, '');
 
   // 1. A branch in a daylight-saving zone, a room in it and a room at the site; the teacher reads the room list.
-  const branch = await call('POST', '/api/branches', tokens.admin, { code: `ACC-MOD07-BR-${stampCode}`, name: { ar: 'فرع قبول MOD-07', en: 'MOD-07 acceptance branch' }, timezone: BRANCH_ZONE });
+  const branch = await call('POST', '/api/branches', tokens.admin, { code: `A7BR-${stampCode}`, name: { ar: 'فرع قبول MOD-07', en: 'MOD-07 acceptance branch' }, timezone: BRANCH_ZONE });
   const branchId = branch.status === 201 ? branch.body.id : null;
-  const roomBranch = await call('POST', '/api/rooms', tokens.admin, { code: `ACC-MOD07-RB-${stampCode}`, name: { ar: 'قاعة برلين' }, ...(branchId ? { branchId } : {}) });
-  const roomSite = await call('POST', '/api/rooms', tokens.admin, { code: `ACC-MOD07-RS-${stampCode}`, name: { ar: 'قاعة المقر' } });
+  const roomBranch = await call('POST', '/api/rooms', tokens.admin, { code: `A7RB-${stampCode}`, name: { ar: 'قاعة برلين' }, ...(branchId ? { branchId } : {}) });
+  const roomSite = await call('POST', '/api/rooms', tokens.admin, { code: `A7RS-${stampCode}`, name: { ar: 'قاعة المقر' } });
   const roomList = await call('GET', '/api/rooms', tokens.teacher);
   const listed = (roomList.body?.items ?? []).map((r) => r.id);
   const roomsOk = roomBranch.status === 201 && roomSite.status === 201 && roomList.status === 200 && listed.includes(roomBranch.body?.id) && listed.includes(roomSite.body?.id);
-  record('1 branch + rooms', roomsOk, `branch ${branch.status}${branchId ? ` (${BRANCH_ZONE})` : ` ${branch.body?.code ?? ''} — rooms without a branch`}; rooms ${roomBranch.status}/${roomSite.status}; GET /api/rooms ${roomList.status} lists both=${listed.includes(roomBranch.body?.id) && listed.includes(roomSite.body?.id)}`);
+  record('1 branch + rooms', roomsOk, `branch ${branch.status}${branchId ? ` (${BRANCH_ZONE})` : ` (${why(branch)}) — rooms without a branch`}; rooms ${roomBranch.status}/${roomSite.status}${roomBranch.status === 201 && roomSite.status === 201 ? '' : ` (${why(roomBranch)} / ${why(roomSite)})`}; GET /api/rooms ${roomList.status} lists both=${listed.includes(roomBranch.body?.id) && listed.includes(roomSite.body?.id)}`);
   if (!roomsOk) throw new Stop();
   const roomZone = branchId ? BRANCH_ZONE : academyZone;
 
@@ -109,7 +114,7 @@ try {
     const createdCourse = await call('POST', '/api/courses', tokens.admin, { code: `ACC-MOD07-CRS-${stampCode}`, name: { ar: 'دورة قبول MOD-07', en: 'MOD-07 acceptance course' } });
     const published = createdCourse.status === 201 ? await call('POST', `/api/courses/${createdCourse.body.id}/status`, tokens.admin, { action: 'publish' }) : { status: 0 };
     if (published.status !== 200) {
-      record('2 preparation', false, `no published course and creating one failed (${createdCourse.status}/${published.status})`);
+      record('2 preparation', false, `no published course and creating one failed (${createdCourse.status} ${why(createdCourse)} / ${published.status})`);
       throw new Stop();
     }
     course = { id: createdCourse.body.id, code: createdCourse.body.code };
@@ -117,7 +122,7 @@ try {
   const classCode = `ACC-MOD07-${stampCode}`;
   const klass = await call('POST', '/api/classes', tokens.admin, { courseId: course.id, code: classCode, name: { ar: 'فصل قبول MOD-07', en: 'MOD-07 acceptance class' }, capacity: 5 });
   if (klass.status !== 201) {
-    record('2 preparation', false, `POST /api/classes -> HTTP ${klass.status} ${klass.body?.code ?? ''}`);
+    record('2 preparation', false, `POST /api/classes -> HTTP ${klass.status} ${why(klass)}`);
     throw new Stop();
   }
   const classId = klass.body.id;
@@ -125,7 +130,7 @@ try {
   const opened = await call('POST', `/api/classes/${classId}/status`, tokens.admin, { action: 'open' });
   const enrolled = await call('POST', `/api/classes/${classId}/enrollments`, tokens.admin, { studentId });
   const prepOk = teachers.status === 200 && opened.status === 200 && enrolled.status === 201;
-  record('2 preparation', prepOk, `class ${classCode} (${classId}) on course ${course.code}: create 201, teachers ${teachers.status}, open ${opened.status}, enroll ${enrolled.status}`);
+  record('2 preparation', prepOk, `class ${classCode} (${classId}) on course ${course.code}: create 201, teachers ${teachers.status}${teachers.status === 200 ? '' : ` (${why(teachers)})`}, open ${opened.status}${opened.status === 200 ? '' : ` (${why(opened)})`}, enroll ${enrolled.status}${enrolled.status === 201 ? '' : ` (${why(enrolled)})`}`);
   if (!prepOk) throw new Stop();
 
   // 3. The weekly schedule: two slots on the first two working days (else Sunday and Tuesday).
@@ -144,7 +149,7 @@ try {
   const slotB = slots.find((s) => s.startTime === '12:00');
   const readByTeacher = await call('GET', `/api/classes/${classId}/schedule`, tokens.teacher);
   const readByStudent = await call('GET', `/api/classes/${classId}/schedule`, tokens.student);
-  record('3 weekly schedule', saved.status === 200 && slots.length === 2 && Boolean(slotA && slotB) && readByTeacher.status === 200 && readByStudent.status === 403, `PUT ${saved.status} (${slots.length} slots, weekdays ${weekdayA}/${weekdayB}); teacher GET ${readByTeacher.status}; student GET ${readByStudent.status} (expected 403)`);
+  record('3 weekly schedule', saved.status === 200 && slots.length === 2 && Boolean(slotA && slotB) && readByTeacher.status === 200 && readByStudent.status === 403, `PUT ${saved.status}${saved.status === 200 ? '' : ` (${why(saved)})`} (${slots.length} slots, weekdays ${weekdayA}/${weekdayB}); teacher GET ${readByTeacher.status}; student GET ${readByStudent.status} (expected 403)`);
   if (saved.status !== 200) throw new Stop();
 
   // 4. Another class cannot book the branch room at an overlapping time; an adjacent slot is fine.
@@ -176,7 +181,7 @@ try {
   const again = await call('POST', `/api/classes/${classId}/schedule/generate`, tokens.admin, { from, to });
   const lessons = generated.body?.lessons ?? [];
   const genOk = generated.status === 200 && generated.body?.created === expected && lessons.every((l) => l.teacher?.userId === teacherId && [slotA?.id, slotB?.id].includes(l.scheduleId)) && again.status === 200 && again.body?.created === 0 && again.body?.existing === expected;
-  record('6 generation + repeat', genOk, `generate ${generated.status} created=${generated.body?.created} (expected ${expected}) existing=${generated.body?.existing} offDays=${generated.body?.offDays}; first lesson ${lessons[0] ? `${lessons[0].startsAt} (${stamp(lessons[0].startsAt)} UTC+03:00)` : '-'}; repeat ${again.status} created=${again.body?.created} existing=${again.body?.existing}`);
+  record('6 generation + repeat', genOk, `generate ${generated.status}${generated.status === 200 ? '' : ` (${why(generated)})`} created=${generated.body?.created} (expected ${expected}) existing=${generated.body?.existing} offDays=${generated.body?.offDays}; first lesson ${lessons[0] ? `${lessons[0].startsAt} (${stamp(lessons[0].startsAt)} UTC+03:00)` : '-'}; repeat ${again.status} created=${again.body?.created} existing=${again.body?.existing}`);
   if (!genOk || lessons.length === 0) throw new Stop();
 
   // 7. The teacher and the student see the generated lessons.
