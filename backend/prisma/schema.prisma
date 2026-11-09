@@ -146,35 +146,40 @@ model User {
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
   roles                   UserRole[]
-  assignedRoles           UserRole[]          @relation("UserRoleAssignedBy")
+  assignedRoles           UserRole[]             @relation("UserRoleAssignedBy")
   studentProfile          StudentProfile?
   employeeProfile         EmployeeProfile?
   /// Links where this user is the guardian.
-  guardianOf              GuardianStudent[]   @relation("GuardianStudentGuardian")
+  guardianOf              GuardianStudent[]      @relation("GuardianStudentGuardian")
   /// Links where this user is the student.
-  guardians               GuardianStudent[]   @relation("GuardianStudentStudent")
+  guardians               GuardianStudent[]      @relation("GuardianStudentStudent")
   refreshTokens           RefreshToken[]
   verificationTokens      VerificationToken[]
   auditLogs               AuditLog[]
   /// Courses this user created (MOD-04); the link is cleared if the user row goes.
-  coursesCreated          Course[]            @relation("CourseCreatedBy")
+  coursesCreated          Course[]               @relation("CourseCreatedBy")
   /// MOD-05: classes this user created, classes they teach (and teacher
   /// assignments they made), their enrollments as a student and the
   /// enrollments they created.
-  classesCreated          Class[]             @relation("ClassCreatedBy")
-  classTeacherships       ClassTeacher[]      @relation("ClassTeacherTeacher")
-  classTeacherAssignments ClassTeacher[]      @relation("ClassTeacherAssignedBy")
-  enrollments             Enrollment[]        @relation("EnrollmentStudent")
-  enrollmentsCreated      Enrollment[]        @relation("EnrollmentCreatedBy")
+  classesCreated          Class[]                @relation("ClassCreatedBy")
+  classTeacherships       ClassTeacher[]         @relation("ClassTeacherTeacher")
+  classTeacherAssignments ClassTeacher[]         @relation("ClassTeacherAssignedBy")
+  enrollments             Enrollment[]           @relation("EnrollmentStudent")
+  enrollmentsCreated      Enrollment[]           @relation("EnrollmentCreatedBy")
   /// MOD-07: weekly slots this user teaches and the slots they created.
-  classSchedulesTaught    ClassSchedule[]     @relation("ClassScheduleTeacher")
-  classSchedulesCreated   ClassSchedule[]     @relation("ClassScheduleCreatedBy")
+  classSchedulesTaught    ClassSchedule[]        @relation("ClassScheduleTeacher")
+  classSchedulesCreated   ClassSchedule[]        @relation("ClassScheduleCreatedBy")
   /// MOD-06: lessons this user teaches or created, their attendance as a
   /// student and the attendance records they wrote as a teacher.
-  lessonsTaught           Lesson[]            @relation("LessonTeacher")
-  lessonsCreated          Lesson[]            @relation("LessonCreatedBy")
-  attendanceRecords       AttendanceRecord[]  @relation("AttendanceStudent")
-  attendanceRecorded      AttendanceRecord[]  @relation("AttendanceRecordedBy")
+  lessonsTaught           Lesson[]               @relation("LessonTeacher")
+  lessonsCreated          Lesson[]               @relation("LessonCreatedBy")
+  attendanceRecords       AttendanceRecord[]     @relation("AttendanceStudent")
+  attendanceRecorded      AttendanceRecord[]     @relation("AttendanceRecordedBy")
+  /// MOD-08: assignments this user created, their submissions as a student
+  /// and the submissions they graded or returned as a teacher.
+  assignmentsCreated      Assignment[]           @relation("AssignmentCreatedBy")
+  submissions             AssignmentSubmission[] @relation("SubmissionStudent")
+  submissionsGraded       AssignmentSubmission[] @relation("SubmissionGradedBy")
 
   @@index([phone])
   @@index([status])
@@ -526,6 +531,7 @@ model Class {
   /// MOD-07: the weekly slots of this class (deleted with it).
   schedules   ClassSchedule[]
   lessons     Lesson[]
+  assignments Assignment[]
 
   @@index([courseId])
   @@index([status])
@@ -768,6 +774,8 @@ model Lesson {
   teacher      User?               @relation("LessonTeacher", fields: [teacherUserId], references: [id], onDelete: Restrict)
   createdBy    User?               @relation("LessonCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   attendance   AttendanceRecord[]
+  /// MOD-08: assignments linked to this lesson (the link is cleared when the lesson goes).
+  assignments  Assignment[]
 
   @@index([classId, startsAt])
   @@index([teacherUserId, startsAt])
@@ -801,4 +809,113 @@ model AttendanceRecord {
   @@index([studentUserId])
   @@index([recordedById])
   @@map("attendance_records")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-08 — assignments and submissions (roadmap §4g; owner decisions
+// D-R35..D-R40, CH-0114). Subset of master doc 6.7.4-D: no submission files
+// (D-R35 — no `files` table before MOD-15; a submission carries text and/or
+// an https link) and no gradebook entries (D-R36 — MOD-09 reads the graded
+// submissions). Manual assignment states `draft → open → closed` (D-R37); one
+// row per attempt up to `max_attempts` (D-R38); a teacher grades or returns a
+// submission (D-R39). `score <= max_score` spans two tables and is a service
+// rule; the single-table CHECKs are hand-written SQL in the migration.
+// ---------------------------------------------------------------------------
+
+enum AssignmentStatus {
+  draft
+  open
+  closed
+  grading
+  graded
+
+  @@map("assignment_status")
+}
+
+enum SubmissionStatus {
+  submitted
+  graded
+  returned
+
+  @@map("submission_status")
+}
+
+/// A piece of work set for a class, optionally tied to one of its lessons.
+/// `grading`/`graded` are in the enum but unused in the first version
+/// (D-R37 — the grading progress is derived from the submissions).
+model Assignment {
+  id                 String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  classId            String           @map("class_id") @db.Uuid
+  lessonId           String?          @map("lesson_id") @db.Uuid
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  title              Json
+  /// Localized text `{ ar, en?, tr? }` or NULL (CHECK in SQL).
+  instructions       Json?
+  /// > 0 (CHECK in SQL); locked once a submission exists (service rule).
+  maxScore           Decimal          @map("max_score") @db.Decimal(6, 2)
+  /// Weight in the final grade — read by MOD-09 (D-R36); >= 0 (CHECK in SQL).
+  weight             Decimal?         @db.Decimal(5, 2)
+  status             AssignmentStatus @default(draft)
+  /// Set by `publish`; NOT NULL for every status but `draft` (CHECK in SQL).
+  publishedAt        DateTime?        @map("published_at") @db.Timestamptz(6)
+  /// Set by `close`, cleared by `reopen`.
+  closedAt           DateTime?        @map("closed_at") @db.Timestamptz(6)
+  /// Instant (timestamptz); the display zone is the room's branch or the academy's (D-R41).
+  dueAt              DateTime?        @map("due_at") @db.Timestamptz(6)
+  allowLate          Boolean          @default(false) @map("allow_late")
+  /// 0..100 and only with `allow_late` (CHECKs in SQL); applied by MOD-09 (D-R36).
+  latePenaltyPercent Decimal?         @map("late_penalty_percent") @db.Decimal(5, 2)
+  /// >= 1 (CHECK in SQL); a `returned` submission grants one more attempt (D-R39).
+  maxAttempts        Int              @default(1) @map("max_attempts") @db.SmallInt
+  createdById        String?          @map("created_by") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  class       Class                  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lesson      Lesson?                @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  createdBy   User?                  @relation("AssignmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  submissions AssignmentSubmission[]
+
+  @@index([classId, dueAt])
+  @@index([status, dueAt])
+  @@index([lessonId])
+  @@index([createdById])
+  @@map("assignments")
+}
+
+/// One attempt of one student on one assignment (D-R38): text and/or an
+/// https link (D-R35), later graded (score + feedback) or returned for
+/// rework (feedback required) by a teacher (D-R39).
+model AssignmentSubmission {
+  id            String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  assignmentId  String           @map("assignment_id") @db.Uuid
+  studentUserId String           @map("student_user_id") @db.Uuid
+  /// >= 1 (CHECK in SQL); unique per (assignment, student).
+  attemptNo     Int              @default(1) @map("attempt_no") @db.SmallInt
+  submittedAt   DateTime         @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  /// Submitted after `due_at` under `allow_late` (service rule).
+  isLate        Boolean          @default(false) @map("is_late")
+  textAnswer    String?          @map("text_answer")
+  /// https:// only; text or link is required (CHECKs in SQL).
+  linkUrl       String?          @map("link_url")
+  status        SubmissionStatus @default(submitted)
+  /// >= 0 and only for `graded` (CHECKs in SQL); <= max_score is a service rule.
+  score         Decimal?         @db.Decimal(6, 2)
+  /// Required for `returned` (CHECK in SQL).
+  feedback      String?
+  gradedById    String?          @map("graded_by") @db.Uuid
+  /// Set when graded or returned, NULL while `submitted` (CHECK in SQL).
+  gradedAt      DateTime?        @map("graded_at") @db.Timestamptz(6)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation("SubmissionStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  gradedBy   User?      @relation("SubmissionGradedBy", fields: [gradedById], references: [id], onDelete: SetNull)
+
+  @@unique([assignmentId, studentUserId, attemptNo], map: "uq_assignment_submissions_attempt")
+  @@index([studentUserId])
+  @@index([gradedById])
+  @@index([assignmentId, status])
+  @@map("assignment_submissions")
 }
