@@ -2,10 +2,11 @@
 // API-086 with the smallest PATCH for an existing one (no request when nothing
 // changed). Local rules mirror the server: code alphabet, Arabic text first, a
 // whole positive capacity, and only an active branch (or the room's current
-// one). A taken code lands on the code field, an unknown or inactive branch on
-// the branch field; any other refusal shows inside the modal. The parent mounts
-// it per session (KI-049: a form instance kept across sessions would bring back
-// an earlier room's values).
+// one — named from the room itself when the branch list lacks it). A taken code
+// lands on the code field, an unknown or inactive branch on the branch field;
+// any other refusal shows inside the modal. The parent mounts it per session
+// (KI-049: a form instance kept across sessions would bring back an earlier
+// room's values), so the form needs no key of its own.
 import { Alert, App, Col, Form, Input, InputNumber, Modal, Row, Select, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -34,7 +35,7 @@ interface RoomModalProps {
   open: boolean
   /** The room to edit; null creates a new one. */
   room: Room | null
-  /** The branches the picker offers (active ones, plus the room's current branch). */
+  /** The branch list (API-080) the picker offers from: the active ones, plus the room's current branch (see branchOptionsFor). */
   branches: readonly Branch[]
   onClose: () => void
   /** The room as the server returned it; `created` tells a new room from an edit. */
@@ -84,7 +85,7 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
 
   const branchOptions = [
     { value: SITE_OPTION, label: t('rooms.site') },
-    ...branchOptionsFor(branches, room?.branchId ?? null, language).map((option) => ({
+    ...branchOptionsFor(branches, room?.branch ?? null, language).map((option) => ({
       value: option.value,
       label: option.inactive ? `${option.label} (${t('labels.inactive')})` : option.label,
     })),
@@ -104,7 +105,6 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
     >
       {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
       <Form
-        key={room ? `${room.id}:${room.updatedAt}` : 'new'}
         form={form}
         layout="vertical"
         requiredMark={false}

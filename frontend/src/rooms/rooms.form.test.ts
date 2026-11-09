@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import type { RoomBranch } from '../api/rooms'
 import { BRANCH_IDS, makeRoom, THREE_ROOMS, TWO_BRANCHES } from '../test/rooms'
-import { branchOptionsFor, buildCreateRoomInput, EMPTY_ROOM_FORM, filterRooms, planRoomPatch, ROOM_CODE_PATTERN, roomDisplayName, roomFormValuesOf } from './rooms.form'
+import {
+  branchLabel,
+  branchOptionsFor,
+  buildCreateRoomInput,
+  EMPTY_ROOM_FORM,
+  filterRooms,
+  planRoomPatch,
+  ROOM_CODE_PATTERN,
+  roomDisplayName,
+  roomFormValuesOf,
+} from './rooms.form'
+
+/** A room's own branch as RoomDto carries it: id, code and name only. */
+const roomBranchOf = (index: 0 | 1): RoomBranch => {
+  const { id, code, name } = TWO_BRANCHES()[index]!
+  return { id, code, name }
+}
 
 describe('rooms.form (J-F06)', () => {
   it('mirrors the server code alphabet (1–16 of A–Z 0–9 . _ -, starting with a letter or digit)', () => {
@@ -65,9 +82,24 @@ describe('rooms.form (J-F06)', () => {
   it('offers the active branches to a room, plus its current inactive branch (marked), never another inactive one', () => {
     const branches = TWO_BRANCHES()
     expect(branchOptionsFor(branches, null, 'ar')).toEqual([{ value: BRANCH_IDS[0], label: 'MAIN — الفرع الرئيسي', inactive: false }])
-    expect(branchOptionsFor(branches, BRANCH_IDS[1], 'en')).toEqual([
+    expect(branchOptionsFor(branches, roomBranchOf(1), 'en')).toEqual([
       { value: BRANCH_IDS[0], label: 'MAIN — Main branch', inactive: false },
       { value: BRANCH_IDS[1], label: 'NORTH — الفرع الشمالي', inactive: true },
     ])
+    // A listed current branch is never offered twice.
+    expect(branchOptionsFor(branches, roomBranchOf(0), 'ar')).toEqual([{ value: BRANCH_IDS[0], label: 'MAIN — الفرع الرئيسي', inactive: false }])
+  })
+
+  it("falls back to the room's own branch when the list lacks it — a failed load, or an inactive branch the caller cannot list (J-F20)", () => {
+    // API-080 failed: an empty list still names the room's branch from RoomDto (the picker would show the raw id otherwise).
+    expect(branchOptionsFor([], roomBranchOf(0), 'ar')).toEqual([{ value: BRANCH_IDS[0], label: 'MAIN — الفرع الرئيسي', inactive: false }])
+    // Without branches.manage the list holds active branches only: the room's inactive branch comes last, unmarked (RoomDto has no state).
+    expect(branchOptionsFor([TWO_BRANCHES()[0]!], roomBranchOf(1), 'en')).toEqual([
+      { value: BRANCH_IDS[0], label: 'MAIN — Main branch', inactive: false },
+      { value: BRANCH_IDS[1], label: 'NORTH — الفرع الشمالي', inactive: false },
+    ])
+    // A room at the academy's own site needs no fallback.
+    expect(branchOptionsFor([], null, 'ar')).toEqual([])
+    expect(branchLabel(roomBranchOf(0), 'en')).toBe('MAIN — Main branch')
   })
 })

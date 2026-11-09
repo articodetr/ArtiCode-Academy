@@ -15,23 +15,27 @@ interface Call {
   body: unknown
 }
 
-/** GET /api/rooms serves `state.current` (re-read on every call), GET /api/branches the given branches; writes answer with `writes()`. */
-function mockRoomsApi(initial: Room[], writes: (method: string, url: string, body: unknown) => Response, branches: Branch[] = TWO_BRANCHES()) {
+/**
+ * GET /api/rooms serves `state.current` (re-read on every call), GET /api/branches the given branches (`null`: the
+ * branch list fails with 503); writes answer with `writes()`.
+ */
+function mockRoomsApi(initial: Room[], writes: (method: string, url: string, body: unknown) => Response, branches: Branch[] | null = TWO_BRANCHES()) {
   const state = { current: initial }
   const calls: Call[] = []
   mockFetch((url, init) => {
     const method = init?.method ?? 'GET'
     const body = init?.body ? JSON.parse(String(init.body)) : undefined
     calls.push({ method, url, body })
-    if (method === 'GET' && url === '/api/branches') return jsonResponse(200, { items: branches })
+    if (method === 'GET' && url === '/api/branches') return branches ? jsonResponse(200, { items: branches }) : jsonResponse(503, { statusCode: 503, message: 'down' })
     if (method === 'GET') return jsonResponse(200, { items: state.current })
     return writes(method, url, body)
   })
   return { calls, state }
 }
 
-function renderManager(permissions: string[] = SCHEDULE_MANAGER_PERMISSIONS) {
-  renderWithProviders(<RoomsManager />, { auth: makeAuth({ user: makeUser({ permissions }) }), route: '/settings/rooms' })
+/** The tab is management-only (the route and SettingsPage gate it on schedule.manage — J-F20), so it renders for a holder of the key. */
+function renderManager() {
+  renderWithProviders(<RoomsManager />, { auth: makeAuth({ user: makeUser({ permissions: SCHEDULE_MANAGER_PERMISSIONS }) }), route: '/settings/rooms' })
 }
 
 function bodyRows() {
@@ -43,11 +47,13 @@ const codesShown = () => bodyRows().map((row) => within(row).getByText(/^(LAB-1|
 const writesOf = (calls: Call[]) => calls.filter((call) => call.method !== 'GET')
 const roomReads = (calls: Call[]) => calls.filter((call) => call.method === 'GET' && call.url.startsWith('/api/rooms')).map((call) => call.url)
 
+/** Waits until the open Select list draws the option with the given text (a table cell with the same text does not count). */
+const findOption = (text: string) => screen.findByText(text, { selector: '.ant-select-item-option-content' })
+
 /** Opens an antd Select by its accessible name and picks the option with the given text. */
 async function pick(label: string, option: string, scope: Pick<typeof screen, 'getByLabelText'> = screen) {
   fireEvent.mouseDown(scope.getByLabelText(label))
-  const item = (await screen.findAllByText(option)).map((node) => node.closest('.ant-select-item-option-content')).find((node): node is HTMLElement => node !== null)
-  fireEvent.click(item!)
+  fireEvent.click(await findOption(option))
 }
 
 describe('RoomsManager (J-F06)', () => {
@@ -72,19 +78,6 @@ describe('RoomsManager (J-F06)', () => {
     expect(screen.getByLabelText(`${ar.rooms.actions.activate}: R-2`)).toBeEnabled()
     expect(screen.getByLabelText(`${ar.rooms.actions.delete}: HALL`)).toBeEnabled()
     expect(screen.getByLabelText(ar.rooms.columns.status)).toBeInTheDocument()
-  })
-
-  it('is read-only without schedule.manage: no add button, no row actions, no status filter', async () => {
-    mockRoomsApi(THREE_ROOMS().filter((room) => room.isActive), () => jsonResponse(500, {}))
-    renderManager(['courses.read'])
-
-    expect(await screen.findByText('HALL')).toBeInTheDocument()
-    expect(screen.getByText(ar.rooms.readOnlyHint)).toBeInTheDocument()
-    expect(screen.queryByText(ar.rooms.add)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(`${ar.common.edit}: HALL`)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(`${ar.rooms.actions.delete}: HALL`)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(ar.rooms.columns.status)).not.toBeInTheDocument()
-    expect(screen.getByLabelText(ar.rooms.columns.kind)).toBeInTheDocument()
   })
 
   it('creates a room through the modal (POST with the normalised, minimal body) and re-reads the list', async () => {
@@ -119,9 +112,10 @@ describe('RoomsManager (J-F06)', () => {
     await userEvent.type(within(dialog).getByLabelText(ar.rooms.fields.code), 'V1')
     await pick(ar.rooms.fields.kind, ar.rooms.kinds.virtual, within(dialog))
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.rooms.fields.branch))
-    // The inactive NORTH branch is not offered; MAIN is.
+    const main = await findOption('MAIN — الفرع الرئيسي')
+    // Only now that the list is drawn does the absence mean something: MAIN is offered, the inactive NORTH branch is not.
     expect(screen.queryByText(/NORTH/)).not.toBeInTheDocument()
-    fireEvent.click((await screen.findAllByText('MAIN — الفرع الرئيسي')).map((node) => node.closest('.ant-select-item-option-content')).find((node) => node !== null)!)
+    fireEvent.click(main)
     fireEvent.click(within(dialog).getByLabelText(ar.rooms.fields.isActive))
     fireEvent.click(within(dialog).getByText(ar.rooms.create).closest('button')!)
 
@@ -148,6 +142,33 @@ describe('RoomsManager (J-F06)', () => {
     fireEvent.click(within(dialog).getByText(ar.common.save).closest('button')!)
     expect(await screen.findByText(ar.rooms.nothingChanged)).toBeInTheDocument()
     expect(writesOf(calls)).toHaveLength(1)
+  })
+
+  it("names a room's own branch in the picker when the branch list failed — never its raw id — and saves only what changed (J-F20)", async () => {
+    const rooms = THREE_ROOMS()
+    const { calls } = mockRoomsApi(rooms, (_method, _url, body) => jsonResponse(200, { ...rooms[2]!, ...(body as object), updatedAt: '2026-11-09T12:00:00.000Z' }), null)
+    renderManager()
+    await screen.findByText('HALL')
+    expect(await screen.findByText(ar.rooms.branchesFailed)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText(`${ar.common.edit}: HALL`))
+    const dialog = (await screen.findByText('تعديل القاعة «القاعة الكبرى»')).closest('[role="dialog"]') as HTMLElement
+    // The fallback comes from RoomDto.branch: code and name, as the table shows them.
+    expect(within(dialog).getByText('MAIN — الفرع الرئيسي')).toBeInTheDocument()
+    expect(within(dialog).queryByText(BRANCH_IDS[0])).not.toBeInTheDocument()
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.rooms.fields.branch))
+    const fallback = await findOption('MAIN — الفرع الرئيسي')
+    const offered = [...fallback.closest('.ant-select-dropdown')!.querySelectorAll('.ant-select-item-option-content')].map((node) => node.textContent)
+    expect(offered).toEqual([ar.rooms.site, 'MAIN — الفرع الرئيسي'])
+    fireEvent.click(fallback)
+
+    const capacity = within(dialog).getByLabelText(ar.rooms.fields.capacity)
+    await userEvent.clear(capacity)
+    await userEvent.type(capacity, '90')
+    fireEvent.click(within(dialog).getByText(ar.common.save).closest('button')!)
+    expect(await screen.findByText(ar.rooms.saved)).toBeInTheDocument()
+    // Keeping the branch sends no branchId.
+    expect(writesOf(calls)).toEqual([{ method: 'PATCH', url: `/api/rooms/${ROOM_IDS[2]}`, body: { capacity: 90 } }])
   })
 
   it('puts a taken code on the code field and keeps the modal open', async () => {
