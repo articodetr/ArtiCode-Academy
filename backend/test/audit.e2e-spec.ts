@@ -3,7 +3,10 @@
 // database; since CH-0051 (MOD-04-T07 backend half, task C2) also every writer
 // route of MOD-04 T02..T04 (levels, courses, syllabus); since CH-0104
 // (MOD-06-T05) also every writer route of MOD-06 T02/T03 (lessons,
-// attendance). Skipped when no database is reachable. Fixtures carry a unique suffix and are deleted at the
+// attendance); since CH-0109 (the Stage 3 gate, task C5) also every writer
+// route of MOD-05 T02..T04 (classes, class teachers, enrollments) and of
+// MOD-07 T02/T03/T05 (rooms, the weekly schedule, lesson generation).
+// Skipped when no database is reachable. Fixtures carry a unique suffix and are deleted at the
 // end (their audit rows stay with a NULL actor — the log is append-only by
 // design, KI-032).
 //
@@ -17,6 +20,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadDotenv } from 'dotenv';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { readSettings } from '../src/academy/academy.settings.js';
 import { AppModule } from '../src/app.module.js';
 import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { assertNoSecrets } from '../src/audit/audit.service.js';
@@ -40,11 +44,17 @@ const LEVELS = '/api/levels';
 const COURSES = '/api/courses';
 const CLASSES = '/api/classes';
 const LESSONS = '/api/lessons';
+const ROOMS = '/api/rooms';
 /** MOD-04 fixture codes (upper case, within LEVEL_CODE_PATTERN / COURSE_CODE_PATTERN). */
 const LEVEL_PREFIX = `T${RUN.toUpperCase()}`;
 const COURSE_PREFIX = `C${RUN.toUpperCase()}`;
-/** MOD-06 fixture class code (the class and its enrollment are created with Prisma — MOD-05 events are not this suite's subject). */
+/** Class codes: the MOD-06 fixture class `-A` (created with Prisma) and the MOD-05/MOD-07 classes `-B`/`-C` created through the API (CH-0109). */
 const CLASS_PREFIX = `L${RUN.toUpperCase()}`;
+/** MOD-07 fixture room codes (ROOM_CODE_PATTERN = LEVEL_CODE_PATTERN: 16 characters at most). */
+const ROOM_PREFIX = `R${RUN.toUpperCase()}`;
+/** A past calendar week (Sunday to Saturday): every weekday occurs once, so one weekly slot generates exactly one lesson. */
+const GENERATION_FROM = '2026-02-01';
+const GENERATION_TO = '2026-02-07';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 async function canConnect(url: string): Promise<boolean> {
@@ -97,6 +107,10 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   const mod04 = { levelA: '', levelB: '', courseA: '', courseB: '' };
   /** MOD-06 fixtures: the class (Prisma, on courseA) and the lessons created through the API by the admin. */
   const mod06 = { classId: '', classCode: '', lesson1: '', lesson2: '' };
+  /** MOD-05 fixtures created through the API by the admin (CH-0109): the class `-B` on courseA and the enrollment of `enrolled` in it. */
+  const mod05 = { classId: '', enrollmentId: '' };
+  /** MOD-07 fixtures created through the API by the admin (CH-0109): the room, the weekly slot of class `-B`, the lesson generated from it, and the slot's weekday (the academy's first working day). */
+  const mod07 = { roomId: '', slotId: '', lessonId: '', weekday: 0 };
 
   // E-mail addresses are stored lower-case (CHECK ck_users_email_lowercase).
   const email = (name: string) => `${name.toLowerCase()}-${RUN}@example.test`;
@@ -183,16 +197,21 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     await createUser('admin', [superuser]);
     await createUser('auditor', [auditor]);
     await createUser('plain');
-    // Enrolled in the MOD-06 class; holds the seeded student role, never acts (the name "student" belongs to the T02 block).
+    // Enrolled in the MOD-06 class and in the MOD-05 class; holds the seeded student role, never acts (the name "student" belongs to the T02 block).
     await createUser('enrolled', [(await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } })).id]);
+    // Lead teacher of the MOD-05 class; holds the seeded teacher role, never acts (the T02 "teacher" is suspended by the T06 block).
+    await createUser('instructor', [(await prisma.role.findUniqueOrThrow({ where: { key: 'teacher' }, select: { id: true } })).id]);
     for (const name of ['admin', 'auditor', 'plain']) tokens[name] = await login(email(name));
+    const academy = await prisma.academy.findFirstOrThrow({ select: { settings: true } });
+    mod07.weekday = (readSettings(academy.settings).scheduling.workingDays ?? [0])[0]!;
   });
 
   afterAll(async () => {
     try {
-      // MOD-06 first: the enrollment (Restrict on the class), then the class (its lessons and attendance cascade) — a course is Restrict on classes.
+      // MOD-05/MOD-06 first: the enrollments (Restrict on the class), then the classes (their teachers, slots, lessons and attendance cascade) — a course is Restrict on classes, a room on slots and lessons.
       await prisma.enrollment.deleteMany({ where: { class: { code: { startsWith: CLASS_PREFIX } } } });
       await prisma.class.deleteMany({ where: { code: { startsWith: CLASS_PREFIX } } });
+      await prisma.room.deleteMany({ where: { code: { startsWith: ROOM_PREFIX } } });
       // Courses next: their level is Restrict.
       await prisma.course.deleteMany({ where: { code: { startsWith: COURSE_PREFIX } } });
       await prisma.level.deleteMany({ where: { code: { startsWith: LEVEL_PREFIX } } });
@@ -638,9 +657,175 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     expect(await since(m)).toEqual([]);
   });
 
+  // MOD-05 and MOD-07 (CH-0109 — the Stage 3 gate, task C5): every writer route of MOD-05 T02..T04 and MOD-07 T02/T03/T05 once.
+
+  it('MOD-05-T02/T03/T04 — class create, update, teachers, open, enrollment, withdrawal and planned-class delete record one event each', async () => {
+    const admin = fx['admin']!;
+    const classEvent = (action: string, entityType: 'classes' | 'enrollments', entityId: string, metadata: Record<string, unknown>): ExpectedEvent => ({
+      action,
+      actorUserId: admin,
+      entityType,
+      entityId,
+      metadata,
+    });
+    const codeB = `${CLASS_PREFIX}-B`;
+    const codeC = `${CLASS_PREFIX}-C`;
+
+    let m = await mark();
+    const b = await api().post(CLASSES).set(bearer('admin')).send({ courseId: mod04.courseA, code: codeB, name: { ar: 'فصل C5 ب' }, capacity: 3 }).expect(201);
+    mod05.classId = b.body.id;
+    await expectEvents(m, [classEvent('classes.created', 'classes', mod05.classId, { code: codeB, courseId: mod04.courseA, status: 'planned' })]);
+
+    m = await mark();
+    await api().patch(`${CLASSES}/${mod05.classId}`).set(bearer('admin')).send({ capacity: 4 }).expect(200);
+    await expectEvents(m, [classEvent('classes.updated', 'classes', mod05.classId, { code: codeB, fields: ['capacity'] })]);
+
+    m = await mark();
+    await api().put(`${CLASSES}/${mod05.classId}/teachers`).set(bearer('admin')).send({ teachers: [{ userId: fx['instructor'], role: 'lead' }] }).expect(200);
+    await expectEvents(m, [
+      classEvent('classes.teachers.changed', 'classes', mod05.classId, { code: codeB, added: [{ userId: fx['instructor'], role: 'lead' }], removed: [], roleChanged: [] }),
+    ]);
+
+    m = await mark();
+    await api().post(`${CLASSES}/${mod05.classId}/status`).set(bearer('admin')).send({ action: 'open' }).expect(200);
+    await expectEvents(m, [classEvent('classes.status.changed', 'classes', mod05.classId, { code: codeB, action: 'open', from: 'planned', to: 'open' })]);
+
+    m = await mark();
+    const enrolled = await api().post(`${CLASSES}/${mod05.classId}/enrollments`).set(bearer('admin')).send({ studentId: fx['enrolled'] }).expect(201);
+    mod05.enrollmentId = enrolled.body.id;
+    await expectEvents(m, [
+      classEvent('enrollments.created', 'enrollments', mod05.enrollmentId, {
+        classId: mod05.classId,
+        classCode: codeB,
+        studentUserId: fx['enrolled'],
+        status: 'active',
+        source: 'admin',
+      }),
+    ]);
+
+    m = await mark();
+    await api().post(`/api/enrollments/${mod05.enrollmentId}/status`).set(bearer('admin')).send({ action: 'withdraw', reason: 'C5 coverage' }).expect(200);
+    await expectEvents(m, [
+      classEvent('enrollments.status.changed', 'enrollments', mod05.enrollmentId, {
+        classId: mod05.classId,
+        classCode: codeB,
+        studentUserId: fx['enrolled'],
+        action: 'withdraw',
+        from: 'active',
+        to: 'withdrawn',
+        reason: 'C5 coverage',
+      }),
+    ]);
+
+    // A planned class without enrollments is the only deletable one: created and deleted in one step, two events.
+    m = await mark();
+    const c = await api().post(CLASSES).set(bearer('admin')).send({ courseId: mod04.courseA, code: codeC, name: { ar: 'فصل C5 ج' }, capacity: 1 }).expect(201);
+    await api().delete(`${CLASSES}/${c.body.id}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [
+      classEvent('classes.created', 'classes', c.body.id, { code: codeC, courseId: mod04.courseA, status: 'planned' }),
+      classEvent('classes.deleted', 'classes', c.body.id, { code: codeC }),
+    ]);
+  });
+
+  it('MOD-07-T02/T03/T05 — room create and update, weekly schedule, lesson generation and room delete record one event each', async () => {
+    const admin = fx['admin']!;
+    const scheduleEvent = (action: string, entityType: 'rooms' | 'classes', entityId: string, metadata: Record<string, unknown>): ExpectedEvent => ({
+      action,
+      actorUserId: admin,
+      entityType,
+      entityId,
+      metadata,
+    });
+    const codeB = `${CLASS_PREFIX}-B`;
+    const codeR1 = `${ROOM_PREFIX}-1`;
+    const codeR2 = `${ROOM_PREFIX}-2`;
+
+    let m = await mark();
+    const r1 = await api().post(ROOMS).set(bearer('admin')).send({ code: codeR1, name: { ar: 'قاعة C5' }, capacity: 10 }).expect(201);
+    mod07.roomId = r1.body.id;
+    await expectEvents(m, [scheduleEvent('rooms.created', 'rooms', mod07.roomId, { code: codeR1, branchId: null, kind: 'classroom' })]);
+
+    m = await mark();
+    await api().patch(`${ROOMS}/${mod07.roomId}`).set(bearer('admin')).send({ capacity: 12 }).expect(200);
+    await expectEvents(m, [scheduleEvent('rooms.updated', 'rooms', mod07.roomId, { code: codeR1, fields: ['capacity'] })]);
+
+    // One weekly slot of the MOD-05 class (open, lead = instructor) in the room on the academy's first working day; no slot teacher = the lead at generation.
+    m = await mark();
+    const saved = await api()
+      .put(`${CLASSES}/${mod05.classId}/schedule`)
+      .set(bearer('admin'))
+      .send({ slots: [{ weekday: mod07.weekday, startTime: '09:00', endTime: '10:00', roomId: mod07.roomId, effectiveFrom: '2026-01-01' }] });
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    mod07.slotId = saved.body.slots[0].id;
+    await expectEvents(m, [scheduleEvent('classes.schedule.changed', 'classes', mod05.classId, { code: codeB, added: 1, updated: 0, removed: 0, slots: 1 })]);
+
+    // The generation of a past week: the slot occurs once, so one lesson in one lessons.created batch (API-092 shares the MOD-06 event).
+    m = await mark();
+    const generated = await api().post(`${CLASSES}/${mod05.classId}/schedule/generate`).set(bearer('admin')).send({ from: GENERATION_FROM, to: GENERATION_TO });
+    expect(generated.status, JSON.stringify(generated.body).slice(0, 400)).toBe(200);
+    expect(generated.body).toMatchObject({ slots: 1, occurrences: 1, created: 1, existing: 0 });
+    mod07.lessonId = generated.body.lessons[0].id;
+    await expectEvents(m, [
+      scheduleEvent('lessons.created', 'classes', mod05.classId, { code: codeB, classId: mod05.classId, count: 1, lessonIds: [mod07.lessonId] }),
+    ]);
+
+    // A room without slots or lessons is the only deletable one: created and deleted in one step, two events.
+    m = await mark();
+    const r2 = await api().post(ROOMS).set(bearer('admin')).send({ code: codeR2 }).expect(201);
+    await api().delete(`${ROOMS}/${r2.body.id}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [
+      scheduleEvent('rooms.created', 'rooms', r2.body.id, { code: codeR2, branchId: null, kind: 'classroom' }),
+      scheduleEvent('rooms.deleted', 'rooms', r2.body.id, { code: codeR2, branchId: null }),
+    ]);
+  });
+
+  it('MOD-05/MOD-07 — rejected requests and writes without a difference record nothing', async () => {
+    const klass = `${CLASSES}/${mod05.classId}`;
+    const codeB = `${CLASS_PREFIX}-B`;
+    const lead = { userId: fx['instructor'], role: 'lead' };
+    const slot = { id: mod07.slotId, weekday: mod07.weekday, startTime: '09:00', endTime: '10:00', roomId: mod07.roomId, effectiveFrom: '2026-01-01' };
+    const newClass = { courseId: mod04.courseA, name: { ar: 'فصل مرفوض' }, capacity: 1 };
+
+    const m = await mark();
+    // MOD-05 — validation, constraint, permission and business-rule refusals.
+    expect((await api().post(CLASSES).set(bearer('admin')).send({ ...newClass, code: codeB }).expect(409)).body.code).toBe('class_code_taken');
+    expect((await api().post(CLASSES).set(bearer('admin')).send({ ...newClass, code: `${CLASS_PREFIX}-X`, startsOn: '2026-12-01', endsOn: '2026-11-01' }).expect(400)).body.code).toBe(
+      'date_range_invalid',
+    );
+    expect((await api().post(CLASSES).set(bearer('plain')).send({ ...newClass, code: `${CLASS_PREFIX}-X` }).expect(403)).body.code).toBe('permission_denied');
+    expect((await api().patch(klass).set(bearer('admin')).send({}).expect(400)).body.code).toBe('nothing_to_update');
+    expect((await api().post(`${klass}/status`).set(bearer('admin')).send({ action: 'open' }).expect(409)).body.code).toBe('invalid_transition');
+    expect((await api().delete(klass).set(bearer('admin')).expect(409)).body.code).toBe('class_not_deletable');
+    expect((await api().put(`${klass}/teachers`).set(bearer('admin')).send({ teachers: [lead, { userId: fx['plain'], role: 'lead' }] }).expect(400)).body.code).toBe('teachers_invalid');
+    expect((await api().put(`${klass}/teachers`).set(bearer('admin')).send({ teachers: [lead, { userId: fx['plain'], role: 'assistant' }] }).expect(422)).body.code).toBe('not_a_teacher');
+    expect((await api().post(`${klass}/enrollments`).set(bearer('admin')).send({ studentId: fx['plain'] }).expect(422)).body.code).toBe('not_a_student');
+    expect((await api().post(`${klass}/enrollments`).set(bearer('admin')).send({ studentId: fx['enrolled'] }).expect(409)).body.code).toBe('already_enrolled');
+    expect((await api().post(`/api/enrollments/${mod05.enrollmentId}/status`).set(bearer('admin')).send({ action: 'withdraw' }).expect(409)).body.code).toBe('invalid_transition');
+    await api().post(`${klass}/enrollments`).set(bearer('plain')).send({ studentId: fx['enrolled'] }).expect(403);
+    // MOD-07 — the same four kinds.
+    expect((await api().post(ROOMS).set(bearer('admin')).send({ code: `${ROOM_PREFIX}-1` }).expect(409)).body.code).toBe('room_code_taken');
+    expect((await api().delete(`${ROOMS}/${mod07.roomId}`).set(bearer('admin')).expect(409)).body.code).toBe('room_in_use');
+    expect((await api().put(`${klass}/schedule`).set(bearer('admin')).send({ slots: [{ ...slot, id: NIL_ID }] }).expect(400)).body.code).toBe('schedule_invalid');
+    expect((await api().put(`${klass}/schedule`).set(bearer('admin')).send({ slots: [slot, { ...slot, id: undefined, startTime: '09:30', endTime: '10:30' }] }).expect(409)).body.code).toBe(
+      'schedule_conflict',
+    );
+    expect((await api().put(`${klass}/schedule`).set(bearer('admin')).send({ slots: [{ ...slot, roomId: NIL_ID }] }).expect(404)).body.code).toBe('room_not_found');
+    expect((await api().put(`${klass}/schedule`).set(bearer('admin')).send({ slots: [{ ...slot, teacherUserId: fx['plain'] }] }).expect(422)).body.code).toBe('teacher_not_assigned');
+    await api().put(`${klass}/schedule`).set(bearer('plain')).send({ slots: [] }).expect(403);
+    await api().post(`${klass}/schedule/generate`).set(bearer('admin')).send({ from: GENERATION_TO, to: GENERATION_FROM }).expect(400);
+    await api().post(`${klass}/schedule/generate`).set(bearer('plain')).send({ from: GENERATION_FROM, to: GENERATION_TO }).expect(403);
+    // Writes identical to the stored state: 200, nothing written, nothing recorded.
+    await api().patch(klass).set(bearer('admin')).send({ capacity: 4 }).expect(200);
+    await api().put(`${klass}/teachers`).set(bearer('admin')).send({ teachers: [lead] }).expect(200);
+    await api().patch(`${ROOMS}/${mod07.roomId}`).set(bearer('admin')).send({ capacity: 12 }).expect(200);
+    await api().put(`${klass}/schedule`).set(bearer('admin')).send({ slots: [slot] }).expect(200);
+    expect((await api().post(`${klass}/schedule/generate`).set(bearer('admin')).send({ from: GENERATION_FROM, to: GENERATION_TO }).expect(200)).body).toMatchObject({ created: 0, existing: 1 });
+    expect(await since(m)).toEqual([]);
+  });
+
   it('filters by actor, action prefix (literal, `_` is no wildcard) and entity — audit.read alone suffices', async () => {
     const admin = fx['admin']!;
-    const byActor = await items('auditor', `actorUserId=${admin}`);
+    const byActor = await items('auditor', `actorUserId=${admin}&limit=200`);
     expect(byActor.items.length).toBeGreaterThanOrEqual(17);
     expect(byActor.items.map((item) => item.id)).toEqual(await dbIds({ actorUserId: admin }));
     expect(byActor.items.every((item) => item.actorUserId === admin)).toBe(true);
