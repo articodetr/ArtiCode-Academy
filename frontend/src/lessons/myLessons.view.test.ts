@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayEndInstant, dayStartInstant } from '../lessons/lessons.format'
+import { dayEndInstant, dayStartInstant } from './lessons.format'
 import { CHILD_ONE, CHILD_TWO, SELF_STUDENT, makeMyLesson } from '../test/myLessons'
 import {
   attendanceCellOf,

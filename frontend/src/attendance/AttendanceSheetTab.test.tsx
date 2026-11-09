@@ -9,6 +9,7 @@ import { LESSON_ID } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { formatDateTime } from '../users/users.format'
 import { AttendanceSheetTab } from './AttendanceSheetTab'
+import { ATTENDANCE_STATUS_COLORS } from './attendance.format'
 
 const [SARA, YOUSEF, , OMAR] = STUDENT_IDS
 
@@ -67,7 +68,7 @@ describe('AttendanceSheetTab', () => {
     const layla = row('ليلى المنسحبة')
     expect(within(layla).getByText(ar.attendance.enrollment.withdrawn)).toBeInTheDocument()
     expect(within(layla).getByText(ar.attendance.readOnlyRow)).toBeInTheDocument()
-    expect(within(layla).getByText(ar.lessons.attendance.present)).toBeInTheDocument()
+    expect(within(layla).getByText(ar.lessons.attendance.present)).toHaveClass(`ant-tag-${ATTENDANCE_STATUS_COLORS.present}`)
     expect(within(layla).queryByLabelText(ar.lessons.attendance.absent)).not.toBeInTheDocument()
 
     expect(within(row('عمر الخريج')).getByText(ar.attendance.enrollment.completed)).toBeInTheDocument()

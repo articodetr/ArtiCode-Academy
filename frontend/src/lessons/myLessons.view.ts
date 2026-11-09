@@ -8,7 +8,7 @@ import type { MyClassItem, MyClassRelation, MyClassStudent } from '../api/enroll
 import type { LessonSortOrder, LessonStatus } from '../api/lessons'
 import type { ListMyLessonsParams, MyLessonItem } from '../api/myLessons'
 import type { LocalizedLabel } from '../api/users'
-import { dayEndInstant, dayStartInstant, todayIso } from '../lessons/lessons.format'
+import { dayEndInstant, dayStartInstant, todayIso } from './lessons.format'
 
 export const MY_LESSON_VIEWS = ['upcoming', 'past', 'range'] as const
 export type MyLessonView = (typeof MY_LESSON_VIEWS)[number]
@@ -114,12 +114,4 @@ export function attendanceCellOf(item: Pick<MyLessonItem, 'attendance' | 'status
   const start = new Date(item.startsAt).getTime()
   if (!Number.isNaN(start) && start > now.getTime()) return { kind: 'not_started' }
   return { kind: 'not_recorded' }
-}
-
-/** Tag colors of the four statuses — the same as the attendance summary of the lesson drawer (J-F09). */
-export const ATTENDANCE_COLORS: Readonly<Record<AttendanceStatus, string>> = {
-  present: 'green',
-  absent: 'red',
-  late: 'gold',
-  excused: 'blue',
 }
