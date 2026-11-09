@@ -16,6 +16,7 @@ import {
   sameMonth,
   startOfWeek,
   weekDatesOf,
+  weekdayInWeek,
   weekdayOf,
   zonedInstant,
 } from './timetable.dates'
@@ -43,6 +44,19 @@ describe('calendar dates', () => {
     expect(startOfWeek('2026-11-07', 6)).toBe('2026-11-07')
     expect(startOfWeek('2026-11-06', 1)).toBe('2026-11-02')
     expect(weekDatesOf('2026-11-06', 6)).toEqual(['2026-10-31', '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'])
+  })
+
+  it('finds a weekday inside the week that holds a date, never in the next or the previous week (J-F18)', () => {
+    // The week of Sunday 8 – Saturday 14 November 2026.
+    expect(weekdayInWeek('2026-11-12', 2, 0)).toBe('2026-11-10')
+    expect(weekdayInWeek('2026-11-10', 2, 0)).toBe('2026-11-10')
+    // Saturday ends that week: its Monday is the 9th, not the nearer 16th.
+    expect(weekdayInWeek('2026-11-14', 1, 0)).toBe('2026-11-09')
+    // A week from Saturday 7 to Friday 13: Friday is its last day.
+    expect(weekdayInWeek('2026-11-07', 5, 6)).toBe('2026-11-13')
+    expect(weekdayInWeek('2026-11-13', 6, 6)).toBe('2026-11-07')
+    // Across a month: Tuesday 1 December sits in the week from Monday 30 November, whose Sunday is the 6th.
+    expect(weekdayInWeek('2026-12-01', 0, 1)).toBe('2026-12-06')
   })
 
   it('lays a month out in rows from the first day of the week, padding with null', () => {

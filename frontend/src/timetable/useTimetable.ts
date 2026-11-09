@@ -4,11 +4,15 @@
 // API-090/091), so every shown date is read on its own: the academy schedule
 // once per date with that date's `weekday` (the answer holds exactly that
 // day's slots), «my schedule» once per date (the answer holds every weekday;
-// the date's own slots are kept). Answers are kept per (mode, filters, date)
-// until `reload`; a batch still running when the inputs change is aborted
-// (its dates are asked again while still shown); a disabled reading never
-// calls the server. Access stays with the server: nothing here filters by
-// permission or ownership.
+// the date's own slots are kept). Since J-F18 (the owner's notes on PR #46):
+// each answer is pinned the moment it arrives, so a slow date never holds the
+// others back; answers are kept per request path until `reload`; a request the
+// new inputs no longer ask is aborted while one they still ask keeps running,
+// so nothing is ever sent twice; and a failure belongs to the inputs it
+// happened under — when the shown requests change, every failure is forgotten
+// and a failed date still shown is asked again (once per change, never in a
+// loop). A disabled reading never calls the server. Access stays with the
+// server: nothing here filters by permission or ownership.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { academySchedulePath, getAcademySchedule, getMySchedule, mySchedulePath } from '../api/timetable'
 import type { AcademyScheduleParams } from '../api/timetable'
@@ -47,11 +51,30 @@ export function requestKey(mode: TimetableMode, filters: AcademyFilters, date: C
 }
 
 interface Store {
+  /** Every answer by request key, kept until `reload`. */
   results: ReadonlyMap<string, TimetableEntry[]>
-  errors: ReadonlyMap<string, unknown>
+  /** The failures under the current inputs, by request key (forgotten when the inputs change). */
+  failures: ReadonlyMap<string, unknown>
 }
 
-const EMPTY_STORE: Store = { results: new Map(), errors: new Map() }
+const EMPTY_STORE: Store = { results: new Map(), failures: new Map() }
+
+type Outcome = { entries: TimetableEntry[] } | { error: unknown }
+
+/** The store with one more outcome: an answer is kept for good, a failure until the inputs change. */
+function pin(store: Store, key: string, outcome: Outcome): Store {
+  if ('error' in outcome) return { results: store.results, failures: new Map(store.failures).set(key, outcome.error) }
+  const failures = new Map(store.failures)
+  failures.delete(key)
+  return { results: new Map(store.results).set(key, outcome.entries), failures }
+}
+
+/** A request still running. */
+interface Flight {
+  controller: AbortController
+  /** The `reload` round it belongs to: a reload aborts every older request. */
+  round: number
+}
 
 export interface TimetableData {
   /** The entries of every requested date that has been answered. */
@@ -61,7 +84,7 @@ export interface TimetableData {
   /** True when a requested date failed; `error` is the first failure. */
   failed: boolean
   error: unknown
-  /** Forgets every answer and failure, so the shown dates are read again. */
+  /** Forgets every answer and failure and aborts what is running, so the shown dates are read again. */
   reload: () => void
 }
 
@@ -70,38 +93,73 @@ const NO_ENTRIES: TimetableEntry[] = []
 
 export function useTimetable(mode: TimetableMode, filters: AcademyFilters, dates: readonly CalendarDate[], enabled: boolean): TimetableData {
   const [store, setStore] = useState<Store>(EMPTY_STORE)
+  const [round, setRound] = useState(0)
   const requests = dates.map((date) => ({ date, key: requestKey(mode, filters, date) }))
   // A date the weekday filter excludes is empty at once: nothing to ask, nothing to wait for.
-  const missing = enabled ? requests.filter(({ key }) => !key.includes(SKIPPED) && !store.results.has(key) && !store.errors.has(key)) : []
+  const asked = enabled ? requests.filter(({ key }) => !key.includes(SKIPPED)) : []
+  const inputs = asked.map(({ key }) => key).join(',')
+
+  // A failure belongs to the inputs it happened under. When the shown requests
+  // change (another week or day, a filter, the mode, enabled), every failure is
+  // forgotten while rendering — React's "adjust state when an input changes",
+  // so no render shows a failure of other inputs — and a failed date still
+  // shown is asked again. Under unchanged inputs a failure stays until `reload`.
+  const [inputsOfFailures, setInputsOfFailures] = useState(inputs)
+  if (inputsOfFailures !== inputs) {
+    setInputsOfFailures(inputs)
+    setStore((current) => (current.failures.size === 0 ? current : { results: current.results, failures: new Map() }))
+  }
+
+  const missing = asked.filter(({ key }) => !store.results.has(key) && !store.failures.has(key))
   const missingKey = missing.map(({ key }) => key).join(',')
-  // The batch effect runs when the missing keys change; the keys name every input
-  // (mode, filters, dates), and the batch reads them from here.
+  // The request effect runs when the missing keys (or the reload round) change;
+  // the keys name every input (mode, filters, dates), and it reads them from here.
   const latest = useRef({ mode, filters, missing })
   useEffect(() => {
     latest.current = { mode, filters, missing }
   })
+  /** The requests still running, by key. */
+  const flights = useRef(new Map<string, Flight>())
 
   useEffect(() => {
     const batch = latest.current
-    if (batch.missing.length === 0) return
-    const controller = new AbortController()
-    void Promise.allSettled(batch.missing.map(({ date }) => loadDate(batch.mode, batch.filters, date, controller.signal))).then((outcomes) => {
-      if (controller.signal.aborted) return
-      setStore((current) => {
-        const results = new Map(current.results)
-        const errors = new Map(current.errors)
-        outcomes.forEach((outcome, index) => {
-          const key = batch.missing[index]!.key
-          if (outcome.status === 'fulfilled') results.set(key, outcome.value)
-          else errors.set(key, outcome.reason)
-        })
-        return { results, errors }
-      })
-    })
-    return () => controller.abort()
-  }, [missingKey])
+    const running = flights.current
+    const wanted = new Set(batch.missing.map(({ key }) => key))
+    // Abort what the inputs no longer ask (and whatever a reload replaced); what they still ask keeps running.
+    for (const [key, flight] of running) {
+      if (wanted.has(key) && flight.round === round) continue
+      flight.controller.abort()
+      running.delete(key)
+    }
+    for (const { date, key } of batch.missing) {
+      if (running.has(key)) continue
+      const controller = new AbortController()
+      running.set(key, { controller, round })
+      // Each date is pinned the moment its answer arrives: a slow date never holds the others back.
+      const settle = (outcome: Outcome) => {
+        if (running.get(key)?.controller === controller) running.delete(key)
+        if (!controller.signal.aborted) setStore((current) => pin(current, key, outcome))
+      }
+      void loadDate(batch.mode, batch.filters, date, controller.signal).then(
+        (entries) => settle({ entries }),
+        (error: unknown) => settle({ error }),
+      )
+    }
+  }, [missingKey, round])
 
-  const reload = useCallback(() => setStore(EMPTY_STORE), [])
+  // Unmounting aborts whatever is still running.
+  useEffect(() => {
+    const running = flights.current
+    return () => {
+      for (const flight of running.values()) flight.controller.abort()
+      running.clear()
+    }
+  }, [])
+
+  const reload = useCallback(() => {
+    setStore(EMPTY_STORE)
+    setRound((value) => value + 1)
+  }, [])
 
   const byDate = new Map<CalendarDate, TimetableEntry[]>()
   const pending = new Set<CalendarDate>()
@@ -110,8 +168,8 @@ export function useTimetable(mode: TimetableMode, filters: AcademyFilters, dates
   for (const { date, key } of requests) {
     const result = key.includes(SKIPPED) ? NO_ENTRIES : store.results.get(key)
     if (result) byDate.set(date, result)
-    else if (store.errors.has(key)) {
-      if (!failed) error = store.errors.get(key)
+    else if (store.failures.has(key)) {
+      if (!failed) error = store.failures.get(key)
       failed = true
     } else if (enabled) pending.add(date)
   }

@@ -95,6 +95,20 @@ async function pickOption(comboboxName: string, option: string) {
   fireEvent.click(await screen.findByText(option, { selector: '.ant-select-item-option-content' }))
 }
 
+/** A phone-sized viewport (below antd's `md`) for this test; undone after it. */
+function stubPhoneViewport() {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(max-width: 767.98px)',
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }))
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
@@ -299,16 +313,7 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
   })
 
   it('gives a phone the day first: the week strip, a timeline of large cards, the week as an agenda and the filters behind a toggle', async () => {
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === '(max-width: 767.98px)',
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }))
+    stubPhoneViewport()
     mockApi({ slots: [makeSlot(), makeSlot({ id: 'monday', weekday: 1, startTime: '09:00', endTime: '10:00' })] })
     renderPage(SCHEDULE_MANAGER_PERMISSIONS)
 
@@ -327,5 +332,51 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     expect(screen.queryByRole('combobox', { name: ar.schedule.columns.room })).not.toBeInTheDocument()
     fireEvent.click(screen.getByText(ar.schedule.filters.toggle))
     expect(screen.getByRole('combobox', { name: ar.schedule.columns.room })).toBeInTheDocument()
+  })
+
+  // ---- J-F18: the owner's note 4 on PR #46 — the day view with a weekday filter ----
+
+  it('keeps the day view on the filtered weekday: the arrows, «today» and the month calendar land on that weekday of their week', async () => {
+    const api = mockApi({ slots: [makeSlot({ id: 'tuesday', weekday: 2, startTime: '12:00', endTime: '13:00' })] })
+    renderPage(SCHEDULE_MANAGER_PERMISSIONS)
+    await waitFor(() => expect(api.academyQueries).toHaveLength(7))
+    const tuesdaySlot = (date: string) => within(screen.getByRole('region', { name: formatLongDate(date, 'ar') })).findByRole('button', { name: /من 12:00 إلى 13:00/ })
+
+    fireEvent.click(screen.getByText(ar.schedule.calendar.dayView))
+    await pickOption(ar.schedule.filters.weekday, ar.days.tue)
+    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-10', 'ar'))
+    expect(await tuesdaySlot('2026-11-10')).toBeInTheDocument()
+
+    // A week at a time, Tuesday to Tuesday.
+    fireEvent.click(screen.getByLabelText(ar.schedule.calendar.nextWeek))
+    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-17', 'ar'))
+    // «Today» (Sunday the 8th) comes back to the Tuesday of this week — not to an empty Sunday — and is then done.
+    fireEvent.click(screen.getByText(ar.schedule.calendar.today))
+    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-10', 'ar'))
+    expect(screen.getByText(ar.schedule.calendar.today).closest('button')).toBeDisabled()
+    // Thursday the 26th picked in the month calendar lands on the Tuesday of its week.
+    fireEvent.click(within(screen.getByRole('region', { name: ar.schedule.month.label })).getByLabelText(formatLongDate('2026-11-26', 'ar')))
+    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-24', 'ar'))
+    expect(await tuesdaySlot('2026-11-24')).toBeInTheDocument()
+    expect(screen.queryByText(ar.schedule.calendar.emptyDay)).not.toBeInTheDocument()
+    // Once the filter was set, only Tuesdays were asked.
+    expect(api.academyQueries.slice(7).map((query) => query.toString())).toEqual(['on=2026-11-17&weekday=2', 'on=2026-11-24&weekday=2'])
+  })
+
+  it('on a phone, a day of the week strip keeps the timeline on the filtered weekday of that week', async () => {
+    stubPhoneViewport()
+    mockApi({ slots: [makeSlot({ id: 'monday', weekday: 1, startTime: '09:00', endTime: '10:00' })] })
+    renderPage(SCHEDULE_MANAGER_PERMISSIONS)
+    const strip = await screen.findByRole('group', { name: ar.schedule.calendar.weekStrip })
+    fireEvent.click(screen.getByText(ar.schedule.filters.toggle))
+    await pickOption(ar.schedule.filters.weekday, ar.days.mon)
+    const monday = formatLongDate('2026-11-09', 'ar')
+    expect(await within(await screen.findByRole('list', { name: monday })).findByRole('button', { name: /من 09:00 إلى 10:00/ })).toBeInTheDocument()
+
+    // Wednesday in the strip stays on Monday instead of opening an empty Wednesday.
+    fireEvent.click(within(strip).getByRole('button', { name: formatLongDate('2026-11-11', 'ar') }))
+    expect(within(strip).getByRole('button', { name: monday })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('list', { name: monday })).toBeInTheDocument()
+    expect(screen.queryByText(ar.schedule.calendar.emptyDay)).not.toBeInTheDocument()
   })
 })

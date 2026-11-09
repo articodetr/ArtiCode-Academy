@@ -57,6 +57,15 @@ export function startOfWeek(date: CalendarDate, weekStartsOn: number): CalendarD
   return addDays(date, -normaliseWeekday(weekdayOf(date) - weekStartsOn))
 }
 
+/**
+ * The date of `weekday` in the week (starting on `weekStartsOn`) that holds
+ * `date` — where the weekday filter of the academy schedule puts a selection,
+ * so the day shown is always a day the filter shows (J-F18).
+ */
+export function weekdayInWeek(date: CalendarDate, weekday: number, weekStartsOn: number): CalendarDate {
+  return addDays(startOfWeek(date, weekStartsOn), normaliseWeekday(weekday - weekStartsOn))
+}
+
 /** `count` consecutive dates starting at `date`. */
 export function datesFrom(date: CalendarDate, count: number): CalendarDate[] {
   return Array.from({ length: count }, (_, index) => addDays(date, index))

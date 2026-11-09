@@ -153,25 +153,3 @@ export function getAcademySchedule(params: AcademyScheduleParams = {}, signal?: 
 export function getMySchedule(params: MyScheduleParams = {}, signal?: AbortSignal): Promise<MySchedule> {
   return apiRequest<MySchedule>(mySchedulePath(params), { signal })
 }
-
-/**
- * The fields of `BranchDto` (API-080) the branch filter of the academy
- * schedule needs (J-F08). The full branches client comes with the branches
- * screen (J-F03); this reading stays here so the two do not collide.
- */
-export interface TimetableBranchOption {
-  id: string
-  code: string
-  name: LocalizedLabel
-  /** IANA zone; null = the academy's. */
-  timezone: string | null
-  isMain: boolean
-  isActive: boolean
-}
-
-export const BRANCHES_PATH = '/api/branches'
-
-/** API-080: every signed-in user (inactive branches for `branches.manage` only); the main branch first, then by code. */
-export function listTimetableBranches(signal?: AbortSignal): Promise<{ items: TimetableBranchOption[] }> {
-  return apiRequest<{ items: TimetableBranchOption[] }>(BRANCHES_PATH, { signal })
-}
