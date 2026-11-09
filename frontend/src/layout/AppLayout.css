@@ -17,6 +17,10 @@
 .app-brand__sub {
   font-size: 12px;
   opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Aligned like the product name above it, whatever the direction of the academy's name (dir="auto"). */
+  text-align: match-parent;
 }
 
 .app-header {
@@ -29,11 +33,38 @@
   line-height: normal;
 }
 
+/* The academy's logo and name (J-F13): the name gives way first and ends in an ellipsis. */
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.app-header__logo {
+  display: block;
+  flex: none;
+  width: auto;
+  height: auto;
+  max-height: 32px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.app-header__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
 .app-header__actions {
   display: flex;
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .app-content {
@@ -54,6 +85,17 @@
   }
   .app-header__title {
     display: none;
+  }
+  /* Only a logo is left of the brand on a phone; without one the actions start the header, as before J-F13. */
+  .app-header__brand--no-logo {
+    display: none;
+  }
+  .app-header__logo {
+    max-height: 28px;
+    max-width: 72px;
+  }
+  .app-header__actions {
+    flex-shrink: 1;
   }
   .app-content {
     padding: 12px;
