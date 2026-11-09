@@ -135,7 +135,7 @@ npm run test:watch     # vitest
 
 ## Automatic verification (doc-sync guard)
 
-`.claude/settings.json` registers `.claude/hooks/doc-sync-check.mjs` on `SessionStart` and `Stop`. It hashes watched source files at session start and, when you stop, blocks **once** if source files changed but `docs/PROJECT_DOCUMENTATION.md` did not. It never edits files and fails open on errors. When it blocks: update the documentation per RULE 18 and finish again. If the change truly needs no documentation (formatting only, or edits you did not make), say so explicitly in your final report and finish again. Details and limitations: section 14.7 of the master document.
+`.claude/settings.json` registers `.claude/hooks/doc-sync-check.mjs` on `SessionStart` and `Stop`. It hashes watched source files at session start and, when you stop, blocks **once** if source files changed but `docs/PROJECT_DOCUMENTATION.md` did not. It never edits files and fails open on errors. When it blocks: update the documentation per RULE 18 and finish again. If the change truly needs no documentation (formatting only, or edits you did not make), say so explicitly in your final report and finish again. Details and limitations: section 14.7 of the master document. Known false positive (CH-0146): Playwright MCP snapshots (`.playwright-mcp/*.yml`) count as code. Until `IGNORE_DIRS` lists `.playwright-mcp` and `test-evidence` (a hook change the developer must approve), say so in the final report and finish again; both folders are git-ignored.
 
 ## Automatic git awareness (git-sync check — CH-0071)
 
