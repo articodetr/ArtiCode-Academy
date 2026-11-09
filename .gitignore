@@ -23,6 +23,10 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
+# Browser-tool output of local acceptance runs (Playwright MCP snapshots, evidence screenshots — docs 13.4)
+.playwright-mcp/
+test-evidence/
+
 # Claude Code local state (project settings.json stays tracked)
 .claude/settings.local.json
 
