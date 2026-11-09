@@ -13,6 +13,7 @@ import { DashboardPage } from '../pages/DashboardPage'
 import { ExamsPage } from '../pages/ExamsPage'
 import { LessonsPage } from '../pages/LessonsPage'
 import { LoginPage } from '../pages/LoginPage'
+import { MyAssignmentsPage } from '../pages/MyAssignmentsPage'
 import { MyClassesPage } from '../pages/MyClassesPage'
 import { MyLessonsPage } from '../pages/MyLessonsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -52,6 +53,7 @@ const router = createBrowserRouter([
       { path: 'lessons', element: guarded('lessons', <LessonsPage />) },
       { path: 'my-lessons', element: guarded('myLessons', <MyLessonsPage />) }, // `student`/`guardian` role keys (J-F11, API-101 — ownership)
       { path: 'assignments', element: guarded('assignments', <AssignmentsPage />) },
+      { path: 'my-assignments', element: guarded('myAssignments', <MyAssignmentsPage />) }, // `student`/`guardian` role keys (J-F42, API-112 — ownership)
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },

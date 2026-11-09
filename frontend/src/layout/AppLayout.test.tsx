@@ -66,6 +66,17 @@ describe('AppLayout navigation', () => {
     expect(selected).toHaveLength(1)
     expect(selected[0]).toHaveTextContent(ar.nav.myLessons)
   })
+
+  it('shows a student «my assignments» in place of «assignments», right after «my lessons», and selects it on /my-assignments (J-F42)', () => {
+    const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'assignments.read', 'assignments.submit', 'schedule.read', 'lessons.read'] })
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user: student }), route: '/my-assignments' })
+    const labels = menuLabels()
+    expect(labels).not.toContain(ar.nav.assignments)
+    expect(labels.indexOf(ar.nav.myAssignments)).toBe(labels.indexOf(ar.nav.myLessons) + 1)
+    const selected = document.querySelectorAll('.ant-menu-item-selected')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]).toHaveTextContent(ar.nav.myAssignments)
+  })
 })
 
 const NAME = { ar: 'أكاديمية النور', en: 'Al-Noor Academy' }
