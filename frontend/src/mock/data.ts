@@ -46,16 +46,6 @@ export interface MockLesson {
   status: 'scheduled' | 'completed' | 'cancelled'
 }
 
-export interface MockAssignment {
-  id: string
-  title: LocalizedText
-  course: LocalizedText
-  dueDate: string
-  submitted: number
-  total: number
-  status: 'open' | 'closed' | 'grading'
-}
-
 export interface MockExam {
   id: string
   title: LocalizedText
@@ -164,13 +154,6 @@ export const mockLessons: MockLesson[] = [
   { id: 'l-004', title: { ar: 'الحركة والمشاهد في Scratch', en: 'Motion and scenes in Scratch' }, course: T.courseScratch, type: 'live', date: '2026-10-30 10:00', durationMin: 90, status: 'scheduled' },
   { id: 'l-005', title: { ar: 'إدارة الحالة', en: 'State management' }, course: T.courseReact, type: 'recorded', date: '2026-10-22 18:30', durationMin: 110, status: 'completed' },
   { id: 'l-006', title: { ar: 'الدوال', en: 'Functions' }, course: T.coursePython, type: 'live', date: '2026-10-21 16:00', durationMin: 120, status: 'cancelled' },
-]
-
-export const mockAssignments: MockAssignment[] = [
-  { id: 'a-001', title: { ar: 'تمارين الحلقات', en: 'Loop exercises' }, course: T.coursePython, dueDate: '2026-11-02', submitted: 31, total: 40, status: 'open' },
-  { id: 'a-002', title: { ar: 'بناء قائمة مهام', en: 'Build a to-do list' }, course: T.courseReact, dueDate: '2026-10-28', submitted: 18, total: 18, status: 'grading' },
-  { id: 'a-003', title: { ar: 'لعبة بسيطة', en: 'A simple game' }, course: T.courseScratch, dueDate: '2026-10-20', submitted: 14, total: 15, status: 'closed' },
-  { id: 'a-004', title: { ar: 'الدوال والوحدات', en: 'Functions and modules' }, course: T.coursePython, dueDate: '2026-11-09', submitted: 0, total: 40, status: 'open' },
 ]
 
 export const mockExams: MockExam[] = [

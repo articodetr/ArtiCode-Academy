@@ -113,6 +113,12 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   // MOD-06-T03 (CH-0102) — first offered with J-F10 (CH-0062)
   'attendance.',
   'attendance.recorded',
+  // MOD-08-T02 (CH-0116) — first offered with J-F38 (CH-0152)
+  'assignments.',
+  'assignments.created',
+  'assignments.updated',
+  'assignments.status.changed',
+  'assignments.deleted',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */
