@@ -14,10 +14,20 @@
 // was recorded — is in the lesson's `timeZone`, named in its own row beside
 // this device's zone when they differ, and the edit form takes the day and
 // the times in that zone (D-R41 — J-F28).
+// Since J-F40 (KI-058 — the guard of the class, user and course drawers and
+// the role editor: KI-052, KI-054, KI-055, KI-057): while the edit form or the
+// attendance sheet holds unsaved work — each reports it through its
+// `onUnsavedChange`, compared with the lesson and the records as the server
+// holds them, so a change changed back holds nothing — Escape and a mask click
+// no longer close the drawer, the close button asks first (common.unsaved.*),
+// a browser back/forward asks the same question (NavigationBlocker), and a
+// reload or a tab close gets the browser's own prompt (useUnsavedChangesGuard).
+// Switching between the two tabs is no close: both keep their work. The edit
+// form's Cancel and the sheet's confirmed reload stay explicit discards.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LinkOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ATTENDANCE_STATUSES } from '../api/attendance'
@@ -29,13 +39,15 @@ import type { Lesson } from '../api/lessons'
 import { AttendanceSheetTab } from '../attendance/AttendanceSheetTab'
 import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { useAuth } from '../auth/auth-context'
+import { NavigationBlocker } from '../common/NavigationBlocker'
+import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { LessonFormFields } from './LessonFormFields'
 import { LessonZoneValue } from './LessonZone'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
-import { lessonFormValuesOf, planLessonPatch } from './lessons.form'
+import { lessonFormHasChanges, lessonFormValuesOf, planLessonPatch } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
 import { durationMinutes, formatLessonDateTime, formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, syllabusItemLabel } from './lessons.format'
 import { availableLessonActions, isClassOpenForLessons, isDangerousLessonAction, lessonEditability } from './lessons.status'
@@ -56,6 +68,11 @@ const STALE_EDIT_CODES = ['lesson_locked', 'class_closed', 'lesson_not_found'].m
 
 /** The tabs of the drawer for holders of `attendance.read`; anyone else sees the details alone. */
 type DrawerTab = 'details' | 'attendance'
+
+/** The editors that report unsaved work (KI-058): the edit form of the details tab and the attendance sheet. */
+type EditorPart = 'details' | 'attendance'
+
+const NOTHING_UNSAVED: Readonly<Record<EditorPart, boolean>> = { details: false, attendance: false }
 
 interface LessonDrawerProps {
   lessonId: string | null
@@ -78,6 +95,15 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<LessonMenuAction | null>(null)
   const [tab, setTab] = useState<DrawerTab>('details')
+  const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<EditorPart, boolean>>>(NOTHING_UNSAVED)
+
+  // One stable reporter per editor (the attendance sheet reports from an effect that depends on it).
+  const reportUnsaved = useMemo(() => {
+    const reporter = (part: EditorPart) => (unsaved: boolean) => setUnsavedParts((current) => (current[part] === unsaved ? current : { ...current, [part]: unsaved }))
+    return { details: reporter('details'), attendance: reporter('attendance') }
+  }, [])
+  // KI-058: while the edit form or the attendance sheet holds unsaved work, Escape and a mask click must not drop it with the drawer.
+  const unsaved = (editing && unsavedParts.details) || unsavedParts.attendance
 
   useEffect(() => {
     if (!lessonId) return
@@ -109,8 +135,14 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
     setEditing(false)
     setPending(null)
     setTab('details')
+    setUnsavedParts(NOTHING_UNSAVED)
     onClose()
   }
+
+  // The close button (Escape and the mask too when nothing is unsaved) asks first while an editor
+  // holds unsaved work, and so does a browser back/forward (NavigationBlocker below) — one question
+  // (common.unsaved.*); a reload or a tab close gets the browser's own prompt (KI-055, KI-058).
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
 
   const applyUpdate = (updated: Lesson) => {
     setLesson(updated)
@@ -150,6 +182,7 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
           reload()
         }}
         onCancel={() => setEditing(false)}
+        onUnsavedChange={reportUnsaved.details}
       />
     ) : (
       <LessonDetails lesson={current} onOpenAttendance={canReadAttendance ? () => setTab('attendance') : undefined} />
@@ -158,7 +191,11 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
   return (
     <Drawer
       open={lessonId !== null}
-      onClose={close}
+      onClose={requestClose}
+      // KI-058: unsaved work turns off the Escape key and the mask click; a modal, Select or
+      // Dropdown open on top still closes on Escape (it sits above the drawer).
+      keyboard={!unsaved}
+      mask={{ closable: !unsaved }}
       title={
         lesson ? (
           <Space wrap>
@@ -197,6 +234,7 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
         ) : null
       }
     >
+      <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
       {loadError ? (
         <Alert
           type="error"
@@ -227,7 +265,15 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
                 label: t('attendance.drawerTabs.sheet'),
                 // Re-read when the lesson is cancelled or restored here (that decides whether it accepts attendance);
                 // completing it keeps the sheet and its unsaved rows.
-                children: <AttendanceSheetTab key={`${lesson.id}:${lesson.status === 'cancelled'}`} lesson={lesson} onSaved={applyAttendance} onLessonStale={reload} />,
+                children: (
+                  <AttendanceSheetTab
+                    key={`${lesson.id}:${lesson.status === 'cancelled'}`}
+                    lesson={lesson}
+                    onSaved={applyAttendance}
+                    onLessonStale={reload}
+                    onUnsavedChange={reportUnsaved.attendance}
+                  />
+                ),
               },
             ]}
           />
@@ -437,6 +483,8 @@ interface LessonEditFormProps {
   /** The server refused the save because the lesson changed elsewhere: close the form and re-read the lesson. */
   onStale: () => void
   onCancel: () => void
+  /** Whether a field holds unsaved work (KI-058): reported on every change, false once saved or left. */
+  onUnsavedChange: (unsaved: boolean) => void
 }
 
 /**
@@ -448,8 +496,11 @@ interface LessonEditFormProps {
  * The day and the times are read in the lesson's zone as loaded (D-R41), even
  * when the room changes: the server may then answer with another zone (the
  * room's branch), and the drawer shows that answer — no request of its own.
+ * It reports unsaved work (KI-058) from onValuesChange — synchronous, where
+ * Form.useWatch would report a task late, after an Escape (J-F23) — compared
+ * with the lesson as loaded through lessonFormHasChanges().
  */
-function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel }: LessonEditFormProps) {
+function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel, onUnsavedChange }: LessonEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const canReadClass = useAuth().hasPermission('classes.read')
@@ -457,6 +508,9 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel }: Le
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const [klass, setKlass] = useState<AcademyClass | null>(null)
+
+  // KI-058: the form left (saved, cancelled, stale, or the drawer closed) — nothing is held any more.
+  useEffect(() => () => onUnsavedChange(false), [onUnsavedChange])
 
   useEffect(() => {
     if (!canReadClass) return
@@ -482,6 +536,8 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel }: Le
     try {
       const updated = await updateLesson(lesson.id, body)
       message.success(t('lessons.drawer.saved'))
+      // Saved: nothing is left to lose, even before the drawer closes the form.
+      onUnsavedChange(false)
       onSaved(updated)
     } catch (caught) {
       const failure = describeLessonsFailure(caught)
@@ -498,7 +554,16 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel }: Le
   }
 
   return (
-    <Form form={form} layout="vertical" requiredMark={false} initialValues={lessonFormValuesOf(lesson)} onFinish={(values) => void save(values as LessonFormValues)} disabled={saving}>
+    <Form
+      form={form}
+      layout="vertical"
+      requiredMark={false}
+      initialValues={lessonFormValuesOf(lesson)}
+      // KI-058: compared with the lesson as loaded on every change, so a change changed back holds nothing.
+      onValuesChange={(_changed, values) => onUnsavedChange(lessonFormHasChanges(lesson, values as LessonFormValues))}
+      onFinish={(values) => void save(values as LessonFormValues)}
+      disabled={saving}
+    >
       <LessonFormFields form={form} mode="edit" zone={{ timeZone: lesson.timeZone, source: 'lesson' }} klass={klass} lesson={lesson} timingLocked={timingLocked} />
       <Flex gap={8} justify="flex-end">
         <Button onClick={onCancel} disabled={saving}>
