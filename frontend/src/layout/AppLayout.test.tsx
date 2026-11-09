@@ -136,7 +136,7 @@ describe('AppLayout — the academy brand in the header (J-F13)', () => {
     }
   })
 
-  it('keeps the static name while the academy is loading', async () => {
+  it('shows no name while the academy is loading — never a flash of the static one — and the real name when it arrives (J-F24)', async () => {
     let answer: (response: Response) => void = () => {}
     mockAcademyApi(
       () =>
@@ -146,12 +146,27 @@ describe('AppLayout — the academy brand in the header (J-F13)', () => {
     )
     renderLayout()
 
-    expect(headerTitle()).toHaveTextContent(ar.common.academyName)
-    expect(siderName()).toHaveTextContent(ar.common.academyName)
+    // The title and the side-menu line stay in place, empty, without a tooltip.
+    expect(headerTitle()).toBeInTheDocument()
+    expect(headerTitle()).toBeEmptyDOMElement()
+    expect(headerTitle()).not.toHaveAttribute('title')
+    expect(siderName()).toBeEmptyDOMElement()
+    expect(siderName()).not.toHaveAttribute('title')
+    expect(screen.queryByText(ar.common.academyName)).not.toBeInTheDocument()
     expect(headerLogo()).toBeNull()
 
     answer(jsonResponse(200, BRANDED))
     await waitFor(() => expect(headerTitle()).toHaveTextContent(NAME.ar))
+    expect(siderName()).toHaveTextContent(NAME.ar)
+    expect(screen.queryByText(ar.common.academyName)).not.toBeInTheDocument()
+  })
+
+  it('shows the static name once the academy arrives without a usable name', async () => {
+    mockAcademyApi(() => jsonResponse(200, makeAcademy({ name: { ar: '   ' } })))
+    renderLayout()
+
+    await waitFor(() => expect(headerTitle()).toHaveTextContent(ar.common.academyName))
+    expect(siderName()).toHaveTextContent(ar.common.academyName)
   })
 
   it('keeps the static name with no banner of its own when the read fails (503), and follows the retry of the settings tab', async () => {
@@ -174,17 +189,35 @@ describe('AppLayout — the academy brand in the header (J-F13)', () => {
   it.each([
     ['an https: URL', 'https://cdn.example.test/brand/logo.png', 'https://cdn.example.test/brand/logo.png'],
     ['a root-relative path', '/media/logo.png', `${window.location.origin}/media/logo.png`],
-  ])('shows the logo from %s, named by the academy and sent without a referrer', async (_, logoUrl, src) => {
+    // jsdom serves the tests over http:, so an http: logo is no mixed content here (J-F24); academy.brand.test.ts covers https: pages.
+    ['an http: URL on an http: page', 'http://cdn.example.test/brand/logo.png', 'http://cdn.example.test/brand/logo.png'],
+  ])('shows the logo from %s, decorative beside the name and sent without a referrer', async (_, logoUrl, src) => {
+    expect(window.location.protocol).toBe('http:')
     mockAcademyApi(() => jsonResponse(200, makeAcademy({ name: NAME, logoUrl })))
     renderLayout()
 
-    const logo = await within(header()).findByAltText(NAME.ar)
+    await waitFor(() => expect(headerLogo()).not.toBeNull())
+    const logo = headerLogo()!
     expect(logo).toHaveAttribute('src', src)
     expect(logo).toHaveAttribute('referrerpolicy', 'no-referrer')
     expect(headerTitle()).toHaveTextContent(NAME.ar)
   })
 
-  it.each(['http://cdn.example.test/logo.png', '//cdn.example.test/logo.png'])('shows no logo for %s', async (logoUrl) => {
+  it('names the brand once: an empty alt on the logo, the name in the title beside it (J-F24)', async () => {
+    mockAcademyApi(() => jsonResponse(200, makeAcademy({ name: NAME, logoUrl: 'https://cdn.example.test/brand/logo.png' })))
+    renderLayout()
+
+    await waitFor(() => expect(headerLogo()).not.toBeNull())
+    expect(headerLogo()).toHaveAttribute('alt', '')
+    // An empty alt makes the image presentational: no img role and no second copy of the name for a screen reader.
+    const brand = header().querySelector('.app-header__brand') as HTMLElement
+    expect(within(brand).queryByRole('img', { hidden: true })).not.toBeInTheDocument()
+    expect(within(header()).queryAllByAltText(NAME.ar)).toHaveLength(0)
+    expect(within(header()).getAllByText(NAME.ar)).toEqual([headerTitle()])
+    expect(brand.textContent).toBe(NAME.ar)
+  })
+
+  it.each(['//cdn.example.test/logo.png', 'javascript:alert(1)'])('shows no logo for %s', async (logoUrl) => {
     mockAcademyApi(() => jsonResponse(200, makeAcademy({ name: NAME, logoUrl })))
     renderLayout()
 
@@ -196,7 +229,8 @@ describe('AppLayout — the academy brand in the header (J-F13)', () => {
     mockAcademyApi(() => jsonResponse(200, makeAcademy({ name: NAME, logoUrl: 'https://cdn.example.test/missing.png' })))
     renderLayout()
 
-    fireEvent.error(await within(header()).findByAltText(NAME.ar))
+    await waitFor(() => expect(headerLogo()).not.toBeNull())
+    fireEvent.error(headerLogo()!)
     expect(headerLogo()).toBeNull()
     expect(headerTitle()).toHaveTextContent(NAME.ar)
   })
@@ -216,7 +250,7 @@ describe('AppLayout — the academy brand in the header (J-F13)', () => {
     await waitFor(() => expect(api.writes).toHaveLength(1))
     expect(api.writes[0]).toEqual({ name: { ar: 'أكاديمية الفجر', en: NAME.en }, logoUrl: 'https://cdn.example.test/fajr.png' })
     await waitFor(() => expect(headerTitle()).toHaveTextContent('أكاديمية الفجر'))
-    expect(within(header()).getByAltText('أكاديمية الفجر')).toHaveAttribute('src', 'https://cdn.example.test/fajr.png')
+    expect(headerLogo()).toHaveAttribute('src', 'https://cdn.example.test/fajr.png')
     expect(siderName()).toHaveTextContent('أكاديمية الفجر')
     // The remounted form shows the server's answer too; nothing was read again.
     expect(screen.getByLabelText(ar.settings.academyNameAr)).toHaveValue('أكاديمية الفجر')

@@ -47,8 +47,26 @@ const codesShown = () => bodyRows().map((row) => within(row).getByText(/^(LAB-1|
 const writesOf = (calls: Call[]) => calls.filter((call) => call.method !== 'GET')
 const roomReads = (calls: Call[]) => calls.filter((call) => call.method === 'GET' && call.url.startsWith('/api/rooms')).map((call) => call.url)
 
-/** Waits until the open Select list draws the option with the given text (a table cell with the same text does not count). */
-const findOption = (text: string) => screen.findByText(text, { selector: '.ant-select-item-option-content' })
+/**
+ * The Select lists not closed: a closed list keeps its nodes behind `ant-select-dropdown-hidden` — in jsdom its leave
+ * animation never ends, so it stays in `ant-slide-up-leave` (or another `…-leave` motion class) instead.
+ */
+const OPEN_DROPDOWN = '.ant-select-dropdown:not(.ant-select-dropdown-hidden)'
+const isLeaving = (list: Element) => /(?:^|\s)ant-[\w-]+-leave(?:\s|$)/.test(list.className)
+
+/** Waits for the one open Select list (J-F24: options are looked up inside it, never across the whole document). */
+const openDropdown = () =>
+  waitFor(() => {
+    const lists = [...document.querySelectorAll<HTMLElement>(OPEN_DROPDOWN)].filter((list) => !isLeaving(list))
+    expect(lists).toHaveLength(1)
+    return lists[0]!
+  })
+
+/** Waits until the open Select list draws the option with the given text (a table cell or another list with the same text does not count). */
+const findOption = async (text: string) => within(await openDropdown()).findByText(text, { selector: '.ant-select-item-option-content' })
+
+/** Every option the open Select list offers, in order. */
+const offeredOptions = async () => [...(await openDropdown()).querySelectorAll('.ant-select-item-option-content')].map((node) => node.textContent)
 
 /** Opens an antd Select by its accessible name and picks the option with the given text. */
 async function pick(label: string, option: string, scope: Pick<typeof screen, 'getByLabelText'> = screen) {
@@ -113,8 +131,8 @@ describe('RoomsManager (J-F06)', () => {
     await pick(ar.rooms.fields.kind, ar.rooms.kinds.virtual, within(dialog))
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.rooms.fields.branch))
     const main = await findOption('MAIN — الفرع الرئيسي')
-    // Only now that the list is drawn does the absence mean something: MAIN is offered, the inactive NORTH branch is not.
-    expect(screen.queryByText(/NORTH/)).not.toBeInTheDocument()
+    // The exact list the picker draws: the site and the active MAIN branch — the inactive NORTH branch is not offered (J-F24).
+    expect(await offeredOptions()).toEqual([ar.rooms.site, 'MAIN — الفرع الرئيسي'])
     fireEvent.click(main)
     fireEvent.click(within(dialog).getByLabelText(ar.rooms.fields.isActive))
     fireEvent.click(within(dialog).getByText(ar.rooms.create).closest('button')!)
@@ -158,8 +176,7 @@ describe('RoomsManager (J-F06)', () => {
     expect(within(dialog).queryByText(BRANCH_IDS[0])).not.toBeInTheDocument()
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.rooms.fields.branch))
     const fallback = await findOption('MAIN — الفرع الرئيسي')
-    const offered = [...fallback.closest('.ant-select-dropdown')!.querySelectorAll('.ant-select-item-option-content')].map((node) => node.textContent)
-    expect(offered).toEqual([ar.rooms.site, 'MAIN — الفرع الرئيسي'])
+    expect(await offeredOptions()).toEqual([ar.rooms.site, 'MAIN — الفرع الرئيسي'])
     fireEvent.click(fallback)
 
     const capacity = within(dialog).getByLabelText(ar.rooms.fields.capacity)
@@ -169,6 +186,33 @@ describe('RoomsManager (J-F06)', () => {
     expect(await screen.findByText(ar.rooms.saved)).toBeInTheDocument()
     // Keeping the branch sends no branchId.
     expect(writesOf(calls)).toEqual([{ method: 'PATCH', url: `/api/rooms/${ROOM_IDS[2]}`, body: { capacity: 90 } }])
+  })
+
+  it("offers a room's inactive branch that a caller without branches.manage cannot list, and the hint says so (J-F24)", async () => {
+    // API-080 answers a caller without branches.manage with the active branches only; the room still belongs to NORTH (inactive).
+    const north = makeRoom({
+      id: ROOM_IDS[2],
+      code: 'HALL',
+      name: { ar: 'القاعة الكبرى' },
+      branchId: BRANCH_IDS[1],
+      branch: { id: BRANCH_IDS[1], code: 'NORTH', name: { ar: 'الفرع الشمالي' } },
+    })
+    const { calls } = mockRoomsApi([north], () => jsonResponse(500, {}), [TWO_BRANCHES()[0]!])
+    renderManager()
+    await screen.findByText('HALL')
+
+    fireEvent.click(screen.getByLabelText(`${ar.common.edit}: HALL`))
+    const dialog = (await screen.findByText('تعديل القاعة «القاعة الكبرى»')).closest('[role="dialog"]') as HTMLElement
+    // RoomDto.branch carries no state, so the option is not marked; the hint stays true by naming the room's current branch.
+    expect(within(dialog).getByText('اتركه على مقر الأكاديمية لقاعة بلا فرع؛ لا تُعرض إلا الفروع النشطة وفرع القاعة الحالي')).toBeInTheDocument()
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.rooms.fields.branch))
+    await findOption('NORTH — الفرع الشمالي')
+    expect(await offeredOptions()).toEqual([ar.rooms.site, 'MAIN — الفرع الرئيسي', 'NORTH — الفرع الشمالي'])
+
+    // Leaving the room where it is sends nothing.
+    fireEvent.click(within(dialog).getByText(ar.common.save).closest('button')!)
+    expect(await screen.findByText(ar.rooms.nothingChanged)).toBeInTheDocument()
+    expect(writesOf(calls)).toEqual([])
   })
 
   it('puts a taken code on the code field and keeps the modal open', async () => {

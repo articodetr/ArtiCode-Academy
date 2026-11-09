@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { Branch } from '../api/branches'
 import { ar } from '../i18n/ar'
-import { BRANCH_IDS, BRANCH_MANAGER_PERMISSIONS, BRANCH_READER_PERMISSIONS, makeBranch, THREE_BRANCHES } from '../test/branches'
+import { BRANCH_IDS, BRANCH_MANAGER_PERMISSIONS, makeBranch, THREE_BRANCHES } from '../test/branches'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { BranchesManager } from './BranchesManager'
@@ -28,8 +28,9 @@ function mockBranchesApi(initial: Branch[], writes: (method: string, url: string
   return { calls, state }
 }
 
-function renderManager(permissions: string[] = BRANCH_MANAGER_PERMISSIONS) {
-  renderWithProviders(<BranchesManager />, { auth: makeAuth({ user: makeUser({ permissions }) }), route: '/settings/branches' })
+/** The tab is management-only (the route, the nav entry and SettingsPage gate it on branches.manage — J-F24), so it renders for a holder of the key. */
+function renderManager() {
+  renderWithProviders(<BranchesManager />, { auth: makeAuth({ user: makeUser({ permissions: BRANCH_MANAGER_PERMISSIONS }) }), route: '/settings/branches' })
 }
 
 function bodyRows() {
@@ -68,17 +69,6 @@ describe('BranchesManager (MOD-02-T06 screen, API-080..API-083)', () => {
     expect(screen.getByLabelText(`${ar.branches.actions.deactivate}: NORTH`)).toBeEnabled()
     expect(screen.getByLabelText(`${ar.branches.actions.delete}: NORTH`)).toBeEnabled()
     expect(screen.getByLabelText(`${ar.branches.actions.activate}: OLD`)).toBeEnabled()
-  })
-
-  it('is read-only without branches.manage: no add button, no actions, the read-only hint', async () => {
-    mockBranchesApi(THREE_BRANCHES().slice(0, 2), () => jsonResponse(500, {}))
-    renderManager(BRANCH_READER_PERMISSIONS)
-
-    expect(await screen.findByText('NORTH')).toBeInTheDocument()
-    expect(screen.getByText(ar.branches.readOnlyHint)).toBeInTheDocument()
-    expect(screen.queryByText(ar.branches.add)).not.toBeInTheDocument()
-    expect(screen.queryByText(ar.common.actions)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(`${ar.common.edit}: MAIN`)).not.toBeInTheDocument()
   })
 
   it('shows the empty state, and a load failure with a retry that re-reads the list', async () => {

@@ -14,9 +14,6 @@ export const BRANCH_ID = BRANCH_IDS[0]
 /** An academy admin as far as the branches tab is concerned (the settings keys open the page). */
 export const BRANCH_MANAGER_PERMISSIONS = ['academy.settings.read', 'academy.settings.manage', 'branches.manage']
 
-/** A viewer of the settings page without `branches.manage`. */
-export const BRANCH_READER_PERMISSIONS = ['academy.settings.read']
-
 export function makeBranch(overrides: Partial<Branch> = {}): Branch {
   return {
     id: BRANCH_ID,

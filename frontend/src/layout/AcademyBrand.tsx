@@ -2,8 +2,11 @@
 // at the start of the header, and its name under the product name in the side
 // menu — from GET /api/academy (API-035) through the read that the settings
 // tab and the calendar share (useAcademy), so a saved PATCH (API-036) shows
-// here without a page reload. The static `common.academyName` stays while
-// there is nothing better (useAcademyBrand); a failure shows no banner.
+// here without a page reload. While the first read runs the name is empty, and
+// the static `common.academyName` shows only after a failure or without a
+// usable name (useAcademyBrand); a failure shows no banner. The logo is
+// decorative (`alt=""`): the name beside it is the one accessible name — on a
+// phone it is visually hidden, never `display: none` (AppLayout.css, J-F24).
 import { useState } from 'react'
 import { useAcademyBrand } from '../academy/useAcademyBrand'
 
@@ -15,11 +18,9 @@ export function HeaderBrand() {
 
   return (
     <div className={logo ? 'app-header__brand' : 'app-header__brand app-header__brand--no-logo'}>
-      {logo ? (
-        <img className="app-header__logo" src={logo} alt={name} referrerPolicy="no-referrer" decoding="async" onError={() => setBrokenLogo(logo)} />
-      ) : null}
+      {logo ? <img className="app-header__logo" src={logo} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => setBrokenLogo(logo)} /> : null}
       {/* dir="auto": a Latin name in the Arabic UI (or the reverse) keeps its own order and is cut at its own end. */}
-      <bdi dir="auto" className="app-header__title" title={name}>
+      <bdi dir="auto" className="app-header__title" title={name || undefined}>
         {name}
       </bdi>
     </div>
@@ -29,7 +30,7 @@ export function HeaderBrand() {
 export function SiderAcademyName() {
   const { name } = useAcademyBrand()
   return (
-    <bdi dir="auto" className="app-brand__sub" title={name}>
+    <bdi dir="auto" className="app-brand__sub" title={name || undefined}>
       {name}
     </bdi>
   )

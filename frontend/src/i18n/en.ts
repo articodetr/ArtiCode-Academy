@@ -1435,6 +1435,7 @@ export const en: Translation = {
     academyNameEn: 'Academy name (English)',
     academyNameTr: 'Academy name (Turkish)',
     logoUrl: 'Logo URL',
+    logoHint: 'On a secure (https) site the header shows a logo only when its address starts with https.',
     defaultLanguage: 'Default language',
     timezone: 'Time zone',
     currency: 'Currency',
@@ -1490,7 +1491,6 @@ export const en: Translation = {
   branches: {
     subtitle: 'The branches and premises of the academy',
     hint: 'The main branch comes first and is always active. An inactive branch is visible to branch managers only, and a branch with rooms cannot be deleted — deactivate it instead.',
-    readOnlyHint: 'You can view the branches only; managing them requires the permission to manage branches.',
     add: 'Add branch',
     refresh: 'Refresh',
     empty: 'No branches yet',
@@ -1706,7 +1706,7 @@ export const en: Translation = {
     },
     hints: {
       code: 'Saved in capitals: Latin letters, digits and . _ - (up to 16), unique inside the branch',
-      branch: 'Leave it on the academy site for a room without a branch; only active branches are offered',
+      branch: "Leave it on the academy site for a room without a branch; only the active branches and the room's current branch are offered",
       capacity: 'Number of seats, when known; never compared with class capacity',
       isActive: 'An inactive room disappears from non-manager lists and accepts no new slots',
     },

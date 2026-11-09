@@ -128,6 +128,19 @@ describe('GeneralSettingsForm', () => {
     expect(api.gets()).toBe(1)
   })
 
+  it('says under the logo field that a secure site shows https logos only, and still saves an http: address the server accepts (J-F24)', async () => {
+    const api = mockAcademyApi()
+    renderForm()
+
+    const logoUrl = await screen.findByLabelText(ar.settings.logoUrl)
+    expect(within(fieldOf(ar.settings.logoUrl)).getByText('على موقع آمن (https) لا يظهر في رأس الصفحة إلا شعار رابطه يبدأ بـ https.')).toBeInTheDocument()
+    fireEvent.change(logoUrl, { target: { value: 'http://cdn.example.test/logo.png' } })
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(api.writes).toEqual([{ logoUrl: 'http://cdn.example.test/logo.png' }]))
+    expect(screen.queryByText(ar.settings.validation.url)).not.toBeInTheDocument()
+  })
+
   it('refuses an unknown time zone and a non-ISO currency locally, before any request (AC6)', async () => {
     const api = mockAcademyApi()
     renderForm()
