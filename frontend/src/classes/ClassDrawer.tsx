@@ -10,15 +10,19 @@
 // a modal. A teacher (`classes.read` alone) sees their class read-only.
 // Since J-F15: an action the server refuses because it became stale
 // (isStaleClassAction — PR #26 review, note 3) closes its dialog, re-reads the
-// class and shows the message; and while an editor holds unsaved work (a
-// change in the edit form, a teachers draft that differs from the server's
-// list, a student picked in the enroll form, weekly slots that differ from the
-// server's — each tab reports it through `onUnsavedChange`) Escape and a mask
-// click no longer close the drawer, and the close button asks first (KI-052).
-// Since J-F21 an editor opened without a change, or changed back, holds nothing
-// (PR #66 review, note 1), and every re-read of the class — a stale action, a
-// stale roster, the retry button — hands it to `onUpdated` too, so the list row
-// follows (note 4).
+// class and shows the message; and while the drawer holds unsaved work, Escape
+// and a mask click no longer close it and the close button asks first (KI-052).
+// Each editor reports through its `onUnsavedChange`: the edit form, the
+// teachers editor and the weekly schedule editor while their values differ
+// from the class as the server holds it — since J-F21 an editor opened without
+// a change, or changed back, holds nothing (PR #66 review, note 1) — and the
+// students tab while its enroll form holds input, a student picked but not
+// enrolled yet (PR #74 review). Since J-F21 every re-read of the class — a
+// stale action, a stale roster, the retry button — hands it to `onUpdated`
+// too, so the list row follows (PR #66 review, note 4). Since J-F27 the same
+// unsaved work also holds a browser back/forward, which asks the same question
+// (NavigationBlocker), and a reload or a tab close gets the browser's own
+// prompt (useUnsavedChangesGuard — KI-055).
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -28,6 +32,8 @@ import { useTranslation } from 'react-i18next'
 import { changeClassStatus, deleteClass, getClass, updateClass } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
+import { NavigationBlocker } from '../common/NavigationBlocker'
+import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { ClassEnrollmentsTab } from '../enrollments/ClassEnrollmentsTab'
 import { canReadRoster } from '../enrollments/enrollments.status'
@@ -76,7 +82,6 @@ interface ClassDrawerProps {
 export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { modal } = App.useApp()
   const { user, hasPermission } = useAuth()
   const canManage = hasPermission('classes.manage')
   const [cls, setCls] = useState<AcademyClass | null>(null)
@@ -133,21 +138,10 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
     onClose()
   }
 
-  /** The close button (Escape and the mask too when nothing is unsaved): asks first while an editor holds unsaved work. */
-  const requestClose = () => {
-    if (!unsaved) {
-      close()
-      return
-    }
-    modal.confirm({
-      title: t('classes.drawer.discard.title'),
-      content: t('classes.drawer.discard.content'),
-      okText: t('classes.drawer.discard.ok'),
-      okButtonProps: { danger: true },
-      cancelText: t('classes.drawer.discard.cancel'),
-      onOk: close,
-    })
-  }
+  // The close button (Escape and the mask too when nothing is unsaved) asks first while an editor
+  // holds unsaved work, and so does a browser back/forward (NavigationBlocker below) — one question
+  // (common.unsaved.*); a reload or a tab close gets the browser's own prompt (KI-055).
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
 
   const applyUpdate = (updated: AcademyClass) => {
     setCls(updated)
@@ -240,6 +234,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
         ) : null
       }
     >
+      <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
       {loadError ? (
         <Alert
           type="error"

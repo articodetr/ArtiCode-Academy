@@ -27,7 +27,8 @@ export const ar = {
     room: 'القاعة',
     total: 'الإجمالي',
     notImplemented: 'هذه الوظيفة غير منفّذة بعد (نموذج أولي).',
-    // KI-054 (J-F23): the «discard?» question of a drawer that holds unsaved work — the wording of classes.drawer.discard.*.
+    // KI-054 (J-F23): the «discard?» question of a drawer that holds unsaved work, asked by its close button and,
+    // since J-F27 (KI-055), by a browser back/forward; the class drawer's too since then (classes.drawer.discard.* is gone).
     unsaved: {
       title: 'تجاهل التعديلات غير المحفوظة؟',
       content: 'في هذا الدرج محرّر مفتوح لم تُحفظ تعديلاته بعد. إغلاق الدرج يتجاهلها.',
@@ -744,12 +745,6 @@ export const ar = {
         details: 'التفاصيل',
         teachers: 'المعلمون ({{count}})',
         students: 'الطلاب ({{count}})',
-      },
-      discard: {
-        title: 'تجاهل التعديلات غير المحفوظة؟',
-        content: 'في هذا الدرج محرّر مفتوح لم تُحفظ تعديلاته بعد. إغلاق الدرج يتجاهلها.',
-        ok: 'تجاهل وإغلاق',
-        cancel: 'متابعة التعديل',
       },
     },
     enrollments: {
