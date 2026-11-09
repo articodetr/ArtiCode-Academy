@@ -146,3 +146,16 @@ export function planUserPatch(current: UserDetail, values: EditUserFormValues, o
 
   return Object.keys(body).length === 0 ? null : body
 }
+
+/**
+ * Whether the edit form holds unsaved work (KI-054 — J-F23, the rule of J-F21's
+ * classFormHasChanges()): the smallest PATCH is non-empty, or the full name was
+ * emptied (planUserPatch never sends a blank one, yet the field holds a change).
+ * A field changed back to its stored value counts as no change, and so does a
+ * change the save would not send either (spaces around a value, the case of an
+ * e-mail or username).
+ */
+export function userFormHasChanges(current: UserDetail, values: EditUserFormValues, options: PlanUserPatchOptions): boolean {
+  const blankFullName = typeof values.fullName === 'string' && values.fullName.trim() === ''
+  return blankFullName || planUserPatch(current, values, options) !== null
+}

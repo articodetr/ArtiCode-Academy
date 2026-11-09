@@ -22,7 +22,11 @@ const SYSTEM_ROLE_OPTIONS = [ar.roles.admin, ar.roles.staff, ar.roles.teacher, a
  * GET /api/users/:id from `detail` and GET /api/roles from `roles`; records
  * every list query and every roles request for assertions.
  */
-function mockUsersApi(pages: Record<string, UserList | Response>, detail: UserDetail = makeUserDetail(), roles: RoleList | Response = makeRoleList()) {
+function mockUsersApi(
+  pages: Record<string, UserList | Response>,
+  detail: UserDetail = makeUserDetail(),
+  roles: RoleList | Response | ((attempt: number) => RoleList | Response) = makeRoleList(),
+) {
   const queries: URLSearchParams[] = []
   const rolesRequests: string[] = []
   const fetchMock = mockFetch((url, init) => {
@@ -30,7 +34,8 @@ function mockUsersApi(pages: Record<string, UserList | Response>, detail: UserDe
     const method = init?.method ?? 'GET'
     if (parsed.pathname === '/api/roles' && method === 'GET') {
       rolesRequests.push(url)
-      return roles instanceof Response ? roles : jsonResponse(200, roles)
+      const answer = typeof roles === 'function' ? roles(rolesRequests.length) : roles
+      return answer instanceof Response ? answer : jsonResponse(200, answer)
     }
     if (parsed.pathname === '/api/users' && method === 'GET') {
       queries.push(parsed.searchParams)
@@ -60,11 +65,13 @@ async function selectOption(comboboxName: string, optionLabel: string) {
   fireEvent.click(option)
 }
 
-/** Opens the role filter and returns the texts of its options, in order (the only open dropdown). */
+/** Opens the role filter and returns the texts of its options, in order — read from the open dropdown only (PR #62 review, note 2). */
 async function roleFilterOptions() {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.users.role }))
   await screen.findByText(ar.roles.admin, { selector: '.ant-select-item-option-content' })
-  return Array.from(document.querySelectorAll('.ant-select-item-option-content'), (option) => option.textContent)
+  const open = document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+  expect(open).toHaveLength(1)
+  return Array.from(open[0]!.querySelectorAll('.ant-select-item-option-content'), (option) => option.textContent)
 }
 
 describe('UsersPage', () => {
@@ -228,5 +235,42 @@ describe('UsersPage', () => {
     await screen.findByText(layla.fullName)
     expect(within(bodyRows()[0]).getByText('librarian')).toBeInTheDocument()
     expect(api.rolesRequests).toEqual([])
+  })
+
+  it('hands the roles it read to the drawer: opening the roles tab asks GET /api/roles no second time (J-F23 — PR #62 review, note 1)', async () => {
+    const detail = makeUserDetail({ id: sara.id, fullName: sara.fullName, roles: [{ key: 'teacher', label: ROLE_LABELS.teacher }], studentProfile: null, guardians: [] })
+    const api = mockUsersApi({ first: makeUserList([layla, sara]) }, detail)
+    renderPage()
+    // Layla's custom role shows its server label once the page holds the roles.
+    expect(await screen.findByText(ROLE_LABELS.librarian.ar)).toBeInTheDocument()
+    expect(api.rolesRequests).toEqual(['/api/roles'])
+
+    fireEvent.click(screen.getByLabelText(`${ar.common.view}: ${sara.fullName}`))
+    const drawer = await screen.findByRole('dialog')
+    await within(drawer).findByRole('heading', { level: 4, name: sara.fullName })
+    fireEvent.click(within(drawer).getByRole('tab', { name: ar.users.tabs.roles }))
+    const select = await within(drawer).findByRole('combobox', { name: ar.users.rolesTab.label })
+    fireEvent.mouseDown(select)
+    expect(await screen.findByText(ROLE_LABELS.librarian.ar, { selector: '.ant-select-dropdown .ant-select-item-option-content' })).toBeInTheDocument()
+    expect(api.rolesRequests).toEqual(['/api/roles'])
+  })
+
+  it('lets the roles tab read the roles itself when the page could not (J-F23 — the fallback)', async () => {
+    const detail = makeUserDetail({ id: sara.id, fullName: sara.fullName, roles: [{ key: 'teacher', label: ROLE_LABELS.teacher }], studentProfile: null, guardians: [] })
+    const api = mockUsersApi({ first: makeUserList([sara]) }, detail, (attempt) =>
+      attempt === 1 ? jsonResponse(500, { statusCode: 500, message: 'Internal server error' }) : makeRoleList(),
+    )
+    renderPage()
+    await screen.findByText(sara.fullName)
+    await waitFor(() => expect(api.rolesRequests).toHaveLength(1))
+
+    fireEvent.click(screen.getByLabelText(`${ar.common.view}: ${sara.fullName}`))
+    const drawer = await screen.findByRole('dialog')
+    await within(drawer).findByRole('heading', { level: 4, name: sara.fullName })
+    fireEvent.click(within(drawer).getByRole('tab', { name: ar.users.tabs.roles }))
+    const select = await within(drawer).findByRole('combobox', { name: ar.users.rolesTab.label })
+    expect(api.rolesRequests).toEqual(['/api/roles', '/api/roles'])
+    fireEvent.mouseDown(select)
+    expect(await screen.findByText(ROLE_LABELS.librarian.ar, { selector: '.ant-select-dropdown .ant-select-item-option-content' })).toBeInTheDocument()
   })
 })

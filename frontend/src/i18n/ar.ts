@@ -27,6 +27,13 @@ export const ar = {
     room: 'القاعة',
     total: 'الإجمالي',
     notImplemented: 'هذه الوظيفة غير منفّذة بعد (نموذج أولي).',
+    // KI-054 (J-F23): the «discard?» question of a drawer that holds unsaved work — the wording of classes.drawer.discard.*.
+    unsaved: {
+      title: 'تجاهل التعديلات غير المحفوظة؟',
+      content: 'في هذا الدرج محرّر مفتوح لم تُحفظ تعديلاته بعد. إغلاق الدرج يتجاهلها.',
+      ok: 'تجاهل وإغلاق',
+      cancel: 'متابعة التعديل',
+    },
   },
   roles: {
     admin: 'مدير الأكاديمية',
@@ -520,6 +527,7 @@ export const ar = {
       nameArRequired: 'الاسم بالعربية مطلوب',
       arabicFirst: 'أدخل النص العربي أولاً',
       ageRange: 'أكبر عمر أقل من أصغر عمر',
+      maxLength: 'الحد الأقصى {{max}} حرفاً',
     },
     create: {
       title: 'دورة جديدة',

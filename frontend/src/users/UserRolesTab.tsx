@@ -5,6 +5,11 @@
 // of the caller's reach is read-only, and `academy_admin` cannot be removed
 // from oneself. After changing the signed-in user's own roles the session user
 // is reloaded so the new permissions apply at once (AC2).
+// Since J-F23: the roles the users page already read (useRoleLabels) are used
+// when handed over — one GET /api/roles per visit (PR #62 review, note 1); the
+// tab reads them itself only without them (still loading, failed, or no
+// `users.read`). A selection that differs from the held roles is reported
+// through `onUnsavedChange`, so the drawer keeps it on Escape (KI-054).
 import { Alert, App, Button, Flex, Form, Radio, Select, Spin, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -31,6 +36,10 @@ interface UserRolesTabProps {
   user: UserDetail
   /** Called with the detail the server returned after the replacement. */
   onSaved: (user: UserDetail) => void
+  /** The roles of API-022 the page already read (J-F23); absent or null, the tab reads them itself. */
+  loadedRoles?: readonly Role[] | null
+  /** Whether the selection differs from the held roles (KI-054): reported while mounted, false once left. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
 interface RolesFormValues {
@@ -38,32 +47,37 @@ interface RolesFormValues {
   employeeKind?: EmployeeKind
 }
 
-export function UserRolesTab({ user, onSaved }: UserRolesTabProps) {
+export function UserRolesTab({ user, onSaved, loadedRoles = null, onUnsavedChange }: UserRolesTabProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { language } = useLocalized()
   const { user: me, reloadUser } = useAuth()
   const permissions = me?.permissions ?? []
   const selfId = me?.id ?? null
-  const [roles, setRoles] = useState<Role[] | null>(null)
+  const [fetched, setFetched] = useState<readonly Role[] | null>(null)
   const [loadError, setLoadError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   // Untyped: `setFields` receives the `string[]` name path of the backend failure.
   const [form] = Form.useForm()
   const selected = Form.useWatch('roleKeys', form) as string[] | undefined
+  // A list read here first stays the tab's own, so the page's later answer never resets the form.
+  const roles = fetched ?? loadedRoles
+  const handedOver = loadedRoles !== null
 
   useEffect(() => {
+    // The page's roles serve the tab: no second GET /api/roles (PR #62 review, note 1).
+    if (handedOver) return
     const controller = new AbortController()
     listRoles(controller.signal)
       .then((list) => {
-        if (!controller.signal.aborted) setRoles(list.items)
+        if (!controller.signal.aborted) setFetched(list.items)
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setLoadError(error)
       })
     return () => controller.abort()
-  }, [])
+  }, [handedOver])
 
   // The form starts from the roles the detail holds and follows them after every save
   // (the Form element exists only once the roles are loaded).
@@ -74,7 +88,18 @@ export function UserRolesTab({ user, onSaved }: UserRolesTabProps) {
     form.setFieldsValue({ roleKeys: heldKey ? heldKey.split(',') : [], employeeKind: undefined })
   }, [form, heldKey, roles])
 
-  if (loadError) {
+  // The selection as last changed, tied to the held roles it was made against: once they change
+  // (a save, a re-read) the form is reset to them and the old draft no longer counts (KI-054).
+  // Read from onValuesChange, not Form.useWatch, whose watchers report a task later.
+  const [draft, setDraft] = useState<{ held: string; keys: readonly string[] } | null>(null)
+  // Unsaved work only while the selection differs from the held roles: a change back holds nothing.
+  const unsaved = draft !== null && draft.held === heldKey && planRolesReplacement(user, draft.keys) !== null
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+    return () => onUnsavedChange?.(false)
+  }, [unsaved, onUnsavedChange])
+
+  if (!roles && loadError) {
     return <Alert type="error" showIcon message={t('users.rolesTab.loadFailed')} description={failureMessage(t, describeUsersFailure(loadError))} />
   }
   if (!roles) {
@@ -123,6 +148,7 @@ export function UserRolesTab({ user, onSaved }: UserRolesTabProps) {
       layout="vertical"
       requiredMark={false}
       initialValues={{ roleKeys: held }}
+      onValuesChange={(_changed, values) => setDraft({ held: heldKey, keys: values.roleKeys ?? [] })}
       onFinish={onFinish}
       disabled={saving || readOnly}
     >

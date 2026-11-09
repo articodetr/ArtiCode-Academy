@@ -2,7 +2,8 @@
 // pagination; a detail/edit drawer and a creation wizard. Actions are shown by
 // permission (`hasPermission`) — the server remains the security boundary.
 // Since J-F12 custom roles carry their server labels in the roles column and
-// in the role filter (GET /api/roles once per visit — useRoleLabels()).
+// in the role filter (GET /api/roles once per visit — useRoleLabels()); since
+// J-F23 the drawer's roles tab reuses that read (PR #62 review, note 1).
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Checkbox, Flex, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -224,6 +225,7 @@ export function UsersPage() {
       <UserDrawer
         userId={selectedId}
         includeDeleted={Boolean(selected?.deletedAt)}
+        loadedRoles={roles.items}
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
       />

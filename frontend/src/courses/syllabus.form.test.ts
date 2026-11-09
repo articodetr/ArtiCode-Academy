@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SYLLABUS_ITEM_IDS, THREE_ITEMS } from '../test/courses'
-import { buildSyllabusInput, emptySyllabusDraft, planSyllabusReplacement, syllabusDraftsOf, totalMinutes } from './syllabus.form'
+import { buildSyllabusInput, emptySyllabusDraft, planSyllabusReplacement, syllabusDraftsOf, syllabusHasChanges, totalMinutes } from './syllabus.form'
 
 describe('syllabus editor helpers (MOD-04-T06)', () => {
   it('sends nothing when the edited list equals the stored syllabus (AC1)', () => {
@@ -32,5 +32,30 @@ describe('syllabus editor helpers (MOD-04-T06)', () => {
   it('sums the estimates, counting an item without one as zero', () => {
     expect(totalMinutes(THREE_ITEMS())).toBe(105)
     expect(totalMinutes([])).toBe(0)
+  })
+})
+
+describe('syllabusHasChanges (KI-054 — J-F23)', () => {
+  it('holds nothing for the stored list, an item changed back, or an item added and removed again', () => {
+    const items = THREE_ITEMS()
+    expect(syllabusHasChanges(items, syllabusDraftsOf(items))).toBe(false)
+    expect(syllabusHasChanges([], [])).toBe(false)
+  })
+
+  it('holds a list that differs by the comparison of the save: an edit, a move, a removal, an empty new item', () => {
+    const items = THREE_ITEMS()
+    const drafts = syllabusDraftsOf(items)
+    expect(syllabusHasChanges(items, [{ ...drafts[0]!, estimatedMinutes: 50 }, drafts[1]!, drafts[2]!])).toBe(true)
+    expect(syllabusHasChanges(items, [drafts[1]!, drafts[0]!, drafts[2]!])).toBe(true)
+    expect(syllabusHasChanges(items, drafts.slice(1))).toBe(true)
+    expect(syllabusHasChanges(items, [...drafts, emptySyllabusDraft()])).toBe(true)
+  })
+
+  it('holds an English description typed without its Arabic text, which the save drops', () => {
+    const items = THREE_ITEMS()
+    const drafts = syllabusDraftsOf(items)
+    const englishOnly = [{ ...drafts[0]!, descriptionEn: 'English only' }, drafts[1]!, drafts[2]!]
+    expect(planSyllabusReplacement(items, englishOnly)).toBeNull()
+    expect(syllabusHasChanges(items, englishOnly)).toBe(true)
   })
 })

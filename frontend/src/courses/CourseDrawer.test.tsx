@@ -159,4 +159,17 @@ describe('CourseDrawer', () => {
     expect(screen.queryByText(ar.courses.syllabus.edit)).not.toBeInTheDocument()
     expect(calls.map((call) => call.url)).toEqual([`/api/courses/${COURSE_ID}`, `/api/courses/${COURSE_ID}/syllabus`])
   })
+
+  it('words the length limit of a text field in its own message, not antd default text, and sends nothing (J-F23)', async () => {
+    const calls = mockCourseApi(() => makeCourse())
+    renderDrawer(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101')
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    fireEvent.change(await screen.findByLabelText(ar.courses.fields.summaryAr), { target: { value: 'م'.repeat(201) } })
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+
+    expect(await screen.findByText('الحد الأقصى 200 حرفاً')).toBeInTheDocument()
+    expect(ar.courses.validation.maxLength.replace('{{max}}', '200')).toBe('الحد الأقصى 200 حرفاً')
+    expect(calls.every((call) => call.method === 'GET')).toBe(true)
+  })
 })
