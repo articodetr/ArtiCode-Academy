@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AcademyModule } from './academy/academy.module.js';
+import { AssignmentsModule } from './assignments/assignments.module.js';
 import { AccountModule } from './account/account.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -62,6 +63,8 @@ import { UsersModule } from './users/users.module.js';
     ScheduleModule,
     // MOD-06-T02: lessons (attendance and «my lessons» follow in T03/T04).
     LessonsModule,
+    // MOD-08 (§4g): assignments (T02); submissions and «my assignments» join it in T03/T04.
+    AssignmentsModule,
     HealthModule,
   ],
 })
