@@ -119,6 +119,8 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
       <Form.Item
         name="logoUrl"
         label={t('settings.logoUrl')}
+        // The server keeps any http(s) URL, but the header loads an http: logo only on an http: page (mixed content — J-F24).
+        extra={t('settings.logoHint')}
         rules={[{ validator: (_, value: string | undefined) => (!value?.trim() || isHttpUrl(value.trim()) ? Promise.resolve() : Promise.reject(new Error(t('settings.validation.url')))) }]}
       >
         <Input dir="ltr" placeholder="https://" />

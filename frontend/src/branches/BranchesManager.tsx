@@ -7,8 +7,11 @@
 // `branch_is_main`), and delete behind a confirmation (never the main branch;
 // a branch with rooms gets the server's `branch_in_use` message). Every write
 // is followed by a re-read of the list: a promotion makes another branch step
-// down, and the order comes from the server. Without `branches.manage` the tab
-// is read-only (the route is gated anyway).
+// down, and the order comes from the server. The tab is management-only by
+// design: the route (`guarded('branches')`), the nav entry and SettingsPage
+// (`RequireAccess permission="branches.manage"`) mount it for holders of
+// `branches.manage` only, so it has no read-only mode (J-F24, as J-F20 did for
+// the rooms tab); the server stays the boundary.
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, StarFilled, StarOutlined, StopOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -16,14 +19,12 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { deleteBranch, updateBranch } from '../api/branches'
 import type { Branch } from '../api/branches'
-import { useAuth } from '../auth/auth-context'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { BranchModal } from './BranchModal'
 import { describeBranchesFailure, failureMessage } from './branches.errors'
 import { promoteBranchBody } from './branches.form'
-import { MANAGE_BRANCHES_PERMISSION } from './branches.policy'
 import { useBranches } from './useBranches'
 
 const EMPTY = '—'
@@ -32,8 +33,6 @@ export function BranchesManager() {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
-  const { hasPermission } = useAuth()
-  const canManage = hasPermission(MANAGE_BRANCHES_PERMISSION)
   const { branches, loading, error, reload } = useBranches()
   const [editing, setEditing] = useState<Branch | 'new' | null>(null)
   const [busy, setBusy] = useState(false)
@@ -104,10 +103,7 @@ export function BranchesManager() {
         row.timezone ? <Typography.Text dir="ltr">{row.timezone}</Typography.Text> : <Typography.Text type="secondary">{t('branches.academyTimezone')}</Typography.Text>,
     },
     { title: t('branches.columns.status'), key: 'status', render: (_, row) => <StatusTag value={row.isActive ? 'active' : 'inactive'} /> },
-  ]
-
-  if (canManage) {
-    columns.push({
+    {
       title: t('common.actions'),
       key: 'actions',
       render: (_, row) => {
@@ -173,20 +169,18 @@ export function BranchesManager() {
           </Space>
         )
       },
-    })
-  }
+    },
+  ]
 
   return (
     <Card>
       <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 16 }}>
-        <Typography.Text type="secondary">{t(canManage ? 'branches.hint' : 'branches.readOnlyHint')}</Typography.Text>
+        <Typography.Text type="secondary">{t('branches.hint')}</Typography.Text>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={reload} aria-label={t('branches.refresh')} />
-          {canManage ? (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing('new')}>
-              {t('branches.add')}
-            </Button>
-          ) : null}
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing('new')}>
+            {t('branches.add')}
+          </Button>
         </Space>
       </Flex>
 
