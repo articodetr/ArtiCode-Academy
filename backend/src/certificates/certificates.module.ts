@@ -3,6 +3,8 @@ import { GradesModule } from '../grades/grades.module.js';
 import { CertificateVerificationController, CertificatesController } from './certificates-read.controller.js';
 import { ClassCertificatesController } from './certificates.controller.js';
 import { CertificatesService } from './certificates.service.js';
+import { MyCertificatesController } from './my-certificates.controller.js';
+import { MyCertificatesService } from './my-certificates.service.js';
 
 /**
  * MOD-10 — certificates (roadmap §4h.10): issuing and the class preview since
@@ -13,8 +15,8 @@ import { CertificatesService } from './certificates.service.js';
  */
 @Module({
   imports: [GradesModule],
-  controllers: [ClassCertificatesController, CertificatesController, CertificateVerificationController],
-  providers: [CertificatesService],
+  controllers: [ClassCertificatesController, CertificatesController, CertificateVerificationController, MyCertificatesController],
+  providers: [CertificatesService, MyCertificatesService],
   exports: [CertificatesService],
 })
 export class CertificatesModule {}
