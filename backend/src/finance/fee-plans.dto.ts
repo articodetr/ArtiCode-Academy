@@ -28,7 +28,7 @@ export class FeePlanLineDto {
   amount: number;
 }
 
-/** An installment share of a plan (D-R60): its percentage of the total and its due day after the issue date. */
+/** An installment share of a plan (D-R60): its percentage of the total and its due day, counted from the day an invoice is created from the plan. */
 export class FeePlanShareDto {
   @ApiProperty({ minimum: 0.01, maximum: 100, example: 50, description: 'A JSON number with at most two decimals; the shares sum to exactly 100' })
   @Transform(rawNumber)
@@ -37,7 +37,7 @@ export class FeePlanShareDto {
   @Max(100)
   percent: number;
 
-  @ApiProperty({ minimum: 0, maximum: DUE_OFFSET_DAYS_MAX, example: 30, description: 'Days after the issue date; not below the previous share' })
+  @ApiProperty({ minimum: 0, maximum: DUE_OFFSET_DAYS_MAX, example: 30, description: 'Days after the day an invoice is created from the plan; not below the previous share' })
   @Transform(rawNumber)
   @IsInt()
   @Min(0)
