@@ -10,9 +10,22 @@ import type { ClassStatus } from '../generated/prisma/client.js';
 import { GradebookService } from '../grades/gradebook.service.js';
 import type { FinalGradeState } from '../grades/gradebook.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { CertificateDto, ClassCertificatesDto, IssueCertificatesDto, IssueCertificatesResultDto, SkippedEnrollmentDto } from './certificates.dto.js';
+import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.js';
+import { escapeLikePattern } from '../users/users.validation.js';
+import { CERTIFICATES_PAGE_DEFAULT } from './certificates.dto.js';
+import type {
+  CertificateDto,
+  CertificateListDto,
+  CertificateVerificationDto,
+  ClassCertificatesDto,
+  IssueCertificatesDto,
+  IssueCertificatesResultDto,
+  ListCertificatesQueryDto,
+  RevokeCertificateDto,
+  SkippedEnrollmentDto,
+} from './certificates.dto.js';
 import { certificatesError } from './certificates.errors.js';
-import { CERTIFICATE_SEQUENCE_KEY, formatSerial, ineligibilityOf, newVerificationCode, yearIn } from './certificates.policy.js';
+import { CERTIFICATE_SEQUENCE_KEY, formatSerial, ineligibilityOf, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
 import type { IneligibleReason } from './certificates.policy.js';
 
 export const CERTIFICATES_AUDIT_ACTIONS = {
@@ -216,6 +229,85 @@ export class CertificatesService {
       );
       return { issued: created.map(toCertificateDto), skipped };
     });
+  }
+
+  /** API-130 — newest first by the UUIDv7 id (insertion order), keyset pages. */
+  async list(query: ListCertificatesQueryDto): Promise<CertificateListDto> {
+    const limit = query.limit ?? CERTIFICATES_PAGE_DEFAULT;
+    const where: Prisma.CertificateWhereInput = {};
+    if (query.classId) where.classId = query.classId;
+    if (query.courseId) where.courseId = query.courseId;
+    if (query.studentId) where.studentUserId = query.studentId;
+    if (query.status) where.status = query.status;
+    if (query.q) where.serial = { contains: escapeLikePattern(query.q), mode: 'insensitive' };
+    if (query.cursor) {
+      const cursor = decodeKeysetCursor(query.cursor, 'issued', 'desc', false, () => certificatesError.cursorInvalid());
+      where.id = { lt: cursor.id };
+    }
+    const rows = await this.prisma.db.certificate.findMany({ where, orderBy: { id: 'desc' }, take: limit + 1, select: CERTIFICATE_SELECT });
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: page.map(toCertificateDto),
+      nextCursor: rows.length > limit && last ? encodeKeysetCursor({ sort: 'issued', order: 'desc', key: null, id: last.id }) : null,
+    };
+  }
+
+  /** API-131 */
+  async detail(certificateId: string): Promise<CertificateDto> {
+    const row = await this.prisma.db.certificate.findUnique({ where: { id: certificateId }, select: CERTIFICATE_SELECT });
+    if (!row) throw certificatesError.certificateNotFound();
+    return toCertificateDto(row);
+  }
+
+  /** API-133 — final (D-R55): issued → revoked under the certificate-row lock, one `certificates.revoked` event. */
+  async revoke(certificateId: string, input: RevokeCertificateDto, caller: AuthPrincipal, ctx: RequestContext): Promise<CertificateDto> {
+    return this.prisma.db.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ status: string; revoked_at: Date | null }[]>`SELECT status::text AS status, revoked_at FROM certificates WHERE id = ${certificateId}::uuid FOR NO KEY UPDATE`;
+      const current = locked[0];
+      if (!current) throw certificatesError.certificateNotFound();
+      if (current.status === 'revoked') throw certificatesError.certificateRevoked(certificateId, current.revoked_at!.toISOString());
+      const row = await tx.certificate.update({
+        where: { id: certificateId },
+        data: { status: 'revoked', revokedAt: new Date(), revokedById: caller.id, revokeReason: input.reason },
+        select: { ...CERTIFICATE_SELECT, classId: true },
+      });
+      await this.audit.record(
+        {
+          action: CERTIFICATES_AUDIT_ACTIONS.revoked,
+          actorUserId: caller.id,
+          entityType: CERTIFICATES_ENTITY_TYPE,
+          entityId: certificateId,
+          metadata: { serial: row.serial, classId: row.classId, reason: input.reason },
+          ...ctx,
+        },
+        tx,
+      );
+      return toCertificateDto(row);
+    });
+  }
+
+  /** API-134 — the public verification (D-R56): a malformed or unknown code is the same 404. */
+  async verify(rawCode: string): Promise<CertificateVerificationDto> {
+    const code = normalizeVerificationCode(rawCode);
+    const row = code
+      ? await this.prisma.db.certificate.findUnique({
+          where: { verificationCode: code },
+          select: { serial: true, status: true, issuedAt: true, revokedAt: true, percent: true, bandLabel: true, bandLetter: true, snapshot: true },
+        })
+      : null;
+    if (!row) throw certificatesError.certificateNotFound();
+    const snapshot = row.snapshot as unknown as CertificateDto['snapshot'];
+    return {
+      serial: row.serial,
+      status: row.status,
+      issuedAt: row.issuedAt.toISOString(),
+      revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
+      student: { fullName: snapshot.student.fullName, fullNameLatin: snapshot.student.fullNameLatin ?? null },
+      course: snapshot.course,
+      grade: { percent: Number(row.percent), label: localized(row.bandLabel, ''), letter: row.bandLetter },
+      academy: snapshot.academy,
+    };
   }
 
   // ---------------------------------------------------------------------------

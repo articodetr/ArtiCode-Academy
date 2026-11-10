@@ -1,10 +1,72 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsOptional, IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsDefined, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
+import { trimParam } from '../users/users.validation.js';
 import { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
 import { CertificateStatus, ClassStatus, EnrollmentStatus } from '../generated/prisma/client.js';
 import { INELIGIBLE_REASONS } from './certificates.policy.js';
 import type { IneligibleReason } from './certificates.policy.js';
+
+/** API-130 page size. */
+export const CERTIFICATES_PAGE_DEFAULT = 50;
+export const CERTIFICATES_PAGE_MAX = 100;
+/** A revocation reason (D-R55): 1..500 characters after trimming. */
+export const REVOKE_REASON_MAX_LENGTH = 500;
+const CERTIFICATE_STATUSES: CertificateStatus[] = ['issued', 'revoked'];
+
+/** API-130 query: ANDed filters, newest first (UUIDv7 id order), keyset pages. */
+export class ListCertificatesQueryDto {
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID('all')
+  classId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID('all')
+  courseId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID('all')
+  studentId?: string;
+
+  @ApiPropertyOptional({ enum: CERTIFICATE_STATUSES })
+  @IsOptional()
+  @IsIn(CERTIFICATE_STATUSES)
+  status?: CertificateStatus;
+
+  @ApiPropertyOptional({ maxLength: 32, description: 'Part of the serial, literal and case-insensitive' })
+  @IsOptional()
+  @Transform(trimParam)
+  @IsString()
+  @Length(1, 32)
+  q?: string;
+
+  @ApiPropertyOptional({ default: CERTIFICATES_PAGE_DEFAULT, minimum: 1, maximum: CERTIFICATES_PAGE_MAX })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(CERTIFICATES_PAGE_MAX)
+  limit?: number;
+
+  @ApiPropertyOptional({ maxLength: 512, description: 'Opaque `nextCursor` of the previous page; send it with the same filters' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 512)
+  cursor?: string;
+}
+
+/** API-133 body. */
+export class RevokeCertificateDto {
+  @ApiProperty({ minLength: 1, maxLength: REVOKE_REASON_MAX_LENGTH, description: 'Why the certificate is revoked; trimmed, required (D-R55)' })
+  @IsDefined()
+  @Transform(trimParam)
+  @IsString()
+  @Length(1, REVOKE_REASON_MAX_LENGTH)
+  reason: string;
+}
 
 /** At most this many enrollments in one issuing request. */
 export const ISSUE_MAX_ENROLLMENTS = 500;
@@ -222,4 +284,39 @@ export class ClassCertificatesDto {
 
   @ApiProperty({ type: [CertificatePreviewItemDto], description: 'Every active or completed enrollment, in enrollment order' })
   items: CertificatePreviewItemDto[];
+}
+
+export class CertificateListDto {
+  @ApiProperty({ type: [CertificateDto], description: 'Newest first' })
+  items: CertificateDto[];
+
+  @ApiProperty({ type: String, nullable: true, description: 'Opaque cursor of the next page, or null on the last one' })
+  nextCursor: string | null;
+}
+
+/** API-134: what a public verification shows (D-R56) — read from the snapshot; no reason, no internal id. */
+export class CertificateVerificationDto {
+  @ApiProperty({ example: 'CERT-2026-00001' })
+  serial: string;
+
+  @ApiProperty({ enum: CertificateStatus, description: '`revoked` = no longer valid' })
+  status: CertificateStatus;
+
+  @ApiProperty({ description: 'ISO 8601' })
+  issuedAt: string;
+
+  @ApiProperty({ type: String, nullable: true, description: 'ISO 8601' })
+  revokedAt: string | null;
+
+  @ApiProperty({ description: '{ fullName, fullNameLatin }' })
+  student: { fullName: string; fullNameLatin: string | null };
+
+  @ApiProperty({ description: '{ code, name }' })
+  course: { code: string; name: LocalizedText };
+
+  @ApiProperty({ type: CertificateGradeDto })
+  grade: CertificateGradeDto;
+
+  @ApiProperty({ description: '{ name }' })
+  academy: { name: LocalizedText };
 }
