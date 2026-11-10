@@ -12,12 +12,17 @@
 //   fee_plan_inactive         409 — an inactive plan creates no invoice ({ feePlanId })
 //   course_not_found          404 — the plan's course does not exist ({ courseId })
 //   class_not_found           404 — the plan's or the batch's class does not exist ({ classId })
+//   fee_plan_mismatch         422 — the plan prices another course or class than the enrollment's
+//                                   or the batch's class ({ feePlanId, classId })
 //   -- invoices (T03) --
 //   invoice_not_found         404 — no invoice with this id
 //   student_not_found         404 — no student with this id ({ studentId })
 //   enrollment_mismatch       422 — the enrollment belongs to another student ({ enrollmentId })
 //   invoice_invalid           400 — the invoice breaks a rule ({ problems }: no_lines,
-//                                   installments_sum, discount_exceeds_subtotal, total_zero, …)
+//                                   no_installments, installments_sum, due_dates_not_ascending,
+//                                   installment_not_positive, discount_exceeds_subtotal,
+//                                   discount_reason_without_discount, total_zero, plan_with_lines,
+//                                   lines_required)
 //   invoice_not_draft         409 — only a draft is edited or deleted ({ status })
 //   invoice_not_issued        409 — payments are recorded on an issued invoice only ({ status })
 //   invoice_has_payments      409 — an invoice with completed payments is not cancelled ({ paymentCount })
@@ -39,6 +44,7 @@ export const FINANCE_ERROR_CODES = [
   'fee_plan_inactive',
   'course_not_found',
   'class_not_found',
+  'fee_plan_mismatch',
   'invoice_not_found',
   'student_not_found',
   'enrollment_mismatch',
@@ -75,7 +81,17 @@ export class FinanceHttpException extends HttpException {
 }
 
 export type FeePlanProblem = 'course_and_class' | 'percent_sum' | 'offsets_not_ascending';
-export type InvoiceProblem = 'no_lines' | 'installments_sum' | 'discount_exceeds_subtotal' | 'total_zero' | 'no_installments' | 'seq_not_consecutive' | 'due_dates_not_ascending' | 'discount_reason_without_discount';
+export type InvoiceProblem =
+  | 'no_lines'
+  | 'no_installments'
+  | 'installments_sum'
+  | 'due_dates_not_ascending'
+  | 'installment_not_positive'
+  | 'discount_exceeds_subtotal'
+  | 'discount_reason_without_discount'
+  | 'total_zero'
+  | 'plan_with_lines'
+  | 'lines_required';
 
 export const financeError = {
   feePlanNotFound: (feePlanId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'fee_plan_not_found', 'No fee plan with this id', { feePlanId }),
@@ -86,6 +102,8 @@ export const financeError = {
   feePlanInactive: (feePlanId: string) => new FinanceHttpException(HttpStatus.CONFLICT, 'fee_plan_inactive', 'An inactive fee plan creates no invoice', { feePlanId }),
   courseNotFound: (courseId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'course_not_found', 'No course with this id', { courseId }),
   classNotFound: (classId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'class_not_found', 'No class with this id', { classId }),
+  feePlanMismatch: (feePlanId: string, classId: string) =>
+    new FinanceHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'fee_plan_mismatch', 'The fee plan prices another course or class', { feePlanId, classId }),
   invoiceNotFound: (invoiceId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'invoice_not_found', 'No invoice with this id', { invoiceId }),
   studentNotFound: (studentId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'student_not_found', 'No student with this id', { studentId }),
   enrollmentMismatch: (enrollmentId: string) =>

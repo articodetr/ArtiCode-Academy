@@ -73,7 +73,7 @@ export function splitInstallments(total: string, shares: readonly PlanShare[], s
 }
 
 /** JSON text with sorted keys — compares stored jsonb with a request. */
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value !== null && typeof value === 'object') {
     return `{${Object.keys(value as Record<string, unknown>)
