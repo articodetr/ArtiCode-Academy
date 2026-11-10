@@ -123,6 +123,11 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'assignments.submitted',
   'assignments.graded',
   'assignments.returned',
+  // MOD-09-T02 (CH-0126) — first offered with J-F44 (CH-0158)
+  'grade_schemes.',
+  'grade_schemes.created',
+  'grade_schemes.updated',
+  'grade_schemes.deleted',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

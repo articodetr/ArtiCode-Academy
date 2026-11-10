@@ -56,6 +56,18 @@ describe('AppLayout navigation', () => {
     expect(selected[0]).toHaveTextContent(ar.nav.roles)
   })
 
+  it('shows the grade schemes entry right after the settings entry to a holder of academy.settings.manage, and selects it on /settings/grade-schemes (J-F44)', () => {
+    renderWithProviders(<AppLayout />, {
+      auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read', 'academy.settings.manage'] }) }),
+      route: '/settings/grade-schemes',
+    })
+    const labels = menuLabels()
+    expect(labels.indexOf(ar.nav.gradeSchemes)).toBe(labels.indexOf(ar.nav.settings) + 1)
+    const selected = document.querySelectorAll('.ant-menu-item-selected')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]).toHaveTextContent(ar.nav.gradeSchemes)
+  })
+
   it('shows a student «my lessons» right after «lessons» and selects it on /my-lessons (J-F11)', () => {
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'schedule.read', 'lessons.read'] })
     renderWithProviders(<AppLayout />, { auth: makeAuth({ user: student }), route: '/my-lessons' })

@@ -120,4 +120,12 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
       expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('assignments.'))
     }
   })
+
+  it('offers the three grade scheme events of MOD-09-T02 once each, after their family prefix (J-F44)', () => {
+    expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'grade_schemes.')).toEqual(['grade_schemes.'])
+    for (const event of ['grade_schemes.created', 'grade_schemes.updated', 'grade_schemes.deleted']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+      expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('grade_schemes.'))
+    }
+  })
 })

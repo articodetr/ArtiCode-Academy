@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
 import { THREE_BRANCHES } from '../test/branches'
+import { THREE_GRADE_SCHEMES } from '../test/gradeSchemes'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -11,7 +12,7 @@ import { ALL_ROLES, makeCatalog } from '../test/roles'
 import { makeRoomList } from '../test/rooms'
 import { SettingsPage } from './SettingsPage'
 
-/** Serves the roles tab (API-022/023), the general tab (API-035), the branches tab (API-080) and the rooms tab (API-084, API-080). */
+/** Serves the roles tab (API-022/023), the general tab (API-035), the branches tab (API-080), the rooms tab (API-084, API-080) and the grade schemes tab (API-122). */
 function mockSettingsApi() {
   return mockFetch((url) => {
     if (url === '/api/roles') return jsonResponse(200, { items: ALL_ROLES })
@@ -19,6 +20,7 @@ function mockSettingsApi() {
     if (url === '/api/academy') return jsonResponse(200, makeAcademy())
     if (url === '/api/branches') return jsonResponse(200, { items: THREE_BRANCHES() })
     if (url === '/api/rooms') return jsonResponse(200, makeRoomList())
+    if (url === '/api/grade-schemes') return jsonResponse(200, { items: THREE_GRADE_SCHEMES() })
     return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
   })
 }
@@ -97,7 +99,8 @@ describe('SettingsPage', () => {
     })
 
     expect(screen.getByText(ar.rooms.subtitle)).toBeInTheDocument()
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.rooms, ar.settings.tabs.roles])
+    // The grade schemes tab (J-F44) follows academy.settings.manage, which SETTINGS_ADMIN holds.
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.rooms, ar.settings.tabs.gradeSchemes, ar.settings.tabs.roles])
     expect(screen.getByRole('tab', { name: ar.settings.tabs.rooms })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByText('HALL')).toBeInTheDocument()
     expect(screen.queryByLabelText(ar.settings.academyNameAr)).not.toBeInTheDocument()
@@ -142,7 +145,7 @@ describe('SettingsPage', () => {
     })
 
     expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.branches, ar.settings.tabs.roles])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.branches, ar.settings.tabs.gradeSchemes, ar.settings.tabs.roles])
     await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.branches }))
     expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings/branches')
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/academy'])
@@ -174,5 +177,50 @@ describe('SettingsPage', () => {
     renderWithProviders(<SettingsPage />, { auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }), route: '/settings' })
     expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: ar.settings.tabs.branches })).not.toBeInTheDocument()
+  })
+
+  // J-F44 (MOD-09-T08 part a): the grade schemes tab under /settings/grade-schemes behind `academy.settings.manage` alone.
+  it('renders the grade schemes manager under /settings/grade-schemes for a holder of academy.settings.manage, its tab after rooms and before roles (J-F44)', async () => {
+    const fetchMock = mockSettingsApi()
+    renderWithProviders(<SettingsPage section="gradeSchemes" />, {
+      auth: makeAuth({ user: makeUser({ permissions: [...SETTINGS_ADMIN, 'branches.manage', 'schedule.manage'] }) }),
+      route: '/settings/grade-schemes',
+      routes: { '/settings/rooms': <LocationProbe /> },
+    })
+
+    expect(screen.getByText(ar.gradeSchemes.subtitle)).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      ar.settings.tabs.general,
+      ar.settings.tabs.branches,
+      ar.settings.tabs.rooms,
+      ar.settings.tabs.gradeSchemes,
+      ar.settings.tabs.roles,
+    ])
+    expect(screen.getByRole('tab', { name: ar.settings.tabs.gradeSchemes })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('ناجح أو راسب')).toBeInTheDocument()
+    expect(screen.getByText(ar.gradeSchemes.add)).toBeInTheDocument()
+    expect(screen.queryByLabelText(ar.settings.academyNameAr)).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/grade-schemes'])
+
+    await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.rooms }))
+    expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings/rooms')
+  })
+
+  it('opens /settings/grade-schemes to a custom role holding academy.settings.manage alone, and answers 403 to a holder of academy.settings.read alone (J-F44)', async () => {
+    mockSettingsApi()
+    const { unmount } = renderWithProviders(<SettingsPage section="gradeSchemes" />, {
+      auth: makeAuth({ user: makeUser({ role: null, roles: ['registrar'], permissions: ['academy.settings.manage'] }) }),
+      route: '/settings/grade-schemes',
+    })
+    expect(await screen.findByText('ناجح أو راسب')).toBeInTheDocument()
+    // The general tab follows the settings entry (read or manage), so this holder sees two tabs.
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.gradeSchemes])
+    unmount()
+
+    const fetchMock = mockSettingsApi()
+    renderWithProviders(<SettingsPage section="gradeSchemes" />, { auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read'] }) }), route: '/settings/grade-schemes' })
+    expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
+    expect(screen.queryByText(ar.gradeSchemes.subtitle)).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
