@@ -190,6 +190,14 @@ model User {
   certificates            Certificate[]          @relation("CertificateStudent")
   certificatesIssued      Certificate[]          @relation("CertificateIssuedBy")
   certificatesRevoked     Certificate[]          @relation("CertificateRevokedBy")
+  /// MOD-11: fee plans they created, invoices as a student, invoices they issued, cancelled or created, payments they recorded or reversed.
+  feePlansCreated         FeePlan[]              @relation("FeePlanCreatedBy")
+  invoices                Invoice[]              @relation("InvoiceStudent")
+  invoicesIssued          Invoice[]              @relation("InvoiceIssuedBy")
+  invoicesCancelled       Invoice[]              @relation("InvoiceCancelledBy")
+  invoicesCreated         Invoice[]              @relation("InvoiceCreatedBy")
+  paymentsRecorded        Payment[]              @relation("PaymentRecordedBy")
+  paymentsReversed        Payment[]              @relation("PaymentReversedBy")
 
   @@index([phone])
   @@index([status])
@@ -440,6 +448,8 @@ model Course {
   classes       Class[]
   /// MOD-10: certificates of this course (Restrict).
   certificates  Certificate[]
+  /// MOD-11: fee plans pricing this course (deleted with it).
+  feePlans      FeePlan[]
 
   @@index([status])
   @@index([levelId])
@@ -548,6 +558,8 @@ model Class {
   exams        Exam[]
   /// MOD-10: the certificates of this class (Restrict — never deleted).
   certificates Certificate[]
+  /// MOD-11: fee plans pricing this class (deleted with it).
+  feePlans     FeePlan[]
 
   @@index([courseId])
   @@index([status])
@@ -599,6 +611,8 @@ model Enrollment {
   finalGrade   FinalGrade?
   /// MOD-10: its certificates — at most one `issued` (partial unique in SQL).
   certificates Certificate[]
+  /// MOD-11: invoices billed for this enrollment (the link is cleared if it goes).
+  invoices     Invoice[]
 
   @@unique([classId, studentUserId], map: "uq_enrollments_class_student")
   @@index([studentUserId])
@@ -1187,4 +1201,176 @@ model Certificate {
   @@index([issuedById])
   @@index([revokedById])
   @@map("certificates")
+}
+
+// MOD-11 — payments and installments (roadmap §4i; owner decisions
+// D-R58..D-R65, CH-0181). First version: fee plans as templates whose lines
+// and installment shares are copied into an invoice (D-R60); invoices with
+// lines, one invoice-level discount and 1..24 installments (D-R61/D-R62/D-R64);
+// manual payments with receipts, reversed instead of edited (D-R63); one
+// academy currency stored on each invoice and payment (D-R59 = D15). Paid
+// installments, partial payment and overdue are computed on read (D-R62);
+// `invoices.paid_amount` is kept in the payment's transaction. No online
+// payment, tax or refund record yet.
+
+enum InvoiceStatus {
+  draft
+  issued
+  cancelled
+
+  @@map("invoice_status")
+}
+
+enum PaymentMethod {
+  cash
+  bank_transfer
+  card
+  cheque
+  other
+
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  completed
+  reversed
+
+  @@map("payment_status")
+}
+
+model FeePlan {
+  id           String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Localized name; `ar` is required (CHECK in SQL).
+  name         Json
+  /// The course or the class the plan prices — one at most (CHECK in SQL); neither = a general plan.
+  courseId     String?  @map("course_id") @db.Uuid
+  classId      String?  @map("class_id") @db.Uuid
+  /// [{ description { ar, en?, tr? }, amount }] — 1..50 positive amounts (service rule; array CHECK in SQL).
+  lines        Json
+  /// [{ percent, dueOffsetDays }] — 1..24 shares summing to 100 (service rule; array CHECK in SQL).
+  installments Json
+  isActive     Boolean  @default(true) @map("is_active")
+  createdById  String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course    Course?   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  class     Class?    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation("FeePlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  invoices  Invoice[]
+
+  @@index([courseId])
+  @@index([classId])
+  @@index([createdById])
+  @@map("fee_plans")
+}
+
+model Invoice {
+  id             String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// `INV-YYYY-NNNNN`, given at issuance (D-R61); null for a draft (CHECK in SQL).
+  number         String?       @unique @db.VarChar(32)
+  studentUserId  String        @map("student_user_id") @db.Uuid
+  enrollmentId   String?       @map("enrollment_id") @db.Uuid
+  feePlanId      String?       @map("fee_plan_id") @db.Uuid
+  status         InvoiceStatus @default(draft)
+  /// The academy currency at creation (D-R59); ISO 4217 (CHECK in SQL).
+  currency       String        @db.Char(3)
+  subtotal       Decimal       @db.Decimal(12, 2)
+  discountAmount Decimal       @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  discountReason String?       @map("discount_reason")
+  /// subtotal − discount (CHECK in SQL).
+  totalAmount    Decimal       @map("total_amount") @db.Decimal(12, 2)
+  /// Sum of the completed payments, kept in the payment's transaction (D-R62); 0..total (CHECK in SQL).
+  paidAmount     Decimal       @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  /// Internal note, never shown to learners.
+  notes          String?
+  issuedAt       DateTime?     @map("issued_at") @db.Timestamptz(6)
+  issuedById     String?       @map("issued_by") @db.Uuid
+  cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  cancelledById  String?       @map("cancelled_by") @db.Uuid
+  cancelReason   String?       @map("cancel_reason")
+  createdById    String?       @map("created_by") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student      User                 @relation("InvoiceStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  enrollment   Enrollment?          @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  feePlan      FeePlan?             @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+  issuedBy     User?                @relation("InvoiceIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  cancelledBy  User?                @relation("InvoiceCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  createdBy    User?                @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  lines        InvoiceLine[]
+  installments InvoiceInstallment[]
+  payments     Payment[]
+
+  @@index([studentUserId])
+  @@index([enrollmentId])
+  @@index([feePlanId])
+  @@index([status, issuedAt])
+  @@index([issuedById])
+  @@index([cancelledById])
+  @@index([createdById])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  invoiceId   String  @map("invoice_id") @db.Uuid
+  sortOrder   Int     @map("sort_order") @db.SmallInt
+  /// Localized description; `ar` is required (CHECK in SQL).
+  description Json
+  /// > 0 (CHECK in SQL).
+  amount      Decimal @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, sortOrder], map: "uq_invoice_lines_order")
+  @@map("invoice_lines")
+}
+
+model InvoiceInstallment {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  /// 1..24 (CHECK in SQL).
+  seq       Int      @db.SmallInt
+  /// > 0 (CHECK in SQL); the installments of an invoice sum to its total (service rule).
+  amount    Decimal  @db.Decimal(12, 2)
+  dueOn     DateTime @map("due_on") @db.Date
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, seq], map: "uq_invoice_installments_seq")
+  @@map("invoice_installments")
+}
+
+model Payment {
+  id            String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// The receipt `RCPT-YYYY-NNNNN` (D-R63).
+  number        String        @unique @db.VarChar(32)
+  invoiceId     String        @map("invoice_id") @db.Uuid
+  /// > 0 and within the balance (CHECK + service rule).
+  amount        Decimal       @db.Decimal(12, 2)
+  currency      String        @db.Char(3)
+  method        PaymentMethod
+  status        PaymentStatus @default(completed)
+  paidAt        DateTime      @map("paid_at") @db.Timestamptz(6)
+  reference     String?
+  payerName     String?       @map("payer_name")
+  notes         String?
+  recordedById  String?       @map("recorded_by") @db.Uuid
+  reversedAt    DateTime?     @map("reversed_at") @db.Timestamptz(6)
+  reversedById  String?       @map("reversed_by") @db.Uuid
+  reverseReason String?       @map("reverse_reason")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  recordedBy User?   @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  reversedBy User?   @relation("PaymentReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([status, paidAt])
+  @@index([recordedById])
+  @@index([reversedById])
+  @@map("payments")
 }
