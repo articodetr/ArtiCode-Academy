@@ -14,6 +14,7 @@ import {
   FileTextOutlined,
   FormOutlined,
   HomeOutlined,
+  PercentageOutlined,
   PlayCircleOutlined,
   PlaySquareOutlined,
   ReadOutlined,
@@ -150,6 +151,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // J-F06 (MOD-07-T02 screen): the rooms tab of the settings lives under /settings/rooms behind the one key the server
   // enforces for writes (`schedule.manage` — reads need no key, D-R27; by seed only academy_admin holds it).
   { key: 'rooms', path: '/settings/rooms', labelKey: 'nav.rooms', icon: createElement(HomeOutlined), permissions: ['schedule.manage'], module: 'MOD-07' },
+  // J-F44 (MOD-09-T08 part a): the grade schemes tab of the settings lives under /settings/grade-schemes behind the one key
+  // every write of /api/grade-schemes requires (`academy.settings.manage` — reads need none, D-R46; by seed only academy_admin
+  // holds it). The `settings` entry above opens with `academy.settings.read` too; this one is management only.
+  {
+    key: 'gradeSchemes',
+    path: '/settings/grade-schemes',
+    labelKey: 'nav.gradeSchemes',
+    icon: createElement(PercentageOutlined),
+    permissions: ['academy.settings.manage'],
+    module: 'MOD-09',
+  },
 ]
 
 /** True when the viewer holds at least one server role key and every one of them is in `keys`. */
