@@ -180,6 +180,12 @@ model User {
   assignmentsCreated      Assignment[]           @relation("AssignmentCreatedBy")
   submissions             AssignmentSubmission[] @relation("SubmissionStudent")
   submissionsGraded       AssignmentSubmission[] @relation("SubmissionGradedBy")
+  /// MOD-09: exams this user created, their recorded results as a student,
+  /// the results they recorded as a teacher and the final grades they fixed.
+  examsCreated            Exam[]                 @relation("ExamCreatedBy")
+  examResults             ExamResult[]           @relation("ExamResultStudent")
+  examResultsRecorded     ExamResult[]           @relation("ExamResultRecordedBy")
+  finalGradesFinalized    FinalGrade[]           @relation("FinalGradeFinalizedBy")
 
   @@index([phone])
   @@index([status])
@@ -532,6 +538,8 @@ model Class {
   schedules   ClassSchedule[]
   lessons     Lesson[]
   assignments Assignment[]
+  /// MOD-09: the exams of this class (deleted with it).
+  exams       Exam[]
 
   @@index([courseId])
   @@index([status])
@@ -576,9 +584,11 @@ model Enrollment {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  class     Class @relation(fields: [classId], references: [id], onDelete: Restrict)
-  student   User  @relation("EnrollmentStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
-  createdBy User? @relation("EnrollmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  class      Class       @relation(fields: [classId], references: [id], onDelete: Restrict)
+  student    User        @relation("EnrollmentStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  createdBy  User?       @relation("EnrollmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// MOD-09: the final grade fixed for this enrollment (D-R44/D-R45), if any.
+  finalGrade FinalGrade?
 
   @@unique([classId, studentUserId], map: "uq_enrollments_class_student")
   @@index([studentUserId])
@@ -776,6 +786,8 @@ model Lesson {
   attendance   AttendanceRecord[]
   /// MOD-08: assignments linked to this lesson (the link is cleared when the lesson goes).
   assignments  Assignment[]
+  /// MOD-09: exams held in this lesson (the link is cleared when the lesson goes).
+  exams        Exam[]
 
   @@index([classId, startsAt])
   @@index([teacherUserId, startsAt])
@@ -918,4 +930,178 @@ model AssignmentSubmission {
   @@index([gradedById])
   @@index([assignmentId, status])
   @@map("assignment_submissions")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-09 — exams and grades (roadmap §4h; owner decisions D-R42..D-R49,
+// CH-0123). First version (D-R42): exams whose results a teacher records — no
+// online exams yet (question banks, exam questions, attempts and answers are a
+// second phase whose counted result will be written into `exam_results`);
+// academy grade schemes whose bands are defined by their lower bound (D-R46);
+// and the per-enrollment final grade fixed for a whole class (D-R45) as a
+// snapshot with its breakdown (D-R44). No `gradebook_entries`: the gradebook
+// is computed on read from the assignments (MOD-08) and the exams. Rules that
+// span two tables (a result's score <= the exam's max score) are service
+// rules; the single-table CHECKs and the "one default scheme" partial unique
+// index are hand-written SQL in the migration.
+// ---------------------------------------------------------------------------
+
+enum ExamType {
+  quiz
+  midterm
+  final
+  project
+  oral
+  practice
+  other
+
+  @@map("exam_type")
+}
+
+/// Manual states (D-R47): `scheduled` shows the exam to the learners,
+/// `published` shows its results too. Online states come with the second phase.
+enum ExamStatus {
+  draft
+  scheduled
+  published
+
+  @@map("exam_status")
+}
+
+enum ExamResultStatus {
+  scored
+  absent
+  excused
+
+  @@map("exam_result_status")
+}
+
+/// An assessment of a class whose results a teacher records (D-R42) — a
+/// written quiz, a final, a project, an oral exam… — optionally held in one of
+/// the class's lessons. Its weight enters the final grade (D-R43).
+model Exam {
+  id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  classId         String     @map("class_id") @db.Uuid
+  lessonId        String?    @map("lesson_id") @db.Uuid
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  title           Json
+  /// Localized text `{ ar, en?, tr? }` or NULL (CHECK in SQL).
+  description     Json?
+  type            ExamType
+  status          ExamStatus @default(draft)
+  /// Instant (timestamptz) the exam takes place; the display zone is the room's branch or the academy's (D-R41).
+  scheduledAt     DateTime?  @map("scheduled_at") @db.Timestamptz(6)
+  /// 1..720 (CHECK in SQL).
+  durationMinutes Int?       @map("duration_minutes") @db.SmallInt
+  /// > 0 (CHECK in SQL); locked once a result exists (service rule).
+  maxScore        Decimal    @map("max_score") @db.Decimal(6, 2)
+  /// 0..max_score (CHECK in SQL); informational — passing the course comes from the grade scheme.
+  passScore       Decimal?   @map("pass_score") @db.Decimal(6, 2)
+  /// Weight in the final grade (D-R43); NULL = informational; >= 0 (CHECK in SQL).
+  weight          Decimal?   @db.Decimal(5, 2)
+  /// When the results were published; NOT NULL exactly for `published` (CHECK in SQL).
+  publishedAt     DateTime?  @map("published_at") @db.Timestamptz(6)
+  createdById     String?    @map("created_by") @db.Uuid
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  class     Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lesson    Lesson?      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  createdBy User?        @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  results   ExamResult[]
+
+  @@index([classId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@index([lessonId])
+  @@index([createdById])
+  @@map("exams")
+}
+
+/// The counted result of one student in one exam (D-R42/D-R47): a score, or
+/// absent (counts 0 in the final grade) or excused (left out of it — D-R45).
+model ExamResult {
+  examId        String           @map("exam_id") @db.Uuid
+  studentUserId String           @map("student_user_id") @db.Uuid
+  status        ExamResultStatus
+  /// >= 0 and exactly for `scored` (CHECKs in SQL); <= the exam's max score is a service rule.
+  score         Decimal?         @db.Decimal(6, 2)
+  feedback      String?
+  recordedById  String?          @map("recorded_by") @db.Uuid
+  recordedAt    DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam       Exam  @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student    User  @relation("ExamResultStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  recordedBy User? @relation("ExamResultRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@id([examId, studentUserId])
+  @@index([studentUserId])
+  @@index([recordedById])
+  @@map("exam_results")
+}
+
+/// An academy grade scheme (D-R46): bands by their lower bound; exactly one
+/// default (partial unique index in SQL), and a default scheme is active.
+model GradeScheme {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name      Json
+  isDefault Boolean  @default(false) @map("is_default")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bands       GradeSchemeBand[]
+  /// Restrict: a scheme used by a final grade is deactivated, not deleted.
+  finalGrades FinalGrade[]
+
+  @@map("grade_schemes")
+}
+
+/// One band of a grade scheme: it covers the percentages from its
+/// `min_percent` up to the next band's (no max, so no gap and no overlap). The
+/// service requires a band at 0 and that every band above a passing one passes.
+model GradeSchemeBand {
+  id         String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schemeId   String  @map("scheme_id") @db.Uuid
+  /// 0..100 (CHECK in SQL); unique inside the scheme.
+  minPercent Decimal @map("min_percent") @db.Decimal(5, 2)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  label      Json
+  /// Optional short code (A, B+, …); trimmed and not blank (CHECK in SQL).
+  letter     String? @db.VarChar(4)
+  isPass     Boolean @map("is_pass")
+
+  scheme GradeScheme @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+
+  @@unique([schemeId, minPercent], map: "uq_grade_scheme_bands_min")
+  @@map("grade_scheme_bands")
+}
+
+/// The final grade fixed for one enrollment when its class is finalized
+/// (D-R45): the percentage, the band of the scheme used and the breakdown of
+/// the components at that moment (D-R44) — what a certificate (MOD-10) and the
+/// transcript build on. Withdrawing the class's final grades deletes the rows.
+model FinalGrade {
+  enrollmentId  String   @id @map("enrollment_id") @db.Uuid
+  /// 0..100 with two decimals (CHECK in SQL).
+  percent       Decimal  @db.Decimal(5, 2)
+  schemeId      String   @map("scheme_id") @db.Uuid
+  /// The band's label at finalization (snapshot); `ar` is required (CHECK in SQL).
+  bandLabel     Json     @map("band_label")
+  bandLetter    String?  @map("band_letter") @db.VarChar(4)
+  isPass        Boolean  @map("is_pass")
+  /// JSON array of the components at finalization (CHECK in SQL).
+  breakdown     Json
+  finalizedById String?  @map("finalized_by") @db.Uuid
+  finalizedAt   DateTime @default(now()) @map("finalized_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment  Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  scheme      GradeScheme @relation(fields: [schemeId], references: [id], onDelete: Restrict)
+  finalizedBy User?       @relation("FinalGradeFinalizedBy", fields: [finalizedById], references: [id], onDelete: SetNull)
+
+  @@index([schemeId])
+  @@index([finalizedById])
+  @@map("final_grades")
 }
