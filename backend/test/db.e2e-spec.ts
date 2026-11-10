@@ -57,6 +57,9 @@ const TABLES = [
   'grade_schemes',
   'grade_scheme_bands',
   'final_grades',
+  // MOD-10-T01 (20261110200231_mod10_certificates) — details in TEST-134.
+  'number_sequences',
+  'certificates',
 ] as const;
 
 // PostgreSQL SQLSTATE codes
@@ -137,7 +140,7 @@ describe.skipIf(!available)('database schema — first migration (e2e, TEST-007)
     return rows[0]!.id;
   }
 
-  it('records the applied migrations (first one first) and the 30 tables', async () => {
+  it('records the applied migrations (first one first) and the 32 tables', async () => {
     const migrations = await pool.query<{ migration_name: string; finished: boolean; rolled_back: boolean }>(
       `SELECT migration_name, finished_at IS NOT NULL AS finished, rolled_back_at IS NOT NULL AS rolled_back
          FROM _prisma_migrations ORDER BY started_at`,
