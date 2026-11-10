@@ -1,7 +1,7 @@
 // TEST-125 (unit) — the due-date keyset shared by API-102/API-112 and the pending filter of «my assignments» (MOD-08-T04).
 import { describe, expect, it } from 'vitest';
 import { NO_DUE_DATE_KEY, afterDueCursor, dueCursorKey, dueOrderBy } from './assignments.keyset.js';
-import { MY_ASSIGNMENT_STATUSES, pendingWhere } from './my-assignments.policy.js';
+import { MY_ASSIGNMENT_STATUSES, awaitingRework, isPendingItem, pendingWhere } from './my-assignments.policy.js';
 
 const ID = '01a1c029-93e8-7402-a176-8fa8224c0217';
 
@@ -36,5 +36,39 @@ describe('pendingWhere / MY_ASSIGNMENT_STATUSES', () => {
       ],
     });
     expect(MY_ASSIGNMENT_STATUSES).toEqual(['open', 'closed']);
+  });
+});
+
+// MOD-08-T07 (D-R49): an attempt returned for rework waits for the student again.
+describe('awaitingRework / isPendingItem / pendingWhere with rework', () => {
+  const ownerships = [
+    { classId: 'A', student: { id: 's1', fullName: 'S1', displayName: null } },
+    { classId: 'B', student: { id: 's2', fullName: 'S2', displayName: null } },
+  ];
+
+  it('keeps the assignments whose latest attempt of an owned student is returned', () => {
+    const attempts = [
+      { assignmentId: 'a1', classId: 'A', studentUserId: 's1', attemptNo: 1, status: 'returned' as const },
+      { assignmentId: 'a2', classId: 'A', studentUserId: 's1', attemptNo: 1, status: 'returned' as const },
+      { assignmentId: 'a2', classId: 'A', studentUserId: 's1', attemptNo: 2, status: 'submitted' as const }, // resubmitted: no longer waiting
+      { assignmentId: 'a3', classId: 'A', studentUserId: 's2', attemptNo: 1, status: 'returned' as const }, // s2 is not owned in A
+      { assignmentId: 'b1', classId: 'B', studentUserId: 's2', attemptNo: 1, status: 'graded' as const },
+    ];
+    expect(awaitingRework(attempts, ownerships)).toEqual(['a1']);
+    expect(pendingWhere(ownerships, ['a1'])).toEqual({
+      OR: [
+        { classId: 'A', submissions: { none: { studentUserId: 's1' } } },
+        { classId: 'B', submissions: { none: { studentUserId: 's2' } } },
+        { id: { in: ['a1'] } },
+      ],
+    });
+  });
+
+  it('an item is pending without an attempt, or when its latest attempt was returned and an attempt is left', () => {
+    expect(isPendingItem(null, 0, 1)).toBe(true);
+    expect(isPendingItem('returned', 1, 2)).toBe(true);
+    expect(isPendingItem('returned', 2, 2)).toBe(false);
+    expect(isPendingItem('submitted', 1, 2)).toBe(false);
+    expect(isPendingItem('graded', 1, 1)).toBe(false);
   });
 });

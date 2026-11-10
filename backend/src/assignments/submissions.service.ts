@@ -7,6 +7,7 @@ import { seesChildren } from '../enrollments/my-classes.policy.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { toIso } from '../lessons/lessons.time.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { READ_CONTACT_PERMISSION } from '../users/users.policy.js';
 import type { UsersProjection } from '../users/users.service.js';
 import { toDecimalText } from './assignments.changes.js';
@@ -18,6 +19,7 @@ import {
   SUBMITTING_ENROLLMENT_STATUS,
   isScoreInRange,
   reviewTarget,
+  reviewVersionMatches,
   sameReview,
   submissionWindow,
   summarizeAttempts,
@@ -32,6 +34,9 @@ export const SUBMISSIONS_AUDIT_ACTIONS = {
 /** Audit `entity_type` of the submission events (the assignment and class travel in the metadata). */
 export const SUBMISSIONS_ENTITY_TYPE = 'assignment_submissions';
 
+/** The academy's time zone for `assignment.timeZone` (D-R41), or UTC while the academy row is missing. */
+const FALLBACK_TIME_ZONE = 'UTC';
+
 const ASSIGNMENT_SUMMARY_SELECT = {
   id: true,
   classId: true,
@@ -42,6 +47,7 @@ const ASSIGNMENT_SUMMARY_SELECT = {
   dueAt: true,
   allowLate: true,
   class: { select: { code: true } },
+  lesson: { select: { room: { select: { branch: { select: { timezone: true } } } } } },
 } satisfies Prisma.AssignmentSelect;
 
 const SUBMISSION_SELECT = {
@@ -123,7 +129,7 @@ function decimalOrNull(value: Prisma.Decimal | string | null): number | null {
   return value === null ? null : Number(value);
 }
 
-function toAssignmentSummary(row: AssignmentSummaryRow): SubmissionDto['assignment'] {
+function toAssignmentSummary(row: AssignmentSummaryRow, academyTimeZone: string): SubmissionDto['assignment'] {
   return {
     id: row.id,
     classId: row.classId,
@@ -131,7 +137,15 @@ function toAssignmentSummary(row: AssignmentSummaryRow): SubmissionDto['assignme
     status: row.status,
     maxScore: Number(row.maxScore),
     dueAt: row.dueAt ? toIso(row.dueAt) : null,
+    allowLate: row.allowLate,
+    timeZone: displayTimeZone(row.lesson?.room?.branch?.timezone, academyTimeZone),
   };
+}
+
+/** The academy's time zone (D-R41); UTC while the academy row is missing. */
+async function academyTimeZone(db: Db): Promise<string> {
+  const academy = await db.academy.findFirst({ select: { timezone: true } });
+  return academy?.timezone ?? FALLBACK_TIME_ZONE;
 }
 
 function toSummaryDto(row: SummaryRow): SubmissionSummaryDto {
@@ -205,7 +219,7 @@ export class SubmissionsService {
       const users = await this.prisma.db.user.findMany({ where: { id: { in: orphans } }, orderBy: { id: 'asc' }, select: STUDENT_SELECT });
       for (const user of users) items.push(item(user, null));
     }
-    return { assignment: toAssignmentSummary(assignment), maxAttempts: assignment.maxAttempts, items };
+    return { assignment: toAssignmentSummary(assignment, await academyTimeZone(this.prisma.db)), maxAttempts: assignment.maxAttempts, items };
   }
 
   /** API-109 — one attempt of the calling student. */
@@ -222,13 +236,15 @@ export class SubmissionsService {
         select: { id: true },
       });
       if (!enrolled) throw assignmentsError.notEnrolled(assignment.classId);
-      const window = submissionWindow(assignment.status, assignment.dueAt, assignment.allowLate);
-      if ('closed' in window) throw assignmentsError.assignmentClosed(window.closed, assignment.dueAt ? toIso(assignment.dueAt) : null);
       const previous = await tx.assignmentSubmission.findMany({ where: { assignmentId, studentUserId: caller.id }, select: { attemptNo: true, status: true, score: true } });
       const summary = summarizeAttempts(
         previous.map((row) => ({ attemptNo: row.attemptNo, status: row.status, score: null })),
         assignment.maxAttempts,
       );
+      // MOD-08-T07 (D-R49): a retried request names the attempt it meant to create — checked before the window, so a retry after closing still says what happened.
+      if (input.attemptNo !== undefined && input.attemptNo !== summary.lastAttemptNo + 1) throw assignmentsError.attemptConflict(input.attemptNo, summary.lastAttemptNo + 1);
+      const window = submissionWindow(assignment.status, assignment.dueAt, assignment.allowLate);
+      if ('closed' in window) throw assignmentsError.assignmentClosed(window.closed, assignment.dueAt ? toIso(assignment.dueAt) : null);
       if (summary.attempts >= summary.attemptsAllowed) throw assignmentsError.attemptsExhausted(summary.attemptsAllowed, summary.attempts);
       const attemptNo = summary.lastAttemptNo + 1;
       const created = await tx.assignmentSubmission.create({
@@ -270,6 +286,8 @@ export class SubmissionsService {
       if (locked.length === 0) throw assignmentsError.submissionNotFound(submissionId);
       const row = await tx.assignmentSubmission.findFirst({ where: { id: submissionId, assignment: visibleAssignmentsWhere(caller) }, select: SUBMISSION_SELECT });
       if (!row) throw assignmentsError.submissionNotFound(submissionId);
+      // MOD-08-T07 (D-R49): two reviewers never overwrite each other silently.
+      if (!reviewVersionMatches(input.expectedGradedAt, row.gradedAt)) throw assignmentsError.reviewConflict(submissionId, row.status, row.gradedAt ? toIso(row.gradedAt) : null);
       let score: string | null = null;
       if (input.action === 'grade') {
         const maxScore = Number(row.assignment.maxScore);
@@ -331,19 +349,22 @@ export class SubmissionsService {
     return this.toDto(db, row);
   }
 
-  /** The DTO with the student's attempt counts on the assignment. */
+  /** The DTO with the student's attempts on the assignment (counts and history). */
   private async toDto(db: Db, row: SubmissionRow): Promise<SubmissionDto> {
+    // Sequential: `db` may be an interactive transaction, which runs one query at a time.
     const attempts = await db.assignmentSubmission.findMany({
       where: { assignmentId: row.assignmentId, studentUserId: row.studentUserId },
-      select: { attemptNo: true, status: true },
+      orderBy: { attemptNo: 'asc' },
+      select: SUMMARY_SELECT,
     });
+    const timeZone = await academyTimeZone(db);
     const summary = summarizeAttempts(
       attempts.map((attempt) => ({ attemptNo: attempt.attemptNo, status: attempt.status, score: null })),
       row.assignment.maxAttempts,
     );
     return {
       id: row.id,
-      assignment: toAssignmentSummary(row.assignment),
+      assignment: toAssignmentSummary(row.assignment, timeZone),
       student: { id: row.student.id, fullName: row.student.fullName, displayName: row.student.displayName },
       attemptNo: row.attemptNo,
       submittedAt: toIso(row.submittedAt),
@@ -357,6 +378,7 @@ export class SubmissionsService {
       gradedAt: row.gradedAt ? toIso(row.gradedAt) : null,
       attempts: summary.attempts,
       attemptsAllowed: summary.attemptsAllowed,
+      history: attempts.map(toSummaryDto),
     };
   }
 }

@@ -37,6 +37,7 @@ const ITEM_KEYS = [
   'class',
   'closedAt',
   'dueAt',
+  'enrollmentStatus',
   'id',
   'instructions',
   'latePenaltyPercent',
@@ -48,6 +49,8 @@ const ITEM_KEYS = [
   'relation',
   'status',
   'student',
+  'submitBlocker',
+  'submitsLate',
   'timeZone',
   'title',
 ];
@@ -62,6 +65,9 @@ interface ItemBody {
   attemptsAllowed: number;
   latest: { id: string; attemptNo: number; status: string; score: number | null; feedback: string | null } | null;
   class: { id: string };
+  enrollmentStatus: string;
+  submitBlocker: string | null;
+  submitsLate: boolean;
 }
 
 async function canConnect(url: string): Promise<boolean> {
@@ -220,6 +226,9 @@ describe.skipIf(!available)('MOD-08 «my assignments» (e2e, TEST-125)', () => {
     expect(a1).toMatchObject({ timeZone: academyTimeZone, maxScore: 20, allowLate: false });
     expect(items[2]).toMatchObject({ latest: null, attempts: 0 });
     expect(items[3]).toMatchObject({ status: 'closed', dueAt: null });
+    // MOD-08-T07: why the student could not submit now (only the cases that do not depend on today's date).
+    expect(items[0]).toMatchObject({ enrollmentStatus: 'completed', submitBlocker: 'not_enrolled', submitsLate: false }); // C1 — a finished class
+    expect(items[3]).toMatchObject({ enrollmentStatus: 'active', submitBlocker: 'closed', submitsLate: false }); // A4 — closed
     const serialized = JSON.stringify(res.body);
     for (const forbidden of ['weight', 'gradedBy', 'textAnswer', 'linkUrl', 'createdBy', 'إجابة s1']) expect(serialized).not.toContain(forbidden);
   });
@@ -274,6 +283,29 @@ describe.skipIf(!available)('MOD-08 «my assignments» (e2e, TEST-125)', () => {
     for (const query of badQueries) {
       expect((await mine('s1', query)).status, JSON.stringify(query)).toBe(400);
     }
+  });
+
+  it('AC4 — MOD-08-T07: pending keeps an attempt returned for rework while an attempt is left; resubmitting drops it', async () => {
+    await createAssignment('R1', 'A', null);
+    const first = await api().post(`${ASSIGNMENTS}/${assignments['R1']}/submissions`).set(bearer('s1')).send({ textAnswer: 'محاولة أولى', attemptNo: 1 }).expect(201);
+    expect(names((await mine('s1', { pending: 'true' }).expect(200)).body.items)).not.toContain('R1');
+    await api().post(`/api/submissions/${first.body.id}/review`).set(bearer('manager')).send({ action: 'return', feedback: 'أكمل الحل' }).expect(200);
+    const pending = (await mine('s1', { pending: 'true' }).expect(200)).body.items as ItemBody[];
+    expect(pending.find((item) => item.id === assignments['R1'])).toMatchObject({
+      attempts: 1,
+      attemptsAllowed: 2,
+      latest: { status: 'returned', feedback: 'أكمل الحل' },
+      enrollmentStatus: 'active',
+      submitBlocker: null,
+      submitsLate: false,
+    });
+    // A guardian sees both children waiting: s1 for rework, s2 without an attempt.
+    const forGuardian = (await mine('guardian', { pending: 'true', classId: classes['A']! }).expect(200)).body.items as ItemBody[];
+    expect(forGuardian.filter((item) => item.id === assignments['R1']).map((item) => item.student.id).sort()).toEqual([id('s1'), id('s2')].sort());
+    await api().post(`${ASSIGNMENTS}/${assignments['R1']}/submissions`).set(bearer('s1')).send({ textAnswer: 'محاولة ثانية', attemptNo: 2 }).expect(201);
+    expect(names((await mine('s1', { pending: 'true' }).expect(200)).body.items)).not.toContain('R1');
+    const after = (await mine('s1', { classId: classes['A']! }).expect(200)).body.items as ItemBody[];
+    expect(after.find((item) => item.id === assignments['R1'])).toMatchObject({ attempts: 2, attemptsAllowed: 2, submitBlocker: 'attempts_exhausted' });
   });
 
   it(

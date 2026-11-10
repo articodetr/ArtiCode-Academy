@@ -82,3 +82,38 @@ export function sameReview(current: ReviewState, next: ReviewState): boolean {
 export function isScoreInRange(score: number, maxScore: number): boolean {
   return score >= 0 && score <= maxScore;
 }
+
+// MOD-08-T07 (roadmap §4h.5, owner decision D-R49) — contract follow-ups.
+
+/** Why the student could not submit now — the order of the checks of API-109. */
+export type SubmitBlocker = 'not_enrolled' | AssignmentClosedReason | 'attempts_exhausted';
+export const SUBMIT_BLOCKERS: readonly SubmitBlocker[] = ['not_enrolled', 'not_published', 'closed', 'past_due', 'attempts_exhausted'];
+
+export interface SubmitState {
+  /** null when a submission now would be accepted. */
+  blocker: SubmitBlocker | null;
+  /** True when a submission now would be accepted and marked late. */
+  late: boolean;
+}
+
+/**
+ * Whether a student could submit now, checked in API-109's order: an active
+ * enrollment, the assignment's window, then an attempt left (D-R38/D-R39).
+ */
+export function submitState(enrollmentStatus: EnrollmentStatus | null, window: SubmissionWindow, attempts: number, attemptsAllowed: number): SubmitState {
+  if (enrollmentStatus !== SUBMITTING_ENROLLMENT_STATUS) return { blocker: 'not_enrolled', late: false };
+  if ('closed' in window) return { blocker: window.closed, late: false };
+  if (attempts >= attemptsAllowed) return { blocker: 'attempts_exhausted', late: false };
+  return { blocker: null, late: window.isLate };
+}
+
+/**
+ * The optimistic guard of API-111: `expectedGradedAt` absent = no check;
+ * `null` = the reviewer saw no review yet; an instant = the review they saw.
+ * Every review stamps `graded_at`, so it is the version of the review state.
+ */
+export function reviewVersionMatches(expectedGradedAt: string | null | undefined, gradedAt: Date | null): boolean {
+  if (expectedGradedAt === undefined) return true;
+  if (expectedGradedAt === null) return gradedAt === null;
+  return gradedAt !== null && Date.parse(expectedGradedAt) === gradedAt.getTime();
+}
