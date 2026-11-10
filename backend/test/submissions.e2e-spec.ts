@@ -40,6 +40,7 @@ const SUBMISSION_KEYS = [
   'feedback',
   'gradedAt',
   'gradedBy',
+  'history',
   'id',
   'isLate',
   'linkUrl',
@@ -65,6 +66,7 @@ interface SubmissionBody {
   gradedAt: string | null;
   attempts: number;
   attemptsAllowed: number;
+  history: { id: string; attemptNo: number; status: string; score: number | null }[];
 }
 
 interface RosterItem {
@@ -95,6 +97,7 @@ describe.skipIf(!available)('MOD-08 submissions and review (e2e, TEST-124)', () 
   let prisma: PrismaClient;
   let passwords: PasswordService;
   let courseId: string;
+  let academyTimeZone: string;
   const createdUserIds: string[] = [];
   const createdRoleIds: string[] = [];
   const fx: Record<string, string> = {};
@@ -172,6 +175,7 @@ describe.skipIf(!available)('MOD-08 submissions and review (e2e, TEST-124)', () 
     await app.init();
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL! }) });
     passwords = new PasswordService();
+    academyTimeZone = (await prisma.academy.findFirstOrThrow({ select: { timezone: true } })).timezone;
 
     courseId = (await prisma.course.create({ data: { code: code('CRS'), name: { ar: 'دورة التسليم' }, status: 'published' }, select: { id: true } })).id;
     const systemRole = async (key: string) => (await prisma.role.findUniqueOrThrow({ where: { key }, select: { id: true } })).id;
@@ -209,7 +213,8 @@ describe.skipIf(!available)('MOD-08 submissions and review (e2e, TEST-124)', () 
     await createAssignment('draft', 'A', {}, []);
     await createAssignment('closed', 'A', {}, ['publish', 'close']);
     await createAssignment('race', 'A', { maxAttempts: 1 });
-  });
+    await createAssignment('guard', 'A', { maxAttempts: 2 });
+  }, 30_000); // eleven accounts hashed and signed in with Argon2 take ~10 s on a slow machine
 
   afterAll(async () => {
     try {
@@ -247,6 +252,9 @@ describe.skipIf(!available)('MOD-08 submissions and review (e2e, TEST-124)', () 
       attempts: 1,
       attemptsAllowed: 1,
     });
+    // MOD-08-T07: the assignment says whether late work is taken and the zone its due date reads in; the history lists the attempts.
+    expect(body.assignment).toMatchObject({ allowLate: false, timeZone: academyTimeZone });
+    expect(body.history).toEqual([{ id: body.id, attemptNo: 1, submittedAt: expect.any(String), isLate: false, status: 'submitted', score: null, gradedAt: null }]);
     fx['sub1'] = body.id;
     const events = await eventsSince(m);
     expect(events.map((event) => [event.action, event.entityType, event.entityId, event.actorUserId])).toEqual([['assignments.submitted', 'assignment_submissions', body.id, id('student1')]]);
@@ -258,7 +266,7 @@ describe.skipIf(!available)('MOD-08 submissions and review (e2e, TEST-124)', () 
     fx['sub2'] = linkOnly.body.id as string;
     const late = await submit('late', { textAnswer: 'متأخر' }, 'student1');
     expect(late.status).toBe(201);
-    expect(late.body).toMatchObject({ isLate: true });
+    expect(late.body).toMatchObject({ isLate: true, assignment: { allowLate: true } });
   });
 
   it('AC2 — refusals: no content, bad link, not enrolled, withdrawn, draft, closed, past due, exhausted, no key, unknown — all without an event', async () => {
@@ -335,6 +343,7 @@ describe.skipIf(!available)('MOD-08 submissions and review (e2e, TEST-124)', () 
     const second = await submit('one', { textAnswer: 'إجابة معدَّلة' }, 'student1');
     expect(second.status, JSON.stringify(second.body)).toBe(201);
     expect(second.body).toMatchObject({ attemptNo: 2, attempts: 2, attemptsAllowed: 2 });
+    expect((second.body as SubmissionBody).history.map((attempt) => [attempt.attemptNo, attempt.status])).toEqual([[1, 'returned'], [2, 'submitted']]);
     expect((await submit('one', { textAnswer: 'ثالثة' }, 'student1')).body).toMatchObject({ code: 'attempts_exhausted', maxAttempts: 2, attempts: 2 });
     await api().post(`${ASSIGNMENTS}/${assignments['one']}/status`).set(bearer('manager')).send({ action: 'close' }).expect(200);
     expect((await review(second.body.id as string, { action: 'grade', score: 19 })).body).toMatchObject({ status: 'graded', score: 19 });
@@ -364,6 +373,44 @@ describe.skipIf(!available)('MOD-08 submissions and review (e2e, TEST-124)', () 
     expect(results.map((res) => res.status).sort()).toEqual([201, 409]);
     expect(results.find((res) => res.status === 409)!.body).toMatchObject({ code: 'attempts_exhausted' });
     expect(await prisma.assignmentSubmission.count({ where: { assignmentId: assignments['race']!, studentUserId: id('student2') } })).toBe(1);
+  });
+
+  it('AC7 — MOD-08-T07: attemptNo guards a retried submission and expectedGradedAt guards a concurrent review; refusals write nothing', async () => {
+    const m = await mark();
+    const first = await submit('guard', { textAnswer: 'الأولى', attemptNo: 1 }, 'student2');
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    const sub = first.body.id as string;
+    const retry = await submit('guard', { textAnswer: 'الأولى', attemptNo: 1 }, 'student2'); // the response of the first try was lost
+    expect(retry.status).toBe(409);
+    expect(retry.body).toMatchObject({ code: 'attempt_conflict', expected: 1, next: 2 });
+    expect((await submit('guard', { textAnswer: 'x', attemptNo: '2' }, 'student2')).status).toBe(400); // a JSON integer
+    expect((await submit('guard', { textAnswer: 'x', attemptNo: 0 }, 'student2')).status).toBe(400);
+    expect((await review(sub, { action: 'grade', score: 10, expectedGradedAt: 'yesterday' })).status).toBe(400);
+
+    const graded = await review(sub, { action: 'grade', score: 10, expectedGradedAt: null }); // no review seen yet
+    expect(graded.status, JSON.stringify(graded.body)).toBe(200);
+    const gradedAt = graded.body.gradedAt as string;
+    const stale = await review(sub, { action: 'grade', score: 12, expectedGradedAt: null }, 'manager'); // a second reviewer who saw no review
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({ code: 'review_conflict', submissionId: sub, status: 'graded', gradedAt });
+    const returned = await review(sub, { action: 'return', feedback: 'أعد الحل', expectedGradedAt: gradedAt }, 'manager');
+    expect(returned.status, JSON.stringify(returned.body)).toBe(200);
+    expect((await review(sub, { action: 'grade', score: 11, expectedGradedAt: gradedAt })).body).toMatchObject({ code: 'review_conflict', status: 'returned' });
+
+    const second = await submit('guard', { linkUrl: 'https://docs.example.com/g2', attemptNo: 2 }, 'student2');
+    expect(second.status, JSON.stringify(second.body)).toBe(201);
+    const history = ((await read(second.body.id as string, 'teacher').expect(200)).body as SubmissionBody).history;
+    expect(history.map((attempt) => [attempt.id, attempt.attemptNo, attempt.status])).toEqual([
+      [sub, 1, 'returned'],
+      [second.body.id, 2, 'submitted'],
+    ]);
+    const events = await eventsSince(m);
+    expect(events.map((event) => [event.action, event.actorUserId])).toEqual([
+      ['assignments.submitted', id('student2')],
+      ['assignments.graded', id('teacher')],
+      ['assignments.returned', id('manager')],
+      ['assignments.submitted', id('student2')],
+    ]);
   });
 
   it(

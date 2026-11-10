@@ -5,15 +5,18 @@ import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { MyClassStudentDto } from '../enrollments/my-classes.dto.js';
 import type { MyClassRelation } from '../enrollments/my-classes.policy.js';
-import { SubmissionStatus } from '../generated/prisma/client.js';
+import { EnrollmentStatus, SubmissionStatus } from '../generated/prisma/client.js';
 import { IsInstant } from '../lessons/lessons.time.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { ASSIGNMENTS_PAGE_DEFAULT, ASSIGNMENTS_PAGE_MAX, AssignmentLessonDto } from './assignments.dto.js';
 import { MY_ASSIGNMENT_STATUSES } from './my-assignments.policy.js';
 import type { MyAssignmentStatus } from './my-assignments.policy.js';
+import { SUBMIT_BLOCKERS } from './submissions.policy.js';
+import type { SubmitBlocker } from './submissions.policy.js';
 
 const RELATIONS: MyClassRelation[] = ['self', 'child'];
 const SUBMISSION_STATUSES = Object.values(SubmissionStatus) as SubmissionStatus[];
+const OWNED_ENROLLMENT_STATUSES: EnrollmentStatus[] = ['active', 'completed'];
 
 /** Query booleans: `"true"`/`"1"` and `"false"`/`"0"`; anything else is left for @IsBoolean to reject (no implicit `Boolean("false")`). */
 function booleanParam({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
@@ -41,7 +44,7 @@ export class ListMyAssignmentsQueryDto {
   @IsIn(MY_ASSIGNMENT_STATUSES)
   status?: MyAssignmentStatus;
 
-  @ApiPropertyOptional({ description: 'true: only the items of a student who has not submitted yet; false or absent: every item' })
+  @ApiPropertyOptional({ description: 'true: only the items waiting for the student — no attempt yet, or the latest attempt returned for rework with an attempt left (MOD-08-T07); false or absent: every item' })
   @IsOptional()
   @Transform(booleanParam)
   @IsBoolean()
@@ -164,6 +167,19 @@ export class MyAssignmentItemDto {
 
   @ApiProperty({ type: MyAssignmentLatestDto, nullable: true, description: 'That student’s latest attempt; null before the first submission' })
   latest: MyAssignmentLatestDto | null;
+
+  @ApiProperty({ enum: OWNED_ENROLLMENT_STATUSES, description: 'MOD-08-T07: that student’s enrollment in the class — only `active` submits' })
+  enrollmentStatus: EnrollmentStatus;
+
+  @ApiProperty({
+    enum: SUBMIT_BLOCKERS,
+    nullable: true,
+    description: 'MOD-08-T07: why that student could not submit now, in the order API-109 checks (`not_enrolled` → `not_published`/`closed`/`past_due` → `attempts_exhausted`); null = a submission now would be accepted. Computed at the server’s clock when the page is read',
+  })
+  submitBlocker: SubmitBlocker | null;
+
+  @ApiProperty({ description: 'MOD-08-T07: a submission now would be accepted and marked late (false whenever `submitBlocker` is set)' })
+  submitsLate: boolean;
 }
 
 export class MyAssignmentListDto {

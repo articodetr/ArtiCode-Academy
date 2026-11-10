@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsIn, IsNumber, IsOptional, IsString, Length, Matches, Validate, ValidateIf, ValidatorConstraint } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsNumber, IsOptional, IsString, Length, Matches, Max, Min, Validate, ValidateIf, ValidatorConstraint } from 'class-validator';
 import type { ValidationArguments, ValidatorConstraintInterface } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
@@ -55,6 +55,18 @@ export class SubmitAssignmentDto {
   @Length(1, LINK_URL_MAX_LENGTH)
   @Matches(LINK_URL_PATTERN, { message: 'linkUrl must be an https:// link without spaces' })
   linkUrl?: string | null;
+
+  @ApiPropertyOptional({
+    minimum: 1,
+    example: 1,
+    description: 'MOD-08-T07: the attempt the client means to create (its `attempts` + 1). Another number is `409 attempt_conflict { expected, next }` and writes nothing — a retried request whose first try already created the attempt does not use another one. A JSON integer; absent = no check',
+  })
+  @IsOptional()
+  @Transform(rawValue)
+  @IsInt()
+  @Min(1)
+  @Max(32767)
+  attemptNo?: number;
 }
 
 /** API-111: the whole new review state of the submission (D-R39). */
@@ -76,6 +88,18 @@ export class ReviewSubmissionDto {
   @IsString()
   @Length(1, FEEDBACK_MAX_LENGTH)
   feedback?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: '2026-11-10T16:40:12.345Z',
+    description: 'MOD-08-T07: the `gradedAt` the reviewer saw (ISO 8601), or null when they saw no review yet. Another review written meanwhile is `409 review_conflict { submissionId, status, gradedAt }` and writes nothing; absent = no check',
+  })
+  @Transform(rawValue)
+  @ValidateIf((_dto, value) => value !== undefined && value !== null)
+  @IsString()
+  @IsISO8601({ strict: true, strictSeparator: true })
+  expectedGradedAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +124,36 @@ export class SubmissionAssignmentDto {
 
   @ApiProperty({ type: String, nullable: true, description: 'ISO 8601 (UTC) or null' })
   dueAt: string | null;
+
+  @ApiProperty({ description: 'Late submissions are taken after the due date (MOD-08-T07)' })
+  allowLate: boolean;
+
+  @ApiProperty({ example: 'Europe/Istanbul', description: 'IANA time zone to display the due date in: the linked lesson’s room branch, else the academy’s (D-R41; MOD-08-T07)' })
+  timeZone: string;
+}
+
+/** An attempt in the roster and in a submission’s history (no answer text — read it through API-110). */
+export class SubmissionSummaryDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ example: 1 })
+  attemptNo: number;
+
+  @ApiProperty({ description: 'ISO 8601' })
+  submittedAt: string;
+
+  @ApiProperty()
+  isLate: boolean;
+
+  @ApiProperty({ enum: SUBMISSION_STATUSES })
+  status: SubmissionStatus;
+
+  @ApiProperty({ type: Number, nullable: true })
+  score: number | null;
+
+  @ApiProperty({ type: String, nullable: true, description: 'ISO 8601 or null' })
+  gradedAt: string | null;
 }
 
 /** One attempt (API-109/110/111): what its student, their guardian and the class's teachers may know. */
@@ -148,30 +202,9 @@ export class SubmissionDto {
 
   @ApiProperty({ example: 2, description: 'maxAttempts plus one per returned attempt (D-R39)' })
   attemptsAllowed: number;
-}
 
-/** An attempt in the roster (no answer text — read it through API-110). */
-export class SubmissionSummaryDto {
-  @ApiProperty({ format: 'uuid' })
-  id: string;
-
-  @ApiProperty({ example: 1 })
-  attemptNo: number;
-
-  @ApiProperty({ description: 'ISO 8601' })
-  submittedAt: string;
-
-  @ApiProperty()
-  isLate: boolean;
-
-  @ApiProperty({ enum: SUBMISSION_STATUSES })
-  status: SubmissionStatus;
-
-  @ApiProperty({ type: Number, nullable: true })
-  score: number | null;
-
-  @ApiProperty({ type: String, nullable: true, description: 'ISO 8601 or null' })
-  gradedAt: string | null;
+  @ApiProperty({ type: [SubmissionSummaryDto], description: 'MOD-08-T07: every attempt of this student on this assignment, in attempt order (this one included), without the answers — read each through API-110' })
+  history: SubmissionSummaryDto[];
 }
 
 export class SubmissionRosterItemDto {

@@ -1,6 +1,6 @@
 // TEST-124 (unit) — the submission window, attempt counting and review rules of MOD-08-T03.
 import { describe, expect, it } from 'vitest';
-import { isScoreInRange, reviewTarget, sameReview, submissionWindow, summarizeAttempts } from './submissions.policy.js';
+import { isScoreInRange, reviewTarget, reviewVersionMatches, sameReview, submissionWindow, submitState, summarizeAttempts } from './submissions.policy.js';
 
 describe('submissionWindow', () => {
   const due = new Date('2026-11-20T20:59:00Z');
@@ -40,5 +40,32 @@ describe('reviewTarget / sameReview / isScoreInRange', () => {
     expect(isScoreInRange(20, 20)).toBe(true);
     expect(isScoreInRange(20.01, 20)).toBe(false);
     expect(isScoreInRange(-0.5, 20)).toBe(false);
+  });
+});
+
+// MOD-08-T07 (D-R49) — contract follow-ups.
+describe('submitState', () => {
+  it('blocks in the order of API-109: enrollment, window, attempts; otherwise says whether the attempt would be late', () => {
+    expect(submitState('completed', { isLate: false }, 0, 1)).toEqual({ blocker: 'not_enrolled', late: false });
+    expect(submitState(null, { closed: 'closed' }, 0, 1)).toEqual({ blocker: 'not_enrolled', late: false });
+    expect(submitState('active', { closed: 'past_due' }, 1, 1)).toEqual({ blocker: 'past_due', late: false });
+    expect(submitState('active', { closed: 'closed' }, 0, 1)).toEqual({ blocker: 'closed', late: false });
+    expect(submitState('active', { isLate: true }, 2, 2)).toEqual({ blocker: 'attempts_exhausted', late: false });
+    expect(submitState('active', { isLate: true }, 1, 2)).toEqual({ blocker: null, late: true });
+    expect(submitState('active', { isLate: false }, 0, 1)).toEqual({ blocker: null, late: false });
+  });
+});
+
+describe('reviewVersionMatches', () => {
+  it('checks nothing without expectedGradedAt; null expects no review yet; an instant must be the last review', () => {
+    const at = new Date('2026-11-10T16:40:12.345Z');
+    expect(reviewVersionMatches(undefined, at)).toBe(true);
+    expect(reviewVersionMatches(undefined, null)).toBe(true);
+    expect(reviewVersionMatches(null, null)).toBe(true);
+    expect(reviewVersionMatches(null, at)).toBe(false);
+    expect(reviewVersionMatches('2026-11-10T16:40:12.345Z', at)).toBe(true);
+    expect(reviewVersionMatches('2026-11-10T19:40:12.345+03:00', at)).toBe(true); // the same instant with an offset
+    expect(reviewVersionMatches('2026-11-10T16:40:12.346Z', at)).toBe(false);
+    expect(reviewVersionMatches('2026-11-10T16:40:12.345Z', null)).toBe(false);
   });
 });

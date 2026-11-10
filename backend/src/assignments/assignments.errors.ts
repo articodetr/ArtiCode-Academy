@@ -38,6 +38,13 @@
 //   score_out_of_range        400 — score outside 0..maxScore ({ score, maxScore })
 //   feedback_required         400 — `return` without feedback
 //   submission_invalid        400 — neither text nor link
+//   -- T07 (contract follow-ups, D-R49) --
+//   attempt_conflict          409 — the body names an attemptNo that is not the student's next
+//                                   one (a retried request whose attempt was already
+//                                   created) ({ expected, next })
+//   review_conflict           409 — expectedGradedAt no longer matches the submission's last
+//                                   review: someone reviewed it meanwhile
+//                                   ({ submissionId, status, gradedAt })
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -60,6 +67,8 @@ export const ASSIGNMENTS_ERROR_CODES = [
   'score_out_of_range',
   'feedback_required',
   'submission_invalid',
+  'attempt_conflict',
+  'review_conflict',
 ] as const;
 
 export type AssignmentsErrorCode = (typeof ASSIGNMENTS_ERROR_CODES)[number];
@@ -134,4 +143,8 @@ export const assignmentsError = {
     new AssignmentsHttpException(HttpStatus.BAD_REQUEST, 'score_out_of_range', `The score must be between 0 and ${maxScore}`, { score, maxScore }),
   feedbackRequired: () => new AssignmentsHttpException(HttpStatus.BAD_REQUEST, 'feedback_required', 'Returning a submission needs feedback'),
   submissionInvalid: () => new AssignmentsHttpException(HttpStatus.BAD_REQUEST, 'submission_invalid', 'A submission needs a text answer or a link'),
+  attemptConflict: (expected: number, next: number) =>
+    new AssignmentsHttpException(HttpStatus.CONFLICT, 'attempt_conflict', `Attempt ${expected} is not the next attempt (${next}); it may already have been submitted`, { expected, next }),
+  reviewConflict: (submissionId: string, status: string, gradedAt: string | null) =>
+    new AssignmentsHttpException(HttpStatus.CONFLICT, 'review_conflict', 'The submission was reviewed meanwhile; reload it before reviewing', { submissionId, status, gradedAt }),
 };

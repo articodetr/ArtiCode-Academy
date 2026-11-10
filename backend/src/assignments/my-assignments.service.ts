@@ -3,7 +3,7 @@ import type { AuthPrincipal } from '../auth/principal.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
 import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import type { EnrollmentStatus, Prisma } from '../generated/prisma/client.js';
 import { expandLessonOwnership, ownedClassIds, ownedEnrollmentsWhere, ownershipOf } from '../lessons/my-lessons.policy.js';
 import type { LessonOwnership } from '../lessons/my-lessons.policy.js';
 import { toInstant, toIso } from '../lessons/lessons.time.js';
@@ -13,9 +13,9 @@ import { ASSIGNMENTS_PAGE_DEFAULT } from './assignments.dto.js';
 import { assignmentsError } from './assignments.errors.js';
 import { ASSIGNMENT_SORT_FIELD, afterDueCursor, dueCursorKey, dueOrderBy } from './assignments.keyset.js';
 import type { ListMyAssignmentsQueryDto, MyAssignmentItemDto, MyAssignmentLatestDto, MyAssignmentListDto } from './my-assignments.dto.js';
-import { MY_ASSIGNMENT_STATUSES, pendingWhere } from './my-assignments.policy.js';
+import { MY_ASSIGNMENT_STATUSES, awaitingRework, isPendingItem, pendingWhere } from './my-assignments.policy.js';
 import type { MyAssignmentStatus } from './my-assignments.policy.js';
-import { summarizeAttempts } from './submissions.policy.js';
+import { submissionWindow, submitState, summarizeAttempts } from './submissions.policy.js';
 
 /** The academy's time zone for `timeZone` (D-R41), or UTC while the academy row is missing. */
 const FALLBACK_TIME_ZONE = 'UTC';
@@ -73,12 +73,20 @@ function toLatest(row: MyAttemptRow): MyAssignmentLatestDto {
   };
 }
 
-function toItem(row: MyAssignmentRow, ownership: LessonOwnership, attempts: readonly MyAttemptRow[], academyTimeZone: string): MyAssignmentItemDto {
+function toItem(
+  row: MyAssignmentRow,
+  ownership: LessonOwnership,
+  attempts: readonly MyAttemptRow[],
+  academyTimeZone: string,
+  enrollmentStatus: EnrollmentStatus,
+  now: Date,
+): MyAssignmentItemDto {
   const summary = summarizeAttempts(
     attempts.map((attempt) => ({ attemptNo: attempt.attemptNo, status: attempt.status, score: null })),
     row.maxAttempts,
   );
   const latest = attempts.find((attempt) => attempt.attemptNo === summary.lastAttemptNo) ?? null;
+  const state = submitState(enrollmentStatus, submissionWindow(row.status, row.dueAt, row.allowLate, now), summary.attempts, summary.attemptsAllowed);
   return {
     id: row.id,
     title: readLocalizedText(row.title) ?? { ar: '' },
@@ -105,6 +113,9 @@ function toItem(row: MyAssignmentRow, ownership: LessonOwnership, attempts: read
     attempts: summary.attempts,
     attemptsAllowed: summary.attemptsAllowed,
     latest: latest ? toLatest(latest) : null,
+    enrollmentStatus,
+    submitBlocker: state.blocker,
+    submitsLate: state.late,
   };
 }
 
@@ -128,9 +139,10 @@ export class MyAssignmentsService {
   async list(query: ListMyAssignmentsQueryDto, caller: AuthPrincipal): Promise<MyAssignmentListDto> {
     const enrollments = await this.prisma.db.enrollment.findMany({
       where: ownedEnrollmentsWhere(caller, query.studentId),
-      select: { classId: true, studentUserId: true, student: { select: { id: true, fullName: true, displayName: true } } },
+      select: { classId: true, studentUserId: true, status: true, student: { select: { id: true, fullName: true, displayName: true } } },
     });
     const ownerships = enrollments.map((row) => ownershipOf(row, caller.id));
+    const enrollmentStatus = new Map(enrollments.map((row) => [attemptKey(row.classId, row.studentUserId), row.status]));
     const classIds = ownedClassIds(ownerships, query.classId);
     if (classIds.length === 0) return { items: [], nextCursor: null };
     const relevant = ownerships.filter((ownership) => classIds.includes(ownership.classId));
@@ -140,7 +152,18 @@ export class MyAssignmentsService {
     const filters: Prisma.AssignmentWhereInput[] = [{ classId: { in: classIds } }, { status: query.status ?? { in: [...MY_ASSIGNMENT_STATUSES] } }];
     if (query.dueFrom) filters.push({ dueAt: { gte: toInstant(query.dueFrom) } });
     if (query.dueTo) filters.push({ dueAt: { lte: toInstant(query.dueTo) } });
-    if (query.pending === true) filters.push(pendingWhere(relevant));
+    if (query.pending === true) {
+      // MOD-08-T07 (D-R49): an attempt returned for rework waits for the student again.
+      const owned = await this.prisma.db.assignmentSubmission.findMany({
+        where: { studentUserId: { in: [...new Set(relevant.map((ownership) => ownership.student.id))] }, assignment: { classId: { in: classIds } } },
+        select: { assignmentId: true, studentUserId: true, attemptNo: true, status: true, assignment: { select: { classId: true } } },
+      });
+      const rework = awaitingRework(
+        owned.map((row) => ({ assignmentId: row.assignmentId, classId: row.assignment.classId, studentUserId: row.studentUserId, attemptNo: row.attemptNo, status: row.status })),
+        relevant,
+      );
+      filters.push(pendingWhere(relevant, rework));
+    }
     if (query.cursor) {
       // The same cursor shape as API-102 (AssignmentsService.list): `(dueAt, id)` bound to the order.
       const cursor = decodeKeysetCursor(query.cursor, ASSIGNMENT_SORT_FIELD, order, true, () => assignmentsError.cursorInvalid());
@@ -169,7 +192,18 @@ export class MyAssignmentsService {
       byKey.set(key, [...(byKey.get(key) ?? []), attempt]);
     }
     const timeZone = academy?.timezone ?? FALLBACK_TIME_ZONE;
-    const items = expanded.map(({ lesson: row, ownership }) => toItem(row, ownership, byKey.get(attemptKey(row.id, ownership.student.id)) ?? [], timeZone));
-    return { items: query.pending === true ? items.filter((item) => item.latest === null) : items, nextCursor };
+    const now = new Date();
+    const items = expanded.map(({ lesson: row, ownership }) =>
+      toItem(
+        row,
+        ownership,
+        byKey.get(attemptKey(row.id, ownership.student.id)) ?? [],
+        timeZone,
+        // Every ownership comes from an owned enrollment, so the map always holds it.
+        enrollmentStatus.get(attemptKey(row.classId, ownership.student.id)) ?? 'active',
+        now,
+      ),
+    );
+    return { items: query.pending === true ? items.filter((item) => isPendingItem(item.latest?.status ?? null, item.attempts, item.attemptsAllowed)) : items, nextCursor };
   }
 }
