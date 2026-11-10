@@ -69,7 +69,7 @@ import { UsersModule } from './users/users.module.js';
     AssignmentsModule,
     // MOD-09 (§4h): grade schemes (T02); exams, the gradebook and final grades follow in T03..T06.
     GradesModule,
-    // MOD-09-T03: exams whose results a teacher records (the results sheet and «my exams» follow in T04).
+    // MOD-09-T03/T04: exams whose results a teacher records, their results sheet and «my exams».
     ExamsModule,
     HealthModule,
   ],

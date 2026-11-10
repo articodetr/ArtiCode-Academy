@@ -43,7 +43,7 @@
 //   results_invalid          400 — the same student twice in one batch ({ duplicates })
 //   not_enrolled             422 — students without an active or completed enrollment
 //                                  in the class, before any write ({ studentIds })
-//   score_out_of_range       400 — a score outside 0..maxScore ({ score, maxScore })
+//   score_out_of_range       400 — a score outside 0..maxScore ({ score, maxScore, studentId? })
 //   -- gradebook and final grades (T05) --
 //   class_not_gradable       409 — final grades are fixed for a running or completed
 //                                  class only ({ classId, status })
@@ -168,8 +168,8 @@ export const gradesError = {
     new GradesHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'not_enrolled', 'These students have no active or completed enrollment in the class', {
       studentIds: [...studentIds],
     }),
-  scoreOutOfRange: (score: number, maxScore: number) =>
-    new GradesHttpException(HttpStatus.BAD_REQUEST, 'score_out_of_range', `The score must be between 0 and ${maxScore}`, { score, maxScore }),
+  scoreOutOfRange: (score: number, maxScore: number, studentId?: string) =>
+    new GradesHttpException(HttpStatus.BAD_REQUEST, 'score_out_of_range', `The score must be between 0 and ${maxScore}`, { score, maxScore, ...(studentId ? { studentId } : {}) }),
   classNotGradable: (classId: string, status: string) =>
     new GradesHttpException(HttpStatus.CONFLICT, 'class_not_gradable', 'Final grades are fixed for a running or completed class only', { classId, status }),
   gradeSchemeMissing: () => new GradesHttpException(HttpStatus.CONFLICT, 'grade_scheme_missing', 'No default grade scheme; create one or name a scheme'),
