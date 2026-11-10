@@ -46,6 +46,10 @@ export const LARGE_JSON_ROUTES: readonly LargeJsonRoute[] = [
   // minutes and a note of up to 500 characters — about 800 KB at most with
   // three-byte text (TEST-064).
   { method: 'PUT', path: /^\/lessons\/[^/]+\/attendance\/?$/i, limit: '1mb' },
+  // API-120 (MOD-09-T04): up to 500 results (RESULTS_BATCH_MAX), each a uuid,
+  // a status, a score and a feedback of up to 500 characters — about 800 KB at
+  // most with three-byte text (TEST-064).
+  { method: 'PUT', path: /^\/exams\/[^/]+\/results\/?$/i, limit: '1mb' },
 ];
 
 /** Same media type the default JSON parser accepts (`application/json`, any parameters). */

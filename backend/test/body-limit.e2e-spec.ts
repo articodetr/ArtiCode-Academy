@@ -13,6 +13,8 @@ import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { validateEnv } from '../src/config/env.schema.js';
 import { ReplaceSyllabusDto, SYLLABUS_ITEMS_MAX, SYLLABUS_MINUTES_MAX } from '../src/courses/syllabus.dto.js';
 import { ATTENDANCE_BATCH_MAX, ATTENDANCE_NOTE_MAX_LENGTH, MINUTES_LATE_MAX, RecordAttendanceDto } from '../src/lessons/attendance.dto.js';
+import { RESULT_FEEDBACK_MAX_LENGTH, RESULTS_BATCH_MAX, RecordExamResultsDto } from '../src/exams/exam-results.dto.js';
+import { EXAM_SCORE_LIMIT } from '../src/exams/exams.dto.js';
 import { LOCALIZED_TEXT_MAX_LENGTH } from '../src/roles/roles.dto.js';
 
 @Controller('courses/:id/syllabus')
@@ -32,6 +34,15 @@ class AttendanceProbeController {
   }
 }
 
+// MOD-09-T04 (API-120): PUT /exams/:id/results with the real RecordExamResultsDto.
+@Controller('exams/:id/results')
+class ExamResultsProbeController {
+  @Put()
+  record(@Body() body: RecordExamResultsDto): { results: number } {
+    return { results: body.results.length };
+  }
+}
+
 @Controller('probe')
 class ProbeController {
   @Put()
@@ -48,6 +59,19 @@ class ProbeController {
 const KB = 1024;
 const SYLLABUS_PATH = `/api/courses/${randomUUID()}/syllabus`;
 const ATTENDANCE_PATH = `/api/lessons/${randomUUID()}/attendance`;
+const RESULTS_PATH = `/api/exams/${randomUUID()}/results`;
+
+/** The largest results batch the DTO accepts: 500 scored students with the highest score and the longest feedback in three-byte letters. */
+function largestResults(): { results: unknown[] } {
+  return {
+    results: Array.from({ length: RESULTS_BATCH_MAX }, () => ({
+      studentId: randomUUID(),
+      status: 'scored',
+      score: EXAM_SCORE_LIMIT,
+      feedback: '漢'.repeat(RESULT_FEEDBACK_MAX_LENGTH),
+    })),
+  };
+}
 
 /** The largest attendance batch the DTO accepts: 500 late students with the longest note in three-byte letters. */
 function largestAttendance(): { records: unknown[] } {
@@ -91,7 +115,7 @@ describe('JSON body limits (KI-050, TEST-064)', () => {
           validate: () => validateEnv({ SWAGGER_ENABLED: 'false' }),
         }),
       ],
-      controllers: [SyllabusProbeController, AttendanceProbeController, ProbeController],
+      controllers: [SyllabusProbeController, AttendanceProbeController, ExamResultsProbeController, ProbeController],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>(APP_CREATE_OPTIONS);
     configureApp(app);
@@ -147,5 +171,17 @@ describe('JSON body limits (KI-050, TEST-064)', () => {
       .send(JSON.stringify({ items: [{ title: { ar: 'مقدمة' } }] }));
     expect(res.status).toBe(400);
     expect(JSON.stringify(res.body.message)).toContain('items');
+  });
+
+  it('MOD-09-T04: the largest valid results batch is above 512 KB and below 1 MB, PUT /exams/:id/results reads and validates it, every other route and method keeps its limit', async () => {
+    const results = largestResults();
+    const resultsBytes = Buffer.byteLength(JSON.stringify(results));
+    expect(resultsBytes).toBeGreaterThan(512 * KB);
+    expect(resultsBytes).toBeLessThan(1024 * KB);
+    const res = await api().put(RESULTS_PATH).send(results).expect(200);
+    expect(res.body).toEqual({ results: RESULTS_BATCH_MAX });
+    await api().post(RESULTS_PATH).send(results).expect(413);
+    await api().put('/api/probe').send(results).expect(413);
+    await api().put(SYLLABUS_PATH).send(results).expect(413);
   });
 });
