@@ -15,7 +15,6 @@ import type {
   CreateEnrollmentDto,
   EnrollmentDto,
   EnrollmentListDto,
-  EnrollmentStudentDto,
   ListEnrollmentsQueryDto,
 } from './enrollments.dto.js';
 import { enrollmentsError } from './enrollments.errors.js';
@@ -28,6 +27,7 @@ import {
   nextEnrollmentStatus,
   takesSeat,
 } from './enrollments.status.js';
+import { ROSTER_STUDENT_SELECT, toRosterStudentDto } from './roster-student.js';
 
 export const ENROLLMENTS_AUDIT_ACTIONS = {
   created: 'enrollments.created',
@@ -41,22 +41,6 @@ export const ENROLLMENTS_ENTITY_TYPE = 'enrollments';
 const ROSTER_SORT = 'createdAt';
 const ROSTER_ORDER = 'asc';
 
-// The student as the roster shows it: identity only, contact fields nulled in
-// the reduced projection (D-R07). Never the password hash, the login counters
-// or the security timestamps.
-const STUDENT_SELECT = {
-  id: true,
-  fullName: true,
-  fullNameLatin: true,
-  displayName: true,
-  avatarUrl: true,
-  status: true,
-  email: true,
-  username: true,
-  phone: true,
-  deletedAt: true,
-} satisfies Prisma.UserSelect;
-
 const ENROLLMENT_SELECT = {
   id: true,
   classId: true,
@@ -69,11 +53,10 @@ const ENROLLMENT_SELECT = {
   withdrawalReason: true,
   createdAt: true,
   updatedAt: true,
-  student: { select: STUDENT_SELECT },
+  student: { select: ROSTER_STUDENT_SELECT },
 } satisfies Prisma.EnrollmentSelect;
 
 type EnrollmentRow = Prisma.EnrollmentGetPayload<{ select: typeof ENROLLMENT_SELECT }>;
-type StudentRow = Prisma.UserGetPayload<{ select: typeof STUDENT_SELECT }>;
 
 /** The class row as the enrollment writes read it under the lock. */
 interface LockedClass {
@@ -105,22 +88,6 @@ function viewOf(caller: AuthPrincipal): EnrollmentView {
   };
 }
 
-function toStudentDto(row: StudentRow, view: UsersProjection): EnrollmentStudentDto {
-  const full = view === 'full';
-  return {
-    id: row.id,
-    fullName: row.fullName,
-    fullNameLatin: row.fullNameLatin,
-    displayName: row.displayName,
-    avatarUrl: row.avatarUrl,
-    status: row.status,
-    email: full ? row.email : null,
-    username: full ? row.username : null,
-    phone: full ? row.phone : null,
-    deletedAt: isoOrNull(row.deletedAt),
-  };
-}
-
 function toEnrollmentDto(row: EnrollmentRow, view: EnrollmentView): EnrollmentDto {
   return {
     id: row.id,
@@ -132,7 +99,7 @@ function toEnrollmentDto(row: EnrollmentRow, view: EnrollmentView): EnrollmentDt
     completedAt: isoOrNull(row.completedAt),
     withdrawnAt: isoOrNull(row.withdrawnAt),
     withdrawalReason: view.withdrawalReason ? row.withdrawalReason : null,
-    student: toStudentDto(row.student, view.contact),
+    student: toRosterStudentDto(row.student, view.contact),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
