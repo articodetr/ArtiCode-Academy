@@ -1,11 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
-import type { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { AttendanceStatus } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { READ_CONTACT_PERMISSION } from '../users/users.policy.js';
 import type { UsersProjection } from '../users/users.service.js';
 import { ATTENDANCE_ENROLLMENT_STATUSES, attendanceBlocker, isEmptyAttendancePlan, planAttendanceBatch } from './attendance.changes.js';
 import type { AttendanceEntry, AttendanceValues } from './attendance.changes.js';
@@ -15,6 +13,7 @@ import { lessonsError } from './lessons.errors.js';
 import { visibleLessonsWhere } from './lessons.policy.js';
 import { LESSONS_ENTITY_TYPE } from './lessons.service.js';
 import { toIso } from './lessons.time.js';
+import { ROSTER_STUDENT_SELECT, rosterProjectionOf, toRosterStudentDto } from '../enrollments/roster-student.js';
 
 /** The one audit event of attendance (12.4): recorded on the lesson when a batch writes something. */
 export const ATTENDANCE_AUDIT_ACTION = 'attendance.recorded';
@@ -31,23 +30,6 @@ const SHEET_LESSON_SELECT = {
   class: { select: { code: true, status: true } },
 } satisfies Prisma.LessonSelect;
 
-// The student as the sheet shows them — a mirror of STUDENT_SELECT /
-// toStudentDto() of enrollments.service.ts (not exported): identity only,
-// contact fields nulled in the reduced projection (D-R07). Never the password
-// hash, the login counters or the security timestamps. Keep them identical.
-const STUDENT_SELECT = {
-  id: true,
-  fullName: true,
-  fullNameLatin: true,
-  displayName: true,
-  avatarUrl: true,
-  status: true,
-  email: true,
-  username: true,
-  phone: true,
-  deletedAt: true,
-} satisfies Prisma.UserSelect;
-
 const RECORD_SELECT = {
   studentUserId: true,
   status: true,
@@ -59,7 +41,6 @@ const RECORD_SELECT = {
 } satisfies Prisma.AttendanceRecordSelect;
 
 type SheetLesson = Prisma.LessonGetPayload<{ select: typeof SHEET_LESSON_SELECT }>;
-type StudentRow = Prisma.UserGetPayload<{ select: typeof STUDENT_SELECT }>;
 type RecordRow = Prisma.AttendanceRecordGetPayload<{ select: typeof RECORD_SELECT }>;
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaService['db'];
@@ -68,26 +49,6 @@ const EMPTY_COUNTS: AttendanceCountsDto = { recorded: 0, present: 0, absent: 0, 
 
 function isoOrNull(value: Date | null): string | null {
   return value ? toIso(value) : null;
-}
-
-function projectionOf(caller: AuthPrincipal): UsersProjection {
-  return caller.permissions.includes(READ_CONTACT_PERMISSION) ? 'full' : 'reduced';
-}
-
-function toStudentDto(row: StudentRow, view: UsersProjection): EnrollmentStudentDto {
-  const full = view === 'full';
-  return {
-    id: row.id,
-    fullName: row.fullName,
-    fullNameLatin: row.fullNameLatin,
-    displayName: row.displayName,
-    avatarUrl: row.avatarUrl,
-    status: row.status,
-    email: full ? row.email : null,
-    username: full ? row.username : null,
-    phone: full ? row.phone : null,
-    deletedAt: isoOrNull(row.deletedAt),
-  };
 }
 
 function toRecordDto(row: RecordRow): AttendanceRecordDto {
@@ -152,12 +113,12 @@ export class AttendanceService {
   async sheet(lessonId: string, caller: AuthPrincipal): Promise<AttendanceSheetDto> {
     const lesson = await this.prisma.db.lesson.findFirst({ where: { AND: [{ id: lessonId }, visibleLessonsWhere(caller)] }, select: SHEET_LESSON_SELECT });
     if (!lesson) throw lessonsError.lessonNotFound(lessonId);
-    return this.buildSheet(this.prisma.db, lesson, projectionOf(caller));
+    return this.buildSheet(this.prisma.db, lesson, rosterProjectionOf(caller));
   }
 
   async record(lessonId: string, input: RecordAttendanceDto, caller: AuthPrincipal, ctx: RequestContext): Promise<AttendanceSheetDto> {
     const entries = input.records.map(toEntry);
-    const view = projectionOf(caller);
+    const view = rosterProjectionOf(caller);
     return this.prisma.db.$transaction(async (tx) => {
       const lesson = await this.lockLesson(tx, lessonId, caller);
       const blocker = attendanceBlocker(lesson.class.status, lesson.status, lesson.startsAt);
@@ -239,18 +200,18 @@ export class AttendanceService {
     const enrollments = await db.enrollment.findMany({
       where: { classId: lesson.classId, OR: [{ status: { in: [...ATTENDANCE_ENROLLMENT_STATUSES] } }, { studentUserId: { in: recordedIds } }] },
       orderBy: { id: 'asc' },
-      select: { studentUserId: true, status: true, student: { select: STUDENT_SELECT } },
+      select: { studentUserId: true, status: true, student: { select: ROSTER_STUDENT_SELECT } },
     });
     const items: AttendanceItemDto[] = enrollments.map((row) => ({
-      student: toStudentDto(row.student, view),
+      student: toRosterStudentDto(row.student, view),
       enrollmentStatus: row.status,
       record: byStudent.has(row.studentUserId) ? toRecordDto(byStudent.get(row.studentUserId)!) : null,
     }));
     const listed = new Set(enrollments.map((row) => row.studentUserId));
     const orphans = recordedIds.filter((studentId) => !listed.has(studentId));
     if (orphans.length > 0) {
-      const users = await db.user.findMany({ where: { id: { in: orphans } }, orderBy: { id: 'asc' }, select: STUDENT_SELECT });
-      for (const user of users) items.push({ student: toStudentDto(user, view), enrollmentStatus: null, record: toRecordDto(byStudent.get(user.id)!) });
+      const users = await db.user.findMany({ where: { id: { in: orphans } }, orderBy: { id: 'asc' }, select: ROSTER_STUDENT_SELECT });
+      for (const user of users) items.push({ student: toRosterStudentDto(user, view), enrollmentStatus: null, record: toRecordDto(byStudent.get(user.id)!) });
     }
     const blocker = attendanceBlocker(lesson.class.status, lesson.status, lesson.startsAt);
     return {

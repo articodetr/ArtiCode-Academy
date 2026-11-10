@@ -2,14 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
-import type { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
 import { seesChildren } from '../enrollments/my-classes.policy.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { toIso } from '../lessons/lessons.time.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
-import { READ_CONTACT_PERMISSION } from '../users/users.policy.js';
-import type { UsersProjection } from '../users/users.service.js';
 import { toDecimalText } from './assignments.changes.js';
 import { assignmentsError } from './assignments.errors.js';
 import { READ_ASSIGNMENTS_PERMISSION, seesEveryClass, visibleAssignmentsWhere } from './assignments.policy.js';
@@ -24,6 +21,8 @@ import {
   submissionWindow,
   summarizeAttempts,
 } from './submissions.policy.js';
+import { ROSTER_STUDENT_SELECT, rosterProjectionOf, toRosterStudentDto } from '../enrollments/roster-student.js';
+import type { RosterStudentRow } from '../enrollments/roster-student.js';
 
 export const SUBMISSIONS_AUDIT_ACTIONS = {
   submitted: 'assignments.submitted',
@@ -79,51 +78,11 @@ const SUMMARY_SELECT = {
   gradedAt: true,
 } satisfies Prisma.AssignmentSubmissionSelect;
 
-// The student as the roster shows them — a mirror of STUDENT_SELECT /
-// toStudentDto() of enrollments.service.ts and attendance.service.ts (not
-// exported): identity only, contact fields nulled in the reduced projection
-// (D-R07). Never the password hash, the login counters or the security
-// timestamps. Keep the three identical (moving them to one shared helper is a
-// small follow-up PR of its own — roadmap §4g.8 (4)).
-const STUDENT_SELECT = {
-  id: true,
-  fullName: true,
-  fullNameLatin: true,
-  displayName: true,
-  avatarUrl: true,
-  status: true,
-  email: true,
-  username: true,
-  phone: true,
-  deletedAt: true,
-} satisfies Prisma.UserSelect;
-
 type AssignmentSummaryRow = Prisma.AssignmentGetPayload<{ select: typeof ASSIGNMENT_SUMMARY_SELECT }>;
 type SubmissionRow = Prisma.AssignmentSubmissionGetPayload<{ select: typeof SUBMISSION_SELECT }>;
 type SummaryRow = Prisma.AssignmentSubmissionGetPayload<{ select: typeof SUMMARY_SELECT }>;
-type StudentRow = Prisma.UserGetPayload<{ select: typeof STUDENT_SELECT }>;
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaService['db'];
-
-function projectionOf(caller: AuthPrincipal): UsersProjection {
-  return caller.permissions.includes(READ_CONTACT_PERMISSION) ? 'full' : 'reduced';
-}
-
-function toStudentDto(row: StudentRow, view: UsersProjection): EnrollmentStudentDto {
-  const full = view === 'full';
-  return {
-    id: row.id,
-    fullName: row.fullName,
-    fullNameLatin: row.fullNameLatin,
-    displayName: row.displayName,
-    avatarUrl: row.avatarUrl,
-    status: row.status,
-    email: full ? row.email : null,
-    username: full ? row.username : null,
-    phone: full ? row.phone : null,
-    deletedAt: row.deletedAt ? toIso(row.deletedAt) : null,
-  };
-}
 
 function decimalOrNull(value: Prisma.Decimal | string | null): number | null {
   return value === null ? null : Number(value);
@@ -185,7 +144,7 @@ export class SubmissionsService {
   async roster(assignmentId: string, caller: AuthPrincipal): Promise<SubmissionRosterDto> {
     const assignment = await this.prisma.db.assignment.findFirst({ where: { AND: [{ id: assignmentId }, visibleAssignmentsWhere(caller)] }, select: ASSIGNMENT_SUMMARY_SELECT });
     if (!assignment) throw assignmentsError.assignmentNotFound(assignmentId);
-    const view = projectionOf(caller);
+    const view = rosterProjectionOf(caller);
     const submissions = await this.prisma.db.assignmentSubmission.findMany({ where: { assignmentId }, orderBy: [{ attemptNo: 'asc' }], select: SUMMARY_SELECT });
     const byStudent = new Map<string, SummaryRow[]>();
     for (const row of submissions) byStudent.set(row.studentUserId, [...(byStudent.get(row.studentUserId) ?? []), row]);
@@ -193,9 +152,9 @@ export class SubmissionsService {
     const enrollments = await this.prisma.db.enrollment.findMany({
       where: { classId: assignment.classId, OR: [{ status: { in: [...SUBMISSION_ROSTER_ENROLLMENT_STATUSES] } }, { studentUserId: { in: submittedIds } }] },
       orderBy: { id: 'asc' },
-      select: { studentUserId: true, status: true, student: { select: STUDENT_SELECT } },
+      select: { studentUserId: true, status: true, student: { select: ROSTER_STUDENT_SELECT } },
     });
-    const item = (student: StudentRow, enrollmentStatus: SubmissionRosterItemDto['enrollmentStatus']): SubmissionRosterItemDto => {
+    const item = (student: RosterStudentRow, enrollmentStatus: SubmissionRosterItemDto['enrollmentStatus']): SubmissionRosterItemDto => {
       const rows = byStudent.get(student.id) ?? [];
       const summary = summarizeAttempts(
         rows.map((row) => ({ attemptNo: row.attemptNo, status: row.status, score: toDecimalText(row.score === null ? null : row.score.toString()) })),
@@ -203,7 +162,7 @@ export class SubmissionsService {
       );
       const latest = rows.find((row) => row.attemptNo === summary.lastAttemptNo) ?? null;
       return {
-        student: toStudentDto(student, view),
+        student: toRosterStudentDto(student, view),
         enrollmentStatus,
         attempts: summary.attempts,
         attemptsAllowed: summary.attemptsAllowed,
@@ -216,7 +175,7 @@ export class SubmissionsService {
     const orphans = submittedIds.filter((studentId) => !listed.has(studentId));
     if (orphans.length > 0) {
       // A submission whose student has no enrollment row cannot come from the API (enrollments are never deleted) but is still listed.
-      const users = await this.prisma.db.user.findMany({ where: { id: { in: orphans } }, orderBy: { id: 'asc' }, select: STUDENT_SELECT });
+      const users = await this.prisma.db.user.findMany({ where: { id: { in: orphans } }, orderBy: { id: 'asc' }, select: ROSTER_STUDENT_SELECT });
       for (const user of users) items.push(item(user, null));
     }
     return { assignment: toAssignmentSummary(assignment, await academyTimeZone(this.prisma.db)), maxAttempts: assignment.maxAttempts, items };
