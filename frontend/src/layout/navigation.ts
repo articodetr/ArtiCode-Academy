@@ -65,10 +65,11 @@ interface PermissionGatedItem extends NavItemBase {
   permissions: readonly string[]
   /**
    * Hidden from a viewer every one of whose server role keys is in this list,
-   * whatever the permissions (J-F38): learners hold `assignments.read` by seed
-   * but are assigned to no class, so API-102 answers them an empty list (D-R16,
-   * D-R40) — their own assignments come through ownership instead. A viewer
-   * holding any other role key (a teacher who is also a guardian) keeps the entry.
+   * whatever the permissions (J-F38): learners hold `assignments.read` (and
+   * `exams.read` — J-F45) by seed but are assigned to no class, so API-102 (and
+   * API-113) answer them an empty list (D-R16, D-R40, D-R48) — their own work
+   * comes through ownership instead. A viewer holding any other role key (a
+   * teacher who is also a guardian) keeps the entry.
    */
   exceptRoleKeysOnly?: readonly string[]
   roles?: undefined
@@ -137,7 +138,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
   // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
   { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
-  { key: 'exams', path: '/exams', labelKey: 'nav.exams', icon: createElement(FormOutlined), roles: ['admin', 'teacher', 'student', 'guardian'], module: 'MOD-09' },
+  // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
+  // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
+  // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams
+  // come with «my exams» (API-121, a later part of MOD-09-T08). Staff hold no exams.* key (matrix 7.2).
+  {
+    key: 'exams',
+    path: '/exams',
+    labelKey: 'nav.exams',
+    icon: createElement(FormOutlined),
+    permissions: ['exams.read'],
+    exceptRoleKeysOnly: ['student', 'guardian'],
+    module: 'MOD-09',
+  },
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },
   { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
   { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
