@@ -29,6 +29,8 @@
 //   lesson_mismatch          422 — the lesson belongs to another class ({ lessonId, classId })
 //   class_closed             409 — a cancelled class takes no exam write, and a
 //                                  completed one no new exam ({ classId, status })
+//   pass_score_invalid       400 — the pass score exceeds the maximum score (after a
+//                                  PATCH merge too) ({ passScore, maxScore }) — added in T03
 //   exam_locked              409 — the field cannot change: maxScore once a result
 //                                  exists ({ status, fields, resultCount })
 //   exam_has_results         409 — `unschedule` of an exam that holds results ({ action, resultCount })
@@ -66,6 +68,7 @@ export const GRADES_ERROR_CODES = [
   'lesson_not_found',
   'lesson_mismatch',
   'class_closed',
+  'pass_score_invalid',
   'exam_locked',
   'exam_has_results',
   'exam_not_deletable',
@@ -147,6 +150,8 @@ export const gradesError = {
     new GradesHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'lesson_mismatch', 'The lesson belongs to another class', { lessonId, classId }),
   classClosed: (classId: string, status: string) =>
     new GradesHttpException(HttpStatus.CONFLICT, 'class_closed', 'This class takes no such exam write in its current status', { classId, status }),
+  passScoreInvalid: (passScore: number, maxScore: number) =>
+    new GradesHttpException(HttpStatus.BAD_REQUEST, 'pass_score_invalid', 'The pass score cannot exceed the maximum score', { passScore, maxScore }),
   examLocked: (status: string, fields: readonly string[], resultCount: number) =>
     new GradesHttpException(HttpStatus.CONFLICT, 'exam_locked', 'These fields cannot change for this exam', { status, fields: [...fields], resultCount }),
   examHasResults: (action: string, resultCount: number) =>

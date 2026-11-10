@@ -12,6 +12,7 @@ import { ENV_FILE_PATHS } from './config/env-files.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { validateEnv } from './config/env.schema.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
+import { ExamsModule } from './exams/exams.module.js';
 import { GradesModule } from './grades/grades.module.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -68,6 +69,8 @@ import { UsersModule } from './users/users.module.js';
     AssignmentsModule,
     // MOD-09 (§4h): grade schemes (T02); exams, the gradebook and final grades follow in T03..T06.
     GradesModule,
+    // MOD-09-T03: exams whose results a teacher records (the results sheet and «my exams» follow in T04).
+    ExamsModule,
     HealthModule,
   ],
 })
