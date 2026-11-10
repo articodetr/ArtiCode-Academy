@@ -14,6 +14,7 @@ import { validateEnv } from './config/env.schema.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { ExamsModule } from './exams/exams.module.js';
 import { CertificatesModule } from './certificates/certificates.module.js';
+import { FinanceModule } from './finance/finance.module.js';
 import { GradesModule } from './grades/grades.module.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -74,6 +75,8 @@ import { UsersModule } from './users/users.module.js';
     ExamsModule,
     // MOD-10 (§4h.10): certificates — issuing and the class preview (T02); reading, revoking, verifying and «my certificates» follow in T03/T04.
     CertificatesModule,
+    // MOD-11 (§4i): fee plans (T02); invoices, payments and «my invoices» follow in T03..T05.
+    FinanceModule,
     HealthModule,
   ],
 })
