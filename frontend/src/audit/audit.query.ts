@@ -128,6 +128,13 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'grade_schemes.created',
   'grade_schemes.updated',
   'grade_schemes.deleted',
+  // MOD-09-T03/T04 (CH-0127, CH-0129) — first offered with J-F45 (CH-0159)
+  'exams.',
+  'exams.created',
+  'exams.updated',
+  'exams.status.changed',
+  'exams.deleted',
+  'exams.results.recorded',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

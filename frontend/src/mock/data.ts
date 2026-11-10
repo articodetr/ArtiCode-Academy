@@ -46,17 +46,6 @@ export interface MockLesson {
   status: 'scheduled' | 'completed' | 'cancelled'
 }
 
-export interface MockExam {
-  id: string
-  title: LocalizedText
-  course: LocalizedText
-  date: string
-  durationMin: number
-  maxScore: number
-  avgScore: number | null
-  status: 'scheduled' | 'in_progress' | 'graded'
-}
-
 export interface MockCertificate {
   id: string
   serial: string
@@ -154,13 +143,6 @@ export const mockLessons: MockLesson[] = [
   { id: 'l-004', title: { ar: 'الحركة والمشاهد في Scratch', en: 'Motion and scenes in Scratch' }, course: T.courseScratch, type: 'live', date: '2026-10-30 10:00', durationMin: 90, status: 'scheduled' },
   { id: 'l-005', title: { ar: 'إدارة الحالة', en: 'State management' }, course: T.courseReact, type: 'recorded', date: '2026-10-22 18:30', durationMin: 110, status: 'completed' },
   { id: 'l-006', title: { ar: 'الدوال', en: 'Functions' }, course: T.coursePython, type: 'live', date: '2026-10-21 16:00', durationMin: 120, status: 'cancelled' },
-]
-
-export const mockExams: MockExam[] = [
-  { id: 'e-001', title: { ar: 'اختبار منتصف الدورة', en: 'Midterm exam' }, course: T.coursePython, date: '2026-11-05', durationMin: 60, maxScore: 50, avgScore: null, status: 'scheduled' },
-  { id: 'e-002', title: { ar: 'اختبار المكوّنات', en: 'Components quiz' }, course: T.courseReact, date: '2026-10-27', durationMin: 30, maxScore: 20, avgScore: 16.4, status: 'graded' },
-  { id: 'e-003', title: { ar: 'الاختبار النهائي', en: 'Final exam' }, course: T.courseScratch, date: '2026-10-29', durationMin: 45, maxScore: 100, avgScore: null, status: 'in_progress' },
-  { id: 'e-004', title: { ar: 'اختبار قصير 1', en: 'Quiz 1' }, course: T.coursePython, date: '2026-10-15', durationMin: 20, maxScore: 10, avgScore: 7.8, status: 'graded' },
 ]
 
 export const mockCertificates: MockCertificate[] = [
