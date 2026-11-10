@@ -14,6 +14,9 @@
 //                      it, while an admin's earlier removals are never undone).
 //   4. academy       — create the single row from SEED_ACADEMY_* when the table
 //                      is empty; an existing row is left untouched.
+//   5. grade scheme  — create the default grade scheme (MOD-09-T02, D-R46) when
+//                      the academy has no scheme at all; an existing scheme —
+//                      edited, renamed or replaced by the admin — is never touched.
 // No user is created: the first academy admin arrives with MOD-01 (argon2id).
 // Running the seed twice yields the same row counts.
 
@@ -27,6 +30,7 @@ import { PERMISSION_CATALOG, PERMISSION_KEYS } from '../src/authorization/permis
 import { ACADEMY_ADMIN_ROLE_KEY, SYSTEM_ROLES } from '../src/authorization/system-roles.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
+import { DEFAULT_GRADE_SCHEME_BANDS, DEFAULT_GRADE_SCHEME_NAME } from '../src/grades/grade-schemes.defaults.js';
 
 type Db = Prisma.TransactionClient;
 
@@ -44,6 +48,7 @@ export interface SeedSummary {
   roles: { created: string[]; existing: string[] };
   rolePermissions: { added: number };
   academy: 'created' | 'kept';
+  gradeScheme: 'created' | 'kept';
 }
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,62}$/;
@@ -101,7 +106,7 @@ export function academySeedFromEnv(env: Record<string, string | undefined>): Aca
 }
 
 /** Permissions + system roles + their default grants. Safe to run repeatedly. */
-export async function seedCatalog(db: Db): Promise<Omit<SeedSummary, 'academy'>> {
+export async function seedCatalog(db: Db): Promise<Omit<SeedSummary, 'academy' | 'gradeScheme'>> {
   let upserted = 0;
   // Keys that did not exist before this run: their default grants apply once,
   // even to system roles created earlier (see rule 3 above).
@@ -194,11 +199,26 @@ export async function seedAcademy(db: Db, academy: AcademySeed): Promise<'create
   return 'created';
 }
 
+/** Creates the default grade scheme when the academy has none (D-R46); never touches an existing one. */
+export async function seedGradeScheme(db: Db): Promise<'created' | 'kept'> {
+  const existing = await db.gradeScheme.findFirst({ select: { id: true } });
+  if (existing) return 'kept';
+  await db.gradeScheme.create({
+    data: {
+      name: { ...DEFAULT_GRADE_SCHEME_NAME },
+      isDefault: true,
+      bands: { create: DEFAULT_GRADE_SCHEME_BANDS.map((band) => ({ minPercent: band.minPercent, label: { ...band.label }, letter: band.letter, isPass: band.isPass })) },
+    },
+  });
+  return 'created';
+}
+
 export async function runSeed(client: PrismaClient, academy: AcademySeed): Promise<SeedSummary> {
   return client.$transaction(async (tx) => {
     const catalog = await seedCatalog(tx);
     const academyResult = await seedAcademy(tx, academy);
-    return { ...catalog, academy: academyResult };
+    const gradeScheme = await seedGradeScheme(tx);
+    return { ...catalog, academy: academyResult, gradeScheme };
   });
 }
 
@@ -223,6 +243,7 @@ async function main(): Promise<void> {
         `roles: created [${summary.roles.created.join(', ')}], existing [${summary.roles.existing.join(', ')}]`,
         `role_permissions: ${summary.rolePermissions.added} added`,
         `academy "${academy.slug}": ${summary.academy}`,
+        `default grade scheme: ${summary.gradeScheme}`,
       ].join('\n'),
     );
   } finally {
