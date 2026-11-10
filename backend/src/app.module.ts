@@ -12,6 +12,7 @@ import { ENV_FILE_PATHS } from './config/env-files.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { validateEnv } from './config/env.schema.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
+import { GradesModule } from './grades/grades.module.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
@@ -65,6 +66,8 @@ import { UsersModule } from './users/users.module.js';
     LessonsModule,
     // MOD-08 (§4g): assignments (T02); submissions and «my assignments» join it in T03/T04.
     AssignmentsModule,
+    // MOD-09 (§4h): grade schemes (T02); exams, the gradebook and final grades follow in T03..T06.
+    GradesModule,
     HealthModule,
   ],
 })
