@@ -29,7 +29,8 @@ export const GRADABLE_CLASS_STATUSES: readonly ClassStatus[] = ['running', 'comp
 const GRADED_ENROLLMENT_STATUSES = ['active', 'completed'] as const;
 
 type Tx = Prisma.TransactionClient;
-type Db = Tx | PrismaService['db'];
+export type GradesDb = Tx | PrismaService['db'];
+type Db = GradesDb;
 
 interface ComponentRow extends GradeComponent {
   title: LocalizedText;
@@ -53,6 +54,15 @@ interface StudentRow {
     finalizedAt: Date;
     finalizedBy: { id: string; fullName: string } | null;
   } | null;
+}
+
+/** An enrollment's final grade as MOD-10 reads it (D-R52). */
+export interface FinalGradeState {
+  enrollmentId: string;
+  enrollmentStatus: 'active' | 'completed';
+  /** The roster projection source (ROSTER_STUDENT_SELECT). */
+  student: StudentRow['student'];
+  final: { percent: string; bandLabel: LocalizedText; bandLetter: string | null; isPass: boolean; finalizedAt: Date; stale: boolean } | null;
 }
 
 interface Loaded {
@@ -108,8 +118,11 @@ function breakdownOf(components: readonly ComponentRow[], outcomes: readonly Cel
  * differs and records exactly one `grades.finalized`; `finalized_at` is taken
  * before the sources are read, so a grade written meanwhile shows the final
  * grade as `stale` (finalize again). Withdrawing deletes the class's final
- * grades with one `grades.withdrawn`; MOD-10 will refuse it once a certificate
- * exists.
+ * grades with one `grades.withdrawn`. Since MOD-10-T02 (D-R54) both refuse a
+ * class that has an issued certificate (`409 grades_certified`) before any
+ * write — the certificates are revoked first. `finalGradeStates()` hands MOD-10
+ * each enrollment's final grade and whether it is stale, inside the issuing
+ * transaction (after the same class-row lock).
  */
 @Injectable()
 export class GradebookService {
@@ -129,6 +142,7 @@ export class GradebookService {
     const view = rosterProjectionOf(caller);
     return this.prisma.db.$transaction(async (tx) => {
       const klass = await this.lockClass(tx, classId, caller);
+      await this.assertNotCertified(tx, classId);
       if (!GRADABLE_CLASS_STATUSES.includes(klass.status)) throw gradesError.classNotGradable(classId, klass.status);
       const scheme = await this.schemeFor(tx, input.schemeId);
       const finalizedAt = new Date(); // before the sources are read: a later change marks the result stale
@@ -204,6 +218,7 @@ export class GradebookService {
     const view = rosterProjectionOf(caller);
     return this.prisma.db.$transaction(async (tx) => {
       const klass = await this.lockClass(tx, classId, caller);
+      await this.assertNotCertified(tx, classId);
       const { count } = await tx.finalGrade.deleteMany({ where: { enrollment: { classId } } });
       if (count > 0) {
         await this.audit.record(
@@ -215,7 +230,37 @@ export class GradebookService {
     });
   }
 
+  /**
+   * MOD-10 (D-R52): every active or completed enrollment of the class with its
+   * final grade and whether a source changed after it was fixed. Read with the
+   * caller's `db` — inside the issuing transaction after its class-row lock.
+   */
+  async finalGradeStates(db: Db, classId: string): Promise<FinalGradeState[]> {
+    const loaded = await this.load(db, classId);
+    return loaded.students.map((student) => ({
+      enrollmentId: student.enrollmentId,
+      enrollmentStatus: student.enrollmentStatus,
+      student: student.student,
+      final: student.final
+        ? {
+            percent: student.final.percent,
+            bandLabel: student.final.bandLabel,
+            bandLetter: student.final.bandLetter,
+            isPass: student.final.isPass,
+            finalizedAt: student.final.finalizedAt,
+            stale: student.sourcesChangedAt > student.final.finalizedAt.getTime(),
+          }
+        : null,
+    }));
+  }
+
   // ---------------------------------------------------------------------------
+
+  /** D-R54: no new final grades and no withdrawal while the class has an issued certificate. */
+  private async assertNotCertified(tx: Tx, classId: string): Promise<void> {
+    const certificateCount = await tx.certificate.count({ where: { classId, status: 'issued' } });
+    if (certificateCount > 0) throw gradesError.gradesCertified(classId, certificateCount);
+  }
 
   private async assertVisible(db: Db, classId: string, caller: AuthPrincipal): Promise<void> {
     const klass = await db.class.findUnique({ where: { id: classId }, select: { id: true } });

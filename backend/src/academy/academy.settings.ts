@@ -26,25 +26,40 @@ export const workingDaysSchema = z
   .transform((days) => [...days].sort((a, b) => a - b));
 
 /**
+ * MOD-10 (D-R51): the prefix of the certificate serials `PREFIX-YYYY-NNNNN` —
+ * 2–10 upper-case letters or digits; `null` = the default `CERT`.
+ */
+export const serialPrefixSchema = z.string().regex(/^[A-Z0-9]{2,10}$/);
+
+/** The prefix used when the academy has not set one. */
+export const DEFAULT_CERTIFICATE_SERIAL_PREFIX = 'CERT';
+
+/**
  * Every known key with its dotted name (used in the audit `fields`) and its
  * path in the stored object, in the fixed order of the audit metadata.
  */
 export const SETTINGS_FIELDS = [
   { field: 'settings.scheduling.weekStartsOn', domain: 'scheduling', key: 'weekStartsOn', schema: weekStartsOnSchema },
   { field: 'settings.scheduling.workingDays', domain: 'scheduling', key: 'workingDays', schema: workingDaysSchema },
+  { field: 'settings.certificates.serialPrefix', domain: 'certificates', key: 'serialPrefix', schema: serialPrefixSchema },
 ] as const;
 
 export type SettingsField = (typeof SETTINGS_FIELDS)[number]['field'];
-export type SettingValue = number | number[];
+export type SettingValue = number | number[] | string;
 
 export interface SchedulingSettings {
   weekStartsOn: number | null;
   workingDays: number[] | null;
 }
 
+export interface CertificatesSettings {
+  serialPrefix: string | null;
+}
+
 /** The settings as the API returns them: every known key, `null` when not set. */
 export interface AcademySettings {
   scheduling: SchedulingSettings;
+  certificates: CertificatesSettings;
 }
 
 /** A validated PATCH of the settings: absent = unchanged, `null` = clear, a value = replace. */
@@ -52,6 +67,9 @@ export interface SettingsPatch {
   scheduling?: {
     weekStartsOn?: number | null;
     workingDays?: number[] | null;
+  };
+  certificates?: {
+    serialPrefix?: string | null;
   };
 }
 
@@ -64,7 +82,7 @@ function asObject(value: unknown): JsonObject {
 /** The stored jsonb → every known key (lenient: anything that fails its schema reads as null). */
 export function readSettings(stored: unknown): AcademySettings {
   const root = asObject(stored);
-  const out: Record<string, Record<string, unknown>> = { scheduling: {} };
+  const out: Record<string, Record<string, unknown>> = { scheduling: {}, certificates: {} };
   for (const { domain, key, schema } of SETTINGS_FIELDS) {
     const parsed = schema.safeParse(asObject(root[domain])[key]);
     (out[domain] ??= {})[key] = parsed.success ? parsed.data : null;

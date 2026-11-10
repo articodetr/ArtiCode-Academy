@@ -52,6 +52,10 @@
 //                                  attempt waits for review, a weighted exam is not
 //                                  published, or nothing is weighted
 //                                  ({ openAssignments, awaitingReview, unpublishedExams, reason? })
+//   -- certificates (MOD-10-T02, D-R54) --
+//   grades_certified         409 — the class has an issued certificate: its final grades
+//                                  are neither fixed again nor withdrawn until the
+//                                  certificates are revoked ({ classId, certificateCount })
 //   -- shared --
 //   nothing_to_update        400 — PATCH body without any field (as API-018)
 //   cursor_invalid           400 — the list cursor does not belong to this order
@@ -80,6 +84,7 @@ export const GRADES_ERROR_CODES = [
   'class_not_gradable',
   'grade_scheme_missing',
   'grades_not_ready',
+  'grades_certified',
   'nothing_to_update',
   'cursor_invalid',
 ] as const;
@@ -175,6 +180,11 @@ export const gradesError = {
   gradeSchemeMissing: () => new GradesHttpException(HttpStatus.CONFLICT, 'grade_scheme_missing', 'No default grade scheme; create one or name a scheme'),
   gradesNotReady: (readiness: GradesReadiness, reason?: 'no_weighted_components') =>
     new GradesHttpException(HttpStatus.CONFLICT, 'grades_not_ready', 'The class’s grades are not settled yet', { ...readiness, ...(reason ? { reason } : {}) }),
+  gradesCertified: (classId: string, certificateCount: number) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'grades_certified', 'The class has issued certificates; revoke them before fixing or withdrawing its final grades', {
+      classId,
+      certificateCount,
+    }),
   nothingToUpdate: () => new GradesHttpException(HttpStatus.BAD_REQUEST, 'nothing_to_update', 'The request body contains no field to update'),
   cursorInvalid: () =>
     new GradesHttpException(HttpStatus.BAD_REQUEST, 'cursor_invalid', 'The cursor is invalid or belongs to a different order; restart from the first page'),

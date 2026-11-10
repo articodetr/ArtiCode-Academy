@@ -6,7 +6,7 @@ import type { LocaleCode, LocalizedText } from '../authorization/localized-text.
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { E164_PATTERN, EMAIL_MAX_LENGTH, nullableIdentifierParam, nullableTextParam, trimParam } from '../users/users.validation.js';
 import { CURRENCY_PATTERN, IsIanaTimeZone, TIME_ZONE_MAX_LENGTH, currencyParam } from './academy.validation.js';
-import { MatchesSchema, weekStartsOnSchema, workingDaysSchema } from './academy.settings.js';
+import { MatchesSchema, serialPrefixSchema, weekStartsOnSchema, workingDaysSchema } from './academy.settings.js';
 import type { AcademySettings } from './academy.settings.js';
 
 /** Body values of the settings stay raw JSON: the implicit conversion must not turn "6" into 6. */
@@ -34,6 +34,15 @@ export class SchedulingSettingsPatchDto {
   workingDays?: number[] | null;
 }
 
+/** `settings.certificates` of a PATCH (MOD-10-T02, D-R51): absent = unchanged, `null` = clear (the default `CERT`). */
+export class CertificatesSettingsPatchDto {
+  @ApiPropertyOptional({ nullable: true, example: 'ACA', description: 'Prefix of the certificate serials PREFIX-YYYY-NNNNN: 2–10 upper-case letters or digits; null clears it (CERT)' })
+  @ValidateIf((dto: CertificatesSettingsPatchDto) => dto.serialPrefix !== undefined && dto.serialPrefix !== null)
+  @Transform(rawValue)
+  @MatchesSchema(serialPrefixSchema, 'settings.certificates.serialPrefix must be 2–10 upper-case letters or digits, or null')
+  serialPrefix?: string | null;
+}
+
 /** `settings` of a PATCH: the known domains only (unknown keys are 400 through forbidNonWhitelisted). */
 export class AcademySettingsPatchDto {
   @ApiPropertyOptional({ type: SchedulingSettingsPatchDto })
@@ -42,6 +51,13 @@ export class AcademySettingsPatchDto {
   @ValidateNested()
   @Type(() => SchedulingSettingsPatchDto)
   scheduling?: SchedulingSettingsPatchDto;
+
+  @ApiPropertyOptional({ type: CertificatesSettingsPatchDto })
+  @ValidateIf((dto: AcademySettingsPatchDto) => dto.certificates !== undefined)
+  @IsObject({ message: 'settings.certificates must be an object' })
+  @ValidateNested()
+  @Type(() => CertificatesSettingsPatchDto)
+  certificates?: CertificatesSettingsPatchDto;
 }
 
 /** Upper bound of the logo URL in a request (`logo_url` is unbounded text). */
@@ -171,7 +187,15 @@ export class SchedulingSettingsDto {
   workingDays: number[] | null;
 }
 
+export class CertificatesSettingsDto {
+  @ApiProperty({ type: String, nullable: true, example: 'ACA', description: 'Prefix of the certificate serials; null = the default CERT' })
+  serialPrefix: string | null;
+}
+
 export class AcademySettingsDto {
   @ApiProperty({ type: SchedulingSettingsDto })
   scheduling: SchedulingSettingsDto;
+
+  @ApiProperty({ type: CertificatesSettingsDto })
+  certificates: CertificatesSettingsDto;
 }

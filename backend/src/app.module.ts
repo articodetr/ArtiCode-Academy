@@ -13,6 +13,7 @@ import { CoursesModule } from './courses/courses.module.js';
 import { validateEnv } from './config/env.schema.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { ExamsModule } from './exams/exams.module.js';
+import { CertificatesModule } from './certificates/certificates.module.js';
 import { GradesModule } from './grades/grades.module.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -71,6 +72,8 @@ import { UsersModule } from './users/users.module.js';
     GradesModule,
     // MOD-09-T03/T04: exams whose results a teacher records, their results sheet and «my exams».
     ExamsModule,
+    // MOD-10 (§4h.10): certificates — issuing and the class preview (T02); reading, revoking, verifying and «my certificates» follow in T03/T04.
+    CertificatesModule,
     HealthModule,
   ],
 })

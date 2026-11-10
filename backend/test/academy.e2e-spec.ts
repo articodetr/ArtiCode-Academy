@@ -182,7 +182,7 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     expect(res.body.updatedAt).toBe(original.updatedAt.toISOString());
     for (const key of collectKeys(res.body)) expect(key).not.toMatch(SENSITIVE_KEY);
     // TEST-068: every known settings key, null when unset — never the raw jsonb.
-    expect(Object.keys(res.body.settings)).toEqual(['scheduling']);
+    expect(Object.keys(res.body.settings)).toEqual(['scheduling', 'certificates']);
     expect(Object.keys(res.body.settings.scheduling).sort()).toEqual(['weekStartsOn', 'workingDays']);
     expect(res.body).not.toHaveProperty('platformAcademyId');
     expect(res.body).not.toHaveProperty('singleton');
@@ -361,11 +361,11 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
 
     const start = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { weekStartsOn: 6 } } });
     expect(start.status, JSON.stringify(start.body)).toBe(200);
-    expect(start.body.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: null } });
+    expect(start.body.settings.scheduling).toEqual({ weekStartsOn: 6, workingDays: null });
     expect(start.body.currency).toBe(before.currency);
 
     const days = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { workingDays: [4, 3, 2, 1, 0] } } }).expect(200);
-    expect(days.body.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] } });
+    expect(days.body.settings.scheduling).toEqual({ weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] });
     const stored = await prisma.academy.findUniqueOrThrow({ where: { id: original.id }, select: { settings: true } });
     expect(stored.settings).toMatchObject({ scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] } });
 
@@ -380,7 +380,7 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     expect(denied.body.code).toBe('permission_denied');
 
     const cleared = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { scheduling: { weekStartsOn: null } } }).expect(200);
-    expect(cleared.body.settings).toEqual({ scheduling: { weekStartsOn: null, workingDays: [0, 1, 2, 3, 4] } });
+    expect(cleared.body.settings.scheduling).toEqual({ weekStartsOn: null, workingDays: [0, 1, 2, 3, 4] });
 
     const events = await eventsSince(m);
     expect(events.map((event) => [event.action, event.metadata, event.entityType])).toEqual([
@@ -399,11 +399,30 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     ]);
     expect([first.status, second.status]).toEqual([200, 200]);
     const read = await api().get(ACADEMY).set(bearer('reader')).expect(200);
-    expect(read.body.settings).toEqual({ scheduling: { weekStartsOn: 1, workingDays: [1, 2, 3] } });
+    expect(read.body.settings.scheduling).toEqual({ weekStartsOn: 1, workingDays: [1, 2, 3] });
     const events = await eventsSince(m);
     expect(events.map((event) => (event.metadata as { fields: string[] }).fields).sort()).toEqual([
       ['settings.scheduling.weekStartsOn'],
       ['settings.scheduling.workingDays'],
+    ]);
+  });
+
+  it('MOD-10-T02 (TEST-135) — settings.certificates.serialPrefix: 2–10 upper-case letters or digits, one event per change, null clears (the default CERT)', async () => {
+    await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix: null } } }).expect(200);
+    const m = await mark();
+    for (const serialPrefix of ['aca', 'A', 'ABCDEFGHIJK', 'AC-1', 42, true]) {
+      const bad = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix } } });
+      expect(bad.status, JSON.stringify(serialPrefix)).toBe(400);
+    }
+    const set = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix: 'ACA26' } } }).expect(200);
+    expect(set.body.settings.certificates).toEqual({ serialPrefix: 'ACA26' });
+    await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix: 'ACA26' } } }).expect(200); // same value: nothing
+    expect((await api().patch(ACADEMY).set(bearer('reader')).send({ settings: { certificates: { serialPrefix: 'XX' } } })).status).toBe(403);
+    const cleared = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix: null } } }).expect(200);
+    expect(cleared.body.settings.certificates).toEqual({ serialPrefix: null });
+    expect((await eventsSince(m)).map((event) => event.metadata)).toEqual([
+      { fields: ['settings.certificates.serialPrefix'] },
+      { fields: ['settings.certificates.serialPrefix'] },
     ]);
   });
 
