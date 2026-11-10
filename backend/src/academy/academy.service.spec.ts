@@ -75,7 +75,7 @@ describe('AcademyService', () => {
       'updatedAt',
     ]);
     expect(dto.createdAt).toBe('2026-10-29T12:00:00.000Z');
-    expect(dto.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: null } });
+    expect(dto.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: null }, certificates: { serialPrefix: null } });
 
     const same = await service.update({ currency: 'SAR', name: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' }, logoUrl: null }, CALLER, CTX);
     expect(same).toEqual(dto);

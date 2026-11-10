@@ -13,7 +13,7 @@ import {
 
 describe('academy settings (TEST-068)', () => {
   it('knows exactly the two scheduling keys, in a fixed order', () => {
-    expect(SETTINGS_FIELDS.map((entry) => entry.field)).toEqual(['settings.scheduling.weekStartsOn', 'settings.scheduling.workingDays']);
+    expect(SETTINGS_FIELDS.map((entry) => entry.field)).toEqual(['settings.scheduling.weekStartsOn', 'settings.scheduling.workingDays', 'settings.certificates.serialPrefix']);
   });
 
   it('accepts a weekday 0–6 as the first day of the week and nothing else', () => {
@@ -30,11 +30,11 @@ describe('academy settings (TEST-068)', () => {
   });
 
   it('reads every known key, null when unset or unreadable, and never throws on a corrupt column', () => {
-    expect(readSettings({})).toEqual({ scheduling: { weekStartsOn: null, workingDays: null } });
-    expect(readSettings({ scheduling: { weekStartsOn: 6, workingDays: [4, 0] } })).toEqual({ scheduling: { weekStartsOn: 6, workingDays: [0, 4] } });
-    expect(readSettings({ scheduling: { weekStartsOn: 'sat', workingDays: [] } })).toEqual({ scheduling: { weekStartsOn: null, workingDays: null } });
+    expect(readSettings({})).toEqual({ scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } });
+    expect(readSettings({ scheduling: { weekStartsOn: 6, workingDays: [4, 0] } })).toEqual({ scheduling: { weekStartsOn: 6, workingDays: [0, 4] }, certificates: { serialPrefix: null } });
+    expect(readSettings({ scheduling: { weekStartsOn: 'sat', workingDays: [] } })).toEqual({ scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } });
     for (const stored of [null, 'text', 42, [], { scheduling: 'x' }, { scheduling: [1] }]) {
-      expect(readSettings(stored), JSON.stringify(stored)).toEqual({ scheduling: { weekStartsOn: null, workingDays: null } });
+      expect(readSettings(stored), JSON.stringify(stored)).toEqual({ scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } });
     }
   });
 
