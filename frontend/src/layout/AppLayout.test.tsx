@@ -89,6 +89,21 @@ describe('AppLayout navigation', () => {
     expect(selected).toHaveLength(1)
     expect(selected[0]).toHaveTextContent(ar.nav.myAssignments)
   })
+
+  it('shows a teacher «exams» right after «assignments» and selects it on /exams; a student holding exams.read does not see it (J-F45)', () => {
+    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['classes.read', 'assignments.read', 'exams.read', 'exams.manage', 'exams.grade'] })
+    const { unmount } = renderWithProviders(<AppLayout />, { auth: makeAuth({ user: teacher }), route: '/exams' })
+    const labels = menuLabels()
+    expect(labels.indexOf(ar.nav.exams)).toBe(labels.indexOf(ar.nav.assignments) + 1)
+    const selected = document.querySelectorAll('.ant-menu-item-selected')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]).toHaveTextContent(ar.nav.exams)
+    unmount()
+
+    const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'assignments.read', 'exams.read', 'exams.take'] })
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user: student }), route: '/' })
+    expect(menuLabels()).not.toContain(ar.nav.exams)
+  })
 })
 
 const NAME = { ar: 'أكاديمية النور', en: 'Al-Noor Academy' }
