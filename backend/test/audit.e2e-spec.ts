@@ -5,7 +5,10 @@
 // (MOD-06-T05) also every writer route of MOD-06 T02/T03 (lessons,
 // attendance); since CH-0109 (the Stage 3 gate, task C5) also every writer
 // route of MOD-05 T02..T04 (classes, class teachers, enrollments) and of
-// MOD-07 T02/T03/T05 (rooms, the weekly schedule, lesson generation).
+// MOD-07 T02/T03/T05 (rooms, the weekly schedule, lesson generation); since
+// CH-0179 (the Stage 4 gate, MOD-10-T05) also every writer route of MOD-08
+// (assignments, submissions and reviews), MOD-09 (grade schemes, exams, their
+// results, final grades) and MOD-10 (issuing and revoking certificates).
 // Skipped when no database is reachable. Fixtures carry a unique suffix and are deleted at the
 // end (their audit rows stay with a NULL actor — the log is append-only by
 // design, KI-032).
@@ -111,6 +114,8 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   const mod05 = { classId: '', enrollmentId: '' };
   /** MOD-07 fixtures created through the API by the admin (CH-0109): the room, the weekly slot of class `-B`, the lesson generated from it, and the slot's weekday (the academy's first working day). */
   const mod07 = { roomId: '', slotId: '', lessonId: '', weekday: 0 };
+  /** Stage 4 (MOD-08..MOD-10, MOD-10-T05): the class, its assignment, the graded attempt, the exam, the grade schemes and the certificate. */
+  const stage4 = { classId: '', assignmentId: '', submissionId: '', examId: '', certificateId: '', schemeIds: [] as string[] };
 
   // E-mail addresses are stored lower-case (CHECK ck_users_email_lowercase).
   const email = (name: string) => `${name.toLowerCase()}-${RUN}@example.test`;
@@ -209,9 +214,12 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   afterAll(async () => {
     try {
       // MOD-05/MOD-06 first: the enrollments (Restrict on the class), then the classes (their teachers, slots, lessons and attendance cascade) — a course is Restrict on classes, a room on slots and lessons.
+      // Stage 4: certificates first (they restrict the enrollment and the class); the final grades go with the enrollments, the schemes after them.
+      await prisma.certificate.deleteMany({ where: { class: { code: { startsWith: CLASS_PREFIX } } } });
       await prisma.enrollment.deleteMany({ where: { class: { code: { startsWith: CLASS_PREFIX } } } });
       await prisma.class.deleteMany({ where: { code: { startsWith: CLASS_PREFIX } } });
       await prisma.room.deleteMany({ where: { code: { startsWith: ROOM_PREFIX } } });
+      if (stage4.schemeIds.length > 0) await prisma.gradeScheme.deleteMany({ where: { id: { in: stage4.schemeIds } } });
       // Courses next: their level is Restrict.
       await prisma.course.deleteMany({ where: { code: { startsWith: COURSE_PREFIX } } });
       await prisma.level.deleteMany({ where: { code: { startsWith: LEVEL_PREFIX } } });
@@ -823,6 +831,136 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     expect(await since(m)).toEqual([]);
   });
 
+  it('Stage 4 (MOD-10-T05) — MOD-08 assignments and submissions, MOD-09 schemes, exams, results and final grades, MOD-10 certificates record one event each', async () => {
+    const admin = fx['admin']!;
+    const learner = fx['enrolled']!;
+    tokens['enrolled'] = await login(email('enrolled'));
+    const ev = (action: string, entityType: string, entityId: string, metadata?: Record<string, unknown>, actorUserId = admin): ExpectedEvent => ({
+      action,
+      actorUserId,
+      entityType,
+      entityId,
+      ...(metadata ? { metadata } : {}),
+    });
+    const code = `${CLASS_PREFIX}-S`;
+    const bands = [
+      { minPercent: 0, label: { ar: 'راسب' }, isPass: false },
+      { minPercent: 50, label: { ar: 'ناجح' }, isPass: true },
+    ];
+    // Preparation (MOD-05 events, covered above): a class with its lead teacher, open, the learner enrolled.
+    const klass = await api().post(CLASSES).set(bearer('admin')).send({ courseId: mod04.courseA, code, name: { ar: 'فصل بوابة Stage 4' }, capacity: 3 }).expect(201);
+    stage4.classId = klass.body.id as string;
+    await api().put(`${CLASSES}/${stage4.classId}/teachers`).set(bearer('admin')).send({ teachers: [{ userId: fx['instructor'], role: 'lead' }] }).expect(200);
+    await api().post(`${CLASSES}/${stage4.classId}/status`).set(bearer('admin')).send({ action: 'open' }).expect(200);
+    await api().post(`${CLASSES}/${stage4.classId}/enrollments`).set(bearer('admin')).send({ studentId: learner }).expect(201);
+
+    // MOD-08 — an assignment through its life, a returned and a graded attempt (the learner submits), a draft deleted.
+    let m = await mark();
+    const a = await api().post(`${CLASSES}/${stage4.classId}/assignments`).set(bearer('admin')).send({ title: { ar: 'واجب البوابة' }, maxScore: 20, weight: 40 }).expect(201);
+    stage4.assignmentId = a.body.id as string;
+    await api().patch(`/api/assignments/${a.body.id}`).set(bearer('admin')).send({ instructions: { ar: 'حل التمارين' } }).expect(200);
+    await api().post(`/api/assignments/${a.body.id}/status`).set(bearer('admin')).send({ action: 'publish' }).expect(200);
+    const first = await api().post(`/api/assignments/${a.body.id}/submissions`).set(bearer('enrolled')).send({ textAnswer: 'محاولة' }).expect(201);
+    await api().post(`/api/submissions/${first.body.id}/review`).set(bearer('admin')).send({ action: 'return', feedback: 'أكمل' }).expect(200);
+    const second = await api().post(`/api/assignments/${a.body.id}/submissions`).set(bearer('enrolled')).send({ textAnswer: 'محاولة ثانية' }).expect(201);
+    stage4.submissionId = second.body.id as string;
+    await api().post(`/api/submissions/${second.body.id}/review`).set(bearer('admin')).send({ action: 'grade', score: 18 }).expect(200);
+    await api().post(`/api/assignments/${a.body.id}/status`).set(bearer('admin')).send({ action: 'close' }).expect(200);
+    const draft = await api().post(`${CLASSES}/${stage4.classId}/assignments`).set(bearer('admin')).send({ title: { ar: 'مسودة' }, maxScore: 5 }).expect(201);
+    await api().delete(`/api/assignments/${draft.body.id}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [
+      ev('assignments.created', 'assignments', a.body.id, { classId: stage4.classId, code }),
+      ev('assignments.updated', 'assignments', a.body.id, { fields: ['instructions'] }),
+      ev('assignments.status.changed', 'assignments', a.body.id, { action: 'publish', from: 'draft', to: 'open' }),
+      ev('assignments.submitted', 'assignment_submissions', first.body.id, { assignmentId: a.body.id, attemptNo: 1, isLate: false }, learner),
+      ev('assignments.returned', 'assignment_submissions', first.body.id),
+      ev('assignments.submitted', 'assignment_submissions', second.body.id, { assignmentId: a.body.id, attemptNo: 2 }, learner),
+      ev('assignments.graded', 'assignment_submissions', second.body.id),
+      ev('assignments.status.changed', 'assignments', a.body.id, { action: 'close', from: 'open', to: 'closed' }),
+      ev('assignments.created', 'assignments', draft.body.id),
+      ev('assignments.deleted', 'assignments', draft.body.id),
+    ]);
+
+    // MOD-09 — grade schemes: create, rename, and an unused spare created and deleted.
+    m = await mark();
+    const scheme = await api().post('/api/grade-schemes').set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} سلّم` }, bands }).expect(201);
+    stage4.schemeIds.push(scheme.body.id as string);
+    await api().patch(`/api/grade-schemes/${scheme.body.id}`).set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} سلّم البوابة` } }).expect(200);
+    const spare = await api().post('/api/grade-schemes').set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} احتياط` }, bands }).expect(201);
+    stage4.schemeIds.push(spare.body.id as string);
+    await api().delete(`/api/grade-schemes/${spare.body.id}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [
+      ev('grade_schemes.created', 'grade_schemes', scheme.body.id, { bandCount: 2 }),
+      ev('grade_schemes.updated', 'grade_schemes', scheme.body.id, { fields: ['name'] }),
+      ev('grade_schemes.created', 'grade_schemes', spare.body.id, { bandCount: 2 }),
+      ev('grade_schemes.deleted', 'grade_schemes', spare.body.id),
+    ]);
+
+    // MOD-09 — an exam through its life with its results sheet, and a draft deleted.
+    m = await mark();
+    const exam = await api().post(`${CLASSES}/${stage4.classId}/exams`).set(bearer('admin')).send({ title: { ar: 'اختبار البوابة' }, type: 'final', maxScore: 50, weight: 60 }).expect(201);
+    stage4.examId = exam.body.id as string;
+    await api().patch(`/api/exams/${exam.body.id}`).set(bearer('admin')).send({ durationMinutes: 60 }).expect(200);
+    await api().post(`/api/exams/${exam.body.id}/status`).set(bearer('admin')).send({ action: 'schedule' }).expect(200);
+    await api().put(`/api/exams/${exam.body.id}/results`).set(bearer('admin')).send({ results: [{ studentId: learner, status: 'scored', score: 42 }] }).expect(200);
+    await api().post(`/api/exams/${exam.body.id}/status`).set(bearer('admin')).send({ action: 'publish' }).expect(200);
+    const spareExam = await api().post(`${CLASSES}/${stage4.classId}/exams`).set(bearer('admin')).send({ title: { ar: 'مسودة' }, type: 'quiz', maxScore: 10 }).expect(201);
+    await api().delete(`/api/exams/${spareExam.body.id}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [
+      ev('exams.created', 'exams', exam.body.id, { classId: stage4.classId, code, type: 'final' }),
+      ev('exams.updated', 'exams', exam.body.id, { fields: ['durationMinutes'] }),
+      ev('exams.status.changed', 'exams', exam.body.id, { action: 'schedule', from: 'draft', to: 'scheduled' }),
+      ev('exams.results.recorded', 'exams', exam.body.id, { classId: stage4.classId, code, created: 1, updated: 0 }),
+      ev('exams.status.changed', 'exams', exam.body.id, { action: 'publish', from: 'scheduled', to: 'published' }),
+      ev('exams.created', 'exams', spareExam.body.id, { type: 'quiz' }),
+      ev('exams.deleted', 'exams', spareExam.body.id),
+    ]);
+
+    // MOD-09 — final grades: fixed, withdrawn, fixed again (86.4 — a pass).
+    await api().post(`${CLASSES}/${stage4.classId}/status`).set(bearer('admin')).send({ action: 'start' }).expect(200);
+    m = await mark();
+    await api().post(`${CLASSES}/${stage4.classId}/final-grades`).set(bearer('admin')).send({ schemeId: scheme.body.id }).expect(200);
+    await api().delete(`${CLASSES}/${stage4.classId}/final-grades`).set(bearer('admin')).expect(200);
+    await api().post(`${CLASSES}/${stage4.classId}/final-grades`).set(bearer('admin')).send({ schemeId: scheme.body.id }).expect(200);
+    await expectEvents(m, [
+      ev('grades.finalized', 'classes', stage4.classId, { code, schemeId: scheme.body.id, created: 1, updated: 0 }),
+      ev('grades.withdrawn', 'classes', stage4.classId, { code, count: 1 }),
+      ev('grades.finalized', 'classes', stage4.classId, { code, schemeId: scheme.body.id, created: 1, updated: 0 }),
+    ]);
+
+    // MOD-10 — the completed class's certificate issued, then revoked.
+    await api().post(`${CLASSES}/${stage4.classId}/status`).set(bearer('admin')).send({ action: 'complete' }).expect(200);
+    m = await mark();
+    const issued = await api().post(`${CLASSES}/${stage4.classId}/certificates`).set(bearer('admin')).send({}).expect(200);
+    const certificate = issued.body.issued[0] as { id: string; serial: string };
+    stage4.certificateId = certificate.id;
+    await api().post(`/api/certificates/${certificate.id}/revoke`).set(bearer('admin')).send({ reason: 'تغطية TEST-030' }).expect(200);
+    await expectEvents(m, [
+      ev('certificates.issued', 'classes', stage4.classId, { code, count: 1, certificateIds: [certificate.id] }),
+      ev('certificates.revoked', 'certificates', certificate.id, { serial: certificate.serial, classId: stage4.classId, reason: 'تغطية TEST-030' }),
+    ]);
+  });
+
+  it('Stage 4 — rejected requests and writes without a difference record nothing', async () => {
+    const m = await mark();
+    // MOD-08: no submission once the enrollment is completed (the class is); a score above the maximum; the same review again; a closed assignment is not deleted.
+    expect((await api().post(`/api/assignments/${stage4.assignmentId}/submissions`).set(bearer('enrolled')).send({ textAnswer: 'متأخر جداً' })).body.code).toBe('not_enrolled');
+    expect((await api().post(`/api/submissions/${stage4.submissionId}/review`).set(bearer('admin')).send({ action: 'grade', score: 25 })).status).toBe(400);
+    await api().post(`/api/submissions/${stage4.submissionId}/review`).set(bearer('admin')).send({ action: 'grade', score: 18 }).expect(200);
+    expect((await api().delete(`/api/assignments/${stage4.assignmentId}`).set(bearer('admin'))).status).toBe(409);
+    // MOD-09: the same scheme name, an identical results batch, a score above the maximum, a published exam is not deleted, an identical finalization.
+    await api().patch(`/api/grade-schemes/${stage4.schemeIds[0]}`).set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} سلّم البوابة` } }).expect(200);
+    await api().put(`/api/exams/${stage4.examId}/results`).set(bearer('admin')).send({ results: [{ studentId: fx['enrolled'], status: 'scored', score: 42 }] }).expect(200);
+    expect((await api().put(`/api/exams/${stage4.examId}/results`).set(bearer('admin')).send({ results: [{ studentId: fx['enrolled'], status: 'scored', score: 60 }] })).status).toBe(400);
+    expect((await api().delete(`/api/exams/${stage4.examId}`).set(bearer('admin'))).status).toBe(409);
+    await api().post(`${CLASSES}/${stage4.classId}/final-grades`).set(bearer('admin')).send({ schemeId: stage4.schemeIds[0] }).expect(200);
+    // MOD-10: an unknown class, a revoked certificate revoked again, a missing reason.
+    expect((await api().post(`${CLASSES}/${NIL_ID}/certificates`).set(bearer('admin')).send({})).status).toBe(404);
+    expect((await api().post(`/api/certificates/${stage4.certificateId}/revoke`).set(bearer('admin')).send({ reason: 'مرة ثانية' })).status).toBe(409);
+    expect((await api().post(`/api/certificates/${stage4.certificateId}/revoke`).set(bearer('admin')).send({})).status).toBe(400);
+    await expectEvents(m, []);
+  });
+
   it('filters by actor, action prefix (literal, `_` is no wildcard) and entity — audit.read alone suffices', async () => {
     const admin = fx['admin']!;
     const byActor = await items('auditor', `actorUserId=${admin}&limit=200`);
@@ -887,7 +1025,8 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     // `before` stays a plain time bound.
     expect((await items('auditor', `actorUserId=${admin}&before=1970-01-02T00:00:00.000Z`)).items).toEqual([]);
     const future = new Date(Date.now() + 60_000).toISOString();
-    expect((await items('auditor', `actorUserId=${admin}&before=${future}`)).items.map((item) => item.id)).toEqual(expected);
+    // limit=200: the admin writes more than the default page of 50 events per run since the Stage 4 blocks (CH-0179).
+    expect((await items('auditor', `actorUserId=${admin}&before=${future}&limit=200`)).items.map((item) => item.id)).toEqual(expected);
   });
 
   it('rejects malformed filters, unknown parameters and entityId without entityType with 400; 403 without audit.read', async () => {
