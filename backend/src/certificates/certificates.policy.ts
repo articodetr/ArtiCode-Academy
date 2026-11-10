@@ -18,6 +18,22 @@ export function certificatesReadMissing(permissions: readonly string[]): string[
   return CERTIFICATE_READ_PERMISSIONS.some((key) => permissions.includes(key)) ? null : [...CERTIFICATE_READ_PERMISSIONS];
 }
 
+/** «My certificates» (D-R57, as «my grades» — D-R48): each relation opens with its own key. */
+export interface MyCertificatesAccess {
+  self: boolean;
+  child: boolean;
+}
+
+export function myCertificatesAccess(permissions: readonly string[]): MyCertificatesAccess {
+  return { self: permissions.includes(READ_OWN_CERTIFICATES_PERMISSION), child: permissions.includes(READ_LINKED_CERTIFICATES_PERMISSION) };
+}
+
+/** The keys to report in `permission_denied` when the caller holds neither, else null. */
+export function myCertificatesMissing(permissions: readonly string[]): string[] | null {
+  const access = myCertificatesAccess(permissions);
+  return access.self || access.child ? null : [READ_OWN_CERTIFICATES_PERMISSION, READ_LINKED_CERTIFICATES_PERMISSION];
+}
+
 /** Why an enrollment of a class gets no certificate (D-R52), checked in this order. */
 export const INELIGIBLE_REASONS = ['already_issued', 'not_completed', 'no_final_grade', 'not_passed', 'stale'] as const;
 export type IneligibleReason = (typeof INELIGIBLE_REASONS)[number];

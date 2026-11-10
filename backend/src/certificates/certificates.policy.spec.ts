@@ -2,7 +2,7 @@
 // eligibility order, the serial format and year, the verification code and
 // its normalisation, and the read keys.
 import { describe, expect, it } from 'vitest';
-import { certificatesReadMissing, formatSerial, ineligibilityOf, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
+import { certificatesReadMissing, formatSerial, ineligibilityOf, myCertificatesAccess, myCertificatesMissing, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
 
 describe('certificate rules (TEST-135)', () => {
   it('gives the first reason in order: already issued, not completed, no final grade, not passed, stale; null when eligible', () => {
@@ -38,5 +38,12 @@ describe('certificate rules (TEST-135)', () => {
     expect(certificatesReadMissing(['certificates.read_all'])).toBeNull();
     expect(certificatesReadMissing(['certificates.issue'])).toBeNull();
     expect(certificatesReadMissing(['certificates.read_own', 'certificates.revoke'])).toEqual(['certificates.read_all', 'certificates.issue']);
+  });
+
+  it('TEST-137 — «my certificates»: each relation opens with its own key; neither key is a 403', () => {
+    expect(myCertificatesAccess(['certificates.read_own'])).toEqual({ self: true, child: false });
+    expect(myCertificatesAccess(['certificates.read_linked'])).toEqual({ self: false, child: true });
+    expect(myCertificatesMissing(['certificates.read_all', 'certificates.issue'])).toEqual(['certificates.read_own', 'certificates.read_linked']);
+    expect(myCertificatesMissing(['certificates.read_linked'])).toBeNull();
   });
 });
