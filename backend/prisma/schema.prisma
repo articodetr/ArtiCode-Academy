@@ -186,6 +186,10 @@ model User {
   examResults             ExamResult[]           @relation("ExamResultStudent")
   examResultsRecorded     ExamResult[]           @relation("ExamResultRecordedBy")
   finalGradesFinalized    FinalGrade[]           @relation("FinalGradeFinalizedBy")
+  /// MOD-10: certificates of this user as a student, and those they issued or revoked.
+  certificates            Certificate[]          @relation("CertificateStudent")
+  certificatesIssued      Certificate[]          @relation("CertificateIssuedBy")
+  certificatesRevoked     Certificate[]          @relation("CertificateRevokedBy")
 
   @@index([phone])
   @@index([status])
@@ -434,6 +438,8 @@ model Course {
   syllabusItems CourseSyllabusItem[]
   /// MOD-05: runs of this course (Restrict — a course with classes cannot be deleted).
   classes       Class[]
+  /// MOD-10: certificates of this course (Restrict).
+  certificates  Certificate[]
 
   @@index([status])
   @@index([levelId])
@@ -530,16 +536,18 @@ model Class {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  course      Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  createdBy   User?           @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  teachers    ClassTeacher[]
-  enrollments Enrollment[]
+  course       Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  createdBy    User?           @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  teachers     ClassTeacher[]
+  enrollments  Enrollment[]
   /// MOD-07: the weekly slots of this class (deleted with it).
-  schedules   ClassSchedule[]
-  lessons     Lesson[]
-  assignments Assignment[]
+  schedules    ClassSchedule[]
+  lessons      Lesson[]
+  assignments  Assignment[]
   /// MOD-09: the exams of this class (deleted with it).
-  exams       Exam[]
+  exams        Exam[]
+  /// MOD-10: the certificates of this class (Restrict — never deleted).
+  certificates Certificate[]
 
   @@index([courseId])
   @@index([status])
@@ -584,11 +592,13 @@ model Enrollment {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  class      Class       @relation(fields: [classId], references: [id], onDelete: Restrict)
-  student    User        @relation("EnrollmentStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
-  createdBy  User?       @relation("EnrollmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  class        Class         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  student      User          @relation("EnrollmentStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  createdBy    User?         @relation("EnrollmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   /// MOD-09: the final grade fixed for this enrollment (D-R44/D-R45), if any.
-  finalGrade FinalGrade?
+  finalGrade   FinalGrade?
+  /// MOD-10: its certificates — at most one `issued` (partial unique in SQL).
+  certificates Certificate[]
 
   @@unique([classId, studentUserId], map: "uq_enrollments_class_student")
   @@index([studentUserId])
@@ -1104,4 +1114,77 @@ model FinalGrade {
   @@index([schemeId])
   @@index([finalizedById])
   @@map("final_grades")
+}
+
+// MOD-10 — certificates (roadmap §4h.10; owner decisions D-R50..D-R57,
+// CH-0174). First version (D-R50): a completion certificate per completed
+// enrollment with a passing, non-stale final grade (MOD-09), keeping an
+// immutable snapshot that the frontend prints — no template table, no stored
+// PDF. Serials `PREFIX-YYYY-NNNNN` come from `number_sequences` (D-R53, shared
+// with MOD-11 later); at most one issued certificate per enrollment (partial
+// unique in SQL — D-R55); certificates are never deleted, only revoked.
+
+enum CertificateStatus {
+  issued
+  revoked
+
+  @@map("certificate_status")
+}
+
+/// Readable running numbers (6.7.4-F): one row per key and period, locked
+/// FOR UPDATE inside the transaction that takes the next value.
+model NumberSequence {
+  /// e.g. `certificate`; trimmed and non-empty (CHECK in SQL).
+  key       String   @db.VarChar(32)
+  /// `''` or a period such as `2026`.
+  period    String   @default("") @db.VarChar(8)
+  /// The last value handed out; >= 0 (CHECK in SQL).
+  lastValue BigInt   @default(0) @map("last_value")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@id([key, period])
+  @@map("number_sequences")
+}
+
+model Certificate {
+  id               String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// `PREFIX-YYYY-NNNNN` (D-R53).
+  serial           String            @unique @db.VarChar(32)
+  /// Random base32 code for the public verification (D-R56).
+  verificationCode String            @unique @map("verification_code") @db.VarChar(32)
+  enrollmentId     String            @map("enrollment_id") @db.Uuid
+  classId          String            @map("class_id") @db.Uuid
+  courseId         String            @map("course_id") @db.Uuid
+  studentUserId    String            @map("student_user_id") @db.Uuid
+  status           CertificateStatus @default(issued)
+  /// The final grade at issuance: 0..100 (CHECK in SQL).
+  percent          Decimal           @db.Decimal(5, 2)
+  /// The band's label at issuance; `ar` is required (CHECK in SQL).
+  bandLabel        Json              @map("band_label")
+  bandLetter       String?           @map("band_letter") @db.VarChar(4)
+  /// Student, course, class, academy and dates at issuance — what is printed (D-R50).
+  snapshot         Json
+  issuedAt         DateTime          @default(now()) @map("issued_at") @db.Timestamptz(6)
+  issuedById       String?           @map("issued_by") @db.Uuid
+  revokedAt        DateTime?         @map("revoked_at") @db.Timestamptz(6)
+  revokedById      String?           @map("revoked_by") @db.Uuid
+  revokeReason     String?           @map("revoke_reason")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  class      Class      @relation(fields: [classId], references: [id], onDelete: Restrict)
+  course     Course     @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  student    User       @relation("CertificateStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  issuedBy   User?      @relation("CertificateIssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  revokedBy  User?      @relation("CertificateRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([enrollmentId])
+  @@index([classId])
+  @@index([courseId])
+  @@index([studentUserId])
+  @@index([status, issuedAt])
+  @@index([issuedById])
+  @@index([revokedById])
+  @@map("certificates")
 }
