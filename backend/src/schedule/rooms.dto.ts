@@ -153,6 +153,13 @@ export class RoomDto {
   @ApiProperty({ type: RoomBranchDto, nullable: true })
   branch: RoomBranchDto | null;
 
+  @ApiProperty({
+    example: 'Asia/Riyadh',
+    description:
+      'IANA zone the room’s times are shown in: its branch’s `timezone`, else the academy’s (UTC without the academy row) — the rule of `timeZone` in API-090/091 and `LessonDto` (D-R41), so a form types a new lesson’s times in the zone of the room it picks',
+  })
+  timeZone: string;
+
   @ApiProperty()
   isActive: boolean;
 

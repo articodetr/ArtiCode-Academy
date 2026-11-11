@@ -12,6 +12,7 @@ import { NO_BRANCH_FILTER } from './rooms.dto.js';
 import type { CreateRoomDto, ListRoomsQueryDto, RoomDto, RoomListDto, UpdateRoomDto } from './rooms.dto.js';
 import { scheduleError } from './schedule.errors.js';
 import { canManageSchedule } from './schedule.policy.js';
+import { displayTimeZone } from './timetable.policy.js';
 
 export const ROOMS_AUDIT_ACTIONS = {
   created: 'rooms.created',
@@ -32,14 +33,15 @@ const ROOM_SELECT = {
   isActive: true,
   createdAt: true,
   updatedAt: true,
-  branch: { select: { id: true, code: true, name: true } },
+  branch: { select: { id: true, code: true, name: true, timezone: true } },
 } satisfies Prisma.RoomSelect;
 
 type RoomRow = Prisma.RoomGetPayload<{ select: typeof ROOM_SELECT }>;
 type Tx = Prisma.TransactionClient;
 type Db = Pick<Tx, 'branch' | 'room' | 'classSchedule'>;
 
-function toRoomDto(row: RoomRow): RoomDto {
+/** `timeZone` = the zone the room's times are shown in (D-R41): its branch's, else the academy's — as for lessons and slots. */
+function toRoomDto(row: RoomRow, academyTimeZone: string): RoomDto {
   return {
     id: row.id,
     code: row.code,
@@ -48,6 +50,7 @@ function toRoomDto(row: RoomRow): RoomDto {
     kind: row.kind,
     branchId: row.branchId,
     branch: row.branch ? { id: row.branch.id, code: row.branch.code, name: readLocalizedText(row.branch.name) ?? { ar: row.branch.code } } : null,
+    timeZone: displayTimeZone(row.branch?.timezone, academyTimeZone),
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -139,8 +142,8 @@ export class RoomsService {
     if (query.branchId === NO_BRANCH_FILTER) where.branchId = null;
     else if (query.branchId !== undefined) where.branchId = query.branchId;
     if (query.kind !== undefined) where.kind = query.kind;
-    const rows = await this.prisma.db.room.findMany({ where, select: ROOM_SELECT });
-    return { items: rows.sort(byPlace).map(toRoomDto) };
+    const [rows, academyTimeZone] = await Promise.all([this.prisma.db.room.findMany({ where, select: ROOM_SELECT }), this.academyTimeZone()]);
+    return { items: rows.sort(byPlace).map((row) => toRoomDto(row, academyTimeZone)) };
   }
 
   async create(input: CreateRoomDto, caller: AuthPrincipal, ctx: RequestContext): Promise<RoomDto> {
@@ -191,7 +194,7 @@ export class RoomsService {
     const patch = patchOf(input);
     // Fast path and friendly refusals on the current row; the transaction plans again under the row lock.
     const first = planRoomUpdate(currentOf(row), patch);
-    if (first.fields.length === 0) return toRoomDto(row);
+    if (first.fields.length === 0) return toRoomDto(row, await this.academyTimeZone());
     const targetBranchId = first.data.branchId !== undefined ? first.data.branchId : row.branchId;
     const targetCode = first.data.code ?? row.code;
     if (first.targetBranchId !== null) await this.assertBranchUsable(this.prisma.db, first.targetBranchId);
@@ -281,6 +284,12 @@ export class RoomsService {
   private async getById(id: string): Promise<RoomDto> {
     const row = await this.prisma.db.room.findUnique({ where: { id }, select: ROOM_SELECT });
     if (!row) throw scheduleError.roomNotFound(id);
-    return toRoomDto(row);
+    return toRoomDto(row, await this.academyTimeZone());
+  }
+
+  /** The academy's IANA zone, read once per request; UTC without the academy row (as API-090/091 and the lessons). */
+  private async academyTimeZone(): Promise<string> {
+    const academy = await this.prisma.db.academy.findFirst({ select: { timezone: true } });
+    return academy?.timezone ?? 'UTC';
   }
 }
