@@ -208,7 +208,6 @@ describe.skipIf(!available)('LR-01-T02 e-mail verification (e2e, TEST-173)', () 
     expect(await events(limited, 'users.email_verification.issued')).toHaveLength(3);
 
     const offline = await createUser('offline', {});
-    const offlineAccess = await signIn(email('offline'));
     const offlineRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MAIL_TRANSPORT)
       .useValue(new NoopMailTransport())
@@ -217,6 +216,13 @@ describe.skipIf(!available)('LR-01-T02 e-mail verification (e2e, TEST-173)', () 
     configureApp(offlineApp);
     await offlineApp.init();
     try {
+      // Signed in through this second app: without JWT_SECRET (CI) each app
+      // instance has its own ephemeral key, so the first app's token is refused here.
+      const login = await request(offlineApp.getHttpServer())
+        .post('/api/auth/login')
+        .send({ identifier: email('offline'), password: PASSWORD })
+        .expect(200);
+      const offlineAccess = login.body.accessToken as string;
       const unavailable = await request(offlineApp.getHttpServer())
         .post(REQUEST)
         .set('Authorization', `Bearer ${offlineAccess}`)
