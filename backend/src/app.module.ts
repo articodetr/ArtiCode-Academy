@@ -21,6 +21,7 @@ import { HealthModule } from './health/health.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
 import { LevelsModule } from './levels/levels.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { RolesModule } from './roles/roles.module.js';
 import { ScheduleModule } from './schedule/schedule.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -77,6 +78,8 @@ import { UsersModule } from './users/users.module.js';
     CertificatesModule,
     // MOD-11 (§4i): fee plans (T02); invoices, payments and «my invoices» follow in T03..T05.
     FinanceModule,
+    // MOD-13 (§4k): reports — attendance (T01); academic, financial and the overview follow in T02..T04.
+    ReportsModule,
     HealthModule,
   ],
 })
