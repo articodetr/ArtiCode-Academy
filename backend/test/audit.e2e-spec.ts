@@ -8,7 +8,10 @@
 // MOD-07 T02/T03/T05 (rooms, the weekly schedule, lesson generation); since
 // CH-0179 (the Stage 4 gate, MOD-10-T05) also every writer route of MOD-08
 // (assignments, submissions and reviews), MOD-09 (grade schemes, exams, their
-// results, final grades) and MOD-10 (issuing and revoking certificates).
+// results, final grades) and MOD-10 (issuing and revoking certificates); since
+// CH-0196 (MOD-13-T05, Stage 5) also every writer route of MOD-11 (fee plans,
+// invoices, the class batch, payments and reversals) and the proof that the
+// MOD-13 reports record nothing.
 // Skipped when no database is reachable. Fixtures carry a unique suffix and are deleted at the
 // end (their audit rows stay with a NULL actor — the log is append-only by
 // design, KI-032).
@@ -116,6 +119,7 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   const mod07 = { roomId: '', slotId: '', lessonId: '', weekday: 0 };
   /** Stage 4 (MOD-08..MOD-10, MOD-10-T05): the class, its assignment, the graded attempt, the exam, the grade schemes and the certificate. */
   const stage4 = { classId: '', assignmentId: '', submissionId: '', examId: '', certificateId: '', schemeIds: [] as string[] };
+  const stage5 = { classId: '', feePlanId: '', invoiceId: '', paymentId: '' };
 
   // E-mail addresses are stored lower-case (CHECK ck_users_email_lowercase).
   const email = (name: string) => `${name.toLowerCase()}-${RUN}@example.test`;
@@ -214,6 +218,12 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   afterAll(async () => {
     try {
       // MOD-05/MOD-06 first: the enrollments (Restrict on the class), then the classes (their teachers, slots, lessons and attendance cascade) — a course is Restrict on classes, a room on slots and lessons.
+      // Stage 5: payments hold their invoice and invoices their student (Restrict) — both go first; fee plans go with their class.
+      const fixtureInvoices = await prisma.invoice.findMany({ where: { studentUserId: { in: createdUserIds } }, select: { id: true } });
+      if (fixtureInvoices.length > 0) {
+        await prisma.payment.deleteMany({ where: { invoiceId: { in: fixtureInvoices.map((row) => row.id) } } });
+        await prisma.invoice.deleteMany({ where: { id: { in: fixtureInvoices.map((row) => row.id) } } });
+      }
       // Stage 4: certificates first (they restrict the enrollment and the class); the final grades go with the enrollments, the schemes after them.
       await prisma.certificate.deleteMany({ where: { class: { code: { startsWith: CLASS_PREFIX } } } });
       await prisma.enrollment.deleteMany({ where: { class: { code: { startsWith: CLASS_PREFIX } } } });
@@ -958,6 +968,108 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     expect((await api().post(`${CLASSES}/${NIL_ID}/certificates`).set(bearer('admin')).send({})).status).toBe(404);
     expect((await api().post(`/api/certificates/${stage4.certificateId}/revoke`).set(bearer('admin')).send({ reason: 'مرة ثانية' })).status).toBe(409);
     expect((await api().post(`/api/certificates/${stage4.certificateId}/revoke`).set(bearer('admin')).send({})).status).toBe(400);
+    await expectEvents(m, []);
+  });
+
+  it('Stage 5 (MOD-13-T05) — MOD-11 fee plans, invoices and payments record one event each; the MOD-13 reports record nothing', async () => {
+    const admin = fx['admin']!;
+    const learner = fx['enrolled']!;
+    const ev = (action: string, entityType: string, entityId: string, metadata?: Record<string, unknown>, actorUserId = admin): ExpectedEvent => ({
+      action,
+      actorUserId,
+      entityType,
+      entityId,
+      ...(metadata ? { metadata } : {}),
+    });
+    const code = `${CLASS_PREFIX}-F`;
+    const lines = [{ description: { ar: 'رسوم الدورة' }, amount: 1000 }];
+    // Preparation (MOD-05 events, covered above): a class, open, the learner enrolled.
+    const klass = await api().post(CLASSES).set(bearer('admin')).send({ courseId: mod04.courseA, code, name: { ar: 'فصل بوابة Stage 5' }, capacity: 3 }).expect(201);
+    stage5.classId = klass.body.id as string;
+    await api().post(`${CLASSES}/${stage5.classId}/status`).set(bearer('admin')).send({ action: 'open' }).expect(200);
+    await api().post(`${CLASSES}/${stage5.classId}/enrollments`).set(bearer('admin')).send({ studentId: learner }).expect(201);
+
+    // MOD-11 — fee plans: one for the class, renamed; an unused spare created and deleted.
+    let m = await mark();
+    const plan = await api().post('/api/fee-plans').set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} خطة` }, classId: stage5.classId, lines, installments: [{ percent: 50, dueOffsetDays: 0 }, { percent: 50, dueOffsetDays: 30 }] }).expect(201);
+    stage5.feePlanId = plan.body.id as string;
+    await api().patch(`/api/fee-plans/${plan.body.id}`).set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} خطة الفصل` } }).expect(200);
+    const spare = await api().post('/api/fee-plans').set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} احتياط` }, lines, installments: [{ percent: 100, dueOffsetDays: 0 }] }).expect(201);
+    await api().delete(`/api/fee-plans/${spare.body.id}`).set(bearer('admin')).expect(204);
+    await expectEvents(m, [
+      ev('fee_plans.created', 'fee_plans', plan.body.id, { classId: stage5.classId, total: 1000, installments: 2 }),
+      ev('fee_plans.updated', 'fee_plans', plan.body.id, { fields: ['name'] }),
+      ev('fee_plans.created', 'fee_plans', spare.body.id, { classId: null, installments: 1 }),
+      ev('fee_plans.deleted', 'fee_plans', spare.body.id),
+    ]);
+
+    // MOD-11 — invoices: the class batch (a draft), its note edited, issued; a manual draft deleted; another issued then cancelled.
+    m = await mark();
+    const batch = await api().post(`${CLASSES}/${stage5.classId}/invoices`).set(bearer('admin')).send({ feePlanId: plan.body.id }).expect(200);
+    const invoice = batch.body.created[0] as { id: string };
+    stage5.invoiceId = invoice.id;
+    await api().patch(`/api/invoices/${invoice.id}`).set(bearer('admin')).send({ notes: 'ملاحظة داخلية' }).expect(200);
+    await api().post(`/api/invoices/${invoice.id}/status`).set(bearer('admin')).send({ action: 'issue' }).expect(200);
+    const dueOn = new Date().toISOString().slice(0, 10);
+    const manual = await api().post('/api/invoices').set(bearer('admin')).send({ studentId: learner, lines: [{ description: { ar: 'كتب' }, amount: 50 }], installments: [{ amount: 50, dueOn }] }).expect(201);
+    await api().delete(`/api/invoices/${manual.body.id}`).set(bearer('admin')).expect(204);
+    const other = await api().post('/api/invoices').set(bearer('admin')).send({ studentId: learner, lines: [{ description: { ar: 'زي' }, amount: 80 }], installments: [{ amount: 80, dueOn }] }).expect(201);
+    await api().post(`/api/invoices/${other.body.id}/status`).set(bearer('admin')).send({ action: 'issue' }).expect(200);
+    await api().post(`/api/invoices/${other.body.id}/status`).set(bearer('admin')).send({ action: 'cancel', reason: 'تغطية TEST-030' }).expect(200);
+    await expectEvents(m, [
+      ev('invoices.batch_created', 'classes', stage5.classId, { code, feePlanId: plan.body.id, issued: false, count: 1, invoiceIds: [invoice.id] }),
+      ev('invoices.updated', 'invoices', invoice.id, { fields: ['notes'] }),
+      ev('invoices.issued', 'invoices', invoice.id, { studentId: learner, installments: 2 }),
+      ev('invoices.created', 'invoices', manual.body.id, { studentId: learner, feePlanId: null, total: 50 }),
+      ev('invoices.deleted', 'invoices', manual.body.id),
+      ev('invoices.created', 'invoices', other.body.id, { total: 80 }),
+      ev('invoices.issued', 'invoices', other.body.id),
+      ev('invoices.cancelled', 'invoices', other.body.id, { studentId: learner, reason: 'تغطية TEST-030' }),
+    ]);
+
+    // MOD-11 — a payment recorded, then reversed.
+    m = await mark();
+    const payment = await api().post(`/api/invoices/${invoice.id}/payments`).set(bearer('admin')).send({ amount: 300, method: 'cash' }).expect(201);
+    stage5.paymentId = payment.body.id as string;
+    await api().post(`/api/payments/${payment.body.id}/reverse`).set(bearer('admin')).send({ reason: 'خطأ إدخال' }).expect(200);
+    await expectEvents(m, [
+      ev('payments.recorded', 'payments', payment.body.id, { invoiceId: invoice.id, amount: 300, method: 'cash' }),
+      ev('payments.reversed', 'payments', payment.body.id, { invoiceId: invoice.id, reason: 'خطأ إدخال' }),
+    ]);
+
+    // MOD-13 — every report and the overview read and record nothing.
+    m = await mark();
+    for (const path of [
+      'attendance/classes',
+      'attendance/students',
+      'academic/classes',
+      'academic/assignments',
+      'academic/exams',
+      'financial/collections',
+      'financial/receivables',
+      'financial/revenue',
+      'overview',
+    ]) {
+      await api().get(`/api/reports/${path}`).set(bearer('admin')).expect(200);
+    }
+    await expectEvents(m, []);
+  });
+
+  it('Stage 5 — rejected requests and writes without a difference record nothing', async () => {
+    const m = await mark();
+    // Fee plans: the same name again; a plan an invoice was made from is not deleted.
+    await api().patch(`/api/fee-plans/${stage5.feePlanId}`).set(bearer('admin')).send({ name: { ar: `${CLASS_PREFIX} خطة الفصل` } }).expect(200);
+    expect((await api().delete(`/api/fee-plans/${stage5.feePlanId}`).set(bearer('admin'))).body.code).toBe('fee_plan_in_use');
+    // Invoices: an issued invoice is not edited; the batch again creates nothing (already invoiced).
+    expect((await api().patch(`/api/invoices/${stage5.invoiceId}`).set(bearer('admin')).send({ notes: 'تعديل' })).body.code).toBe('invoice_not_draft');
+    const again = await api().post(`${CLASSES}/${stage5.classId}/invoices`).set(bearer('admin')).send({ feePlanId: stage5.feePlanId }).expect(200);
+    expect(again.body.created).toEqual([]);
+    // Payments: above the balance; a reversed payment reversed again; a reversal without a reason.
+    expect((await api().post(`/api/invoices/${stage5.invoiceId}/payments`).set(bearer('admin')).send({ amount: 999999, method: 'cash' })).body.code).toBe('payment_exceeds_balance');
+    expect((await api().post(`/api/payments/${stage5.paymentId}/reverse`).set(bearer('admin')).send({ reason: 'مرة ثانية' })).body.code).toBe('payment_reversed');
+    expect((await api().post(`/api/payments/${stage5.paymentId}/reverse`).set(bearer('admin')).send({})).status).toBe(400);
+    // Reports: a reversed period.
+    expect((await api().get('/api/reports/financial/revenue?from=2026-03-10&to=2026-03-01').set(bearer('admin'))).body.code).toBe('report_range_invalid');
     await expectEvents(m, []);
   });
 
