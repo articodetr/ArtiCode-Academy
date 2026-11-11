@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsISO8601, IsNumber, IsOptional, IsString, Length, Matches, Max, Min, Validate, ValidateIf, ValidatorConstraint } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Length, Matches, Max, Min, Validate, ValidateIf, ValidatorConstraint } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { ValidationArguments, ValidatorConstraintInterface } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
@@ -79,7 +80,7 @@ export class ReviewSubmissionDto {
   @ApiPropertyOptional({ minimum: 0, example: 17.5, description: 'Required with `grade`, refused with `return`; a JSON number with at most two decimals' })
   @IsOptional()
   @Transform(rawValue)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   score?: number;
 
   @ApiPropertyOptional({ maxLength: FEEDBACK_MAX_LENGTH, description: 'Required with `return`; with `grade` it replaces the previous feedback (absent clears it); trimmed, blank = absent' })

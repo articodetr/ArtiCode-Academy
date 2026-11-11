@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsNumber, IsObject, IsOptional, IsString, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsObject, IsOptional, IsString, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { rawBoolean, rawNumber } from '../courses/courses.validation.js';
 import { LocalizedTextDto } from '../roles/roles.dto.js';
@@ -14,7 +15,7 @@ export const BAND_LETTER_MAX_LENGTH = 4;
 export class GradeSchemeBandInputDto {
   @ApiProperty({ minimum: 0, maximum: 100, example: 60, description: 'A JSON number with at most two decimals; unique inside the scheme; one band must start at 0' })
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(100)
   minPercent: number;

@@ -171,6 +171,9 @@ describe.skipIf(!available)('MOD-11 fee plans (e2e, TEST-161)', () => {
       { name: name('x'), lines: [], installments: shares },
       { name: name('x'), lines: [{ description: { ar: 'r' }, amount: 0 }], installments: shares },
       { name: name('x'), lines: [{ description: { ar: 'r' }, amount: 10.005 }], installments: shares },
+      // KI-075 (CH-0191): exponent forms are refused as a 400, not a TypeError from class-validator's decimal count (a 500).
+      { name: name('x'), lines: [{ description: { ar: 'r' }, amount: 1e-7 }], installments: shares },
+      { name: name('x'), lines, installments: [{ percent: 5e-324, dueOffsetDays: 0 }, { percent: 100, dueOffsetDays: 30 }] },
       { name: name('x'), lines: [{ description: { ar: 'r' }, amount: '100' }], installments: shares },
       { name: name('x'), lines, installments: Array.from({ length: 25 }, (_, i) => ({ percent: 4, dueOffsetDays: i })) },
       { name: name('x'), lines, installments: [{ percent: 100, dueOffsetDays: -1 }] },

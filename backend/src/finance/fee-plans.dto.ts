@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsInt, IsNumber, IsObject, IsOptional, IsUUID, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsInt, IsObject, IsOptional, IsUUID, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { rawBoolean, rawNumber } from '../courses/courses.validation.js';
 import { LocalizedTextDto } from '../roles/roles.dto.js';
@@ -22,7 +23,7 @@ export class FeePlanLineDto {
 
   @ApiProperty({ minimum: 0.01, maximum: MONEY_MAX, example: 1500, description: 'A JSON number with at most two decimals, in the academy currency' })
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(MONEY_MAX)
   amount: number;
@@ -32,7 +33,7 @@ export class FeePlanLineDto {
 export class FeePlanShareDto {
   @ApiProperty({ minimum: 0.01, maximum: 100, example: 50, description: 'A JSON number with at most two decimals; the shares sum to exactly 100' })
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(100)
   percent: number;
