@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import { AssignmentInstructionsDto, AssignmentLessonDto } from '../assignments/assignments.dto.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
@@ -122,7 +123,7 @@ export class CreateExamDto {
 
   @ApiProperty({ minimum: 0.01, maximum: EXAM_SCORE_LIMIT, example: 50, description: 'A JSON number with at most two decimals' })
   @Transform(rawValue)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(EXAM_SCORE_LIMIT)
   maxScore: number;
@@ -131,7 +132,7 @@ export class CreateExamDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(EXAM_SCORE_LIMIT)
   passScore?: number | null;
@@ -140,7 +141,7 @@ export class CreateExamDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(EXAM_WEIGHT_LIMIT)
   weight?: number | null;
@@ -198,7 +199,7 @@ export class UpdateExamDto {
   @ApiPropertyOptional({ minimum: 0.01, maximum: EXAM_SCORE_LIMIT, description: 'Locked once a result exists; not nullable' })
   @Transform(rawValue)
   @ValidateIf((dto: UpdateExamDto) => dto.maxScore !== undefined)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(EXAM_SCORE_LIMIT)
   maxScore?: number;
@@ -207,7 +208,7 @@ export class UpdateExamDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(EXAM_SCORE_LIMIT)
   passScore?: number | null;
@@ -216,7 +217,7 @@ export class UpdateExamDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(EXAM_WEIGHT_LIMIT)
   weight?: number | null;

@@ -1,21 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import {
-  IsDefined,
-  IsIn,
-  IsInt,
-  IsNumber,
-  IsObject,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Length,
-  Matches,
-  Max,
-  Min,
-  ValidateIf,
-  ValidateNested,
-} from 'class-validator';
+import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { CourseStatus } from '../generated/prisma/client.js';
@@ -130,7 +116,7 @@ export class CreateCourseDto {
   @ApiPropertyOptional({ minimum: 0.1, maximum: DURATION_HOURS_MAX, example: 24.5, description: 'Total hours, one decimal' })
   @IsOptional()
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 1, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(1)
   @Min(0.1)
   @Max(DURATION_HOURS_MAX)
   durationHours?: number;
@@ -207,7 +193,7 @@ export class UpdateCourseDto {
   @IsOptional()
   @Transform(rawNumber)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 1, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(1)
   @Min(0.1)
   @Max(DURATION_HOURS_MAX)
   durationHours?: number | null;

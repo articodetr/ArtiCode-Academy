@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Length, Max, Min, registerDecorator } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, registerDecorator } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { ValidationOptions } from 'class-validator';
 import { rawNumber } from '../courses/courses.validation.js';
 import { InvoiceStatus, PaymentMethod, PaymentStatus } from '../generated/prisma/client.js';
@@ -34,7 +35,7 @@ export function IsNotFutureInstant(options?: ValidationOptions): PropertyDecorat
 export class RecordPaymentDto {
   @ApiProperty({ minimum: 0.01, maximum: MONEY_MAX, example: 750, description: 'A JSON number with at most two decimals, not above the invoice balance; the invoice currency' })
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(MONEY_MAX)
   amount: number;

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { rawBoolean, rawNumber } from '../courses/courses.validation.js';
 import { InvoiceStatus, PaymentMethod, PaymentStatus } from '../generated/prisma/client.js';
@@ -21,7 +22,7 @@ const INSTALLMENT_STATUSES: InstallmentStatus[] = ['paid', 'partial', 'unpaid'];
 export class InvoiceInstallmentInputDto {
   @ApiProperty({ minimum: 0.01, maximum: MONEY_MAX, example: 1500, description: 'A JSON number with at most two decimals' })
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(MONEY_MAX)
   amount: number;
@@ -68,7 +69,7 @@ export class CreateInvoiceDto {
   @ApiPropertyOptional({ minimum: 0, maximum: MONEY_MAX, default: 0, description: 'One invoice-level discount (D-R64), within the subtotal' })
   @IsOptional()
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(MONEY_MAX)
   discountAmount?: number;
@@ -116,7 +117,7 @@ export class UpdateInvoiceDto {
   @ApiPropertyOptional({ minimum: 0, maximum: MONEY_MAX })
   @ValidateIf((dto: UpdateInvoiceDto) => dto.discountAmount !== undefined)
   @Transform(rawNumber)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(MONEY_MAX)
   discountAmount?: number;

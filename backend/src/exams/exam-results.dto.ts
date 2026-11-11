@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsNumber, IsOptional, IsString, IsUUID, Length, Max, Min, Validate, ValidateNested, ValidatorConstraint } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsOptional, IsString, IsUUID, Length, Max, Min, Validate, ValidateNested, ValidatorConstraint } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { ValidationArguments, ValidatorConstraintInterface } from 'class-validator';
 import { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
 import { EnrollmentStatus, ExamResultStatus, ExamStatus } from '../generated/prisma/client.js';
@@ -47,7 +48,7 @@ export class ExamResultInputDto {
   @ApiPropertyOptional({ minimum: 0, maximum: EXAM_SCORE_LIMIT, example: 41.5, description: 'Required with `scored`, refused otherwise; a JSON number with at most two decimals, at most the exam’s maxScore (`score_out_of_range`)' })
   @IsOptional()
   @Transform(rawValue)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(EXAM_SCORE_LIMIT)
   score?: number | null;

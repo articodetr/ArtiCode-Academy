@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsBoolean, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { AssignmentStatus } from '../generated/prisma/client.js';
@@ -135,7 +136,7 @@ export class CreateAssignmentDto {
 
   @ApiProperty({ minimum: 0.01, maximum: MAX_SCORE_LIMIT, example: 20, description: 'A JSON number with at most two decimals' })
   @Transform(rawValue)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(MAX_SCORE_LIMIT)
   maxScore: number;
@@ -144,7 +145,7 @@ export class CreateAssignmentDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(WEIGHT_LIMIT)
   weight?: number | null;
@@ -165,7 +166,7 @@ export class CreateAssignmentDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(100)
   latePenaltyPercent?: number | null;
@@ -212,7 +213,7 @@ export class UpdateAssignmentDto {
   @ApiPropertyOptional({ minimum: 0.01, maximum: MAX_SCORE_LIMIT, description: 'Locked once a submission exists; not nullable' })
   @Transform(rawValue)
   @ValidateIf((dto: UpdateAssignmentDto) => dto.maxScore !== undefined)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0.01)
   @Max(MAX_SCORE_LIMIT)
   maxScore?: number;
@@ -221,7 +222,7 @@ export class UpdateAssignmentDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(WEIGHT_LIMIT)
   weight?: number | null;
@@ -242,7 +243,7 @@ export class UpdateAssignmentDto {
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsDecimalNumber(2)
   @Min(0)
   @Max(100)
   latePenaltyPercent?: number | null;
