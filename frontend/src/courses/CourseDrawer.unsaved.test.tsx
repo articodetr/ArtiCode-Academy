@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
 import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse, makeLevel, makeSyllabus } from '../test/courses'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CourseDrawer } from './CourseDrawer'
@@ -56,7 +57,7 @@ async function startSyllabusEditing() {
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */
 async function openDiscardDialog(): Promise<HTMLElement> {
-  fireEvent.click(closeButton())
+  await clickWhenSettled(closeButton)
   const titles = await screen.findAllByText(ar.common.unsaved.title)
   return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
 }
@@ -69,9 +70,9 @@ describe('CourseDrawer — unsaved editors (KI-054)', () => {
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(3)
     expectNoDiscardQuestion()
   })
@@ -85,7 +86,7 @@ describe('CourseDrawer — unsaved editors (KI-054)', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(screen.getByLabelText(ar.courses.fields.nameEn)).toHaveValue('Python 3')
@@ -141,7 +142,7 @@ describe('CourseDrawer — unsaved editors (KI-054)', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(screen.getAllByTestId('syllabus-item-editor')).toHaveLength(2)

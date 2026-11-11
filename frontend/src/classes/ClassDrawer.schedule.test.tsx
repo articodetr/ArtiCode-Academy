@@ -6,10 +6,22 @@ import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
 import { CLASS_ID, CLASS_READER_PERMISSIONS, makeClass } from '../test/classes'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { SCHEDULE_ADMIN_PERMISSIONS, makeRoom, makeSchedule } from '../test/schedule'
 import { ClassDrawer } from './ClassDrawer'
+
+/**
+ * Opens the schedule editor. Its «تعديل» button is disabled until the class schedule has
+ * arrived, and a click on a disabled button is lost; under load the button can be on screen
+ * before the schedule (KI-060).
+ */
+async function openScheduleEditor() {
+  const edit = () => screen.getByText(ar.classSchedule.edit).closest('button')!
+  await waitFor(() => expect(edit()).toBeEnabled())
+  fireEvent.click(edit())
+}
 
 describe('ClassDrawer — weekly schedule tab', () => {
   it('opens the weekly schedule tab and reads the class schedule; a reader gets no edit button', async () => {
@@ -56,14 +68,14 @@ describe('ClassDrawer — weekly schedule tab', () => {
     const pressEscape = () => fireEvent.keyDown(document.body, { key: 'Escape' })
 
     fireEvent.click(screen.getByRole('tab', { name: ar.classSchedule.tab }))
-    fireEvent.click((await screen.findByText(ar.classSchedule.edit)).closest('button')!)
+    await openScheduleEditor()
     // A change without opening any popup: a new slot card.
     fireEvent.click((await screen.findByText(ar.classSchedule.addSlot)).closest('button')!)
     expect(screen.getByText('الحصة 2')).toBeInTheDocument()
 
     pressEscape()
     pressEscape()
-    fireEvent.click(document.querySelector('.ant-drawer-mask')!)
+    await clickWhenSettled(() => document.querySelector('.ant-drawer-mask')!)
     expect(onClose).not.toHaveBeenCalled()
     // Nothing at all happens: no «discard?» question either (that is the close button's).
     expect(screen.queryByText(ar.common.unsaved.title)).not.toBeInTheDocument()
@@ -96,7 +108,7 @@ describe('ClassDrawer — weekly schedule tab', () => {
     const pressEscape = () => fireEvent.keyDown(document.body, { key: 'Escape' })
 
     fireEvent.click(screen.getByRole('tab', { name: ar.classSchedule.tab }))
-    fireEvent.click((await screen.findByText(ar.classSchedule.edit)).closest('button')!)
+    await openScheduleEditor()
     const editor = await screen.findByTestId('schedule-editor')
     fireEvent.click(within(editor).getByText(ar.classSchedule.addSlot).closest('button')!)
     pressEscape()

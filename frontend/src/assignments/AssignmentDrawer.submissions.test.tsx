@@ -10,6 +10,7 @@ import type { SubmissionRoster } from '../api/submissions'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
 import { ASSIGNMENT_ID, ASSIGNMENT_TEACHER_PERMISSIONS, makeAssignment } from '../test/assignments'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { SUBMISSION_IDS, makeGradedSubmission, makeSubmission, makeSubmissionRoster, makeSubmissionSummary, rosterOfFour } from '../test/submissions'
@@ -143,8 +144,10 @@ describe('AssignmentDrawer — submissions tab (J-F41)', () => {
       await userEvent.type(screen.getByLabelText(ar.assignments.review.form.feedback), 'ملاحظة لم تُحفظ')
       pressEscape()
       pressEscape()
-      const masks = document.querySelectorAll<HTMLElement>('.ant-drawer-mask')
-      fireEvent.click(masks[masks.length - 1]!)
+      await clickWhenSettled(() => {
+        const masks = document.querySelectorAll<HTMLElement>('.ant-drawer-mask')
+        return masks[masks.length - 1]!
+      })
       expect(onClose).not.toHaveBeenCalled()
       expect(screen.getByTestId('submission-text')).toBeInTheDocument()
       expect(screen.getByLabelText(ar.assignments.review.form.feedback)).toHaveValue('ملاحظة لم تُحفظ')

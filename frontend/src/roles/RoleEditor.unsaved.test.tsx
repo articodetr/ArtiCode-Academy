@@ -9,6 +9,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Role } from '../api/roles'
 import { ar } from '../i18n/ar'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { unloadWouldPrompt } from '../test/navigation'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -56,7 +57,7 @@ function permissionBox(dialog: HTMLElement, key: string): HTMLInputElement {
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */
 async function openDiscardDialog(): Promise<HTMLElement> {
-  fireEvent.click(closeButton())
+  await clickWhenSettled(closeButton)
   const titles = await screen.findAllByText(ar.common.unsaved.title)
   return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
 }
@@ -69,9 +70,9 @@ describe('RoleEditor — unsaved permissions and texts (KI-057)', () => {
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(3)
     expectNoDiscardQuestion()
     expect(unloadWouldPrompt()).toBe(false)
@@ -88,7 +89,7 @@ describe('RoleEditor — unsaved permissions and texts (KI-057)', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     for (const key of ['users.read', 'courses.read', 'exams.read', 'exams.take', 'grades.read_own']) expect(permissionBox(dialog, key)).toBeChecked()
@@ -119,11 +120,11 @@ describe('RoleEditor — unsaved permissions and texts (KI-057)', () => {
 
     const labelEn = within(dialog).getByLabelText(ar.rolesAdmin.fields.labelEn)
     fireEvent.change(labelEn, { target: { value: 'Head librarian' } })
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(1)
     // Typed back to the stored text, with spaces the save would trim.
     fireEvent.change(labelEn, { target: { value: ' Librarian ' } })
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
     expectNoDiscardQuestion()
     expect(writes).toEqual([])
@@ -136,7 +137,7 @@ describe('RoleEditor — unsaved permissions and texts (KI-057)', () => {
 
     fireEvent.change(within(dialog).getByLabelText(ar.rolesAdmin.fields.labelAr), { target: { value: '' } })
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expect(unloadWouldPrompt()).toBe(true)
   })
@@ -159,7 +160,7 @@ describe('RoleEditor — unsaved permissions and texts (KI-057)', () => {
 
     const descriptionEn = within(dialog).getByLabelText(ar.rolesAdmin.fields.descriptionEn)
     fireEvent.change(descriptionEn, { target: { value: 'Proctors exams' } })
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expect(unloadWouldPrompt()).toBe(true)
 
@@ -184,9 +185,9 @@ describe('RoleEditor — unsaved permissions and texts (KI-057)', () => {
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(3)
     expectNoDiscardQuestion()
   })

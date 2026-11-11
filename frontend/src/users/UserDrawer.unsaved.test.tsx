@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { UserDetail } from '../api/users'
 import { ar } from '../i18n/ar'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { ADMIN_PERMISSIONS, makeGuardianLinkItem, makeListItem, makeRoleList, makeUserDetail, makeUserList } from '../test/users'
@@ -62,7 +63,7 @@ async function startEditing(drawer: HTMLElement) {
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */
 async function openDiscardDialog(): Promise<HTMLElement> {
-  fireEvent.click(closeButton())
+  await clickWhenSettled(closeButton)
   const titles = await screen.findAllByText(ar.common.unsaved.title)
   return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
 }
@@ -75,9 +76,9 @@ describe('UserDrawer — unsaved editors (KI-054)', () => {
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(3)
     expectNoDiscardQuestion()
   })
@@ -91,7 +92,7 @@ describe('UserDrawer — unsaved editors (KI-054)', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(within(drawer).getByLabelText(ar.users.fields.displayName)).toHaveValue('عمر')
@@ -146,7 +147,7 @@ describe('UserDrawer — unsaved editors (KI-054)', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()
 
@@ -165,14 +166,14 @@ describe('UserDrawer — unsaved editors (KI-054)', () => {
 
     fireEvent.click(select.closest('.ant-select')!.querySelector<HTMLElement>('.ant-select-selection-item-remove')!)
     await waitFor(() => expect(select.closest('.ant-select')!.querySelector('.ant-select-selection-item')).toBeNull())
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
 
     // «طالب» picked again: the selection is the held one. (The open popup would take Escape in jsdom — the close button proves it.)
     fireEvent.mouseDown(select)
     fireEvent.click(await screen.findByText(ar.roles.student, { selector: '.ant-select-item-option-content' }))
     await waitFor(() => expect(select.closest('.ant-select')!.querySelector('.ant-select-selection-item')).not.toBeNull())
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()
     expect(writes).toEqual([])
@@ -186,7 +187,7 @@ describe('UserDrawer — unsaved editors (KI-054)', () => {
     fireEvent.click((await within(drawer).findByText(ar.users.links.add.guardians)).closest('button')!)
 
     // The open form alone holds nothing.
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()
 
@@ -198,7 +199,7 @@ describe('UserDrawer — unsaved editors (KI-054)', () => {
     // No Escape here: jsdom never ends the closing animation of the search popup, which so stays on
     // top of the Escape stack and takes the key itself (in a browser it leaves within ~0.2 s). The
     // Escape path is proven by the other editors; the mask and the close button prove the report.
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()
     const dialog = await openDiscardDialog()
@@ -207,7 +208,7 @@ describe('UserDrawer — unsaved editors (KI-054)', () => {
 
     fireEvent.click(within(drawer).getByText(ar.common.cancel, { selector: 'button span' }).closest('button')!)
     await waitFor(() => expect(within(drawer).queryByRole('combobox', { name: ar.users.links.party.guardians })).not.toBeInTheDocument())
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(2)
     expect(writes).toEqual([])
   })
