@@ -9,11 +9,18 @@ import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import type { Env } from '../config/env.schema.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { MailService } from '../mail/mail.service.js';
+import type { MailDeliveryResult } from '../mail/mail.transport.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { usersError } from '../users/users.errors.js';
 import { activePermissionKeys, exceedingPermissions } from '../users/users.policy.js';
 import { normalizeIdentifier } from '../users/users.validation.js';
-import type { InvitationPreviewDto, IssueInvitationResponseDto, IssuePasswordResetResponseDto } from './account.dto.js';
+import type {
+  ConfirmEmailVerificationResponseDto,
+  InvitationPreviewDto,
+  IssueInvitationResponseDto,
+  IssuePasswordResetResponseDto,
+  RequestEmailVerificationResponseDto,
+} from './account.dto.js';
 import { maskEmail, maskUsername } from './account.masking.js';
 import { VerificationTokenService } from './verification-token.service.js';
 
@@ -22,7 +29,16 @@ export const ACCOUNT_AUDIT_ACTIONS = {
   invitationAccepted: 'users.invitation.accepted',
   passwordResetIssued: 'users.password_reset.issued',
   passwordReset: 'auth.password.reset',
+  emailVerificationIssued: 'users.email_verification.issued',
+  emailVerified: 'users.email.verified',
 } as const;
+
+/** LR-01-T02 (D-R78): at most 3 confirmation e-mails per account per 15 minutes, counted from the stored tokens. */
+export const EMAIL_VERIFICATION_REQUEST_LIMIT = 3;
+export const EMAIL_VERIFICATION_WINDOW_MS = 15 * 60 * 1000;
+
+/** Why a confirmation e-mail was sent: the user asked (API-165), or right after accepting an invitation. */
+export type EmailVerificationOrigin = 'self' | 'invitation';
 
 /** Only accounts created by POST /api/users and never activated can be invited. */
 export const INVITABLE_STATUS = 'invited';
@@ -89,6 +105,32 @@ const RESET_SELECT = {
 
 type ResetRow = Prisma.VerificationTokenGetPayload<{ select: typeof RESET_SELECT }>;
 
+/** What a confirmation e-mail needs to know about its recipient. */
+interface VerificationRecipient {
+  id: string;
+  email: string;
+  fullName: string;
+  displayName: string | null;
+  locale: TargetRow['locale'];
+}
+
+const VERIFICATION_SELECT = {
+  id: true,
+  purpose: true,
+  expiresAt: true,
+  consumedAt: true,
+  metadata: true,
+  user: { select: { id: true, email: true, status: true, deletedAt: true } },
+} satisfies Prisma.VerificationTokenSelect;
+
+/** The address a confirmation token was issued for (stored in its metadata), or null. */
+function issuedForEmail(metadata: Prisma.JsonValue): string | null {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata) && typeof metadata['email'] === 'string') {
+    return metadata['email'];
+  }
+  return null;
+}
+
 interface IssuedPasswordReset {
   token: string;
   expiresAt: Date;
@@ -100,7 +142,8 @@ interface IssuedPasswordReset {
  * token is returned a single time to the authorized issuer (D-R01). Accepting
  * through such a manually delivered link never sets `email_verified_at`
  * (D-R08, ADR-031). Every write records exactly one audit event inside its
- * transaction.
+ * transaction. LR-01-T02: `email_verified_at` is set only through a
+ * confirmation token that travels in an e-mail (D-R78).
  */
 @Injectable()
 export class AccountService {
@@ -250,7 +293,25 @@ export class AccountService {
       );
     });
 
-    return this.auth.openSession(invitation.user.id, 'invitation', ctx);
+    const session = await this.auth.openSession(invitation.user.id, 'invitation', ctx);
+
+    // D-R78: accepting a manually delivered link proves nothing about the
+    // address, so a confirmation e-mail goes to it right away — after the
+    // response, so the provider's latency never delays the sign-in.
+    const { user } = invitation;
+    if (user.email && this.mail.transportName !== 'none') {
+      const recipient: VerificationRecipient = {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        displayName: user.displayName,
+        locale: user.locale,
+      };
+      setImmediate(() => {
+        void this.verifyAfterAcceptance(recipient, ctx);
+      });
+    }
+    return session;
   }
 
   // ----------------------------------------------- password reset (T05)
@@ -437,6 +498,147 @@ export class AccountService {
     });
 
     return { token: generated.token, expiresAt };
+  }
+
+  // ------------------------------------------ e-mail verification (LR-01-T02)
+
+  /**
+   * API-165: the signed-in user asks for a confirmation e-mail to their own
+   * address. Refused when there is no address (422), it is already confirmed
+   * (409), no transport reaches the user (503 — `MAIL_TRANSPORT=none`), or
+   * three were issued in the last 15 minutes (429). The token travels in the
+   * e-mail only — never in this response (D-R78).
+   */
+  async requestEmailVerification(caller: AuthPrincipal, ctx: RequestContext): Promise<RequestEmailVerificationResponseDto> {
+    const user = await this.prisma.db.user.findFirst({
+      where: { id: caller.id, deletedAt: null },
+      select: { id: true, email: true, emailVerifiedAt: true, fullName: true, displayName: true, locale: true },
+    });
+    if (!user) throw usersError.userNotFound();
+    if (!user.email) throw usersError.emailMissing();
+    if (user.emailVerifiedAt) throw usersError.emailAlreadyVerified(user.emailVerifiedAt);
+    if (this.mail.transportName === 'none') throw usersError.mailUnavailable();
+    const recent = await this.prisma.db.verificationToken.count({
+      where: {
+        userId: user.id,
+        purpose: 'email_verification',
+        createdAt: { gte: new Date(Date.now() - EMAIL_VERIFICATION_WINDOW_MS) },
+      },
+    });
+    if (recent >= EMAIL_VERIFICATION_REQUEST_LIMIT) throw authError.rateLimited();
+
+    const { expiresAt, delivery } = await this.issueEmailVerification({ ...user, email: user.email }, 'self', ctx);
+    return { expiresAt: expiresAt.toISOString(), delivery: { transport: delivery.transport, status: delivery.status } };
+  }
+
+  /**
+   * API-166 (public): the link from the e-mail. Sets `email_verified_at` —
+   * the only path that does (D-R78) — when the token is unused and unexpired
+   * and the account is active and still has the address the token was issued
+   * for. Opens no session: the link may be opened on any device.
+   */
+  async confirmEmailVerification(token: string, ctx: RequestContext): Promise<ConfirmEmailVerificationResponseDto> {
+    if (!this.tokens.isWellFormed(token)) throw usersError.verificationInvalid();
+    const row = await this.prisma.db.verificationToken.findUnique({
+      where: { tokenHash: this.tokens.hash(token) },
+      select: VERIFICATION_SELECT,
+    });
+    if (!row || row.purpose !== 'email_verification' || row.consumedAt !== null) throw usersError.verificationInvalid();
+    const now = new Date();
+    if (row.expiresAt <= now) throw usersError.verificationExpired(row.expiresAt);
+    const email = issuedForEmail(row.metadata);
+    if (!email || row.user.deletedAt !== null || row.user.status !== RESETTABLE_STATUS || row.user.email !== email) {
+      throw usersError.verificationInvalid();
+    }
+
+    await this.prisma.db.$transaction(async (tx) => {
+      const consumed = await tx.verificationToken.updateMany({
+        where: { id: row.id, consumedAt: null },
+        data: { consumedAt: now },
+      });
+      if (consumed.count !== 1) throw usersError.verificationInvalid();
+      // Conditional: an address changed after the checks above confirms nothing.
+      const verified = await tx.user.updateMany({
+        where: { id: row.user.id, email, deletedAt: null },
+        data: { emailVerifiedAt: now },
+      });
+      if (verified.count !== 1) throw usersError.verificationInvalid();
+      await this.audit.record(
+        {
+          action: ACCOUNT_AUDIT_ACTIONS.emailVerified,
+          actorUserId: row.user.id,
+          entityType: 'users',
+          entityId: row.user.id,
+          metadata: { verificationId: row.id },
+          ...ctx,
+        },
+        tx,
+      );
+    });
+    return { emailVerifiedAt: now.toISOString() };
+  }
+
+  /**
+   * One transaction: retires the pending confirmation tokens of the account,
+   * stores the hash of a fresh one with the address it confirms, and records
+   * `users.email_verification.issued`; then mails the link (never logged,
+   * never returned).
+   */
+  private async issueEmailVerification(
+    user: VerificationRecipient,
+    via: EmailVerificationOrigin,
+    ctx: RequestContext,
+  ): Promise<{ expiresAt: Date; delivery: MailDeliveryResult }> {
+    const generated = this.tokens.generate();
+    const now = new Date();
+    const expiresAt = this.tokens.emailVerificationExpiry(now);
+
+    await this.prisma.db.$transaction(async (tx) => {
+      const retired = await tx.verificationToken.updateMany({
+        where: { userId: user.id, purpose: 'email_verification', consumedAt: null },
+        data: { consumedAt: now },
+      });
+      const created = await tx.verificationToken.create({
+        data: {
+          userId: user.id,
+          purpose: 'email_verification',
+          tokenHash: generated.hash,
+          expiresAt,
+          metadata: { email: user.email, via },
+        },
+        select: { id: true },
+      });
+      await this.audit.record(
+        {
+          action: ACCOUNT_AUDIT_ACTIONS.emailVerificationIssued,
+          actorUserId: user.id,
+          entityType: 'users',
+          entityId: user.id,
+          metadata: { verificationId: created.id, via, superseded: retired.count, expiresAt: expiresAt.toISOString() },
+          ...ctx,
+        },
+        tx,
+      );
+    });
+
+    const delivery = await this.mail.sendEmailVerification({
+      userId: user.id,
+      to: user.email,
+      recipientName: user.displayName ?? user.fullName,
+      locale: user.locale,
+      token: generated.token,
+      expiresAt,
+    });
+    return { expiresAt, delivery };
+  }
+
+  private async verifyAfterAcceptance(user: VerificationRecipient, ctx: RequestContext): Promise<void> {
+    try {
+      await this.issueEmailVerification(user, 'invitation', ctx);
+    } catch (error) {
+      // Nothing about the account, the address or the token.
+      this.logger.error('e-mail verification after an accepted invitation failed', error instanceof Error ? error.stack : String(error));
+    }
   }
 
   // ------------------------------------------------------------- lookup

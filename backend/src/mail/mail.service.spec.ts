@@ -8,7 +8,7 @@ import type { Env } from '../config/env.schema.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { LogMailTransport } from './log.transport.js';
 import { MailService } from './mail.service.js';
-import { formatExpiry, renderInvitation, renderPasswordReset, templateLocale } from './mail.templates.js';
+import { formatExpiry, renderEmailVerification, renderInvitation, renderPasswordReset, templateLocale } from './mail.templates.js';
 import type { MailDeliveryResult, MailMessage, MailTransport } from './mail.transport.js';
 import { NoopMailTransport } from './noop.transport.js';
 
@@ -157,7 +157,7 @@ describe('MailService (TEST-017)', () => {
     expect(templateLocale(undefined, 'en')).toBe('en');
 
     const input = { academyName: 'ACADEMY', recipientName: 'RECIPIENT', link: 'https://l.example/x', expiresAt: 'EXPIRY' };
-    for (const render of [renderInvitation, renderPasswordReset]) {
+    for (const render of [renderInvitation, renderPasswordReset, renderEmailVerification]) {
       for (const locale of ['ar', 'en'] as const) {
         const { subject, text } = render(locale, input);
         expect(subject).toContain('ACADEMY');
@@ -242,5 +242,20 @@ describe('MailService (TEST-017)', () => {
       mailTo('sara@example.test', 'ar'),
     );
     expect(result).toEqual({ transport: 'fake', status: 'sent', messageId: 'm-1' });
+  });
+
+  // TEST-173 — LR-01-T02: the confirmation e-mail (D-R78).
+  it('sends the e-mail confirmation in the recipient locale with the /verify-email link', async () => {
+    const transport = new CapturingTransport();
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'), recordingAudit());
+
+    await service.sendEmailVerification(mailTo('sara@example.test', 'en'));
+    await service.sendEmailVerification(mailTo('sara@example.test', 'ar'));
+
+    expect(transport.sent.map((message) => message.kind)).toEqual(['email_verification', 'email_verification']);
+    expect(transport.sent[0]!.subject).toBe('Confirm your e-mail address at Arti Academy');
+    expect(transport.sent[0]!.text).toContain(`https://academy.example/verify-email/${TOKEN}`);
+    expect(transport.sent[1]!.subject).toBe('تأكيد بريدك الإلكتروني في أكاديمية آرتي');
+    expect(service.emailVerificationLink(TOKEN)).toBe(`https://academy.example/verify-email/${TOKEN}`);
   });
 });

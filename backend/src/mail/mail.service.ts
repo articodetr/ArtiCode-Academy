@@ -8,9 +8,11 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { renderMailHtml } from './mail.html.js';
 import {
+  EMAIL_VERIFICATION_PATH,
   INVITATION_PATH,
   PASSWORD_RESET_PATH,
   formatExpiry,
+  renderEmailVerification,
   renderInvitation,
   renderPasswordReset,
   templateLocale,
@@ -91,6 +93,11 @@ export class MailService {
     return `${this.publicUrl ?? ''}${PASSWORD_RESET_PATH}/${encodeURIComponent(token)}`;
   }
 
+  /** LR-01-T02: `<APP_PUBLIC_URL>/verify-email/<token>`. Never returned by the API — the link travels in the e-mail only (D-R78). */
+  emailVerificationLink(token: string): string {
+    return `${this.publicUrl ?? ''}${EMAIL_VERIFICATION_PATH}/${encodeURIComponent(token)}`;
+  }
+
   sendInvitation(mail: AccountMail): Promise<MailDeliveryResult> {
     return this.deliver('invitation', mail, this.invitationLink(mail.token), renderInvitation);
   }
@@ -98,6 +105,11 @@ export class MailService {
   /** MOD-03-T05: the reset link, for administrative issuing and the self-service request alike. */
   sendPasswordReset(mail: AccountMail): Promise<MailDeliveryResult> {
     return this.deliver('password_reset', mail, this.passwordResetLink(mail.token), renderPasswordReset);
+  }
+
+  /** LR-01-T02: the address-ownership message (D-R78). */
+  sendEmailVerification(mail: AccountMail): Promise<MailDeliveryResult> {
+    return this.deliver('email_verification', mail, this.emailVerificationLink(mail.token), renderEmailVerification);
   }
 
   private async deliver(

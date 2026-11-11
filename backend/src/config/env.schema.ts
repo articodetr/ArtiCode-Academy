@@ -211,6 +211,11 @@ export const envSchema = z
       emptyToUndefined,
       z.coerce.number().int().min(5).max(1440).default(30),
     ),
+    /** Lifetime of an e-mail verification token in hours (1 h – 30 days; LR-01-T02, D-R78: 48). */
+    AUTH_EMAIL_VERIFICATION_TTL_HOURS: z.preprocess(
+      emptyToUndefined,
+      z.coerce.number().int().min(1).max(720).default(48),
+    ),
     /**
      * Public "forgot my password" route. Off until an e-mail channel exists
      * (D-R01: invitation and reset links are handed over manually for now).

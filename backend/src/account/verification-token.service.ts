@@ -18,16 +18,19 @@ export interface GeneratedVerificationToken {
 /**
  * One-time tokens of the account flows (MOD-03-T03 invitations, T05 password
  * reset; LR-01 e-mail verification): random, stored hashed, with lifetimes from
- * `AUTH_INVITATION_TTL_HOURS` and `AUTH_PASSWORD_RESET_TTL_MINUTES` (D-R02).
+ * `AUTH_INVITATION_TTL_HOURS`, `AUTH_PASSWORD_RESET_TTL_MINUTES` (D-R02) and
+ * `AUTH_EMAIL_VERIFICATION_TTL_HOURS` (D-R78).
  */
 @Injectable()
 export class VerificationTokenService {
   readonly invitationTtlMs: number;
   readonly passwordResetTtlMs: number;
+  readonly emailVerificationTtlMs: number;
 
   constructor(config: ConfigService<Env, true>) {
     this.invitationTtlMs = config.get('AUTH_INVITATION_TTL_HOURS', { infer: true }) * 60 * 60 * 1000;
     this.passwordResetTtlMs = config.get('AUTH_PASSWORD_RESET_TTL_MINUTES', { infer: true }) * 60 * 1000;
+    this.emailVerificationTtlMs = config.get('AUTH_EMAIL_VERIFICATION_TTL_HOURS', { infer: true }) * 60 * 60 * 1000;
   }
 
   generate(): GeneratedVerificationToken {
@@ -50,5 +53,10 @@ export class VerificationTokenService {
 
   passwordResetExpiry(from: Date = new Date()): Date {
     return new Date(from.getTime() + this.passwordResetTtlMs);
+  }
+
+  /** LR-01-T02: `AUTH_EMAIL_VERIFICATION_TTL_HOURS` after issue. */
+  emailVerificationExpiry(from: Date = new Date()): Date {
+    return new Date(from.getTime() + this.emailVerificationTtlMs);
   }
 }

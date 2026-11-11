@@ -7,6 +7,8 @@ import type { LocaleCode } from '../authorization/localized-text.js';
 /** Frontend paths the links point to (the pages are MOD-03-T12). */
 export const INVITATION_PATH = '/invite';
 export const PASSWORD_RESET_PATH = '/reset-password';
+/** LR-01-T02: the page that confirms an address (frontend task). */
+export const EMAIL_VERIFICATION_PATH = '/verify-email';
 
 /** Locales that have templates. */
 export const TEMPLATE_LOCALES = ['ar', 'en'] as const satisfies readonly LocaleCode[];
@@ -95,5 +97,39 @@ export function renderPasswordReset(locale: TemplateLocale, input: AccountMailIn
       `لتعيين كلمة مرور جديدة افتح الرابط التالي:\n${input.link}\n\n` +
       `تنتهي صلاحية هذا الرابط في ${input.expiresAt}. ` +
       `إن لم تطلب ذلك فتجاهل هذه الرسالة؛ كلمة مرورك تبقى كما هي.`,
+  };
+}
+
+/** LR-01-T02 (D-R78): the only message whose link proves the recipient owns the address. */
+export function renderEmailVerification(locale: TemplateLocale, input: AccountMailInput): RenderedMail {
+  if (locale === 'en') {
+    return {
+      subject: `Confirm your e-mail address at ${input.academyName}`,
+      text:
+        `Hello ${input.recipientName},
+
+` +
+        `Please confirm that this e-mail address belongs to your ${input.academyName} account. ` +
+        `To confirm it, open this link:
+${input.link}
+
+` +
+        `The link expires on ${input.expiresAt}. ` +
+        `If you do not have an account with us, you can ignore this message.`,
+    };
+  }
+  return {
+    subject: `تأكيد بريدك الإلكتروني في ${input.academyName}`,
+    text:
+      `مرحباً ${input.recipientName}،
+
+` +
+      `نرجو تأكيد أن هذا البريد الإلكتروني يخص حسابك في ${input.academyName}. ` +
+      `للتأكيد افتح الرابط التالي:
+${input.link}
+
+` +
+      `تنتهي صلاحية هذا الرابط في ${input.expiresAt}. ` +
+      `إن لم يكن لديك حساب لدينا فتجاهل هذه الرسالة.`,
   };
 }
