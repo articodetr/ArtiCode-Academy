@@ -29,6 +29,22 @@ export function absenceRate(counts: AttendanceCounts): number | null {
   return percentOf(counts.absent, counts.present + counts.late + counts.absent);
 }
 
+/** Half-up to two places, as a JSON number. */
+export function round2(value: DecimalLike): number {
+  return new D(value).toDecimalPlaces(2, D.ROUND_HALF_UP).toNumber();
+}
+
+/** The mean of exact values, rounded at the end only; null over nothing. */
+export function meanOf(values: readonly DecimalLike[]): number | null {
+  if (values.length === 0) return null;
+  return round2(values.reduce<Prisma.Decimal>((sum, value) => sum.plus(value), new D(0)).div(values.length));
+}
+
+/** `sum ÷ count` rounded; null when nothing was counted. */
+export function averageOf(sum: DecimalLike, count: number): number | null {
+  return count === 0 ? null : round2(new D(sum).div(count));
+}
+
 /** D-R72: the first `cap` rows of a read of up to `cap + 1`, and whether more existed. */
 export function capRows<T>(rows: readonly T[], cap: number = ROW_CAP): { rows: T[]; truncated: boolean } {
   return rows.length > cap ? { rows: rows.slice(0, cap), truncated: true } : { rows: [...rows], truncated: false };

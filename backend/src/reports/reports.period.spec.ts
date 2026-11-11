@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { absenceRate, attendanceRate, capRows, percentOf } from './reports.calc.js';
+import { absenceRate, attendanceRate, averageOf, capRows, meanOf, percentOf, round2 } from './reports.calc.js';
 import { ReportsHttpException } from './reports.errors.js';
 import { periodWindow, resolvePeriod } from './reports.period.js';
 
@@ -57,6 +57,16 @@ describe('percentages and the row cap (D-R70/D-R72)', () => {
     expect(attendanceRate(counts)).toBe(75);
     expect(absenceRate(counts)).toBe(25);
     expect(attendanceRate({ present: 0, late: 0, absent: 0, excused: 3 })).toBeNull();
+  });
+
+  it('means round once, at the end (T02)', () => {
+    // 80 + 0 + 75 = 155 → 51.666… → 51.67; rounding each value first could drift.
+    expect(meanOf(['80', '0', '75'])).toBe(51.67);
+    expect(meanOf(['72', '90'])).toBe(81);
+    expect(meanOf([])).toBeNull();
+    expect(averageOf('288.90', 4)).toBe(72.23);
+    expect(averageOf('0', 0)).toBeNull();
+    expect(round2('2.675')).toBe(2.68);
   });
 
   it('cuts a read of cap + 1 rows and says so', () => {
