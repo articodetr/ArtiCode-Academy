@@ -6,6 +6,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { answerDiscardQuestion, blockerStates, discardQuestionCount, goBack, latestDiscardQuestion, renderInDataRouter, unloadWouldPrompt } from '../test/navigation'
 import { makeAuth, makeUser } from '../test/render'
@@ -88,7 +89,7 @@ describe('RoleEditor — browser back with unsaved work (KI-057)', () => {
     const { router, onClose, dialog } = await renderEditor({ mode: 'create' })
     fireEvent.change(within(dialog).getByLabelText(ar.rolesAdmin.fields.key), { target: { value: 'proctor' } })
 
-    fireEvent.click(document.querySelector<HTMLButtonElement>('.ant-drawer-close')!)
+    await clickWhenSettled(() => document.querySelector<HTMLButtonElement>('.ant-drawer-close')!)
     const question = await latestDiscardQuestion()
     await goBack(router)
     expect(discardQuestionCount()).toBe(1)

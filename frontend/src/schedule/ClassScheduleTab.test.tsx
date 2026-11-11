@@ -55,7 +55,12 @@ function renderTab(permissions: string[], cls: AcademyClass = makeClass()) {
   renderWithProviders(<ClassScheduleTab cls={cls} />, { auth: makeAuth({ user: makeUser({ permissions }) }), route: '/classes' })
 }
 
-const openEditor = async () => fireEvent.click((await screen.findByText(ar.classSchedule.edit)).closest('button')!)
+// The «تعديل» button is disabled until the schedule has arrived; a click on it before then is lost (KI-060).
+const editButton = () => screen.getByText(ar.classSchedule.edit).closest('button')!
+const openEditor = async () => {
+  await waitFor(() => expect(editButton()).toBeEnabled())
+  fireEvent.click(editButton())
+}
 const field = (name: keyof typeof ar.classSchedule.fields, n: number) => `${ar.classSchedule.fields[name]}: ${n}`
 const setValue = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
 const option = (text: string): HTMLElement => screen.getByText(text, { selector: '.ant-select-item-option-content' }).closest('.ant-select-item-option') as HTMLElement

@@ -14,6 +14,7 @@ import { ar } from '../i18n/ar'
 import { ATTENDANCE_STAFF_PERMISSIONS, ATTENDANCE_TEACHER_PERMISSIONS, fourStudents, makeAttendanceRecord, makeAttendanceSheet } from '../test/attendance'
 import { CLASS_ID, makeClass } from '../test/classes'
 import { makeSyllabus } from '../test/courses'
+import { clickWhenSettled, waitForDrawersToSettle } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ID, makeLesson } from '../test/lessons'
 import { unloadWouldPrompt } from '../test/navigation'
@@ -91,7 +92,7 @@ const mark = (name: string, status: string) => fireEvent.click(within(row(name))
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */
 async function openDiscardDialog(): Promise<HTMLElement> {
-  fireEvent.click(closeButton())
+  await clickWhenSettled(closeButton)
   const titles = await screen.findAllByText(ar.common.unsaved.title)
   return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
 }
@@ -106,9 +107,9 @@ describe('LessonDrawer — unsaved edit form and attendance sheet (KI-058)', () 
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(3)
     expectNoDiscardQuestion()
   })
@@ -122,7 +123,7 @@ describe('LessonDrawer — unsaved edit form and attendance sheet (KI-058)', () 
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(titleInput()).toHaveValue('الأنواع')
@@ -149,7 +150,7 @@ describe('LessonDrawer — unsaved edit form and attendance sheet (KI-058)', () 
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(within(row('سارة الطالبة')).getByLabelText(ar.lessons.attendance.absent)).toBeChecked()
@@ -265,6 +266,8 @@ describe('LessonDrawer — unsaved edit form and attendance sheet (KI-058)', () 
     expect(unloadWouldPrompt()).toBe(true)
 
     // The rows could not be saved any more: a cancelled lesson takes no attendance.
+    // The dialog is drawn inside the drawer: until the drawer has settled it can show late (KI-060).
+    await waitForDrawersToSettle()
     fireEvent.click(screen.getByText(ar.lessons.actions.menu).closest('button')!)
     fireEvent.click(await screen.findByText(ar.lessons.actions.cancel, { selector: '.ant-dropdown-menu-title-content' }))
     const dialog = screen.getByText(ar.lessons.confirm.cancel).closest('[role="dialog"]') as HTMLElement
@@ -273,7 +276,7 @@ describe('LessonDrawer — unsaved edit form and attendance sheet (KI-058)', () 
     expect(await screen.findByText(ar.attendance.closed.cancelled)).toBeInTheDocument()
     expect(unloadWouldPrompt()).toBe(false)
 
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()
     expect(writes).toEqual([`POST /api/lessons/${LESSON_ID}/status`])

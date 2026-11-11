@@ -6,6 +6,7 @@ import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { ar } from '../i18n/ar'
 import { CLASS_ID, makeClass } from '../test/classes'
 import { makeSyllabus } from '../test/courses'
+import { waitForDrawersToSettle } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { FAR_TIME_ZONE, LESSON_ADMIN_PERMISSIONS, LESSON_ID, LESSON_STAFF_PERMISSIONS, LESSON_TIME_ZONE, makeLesson } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -77,6 +78,8 @@ async function openMenu() {
 }
 
 async function chooseAction(label: string) {
+  // The action dialog is drawn inside the drawer: until the drawer has settled it can show late (KI-060).
+  await waitForDrawersToSettle()
   fireEvent.click(screen.getByText(ar.lessons.actions.menu).closest('button')!)
   fireEvent.click(await screen.findByText(label, { selector: '.ant-dropdown-menu-title-content' }))
 }

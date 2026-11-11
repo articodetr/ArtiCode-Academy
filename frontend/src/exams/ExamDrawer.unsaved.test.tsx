@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
+import { clickWhenSettled } from '../test/drawer'
 import { EXAM_ID, EXAM_TEACHER_PERMISSIONS, makeExam, makeResultsSheet } from '../test/exams'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeLessonList } from '../test/lessons'
@@ -81,9 +82,9 @@ describe('ExamDrawer — unsaved edit form and results sheet', () => {
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(3)
     expectNoDiscardQuestion()
   })
@@ -94,7 +95,7 @@ describe('ExamDrawer — unsaved edit form and results sheet', () => {
     await markSaraAbsent()
 
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(unloadWouldPrompt()).toBe(true)
@@ -102,14 +103,14 @@ describe('ExamDrawer — unsaved edit form and results sheet', () => {
     fireEvent.click(resultsTab())
     expect(saraAbsent()).toBeChecked()
 
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     const first = await latestDiscardQuestion()
     expect(within(first).getByText(ar.common.unsaved.content)).toBeInTheDocument()
     await answerDiscardQuestion(first, 'keep')
     expect(saraAbsent()).toBeChecked()
     expect(onClose).not.toHaveBeenCalled()
 
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     await answerDiscardQuestion(await latestDiscardQuestion(), 'discard')
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(writes).toEqual([])
