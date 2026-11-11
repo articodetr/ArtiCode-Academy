@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AcademyClass } from '../api/classes'
 import { ar } from '../i18n/ar'
 import { CLASS_ID, makeClass } from '../test/classes'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { answerDiscardQuestion, blockerStates, discardQuestionCount, goBack, latestDiscardQuestion, renderInDataRouter, unloadWouldPrompt } from '../test/navigation'
 import { makeAuth, makeUser } from '../test/render'
@@ -108,7 +109,7 @@ describe('ClassDrawer — browser back, reload and tab close with unsaved work (
     const { router, onClose } = await renderDrawer()
     await typeCapacity()
 
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     const dialog = await latestDiscardQuestion()
     await goBack(router)
     expect(discardQuestionCount()).toBe(1)
@@ -124,7 +125,7 @@ describe('ClassDrawer — browser back, reload and tab close with unsaved work (
     const { router, onClose } = await renderDrawer()
     await typeCapacity()
 
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     const dialog = await latestDiscardQuestion()
     await goBack(router)
     expect(discardQuestionCount()).toBe(1)
@@ -157,7 +158,7 @@ describe('ClassDrawer — browser back, reload and tab close with unsaved work (
     const { router, onClose } = await renderDrawer()
     await typeCapacity()
 
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     await answerDiscardQuestion(await latestDiscardQuestion(), 'discard')
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(unloadWouldPrompt()).toBe(false)

@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AcademyClass } from '../api/classes'
 import { ar } from '../i18n/ar'
 import { CLASS_ID, makeClass } from '../test/classes'
+import { clickWhenSettled } from '../test/drawer'
 import { ENROLLMENT_IDS, makeEnrollment, makeEnrollmentList, makeEnrollmentStudent, makeStudentCandidate } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -65,7 +66,7 @@ const expectNoDiscardQuestion = () => expect(screen.queryByText(ar.common.unsave
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */
 async function openDiscardDialog(): Promise<HTMLElement> {
-  fireEvent.click(closeButton())
+  await clickWhenSettled(closeButton)
   const titles = await screen.findAllByText(ar.common.unsaved.title)
   return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
 }
@@ -78,9 +79,9 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(3)
     expectNoDiscardQuestion()
   })
@@ -97,7 +98,7 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(screen.getByLabelText(ar.classes.fields.capacity)).toHaveValue('25')
@@ -155,7 +156,7 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'المعلمون (1)' }))
     fireEvent.click((await screen.findByText(ar.classes.teachers.edit)).closest('button')!)
     await screen.findByLabelText(`${ar.classes.teachers.remove}: خالد المعلم`)
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()
   })
@@ -173,7 +174,7 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     expect(screen.getByText(ar.classes.teachers.emptyDraft)).toBeInTheDocument()
@@ -199,7 +200,7 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
     // No Escape here: jsdom never ends the closing animation of the search popup, which so stays on
     // top of the Escape stack and takes the key itself (in a browser it leaves within ~0.2 s). The
     // Escape path is proven by the other editors; the mask and the close button prove the report.
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
     const dialog = await openDiscardDialog()
@@ -210,7 +211,7 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
     fireEvent.click(enroll)
     expect(await screen.findByText('تم تسجيل «ليلى سعيد» في الفصل')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(ar.classes.enrollments.enroll).closest('button')).toBeDisabled())
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(writes).toEqual([{ method: 'POST', url: `/api/classes/${CLASS_ID}/enrollments`, body: { studentId: layla.id } }])
   })

@@ -238,13 +238,15 @@ describe('ProfilePage (J-F36)', () => {
 
       const user = userEvent.setup()
       await user.click(passwordForm().save)
-      expect(await within(passwordForm().form).findAllByText(ar.login.passwordRequired)).toHaveLength(3)
+      // antd shows each field's message once that field's validation settles: the first can be on
+      // screen before the other two (seen under load), so wait for all of them (KI-060).
+      await waitFor(() => expect(within(passwordForm().form).getAllByText(ar.login.passwordRequired)).toHaveLength(3))
 
       const { fields } = await fillPasswords('OldSecret123', 'short', 'different')
-      expect(
-        await within(fields.form).findByText(i18n.t('profile.errors.password_weak', { min: 10 })),
-      ).toBeInTheDocument()
-      expect(within(fields.form).getByText(ar.profile.errors.mismatch)).toBeInTheDocument()
+      await waitFor(() => {
+        expect(within(fields.form).getByText(i18n.t('profile.errors.password_weak', { min: 10 }))).toBeInTheDocument()
+        expect(within(fields.form).getByText(ar.profile.errors.mismatch)).toBeInTheDocument()
+      })
       await user.click(fields.save)
       await act(async () => {})
       expect(calls).toEqual([])

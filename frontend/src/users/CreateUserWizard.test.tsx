@@ -76,7 +76,8 @@ describe('CreateUserWizard', () => {
     await fill(ar.users.fields.fullName, 'عمر خالد')
     await userEvent.click(buttons.next())
 
-    expect(await screen.findAllByText(ar.users.validation.identifierRequired)).toHaveLength(2)
+    // Each field's message shows once its own validation settles: wait for both (KI-060).
+    await waitFor(() => expect(screen.getAllByText(ar.users.validation.identifierRequired)).toHaveLength(2))
     expect(screen.queryByLabelText(ar.users.fields.studentNumber)).not.toBeInTheDocument()
     expect(bodies).toHaveLength(0)
   })

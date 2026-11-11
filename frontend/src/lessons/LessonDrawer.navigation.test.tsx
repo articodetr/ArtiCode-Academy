@@ -10,6 +10,7 @@ import { ar } from '../i18n/ar'
 import { ATTENDANCE_TEACHER_PERMISSIONS, makeAttendanceSheet } from '../test/attendance'
 import { CLASS_ID, makeClass } from '../test/classes'
 import { makeSyllabus } from '../test/courses'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LESSON_ID, makeLesson } from '../test/lessons'
 import { answerDiscardQuestion, blockerStates, discardQuestionCount, goBack, latestDiscardQuestion, renderInDataRouter, unloadWouldPrompt } from '../test/navigation'
@@ -116,7 +117,7 @@ describe('LessonDrawer — browser back with unsaved work (KI-058)', () => {
     const { router, onClose } = await renderDrawer()
     const title = await typeTitle()
 
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     const first = await latestDiscardQuestion()
     await goBack(router)
     expect(discardQuestionCount()).toBe(1)
@@ -128,7 +129,7 @@ describe('LessonDrawer — browser back with unsaved work (KI-058)', () => {
     expect(onClose).not.toHaveBeenCalled()
 
     const asked = discardQuestionCount()
-    fireEvent.click(closeButton())
+    await clickWhenSettled(closeButton)
     const second = await latestDiscardQuestion()
     await goBack(router)
     expect(discardQuestionCount()).toBe(asked + 1)

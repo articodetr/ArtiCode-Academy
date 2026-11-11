@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Submission } from '../api/submissions'
 import { ar } from '../i18n/ar'
 import { ASSIGNMENT_READER_PERMISSIONS, ASSIGNMENT_TEACHER_PERMISSIONS } from '../test/assignments'
+import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { SUBMISSION_IDS, makeGradedSubmission, makeSubmission, makeSubmissionAssignment } from '../test/submissions'
@@ -59,7 +60,7 @@ const closeButton = () => document.querySelector<HTMLButtonElement>('.ant-drawer
 const mask = () => document.querySelector<HTMLElement>('.ant-drawer-mask')!
 
 async function openDiscardDialog(): Promise<HTMLElement> {
-  fireEvent.click(closeButton())
+  await clickWhenSettled(closeButton)
   const titles = await screen.findAllByText(ar.assignments.review.discard.title)
   return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
 }
@@ -266,7 +267,7 @@ describe('SubmissionReviewPanel', () => {
 
     pressEscape()
     pressEscape()
-    fireEvent.click(mask())
+    await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.queryByText(ar.assignments.review.discard.title)).not.toBeInTheDocument()
     expect(feedbackInput()).toHaveValue('ملاحظة لم تُحفظ')
