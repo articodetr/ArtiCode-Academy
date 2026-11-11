@@ -28,7 +28,7 @@ const PASSWORD = 'Correct-Horse-Battery-9';
 const USER_AGENT = 'TEST-071 supertest';
 const ROOMS = '/api/rooms';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
-const DTO_KEYS = ['branch', 'branchId', 'capacity', 'code', 'createdAt', 'id', 'isActive', 'kind', 'name', 'updatedAt'];
+const DTO_KEYS = ['branch', 'branchId', 'capacity', 'code', 'createdAt', 'id', 'isActive', 'kind', 'name', 'timeZone', 'updatedAt'];
 
 async function canConnect(url: string): Promise<boolean> {
   const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url, connectionTimeoutMillis: 3000 }) });
@@ -362,6 +362,31 @@ describe.skipIf(!available)('MOD-07 rooms API (e2e, TEST-071)', () => {
     expect(await eventsSince(m)).toEqual([]);
   });
 
+  it('AC8 — every room carries the zone its times are shown in (D-R41): its branch’s timezone, else the academy’s — on list, create and update (CH-0189)', async () => {
+    const academy = await prisma.academy.findFirst({ select: { timezone: true } });
+    const academyZone = academy?.timezone ?? 'UTC';
+    // A zone that differs from the academy's, so the branch rule is visible whatever the dev row holds.
+    const branchZone = academyZone === 'Pacific/Kiritimati' ? 'Europe/Berlin' : 'Pacific/Kiritimati';
+    const zonedBranchId = (await prisma.branch.create({ data: { code: code('BZ'), name: { ar: 'فرع بمنطقته' }, timezone: branchZone }, select: { id: true } })).id;
+    const inZoned = await seedRoom('Z1', { branchId: zonedBranchId });
+    const inPlain = await seedRoom('Z2', { branchId: activeBranchId });
+    const atSite = await seedRoom('Z3');
+
+    const list = await api().get(ROOMS).set(bearer('reader')).expect(200);
+    const zoneOf = (id: string) => (list.body.items as { id: string; timeZone: string }[]).find((item) => item.id === id)?.timeZone;
+    expect(zoneOf(inZoned)).toBe(branchZone);
+    expect(zoneOf(inPlain)).toBe(academyZone); // a branch without its own timezone shows the academy's
+    expect(zoneOf(atSite)).toBe(academyZone);
+
+    const created = await api().post(ROOMS).set(bearer('scheduler')).send({ code: code('Z4'), branchId: zonedBranchId }).expect(201);
+    expect(created.body).toMatchObject({ branchId: zonedBranchId, timeZone: branchZone });
+    const moved = await api().patch(`${ROOMS}/${created.body.id}`).set(bearer('scheduler')).send({ branchId: null }).expect(200);
+    expect(moved.body).toMatchObject({ branchId: null, timeZone: academyZone });
+    // The no-difference fast path answers with the same field.
+    const unchanged = await api().patch(`${ROOMS}/${created.body.id}`).set(bearer('scheduler')).send({ branchId: null }).expect(200);
+    expect(unchanged.body.timeZone).toBe(academyZone);
+  });
+
   it(
     'documents the four routes in OpenAPI',
     async () => {
@@ -373,6 +398,7 @@ describe.skipIf(!available)('MOD-07 rooms API (e2e, TEST-071)', () => {
       expect(docs.body.components.schemas).toHaveProperty('UpdateRoomDto');
       // Nullable scalars carry an explicit type (the KI-051 pattern avoided here).
       expect(docs.body.components.schemas.RoomDto.properties.capacity).toMatchObject({ type: 'number', nullable: true });
+      expect(docs.body.components.schemas.RoomDto.required).toContain('timeZone');
     },
     20_000, // the OpenAPI document is slow under a parallel e2e run (KI-040)
   );
