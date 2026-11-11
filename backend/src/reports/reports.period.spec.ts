@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { absenceRate, attendanceRate, averageOf, capRows, meanOf, percentOf, round2 } from './reports.calc.js';
 import { ReportsHttpException } from './reports.errors.js';
 import { periodWindow, resolvePeriod } from './reports.period.js';
+import { reportsMissing } from './reports.policy.js';
 
 describe('resolvePeriod (D-R69, TEST-167)', () => {
   it('defaults to the 30 days ending today, or ending at `to`', () => {
@@ -67,6 +68,12 @@ describe('percentages and the row cap (D-R70/D-R72)', () => {
     expect(averageOf('288.90', 4)).toBe(72.23);
     expect(averageOf('0', 0)).toBeNull();
     expect(round2('2.675')).toBe(2.68);
+  });
+
+  it('the overview opens with any report key and names the three when none is held (T04)', () => {
+    expect(reportsMissing(['reports.financial.view'])).toBeNull();
+    expect(reportsMissing(['reports.academic.view', 'courses.read'])).toBeNull();
+    expect(reportsMissing(['courses.read', 'invoices.manage'])).toEqual(['reports.attendance.view', 'reports.academic.view', 'reports.financial.view']);
   });
 
   it('cuts a read of cap + 1 rows and says so', () => {
