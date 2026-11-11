@@ -1,5 +1,6 @@
 // Error vocabulary of MOD-03 (users, invitations, password reset, roles,
-// guardians) — fixed in MOD-03-T00, extended in T02, T03, T04, T05 and T06; T07
+// guardians) — fixed in MOD-03-T00, extended in T02, T03, T04, T05 and T06 (and
+// by launch task LR-01-T02 for e-mail verification); T07
 // (role assignment) reuses role_unknown, employee_kind_required,
 // profile_mismatch, self_forbidden and last_admin. Same shape as
 // AuthHttpException: the body is `{ statusCode, error, code, message, ...details }`
@@ -27,6 +28,12 @@ export const USERS_ERROR_CODES = [
   'reset_expired',
   'reset_disabled',
   'user_not_resettable',
+  // LR-01-T02 — e-mail verification (D-R78)
+  'verification_invalid',
+  'verification_expired',
+  'email_missing',
+  'email_already_verified',
+  'mail_unavailable',
   // T02 / T04 / T06 — profiles, update and account status
   'profile_mismatch',
   'nothing_to_update',
@@ -174,5 +181,32 @@ export const usersError = {
       HttpStatus.FORBIDDEN,
       'reset_disabled',
       'Self-service password reset is not available; ask the academy to reset your password',
+    ),
+
+  // LR-01-T02 — e-mail verification (D-R78)
+  verificationInvalid: () =>
+    new UsersHttpException(
+      HttpStatus.NOT_FOUND,
+      'verification_invalid',
+      'This confirmation link is not valid, has already been used, or belongs to an address the account no longer has',
+    ),
+  verificationExpired: (expiredAt: Date) =>
+    new UsersHttpException(
+      HttpStatus.GONE,
+      'verification_expired',
+      'This confirmation link has expired; request a new one from your profile',
+      { expiredAt: expiredAt.toISOString() },
+    ),
+  emailMissing: () =>
+    new UsersHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'email_missing', 'The account has no e-mail address to confirm'),
+  emailAlreadyVerified: (emailVerifiedAt: Date) =>
+    new UsersHttpException(HttpStatus.CONFLICT, 'email_already_verified', 'The e-mail address is already confirmed', {
+      emailVerifiedAt: emailVerifiedAt.toISOString(),
+    }),
+  mailUnavailable: () =>
+    new UsersHttpException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'mail_unavailable',
+      'No mail transport reaches the user (MAIL_TRANSPORT=none); the address cannot be confirmed yet',
     ),
 };

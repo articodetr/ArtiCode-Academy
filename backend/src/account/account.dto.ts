@@ -121,3 +121,18 @@ export class ConfirmPasswordResetDto {
   @Length(PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH)
   newPassword: string;
 }
+
+/** LR-01-T02 — answer of POST /api/account/email-verification/request (API-165). The token itself is never returned (D-R78). */
+export class RequestEmailVerificationResponseDto {
+  @ApiProperty({ description: 'ISO 8601; `AUTH_EMAIL_VERIFICATION_TTL_HOURS` after issue (48 h by default)' })
+  expiresAt: string;
+
+  @ApiProperty({ type: MailDeliveryDto, description: 'What happened to the confirmation e-mail; `failed` = ask again later' })
+  delivery: MailDeliveryDto;
+}
+
+/** LR-01-T02 — answer of POST /api/account/email-verification/:token/confirm (API-166). */
+export class ConfirmEmailVerificationResponseDto {
+  @ApiProperty({ description: 'ISO 8601 — when the address was confirmed (now)' })
+  emailVerifiedAt: string;
+}

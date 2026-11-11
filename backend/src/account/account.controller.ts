@@ -23,7 +23,13 @@ import { Public } from '../auth/decorators.js';
 import { presentSession, sessionCookieOptions } from '../auth/session.presenter.js';
 import { TokenService } from '../auth/token.service.js';
 import type { Env } from '../config/env.schema.js';
-import { AcceptInvitationDto, ConfirmPasswordResetDto, InvitationPreviewDto, RequestPasswordResetDto } from './account.dto.js';
+import {
+  AcceptInvitationDto,
+  ConfirmEmailVerificationResponseDto,
+  ConfirmPasswordResetDto,
+  InvitationPreviewDto,
+  RequestPasswordResetDto,
+} from './account.dto.js';
 import { AccountService } from './account.service.js';
 
 /** 60 previews per minute per IP (a page load each). */
@@ -34,9 +40,12 @@ const ACCEPT_LIMIT = { login: { limit: 20, ttl: 15 * 60 * 1000 } };
 const REQUEST_RESET_LIMIT = { login: { limit: 5, ttl: 15 * 60 * 1000 } };
 /** 20 confirmation attempts per 15 minutes per IP, like invitation acceptance. */
 const CONFIRM_RESET_LIMIT = ACCEPT_LIMIT;
+/** LR-01-T02: 20 e-mail confirmations per 15 minutes per IP, like the other one-time links. */
+const CONFIRM_EMAIL_LIMIT = ACCEPT_LIMIT;
 
 /**
- * Public account routes (MOD-03-T03 invitations, MOD-03-T05 password reset):
+ * Public account routes (MOD-03-T03 invitations, MOD-03-T05 password reset,
+ * LR-01-T02 e-mail confirmation):
  * what the invitation and reset pages need. Rate limited like the auth routes;
  * the only credential is the one-time token in the path, which identifies
  * nothing until it matches a stored hash.
@@ -141,5 +150,28 @@ export class AccountController {
   ): Promise<SessionResponseDto> {
     const session = await this.account.confirmPasswordReset(token, body.newPassword, requestContext(req));
     return presentSession(res, session, this.cookie);
+  }
+
+  // ------------------------------------------- e-mail verification (LR-01-T02)
+
+  @Post('email-verification/:token/confirm')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(CONFIRM_EMAIL_LIMIT)
+  @ApiOperation({
+    summary: 'Confirm an e-mail address from the link in the confirmation e-mail (public, API-166)',
+    description:
+      'Consumes the one-time token and sets `emailVerifiedAt` — the only route that does (D-R78) — when the account is active and still has the address the token was issued for. ' +
+      'Opens no session (the link may be opened on any device). Records `users.email.verified`.',
+  })
+  @ApiParam({ name: 'token', description: 'The raw confirmation token from the e-mailed link' })
+  @ApiOkResponse({ type: ConfirmEmailVerificationResponseDto })
+  @ApiForbiddenResponse({ type: AuthErrorDto, description: 'origin_forbidden' })
+  @ApiNotFoundResponse({
+    type: AuthErrorDto,
+    description: 'verification_invalid (malformed, unknown, already used or replaced, the address changed since, or the account is not active)',
+  })
+  @ApiGoneResponse({ type: AuthErrorDto, description: 'verification_expired' })
+  confirmEmail(@Param('token') token: string, @Req() req: Request): Promise<ConfirmEmailVerificationResponseDto> {
+    return this.account.confirmEmailVerification(token, requestContext(req));
   }
 }
