@@ -3,6 +3,7 @@
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { MockInstance } from 'vitest';
+import type { AuditEntry, AuditService } from '../audit/audit.service.js';
 import type { Env } from '../config/env.schema.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { LogMailTransport } from './log.transport.js';
@@ -29,11 +30,26 @@ function configWith(publicUrl?: string): ConfigService<Env, true> {
   return { get: (key: string) => (key === 'APP_PUBLIC_URL' ? publicUrl : undefined) } as unknown as ConfigService<Env, true>;
 }
 
+/** An AuditService stub that keeps what it was asked to record (TEST-172). */
+function recordingAudit(fail = false): AuditService & { entries: AuditEntry[] } {
+  const entries: AuditEntry[] = [];
+  return {
+    entries,
+    record: async (entry: AuditEntry) => {
+      if (fail) throw new Error('audit down');
+      entries.push(entry);
+    },
+  } as unknown as AuditService & { entries: AuditEntry[] };
+}
+
 function prismaWith(academy: typeof ACADEMY | null): PrismaService {
   return { db: { academy: { findFirst: async () => academy } } } as unknown as PrismaService;
 }
 
+const USER_ID = '01900000-0000-7000-8000-000000000001';
+
 const mailTo = (to: string | null, locale: 'ar' | 'en' | 'tr' | null, recipientName = 'Sara') => ({
+  userId: USER_ID,
   to,
   recipientName,
   locale,
@@ -55,7 +71,7 @@ describe('MailService (TEST-017)', () => {
 
   it('renders the invitation in the recipient locale with the absolute link and hands it to the transport', async () => {
     const transport = new CapturingTransport();
-    const service = new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'));
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'), recordingAudit());
 
     const result = await service.sendInvitation(mailTo('sara@example.test', 'en'));
 
@@ -72,7 +88,7 @@ describe('MailService (TEST-017)', () => {
 
   it('falls back to the academy default locale, then Arabic, and builds root-relative links without APP_PUBLIC_URL', async () => {
     const transport = new CapturingTransport();
-    const service = new MailService(transport, prismaWith(ACADEMY), configWith(undefined));
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith(undefined), recordingAudit());
 
     await service.sendInvitation(mailTo('x@example.test', 'tr', 'سارة'));
     await service.sendInvitation(mailTo('x@example.test', null, 'سارة'));
@@ -86,7 +102,7 @@ describe('MailService (TEST-017)', () => {
     expect(service.passwordResetLink(TOKEN)).toBe(`/reset-password/${TOKEN}`);
 
     const english = new CapturingTransport();
-    await new MailService(english, prismaWith({ ...ACADEMY, defaultLocale: 'en' as never }), configWith()).sendPasswordReset(
+    await new MailService(english, prismaWith({ ...ACADEMY, defaultLocale: 'en' as never }), configWith(), recordingAudit()).sendPasswordReset(
       mailTo('x@example.test', 'tr'),
     );
     expect(english.sent[0]).toMatchObject({ kind: 'password_reset', locale: 'en', subject: 'Reset your Arti Academy password' });
@@ -95,7 +111,7 @@ describe('MailService (TEST-017)', () => {
 
   it('skips accounts without an e-mail address and survives a failing transport or a missing academy row', async () => {
     const transport = new CapturingTransport();
-    const service = new MailService(transport, prismaWith(ACADEMY), configWith());
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith(), recordingAudit());
 
     expect(await service.sendInvitation(mailTo(null, 'ar'))).toEqual({ transport: 'fake', status: 'skipped', messageId: null });
     expect(transport.sent).toEqual([]);
@@ -106,8 +122,8 @@ describe('MailService (TEST-017)', () => {
         throw new Error('provider down');
       },
     };
-    const result = await new MailService(failing, prismaWith(null), configWith()).sendInvitation(mailTo('x@example.test', 'ar'));
-    expect(result).toEqual({ transport: 'broken', status: 'failed', messageId: null });
+    const result = await new MailService(failing, prismaWith(null), configWith(), recordingAudit()).sendInvitation(mailTo('x@example.test', 'ar'));
+    expect(result).toEqual({ transport: 'broken', status: 'failed', messageId: null, failure: { reason: 'error' } });
   });
 
   it('the none transport logs only the kind; the log transport logs the whole message (development only)', async () => {
@@ -117,6 +133,7 @@ describe('MailService (TEST-017)', () => {
       locale: 'ar',
       subject: 'Subject line',
       text: `open /invite/${TOKEN}`,
+      html: `<p>open /invite/${TOKEN}</p>`,
     };
 
     expect(await new NoopMailTransport().send(message)).toEqual({ transport: 'none', status: 'skipped', messageId: null });
@@ -153,5 +170,77 @@ describe('MailService (TEST-017)', () => {
     expect(formatExpiry(EXPIRES, 'en', 'Europe/Istanbul')).toContain('2026');
     expect(formatExpiry(EXPIRES, 'ar', 'Europe/Istanbul')).not.toBe('');
     expect(formatExpiry(EXPIRES, 'en', 'Not/AZone')).toBe(formatExpiry(EXPIRES, 'en', 'UTC'));
+  });
+
+  // TEST-172 — LR-01-T01: the HTML twin and the delivery events (D-R76/D-R77).
+  it('hands the transport an HTML twin in the reading direction of the locale', async () => {
+    const transport = new CapturingTransport();
+    await new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'), recordingAudit()).sendInvitation(
+      mailTo('sara@example.test', 'ar'),
+    );
+    const { html } = transport.sent[0]!;
+    expect(html).toContain('<html lang="ar" dir="rtl">');
+    expect(html).toContain(`<a href="https://academy.example/invite/${TOKEN}" dir="ltr"`);
+    expect(html).toContain('مرحباً Sara،');
+  });
+
+  it('records mail.delivery.sent / failed with the kind and the id or the failure code only; none and log record nothing', async () => {
+    const audit = recordingAudit();
+    await new MailService(new CapturingTransport(), prismaWith(ACADEMY), configWith('https://academy.example'), audit).sendPasswordReset(
+      mailTo('sara@example.test', 'en'),
+    );
+    const refusing: MailTransport = {
+      name: 'resend',
+      send: async () => ({
+        transport: 'resend',
+        status: 'failed',
+        messageId: null,
+        failure: { reason: 'http', httpStatus: 403, providerCode: 'validation_error' },
+      }),
+    };
+    await new MailService(refusing, prismaWith(ACADEMY), configWith('https://academy.example'), audit).sendInvitation(
+      mailTo('sara@example.test', 'ar'),
+    );
+    const throwing: MailTransport = { name: 'resend', send: async () => Promise.reject(new Error('boom')) };
+    await new MailService(throwing, prismaWith(ACADEMY), configWith(), audit).sendInvitation(mailTo('sara@example.test', 'ar'));
+
+    expect(audit.entries).toEqual([
+      {
+        action: 'mail.delivery.sent',
+        actorUserId: null,
+        entityType: 'users',
+        entityId: USER_ID,
+        metadata: { kind: 'password_reset', transport: 'fake', messageId: 'm-1' },
+      },
+      {
+        action: 'mail.delivery.failed',
+        actorUserId: null,
+        entityType: 'users',
+        entityId: USER_ID,
+        metadata: { kind: 'invitation', transport: 'resend', reason: 'http', httpStatus: 403, providerCode: 'validation_error' },
+      },
+      {
+        action: 'mail.delivery.failed',
+        actorUserId: null,
+        entityType: 'users',
+        entityId: USER_ID,
+        metadata: { kind: 'invitation', transport: 'resend', reason: 'error' },
+      },
+    ]);
+    expect(JSON.stringify(audit.entries)).not.toMatch(/sara|invite\/|reset-password|aaaa/);
+
+    const quiet = recordingAudit();
+    for (const transport of [new NoopMailTransport(), new LogMailTransport()]) {
+      await new MailService(transport, prismaWith(ACADEMY), configWith(), quiet).sendInvitation(mailTo('sara@example.test', 'ar'));
+    }
+    await new MailService(new CapturingTransport(), prismaWith(ACADEMY), configWith(), quiet).sendInvitation(mailTo(null, 'ar'));
+    expect(quiet.entries).toEqual([]);
+  });
+
+  it('a lost delivery event never fails the mail: the result stands', async () => {
+    const result = await new MailService(new CapturingTransport(), prismaWith(ACADEMY), configWith(), recordingAudit(true)).sendInvitation(
+      mailTo('sara@example.test', 'ar'),
+    );
+    expect(result).toEqual({ transport: 'fake', status: 'sent', messageId: 'm-1' });
   });
 });

@@ -6,8 +6,17 @@ import { POSTGRES_DEFAULTS, buildPostgresUrl } from './database-url.js';
 // application must be declared here so a typo or a missing value fails at boot.
 
 export const NODE_ENVS = ['development', 'test', 'production'] as const;
-/** Outgoing-mail transports (src/mail/); `log` is for development only. */
-export const MAIL_TRANSPORTS = ['none', 'log'] as const;
+/** Outgoing-mail transports (src/mail/); `log` is for development only, `resend` is the real provider (LR-01, D-R74). */
+export const MAIL_TRANSPORTS = ['none', 'log', 'resend'] as const;
+
+/** A bare address: one @, no spaces or angle brackets, a dot in the domain. */
+const MAIL_ADDRESS = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/;
+
+/** `MAIL_FROM`: `address` or `Display Name <address>` (the forms Resend accepts). */
+export function isMailbox(value: string): boolean {
+  const named = /^([^<>]*\S)\s*<([^<>]+)>$/.exec(value);
+  return named ? MAIL_ADDRESS.test(named[2]!) : MAIL_ADDRESS.test(value);
+}
 
 function parseList(value: string): string[] {
   return value
@@ -232,10 +241,37 @@ export const envSchema = z
      * nothing but the message kind is logged — invitation and reset tokens
      * reach the authorized admin once, in the API response (D-R01). `log`
      * (development only): also writes each message with its link to the
-     * server log; refused in production below. A real provider is added as a
-     * further transport in launch task LR-01.
+     * server log; refused in production below. `resend` (LR-01, D-R74): sends
+     * through the Resend API and needs RESEND_API_KEY, MAIL_FROM and
+     * APP_PUBLIC_URL.
      */
     MAIL_TRANSPORT: z.preprocess(emptyToUndefined, z.enum(MAIL_TRANSPORTS).default('none')),
+    /**
+     * Resend API key (LR-01, D-R74/D-R75) — required when MAIL_TRANSPORT=resend,
+     * ignored otherwise. A secret: never committed, logged or documented by value.
+     */
+    RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().regex(/^\S+$/, 'must not contain spaces').optional()),
+    /**
+     * Sender of every e-mail, `address` or `Display Name <address>`, on a domain
+     * verified at the provider — required when MAIL_TRANSPORT=resend.
+     */
+    MAIL_FROM: z.preprocess(
+      emptyToUndefined,
+      z
+        .string()
+        .transform((value) => value.trim())
+        .refine(isMailbox, 'must be an address or "Display Name <address>"')
+        .optional(),
+    ),
+    /** Optional Reply-To address of every e-mail (e.g. the academy office). */
+    MAIL_REPLY_TO: z.preprocess(
+      emptyToUndefined,
+      z
+        .string()
+        .transform((value) => value.trim().toLowerCase())
+        .refine((value) => MAIL_ADDRESS.test(value), 'must be an e-mail address')
+        .optional(),
+    ),
   })
   // The derivation inputs stay out of the validated config: feature code only
   // ever sees DATABASE_URL.
@@ -291,7 +327,7 @@ export const envSchema = z
         code: 'custom',
         path: ['MAIL_TRANSPORT'],
         message:
-          '"log" is a development-only transport and is refused when NODE_ENV=production (use "none" until a real provider is configured — LR-01)',
+          '"log" is a development-only transport and is refused when NODE_ENV=production (use "resend", or "none" to hand the links over manually)',
       });
     }
     if (env.AUTH_REFRESH_FAMILY_MAX_DAYS < env.AUTH_REFRESH_TTL_DAYS) {
@@ -300,6 +336,13 @@ export const envSchema = z
         path: ['AUTH_REFRESH_FAMILY_MAX_DAYS'],
         message: `must be at least AUTH_REFRESH_TTL_DAYS (${env.AUTH_REFRESH_TTL_DAYS}): a session cannot be capped below the lifetime of a single refresh token`,
       });
+    }
+    // LR-01 (D-R75): a real transport needs its key, a sender, and absolute
+    // links — a root-relative link in an e-mail leads nowhere.
+    if (env.MAIL_TRANSPORT === 'resend') {
+      for (const key of ['RESEND_API_KEY', 'MAIL_FROM', 'APP_PUBLIC_URL'] as const) {
+        if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required when MAIL_TRANSPORT=resend' });
+      }
     }
     if (env.AUTH_SELF_SERVICE_RESET_ENABLED && env.MAIL_TRANSPORT === 'none') {
       ctx.addIssue({

@@ -167,8 +167,9 @@ export class AccountService {
     });
 
     // After the commit, outside the transaction: the mail copy is best effort
-    // (transport `none` until LR-01) and never decides the outcome.
+    // (any transport, `resend` included — LR-01) and never decides the outcome.
     const delivery = await this.mail.sendInvitation({
+      userId: user.id,
       to: user.email,
       recipientName: user.displayName ?? user.fullName,
       locale: user.locale,
@@ -268,6 +269,7 @@ export class AccountService {
 
     const issued = await this.createPasswordReset(user, { via: 'admin', actorUserId: caller.id, mustChangePassword: true }, ctx);
     const delivery = await this.mail.sendPasswordReset({
+      userId: user.id,
       to: user.email,
       recipientName: user.displayName ?? user.fullName,
       locale: user.locale,
@@ -322,6 +324,7 @@ export class AccountService {
     try {
       const issued = await this.createPasswordReset(user, { via: 'self_service', actorUserId: null, mustChangePassword: false }, ctx);
       await this.mail.sendPasswordReset({
+        userId: user.id,
         to: user.email,
         recipientName: user.displayName ?? user.fullName,
         locale: user.locale,
