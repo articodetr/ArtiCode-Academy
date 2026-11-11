@@ -1,4 +1,4 @@
-import { validateEnv } from './env.schema.js';
+import { isMailbox, validateEnv } from './env.schema.js';
 
 /** 48 characters: long enough for the production rule, obviously not a real secret. */
 const PRODUCTION_SECRET = 'test-secret-'.repeat(4);
@@ -275,6 +275,57 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ TRUST_PROXY: '11' })).toThrow(/TRUST_PROXY: must be at most 10 proxies/);
     for (const bad of ['nginx', '10.0.0.0/33', '10.0.0.0/8/1', 'fd00::/129', '300.1.1.1', 'loopback, example.com', ',']) {
       expect(() => validateEnv({ TRUST_PROXY: bad }), bad).toThrow(/TRUST_PROXY: must be a number of proxies/);
+    }
+  });
+});
+
+// TEST-172 — LR-01-T01: the Resend transport's settings (D-R75).
+describe('validateEnv — the resend transport (TEST-172)', () => {
+  const PRODUCTION = { NODE_ENV: 'production', DATABASE_URL: 'postgresql://u:p@db:5432/app', JWT_SECRET: PRODUCTION_SECRET };
+  const resend = {
+    MAIL_TRANSPORT: 'resend',
+    RESEND_API_KEY: 're_test_not_a_real_key',
+    MAIL_FROM: 'Arti Academy <no-reply@mail.academy.example>',
+    APP_PUBLIC_URL: 'https://academy.example/',
+  };
+
+  it('accepts a complete configuration, in production too, and normalises the reply-to address', () => {
+    const env = validateEnv({ ...resend, MAIL_REPLY_TO: ' Office@Academy.Example ' });
+    expect(env).toMatchObject({
+      MAIL_TRANSPORT: 'resend',
+      RESEND_API_KEY: 're_test_not_a_real_key',
+      MAIL_FROM: 'Arti Academy <no-reply@mail.academy.example>',
+      MAIL_REPLY_TO: 'office@academy.example',
+      APP_PUBLIC_URL: 'https://academy.example',
+    });
+    expect(validateEnv({ ...resend, ...PRODUCTION }).MAIL_TRANSPORT).toBe('resend');
+    expect(validateEnv({ ...resend, AUTH_SELF_SERVICE_RESET_ENABLED: 'true' }).AUTH_SELF_SERVICE_RESET_ENABLED).toBe(true);
+  });
+
+  it('refuses to boot without the key, the sender or the public URL (absolute links)', () => {
+    for (const key of ['RESEND_API_KEY', 'MAIL_FROM', 'APP_PUBLIC_URL'] as const) {
+      const { [key]: _omitted, ...partial } = resend;
+      expect(() => validateEnv(partial), key).toThrow(new RegExp(`${key}: is required when MAIL_TRANSPORT=resend`));
+      expect(() => validateEnv({ ...partial, [key]: '' }), key).toThrow(new RegExp(key));
+    }
+    expect(() => validateEnv({ ...resend, MAIL_FROM: 'Arti Academy' })).toThrow(/MAIL_FROM/);
+    expect(() => validateEnv({ ...resend, MAIL_REPLY_TO: 'office' })).toThrow(/MAIL_REPLY_TO/);
+    expect(() => validateEnv({ ...resend, RESEND_API_KEY: 're_ key' })).toThrow(/RESEND_API_KEY/);
+  });
+
+  it('ignores the provider settings for the other transports and still refuses log in production', () => {
+    expect(validateEnv({ MAIL_FROM: 'no-reply@academy.example' }).MAIL_TRANSPORT).toBe('none');
+    expect(() => validateEnv({ ...PRODUCTION, MAIL_TRANSPORT: 'log' })).toThrow(
+      /MAIL_TRANSPORT.*"resend"/,
+    );
+  });
+
+  it('isMailbox takes a bare address or "Display Name <address>"', () => {
+    for (const good of ['no-reply@academy.example', 'Arti Academy <no-reply@academy.example>', 'أكاديمية آرتي <a@b.example>']) {
+      expect(isMailbox(good), good).toBe(true);
+    }
+    for (const bad of ['academy.example', 'a@b', '<a@b.example>', 'Name <a@b>', 'Name a@b.example', 'a b@c.example']) {
+      expect(isMailbox(bad), bad).toBe(false);
     }
   });
 });
