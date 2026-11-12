@@ -3,7 +3,8 @@
 // smallest PATCH /api/academy for holders of `academy.settings.manage`. Local
 // rules mirror the server (academy.validation.ts); the server stays the boundary.
 // Since J-F02 the same form also edits the weekly schedule (`settings.scheduling`,
-// MOD-02-T03) and saves it in the same single PATCH.
+// MOD-02-T03) and saves it in the same single PATCH; since J-F51 the prefix of
+// the certificate serials too (`settings.certificates.serialPrefix`, D-R51).
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, AutoComplete, Button, Card, Checkbox, Flex, Form, Input, Select, Skeleton, Space, Typography } from 'antd'
 import { useState } from 'react'
@@ -17,7 +18,15 @@ import { E164_PATTERN } from '../users/users.validation'
 import { describeAcademyFailure, failureMessage } from './academy.errors'
 import { planAcademyPatch, settingsFormValuesOf } from './academy.patch'
 import type { GeneralSettingsFormValues } from './academy.patch'
-import { orderedWeekdays, WEEKDAY_KEYS, WEEKDAYS } from './academy.settings'
+import {
+  DEFAULT_CERTIFICATE_SERIAL_PREFIX,
+  exampleSerial,
+  isSerialPrefixInput,
+  orderedWeekdays,
+  SERIAL_PREFIX_MAX_LENGTH,
+  WEEKDAY_KEYS,
+  WEEKDAYS,
+} from './academy.settings'
 import { isCurrencyCode, isHttpUrl, isIanaTimeZone, matchTimeZones, normaliseCurrency, TIME_ZONE_MAX_LENGTH } from './academy.validation'
 import { MANAGE_ACADEMY_SETTINGS_PERMISSION } from './academy.policy'
 import { useAcademy } from './useAcademy'
@@ -74,6 +83,8 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
   const [form] = Form.useForm<GeneralSettingsFormValues>()
   const [saving, setSaving] = useState(false)
   const [timeZoneQuery, setTimeZoneQuery] = useState('')
+  // The year of the example serial under the prefix field, read once per form session.
+  const [year] = useState(() => new Date().getFullYear())
 
   const submit = async (values: GeneralSettingsFormValues) => {
     const body = planAcademyPatch(academy, values)
@@ -99,6 +110,8 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
   const dayLabel = (day: number) => t(`settings.weekdays.${WEEKDAY_KEYS[day]}`)
   const firstDayOptions = WEEKDAYS.map((day) => ({ value: day, label: dayLabel(day) }))
   const workingDayOptions = orderedWeekdays(weekStartsOn).map((day) => ({ value: day, label: dayLabel(day) }))
+  // The hint shows the first serial of this year with the prefix typed so far (the default one until it is valid).
+  const serialPrefix = Form.useWatch('serialPrefix', form)
 
   return (
     <Form<GeneralSettingsFormValues> form={form} layout="vertical" initialValues={settingsFormValuesOf(academy)} onFinish={submit} disabled={!canManage || saving}>
@@ -169,6 +182,22 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
       </Form.Item>
       <Form.Item name="workingDays" label={t('settings.scheduling.workingDays')} extra={t('settings.scheduling.workingDaysHint')}>
         <Checkbox.Group options={workingDayOptions} />
+      </Form.Item>
+
+      <Typography.Title level={5} style={{ marginTop: 8 }}>
+        {t('certificates.settings.title')}
+      </Typography.Title>
+      <Typography.Paragraph type="secondary">{t('certificates.settings.intro')}</Typography.Paragraph>
+      <Form.Item
+        name="serialPrefix"
+        label={t('certificates.settings.serialPrefix')}
+        extra={t('certificates.settings.hint', { example: exampleSerial(serialPrefix, year) })}
+        normalize={(value: string | undefined) => (value ?? '').toUpperCase()}
+        rules={[
+          { validator: (_, value: string | undefined) => (isSerialPrefixInput(value) ? Promise.resolve() : Promise.reject(new Error(t('certificates.settings.invalid')))) },
+        ]}
+      >
+        <Input dir="ltr" maxLength={SERIAL_PREFIX_MAX_LENGTH} placeholder={DEFAULT_CERTIFICATE_SERIAL_PREFIX} style={{ maxWidth: 200 }} />
       </Form.Item>
 
       <Flex justify="space-between" align="center" wrap gap={12}>

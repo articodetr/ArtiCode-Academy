@@ -46,15 +46,6 @@ export interface MockLesson {
   status: 'scheduled' | 'completed' | 'cancelled'
 }
 
-export interface MockCertificate {
-  id: string
-  serial: string
-  student: LocalizedText
-  course: LocalizedText
-  issuedAt: string
-  grade: LocalizedText
-}
-
 export interface MockPayment {
   id: string
   invoice: string
@@ -143,12 +134,6 @@ export const mockLessons: MockLesson[] = [
   { id: 'l-004', title: { ar: 'الحركة والمشاهد في Scratch', en: 'Motion and scenes in Scratch' }, course: T.courseScratch, type: 'live', date: '2026-10-30 10:00', durationMin: 90, status: 'scheduled' },
   { id: 'l-005', title: { ar: 'إدارة الحالة', en: 'State management' }, course: T.courseReact, type: 'recorded', date: '2026-10-22 18:30', durationMin: 110, status: 'completed' },
   { id: 'l-006', title: { ar: 'الدوال', en: 'Functions' }, course: T.coursePython, type: 'live', date: '2026-10-21 16:00', durationMin: 120, status: 'cancelled' },
-]
-
-export const mockCertificates: MockCertificate[] = [
-  { id: 'cert-001', serial: 'ACA-2026-0001', student: T.student1, course: T.courseJs, issuedAt: '2026-06-30', grade: { ar: 'ممتاز', en: 'Excellent' } },
-  { id: 'cert-002', serial: 'ACA-2026-0002', student: T.student3, course: T.courseJs, issuedAt: '2026-06-30', grade: { ar: 'جيد جداً', en: 'Very good' } },
-  { id: 'cert-003', serial: 'ACA-2026-0003', student: T.student2, course: T.courseScratch, issuedAt: '2026-08-15', grade: { ar: 'ممتاز', en: 'Excellent' } },
 ]
 
 export const mockPayments: MockPayment[] = [

@@ -16,6 +16,7 @@ describe('settingsFormValuesOf', () => {
       contactPhone: '',
       weekStartsOn: undefined,
       workingDays: [],
+      serialPrefix: '',
     })
   })
 })
@@ -62,7 +63,7 @@ describe('planAcademyPatch', () => {
   })
 
   it('adds the changed weekly-schedule keys under settings.scheduling, in the same body as the row fields (J-F02)', () => {
-    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1, 2, 3, 4] } } })
+    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1, 2, 3, 4] }, certificates: { serialPrefix: null } } })
     const values = settingsFormValuesOf(academy)
     expect(planAcademyPatch(academy, { ...values, workingDays: [4, 3, 2, 1, 0] })).toBeNull()
     expect(planAcademyPatch(academy, { ...values, currency: 'TRY', weekStartsOn: 6, workingDays: [] })).toEqual({
@@ -75,5 +76,25 @@ describe('planAcademyPatch', () => {
     const academy = makeAcademy()
     const values = { ...settingsFormValuesOf(academy), nameAr: '  ', timezone: '', currency: '' }
     expect(planAcademyPatch(academy, values)).toBeNull()
+  })
+
+  it('adds the certificate prefix under settings.certificates in the same body, upper-cased; blank clears it to null (J-F51)', () => {
+    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: null }, certificates: { serialPrefix: 'ACA' } } })
+    const values = settingsFormValuesOf(academy)
+    expect(values.serialPrefix).toBe('ACA')
+    expect(planAcademyPatch(academy, { ...values, serialPrefix: ' aca ' })).toBeNull()
+    expect(planAcademyPatch(academy, { ...values, serialPrefix: 'acad26', weekStartsOn: 6 })).toEqual({
+      settings: { scheduling: { weekStartsOn: 6 }, certificates: { serialPrefix: 'ACAD26' } },
+    })
+    expect(planAcademyPatch(academy, { ...values, serialPrefix: '' })).toEqual({ settings: { certificates: { serialPrefix: null } } })
+    // A form without the field changes nothing.
+    expect(planAcademyPatch(academy, { ...values, serialPrefix: undefined })).toBeNull()
+  })
+
+  it('reads a server before MOD-10-T02 (no settings.certificates) as an unset prefix', () => {
+    const academy = { ...makeAcademy(), settings: { scheduling: { weekStartsOn: null, workingDays: null } } } as unknown as ReturnType<typeof makeAcademy>
+    expect(settingsFormValuesOf(academy).serialPrefix).toBe('')
+    expect(planAcademyPatch(academy, settingsFormValuesOf(academy))).toBeNull()
+    expect(planAcademyPatch(academy, { ...settingsFormValuesOf(academy), serialPrefix: 'ACA' })).toEqual({ settings: { certificates: { serialPrefix: 'ACA' } } })
   })
 })

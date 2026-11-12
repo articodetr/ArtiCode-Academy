@@ -139,6 +139,10 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'exams.status.changed',
   'exams.deleted',
   'exams.results.recorded',
+  // MOD-10-T02/T03 (CH-0176, CH-0177) — first offered with J-F51 (CH-0165)
+  'certificates.',
+  'certificates.issued',
+  'certificates.revoked',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */
