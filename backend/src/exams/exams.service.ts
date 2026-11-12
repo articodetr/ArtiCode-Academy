@@ -10,6 +10,9 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { ClassStatus } from '../generated/prisma/client.js';
 import { gradesError } from '../grades/grades.errors.js';
 import { toInstant, toIso } from '../lessons/lessons.time.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
+import type { NotificationBatch } from '../notifications/notifications.service.js';
+import { formatNumber } from '../notifications/notifications.templates.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
@@ -20,6 +23,7 @@ import type { ChangeExamStatusDto, CreateExamDto, ExamDto, ExamListDto, ExamResu
 import { EXAM_SORT_FIELD, afterExamCursor, examCursorKey, examOrderBy } from './exams.keyset.js';
 import { isClassFrozenForExams, isClassOpenForNewExam, seesEveryClass, visibleExamsWhere } from './exams.policy.js';
 import { actionNeedsLiveClass, allowedExamActions, isExamDeletable, lockedExamFields, nextExamStatus } from './exams.status.js';
+import type { ExamStatusAction } from './exams.status.js';
 
 export const EXAMS_AUDIT_ACTIONS = {
   created: 'exams.created',
@@ -139,12 +143,16 @@ function toUpdateInput(data: ExamPatch): Prisma.ExamUncheckedUpdateInput {
  * deletion locks it `FOR UPDATE` (so a results batch of T04, which locks the
  * row too, serialises with all of them). Every write is one transaction with
  * exactly one audit event; an identical PATCH writes and records nothing.
+ * Since MOD-12-T03 (roadmap §4j.5) two status actions also notify the
+ * learners inside that transaction: `schedule` (`exam.scheduled`) and
+ * `publish` (`exam.results_published`) — nothing else does.
  */
 @Injectable()
 export class ExamsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(query: ListExamsQueryDto, caller: AuthPrincipal): Promise<ExamListDto> {
@@ -244,9 +252,14 @@ export class ExamsService {
     });
   }
 
-  /** schedule / unschedule / publish / unpublish (exams.status.ts). */
+  /**
+   * schedule / unschedule / publish / unpublish (exams.status.ts). Since
+   * MOD-12-T03 an effective `schedule` or `publish` also writes its
+   * notifications in this transaction (`notifyStatusChange()`); their e-mail
+   * copies are handed to the dispatcher after the commit.
+   */
   async changeStatus(id: string, input: ChangeExamStatusDto, caller: AuthPrincipal, ctx: RequestContext): Promise<ExamDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const row = await this.lockExam(tx, id, caller, 'NO KEY UPDATE');
       if (actionNeedsLiveClass(input.action) && isClassFrozenForExams(row.class.status)) throw gradesError.classClosed(row.classId, row.class.status);
       const to = nextExamStatus(input.action, row.status);
@@ -270,8 +283,13 @@ export class ExamsService {
         },
         tx,
       );
-      return this.read(tx, id);
+      const dto = await this.read(tx, id);
+      // Only reached once the status has moved: a refusal threw above and wrote nothing.
+      const batch = await this.notifyStatusChange(tx, input.action, row, dto);
+      return { dto, batch };
     });
+    this.notifications.dispatch(batch);
+    return dto;
   }
 
   /** Deletes a draft or scheduled exam without any result (whatever the class status); anything else is 409 exam_not_deletable. */
@@ -289,6 +307,55 @@ export class ExamsService {
   }
 
   // ---------------------------------------------------------------------------
+
+  /**
+   * MOD-12-T03 — what a status action that really moved the exam tells the
+   * learners (roadmap §4j.5; D-R80/D-R81), written inside the action's own
+   * transaction:
+   *   - `schedule` → `exam.scheduled`, a class event: the students with an
+   *     active enrollment and their guardians, the date in the exam's display
+   *     zone (the `timeZone` of the DTO — D-R41);
+   *   - `publish` → `exam.results_published`, a student event: one item per
+   *     recorded result with that student's own status and score — never the
+   *     feedback or the recorder. No result row, no notification: an exam
+   *     published without any result tells nobody;
+   *   - `unschedule` / `unpublish` → nobody.
+   * `row` is the exam as it was locked (an action changes neither its date nor
+   * its maximum score); `dto` is what the route answers — the localized texts
+   * and the display zone are taken from it, so both always say the same.
+   */
+  private async notifyStatusChange(tx: Tx, action: ExamStatusAction, row: ExamRow, dto: ExamDto): Promise<NotificationBatch> {
+    if (action === 'schedule') {
+      return this.notifications.notifyClass(tx, 'exam.scheduled', row.classId, {
+        examId: row.id,
+        classId: row.classId,
+        title: dto.title,
+        className: dto.class.name,
+        scheduledAt: row.scheduledAt,
+        timeZone: dto.timeZone,
+      });
+    }
+    if (action === 'publish') {
+      const results = await tx.examResult.findMany({ where: { examId: row.id }, orderBy: { studentUserId: 'asc' }, select: { studentUserId: true, status: true, score: true } });
+      const maxScore = formatNumber(row.maxScore);
+      return this.notifications.notifyStudents(
+        tx,
+        'exam.results_published',
+        results.map((result) => ({
+          studentId: result.studentUserId,
+          params: {
+            examId: row.id,
+            classId: row.classId,
+            title: dto.title,
+            result: result.status,
+            score: result.status === 'scored' && result.score !== null ? formatNumber(result.score) : null,
+            maxScore,
+          },
+        })),
+      );
+    }
+    return EMPTY_BATCH;
+  }
 
   /** Locks the class row (the MOD-05 lock) and applies the visibility rule; an unknown or invisible class is 404. */
   private async lockClass(tx: Tx, classId: string, caller: AuthPrincipal): Promise<{ code: string; status: ClassStatus }> {

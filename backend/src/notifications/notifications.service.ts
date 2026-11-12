@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { LocaleCode } from '../authorization/localized-text.js';
 import type { NotificationCategory, Prisma } from '../generated/prisma/client.js';
 import { GUARDIAN_ROLE_KEY } from '../guardians/guardians.policy.js';
+import { MY_LESSONS_ENROLLMENT_STATUSES } from '../lessons/my-lessons.policy.js';
 import { MailService } from '../mail/mail.service.js';
 import { templateLocale } from '../mail/mail.templates.js';
 import { NotificationDispatcher } from './notifications.dispatcher.js';
@@ -26,6 +27,14 @@ export interface NotificationBatch {
 }
 
 export const EMPTY_BATCH: NotificationBatch = Object.freeze({ created: 0, queuedIds: [] }) as NotificationBatch;
+
+/** The class a student event is about, when its params name one. */
+function classIdOf(params: object): string | null {
+  const classId = (params as { classId?: unknown }).classId;
+  return typeof classId === 'string' ? classId : null;
+}
+
+const enrollmentKey = (classId: string, studentId: string) => `${classId}|${studentId}`;
 
 /** Rows per INSERT; a class is far below it, an announcement to 5,000 recipients (T05) takes five. */
 export const NOTIFICATION_INSERT_CHUNK = 1000;
@@ -73,6 +82,14 @@ export class NotificationsService {
    * A student event: one notification per (recipient × student) — the
    * student, while their account is active, and each of their guardians. An
    * unknown or soft-deleted student yields nothing.
+   *
+   * An event about a class (its params carry a `classId`: an absence, a
+   * graded or returned attempt, an exam result, a final grade) follows the
+   * «my …» pages (D-R83): it reaches the student and their guardians only
+   * while the student's enrollment in that class is `active` or `completed`
+   * — exactly when those pages show them the class. A withdrawn student is
+   * told nothing about work they can no longer see. Events without a class
+   * (invoices, payments, certificates) have no such condition.
    */
   async notifyStudents<K extends StudentEventKey>(
     tx: NotificationTx,
@@ -82,10 +99,13 @@ export class NotificationsService {
     if (items.length === 0) return EMPTY_BATCH;
     const category = NOTIFICATION_EVENTS[key].category;
     const audience = await this.audience(tx, items.map((item) => item.studentId), category);
+    const enrolled = await this.ownedClasses(tx, items);
     const rows: Prisma.NotificationCreateManyInput[] = [];
     for (const item of items) {
       const student = audience.students.get(item.studentId);
       if (!student) continue;
+      const classId = classIdOf(item.params);
+      if (classId !== null && !enrolled.has(enrollmentKey(classId, student.id))) continue;
       const guardians = audience.links
         .filter((link) => link.studentUserId === student.id)
         .map((link) => audience.guardians.get(link.guardianUserId))
@@ -116,6 +136,28 @@ export class NotificationsService {
   }
 
   // --------------------------------------------------------------- internals
+
+  /**
+   * The (class, student) pairs of these items in which the student holds an
+   * enrollment the «my …» pages show — one flat read, and none at all when no
+   * item is about a class.
+   */
+  private async ownedClasses(tx: NotificationTx, items: ReadonlyArray<{ studentId: string; params: object }>): Promise<Set<string>> {
+    const classIds = new Set<string>();
+    const studentIds = new Set<string>();
+    for (const item of items) {
+      const classId = classIdOf(item.params);
+      if (classId === null) continue;
+      classIds.add(classId);
+      studentIds.add(item.studentId);
+    }
+    if (classIds.size === 0) return new Set();
+    const enrollments = await tx.enrollment.findMany({
+      where: { classId: { in: [...classIds] }, studentUserId: { in: [...studentIds] }, status: { in: [...MY_LESSONS_ENROLLMENT_STATUSES] } },
+      select: { classId: true, studentUserId: true },
+    });
+    return new Set(enrollments.map((enrollment) => enrollmentKey(enrollment.classId, enrollment.studentUserId)));
+  }
 
   /** The students, their eligible guardians, the muted recipients and the academy's language — four flat reads. */
   private async audience(tx: NotificationTx, studentIds: readonly string[], category: NotificationCategory): Promise<Audience> {

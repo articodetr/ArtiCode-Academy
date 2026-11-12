@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 import { AssignmentsController, ClassAssignmentsController } from './assignments.controller.js';
 import { AssignmentsService } from './assignments.service.js';
 import { MyAssignmentsController } from './my-assignments.controller.js';
@@ -15,9 +16,12 @@ import { SubmissionsService } from './submissions.service.js';
  * the global guards (AuthModule), PrismaModule and the global AuditModule;
  * reuses the class visibility rule of classes/classes.policy.ts (D-R16), the
  * instant helpers of lessons/lessons.time.ts and the display-zone rule of
- * schedule/timetable.policy.ts (D-R41).
+ * schedule/timetable.policy.ts (D-R41). Since MOD-12-T03 publishing an
+ * assignment and reviewing a submission notify through NotificationsModule
+ * (`assignment.published`, `submission.graded`, `submission.returned`).
  */
 @Module({
+  imports: [NotificationsModule],
   controllers: [ClassAssignmentsController, AssignmentsController, AssignmentSubmissionsController, SubmissionsController, MyAssignmentsController],
   providers: [AssignmentsService, SubmissionsService, MyAssignmentsService],
 })

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 import { AttendanceController } from './attendance.controller.js';
 import { AttendanceService } from './attendance.service.js';
 import { ClassLessonsController, LessonsController } from './lessons.controller.js';
@@ -14,8 +15,12 @@ import { MyLessonsService } from './my-lessons.service.js';
  * classes/classes.policy.ts (D-R16), the room/teacher DTOs of schedule/ and
  * the write-conflict retry of schedule/class-schedule.service.ts (KI-071).
  * `LessonsService.createLessons()` is exported for MOD-07-T05 (D-R31).
+ * Imports NotificationsModule (MOD-12-T03): cancelling a lesson, moving a
+ * scheduled one in time or room and recording an absence notify the students
+ * concerned and their guardians from inside the writing transaction.
  */
 @Module({
+  imports: [NotificationsModule],
   controllers: [ClassLessonsController, LessonsController, AttendanceController, MyLessonsController],
   providers: [LessonsService, AttendanceService, MyLessonsService],
   exports: [LessonsService],

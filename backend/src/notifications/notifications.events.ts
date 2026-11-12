@@ -45,8 +45,13 @@ interface LessonEventParams {
  */
 export interface NotificationEventParams {
   'lesson.cancelled': LessonEventParams;
-  /** `roomName` is the room after the change; null when the lesson has no room. */
-  'lesson.rescheduled': LessonEventParams & { roomName: string | null };
+  /**
+   * The lesson as it stands after the change: its new start, its end
+   * (`endsAt` — a lesson that only ends earlier or later is news too) and its
+   * room, worded by its name in the reader's language, else by its code; null
+   * when the lesson has no room.
+   */
+  'lesson.rescheduled': LessonEventParams & { endsAt: Date; room: { code: string; name: LocalizedText | null } | null };
   'attendance.absent': LessonEventParams;
   'assignment.published': { assignmentId: string; classId: string; title: LocalizedText; className: LocalizedText; dueAt: Date | null; timeZone: string };
   'submission.graded': { submissionId: string; assignmentId: string; classId: string; title: LocalizedText; score: string; maxScore: string };

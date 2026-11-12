@@ -7,6 +7,9 @@ import { canManageClasses } from '../classes/classes.policy.js';
 import { ROSTER_STUDENT_SELECT, rosterProjectionOf, toRosterStudentDto } from '../enrollments/roster-student.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { ClassStatus } from '../generated/prisma/client.js';
+import type { NotificationEventParams } from '../notifications/notifications.events.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { formatNumber } from '../notifications/notifications.templates.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { UsersProjection } from '../users/users.service.js';
 import { bandOf, percentText } from './grade-schemes.changes.js';
@@ -100,6 +103,17 @@ function breakdownOf(components: readonly ComponentRow[], outcomes: readonly Cel
   return rows;
 }
 
+/** One `grades.finalized` notification: the student and what the event is worded from. */
+interface FinalizedNotice {
+  studentId: string;
+  params: NotificationEventParams['grades.finalized'];
+}
+
+/** MOD-12-T03: what a student is told about a final grade — the percentage and the band exactly as they were just written. */
+function finalizedNotice(klass: Loaded['klass'], studentId: string, grade: { percent: string; bandLabel: LocalizedText; bandLetter: string | null }): FinalizedNotice {
+  return { studentId, params: { classId: klass.id, className: klass.name, percent: formatNumber(grade.percent), bandLabel: grade.bandLabel, bandLetter: grade.bandLetter } };
+}
+
 /**
  * MOD-09-T05 — the gradebook and the final grades of a class (roadmap §4h.4
  * API-126..API-128; owner decisions D-R43..D-R45). The gradebook is computed
@@ -122,13 +136,18 @@ function breakdownOf(components: readonly ComponentRow[], outcomes: readonly Cel
  * class that has an issued certificate (`409 grades_certified`) before any
  * write — the certificates are revoked first. `finalGradeStates()` hands MOD-10
  * each enrollment's final grade and whether it is stale, inside the issuing
- * transaction (after the same class-row lock).
+ * transaction (after the same class-row lock). Since MOD-12-T03 a finalization
+ * also writes, in the same transaction, one `grades.finalized` notification per
+ * final grade it created or changed — to the student and their guardians
+ * (D-R80/D-R81); the unchanged and the skipped students are told nothing, and
+ * neither is anybody by a withdrawal. The e-mail copies go out after the commit.
  */
 @Injectable()
 export class GradebookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** API-126 */
@@ -140,7 +159,7 @@ export class GradebookService {
   /** API-127 */
   async finalize(classId: string, input: FinalizeGradesDto, caller: AuthPrincipal, ctx: RequestContext): Promise<GradebookDto> {
     const view = rosterProjectionOf(caller);
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const klass = await this.lockClass(tx, classId, caller);
       await this.assertNotCertified(tx, classId);
       if (!GRADABLE_CLASS_STATUSES.includes(klass.status)) throw gradesError.classNotGradable(classId, klass.status);
@@ -157,6 +176,8 @@ export class GradebookService {
       let created = 0;
       let updated = 0;
       let skipped = 0;
+      // MOD-12-T03: the final grades this run writes, each worth one notification.
+      const written: FinalizedNotice[] = [];
       for (const student of loaded.students) {
         const percent = weightedPercent(loaded.components, student.outcomes, 'final');
         if (percent === null) {
@@ -179,6 +200,7 @@ export class GradebookService {
             select: { enrollmentId: true },
           });
           created += 1;
+          written.push(finalizedNotice(loaded.klass, student.student.id, next));
           continue;
         }
         const same =
@@ -195,6 +217,14 @@ export class GradebookService {
           select: { enrollmentId: true },
         });
         updated += 1;
+        // Only what the student sees on «my grades» is news: another percentage or band. A changed breakdown or scheme
+        // alone rewrites the row quietly.
+        const outcomeChanged =
+          percentText(current.percent) !== next.percent ||
+          !sameLocalizedText(current.bandLabel, next.bandLabel) ||
+          current.bandLetter !== next.bandLetter ||
+          current.isPass !== next.isPass;
+        if (outcomeChanged) written.push(finalizedNotice(loaded.klass, student.student.id, next));
       }
       if (created + updated > 0) {
         await this.audit.record(
@@ -209,8 +239,12 @@ export class GradebookService {
           tx,
         );
       }
-      return this.build(tx, await this.load(tx, classId), view);
+      // After the writes, still under the class-row lock; an identical run wrote nothing, so it tells nobody (an empty list is no query at all).
+      const batch = await this.notifications.notifyStudents(tx, 'grades.finalized', written);
+      return { dto: await this.build(tx, await this.load(tx, classId), view), batch };
     });
+    this.notifications.dispatch(batch); // after the commit — the e-mail copies never delay or fail the request
+    return dto;
   }
 
   /** API-128 */

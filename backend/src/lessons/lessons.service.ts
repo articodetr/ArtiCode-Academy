@@ -7,12 +7,15 @@ import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { AttendanceStatus, ClassStatus, DeliveryMode } from '../generated/prisma/client.js';
+import type { NotificationEventParams } from '../notifications/notifications.events.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
+import type { NotificationBatch } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { isWriteConflict } from '../schedule/class-schedule.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { isEmptyLessonPatch, mergedRange, planLessonUpdate } from './lessons.changes.js';
-import type { LessonPatch, LessonValues } from './lessons.changes.js';
+import type { LessonPatch, LessonPatchField, LessonValues } from './lessons.changes.js';
 import { LESSONS_PAGE_DEFAULT, LESSON_SORT_FIELD } from './lessons.dto.js';
 import type { AttendanceCountsDto, ChangeLessonStatusDto, CreateLessonDto, LessonDto, LessonListDto, ListLessonsQueryDto, UpdateLessonDto } from './lessons.dto.js';
 import { lessonsError } from './lessons.errors.js';
@@ -37,6 +40,14 @@ const WRITE_CONFLICT_ATTEMPTS = 2;
 
 /** The academy's time zone for `LessonDto.timeZone` (D-R41), or UTC while the academy row is missing (the readiness check reports that state). */
 const FALLBACK_TIME_ZONE = 'UTC';
+
+/**
+ * The fields whose change moves a lesson for those who attend it — its time
+ * range or its room (MOD-12 `lesson.rescheduled`). Only a scheduled lesson
+ * accepts them (`lockedFields()`); a new title, description, teacher, link,
+ * delivery mode or syllabus item notifies nobody.
+ */
+const RESCHEDULING_FIELDS: readonly LessonPatchField[] = ['startsAt', 'endsAt', 'roomId'];
 
 const LESSON_SELECT = {
   id: true,
@@ -156,6 +167,29 @@ function toLessonDto(row: LessonRow, counts: AttendanceCounts, academyTimeZone: 
   };
 }
 
+/** What a write carries out of its transaction: the response, and the notifications written with it (MOD-12 — their e-mails go out after the commit). */
+interface LessonWrite {
+  lesson: LessonDto;
+  batch: NotificationBatch;
+}
+
+/**
+ * What a lesson notification says about its lesson (MOD-12-T03), taken from
+ * the DTO the write itself returns — the lesson as it is stored now, in the
+ * display zone of `LessonDto.timeZone` (D-R41). Only these six entries leave
+ * the DTO: never the cancellation reason, the teacher or who made the change.
+ */
+function lessonEventParams(lesson: LessonDto): NotificationEventParams['lesson.cancelled'] {
+  return {
+    lessonId: lesson.id,
+    classId: lesson.class.id,
+    lessonTitle: lesson.title,
+    className: lesson.class.name,
+    startsAt: toInstant(lesson.startsAt),
+    timeZone: lesson.timeZone,
+  };
+}
+
 function valuesOf(row: LessonRow): LessonValues {
   return {
     title: readLocalizedText(row.title) ?? { ar: '' },
@@ -230,12 +264,21 @@ interface Booking {
  * actions lock the lesson row, deletion locks it `FOR UPDATE`. Every write is
  * one transaction with exactly one audit event, retried once on a write
  * conflict or deadlock (KI-071).
+ *
+ * MOD-12-T03 — two of these writes notify the class (its active students and
+ * their guardians) from inside their transaction: `cancel`
+ * (`lesson.cancelled`) and a PATCH that changes the time range or the room of
+ * a scheduled lesson (`lesson.rescheduled`, describing the lesson after the
+ * change). Creating, generating, completing, restoring and deleting notify
+ * nobody; neither does a refusal or a PATCH without a difference. The e-mail
+ * copies are handed over once, after the transaction that finally committed.
  */
 @Injectable()
 export class LessonsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(query: ListLessonsQueryDto, caller: AuthPrincipal): Promise<LessonListDto> {
@@ -412,12 +455,13 @@ export class LessonsService {
 
     let booking: Booking | null = null;
     for (let attempt = 1; ; attempt++) {
+      let written: LessonWrite;
       try {
-        return await this.prisma.db.$transaction(async (tx) => {
+        written = await this.prisma.db.$transaction(async (tx) => {
           const row = await this.lockLesson(tx, id, caller, 'NO KEY UPDATE');
           const current = valuesOf(row);
           const plan = planLessonUpdate(current, patch);
-          if (plan.fields.length === 0) return toLessonDto(row, await this.attendanceCounts(tx, [id]), await this.academyTimeZone(tx));
+          if (plan.fields.length === 0) return { lesson: toLessonDto(row, await this.attendanceCounts(tx, [id]), await this.academyTimeZone(tx)), batch: EMPTY_BATCH };
           if (!isClassOpenForLessons(row.class.status)) throw lessonsError.classClosed(row.classId, row.class.status);
           const locked = lockedFields(row.status, plan.fields);
           if (locked.length > 0) throw lessonsError.lessonLocked(row.status, locked);
@@ -445,7 +489,16 @@ export class LessonsService {
             },
             tx,
           );
-          return this.read(tx, id);
+          const lesson = await this.read(tx, id);
+          // MOD-12: a new time range or room of a scheduled lesson concerns the class — told how the lesson stands now; any other change notifies nobody.
+          const batch = row.status === 'scheduled' && plan.fields.some((field) => RESCHEDULING_FIELDS.includes(field))
+            ? await this.notifications.notifyClass(tx, 'lesson.rescheduled', row.classId, {
+                ...lessonEventParams(lesson),
+                endsAt: toInstant(lesson.endsAt),
+                room: lesson.room ? { code: lesson.room.code, name: lesson.room.name } : null,
+              })
+            : EMPTY_BATCH;
+          return { lesson, batch };
         });
       } catch (error) {
         const resource = lessonExclusionOf(error);
@@ -453,6 +506,9 @@ export class LessonsService {
         if (isWriteConflict(error) && attempt < WRITE_CONFLICT_ATTEMPTS) continue;
         throw error;
       }
+      // After the commit, and once: an attempt that is retried rolled its notifications back with it.
+      this.notifications.dispatch(written.batch);
+      return written.lesson;
     }
   }
 
@@ -460,8 +516,9 @@ export class LessonsService {
   async changeStatus(id: string, input: ChangeLessonStatusDto, caller: AuthPrincipal, ctx: RequestContext): Promise<LessonDto> {
     let booking: Booking | null = null;
     for (let attempt = 1; ; attempt++) {
+      let written: LessonWrite;
       try {
-        return await this.prisma.db.$transaction(async (tx) => {
+        written = await this.prisma.db.$transaction(async (tx) => {
           const row = await this.lockLesson(tx, id, caller, 'NO KEY UPDATE');
           if (!isClassOpenForLessons(row.class.status)) throw lessonsError.classClosed(row.classId, row.class.status);
           const to = nextLessonStatus(input.action, row.status);
@@ -490,7 +547,10 @@ export class LessonsService {
             },
             tx,
           );
-          return this.read(tx, id);
+          const lesson = await this.read(tx, id);
+          // MOD-12: the class learns that the lesson is off — never why. Completing or restoring notifies nobody.
+          const batch = to === 'cancelled' ? await this.notifications.notifyClass(tx, 'lesson.cancelled', row.classId, lessonEventParams(lesson)) : EMPTY_BATCH;
+          return { lesson, batch };
         });
       } catch (error) {
         const resource = lessonExclusionOf(error);
@@ -498,6 +558,9 @@ export class LessonsService {
         if (isWriteConflict(error) && attempt < WRITE_CONFLICT_ATTEMPTS) continue;
         throw error;
       }
+      // After the commit, and once: an attempt that is retried rolled its notifications back with it.
+      this.notifications.dispatch(written.batch);
+      return written.lesson;
     }
   }
 

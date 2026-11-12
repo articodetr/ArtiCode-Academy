@@ -49,6 +49,16 @@ export function formatWhen(date: Date, timeZone: string, locale: TemplateLocale)
   }
 }
 
+/** The clock time alone (`12:00`) in the zone of the event — the end of a time range whose start `formatWhen()` already dated. */
+export function formatTime(date: Date, timeZone: string, locale: TemplateLocale): string {
+  const options: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+  try {
+    return new Intl.DateTimeFormat(intlTag(locale), { ...options, timeZone }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat(intlTag(locale), { ...options, timeZone: 'UTC' }).format(date);
+  }
+}
+
 /** A calendar day `YYYY-MM-DD` (a due date) worded for the reader; anything else is returned as it is. */
 export function formatDay(day: string, locale: TemplateLocale): string {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(day) ? new Date(`${day}T00:00:00Z`) : null;
@@ -67,6 +77,7 @@ interface Wording {
   /** A stored `{ ar, en?, tr? }` text in the reader's language (D1 fallback order). */
   text(value: LocalizedText): string;
   when(date: Date, timeZone: string): string;
+  time(date: Date, timeZone: string): string;
   day(day: string): string;
 }
 
@@ -85,9 +96,11 @@ const RENDERERS: { [K in NotificationEventKey]: Renderer<K> } = {
     const lesson = w.text(p.lessonTitle);
     const klass = w.text(p.className);
     const when = w.when(p.startsAt, p.timeZone);
+    const until = w.time(p.endsAt, p.timeZone);
+    const room = p.room ? (p.room.name ? w.text(p.room.name) : p.room.code) : null;
     return w.en
-      ? { title: `Lesson changed: ${lesson}`, body: `The lesson “${lesson}” of class “${klass}” is now on ${when}${p.roomName ? `, in ${p.roomName}` : ''}.` }
-      : { title: `تغيّر موعد أو قاعة درس: ${lesson}`, body: `درس «${lesson}» في فصل «${klass}» صار موعده ${when}${p.roomName ? `، في ${p.roomName}` : ''}.` };
+      ? { title: `Lesson changed: ${lesson}`, body: `The lesson “${lesson}” of class “${klass}” is now on ${when}, until ${until}${room ? `, in ${room}` : ''}.` }
+      : { title: `تغيّر موعد أو قاعة درس: ${lesson}`, body: `درس «${lesson}» في فصل «${klass}» صار موعده ${when} حتى ${until}${room ? `، في ${room}` : ''}.` };
   },
   'attendance.absent': (p, w) => {
     const lesson = w.text(p.lessonTitle);
@@ -188,6 +201,7 @@ export function renderNotification<K extends NotificationEventKey>(
     en: locale === 'en',
     text: (value) => pickLocalized(value, locale, defaultLocale),
     when: (date, timeZone) => formatWhen(date, timeZone, locale),
+    time: (date, timeZone) => formatTime(date, timeZone, locale),
     day: (day) => formatDay(day, locale),
   };
   return RENDERERS[key](params, wording);

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_EVENTS, NOTIFICATION_EVENT_KEYS, notificationData } from './notifications.events.js';
 import type { NotificationEventKey, NotificationEventParams } from './notifications.events.js';
-import { childrenSuffix, formatDay, formatNumber, formatWhen, renderNotification } from './notifications.templates.js';
+import { childrenSuffix, formatDay, formatNumber, formatTime, formatWhen, renderNotification } from './notifications.templates.js';
 
 const LESSON_ID = '019a0000-0000-7000-8000-00000000000a';
 const CLASS_ID = '019a0000-0000-7000-8000-00000000000b';
@@ -24,7 +24,8 @@ const lesson = { lessonId: LESSON_ID, classId: CLASS_ID, lessonTitle: { ar: 'ا�
 
 const SAMPLES: { [K in NotificationEventKey]: NotificationEventParams[K] } = {
   'lesson.cancelled': lesson,
-  'lesson.rescheduled': { ...lesson, roomName: 'A-101' },
+  // The lesson now ends at 12:00 in Riyadh.
+  'lesson.rescheduled': { ...lesson, endsAt: new Date('2026-11-15T09:00:00Z'), room: { code: 'A-101', name: null } },
   'attendance.absent': lesson,
   'assignment.published': { assignmentId: OTHER_ID, classId: CLASS_ID, title: { ar: 'مقال', en: 'Essay' }, className: lesson.className, dueAt: AT, timeZone: ZONE },
   'submission.graded': { submissionId: LESSON_ID, assignmentId: OTHER_ID, classId: CLASS_ID, title: { ar: 'مقال', en: 'Essay' }, score: SCORE, maxScore: MAX_SCORE },
@@ -149,9 +150,16 @@ describe('notification wording (D-R83, TEST-175)', () => {
     const noDue = { ...SAMPLES['assignment.published'], dueAt: null };
     expect(renderNotification('assignment.published', noDue, 'en').body).toBe('The assignment “Essay” was published in class “Morning class”. It has no due date.');
     expect(renderNotification('assignment.published', noDue, 'ar').body).toBe('نُشر واجب «مقال» في فصل «فصل الصباح». بلا موعد تسليم محدد.');
-    expect(render('lesson.rescheduled', 'en').body).toContain(', in A-101.');
-    expect(render('lesson.rescheduled', 'ar').body).toContain('، في A-101.');
-    expect(renderNotification('lesson.rescheduled', { ...SAMPLES['lesson.rescheduled'], roomName: null }, 'en').body).not.toContain(', in ');
+    // The end of the lesson is worded too: a lesson that only ends earlier or later is news.
+    expect(render('lesson.rescheduled', 'en').body).toContain(', until 12:00, in A-101.');
+    expect(render('lesson.rescheduled', 'ar').body).toContain(' حتى 12:00، في A-101.');
+    expect(formatTime(new Date('2026-11-15T09:00:00Z'), 'Europe/Berlin', 'en')).toBe('10:00');
+    expect(formatTime(new Date('2026-11-15T09:00:00Z'), 'Not/AZone', 'ar')).toBe('09:00');
+    // A named room is worded in the reader's language; a room without a name by its code; no room, no mention.
+    const named = { ...SAMPLES['lesson.rescheduled'], room: { code: 'A-101', name: { ar: 'قاعة الحاسوب', en: 'Computer lab' } } };
+    expect(renderNotification('lesson.rescheduled', named, 'en').body).toContain(', in Computer lab.');
+    expect(renderNotification('lesson.rescheduled', named, 'ar').body).toContain('، في قاعة الحاسوب.');
+    expect(renderNotification('lesson.rescheduled', { ...SAMPLES['lesson.rescheduled'], room: null }, 'en').body.endsWith(', until 12:00.')).toBe(true);
     const unscheduled = { ...SAMPLES['exam.scheduled'], scheduledAt: null };
     expect(renderNotification('exam.scheduled', unscheduled, 'en').body).toBe('The exam “Midterm” of class “Morning class” was scheduled; its time will follow.');
     expect(renderNotification('exam.scheduled', unscheduled, 'ar').body).toBe('اختبار «اختبار منتصف الفصل» في فصل «فصل الصباح» جُدول وسيُعلن موعده لاحقاً.');

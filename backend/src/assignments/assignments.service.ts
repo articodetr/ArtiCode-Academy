@@ -7,6 +7,7 @@ import type { SortOrder } from '../common/keyset-cursor.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { ClassStatus, SubmissionStatus } from '../generated/prisma/client.js';
 import { toInstant, toIso } from '../lessons/lessons.time.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
@@ -146,13 +147,15 @@ function toUpdateInput(data: AssignmentPatch): Prisma.AssignmentUncheckedUpdateI
  * (`FOR NO KEY UPDATE`, the MOD-05 lock), edits and actions lock the
  * assignment row, deletion locks it `FOR UPDATE`. Every write is one
  * transaction with exactly one audit event; an identical PATCH writes and
- * records nothing.
+ * records nothing. Publishing notifies the class inside that transaction
+ * (MOD-12-T03, `assignment.published`); no other write here notifies anybody.
  */
 @Injectable()
 export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(query: ListAssignmentsQueryDto, caller: AuthPrincipal): Promise<AssignmentListDto> {
@@ -274,9 +277,14 @@ export class AssignmentsService {
     });
   }
 
-  /** publish / close / reopen (assignments.status.ts); `close` also ends an assignment of a completed or cancelled class. */
+  /**
+   * publish / close / reopen (assignments.status.ts); `close` also ends an
+   * assignment of a completed or cancelled class. `publish` notifies the
+   * class's active students and their guardians (MOD-12-T03); `close` and
+   * `reopen` notify nobody.
+   */
   async changeStatus(id: string, input: ChangeAssignmentStatusDto, caller: AuthPrincipal, ctx: RequestContext): Promise<AssignmentDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const row = await this.lockAssignment(tx, id, caller, 'NO KEY UPDATE');
       if (actionNeedsOpenClass(input.action) && !isClassOpenForAssignments(row.class.status)) throw assignmentsError.classClosed(row.classId, row.class.status);
       const to = nextAssignmentStatus(input.action, row.status);
@@ -305,8 +313,26 @@ export class AssignmentsService {
         },
         tx,
       );
-      return this.read(tx, id);
+      const dto = await this.read(tx, id);
+      // MOD-12-T03: written with the status change, so the notifications exist exactly when the assignment is open.
+      // What they say is what the response says — the title, the class, the due instant and its display zone (D-R41);
+      // the optional `reason` of the action stays in the audit event.
+      const batch =
+        input.action === 'publish'
+          ? await this.notifications.notifyClass(tx, 'assignment.published', row.classId, {
+              assignmentId: id,
+              classId: row.classId,
+              title: dto.title,
+              className: dto.class.name,
+              dueAt: row.dueAt,
+              timeZone: dto.timeZone,
+            })
+          : EMPTY_BATCH;
+      return { dto, batch };
     });
+    // After the commit: the e-mail copies go out in the background, never inside the request.
+    this.notifications.dispatch(batch);
+    return dto;
   }
 
   /** Deletes a draft without any submission (also of a completed or cancelled class); any other is 409 assignment_not_deletable — close it instead. */
