@@ -154,7 +154,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },
   { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
   { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
-  { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
+  // MOD-13 (J-F53): the reports API is real — any of the three report keys opens the page (each report needs its own key,
+  // D-R68 — the page lists the ones the viewer's keys open), as API-164 opens with any of them. By seed academy_admin holds
+  // all three and staff the attendance and financial keys; teachers, students and guardians hold none.
+  {
+    key: 'reports',
+    path: '/reports',
+    labelKey: 'nav.reports',
+    icon: createElement(BarChartOutlined),
+    permissions: ['reports.attendance.view', 'reports.academic.view', 'reports.financial.view'],
+    module: 'MOD-13',
+  },
   { key: 'audit', path: '/audit-logs', labelKey: 'nav.audit', icon: createElement(AuditOutlined), permissions: ['audit.read'], module: 'MOD-03' },
   // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the
   // catalog keys (either one shows it; saving needs `manage`). By default only academy_admin holds them — no visible change.

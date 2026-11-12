@@ -1,0 +1,69 @@
+/* The reports page (J-F53, MOD-13-T06): numeric cells, the period/zone line, and the print view (D-R71). */
+
+.report-filters {
+  margin-bottom: 16px;
+}
+
+.report-filter {
+  min-width: 0;
+}
+
+.report-cell--number {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-meta {
+  margin-bottom: 12px;
+}
+
+/* The filters line is printed only — on the screen the filter fields say it. */
+.report-print-only {
+  display: none;
+}
+
+@media print {
+  /* Only the report: no side menu, header, page title, filter fields, buttons or pager. */
+  body:has(.report-print) .ant-layout-sider,
+  body:has(.report-print) .app-header,
+  .report-no-print,
+  .report-print .ant-pagination {
+    display: none !important;
+  }
+
+  body:has(.report-print) .app-content {
+    padding: 0 !important;
+    min-height: 0 !important;
+    background: none !important;
+  }
+
+  .report-print-only {
+    display: block;
+  }
+
+  .report-print.ant-card {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .report-print > .ant-card-body {
+    padding: 0;
+  }
+
+  /* A wide table prints whole instead of inside its scroll box; the header repeats on every page. */
+  .report-print .ant-table-content {
+    overflow: visible !important;
+  }
+
+  .report-print .ant-table {
+    font-size: 9pt;
+  }
+
+  .report-print thead {
+    display: table-header-group;
+  }
+
+  .report-print tr {
+    break-inside: avoid;
+  }
+}

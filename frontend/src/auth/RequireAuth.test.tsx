@@ -55,22 +55,42 @@ describe('RequireAuth', () => {
 
 describe('RequireAccess', () => {
   it('lets a role that owns a role-gated screen through and shows the 403 page to one that does not', () => {
-    // `reports` is still on the role matrix (admin only); `settings` moved to permission keys in CH-0036.
+    // `notifications` is still on the role matrix (every known role); `settings` moved to permission keys in CH-0036 and
+    // `reports` in J-F53 (any report key), so a user without a known role stands for the one who does not own it.
     const { unmount } = renderWithProviders(
-      <RequireAccess navKey="reports">
+      <RequireAccess navKey="notifications">
         <p>{SECRET}</p>
       </RequireAccess>,
-      { auth: makeAuth({ user: makeUser() }), route: '/reports' },
+      { auth: makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) }), route: '/notifications' },
     )
     expect(screen.getByText(SECRET)).toBeInTheDocument()
     unmount()
 
-    const student = makeUser({ role: 'student', roles: ['student'], permissions: [] })
+    const custom = makeUser({ role: null, roles: ['custom_reporting'], permissions: [] })
+    renderWithProviders(
+      <RequireAccess navKey="notifications">
+        <p>{SECRET}</p>
+      </RequireAccess>,
+      { auth: makeAuth({ user: custom }), route: '/notifications' },
+    )
+    expectForbidden()
+  })
+
+  it('opens the reports screen with any report key and shows the 403 page without one, whatever the role (J-F53)', () => {
+    const { unmount } = renderWithProviders(
+      <RequireAccess navKey="reports">
+        <p>{SECRET}</p>
+      </RequireAccess>,
+      { auth: makeAuth({ user: makeUser({ role: null, roles: ['accountant'], permissions: ['reports.financial.view'] }) }), route: '/reports' },
+    )
+    expect(screen.getByText(SECRET)).toBeInTheDocument()
+    unmount()
+
     renderWithProviders(
       <RequireAccess navKey="reports">
         <p>{SECRET}</p>
       </RequireAccess>,
-      { auth: makeAuth({ user: student }), route: '/reports' },
+      { auth: makeAuth({ user: makeUser() }), route: '/reports' },
     )
     expectForbidden()
   })
