@@ -2082,7 +2082,7 @@ export const ar = {
       noClasses: 'لا فصول مطابقة',
       classStatus: 'حالة الفصل الآن',
       any: 'الكل',
-      minAbsences: 'الغياب لا يقل عن (مرة)',
+      minAbsences: 'مرات الغياب لا تقل عن',
       minAbsenceRate: 'نسبة الغياب لا تقل عن (%)',
       assignmentStatus: 'حالة الواجب',
       examType: 'نوع الاختبار',

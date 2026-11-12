@@ -5,9 +5,7 @@
 // the rows are cut). The table (ReportTable) and the CSV export (D-R71) are both
 // drawn from these sections, so the file holds exactly the visible columns.
 // Pure; unit-tested in reports.sections.test.ts.
-import type {
-  AttendanceCounts,
-} from '../api/lessons'
+import type { AttendanceCounts } from '../api/lessons'
 import type {
   Aging,
   AssignmentSubmissionRow,
