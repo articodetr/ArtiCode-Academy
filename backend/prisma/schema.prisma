@@ -146,58 +146,63 @@ model User {
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
   roles                   UserRole[]
-  assignedRoles           UserRole[]             @relation("UserRoleAssignedBy")
+  assignedRoles           UserRole[]               @relation("UserRoleAssignedBy")
   studentProfile          StudentProfile?
   employeeProfile         EmployeeProfile?
   /// Links where this user is the guardian.
-  guardianOf              GuardianStudent[]      @relation("GuardianStudentGuardian")
+  guardianOf              GuardianStudent[]        @relation("GuardianStudentGuardian")
   /// Links where this user is the student.
-  guardians               GuardianStudent[]      @relation("GuardianStudentStudent")
+  guardians               GuardianStudent[]        @relation("GuardianStudentStudent")
   refreshTokens           RefreshToken[]
   verificationTokens      VerificationToken[]
   auditLogs               AuditLog[]
   /// Courses this user created (MOD-04); the link is cleared if the user row goes.
-  coursesCreated          Course[]               @relation("CourseCreatedBy")
+  coursesCreated          Course[]                 @relation("CourseCreatedBy")
   /// MOD-05: classes this user created, classes they teach (and teacher
   /// assignments they made), their enrollments as a student and the
   /// enrollments they created.
-  classesCreated          Class[]                @relation("ClassCreatedBy")
-  classTeacherships       ClassTeacher[]         @relation("ClassTeacherTeacher")
-  classTeacherAssignments ClassTeacher[]         @relation("ClassTeacherAssignedBy")
-  enrollments             Enrollment[]           @relation("EnrollmentStudent")
-  enrollmentsCreated      Enrollment[]           @relation("EnrollmentCreatedBy")
+  classesCreated          Class[]                  @relation("ClassCreatedBy")
+  classTeacherships       ClassTeacher[]           @relation("ClassTeacherTeacher")
+  classTeacherAssignments ClassTeacher[]           @relation("ClassTeacherAssignedBy")
+  enrollments             Enrollment[]             @relation("EnrollmentStudent")
+  enrollmentsCreated      Enrollment[]             @relation("EnrollmentCreatedBy")
   /// MOD-07: weekly slots this user teaches and the slots they created.
-  classSchedulesTaught    ClassSchedule[]        @relation("ClassScheduleTeacher")
-  classSchedulesCreated   ClassSchedule[]        @relation("ClassScheduleCreatedBy")
+  classSchedulesTaught    ClassSchedule[]          @relation("ClassScheduleTeacher")
+  classSchedulesCreated   ClassSchedule[]          @relation("ClassScheduleCreatedBy")
   /// MOD-06: lessons this user teaches or created, their attendance as a
   /// student and the attendance records they wrote as a teacher.
-  lessonsTaught           Lesson[]               @relation("LessonTeacher")
-  lessonsCreated          Lesson[]               @relation("LessonCreatedBy")
-  attendanceRecords       AttendanceRecord[]     @relation("AttendanceStudent")
-  attendanceRecorded      AttendanceRecord[]     @relation("AttendanceRecordedBy")
+  lessonsTaught           Lesson[]                 @relation("LessonTeacher")
+  lessonsCreated          Lesson[]                 @relation("LessonCreatedBy")
+  attendanceRecords       AttendanceRecord[]       @relation("AttendanceStudent")
+  attendanceRecorded      AttendanceRecord[]       @relation("AttendanceRecordedBy")
   /// MOD-08: assignments this user created, their submissions as a student
   /// and the submissions they graded or returned as a teacher.
-  assignmentsCreated      Assignment[]           @relation("AssignmentCreatedBy")
-  submissions             AssignmentSubmission[] @relation("SubmissionStudent")
-  submissionsGraded       AssignmentSubmission[] @relation("SubmissionGradedBy")
+  assignmentsCreated      Assignment[]             @relation("AssignmentCreatedBy")
+  submissions             AssignmentSubmission[]   @relation("SubmissionStudent")
+  submissionsGraded       AssignmentSubmission[]   @relation("SubmissionGradedBy")
   /// MOD-09: exams this user created, their recorded results as a student,
   /// the results they recorded as a teacher and the final grades they fixed.
-  examsCreated            Exam[]                 @relation("ExamCreatedBy")
-  examResults             ExamResult[]           @relation("ExamResultStudent")
-  examResultsRecorded     ExamResult[]           @relation("ExamResultRecordedBy")
-  finalGradesFinalized    FinalGrade[]           @relation("FinalGradeFinalizedBy")
+  examsCreated            Exam[]                   @relation("ExamCreatedBy")
+  examResults             ExamResult[]             @relation("ExamResultStudent")
+  examResultsRecorded     ExamResult[]             @relation("ExamResultRecordedBy")
+  finalGradesFinalized    FinalGrade[]             @relation("FinalGradeFinalizedBy")
   /// MOD-10: certificates of this user as a student, and those they issued or revoked.
-  certificates            Certificate[]          @relation("CertificateStudent")
-  certificatesIssued      Certificate[]          @relation("CertificateIssuedBy")
-  certificatesRevoked     Certificate[]          @relation("CertificateRevokedBy")
+  certificates            Certificate[]            @relation("CertificateStudent")
+  certificatesIssued      Certificate[]            @relation("CertificateIssuedBy")
+  certificatesRevoked     Certificate[]            @relation("CertificateRevokedBy")
   /// MOD-11: fee plans they created, invoices as a student, invoices they issued, cancelled or created, payments they recorded or reversed.
-  feePlansCreated         FeePlan[]              @relation("FeePlanCreatedBy")
-  invoices                Invoice[]              @relation("InvoiceStudent")
-  invoicesIssued          Invoice[]              @relation("InvoiceIssuedBy")
-  invoicesCancelled       Invoice[]              @relation("InvoiceCancelledBy")
-  invoicesCreated         Invoice[]              @relation("InvoiceCreatedBy")
-  paymentsRecorded        Payment[]              @relation("PaymentRecordedBy")
-  paymentsReversed        Payment[]              @relation("PaymentReversedBy")
+  feePlansCreated         FeePlan[]                @relation("FeePlanCreatedBy")
+  invoices                Invoice[]                @relation("InvoiceStudent")
+  invoicesIssued          Invoice[]                @relation("InvoiceIssuedBy")
+  invoicesCancelled       Invoice[]                @relation("InvoiceCancelledBy")
+  invoicesCreated         Invoice[]                @relation("InvoiceCreatedBy")
+  paymentsRecorded        Payment[]                @relation("PaymentRecordedBy")
+  paymentsReversed        Payment[]                @relation("PaymentReversedBy")
+  /// MOD-12: notifications they received (deleted with them), notifications about them as a student, their e-mail preferences and the announcements they sent.
+  notifications           Notification[]           @relation("NotificationRecipient")
+  notificationsAbout      Notification[]           @relation("NotificationStudent")
+  notificationPreferences NotificationPreference[]
+  announcementsSent       Announcement[]           @relation("AnnouncementSender")
 
   @@index([phone])
   @@index([status])
@@ -546,20 +551,22 @@ model Class {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  course       Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  createdBy    User?           @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  teachers     ClassTeacher[]
-  enrollments  Enrollment[]
+  course        Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  createdBy     User?           @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  teachers      ClassTeacher[]
+  enrollments   Enrollment[]
   /// MOD-07: the weekly slots of this class (deleted with it).
-  schedules    ClassSchedule[]
-  lessons      Lesson[]
-  assignments  Assignment[]
+  schedules     ClassSchedule[]
+  lessons       Lesson[]
+  assignments   Assignment[]
   /// MOD-09: the exams of this class (deleted with it).
-  exams        Exam[]
+  exams         Exam[]
   /// MOD-10: the certificates of this class (Restrict — never deleted).
-  certificates Certificate[]
+  certificates  Certificate[]
   /// MOD-11: fee plans pricing this class (deleted with it).
-  feePlans     FeePlan[]
+  feePlans      FeePlan[]
+  /// MOD-12: announcements sent to this class (they stay, without the link, if it goes).
+  announcements Announcement[]
 
   @@index([courseId])
   @@index([status])
@@ -1373,4 +1380,118 @@ model Payment {
   @@index([recordedById])
   @@index([reversedById])
   @@map("payments")
+}
+
+// MOD-12 — notifications (roadmap §4j; owner decisions D-R79..D-R86, CH-0200).
+// First version: one row per in-app notification, written inside the
+// transaction of the write that causes it (D-R82). The state of its e-mail
+// copy lives in the same row instead of a row per channel, so the inbox never
+// shows a notification twice. Title and body are rendered in the recipient's
+// language at creation (D-R83). E-mail is switched off per category (D-R84) —
+// a missing preference row means "on"; in-app notifications are always on.
+// Manual announcements keep their audience and fan out into notifications
+// (D-R85). No template table, no device tokens and no outbox yet.
+
+enum NotificationCategory {
+  lessons
+  assignments
+  exams
+  grades
+  finance
+  announcements
+
+  @@map("notification_category")
+}
+
+/// E-mail copy of a notification: `none` = no e-mail was due (unverified
+/// address, category switched off, announcement without e-mail); `queued` =
+/// waiting for the dispatcher; `sent` / `failed` = the transport's verdict;
+/// `skipped` = no transport is configured (`MAIL_TRANSPORT=none`).
+enum NotificationEmailStatus {
+  none
+  queued
+  sent
+  failed
+  skipped
+
+  @@map("notification_email_status")
+}
+
+model Notification {
+  id              String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  recipientUserId String                  @map("recipient_user_id") @db.Uuid
+  /// The event, e.g. `assignment.published` — the list lives in code (D-R80); a lower-case dotted key (CHECK in SQL).
+  eventKey        String                  @map("event_key") @db.VarChar(64)
+  category        NotificationCategory
+  /// Rendered in the recipient's language at creation (D-R83); not blank (CHECK in SQL).
+  title           String
+  /// Not blank (CHECK in SQL).
+  body            String
+  /// The frontend path (`link`) and ids only — a JSON object (CHECK in SQL).
+  data            Json                    @default("{}")
+  /// The student the event is about (a guardian's copy names the child); cleared if that user goes.
+  studentUserId   String?                 @map("student_user_id") @db.Uuid
+  /// Set exactly for the `announcements` category (CHECK in SQL).
+  announcementId  String?                 @map("announcement_id") @db.Uuid
+  readAt          DateTime?               @map("read_at") @db.Timestamptz(6)
+  emailStatus     NotificationEmailStatus @default(none) @map("email_status")
+  /// Set exactly for `sent` (CHECK in SQL).
+  emailSentAt     DateTime?               @map("email_sent_at") @db.Timestamptz(6)
+  /// The provider's message id; only for `sent` (CHECK in SQL).
+  emailMessageId  String?                 @map("email_message_id")
+  /// A reason code, never the provider's message: required for `failed`, optional for `skipped`, absent otherwise (CHECK in SQL).
+  emailFailure    String?                 @map("email_failure") @db.VarChar(32)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  recipient    User          @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  student      User?         @relation("NotificationStudent", fields: [studentUserId], references: [id], onDelete: SetNull)
+  announcement Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  /// The inbox: newest first by the UUIDv7 id (keyset). Two partial indexes
+  /// (unread counter, queued e-mails) are hand-written in the migration.
+  @@index([recipientUserId, id(sort: Desc)])
+  @@index([studentUserId])
+  @@index([announcementId])
+  @@map("notifications")
+}
+
+/// E-mail switch per category (D-R84). A missing row means the e-mail of that
+/// category is on.
+model NotificationPreference {
+  userId       String               @map("user_id") @db.Uuid
+  category     NotificationCategory
+  emailEnabled Boolean              @map("email_enabled")
+  updatedAt    DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, category])
+  @@map("notification_preferences")
+}
+
+/// A manual announcement (D-R85): what was sent, to whom and to how many. Its
+/// notifications point back to it; it is never edited or withdrawn.
+model Announcement {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  senderUserId   String?  @map("sender_user_id") @db.Uuid
+  /// `{ kind: class|academy, classId?, students?, guardians?, teachers?, roleKeys? }` as requested — an object with a known kind (CHECK in SQL).
+  audience       Json
+  /// The class of a class announcement (never set for an academy one — CHECK in SQL); cleared if the class goes, the audience keeps its id.
+  classId        String?  @map("class_id") @db.Uuid
+  /// 1..200 characters, not blank (CHECK in SQL).
+  title          String
+  /// 1..4,000 characters, not blank (CHECK in SQL).
+  body           String
+  sendEmail      Boolean  @default(false) @map("send_email")
+  /// Recipients at sending time; >= 0 (CHECK in SQL).
+  recipientCount Int      @map("recipient_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  sender        User?          @relation("AnnouncementSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  class         Class?         @relation(fields: [classId], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@index([senderUserId, id(sort: Desc)])
+  @@index([classId])
+  @@map("announcements")
 }
