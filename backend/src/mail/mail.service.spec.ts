@@ -302,6 +302,15 @@ describe('MailService (TEST-017)', () => {
     await send('x'.repeat(400), '/my-lessons');
     expect(transport.sent.at(-1)!.subject.length).toBeLessThanOrEqual('New notification: '.length + 160);
     expect(transport.sent.at(-1)!.subject.endsWith('…')).toBe(true);
+    // The cap counts characters, not UTF-16 units: 200 emoji (an announcement title may be that) are cut after the
+    // 159th — never between the two halves of a surrogate pair, which no mail provider has to accept.
+    await send('\u{1F600}'.repeat(200), '/notifications');
+    const cut = transport.sent.at(-1)!;
+    expect(cut.subject).toBe(`New notification: ${'\u{1F600}'.repeat(159)}…`);
+    // A lone surrogate does not survive UTF-8: well-formed text comes back unchanged.
+    for (const part of [cut.subject, cut.text, cut.html ?? '']) expect(Buffer.from(part, 'utf8').toString('utf8')).toBe(part);
+    await send('\u{1F600}'.repeat(160), '/notifications');
+    expect(transport.sent.at(-1)!.subject).toBe(`New notification: ${'\u{1F600}'.repeat(160)}`);
     // Without APP_PUBLIC_URL the link is root-relative, as in the account e-mails.
     const relative = new CapturingTransport();
     await new MailService(relative, prismaWith(null), configWith(), recordingAudit()).sendNotification({ to: 'a@example.test', recipientName: 'A', locale: 'ar', title: 'عنوان', path: '/my-grades' });

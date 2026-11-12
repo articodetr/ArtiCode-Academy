@@ -130,6 +130,25 @@ export class NotificationsService {
     return this.write(tx, rows);
   }
 
+  /**
+   * Writes planned notification rows inside the caller's transaction — the
+   * last step of `notifyStudents()` / `notifyClass()`, and the whole of what a
+   * manual announcement (T05) needs from the engine: it plans its own rows.
+   * `NOTIFICATION_INSERT_CHUNK` rows per statement; the ids of the rows whose
+   * e-mail copy is `queued` come back for `dispatch()`.
+   */
+  async write(tx: NotificationTx, rows: Prisma.NotificationCreateManyInput[]): Promise<NotificationBatch> {
+    const queuedIds: string[] = [];
+    for (let start = 0; start < rows.length; start += NOTIFICATION_INSERT_CHUNK) {
+      const written = await tx.notification.createManyAndReturn({
+        data: rows.slice(start, start + NOTIFICATION_INSERT_CHUNK),
+        select: { id: true, emailStatus: true },
+      });
+      for (const row of written) if (row.emailStatus === 'queued') queuedIds.push(row.id);
+    }
+    return { created: rows.length, queuedIds };
+  }
+
   /** After the transaction committed: queues the e-mail copies. Never throws and never waits for a send. */
   dispatch(batch: NotificationBatch): void {
     this.dispatcher.enqueue(batch.queuedIds);
@@ -209,17 +228,5 @@ export class NotificationsService {
         transport: this.mail.transportName,
       }),
     };
-  }
-
-  private async write(tx: NotificationTx, rows: Prisma.NotificationCreateManyInput[]): Promise<NotificationBatch> {
-    const queuedIds: string[] = [];
-    for (let start = 0; start < rows.length; start += NOTIFICATION_INSERT_CHUNK) {
-      const written = await tx.notification.createManyAndReturn({
-        data: rows.slice(start, start + NOTIFICATION_INSERT_CHUNK),
-        select: { id: true, emailStatus: true },
-      });
-      for (const row of written) if (row.emailStatus === 'queued') queuedIds.push(row.id);
-    }
-    return { created: rows.length, queuedIds };
   }
 }

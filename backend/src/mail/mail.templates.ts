@@ -149,10 +149,16 @@ export interface NotificationMailInput {
   link: string;
 }
 
-/** One line, trimmed and capped: a title typed with line breaks must not break the subject. */
+/**
+ * One line, trimmed and capped: a title typed with line breaks must not break
+ * the subject. The cap counts characters (code points), so the cut never
+ * leaves half of a surrogate pair behind — an announcement title may be 200
+ * emoji long (MOD-12-T05).
+ */
 export function subjectTitle(title: string): string {
-  const oneLine = title.replace(/\s+/g, ' ').trim();
-  return oneLine.length > NOTIFICATION_SUBJECT_TITLE_MAX ? `${oneLine.slice(0, NOTIFICATION_SUBJECT_TITLE_MAX - 1)}…` : oneLine;
+  const characters = [...title.replace(/\s+/g, ' ').trim()];
+  if (characters.length <= NOTIFICATION_SUBJECT_TITLE_MAX) return characters.join('');
+  return `${characters.slice(0, NOTIFICATION_SUBJECT_TITLE_MAX - 1).join('')}…`;
 }
 
 /**
