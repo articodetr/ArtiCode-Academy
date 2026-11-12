@@ -5,6 +5,7 @@ import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { toInstant } from '../lessons/lessons.time.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { escapeLikePattern } from '../users/users.validation.js';
 import { moneyText } from './fee-plans.rules.js';
@@ -104,21 +105,28 @@ export function toPaymentDto(row: PaymentRow): PaymentDto {
  * `invoices.read_all`, `invoices.manage` or `payments.record` (the
  * controller); recording needs `payments.record`, reversing
  * `payments.refund`. One `payments.*` event per write.
+ *
+ * MOD-12-T04: a recorded and a reversed payment notify the invoice's student
+ * and their guardians — `payment.recorded` (the receipt and its amount) /
+ * `payment.reversed` (the receipt alone), written inside the same transaction
+ * under the invoice-row lock and e-mailed after the commit. Never the note,
+ * the reference, the payer, the reason or whoever recorded or reversed it.
  */
 @Injectable()
 export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** API-151 */
   async record(invoiceId: string, input: RecordPaymentDto, caller: AuthPrincipal, ctx: RequestContext): Promise<PaymentDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       await this.lockInvoice(tx, invoiceId);
       const invoice = await tx.invoice.findUniqueOrThrow({
         where: { id: invoiceId },
-        select: { id: true, number: true, status: true, currency: true, totalAmount: true, paidAmount: true },
+        select: { id: true, number: true, status: true, studentUserId: true, currency: true, totalAmount: true, paidAmount: true },
       });
       if (invoice.status !== 'issued') throw financeError.invoiceNotIssued(invoice.status);
       const amount = moneyText(input.amount);
@@ -158,8 +166,18 @@ export class PaymentsService {
         },
         tx,
       );
-      return toPaymentDto(await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, select: PAYMENT_SELECT }));
+      // The receipt and its amount only. An issued invoice always carries its number (`ck_invoices_issued`).
+      const batch = await this.notifications.notifyStudents(tx, 'payment.recorded', [
+        {
+          studentId: invoice.studentUserId,
+          params: { paymentId: payment.id, invoiceId, receiptNumber: number, invoiceNumber: invoice.number!, amount, currency: invoice.currency },
+        },
+      ]);
+      const dto = toPaymentDto(await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, select: PAYMENT_SELECT }));
+      return { dto, batch };
     });
+    this.notifications.dispatch(batch);
+    return dto;
   }
 
   /** API-152 */
@@ -193,7 +211,7 @@ export class PaymentsService {
 
   /** API-154 — completed → reversed, for good; the amount leaves the invoice's paid amount. */
   async reverse(id: string, input: ReversePaymentDto, caller: AuthPrincipal, ctx: RequestContext): Promise<PaymentDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       // A payment never moves to another invoice, so its invoice is read unlocked and locked
       // before the payment is read again — the lock order of every payment write.
       const target = await tx.payment.findUnique({ where: { id }, select: { invoiceId: true } });
@@ -201,7 +219,7 @@ export class PaymentsService {
       await this.lockInvoice(tx, target.invoiceId);
       const payment = await tx.payment.findUniqueOrThrow({
         where: { id },
-        select: { id: true, number: true, amount: true, status: true, reversedAt: true, invoiceId: true, invoice: { select: { number: true } } },
+        select: { id: true, number: true, amount: true, status: true, reversedAt: true, invoiceId: true, invoice: { select: { number: true, studentUserId: true } } },
       });
       if (payment.status === 'reversed') throw financeError.paymentReversed(id, payment.reversedAt!.toISOString());
       await tx.payment.update({ where: { id }, data: { status: 'reversed', reversedAt: new Date(), reversedById: caller.id, reverseReason: input.reason } });
@@ -217,8 +235,18 @@ export class PaymentsService {
         },
         tx,
       );
-      return toPaymentDto(await tx.payment.findUniqueOrThrow({ where: { id }, select: PAYMENT_SELECT }));
+      // The receipt only — never the reason. A payment is recorded on an issued invoice, which keeps its number for good (`ck_invoices_issued`).
+      const batch = await this.notifications.notifyStudents(tx, 'payment.reversed', [
+        {
+          studentId: payment.invoice.studentUserId,
+          params: { paymentId: id, invoiceId: payment.invoiceId, receiptNumber: payment.number, invoiceNumber: payment.invoice.number! },
+        },
+      ]);
+      const dto = toPaymentDto(await tx.payment.findUniqueOrThrow({ where: { id }, select: PAYMENT_SELECT }));
+      return { dto, batch };
     });
+    this.notifications.dispatch(batch);
+    return dto;
   }
 
   private async lockInvoice(tx: Tx, invoiceId: string): Promise<void> {
