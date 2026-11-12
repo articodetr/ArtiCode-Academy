@@ -21,9 +21,17 @@ export interface SchedulingSettings {
   workingDays: Weekday[] | null
 }
 
+/** `CertificatesSettingsDto` (MOD-10-T02, D-R51 — J-F51). */
+export interface CertificatesSettings {
+  /** Prefix of the certificate serials `PREFIX-YYYY-NNNNN`: 2–10 upper-case letters or digits; `null` = the default `CERT`. */
+  serialPrefix: string | null
+}
+
 /** `AcademySettingsDto`: every known key, `null` when not set (an unreadable stored value reads as `null`). */
 export interface AcademySettings {
   scheduling: SchedulingSettings
+  /** Since MOD-10-T02 (CH-0176); a server before it sends no `certificates` — read it through `serialPrefixOf()`. */
+  certificates: CertificatesSettings
 }
 
 /** `settings` of a PATCH, per key: absent = unchanged, `null` = clear, a value = replace. */
@@ -31,6 +39,9 @@ export interface AcademySettingsInput {
   scheduling?: {
     weekStartsOn?: Weekday | null
     workingDays?: Weekday[] | null
+  }
+  certificates?: {
+    serialPrefix?: string | null
   }
 }
 

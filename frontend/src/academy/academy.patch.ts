@@ -3,14 +3,17 @@
 // differs from the loaded academy are sent; a cleared nullable field becomes
 // null; the localized name travels as a whole object when any of its locales
 // changes; the weekly-schedule keys travel under `settings.scheduling`, key by
-// key (academy.settings.ts — J-F02); nothing changed → null.
-import type { Academy, AcademyLocale, LocalizedLabel, UpdateAcademyInput } from '../api/academy'
-import { planSchedulingPatch, schedulingFormValuesOf } from './academy.settings'
+// key (academy.settings.ts — J-F02), and since J-F51 the certificate prefix
+// under `settings.certificates` in the same body; nothing changed → null.
+import type { Academy, AcademyLocale, AcademySettingsInput, LocalizedLabel, UpdateAcademyInput } from '../api/academy'
+import { planCertificatesPatch, planSchedulingPatch, schedulingFormValuesOf, serialPrefixOf } from './academy.settings'
 import type { SchedulingFormValues } from './academy.settings'
 import { normaliseCurrency } from './academy.validation'
 
-/** Form values: every text field a string (empty = cleared where the server allows it), plus the weekly schedule. */
+/** Form values: every text field a string (empty = cleared where the server allows it), plus the weekly schedule and the certificate prefix. */
 export interface GeneralSettingsFormValues extends SchedulingFormValues {
+  /** `settings.certificates.serialPrefix` as typed; blank = not set (the default `CERT`). */
+  serialPrefix?: string
   nameAr: string
   nameEn?: string
   nameTr?: string
@@ -37,6 +40,7 @@ export function settingsFormValuesOf(academy: Academy): GeneralSettingsFormValue
     contactEmail: text(academy.contactEmail),
     contactPhone: text(academy.contactPhone),
     ...schedulingFormValuesOf(academy.settings.scheduling),
+    serialPrefix: text(serialPrefixOf(academy.settings)),
   }
 }
 
@@ -91,8 +95,12 @@ export function planAcademyPatch(current: Academy, values: GeneralSettingsFormVa
   const contactPhone = changedNullable(current.contactPhone, values.contactPhone)
   if (contactPhone !== undefined) body.contactPhone = contactPhone
 
+  const settings: AcademySettingsInput = {}
   const scheduling = planSchedulingPatch(current.settings.scheduling, values)
-  if (scheduling) body.settings = { scheduling }
+  if (scheduling) settings.scheduling = scheduling
+  const certificates = planCertificatesPatch(serialPrefixOf(current.settings), values.serialPrefix)
+  if (certificates) settings.certificates = certificates
+  if (Object.keys(settings).length > 0) body.settings = settings
 
   return Object.keys(body).length === 0 ? null : body
 }

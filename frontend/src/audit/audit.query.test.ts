@@ -144,4 +144,12 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
       expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('exams.'))
     }
   })
+
+  it('offers the two certificate events of MOD-10-T02/T03 once each, after their family prefix (J-F51)', () => {
+    expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'certificates.')).toEqual(['certificates.'])
+    for (const event of ['certificates.issued', 'certificates.revoked']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+      expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('certificates.'))
+    }
+  })
 })

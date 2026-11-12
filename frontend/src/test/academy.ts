@@ -15,8 +15,8 @@ export function makeAcademy(overrides: Partial<Academy> = {}): Academy {
     currency: 'SAR',
     contactEmail: 'info@articode.test',
     contactPhone: null,
-    // As a freshly seeded academy: nothing set (MOD-02-T03).
-    settings: { scheduling: { weekStartsOn: null, workingDays: null } },
+    // As a freshly seeded academy: nothing set (MOD-02-T03; the certificate prefix since MOD-10-T02).
+    settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } },
     createdAt: '2026-10-29T12:00:00.000Z',
     updatedAt: '2026-10-30T09:30:00.000Z',
     ...overrides,
