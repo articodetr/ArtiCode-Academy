@@ -128,6 +128,10 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'grade_schemes.created',
   'grade_schemes.updated',
   'grade_schemes.deleted',
+  // MOD-09-T05 (CH-0170) — first offered with J-F49 (CH-0163)
+  'grades.',
+  'grades.finalized',
+  'grades.withdrawn',
   // MOD-09-T03/T04 (CH-0127, CH-0129) — first offered with J-F45 (CH-0159)
   'exams.',
   'exams.created',

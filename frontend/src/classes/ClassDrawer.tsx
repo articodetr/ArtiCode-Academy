@@ -37,6 +37,7 @@ import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { ClassEnrollmentsTab } from '../enrollments/ClassEnrollmentsTab'
 import { canReadRoster } from '../enrollments/enrollments.status'
+import { ClassGradebookTab } from '../grades/ClassGradebookTab'
 import { useLocalized } from '../i18n/useLocalized'
 import { ClassScheduleTab } from '../schedule/ClassScheduleTab'
 import { formatDateTime, formatDay, localizedLabel } from '../users/users.format'
@@ -60,10 +61,10 @@ const ICONS: Readonly<Record<ClassMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule'
+type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule' | 'gradebook'
 
-/** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself. */
-type EditorTab = Exclude<DrawerTab, 'details'>
+/** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself, the gradebook holds none. */
+type EditorTab = Exclude<DrawerTab, 'details' | 'gradebook'>
 
 const NOTHING_UNSAVED: Readonly<Record<EditorTab, boolean>> = { teachers: false, students: false, schedule: false }
 
@@ -279,6 +280,11 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
               children: <ClassScheduleTab cls={cls} onUnsavedChange={reportUnsaved.schedule} />,
               disabled: editing,
             },
+            // J-F49: the gradebook the server computes (API-126) for `grades.read_all` — the server adds the class's
+            // visibility (404 reads as «not available»); finalize/withdraw for `grades.manage` (API-127/API-128).
+            ...(hasPermission('grades.read_all')
+              ? [{ key: 'gradebook', label: t('gradebook.tab'), children: <ClassGradebookTab cls={cls} />, disabled: editing }]
+              : []),
           ]}
         />
       ) : null}

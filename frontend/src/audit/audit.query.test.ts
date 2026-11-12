@@ -129,6 +129,15 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     }
   })
 
+  it('offers the two final-grade events of MOD-09-T05 once each, right after the grade scheme events and their own prefix (J-F49)', () => {
+    expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'grades.')).toEqual(['grades.'])
+    expect(AUDIT_ACTION_SUGGESTIONS.indexOf('grades.')).toBe(AUDIT_ACTION_SUGGESTIONS.indexOf('grade_schemes.deleted') + 1)
+    for (const event of ['grades.finalized', 'grades.withdrawn']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+      expect(AUDIT_ACTION_SUGGESTIONS.indexOf(event)).toBeGreaterThan(AUDIT_ACTION_SUGGESTIONS.indexOf('grades.'))
+    }
+  })
+
   it('offers the five exam events of MOD-09-T03/T04 once each, after their family prefix (J-F45)', () => {
     for (const event of ['exams.created', 'exams.updated', 'exams.status.changed', 'exams.deleted', 'exams.results.recorded']) {
       expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
