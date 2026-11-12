@@ -7,6 +7,7 @@ import { changePassword } from '../api/auth'
 import { useAuth } from '../auth/auth-context'
 import { uiRoleFor } from '../auth/roles'
 import { PageHeader } from '../components/PageHeader'
+import { NotificationPreferencesCard } from '../notifications/NotificationPreferencesCard'
 import { ProfilePermissions } from '../profile/ProfilePermissions'
 import { PASSWORD_MIN_LENGTH, passwordChangeFailure, requestFailure } from '../profile/profile.errors'
 import { useRoleLabels } from '../users/useRoleLabels'
@@ -18,7 +19,7 @@ interface PasswordFormValues {
   confirmPassword: string
 }
 
-/** The signed-in user's own page: identity, roles, permissions, sessions and password. */
+/** The signed-in user's own page: identity, roles, permissions, sessions, password and the notification e-mails (J-F54). */
 export function ProfilePage() {
   const { t } = useTranslation()
   const { message } = App.useApp()
@@ -165,6 +166,11 @@ export function ProfilePage() {
               {t('profile.passwordHint')}
             </Typography.Paragraph>
           </Card>
+
+          {/* The e-mail copies of the notifications and the address confirmation (J-F54 — API-171/172, API-165). */}
+          <div style={{ marginTop: 16 }}>
+            <NotificationPreferencesCard />
+          </div>
         </Col>
       </Row>
     </>

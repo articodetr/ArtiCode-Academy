@@ -14,6 +14,7 @@ import {
   FileTextOutlined,
   FormOutlined,
   HomeOutlined,
+  NotificationOutlined,
   PercentageOutlined,
   PlayCircleOutlined,
   PlaySquareOutlined,
@@ -23,7 +24,6 @@ import {
   SettingOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
-import { ROLES } from '../auth/roles'
 import type { Role } from '../auth/roles'
 
 /** What the navigation needs to know about the signed-in user (a subset of `AuthUser`). */
@@ -92,9 +92,6 @@ interface RoleKeyGatedItem extends NavItemBase {
 
 export type NavItem = RoleGatedItem | PermissionGatedItem | RoleKeyGatedItem
 
-/** Every known UI role (not a user without one). */
-const KNOWN_ROLES: readonly Role[] = ROLES
-
 export const NAV_ITEMS: readonly NavItem[] = [
   // The landing page of every signed-in user (and the exit of the 403 page).
   { key: 'dashboard', path: '/', labelKey: 'nav.dashboard', icon: createElement(DashboardOutlined), roles: 'everyone', module: 'MOD-FE-01' },
@@ -153,7 +150,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },
   { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
-  { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
+  // MOD-12 (J-F54): «my notifications» (API-167) needs no permission key — ownership of every signed-in user (D-R86), a
+  // custom role included, as the header bell is; so the entry left the role matrix for 'everyone', like the dashboard.
+  { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: 'everyone', module: 'MOD-12' },
+  // MOD-12 (J-F54): the announcements (API-173..175) are gated by the one key all three routes require (`notifications.send` —
+  // the teacher and the academy admin by seed); what a holder may address and read depends on `classes.manage` (D-R85).
+  { key: 'announcements', path: '/announcements', labelKey: 'nav.announcements', icon: createElement(NotificationOutlined), permissions: ['notifications.send'], module: 'MOD-12' },
   { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
   { key: 'audit', path: '/audit-logs', labelKey: 'nav.audit', icon: createElement(AuditOutlined), permissions: ['audit.read'], module: 'MOD-03' },
   // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the

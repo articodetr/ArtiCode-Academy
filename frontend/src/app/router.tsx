@@ -2,8 +2,10 @@ import type { ReactNode } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import { InvitationPage } from '../account/InvitationPage'
 import { ResetPasswordPage } from '../account/ResetPasswordPage'
+import { VerifyEmailPage } from '../account/VerifyEmailPage'
 import { RequireAccess, RequireAuth } from '../auth/RequireAuth'
 import { AppLayout } from '../layout/AppLayout'
+import { AnnouncementsPage } from '../pages/AnnouncementsPage'
 import { AssignmentsPage } from '../pages/AssignmentsPage'
 import { AuditLogPage } from '../pages/AuditLogPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
@@ -36,6 +38,8 @@ const router = createBrowserRouter([
   // Public token pages (MOD-03-T12): the one-time link is the only credential.
   { path: '/invite/:token', element: <InvitationPage /> },
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+  // The link of the confirmation e-mail (LR-01-T02, API-166 — J-F54): public, opens no session.
+  { path: '/verify-email/:token', element: <VerifyEmailPage /> },
   {
     path: '/',
     element: (
@@ -57,7 +61,8 @@ const router = createBrowserRouter([
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },
-      { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },
+      { path: 'notifications', element: guarded('notifications', <NotificationsPage />) }, // every signed-in user (J-F54, API-167 — ownership)
+      { path: 'announcements', element: guarded('announcements', <AnnouncementsPage />) }, // `notifications.send` (J-F54, API-173..175)
       { path: 'reports', element: guarded('reports', <ReportsPage />) },
       { path: 'audit-logs', element: guarded('audit', <AuditLogPage />) }, // `audit.read` (MOD-03-T15)
       { path: 'settings', element: guarded('settings', <SettingsPage />) },

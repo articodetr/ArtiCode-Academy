@@ -135,6 +135,14 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'exams.status.changed',
   'exams.deleted',
   'exams.results.recorded',
+  // LR-01-T01/T02 (CH-0198, CH-0199) and MOD-12-T05 (CH-0205) — first offered with J-F54 (CH-0168), in the order of 12.4
+  'mail.',
+  'mail.delivery.sent',
+  'mail.delivery.failed',
+  'users.email_verification.issued',
+  'users.email.verified',
+  'notifications.',
+  'notifications.announcement.sent',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

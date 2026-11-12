@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { NotificationBell } from '../notifications/NotificationBell'
 import { HeaderBrand, SiderAcademyName } from './AcademyBrand'
 import { navFor } from './navigation'
 import './AppLayout.css'
@@ -105,6 +106,8 @@ export function AppLayout() {
               {t('common.demoMode')}
             </Tag>
             <LanguageSwitcher />
+            {/* Every signed-in user's unread count (API-168, polled while the page is visible — J-F54, D-R86). */}
+            <NotificationBell />
             <Dropdown menu={{ items: userMenu }} trigger={['click']}>
               <span className="app-user">
                 <Avatar size="small" icon={<UserOutlined />} />

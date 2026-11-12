@@ -1,0 +1,89 @@
+/* «My notifications» (J-F54): the inbox list of /notifications and the panel of the header bell. */
+
+.notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid;
+  border-radius: 6px;
+}
+
+.notification-item__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.notification-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+/* The title opens the notification: a button that reads like a heading link. */
+.notification-item__title {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.notification-item__title--read {
+  font-weight: 400;
+}
+
+.notification-item__title:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* The sender's words as typed: their line breaks stay, nothing is read as markup. */
+.notification-item__body {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notification-item__actions {
+  flex: none;
+}
+
+.notification-bell__panel {
+  width: min(360px, calc(100vw - 32px));
+}
+
+.notification-bell__list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.notification-bell__list .notification-item {
+  padding: 8px 4px;
+}
+
+/* One line of the body in the panel; the whole text is on the page. */
+.notification-bell__list .notification-item__body {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 576px) {
+  .notification-item {
+    flex-direction: column;
+  }
+}
