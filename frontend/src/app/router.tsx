@@ -15,11 +15,13 @@ import { LessonsPage } from '../pages/LessonsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { MyAssignmentsPage } from '../pages/MyAssignmentsPage'
 import { MyClassesPage } from '../pages/MyClassesPage'
+import { MyInvoicesPage } from '../pages/MyInvoicesPage'
 import { MyLessonsPage } from '../pages/MyLessonsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
 import { PaymentsPage } from '../pages/PaymentsPage'
 import { ProfilePage } from '../pages/ProfilePage'
+import { MyReceiptPage, ReceiptPage } from '../pages/ReceiptPage'
 import { ReportsPage } from '../pages/ReportsPage'
 import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
@@ -36,6 +38,9 @@ const router = createBrowserRouter([
   // Public token pages (MOD-03-T12): the one-time link is the only credential.
   { path: '/invite/:token', element: <InvitationPage /> },
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+  // Receipt print pages (J-F52 — MOD-11-T07): signed-in, outside the app chrome, so the browser prints the receipt alone.
+  { path: '/payments/:id/receipt', element: <RequireAuth>{guarded('payments', <ReceiptPage />)}</RequireAuth> }, // the read keys of the invoices (API-153)
+  { path: '/my-invoices/receipts/:id', element: <RequireAuth>{guarded('myInvoices', <MyReceiptPage />)}</RequireAuth> }, // ownership (API-155)
   {
     path: '/',
     element: (
@@ -54,6 +59,7 @@ const router = createBrowserRouter([
       { path: 'my-lessons', element: guarded('myLessons', <MyLessonsPage />) }, // `student`/`guardian` role keys (J-F11, API-101 — ownership)
       { path: 'assignments', element: guarded('assignments', <AssignmentsPage />) },
       { path: 'my-assignments', element: guarded('myAssignments', <MyAssignmentsPage />) }, // `student`/`guardian` role keys (J-F42, API-112 — ownership)
+      { path: 'my-invoices', element: guarded('myInvoices', <MyInvoicesPage />) }, // `student`/`guardian` role keys (J-F52, API-155 — ownership + read_own/read_linked)
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },
@@ -65,6 +71,7 @@ const router = createBrowserRouter([
       { path: 'settings/branches', element: guarded('branches', <SettingsPage section="branches" />) }, // `branches.manage` alone (MOD-02-T06 screen)
       { path: 'settings/rooms', element: guarded('rooms', <SettingsPage section="rooms" />) }, // `schedule.manage` alone (J-F06 — MOD-07-T02 screen)
       { path: 'settings/grade-schemes', element: guarded('gradeSchemes', <SettingsPage section="gradeSchemes" />) }, // `academy.settings.manage` alone (J-F44 — MOD-09-T08 part a)
+      { path: 'settings/fee-plans', element: guarded('feePlans', <SettingsPage section="feePlans" />) }, // `fee_plans.manage` or `invoices.manage` (J-F52 — MOD-11-T07)
       // Own profile: every signed-in user, whatever the role.
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },

@@ -1,0 +1,69 @@
+/* The receipt print page (J-F52): a sheet centred on screen; printed alone, without the toolbar. */
+.receipt-page {
+  min-height: 100vh;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+.receipt-sheet {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.receipt-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.receipt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.receipt-head__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.receipt-head__logo {
+  display: block;
+  max-height: 48px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.receipt-reversed {
+  border: 2px solid currentColor;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media print {
+  .receipt-toolbar {
+    display: none !important;
+  }
+
+  .receipt-page {
+    min-height: auto;
+    padding: 0;
+  }
+
+  .receipt-sheet {
+    max-width: none;
+  }
+
+  .receipt-sheet .ant-card {
+    box-shadow: none;
+  }
+}

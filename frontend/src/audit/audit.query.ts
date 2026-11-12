@@ -135,6 +135,21 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'exams.status.changed',
   'exams.deleted',
   'exams.results.recorded',
+  // MOD-11-T02..T04 (CH-0183..CH-0185) — first offered with J-F52 (CH-0166)
+  'fee_plans.',
+  'fee_plans.created',
+  'fee_plans.updated',
+  'fee_plans.deleted',
+  'invoices.',
+  'invoices.created',
+  'invoices.updated',
+  'invoices.deleted',
+  'invoices.issued',
+  'invoices.cancelled',
+  'invoices.batch_created',
+  'payments.',
+  'payments.recorded',
+  'payments.reversed',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

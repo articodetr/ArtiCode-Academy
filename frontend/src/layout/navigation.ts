@@ -9,6 +9,7 @@ import {
   CalendarOutlined,
   CreditCardOutlined,
   DashboardOutlined,
+  DollarOutlined,
   EnvironmentOutlined,
   FileDoneOutlined,
   FileTextOutlined,
@@ -22,6 +23,7 @@ import {
   SafetyOutlined,
   SettingOutlined,
   TeamOutlined,
+  WalletOutlined,
 } from '@ant-design/icons'
 import { ROLES } from '../auth/roles'
 import type { Role } from '../auth/roles'
@@ -138,6 +140,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
   // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
   { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
+  // MOD-11 (J-F52): «my invoices» (API-155) is ownership plus a key (invoices.read_own for oneself, invoices.read_linked for the
+  // children while holding the guardian role — the server answers 403 without either); shown to whoever holds the `student` or
+  // `guardian` server role, like «my classes» (a teacher or an admin alone gets no entry — the office reads /payments).
+  { key: 'myInvoices', path: '/my-invoices', labelKey: 'nav.myInvoices', icon: createElement(WalletOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-11' },
   // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
   // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
   // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams
@@ -152,7 +158,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
     module: 'MOD-09',
   },
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },
-  { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
+  // MOD-11 (J-F52): the invoices and payments API is real — gated by the three keys any of which reads /api/invoices and
+  // /api/payments (D-R65: invoices.read_all, invoices.manage or payments.record — staff hold the last two). Learners hold none of
+  // them by seed (their own invoices come with «my invoices»), so no role key is excepted; teachers hold no finance key.
+  { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), permissions: ['invoices.read_all', 'invoices.manage', 'payments.record'], module: 'MOD-11' },
   { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
   { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
   { key: 'audit', path: '/audit-logs', labelKey: 'nav.audit', icon: createElement(AuditOutlined), permissions: ['audit.read'], module: 'MOD-03' },
@@ -175,6 +184,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permissions: ['academy.settings.manage'],
     module: 'MOD-09',
   },
+  // J-F52 (MOD-11-T07): the fee plans tab of the settings lives under /settings/fee-plans, read with either key of API-140
+  // (fee_plans.manage, or invoices.manage to create invoices from the plans — read-only); writing needs fee_plans.manage. By
+  // seed the admin and the staff hold both.
+  { key: 'feePlans', path: '/settings/fee-plans', labelKey: 'nav.feePlans', icon: createElement(DollarOutlined), permissions: ['fee_plans.manage', 'invoices.manage'], module: 'MOD-11' },
 ]
 
 /** True when the viewer holds at least one server role key and every one of them is in `keys`. */
