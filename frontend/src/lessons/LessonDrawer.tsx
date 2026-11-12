@@ -13,7 +13,8 @@
 // shows — the lesson's own, its creation and last change, when its attendance
 // was recorded — is in the lesson's `timeZone`, named in its own row beside
 // this device's zone when they differ, and the edit form takes the day and
-// the times in that zone (D-R41 — J-F28).
+// the times in that zone (D-R41 — J-F28) — or, once another room is chosen, in
+// the zone the server will give the lesson there (J-F48).
 // Since J-F40 (KI-058 — the guard of the class, user and course drawers and
 // the role editor: KI-052, KI-054, KI-055, KI-057): while the edit form or the
 // attendance sheet holds unsaved work — each reports it through its
@@ -27,7 +28,7 @@
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LinkOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ATTENDANCE_STATUSES } from '../api/attendance'
@@ -47,11 +48,12 @@ import { localizedLabel } from '../users/users.format'
 import { LessonFormFields } from './LessonFormFields'
 import { LessonZoneValue } from './LessonZone'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
-import { lessonFormHasChanges, lessonFormValuesOf, planLessonPatch } from './lessons.form'
-import type { LessonFormValues } from './lessons.form'
-import { durationMinutes, formatLessonDateTime, formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, syllabusItemLabel } from './lessons.format'
+import { editZoneOf, lessonFormHasChanges, lessonFormValuesOf, planLessonPatch, retimedFields } from './lessons.form'
+import type { LessonFormValues, RoomChoice } from './lessons.form'
+import { durationMinutes, formatLessonDateTime, formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle, sameTimeZone, syllabusItemLabel } from './lessons.format'
 import { availableLessonActions, isClassOpenForLessons, isDangerousLessonAction, lessonEditability } from './lessons.status'
 import type { LessonMenuAction } from './lessons.status'
+import { useAcademyZone } from './useAcademyZone'
 
 const ICONS: Readonly<Record<LessonMenuAction, ReactNode>> = {
   complete: <CheckCircleOutlined />,
@@ -493,12 +495,18 @@ interface LessonEditFormProps {
  * for the teacher options (a teacher who lost the assignment stays selectable
  * as the current value) — only with `classes.read`, which GET /api/classes/:id
  * requires; without it the select offers the current teacher and «no teacher».
- * The day and the times are read in the lesson's zone as loaded (D-R41), even
- * when the room changes: the server may then answer with another zone (the
- * room's branch), and the drawer shows that answer — no request of its own.
- * It reports unsaved work (KI-058) from onValuesChange — synchronous, where
+ * The day and the times are read in the zone the server will give the lesson
+ * (D-R41 — J-F48, the owner's review of #105; editZoneOf()): its own
+ * `timeZone` while its room stays, the newly chosen room's `timeZone` (the
+ * picker's RoomDto item — no request of its own), or the academy's without a
+ * room. When that zone changes, the day and times the user has not edited
+ * move to the new zone's clock of the same instants (retimedFields()), so the
+ * PATCH carries no instant for them and the lesson keeps its moment; an
+ * edited time keeps what was typed and is read in the new zone. It reports
+ * unsaved work (KI-058) from onValuesChange — synchronous, where
  * Form.useWatch would report a task late, after an Escape (J-F23) — compared
- * with the lesson as loaded through lessonFormHasChanges().
+ * with the lesson as loaded through lessonFormHasChanges(), and again after a
+ * zone change has moved the times.
  */
 function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel, onUnsavedChange }: LessonEditFormProps) {
   const { t } = useTranslation()
@@ -508,9 +516,27 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel, onUn
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const [klass, setKlass] = useState<AcademyClass | null>(null)
+  // The room picked in this session (null = untouched) and the zone the server will give the lesson with it.
+  const [roomChoice, setRoomChoice] = useState<RoomChoice | null>(null)
+  const academy = useAcademyZone()
+  const zone = editZoneOf(lesson, roomChoice, { timeZone: academy.timeZone, source: academy.source })
+  // The zone the time fields are written in: the lesson's own as loaded, then each zone they were moved to.
+  const fieldsZone = useRef(lesson.timeZone)
 
   // KI-058: the form left (saved, cancelled, stale, or the drawer closed) — nothing is held any more.
   useEffect(() => () => onUnsavedChange(false), [onUnsavedChange])
+
+  // J-F48: the form's zone moved (another room; or no room, the academy's — also when the academy is read only after
+  // that): the unedited times move to its clock of the same instants before the frame is painted, and the drawer hears
+  // what the form holds then.
+  useLayoutEffect(() => {
+    if (sameTimeZone(fieldsZone.current, zone.timeZone)) return
+    const values = form.getFieldsValue() as LessonFormValues
+    const moved = retimedFields(lesson, values, fieldsZone.current, zone.timeZone)
+    fieldsZone.current = zone.timeZone
+    if (moved) form.setFieldsValue(moved)
+    onUnsavedChange(lessonFormHasChanges(lesson, { ...values, ...moved }, zone.timeZone))
+  }, [form, lesson, onUnsavedChange, zone.timeZone])
 
   useEffect(() => {
     if (!canReadClass) return
@@ -526,7 +552,7 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel, onUn
   }, [canReadClass, lesson.class.id])
 
   const save = async (values: LessonFormValues) => {
-    const body = planLessonPatch(lesson, values)
+    const body = planLessonPatch(lesson, values, zone.timeZone)
     if (!body) {
       message.info(t('lessons.drawer.nothingChanged'))
       onCancel()
@@ -560,11 +586,19 @@ function LessonEditForm({ lesson, timingLocked, onSaved, onStale, onCancel, onUn
       requiredMark={false}
       initialValues={lessonFormValuesOf(lesson)}
       // KI-058: compared with the lesson as loaded on every change, so a change changed back holds nothing.
-      onValuesChange={(_changed, values) => onUnsavedChange(lessonFormHasChanges(lesson, values as LessonFormValues))}
+      onValuesChange={(_changed, values) => onUnsavedChange(lessonFormHasChanges(lesson, values as LessonFormValues, zone.timeZone))}
       onFinish={(values) => void save(values as LessonFormValues)}
       disabled={saving}
     >
-      <LessonFormFields form={form} mode="edit" zone={{ timeZone: lesson.timeZone, source: 'lesson' }} klass={klass} lesson={lesson} timingLocked={timingLocked} />
+      <LessonFormFields
+        form={form}
+        mode="edit"
+        zone={zone}
+        onRoomChange={(id, room) => setRoomChoice({ id, room })}
+        klass={klass}
+        lesson={lesson}
+        timingLocked={timingLocked}
+      />
       <Flex gap={8} justify="flex-end">
         <Button onClick={onCancel} disabled={saving}>
           {t('common.cancel')}

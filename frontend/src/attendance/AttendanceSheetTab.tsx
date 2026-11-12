@@ -8,7 +8,9 @@
 // not active or completed (withdrawn after the lesson, cancelled…) stays
 // listed read-only — the server refuses them with `not_enrolled`. Its times
 // (the lesson's start, when the sheet and each record were written) are in the
-// lesson's `timeZone`, as everywhere in the drawer (D-R41 — J-F28). Since
+// lesson's `timeZone`, as everywhere in the drawer (D-R41 — J-F28), and the
+// tab names that zone with this device's beside it when they differ, as the
+// details tab does (J-F48 — the owner's note 1 on #105). Since
 // J-F40 (KI-058) the editor reports through `onUnsavedChange` whether a row
 // differs from the server's record — the save would send it — so the drawer
 // keeps it on Escape, a mask click, the close button, a browser back/forward
@@ -24,7 +26,8 @@ import type { AttendanceItem, AttendanceSheet, AttendanceStatus } from '../api/a
 import type { Lesson } from '../api/lessons'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
-import { formatLessonDateTime } from '../lessons/lessons.format'
+import { LessonZoneValue } from '../lessons/LessonZone'
+import { differsFromDevice, formatLessonDateTime } from '../lessons/lessons.format'
 import { changedItems, currentDraft, draftProblem, isBatchTooLarge, isRecordableItem, markAllPresent, planAttendanceSave, unrecordedItems, withStatus } from './attendance.changes'
 import type { AttendanceDraft } from './attendance.changes'
 import { describeAttendanceFailure, failureMessage } from './attendance.errors'
@@ -321,6 +324,13 @@ function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStal
           {sheet.attendanceTakenAt ? t('lessons.attendance.takenAt', { date: formatLessonDateTime(sheet.attendanceTakenAt, language, timeZone) }) : t('lessons.attendance.notTaken')}
         </Typography.Text>
       </Flex>
+      {differsFromDevice(timeZone) ? (
+        // The times below are the lesson's zone, not this device's: say which, as the details tab does.
+        <Typography.Paragraph type="secondary" data-testid="attendance-zone" style={{ marginBottom: 12 }}>
+          {`${t('lessons.fields.timeZone')}: `}
+          <LessonZoneValue timeZone={timeZone} />
+        </Typography.Paragraph>
+      ) : null}
 
       {!sheet.recordable && sheet.closedReason ? (
         <Alert
