@@ -3,18 +3,20 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Lesson } from '../api/lessons'
 import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
+import type { Academy } from '../api/academy'
 import { ar } from '../i18n/ar'
+import { makeAcademy } from '../test/academy'
 import { CLASS_ID, makeClass } from '../test/classes'
 import { makeSyllabus } from '../test/courses'
 import { waitForDrawersToSettle } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { FAR_TIME_ZONE, LESSON_ADMIN_PERMISSIONS, LESSON_ID, LESSON_STAFF_PERMISSIONS, LESSON_TIME_ZONE, makeLesson } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { BRANCH_ID, ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
+import { BRANCH_ID, makeRoom, makeRoomList } from '../test/timetable'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { LessonDrawer } from './LessonDrawer'
 import { lessonFormValuesOf } from './lessons.form'
-import { durationMinutes, formatLessonDateTime, formatLessonDay, formatLessonTimes, rangeOf } from './lessons.format'
+import { differsFromDevice, durationMinutes, formatLessonDateTime, formatLessonDay, formatLessonTimes, rangeOf } from './lessons.format'
 
 interface Call {
   method: string
@@ -28,24 +30,38 @@ const NOW = Math.floor(Date.now() / 60_000) * 60_000
 /** A lesson that started two hours ago (complete is offered) and one next week (complete is not). */
 const pastLesson = (overrides: Partial<Lesson> = {}) => makeLesson({ startsAt: new Date(NOW - 2 * HOUR).toISOString(), endsAt: new Date(NOW - HOUR).toISOString(), ...overrides })
 const futureLesson = (overrides: Partial<Lesson> = {}) => makeLesson({ startsAt: new Date(NOW + 7 * 24 * HOUR).toISOString(), endsAt: new Date(NOW + 7 * 24 * HOUR + HOUR).toISOString(), ...overrides })
-/** A room of a branch with its own zone (the server shows a lesson there in that branch's zone — D-R41). */
+const BERLIN = 'Europe/Berlin'
+/** A room of the Berlin branch, as a lesson carries it: the server shows a lesson there in that branch's zone (D-R41). */
 const BRANCH_ROOM = { id: 'room-branch', code: 'BR-1', name: { ar: 'قاعة الفرع' }, branch: { id: BRANCH_ID, code: 'BER', name: { ar: 'فرع برلين' } } }
+/** A room of a branch in UTC+14 — a zone no test machine runs in, so the device's zone never passes for it by chance. */
+const FAR_ROOM = { id: 'room-far', code: 'FAR-1', name: { ar: 'قاعة بعيدة' }, branch: { id: 'branch-far', code: 'KIR', name: { ar: 'فرع كيريباتي' } } }
 
 /**
- * GET /api/lessons/:id returns `detail()` (re-read on every call), the pickers answer, writes answer with
- * `writes[method]`; `classReads` records the GET /api/classes/:id of the edit form.
+ * GET /api/lessons/:id returns `detail()` (re-read on every call), the pickers answer — the rooms with their RoomDto
+ * `timeZone` (CH-0189): LAB-1 of the academy's site, BR-1 of Berlin and FAR-1 of UTC+14 — and the academy (API-035, the
+ * zone of a lesson without a room — Asia/Riyadh by default); writes answer with `writes[method]`; `classReads`
+ * records the GET /api/classes/:id of the edit form.
  */
-function mockLessonApi(detail: () => Lesson, writes: Partial<Record<string, Response>> = {}) {
+function mockLessonApi(detail: () => Lesson, writes: Partial<Record<string, Response>> = {}, academy: Academy = makeAcademy()) {
   const calls: Call[] = []
   const classReads: string[] = []
   mockFetch((url, init) => {
     const method = init?.method ?? 'GET'
     const parsed = new URL(url, 'http://localhost')
+    if (parsed.pathname === '/api/academy') return jsonResponse(200, academy)
     if (parsed.pathname === `/api/classes/${CLASS_ID}`) {
       classReads.push(parsed.pathname)
       return jsonResponse(200, makeClass())
     }
-    if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom(), makeRoom({ ...BRANCH_ROOM, branchId: BRANCH_ID })]))
+    if (parsed.pathname === '/api/rooms')
+      return jsonResponse(
+        200,
+        makeRoomList([
+          makeRoom(),
+          makeRoom({ ...BRANCH_ROOM, branchId: BRANCH_ID, timeZone: BERLIN }),
+          makeRoom({ ...FAR_ROOM, branchId: FAR_ROOM.branch.id, timeZone: FAR_TIME_ZONE }),
+        ]),
+      )
     if (parsed.pathname.endsWith('/syllabus')) return jsonResponse(200, makeSyllabus())
     calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
     if (method === 'GET') return jsonResponse(200, detail())
@@ -86,6 +102,32 @@ async function chooseAction(label: string) {
 
 function dialogOf(hint: string): HTMLElement {
   return screen.getByText(hint).closest('[role="dialog"]') as HTMLElement
+}
+
+/** Opens the edit form and waits until the room picker has its options. */
+async function openEditForm() {
+  fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+  return screen.findByLabelText(ar.lessons.fields.room)
+}
+
+async function chooseRoom(label: string) {
+  fireEvent.mouseDown(screen.getByLabelText(ar.lessons.fields.room))
+  fireEvent.click(await screen.findByText(label, { selector: '.ant-select-item-option-content' }))
+}
+
+/** The edit form's three time fields, as typed. */
+function timeFields() {
+  return {
+    date: (screen.getByLabelText(ar.lessons.fields.date) as HTMLInputElement).value,
+    startTime: (screen.getByLabelText(ar.lessons.fields.startTime) as HTMLInputElement).value,
+    endTime: (screen.getByLabelText(ar.lessons.fields.endTime) as HTMLInputElement).value,
+  }
+}
+
+/** The line above the day and the times: the zone they are read in, and this device's when it differs. */
+function zoneHint(source: 'lessonInput' | 'roomInput' | 'academyInput', zone: string): string {
+  const named = ar.lessons.zone[source].replace('{{zone}}', zone)
+  return differsFromDevice(zone) ? `${named} — ${ar.lessons.zone.device.replace('{{zone}}', deviceTimeZone())}` : named
 }
 
 describe('LessonDrawer', () => {
@@ -385,28 +427,86 @@ describe('LessonDrawer', () => {
     ])
   })
 
-  it('says under the room that the lesson’s zone follows its room, keeps the typed times in the shown zone, and shows the server’s answer (D-R41 — J-F28)', async () => {
-    // A lesson in a Berlin branch room: shown in Europe/Berlin; moved to the academy's own site, the server answers in the academy's zone.
-    const lesson = makeLesson({ room: BRANCH_ROOM, timeZone: 'Europe/Berlin' })
-    const moved = makeLesson({ timeZone: LESSON_TIME_ZONE, updatedAt: '2026-11-07T10:00:00.000Z' })
+  it('reads an edited time in the zone of the room the lesson moves to: a Riyadh lesson moved into a Berlin room and started at 11:00 is 10:00 UTC, its untouched end keeps its instant (D-R41 — J-F48)', async () => {
+    // The owner's example: 2026-11-20 10:00–14:00 in LAB-1 of the academy's site (Asia/Riyadh) = 07:00–11:00 UTC.
+    const lesson = makeLesson({ startsAt: '2026-11-20T07:00:00.000Z', endsAt: '2026-11-20T11:00:00.000Z' })
+    const saved = makeLesson({ startsAt: '2026-11-20T10:00:00.000Z', endsAt: '2026-11-20T11:00:00.000Z', room: BRANCH_ROOM, timeZone: BERLIN, updatedAt: '2026-11-07T10:00:00.000Z' })
+    const calls = mockLessonApi(() => lesson, { PATCH: jsonResponse(200, saved) })
+    const { onUpdated } = renderDrawer(LESSON_ADMIN_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+
+    await openEditForm()
+    expect(screen.getByTestId('lesson-zone-hint')).toHaveTextContent(zoneHint('lessonInput', LESSON_TIME_ZONE))
+    expect(timeFields()).toEqual({ date: '2026-11-20', startTime: '10:00', endTime: '14:00' })
+    await chooseRoom('BR-1 — قاعة الفرع (BER)')
+    // The zone the server will give the lesson there is named, and the times not edited show their instants on its clock.
+    await waitFor(() => expect(screen.getByTestId('lesson-zone-hint')).toHaveTextContent(zoneHint('roomInput', BERLIN)))
+    await waitFor(() => expect(timeFields()).toEqual({ date: '2026-11-20', startTime: '08:00', endTime: '12:00' }))
+    // An edited start is read in Berlin.
+    fireEvent.change(screen.getByLabelText(ar.lessons.fields.startTime), { target: { value: '11:00' } })
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(saved))
+    // 11:00 in Berlin (UTC+1) — not the 08:00 UTC of Riyadh's 11:00; the end was not edited, so no endsAt travels.
+    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ startsAt: '2026-11-20T10:00:00.000Z', roomId: 'room-branch' }])
+    expect(await screen.findByText(formatLessonTimes(saved.startsAt, saved.endsAt, 'ar', BERLIN))).toBeInTheDocument()
+    expect(formatLessonTimes(saved.startsAt, saved.endsAt, 'ar', BERLIN)).toBe('11:00 – 12:00')
+  })
+
+  it('moves a lesson between zones without touching its time: the clock follows the new room’s zone, the room alone travels, and the drawer shows the server’s answer (D-R41 — J-F48)', async () => {
+    expect(deviceTimeZone()).not.toBe(FAR_TIME_ZONE)
+    // 10:00–11:30 UTC in a Berlin room (11:00–12:30 there), moved to a room in UTC+14 — the 11th from 00:00 there.
+    const lesson = makeLesson({ room: BRANCH_ROOM, timeZone: BERLIN })
+    const moved = makeLesson({ room: FAR_ROOM, timeZone: FAR_TIME_ZONE, updatedAt: '2026-11-07T10:00:00.000Z' })
     const calls = mockLessonApi(() => lesson, { PATCH: jsonResponse(200, moved) })
     const { onUpdated } = renderDrawer(LESSON_ADMIN_PERMISSIONS)
     await screen.findByText('PY-101-A')
-    expect(screen.getByText(formatLessonTimes(lesson.startsAt, lesson.endsAt, 'ar', 'Europe/Berlin'))).toBeInTheDocument()
+    expect(screen.getByText(formatLessonTimes(lesson.startsAt, lesson.endsAt, 'ar', BERLIN))).toBeInTheDocument()
 
-    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
-    const room = await screen.findByLabelText(ar.lessons.fields.room)
-    expect(screen.queryByText(ar.lessons.zone.followsRoom)).not.toBeInTheDocument()
-    fireEvent.mouseDown(room)
-    fireEvent.click(await screen.findByText('LAB-1 — مختبر 1', { selector: '.ant-select-item-option-content' }))
-    expect(await screen.findByText(ar.lessons.zone.followsRoom)).toBeInTheDocument()
+    await openEditForm()
+    expect(timeFields()).toEqual({ date: '2026-11-10', startTime: '11:00', endTime: '12:30' })
+    await chooseRoom('FAR-1 — قاعة بعيدة (KIR)')
+    await waitFor(() => expect(screen.getByTestId('lesson-zone-hint')).toHaveTextContent(zoneHint('roomInput', FAR_TIME_ZONE)))
+    // The day too: the same instants fall on the 11th there.
+    await waitFor(() => expect(timeFields()).toEqual({ date: '2026-11-11', startTime: '00:00', endTime: '01:30' }))
+    // No note about a zone the lesson «may» take once saved: the hint above the day already names it.
+    expect(screen.queryByText(/بعد الحفظ قد يُعرض/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
     await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(moved))
-    // The room alone travels: the lesson keeps its instants, whatever zone shows them afterwards.
-    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ roomId: ROOM_ID }])
-    expect(await screen.findByText(formatLessonTimes(moved.startsAt, moved.endsAt, 'ar', LESSON_TIME_ZONE))).toBeInTheDocument()
-    expect(screen.getByText(LESSON_TIME_ZONE)).toBeInTheDocument()
+    // The room alone travels: the lesson keeps its instants, now shown in the new room's zone.
+    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ roomId: 'room-far' }])
+    expect(await screen.findByText('00:00 – 01:30')).toBeInTheDocument()
+    expect(screen.getByText(FAR_TIME_ZONE)).toBeInTheDocument()
+  })
+
+  it('reads the times of a lesson moved out of its room in the academy’s zone — the zone of a lesson without one — and holds nothing once the room is chosen back (J-F48)', async () => {
+    // A Berlin lesson (11:00–12:30 there); the academy in UTC+14, so the device's zone never passes for it by chance.
+    const lesson = makeLesson({ room: BRANCH_ROOM, timeZone: BERLIN })
+    const calls = mockLessonApi(() => lesson, { PATCH: jsonResponse(200, makeLesson({ room: null, timeZone: FAR_TIME_ZONE })) }, makeAcademy({ timezone: FAR_TIME_ZONE }))
+    renderDrawer(LESSON_ADMIN_PERMISSIONS)
+    await screen.findByText('PY-101-A')
+
+    await openEditForm()
+    const room = screen.getByLabelText(ar.lessons.fields.room)
+    fireEvent.click(room.closest('.ant-select')!.querySelector('.ant-select-clear')!)
+    await waitFor(() => expect(screen.getByTestId('lesson-zone-hint')).toHaveTextContent(zoneHint('academyInput', FAR_TIME_ZONE)))
+    await waitFor(() => expect(timeFields()).toEqual({ date: '2026-11-11', startTime: '00:00', endTime: '01:30' }))
+    // The same room again: the lesson's own zone and clock — nothing left to save.
+    await chooseRoom('BR-1 — قاعة الفرع (BER)')
+    await waitFor(() => expect(screen.getByTestId('lesson-zone-hint')).toHaveTextContent(zoneHint('lessonInput', BERLIN)))
+    await waitFor(() => expect(timeFields()).toEqual({ date: '2026-11-10', startTime: '11:00', endTime: '12:30' }))
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+    expect(await screen.findByText(ar.lessons.drawer.nothingChanged)).toBeInTheDocument()
+
+    // Out of its room again, with a new end: read in the academy's zone (02:00 on the 11th in UTC+14 = 12:00 UTC on the 10th).
+    await openEditForm()
+    fireEvent.click(screen.getByLabelText(ar.lessons.fields.room).closest('.ant-select')!.querySelector('.ant-select-clear')!)
+    await waitFor(() => expect(timeFields()).toEqual({ date: '2026-11-11', startTime: '00:00', endTime: '01:30' }))
+    fireEvent.change(screen.getByLabelText(ar.lessons.fields.endTime), { target: { value: '02:00' } })
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+    await waitFor(() => expect(calls.filter((call) => call.method === 'PATCH')).toHaveLength(1))
+    expect(calls.filter((call) => call.method === 'PATCH')[0]!.body).toEqual({ endsAt: '2026-11-10T12:00:00.000Z', roomId: null })
   })
 
   it('words a missing delivery mode itself in the edit form and sends nothing (J-F19)', async () => {
