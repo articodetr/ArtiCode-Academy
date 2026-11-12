@@ -10,13 +10,24 @@ import { jsonResponse, mockFetch } from '../test/http'
 import { FAR_TIME_ZONE, LESSON_ADMIN_PERMISSIONS, LESSON_TIME_ZONE, makeLesson } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { BRANCH_ID, ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
+import { zonedInstant } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { CreateLessonModal } from './CreateLessonModal'
-import { durationMinutes, formatLessonDay, rangeOf } from './lessons.format'
+import { differsFromDevice, durationMinutes, formatLessonDay, rangeOf } from './lessons.format'
 
+const BERLIN = 'Europe/Berlin'
 const twoTeachers = makeClass({ teachers: [makeClassTeacher(), makeClassTeacher({ userId: TEACHER_IDS[1], fullName: 'منى المساعدة', role: 'assistant' })] })
-/** A room of a branch: the server would show a lesson there in the branch's zone (D-R41). */
-const branchRoom = makeRoom({ id: 'room-branch', code: 'BR-1', name: { ar: 'قاعة الفرع' }, branchId: BRANCH_ID, branch: { id: BRANCH_ID, code: 'IST', name: { ar: 'فرع إسطنبول' } } })
+/** A room of the Berlin branch: RoomDto `timeZone` is the branch's zone (CH-0189), so a lesson there is typed in it (D-R41 — J-F48). */
+const berlinRoom = makeRoom({
+  id: 'room-berlin',
+  code: 'BER-1',
+  name: { ar: 'قاعة برلين' },
+  branchId: BRANCH_ID,
+  branch: { id: BRANCH_ID, code: 'BER', name: { ar: 'فرع برلين' } },
+  timeZone: BERLIN,
+})
+/** A room of a branch in UTC+14 — a zone no test machine runs in, so the device's zone never passes for the room's by chance. */
+const farRoom = makeRoom({ id: 'room-far', code: 'FAR-1', name: { ar: 'قاعة بعيدة' }, branchId: 'branch-far', branch: { id: 'branch-far', code: 'KIR', name: { ar: 'فرع كيريباتي' } }, timeZone: FAR_TIME_ZONE })
 
 /**
  * Serves the academy (API-035 — the zone the times are read in, makeAcademy()'s Asia/Riyadh by default), the class
@@ -29,7 +40,7 @@ function mockCreateApi(createResponse: Response = jsonResponse(201, makeLesson({
     const method = init?.method ?? 'GET'
     if (parsed.pathname === '/api/academy') return academy instanceof Response ? academy : jsonResponse(200, academy)
     if (parsed.pathname === '/api/classes') return jsonResponse(200, makeClassList([twoTeachers, makeClass({ id: 'closed-1', code: 'OLD-A', name: { ar: 'فصل قديم' }, status: 'completed' })]))
-    if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom(), branchRoom]))
+    if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom(), berlinRoom, farRoom]))
     if (parsed.pathname.endsWith('/syllabus')) return jsonResponse(200, makeSyllabus())
     if (parsed.pathname === `/api/classes/${CLASS_ID}/lessons` && method === 'POST') {
       posts.push(JSON.parse(String(init?.body)))
@@ -41,10 +52,10 @@ function mockCreateApi(createResponse: Response = jsonResponse(201, makeLesson({
 }
 
 /** The line above the day and the times: which zone they are read in, and this device's when it differs. */
-function zoneHint(source: 'academyInput' | 'deviceInput', zone: string): string {
+function zoneHint(source: 'academyInput' | 'deviceInput' | 'roomInput', zone: string): string {
   const device = deviceTimeZone()
   const named = ar.lessons.zone[source].replace('{{zone}}', zone)
-  return zone === device ? named : `${named} — ${ar.lessons.zone.device.replace('{{zone}}', device)}`
+  return differsFromDevice(zone, device) ? `${named} — ${ar.lessons.zone.device.replace('{{zone}}', device)}` : named
 }
 
 /** Opens the modal and waits until the academy's zone is read (`zone` = what the hint then names). */
@@ -71,6 +82,18 @@ function fillTimes(dialog: HTMLElement, date: string, start: string, end: string
 function submit(dialog: HTMLElement) {
   fireEvent.click(within(dialog).getByText(ar.lessons.create.submit).closest('button')!)
 }
+
+async function chooseRoom(dialog: HTMLElement, label: string) {
+  fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.room))
+  fireEvent.click(await screen.findByText(label, { selector: '.ant-select-item-option-content' }))
+}
+
+/** The room select's clear button (allowClear): «no room». */
+function clearRoom(dialog: HTMLElement) {
+  fireEvent.click(within(dialog).getByLabelText(ar.lessons.fields.room).closest('.ant-select')!.querySelector('.ant-select-clear')!)
+}
+
+const zoneHintOf = (dialog: HTMLElement) => within(dialog).getByTestId('lesson-zone-hint')
 
 describe('CreateLessonModal', () => {
   it('offers a completed class disabled, and once a class is chosen its teachers (lead first, then «no teacher») and its syllabus items', async () => {
@@ -154,7 +177,7 @@ describe('CreateLessonModal', () => {
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.meetingUrl), 'https://meet.example.com/f')
     submit(dialog)
 
-    // 22:00 → 00:30 of the next day in the academy's zone (Asia/Riyadh, UTC+3).
+    // 22:00 → 00:30 of the next day in LAB-1's zone: the academy's own site, so the academy's (Asia/Riyadh, UTC+3).
     await waitFor(() =>
       expect(posts).toEqual([
         {
@@ -270,19 +293,68 @@ describe('CreateLessonModal', () => {
     expect(posts[0]).toMatchObject({ startsAt: range.startsAt, endsAt: range.endsAt })
   })
 
-  it('says under the room that a room of a branch may show the lesson in that branch’s zone once created (D-R41)', async () => {
-    mockCreateApi()
+  it('types the day and the times in the chosen room’s zone: 10:00–11:30 in a Berlin room is 09:00–10:30 UTC, the instant its weekly slot at 10:00 generates (D-R41 — J-F48)', async () => {
+    // The owner's example: the academy in Asia/Riyadh, a room of a branch in Europe/Berlin.
+    const posts = mockCreateApi()
     const { dialog } = await renderOpen()
-    const room = within(dialog).getByLabelText(ar.lessons.fields.room)
-    expect(within(dialog).queryByText(ar.lessons.zone.followsRoom)).not.toBeInTheDocument()
+    await chooseClass(dialog)
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'درس')
+    // Typed while the hint names the academy's zone …
+    fillTimes(dialog, '2026-11-20', '10:00', '11:30')
+    expect(zoneHintOf(dialog)).toHaveTextContent(zoneHint('academyInput', LESSON_TIME_ZONE))
+    // … then the Berlin room: the hint follows it, and the typed wall clock stays, to be read in the room's zone.
+    await chooseRoom(dialog, 'BER-1 — قاعة برلين (BER)')
+    await waitFor(() => expect(zoneHintOf(dialog)).toHaveTextContent(zoneHint('roomInput', BERLIN)))
+    expect(within(dialog).getByLabelText(ar.lessons.fields.date)).toHaveValue('2026-11-20')
+    expect(within(dialog).getByLabelText(ar.lessons.fields.startTime)).toHaveValue('10:00')
+    expect(within(dialog).getByLabelText(ar.lessons.fields.endTime)).toHaveValue('11:30')
+    // No note about a zone the lesson «may» take once saved: the hint above the day already names it.
+    expect(within(dialog).queryByText(/بعد الحفظ قد يُعرض/)).not.toBeInTheDocument()
+    submit(dialog)
 
-    fireEvent.mouseDown(room)
-    fireEvent.click(await screen.findByText('BR-1 — قاعة الفرع (IST)', { selector: '.ant-select-item-option-content' }))
-    expect(await within(dialog).findByText(ar.lessons.zone.followsRoom)).toBeInTheDocument()
+    await waitFor(() => expect(posts).toHaveLength(1))
+    // Not 07:00 UTC (the academy's 10:00): 10:00 in Berlin (UTC+1 in November).
+    expect(posts[0]).toMatchObject({ roomId: 'room-berlin', startsAt: '2026-11-20T09:00:00.000Z', endsAt: '2026-11-20T10:30:00.000Z' })
+    // The same instant a weekly slot at 10:00 in that room generates (zonedInstant() mirrors the server's generation), so
+    // the two match — and conflict — on the server.
+    expect(new Date(zonedInstant('2026-11-20', '10:00', BERLIN)).toISOString()).toBe('2026-11-20T09:00:00.000Z')
+  })
 
-    // A room of the academy's own site keeps the academy's zone: nothing to say.
-    fireEvent.mouseDown(room)
-    fireEvent.click(await screen.findByText('LAB-1 — مختبر 1', { selector: '.ant-select-item-option-content' }))
-    await waitFor(() => expect(within(dialog).queryByText(ar.lessons.zone.followsRoom)).not.toBeInTheDocument())
+  it('follows the room as it changes: back to the academy’s zone without a room, and a room in UTC+14 reads the same wall clock there — never the device’s zone (J-F48)', async () => {
+    expect(deviceTimeZone()).not.toBe(FAR_TIME_ZONE)
+    const posts = mockCreateApi()
+    const { dialog } = await renderOpen()
+    await chooseClass(dialog)
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'درس')
+    fillTimes(dialog, '2026-11-12', '23:00', '00:30')
+
+    await chooseRoom(dialog, 'BER-1 — قاعة برلين (BER)')
+    await waitFor(() => expect(zoneHintOf(dialog)).toHaveTextContent(zoneHint('roomInput', BERLIN)))
+    // No room any more: the zone of a lesson without one — the academy's.
+    clearRoom(dialog)
+    await waitFor(() => expect(zoneHintOf(dialog)).toHaveTextContent(zoneHint('academyInput', LESSON_TIME_ZONE)))
+    await chooseRoom(dialog, 'FAR-1 — قاعة بعيدة (KIR)')
+    await waitFor(() => expect(zoneHintOf(dialog)).toHaveTextContent(zoneHint('roomInput', FAR_TIME_ZONE)))
+    // The next day of the room's zone, whose midnight is 10:00 UTC.
+    expect(within(dialog).getByTestId('lesson-end-mark')).toHaveTextContent('(+1)')
+    submit(dialog)
+
+    await waitFor(() => expect(posts).toHaveLength(1))
+    // 23:00 on the 12th in UTC+14 is 09:00 UTC on the 12th; 00:30 on the 13th is 10:30 UTC.
+    expect(posts[0]).toMatchObject({ roomId: 'room-far', startsAt: '2026-11-12T09:00:00.000Z', endsAt: '2026-11-12T10:30:00.000Z' })
+  })
+
+  it('reads the times in the chosen room’s zone even when the academy cannot be read (J-F48)', async () => {
+    const posts = mockCreateApi(undefined, jsonResponse(503, { statusCode: 503, code: 'academy_not_configured', message: 'nope' }))
+    const { dialog } = await renderOpen(deviceTimeZone(), 'deviceInput')
+    await chooseClass(dialog)
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'درس')
+    fillTimes(dialog, '2026-11-12', '09:00', '10:30')
+    await chooseRoom(dialog, 'FAR-1 — قاعة بعيدة (KIR)')
+    await waitFor(() => expect(zoneHintOf(dialog)).toHaveTextContent(zoneHint('roomInput', FAR_TIME_ZONE)))
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    // 09:00 on the 12th in UTC+14 is the 11th at 19:00 UTC.
+    expect(posts[0]).toMatchObject({ startsAt: '2026-11-11T19:00:00.000Z', endsAt: '2026-11-11T20:30:00.000Z' })
   })
 })

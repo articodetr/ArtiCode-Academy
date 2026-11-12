@@ -2,92 +2,78 @@
 // time inputs, the range rule of lessons.time.ts, and the labels the list and
 // the drawer render. Every wall-clock value here belongs to a named IANA zone
 // (D-R41 — J-F28): a lesson's own `timeZone` (its room's branch, else the
-// academy's — the server decides) for its times, shown and typed; the
-// academy's for «today», the day filters and a lesson not created yet. The
-// browser's zone is read in one place only, deviceTimeZone(), which the
-// screens name beside a lesson zone that differs from it. Conversions go
-// through the timetable's zonedInstant() (DST-safe, a mirror of the server's).
-// No React, no i18next instance.
+// academy's — the server decides) for its times, shown and typed; for a lesson
+// typed with another room, or not created yet, the zone the server will give
+// it — the chosen room's `timeZone` (RoomDto since CH-0189), else the
+// academy's (lessonZoneFor() — J-F48); the academy's for «today» and the day
+// filters. The browser's zone is read in one place only, deviceTimeZone(),
+// which the screens name beside a lesson zone that differs from it. The
+// academy's zone, the zone comparison and the wall-clock conversions are the
+// shared ones of common/timeZone.ts (J-F48), re-exported here under their
+// names; they go through the timetable's zonedInstant() (DST-safe, a mirror of
+// the server's). No React, no i18next instance.
 import { MAX_LESSON_HOURS } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import type { ScheduleRoom } from '../api/timetable'
+import { academyTimeZoneOf, dayEndIn, dayStartIn, differsFromDevice, instantIn, sameTimeZone, wallClockIn } from '../common/timeZone'
 import type { Language } from '../i18n/language'
-import { addDays, calendarDateIn, clockOfMinutes, isCalendarDate, isTimeZone, minutesNowIn, zonedInstant } from '../timetable/timetable.dates'
+import { addDays, calendarDateIn, isCalendarDate, isTimeZone } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { localizedLabel } from '../users/users.format'
 
-const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 const EMPTY = '—'
 
 /** The mark of an end on the next day, after the end time (list, drawer and the form's end time — J-F19). */
 export const NEXT_DAY_MARK = '(+1)'
 
 /** Where the zone of the shown or typed times comes from — the screens say it beside the zone's name. */
-export type LessonZoneSource = 'lesson' | 'academy' | 'device'
+export type LessonZoneSource = 'lesson' | 'room' | 'academy' | 'device'
 
 export interface LessonZone {
   /** IANA name. */
   timeZone: string
-  /** `lesson` = the lesson's own (D-R41); `academy` = API-035 `timezone`; `device` = this device's, when the academy could not be read. */
+  /**
+   * `lesson` = the lesson's own (D-R41); `room` = the chosen room's (RoomDto `timeZone` — J-F48); `academy` = API-035
+   * `timezone`; `device` = this device's, when the academy could not be read.
+   */
   source: LessonZoneSource
 }
 
 /**
  * The academy's zone (API-035 `timezone`) — the zone of «today», of the day
- * filters and of the times typed for a new lesson — or this device's when the
- * academy could not be read (as the timetable falls back).
+ * filters and of the times typed for a lesson without a room — or this
+ * device's when the academy could not be read (as the timetable falls back).
  */
 export function academyZoneOf(academy: { timezone?: unknown } | null): LessonZone {
-  const zone = academy?.timezone
-  return isTimeZone(zone) ? { timeZone: zone, source: 'academy' } : { timeZone: deviceTimeZone(), source: 'device' }
+  const zone = academyTimeZoneOf(academy)
+  return zone ? { timeZone: zone, source: 'academy' } : { timeZone: deviceTimeZone(), source: 'device' }
 }
 
-const canonicalZones = new Map<string, string>()
-
-/** The name Intl resolves a zone to, so an alias (Etc/UTC, Asia/Kolkata) compares equal to its canonical name. */
-function canonicalZone(timeZone: string): string {
-  let canonical = canonicalZones.get(timeZone)
-  if (canonical === undefined) {
-    try {
-      canonical = new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone
-    } catch {
-      canonical = timeZone
-    }
-    canonicalZones.set(timeZone, canonical)
-  }
-  return canonical
+/**
+ * The zone the server will give a lesson held in `room` (D-R41 — a manual
+ * mirror of `displayTimeZone()` in backend/src/schedule/timetable.policy.ts,
+ * which LessonsService applies — keep them in sync): the room's `timeZone` (RoomDto since CH-0189 — its
+ * branch's, else the academy's, by the same function), else — no room, or a
+ * room read without a zone — `academy` (useAcademyZone(): this device's when
+ * the academy could not be read). The lesson forms type the day and the times
+ * in it (J-F48), so a lesson typed at 10:00 in a Berlin room is 10:00 in
+ * Berlin, as the weekly slot at 10:00 in that room generates it.
+ */
+export function lessonZoneFor(room: { timeZone?: unknown } | null | undefined, academy: LessonZone): LessonZone {
+  const zone = room?.timeZone
+  return isTimeZone(zone) ? { timeZone: zone, source: 'room' } : academy
 }
 
-/** True when the two names denote one zone. */
-export function sameTimeZone(a: string, b: string): boolean {
-  return a === b || canonicalZone(a) === canonicalZone(b)
-}
-
-/** True when `timeZone` is not this device's zone: the screens then name both zones (D-R41). */
-export function differsFromDevice(timeZone: string, device: string = deviceTimeZone()): boolean {
-  return !sameTimeZone(timeZone, device)
-}
-
+// The shared comparison (an alias is the zone it stands for) and conversions, under the names the lessons screens use.
+export { differsFromDevice, sameTimeZone }
 /** The instant as `YYYY-MM-DD` and `HH:MM` on the wall clock of `timeZone` (the values of the native inputs). */
-export function zonedPartsOf(iso: string, timeZone: string): { date: string; time: string } {
-  const instant = new Date(iso).getTime()
-  if (Number.isNaN(instant)) return { date: '', time: '' }
-  return { date: calendarDateIn(timeZone, instant), time: clockOfMinutes(minutesNowIn(timeZone, instant)) }
-}
+export { wallClockIn as zonedPartsOf }
+/** A wall-clock date and time in `timeZone` → ISO 8601 instant (UTC, `Z`), or undefined when either is missing or malformed. */
+export { instantIn as toInstant }
 
 /** Today in `timeZone` as `YYYY-MM-DD` — the default «from» of the lessons list (the academy's day — D-R41). */
 export function todayIn(timeZone: string, now: Date = new Date()): string {
   return calendarDateIn(timeZone, now.getTime())
-}
-
-/**
- * A wall-clock date and time in `timeZone` → ISO 8601 instant (UTC, `Z`), or
- * undefined when either is missing or malformed. A time a DST gap skips moves
- * forward; one that occurs twice resolves as zonedInstant() says.
- */
-export function toInstant(date: string | undefined, time: string | undefined, timeZone: string): string | undefined {
-  if (!date || !time || !isCalendarDate(date) || !CLOCK_TIME.test(time)) return undefined
-  return new Date(zonedInstant(date, time, timeZone)).toISOString()
 }
 
 /**
@@ -105,11 +91,11 @@ export function rangeOf(
   endTime: string | undefined,
   timeZone: string,
 ): { startsAt: string; endsAt: string; nextDay: boolean } | undefined {
-  const startsAt = toInstant(date, startTime, timeZone)
-  const sameDayEnd = toInstant(date, endTime, timeZone)
+  const startsAt = instantIn(date, startTime, timeZone)
+  const sameDayEnd = instantIn(date, endTime, timeZone)
   if (!date || !startsAt || !sameDayEnd) return undefined
   const nextDay = new Date(sameDayEnd).getTime() <= new Date(startsAt).getTime()
-  const endsAt = nextDay ? toInstant(addDays(date, 1), endTime, timeZone) : sameDayEnd
+  const endsAt = nextDay ? instantIn(addDays(date, 1), endTime, timeZone) : sameDayEnd
   return endsAt ? { startsAt, endsAt, nextDay } : undefined
 }
 
@@ -154,19 +140,9 @@ export function dateFilterValue(raw: string): string | undefined {
 }
 
 /** The first instant of a calendar day in `timeZone` as ISO 8601 (the `from` filter), or undefined for a blank or malformed input. */
-export function dayStartInstant(date: string | undefined, timeZone: string): string | undefined {
-  return toInstant(date, '00:00', timeZone)
-}
-
-/**
- * The last millisecond of a calendar day in `timeZone` as ISO 8601 (the `to`
- * filter — the server compares inclusively): one before the next day starts,
- * so a 23- or 25-hour day (DST) keeps its whole length.
- */
-export function dayEndInstant(date: string | undefined, timeZone: string): string | undefined {
-  if (!date || !isCalendarDate(date)) return undefined
-  return new Date(zonedInstant(addDays(date, 1), '00:00', timeZone) - 1).toISOString()
-}
+export { dayStartIn as dayStartInstant }
+/** The last millisecond of a calendar day in `timeZone` as ISO 8601 (the `to` filter, inclusive); a 23- or 25-hour day keeps its whole length. */
+export { dayEndIn as dayEndInstant }
 
 function intlLocale(language: Language): string {
   // Arabic with Latin digits, as users.format.ts: times line up with the identifiers around them.
@@ -196,8 +172,8 @@ export function formatClock(iso: string, language: Language, timeZone: string): 
 
 /** `10:00 – 11:30` in `timeZone` (render it in a plain `dir="ltr"` span); a lesson ending on another day of that zone shows NEXT_DAY_MARK. */
 export function formatLessonTimes(startsAt: string, endsAt: string, language: Language, timeZone: string): string {
-  const start = zonedPartsOf(startsAt, timeZone)
-  const end = zonedPartsOf(endsAt, timeZone)
+  const start = wallClockIn(startsAt, timeZone)
+  const end = wallClockIn(endsAt, timeZone)
   const range = `${formatClock(startsAt, language, timeZone)} – ${formatClock(endsAt, language, timeZone)}`
   return start.date === end.date || !end.date ? range : `${range} ${NEXT_DAY_MARK}`
 }

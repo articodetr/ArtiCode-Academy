@@ -8,6 +8,7 @@ import { formatLessonDateTime } from '../lessons/lessons.format'
 import { jsonResponse, mockFetch } from '../test/http'
 import { FAR_TIME_ZONE, LESSON_ID, LESSON_TIME_ZONE } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { deviceTimeZone } from '../timetable/timetable.settings'
 import { formatDateTime } from '../users/users.format'
 import { AttendanceSheetTab } from './AttendanceSheetTab'
 import { ATTENDANCE_STATUS_COLORS } from './attendance.format'
@@ -210,6 +211,17 @@ describe('AttendanceSheetTab', () => {
     expect(screen.getByText(ar.lessons.attendance.takenAt.replace('{{date}}', formatLessonDateTime(closed.attendanceTakenAt, 'ar', FAR_TIME_ZONE)))).toBeInTheDocument()
     // Yousef's record (written 10:05 UTC) — under his name, after who wrote it.
     expect(within(row('يوسف الطالب')).getByText(formatLessonDateTime('2026-11-10T10:05:00.000Z', 'ar', FAR_TIME_ZONE), { exact: false })).toBeInTheDocument()
+    // The tab names the zone of those times, with this device's beside it, as the details tab does (J-F48 — the owner's note 1 on #105).
+    const zone = screen.getByTestId('attendance-zone')
+    expect(zone).toHaveTextContent(`${ar.lessons.fields.timeZone}: ${FAR_TIME_ZONE}`)
+    expect(zone).toHaveTextContent(ar.lessons.zone.device.replace('{{zone}}', deviceTimeZone()))
+  })
+
+  it('names no zone when the lesson is in the device’s own zone (J-F48)', async () => {
+    mockSheetApi(() => makeAttendanceSheet())
+    renderTab(ATTENDANCE_TEACHER_PERMISSIONS, deviceTimeZone())
+    expect(await screen.findByText('يوسف الطالب')).toBeInTheDocument()
+    expect(screen.queryByTestId('attendance-zone')).not.toBeInTheDocument()
   })
 
   it('re-reads the sheet and asks the drawer to re-read the lesson when the server says it no longer takes attendance', async () => {

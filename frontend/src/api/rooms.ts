@@ -33,6 +33,12 @@ export interface Room {
   /** null = the academy's own site. */
   branchId: string | null
   branch: RoomBranch | null
+  /**
+   * IANA zone the room's times are shown in (since CH-0189): its branch's `timezone`, else the academy's (UTC without
+   * the academy row) — the `displayTimeZone()` rule of API-090/091 and `LessonDto` (D-R41). The lesson forms type a
+   * lesson's times in the zone of the room they pick (J-F48).
+   */
+  timeZone: string
   /** An inactive room is visible to holders of `schedule.manage` only and accepts no new slots. */
   isActive: boolean
   createdAt: string

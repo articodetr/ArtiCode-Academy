@@ -2,12 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { SYLLABUS_ITEM_IDS } from '../test/courses'
 import { FAR_TIME_ZONE, LESSON_TIME_ZONE, makeLesson } from '../test/lessons'
 import { withTimeZone } from '../test/time-zone'
-import { ROOM_ID } from '../test/timetable'
-import { NO_TEACHER, buildCreateLessonInput, isMeetingUrlValid, lessonFormHasChanges, lessonFormValuesOf, planLessonPatch } from './lessons.form'
+import { BRANCH_ID, ROOM_ID } from '../test/timetable'
+import {
+  NO_TEACHER,
+  buildCreateLessonInput,
+  editZoneOf,
+  isMeetingUrlValid,
+  lessonFormHasChanges,
+  lessonFormValuesOf,
+  lessonTimesIn,
+  planLessonPatch,
+  retimedFields,
+} from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
+import type { LessonZone } from './lessons.format'
 
 const BERLIN = 'Europe/Berlin'
 const NEW_YORK = 'America/New_York'
+const ACADEMY: LessonZone = { timeZone: LESSON_TIME_ZONE, source: 'academy' }
+const BERLIN_ROOM_ID = 'room-berlin'
+/** A lesson's view of a room of the Berlin branch. */
+const BERLIN_ROOM = { id: BERLIN_ROOM_ID, code: 'BER-1', name: null, branch: { id: BRANCH_ID, code: 'BER', name: { ar: 'فرع برلين' } } }
 
 // 2026-11-10 10:00–11:30 UTC in the academy's zone (Asia/Riyadh, UTC+3): 13:00–14:30 on its wall clock.
 const lesson = makeLesson({ description: { ar: 'مقدمة', tr: 'Giriş' }, meetingUrl: 'https://meet.example.com/a' })
@@ -142,6 +157,75 @@ describe('lessons.form', () => {
     expect(lessonFormValuesOf(first)).toMatchObject({ date: '2026-10-25', startTime: '02:30', endTime: '03:30' })
     expect(planLessonPatch(first, { ...lessonFormValuesOf(first), titleAr: 'الأنواع' })).toEqual({ title: { ar: 'الأنواع', en: 'Variables and data types' } })
     expect(planLessonPatch(first, { ...lessonFormValuesOf(first), endTime: '04:00' })).toEqual({ endsAt: '2026-10-25T03:00:00.000Z' })
+  })
+
+  it('types an edit in the zone the server will give the lesson: its own while the room stays, else the new room’s, else the academy’s (D-R41 — J-F48)', () => {
+    const berlinLesson = makeLesson({ room: BERLIN_ROOM, timeZone: BERLIN })
+    // Untouched, or the same room picked again: the lesson's own zone.
+    expect(editZoneOf(berlinLesson, null, ACADEMY)).toEqual({ timeZone: BERLIN, source: 'lesson' })
+    expect(editZoneOf(berlinLesson, { id: BERLIN_ROOM_ID, room: { timeZone: BERLIN } }, ACADEMY)).toEqual({ timeZone: BERLIN, source: 'lesson' })
+    // Another room: the zone its RoomDto names (CH-0189) — the site's room is in the academy's.
+    expect(editZoneOf(berlinLesson, { id: ROOM_ID, room: { timeZone: LESSON_TIME_ZONE } }, ACADEMY)).toEqual({ timeZone: LESSON_TIME_ZONE, source: 'room' })
+    expect(editZoneOf(lesson, { id: BERLIN_ROOM_ID, room: { timeZone: BERLIN } }, ACADEMY)).toEqual({ timeZone: BERLIN, source: 'room' })
+    // No room any more (or a room read without its zone): the academy's — this device's when the academy could not be read.
+    expect(editZoneOf(berlinLesson, { id: undefined, room: undefined }, ACADEMY)).toEqual(ACADEMY)
+    expect(editZoneOf(berlinLesson, { id: ROOM_ID, room: undefined }, ACADEMY)).toEqual(ACADEMY)
+    expect(editZoneOf(berlinLesson, { id: undefined, room: undefined }, { timeZone: FAR_TIME_ZONE, source: 'device' })).toEqual({ timeZone: FAR_TIME_ZONE, source: 'device' })
+    // A lesson without a room stays in its own zone while none is picked.
+    const roomless = makeLesson({ room: null })
+    expect(editZoneOf(roomless, { id: undefined, room: undefined }, { timeZone: FAR_TIME_ZONE, source: 'academy' })).toEqual({ timeZone: LESSON_TIME_ZONE, source: 'lesson' })
+  })
+
+  it('moves the times the user did not edit to the new zone’s clock of the same instants, and keeps an edited one as typed (J-F48)', () => {
+    // The owner's example: 2026-11-20 10:00–14:00 in Riyadh (07:00–11:00 UTC) moved into a Berlin room — 08:00–12:00 there.
+    const riyadh = makeLesson({ startsAt: '2026-11-20T07:00:00.000Z', endsAt: '2026-11-20T11:00:00.000Z' })
+    const loaded = lessonTimesIn(riyadh, LESSON_TIME_ZONE)
+    expect(loaded).toEqual({ date: '2026-11-20', startTime: '10:00', endTime: '14:00' })
+    expect(retimedFields(riyadh, loaded, LESSON_TIME_ZONE, BERLIN)).toEqual({ startTime: '08:00', endTime: '12:00' })
+    // An edited start keeps its wall clock (read in Berlin at the save); the untouched end still moves.
+    expect(retimedFields(riyadh, { ...loaded, startTime: '11:00' }, LESSON_TIME_ZONE, BERLIN)).toEqual({ endTime: '12:00' })
+    // An edited day is an edited start: the start time stays with it.
+    expect(retimedFields(riyadh, { ...loaded, date: '2026-11-21' }, LESSON_TIME_ZONE, BERLIN)).toEqual({ endTime: '12:00' })
+    expect(retimedFields(riyadh, { ...loaded, endTime: '15:00' }, LESSON_TIME_ZONE, BERLIN)).toEqual({ startTime: '08:00' })
+    // The day follows the instant: 01:00 on the 21st in Riyadh is 23:00 on the 20th in Berlin.
+    const night = makeLesson({ startsAt: '2026-11-20T22:00:00.000Z', endsAt: '2026-11-20T23:30:00.000Z' })
+    expect(retimedFields(night, lessonTimesIn(night, LESSON_TIME_ZONE), LESSON_TIME_ZONE, BERLIN)).toEqual({ date: '2026-11-20', startTime: '23:00', endTime: '00:30' })
+    // The same zone, or one of its aliases, moves nothing.
+    expect(retimedFields(riyadh, loaded, LESSON_TIME_ZONE, LESSON_TIME_ZONE)).toBeNull()
+    expect(retimedFields(riyadh, lessonTimesIn(riyadh, 'UTC'), 'UTC', 'Etc/UTC')).toBeNull()
+  })
+
+  it('reads an edited time in the new room’s zone and sends no instant for an untouched one — the owner’s 11:00 in Berlin is 10:00 UTC (J-F48)', () => {
+    const riyadh = makeLesson({ startsAt: '2026-11-20T07:00:00.000Z', endsAt: '2026-11-20T11:00:00.000Z' })
+    const inBerlin = { ...lessonFormValuesOf(riyadh), ...retimedFields(riyadh, lessonTimesIn(riyadh, LESSON_TIME_ZONE), LESSON_TIME_ZONE, BERLIN), roomId: BERLIN_ROOM_ID }
+    // Moved without touching the time: the room alone travels, the lesson keeps its instants.
+    expect(planLessonPatch(riyadh, inBerlin, BERLIN)).toEqual({ roomId: BERLIN_ROOM_ID })
+    // Its start set to 11:00 (Berlin): 10:00 UTC — not the 08:00 UTC of 11:00 in Riyadh; the end did not move.
+    expect(planLessonPatch(riyadh, { ...inBerlin, startTime: '11:00' }, BERLIN)).toEqual({ startsAt: '2026-11-20T10:00:00.000Z', roomId: BERLIN_ROOM_ID })
+    expect(planLessonPatch(riyadh, { ...inBerlin, startTime: '11:00' }, LESSON_TIME_ZONE)).toMatchObject({ startsAt: '2026-11-20T08:00:00.000Z' })
+    // Both times set: both read in Berlin.
+    expect(planLessonPatch(riyadh, { ...inBerlin, startTime: '11:00', endTime: '12:30' }, BERLIN)).toEqual({
+      startsAt: '2026-11-20T10:00:00.000Z',
+      endsAt: '2026-11-20T11:30:00.000Z',
+      roomId: BERLIN_ROOM_ID,
+    })
+    // A time that occurs twice (Berlin's 02:30 on 2026-10-25, its first — summer — occurrence) moved to Riyadh untouched:
+    // 03:30 there, and no instant travels, so it is never shifted to the other occurrence.
+    const repeated = makeLesson({ startsAt: '2026-10-25T00:30:00.000Z', endsAt: '2026-10-25T02:30:00.000Z', room: BERLIN_ROOM, timeZone: BERLIN })
+    const moved = { ...lessonFormValuesOf(repeated), ...retimedFields(repeated, lessonFormValuesOf(repeated), BERLIN, LESSON_TIME_ZONE), roomId: ROOM_ID }
+    expect(moved).toMatchObject({ date: '2026-10-25', startTime: '03:30', endTime: '05:30' })
+    expect(planLessonPatch(repeated, moved, LESSON_TIME_ZONE)).toEqual({ roomId: ROOM_ID })
+  })
+
+  it('holds the room alone after a move with the times untouched, and nothing once the room is chosen back (KI-058 — J-F48)', () => {
+    const riyadh = makeLesson({ startsAt: '2026-11-20T07:00:00.000Z', endsAt: '2026-11-20T11:00:00.000Z' })
+    const values = lessonFormValuesOf(riyadh)
+    const inBerlin = { ...values, ...retimedFields(riyadh, values, LESSON_TIME_ZONE, BERLIN), roomId: BERLIN_ROOM_ID }
+    expect(lessonFormHasChanges(riyadh, inBerlin, BERLIN)).toBe(true)
+    // Back in its room: the lesson's clock again — nothing is held.
+    const back = { ...inBerlin, ...retimedFields(riyadh, inBerlin, BERLIN, LESSON_TIME_ZONE), roomId: ROOM_ID }
+    expect(back).toEqual(values)
+    expect(lessonFormHasChanges(riyadh, back, LESSON_TIME_ZONE)).toBe(false)
   })
 
   it('holds nothing while the edit form matches the lesson: opened untouched, changed back, or only spaces around a text (KI-058 — J-F40)', () => {

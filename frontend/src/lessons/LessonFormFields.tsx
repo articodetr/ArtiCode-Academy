@@ -7,16 +7,15 @@
 // time earlier than the start rolls the lesson over to the next day: the end
 // time then carries NEXT_DAY_MARK and the hint names the end day and the
 // length, so a typo such as 13:00 → 01:00 (a 12-hour night) does not pass
-// unseen (J-F19). The day and the times are a wall clock in `zone` (D-R41 —
-// J-F28): the lesson's own zone when editing, the academy's for a new lesson —
-// a line above them names it, with this device's zone when they differ. The
-// server decides a lesson's zone from its room's branch, so choosing a room of
-// another branch (or of none) adds a note under the room: once saved, the
-// lesson may be shown in another zone — the times typed here are still read
-// in the zone named above, and the drawer then shows the server's answer.
+// unseen (J-F19). The day and the times are a wall clock in `zone` (D-R41): the
+// zone the server will give the lesson, which the caller derives from the room
+// chosen here (J-F48 — lessonZoneFor() on creation, editZoneOf() in the edit
+// form; `onRoomChange` hands it the picker's item, whose RoomDto `timeZone`
+// names that zone without another request). A line above the day names the
+// zone, with this device's when they differ, and follows the room as it
+// changes.
 import { Alert, Col, Form, Input, Row, Select, Typography } from 'antd'
 import type { FormInstance } from 'antd'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { DELIVERY_MODES, LESSON_TEXT_MAX_LENGTH, MAX_LESSON_HOURS } from '../api/lessons'
@@ -32,17 +31,14 @@ import { isMeetingUrlValid } from './lessons.form'
 import { NEXT_DAY_MARK, differsFromDevice, durationMinutes, formatLessonDay, nextDayRangeOf, rangeOf, rangeProblem } from './lessons.format'
 import type { LessonZone } from './lessons.format'
 
-/** The branch of a room; null = the academy's own site (or no room). */
-function branchIdOf(room: { branch: { id: string } | null } | null | undefined): string | null {
-  return room?.branch?.id ?? null
-}
-
 interface LessonFormFieldsProps {
   form: FormInstance
   /** `create` shows the class picker; `edit` keeps the class fixed. */
   mode: 'create' | 'edit'
-  /** The zone the day and the times are read in: `{ lesson.timeZone, 'lesson' }` when editing, the academy's (useAcademyZone()) for a new lesson. */
+  /** The zone the day and the times are read in: the zone the server will give the lesson with the room chosen here (J-F48). */
   zone: LessonZone
+  /** The room picker's choice (`roomId` undefined = cleared) with its item — the caller's zone follows it (J-F48). */
+  onRoomChange?: (roomId: string | undefined, room: Room | undefined) => void
   /** The class the lesson belongs to — chosen in the picker (create) or loaded (edit); null until known. */
   klass: AcademyClass | null
   /** Edit only: the lesson, so a teacher or syllabus item no longer offered stays selectable. */
@@ -53,7 +49,7 @@ interface LessonFormFieldsProps {
   onClassChange?: (klass: AcademyClass | undefined) => void
 }
 
-export function LessonFormFields({ form, mode, zone, klass, lesson, timingLocked = false, onClassChange }: LessonFormFieldsProps) {
+export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson, timingLocked = false, onClassChange }: LessonFormFieldsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   // GET /api/classes(/:id) needs classes.read at the controller: without it the class list and the class's teachers stay unknown.
@@ -64,11 +60,6 @@ export function LessonFormFields({ form, mode, zone, klass, lesson, timingLocked
   const watchedStart = Form.useWatch('startTime', form) as string | undefined
   const watchedEnd = Form.useWatch('endTime', form) as string | undefined
   const nextDay = nextDayRangeOf(watchedDate, watchedStart, watchedEnd, zone.timeZone)
-  // The room as last chosen in the picker — its branch is known only from there, without a request; null = untouched.
-  const [roomChoice, setRoomChoice] = useState<{ id: string | undefined; room: Room | undefined } | null>(null)
-  // The server takes the lesson's zone from its room's branch (D-R41): a room of another branch (or none) may change it.
-  const followsRoom =
-    roomChoice !== null && roomChoice.id !== (mode === 'edit' ? lesson?.room?.id : undefined) && branchIdOf(roomChoice.room) !== (mode === 'edit' ? branchIdOf(lesson?.room) : null)
   const device = deviceTimeZone()
 
   /** The length rule of every text field, worded by the lessons dictionary. */
@@ -130,7 +121,8 @@ export function LessonFormFields({ form, mode, zone, klass, lesson, timingLocked
         </Col>
       </Row>
       {timingLocked ? <Alert type="info" showIcon title={t('lessons.hints.timingLocked')} style={{ marginBottom: 16 }} /> : null}
-      <Typography.Paragraph type="secondary" data-testid="lesson-zone-hint" style={{ marginBottom: 8 }}>
+      {/* It changes with the room (J-F48): a polite live region, so a screen reader hears the new zone too. */}
+      <Typography.Paragraph type="secondary" data-testid="lesson-zone-hint" aria-live="polite" style={{ marginBottom: 8 }}>
         {t(`lessons.zone.${zone.source}Input`, { zone: zone.timeZone })}
         {differsFromDevice(zone.timeZone, device) ? ` — ${t('lessons.zone.device', { zone: device })}` : ''}
       </Typography.Paragraph>
@@ -178,8 +170,8 @@ export function LessonFormFields({ form, mode, zone, klass, lesson, timingLocked
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="roomId" label={t('lessons.fields.room')} extra={followsRoom ? t('lessons.zone.followsRoom') : undefined}>
-            <RoomPicker allowClear placeholder={t('lessons.drawer.noRoom')} disabled={timingLocked} onChange={(value, room) => setRoomChoice({ id: value || undefined, room })} />
+          <Form.Item name="roomId" label={t('lessons.fields.room')}>
+            <RoomPicker allowClear placeholder={t('lessons.drawer.noRoom')} disabled={timingLocked} onChange={(value, room) => onRoomChange?.(value || undefined, room)} />
           </Form.Item>
         </Col>
       </Row>
