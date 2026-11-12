@@ -54,13 +54,26 @@ describe('planReview', () => {
   const waiting = makeSubmission()
   const graded = makeGradedSubmission()
 
-  it('grades with the smallest body: the score alone, plus the feedback only when it is not blank', () => {
-    expect(planReview(waiting, { action: 'grade', score: 17.5, feedback: '   ' })).toEqual({ kind: 'send', body: { action: 'grade', score: 17.5 } })
-    expect(planReview(waiting, { action: 'grade', score: 17.5, feedback: ' عمل جيد ' })).toEqual({ kind: 'send', body: { action: 'grade', score: 17.5, feedback: 'عمل جيد' } })
+  it('grades with the smallest body: the score alone, plus the feedback only when it is not blank — and null as the review seen on a waiting attempt', () => {
+    expect(planReview(waiting, { action: 'grade', score: 17.5, feedback: '   ' })).toEqual({ kind: 'send', body: { action: 'grade', score: 17.5, expectedGradedAt: null } })
+    expect(planReview(waiting, { action: 'grade', score: 17.5, feedback: ' عمل جيد ' })).toEqual({
+      kind: 'send',
+      body: { action: 'grade', score: 17.5, feedback: 'عمل جيد', expectedGradedAt: null },
+    })
   })
 
-  it('returns with the feedback and never a score', () => {
-    expect(planReview(graded, { action: 'return', score: 17.5, feedback: 'أكمل التمرين الثالث' })).toEqual({ kind: 'send', body: { action: 'return', feedback: 'أكمل التمرين الثالث' } })
+  it('returns with the feedback and never a score, naming the review it replaces (D-R49)', () => {
+    expect(planReview(graded, { action: 'return', score: 17.5, feedback: 'أكمل التمرين الثالث' })).toEqual({
+      kind: 'send',
+      body: { action: 'return', feedback: 'أكمل التمرين الثالث', expectedGradedAt: '2026-11-21T09:00:00.000Z' },
+    })
+  })
+
+  it('sends the gradedAt the grader saw with every review: a correction of a graded attempt names its review', () => {
+    const plan = planReview(graded, { action: 'grade', score: 18, feedback: 'عمل جيد؛ راجع شرط التوقف' })
+    expect(plan).toEqual({ kind: 'send', body: { action: 'grade', score: 18, feedback: 'عمل جيد؛ راجع شرط التوقف', expectedGradedAt: graded.gradedAt } })
+    const returned = makeSubmission({ status: 'returned', feedback: 'أعد', gradedAt: '2026-11-20T08:00:00.000Z' })
+    expect(planReview(returned, { action: 'grade', score: 12 })).toEqual({ kind: 'send', body: { action: 'grade', score: 12, expectedGradedAt: '2026-11-20T08:00:00.000Z' } })
   })
 
   it('refuses in the server order: return without feedback, then a score out of range or with three decimals', () => {
@@ -74,7 +87,7 @@ describe('planReview', () => {
   it('sends nothing for a review equal to the stored one, and a correction when one part differs', () => {
     expect(planReview(graded, { action: 'grade', score: 17.5, feedback: 'عمل جيد؛ راجع شرط التوقف ' })).toEqual({ kind: 'unchanged' })
     // A blank feedback with grade clears the stored one: that is a change.
-    expect(planReview(graded, { action: 'grade', score: 17.5, feedback: '' })).toEqual({ kind: 'send', body: { action: 'grade', score: 17.5 } })
+    expect(planReview(graded, { action: 'grade', score: 17.5, feedback: '' })).toEqual({ kind: 'send', body: { action: 'grade', score: 17.5, expectedGradedAt: graded.gradedAt } })
     const returned = makeSubmission({ status: 'returned', feedback: 'أكمل التمرين الثالث', gradedAt: '2026-11-20T08:00:00.000Z' })
     expect(planReview(returned, { action: 'return', feedback: 'أكمل التمرين الثالث' })).toEqual({ kind: 'unchanged' })
   })
@@ -96,6 +109,14 @@ describe('the grading form', () => {
     expect(isReviewDraftDirty(initial, { ...initial, action: 'return' })).toBe(true)
     expect(isReviewDraftDirty(reviewDraftOf(makeSubmission()), { action: 'grade', score: undefined, feedback: 'ملاحظة' })).toBe(true)
   })
+
+  it('reads the score the store keeps while «return» hides its field: back on «grade» it counts again', () => {
+    // A waiting attempt: 15 typed, then return, then grade — the whole store still holds 15.
+    expect(isReviewDraftDirty(reviewDraftOf(makeSubmission()), { action: 'grade', score: 15, feedback: '' })).toBe(true)
+    // A graded 17.5: grade → return → grade with nothing changed is the stored review.
+    const graded = reviewDraftOf(makeGradedSubmission())
+    expect(isReviewDraftDirty(graded, { action: 'grade', score: 17.5, feedback: 'عمل جيد؛ راجع شرط التوقف' })).toBe(false)
+  })
 })
 
 describe('the effects the panel announces (D-R39)', () => {
@@ -108,10 +129,10 @@ describe('the effects the panel announces (D-R39)', () => {
   })
 
   it('warns that a granted attempt waits for a closed assignment to reopen, or for a due date without late submissions — never from the clock', () => {
-    expect(returnCaveats({ ...makeSubmissionAssignment(), allowLate: true })).toEqual([])
-    expect(returnCaveats({ ...makeSubmissionAssignment({ status: 'closed' }), allowLate: true })).toEqual(['closed'])
-    expect(returnCaveats({ ...makeSubmissionAssignment(), allowLate: false })).toEqual(['noLate'])
-    expect(returnCaveats({ ...makeSubmissionAssignment({ status: 'closed' }), allowLate: false })).toEqual(['closed', 'noLate'])
-    expect(returnCaveats({ ...makeSubmissionAssignment({ dueAt: null }), allowLate: false })).toEqual([])
+    expect(returnCaveats(makeSubmissionAssignment({ allowLate: true }))).toEqual([])
+    expect(returnCaveats(makeSubmissionAssignment({ status: 'closed', allowLate: true }))).toEqual(['closed'])
+    expect(returnCaveats(makeSubmissionAssignment({ allowLate: false }))).toEqual(['noLate'])
+    expect(returnCaveats(makeSubmissionAssignment({ status: 'closed', allowLate: false }))).toEqual(['closed', 'noLate'])
+    expect(returnCaveats(makeSubmissionAssignment({ dueAt: null, allowLate: false }))).toEqual([])
   })
 })

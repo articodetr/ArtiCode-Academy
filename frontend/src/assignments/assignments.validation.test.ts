@@ -12,6 +12,18 @@ describe('assignments.validation (mirrors of CreateAssignmentDto / UpdateAssignm
     expect(isTwoDecimalNumber(Number.POSITIVE_INFINITY)).toBe(false)
   })
 
+  it('refuses a tiny number written in exponent form — 1e-7 has more than two decimals (J-F47)', () => {
+    expect(String(1e-7)).toBe('1e-7')
+    expect(isTwoDecimalNumber(1e-7)).toBe(false)
+    expect(isTwoDecimalNumber(0.0000001)).toBe(false)
+    expect(isTwoDecimalNumber(2.5e-3)).toBe(false)
+    expect(isTwoDecimalNumber(1e-2)).toBe(true)
+    expect(isTwoDecimalNumber(0)).toBe(true)
+    expect(isTwoDecimalNumber(-0.5)).toBe(true)
+    expect(isTwoDecimalNumber(9999.99)).toBe(true)
+    expect(isMaxScoreValid(1e-7)).toBe(false)
+  })
+
   it('bounds the maximum score to 0.01..9999.99, the weight to 0..999.99 and the late penalty to 0..100', () => {
     expect(isMaxScoreValid(0.01)).toBe(true)
     expect(isMaxScoreValid(9999.99)).toBe(true)

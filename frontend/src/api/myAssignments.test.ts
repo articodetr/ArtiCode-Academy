@@ -55,13 +55,23 @@ describe('my assignments API (API-112) and the learner submission calls (API-109
     }
   })
 
-  it('sends one attempt as a POST with the typed fields only and returns the stored attempt (201)', async () => {
+  it('sends one attempt as a POST with the typed fields and the attempt meant, and returns the stored attempt (201)', async () => {
     const created = makeMySubmission({ textAnswer: null })
     const fetchMock = mockFetch(() => jsonResponse(201, created))
-    await expect(submitMyAttempt(ASSIGNMENT_ID, { linkUrl: 'https://docs.example.com/answer' })).resolves.toEqual(created)
+    await expect(submitMyAttempt(ASSIGNMENT_ID, { linkUrl: 'https://docs.example.com/answer', attemptNo: 1 })).resolves.toEqual(created)
     const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe(`/api/assignments/${ASSIGNMENT_ID}/submissions`)
     expect(init?.method).toBe('POST')
-    expect(init?.body).toBe(JSON.stringify({ linkUrl: 'https://docs.example.com/answer' }))
+    expect(init?.body).toBe(JSON.stringify({ linkUrl: 'https://docs.example.com/answer', attemptNo: 1 }))
+  })
+
+  it('reads the MOD-08-T07 fields: the item’s enrollment and submit state, the attempt’s history and its assignment’s late policy and zone', async () => {
+    const item = makeMyAssignment({ submitBlocker: 'past_due', submitsLate: false, enrollmentStatus: 'active' })
+    mockFetch((url) => jsonResponse(200, url.startsWith('/api/me/') ? makeMyAssignmentList([item]) : makeMySubmission()))
+    const list = await listMyAssignments()
+    expect(list.items[0]).toMatchObject({ enrollmentStatus: 'active', submitBlocker: 'past_due', submitsLate: false })
+    const submission = await getMySubmission(SUBMISSION_ID)
+    expect(submission.assignment).toMatchObject({ allowLate: false, timeZone: 'Asia/Riyadh' })
+    expect(submission.history).toEqual([{ id: SUBMISSION_ID, attemptNo: 1, submittedAt: '2026-11-10T08:30:00.000Z', isLate: false, status: 'submitted', score: null, gradedAt: null }])
   })
 })

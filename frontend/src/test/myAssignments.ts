@@ -1,10 +1,15 @@
 // Fixtures for «my assignments» (MOD-08-T04 — J-F42): the shapes of API-112,
 // API-109 and API-110 as the backend returns them (my-assignments.dto.ts,
-// submissions.dto.ts), plus the permission sets of the seeded learner roles
-// (backend/src/authorization/system-roles.ts). The assignment part reuses the
-// J-F38 fixture and the students those of J-F11, so the class, course, zone
-// and people are the same everywhere.
-import type { MyAssignmentItem, MyAssignmentLatest, MyAssignmentList, MySubmission } from '../api/myAssignments'
+// submissions.dto.ts), with the MOD-08-T07 fields (D-R49 — the item's
+// `enrollmentStatus`/`submitBlocker`/`submitsLate`, the attempt's `history`
+// and its assignment's `allowLate`/`timeZone`), plus the permission sets of
+// the seeded learner roles (backend/src/authorization/system-roles.ts). The
+// submit state is the server's verdict and is never derived here: a fixture
+// that is past due, closed or out of attempts says so in `submitBlocker` /
+// `submitsLate` itself. The assignment part reuses the J-F38 fixture and the
+// students those of J-F11, so the class, course, zone and people are the same
+// everywhere.
+import type { MyAssignmentItem, MyAssignmentLatest, MyAssignmentList, MySubmission, MySubmissionSummary } from '../api/myAssignments'
 import { ASSIGNMENT_ID, makeAssignment } from './assignments'
 import { SELF_STUDENT } from './myLessons'
 
@@ -22,7 +27,10 @@ export const PAST_DUE = '2026-01-15T20:59:00.000Z'
 export const SUBMISSION_ID = '0193f000-0000-7000-8000-00000000c001'
 export const SUBMISSION_ID_2 = '0193f000-0000-7000-8000-00000000c002'
 
-/** An open assignment of PY-101-A owned by the student themselves, due in 2030 (Asia/Riyadh), out of 20, one attempt, not submitted yet. */
+/**
+ * An open assignment of PY-101-A owned by the student themselves (active enrollment), due in 2030 (Asia/Riyadh),
+ * out of 20, one attempt, not submitted yet — so the server takes an attempt now, on time.
+ */
 export function makeMyAssignment(overrides: Partial<MyAssignmentItem> = {}): MyAssignmentItem {
   const assignment = makeAssignment({ status: 'open', publishedAt: '2026-11-09T09:00:00.000Z', dueAt: FUTURE_DUE })
   return {
@@ -45,6 +53,9 @@ export function makeMyAssignment(overrides: Partial<MyAssignmentItem> = {}): MyA
     attempts: 0,
     attemptsAllowed: 1,
     latest: null,
+    enrollmentStatus: 'active',
+    submitBlocker: null,
+    submitsLate: false,
     ...overrides,
   }
 }
@@ -68,12 +79,21 @@ export function makeMyAssignmentList(items: MyAssignmentItem[], nextCursor: stri
   return { items, nextCursor }
 }
 
-/** The attempt as API-109 / API-110 return it: the student's first attempt on the fixture assignment, a text and a link, not reviewed. */
+/** The summary an attempt has in a `history`. */
+export function mySummaryOf(submission: Pick<MySubmission, 'id' | 'attemptNo' | 'submittedAt' | 'isLate' | 'status' | 'score' | 'gradedAt'>): MySubmissionSummary {
+  const { id, attemptNo, submittedAt, isLate, status, score, gradedAt } = submission
+  return { id, attemptNo, submittedAt, isLate, status, score, gradedAt }
+}
+
+/**
+ * The attempt as API-109 / API-110 return it: the student's first attempt on the fixture assignment, a text and a
+ * link, not reviewed. Without a `history` override the history holds this attempt alone.
+ */
 export function makeMySubmission(overrides: Partial<MySubmission> = {}): MySubmission {
   const item = makeMyAssignment()
-  return {
+  const submission: MySubmission = {
     id: SUBMISSION_ID,
-    assignment: { id: ASSIGNMENT_ID, classId: item.class.id, title: item.title, status: 'open', maxScore: item.maxScore, dueAt: item.dueAt },
+    assignment: { id: ASSIGNMENT_ID, classId: item.class.id, title: item.title, status: 'open', maxScore: item.maxScore, dueAt: item.dueAt, allowLate: item.allowLate, timeZone: item.timeZone },
     student: SELF_STUDENT,
     attemptNo: 1,
     submittedAt: '2026-11-10T08:30:00.000Z',
@@ -87,6 +107,8 @@ export function makeMySubmission(overrides: Partial<MySubmission> = {}): MySubmi
     gradedAt: null,
     attempts: 1,
     attemptsAllowed: 1,
+    history: [],
     ...overrides,
   }
+  return overrides.history ? submission : { ...submission, history: [mySummaryOf(submission)] }
 }

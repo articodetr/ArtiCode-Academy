@@ -12,13 +12,16 @@
 // feedback. The instructions and grading rules are in the expanded row
 // (learners never read API-103). The student sends an attempt from a `self`
 // row (SubmitAttemptModal — API-109, `assignments.submit`) and reads their
-// latest attempt in MySubmissionDrawer (API-110); a guardian reads their
-// children's and never submits. Both answers update the row without another
-// read. The student and class filters read «my classes» (the same ownership),
-// which also says whether an enrollment is still active — a completed one
-// takes no attempt. The route opens to the holders of the `student` or
-// `guardian` server role key only (nav entry `myAssignments`, like «my
-// lessons»).
+// latest attempt — and, through its history, any other — in
+// MySubmissionDrawer (API-110); a guardian reads their children's and never
+// submits. Both answers update the row without another read. Whether a row
+// takes an attempt now, and whether it would be late, is the server's verdict
+// on the row (MOD-08-T07, D-R49 — `submitBlocker`/`submitsLate`, computed at
+// its clock when the page is read, never at this device's); an answer
+// re-applies it (followSubmitState()). The student and class filters, and the
+// class teacher's name, read «my classes» (the same ownership). The route
+// opens to the holders of the `student` or `guardian` server role key only
+// (nav entry `myAssignments`, like «my lessons»).
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Flex, Segmented, Select, Space, Table, Tag, Typography } from 'antd'
 import type { DescriptionsProps, TableProps } from 'antd'
@@ -43,17 +46,14 @@ import {
   applySubmission,
   defaultMyAssignmentsFilters,
   enrollmentIndexOf,
-  enrollmentStatusOf,
   feedbackExcerpt,
   gradedScoreOf,
   isNarrowed,
-  isPastDue,
   leadTeacherOf,
   myAssignmentKey,
   offersSubmit,
   scoreText,
   submissionCellOf,
-  submitAvailability,
 } from '../assignments/myAssignments.view'
 import type { EnrollmentIndex, MyAssignmentView, MyAssignmentsFilters } from '../assignments/myAssignments.view'
 import { useMyAssignments } from '../assignments/useMyAssignments'
@@ -87,7 +87,8 @@ function SubmissionCell({ item }: { item: MyAssignmentItem }) {
     return (
       <span>
         <Typography.Text type="secondary">{t('myAssignments.submission.none')}</Typography.Text>
-        {isPastDue(item) ? (
+        {/* The server's verdict: an attempt now is taken and marked late (never this device's clock). */}
+        {item.submitsLate ? (
           <>
             <br />
             <Typography.Text type="warning" style={{ fontSize: 12 }}>
@@ -285,12 +286,13 @@ export function MyAssignmentsPage() {
       key: 'actions',
       render: (_, row) => {
         const offered = offersSubmit(row, holdsSubmitKey)
-        const availability = offered ? submitAvailability(row, enrollmentStatusOf(enrollments, row)) : null
+        // The server's verdict when the page was read (MOD-08-T07): the button and its reason never follow this device's clock.
+        const takesAttempt = offered && row.submitBlocker === null
         // A closed assignment says so in its status column; the other reasons are not visible elsewhere.
-        const blocker = availability?.blocker && availability.blocker !== 'closed' ? availability.blocker : null
+        const blocker = offered && row.submitBlocker !== null && row.submitBlocker !== 'closed' ? row.submitBlocker : null
         return (
           <Space orientation="vertical" size={4}>
-            {availability && availability.blocker === null ? (
+            {takesAttempt ? (
               <Button type="primary" size="small" onClick={() => setSubmitFor(row)}>
                 {t(row.attempts > 0 ? 'myAssignments.actions.submitAgain' : 'myAssignments.actions.submit')}
               </Button>
@@ -473,7 +475,8 @@ export function MyAssignmentsPage() {
           message.success(t('myAssignments.submit.done', { number: submission.attemptNo, title: localizedLabel(submission.assignment.title, language) }))
         }}
         onStale={() => {
-          // The refusal says the assignment, the attempts or the enrollment moved on: both readings may be stale.
+          // The refusal says the assignment, the attempts or the enrollment moved on (or the attempt was already received):
+          // the rows (their submit state) and «my classes» (a withdrawn enrollment leaves the filters) may both be stale.
           list.reload()
           myClasses.reload()
         }}

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { SUBMIT_LINK_MAX_LENGTH, SUBMIT_TEXT_MAX_LENGTH } from '../api/myAssignments'
 import { describeMyAssignmentsFailure, isMyAssignmentsFailure } from './myAssignments.errors'
-import { buildSubmitInput, hasAnswer, isSubmitLinkValid, isTextAnswerWithinLimit, linkProblemOf, trimmedOrUndefined } from './myAssignments.submit'
+import { buildSubmitInput, hasAnswer, isSubmitLinkValid, isTextAnswerWithinLimit, linkProblemOf, nextAttemptNo, trimmedOrUndefined } from './myAssignments.submit'
 
 describe('the attempt form (mirror of SubmitAssignmentDto)', () => {
   it('trims both fields and treats a blank one as absent', () => {
@@ -14,11 +14,17 @@ describe('the attempt form (mirror of SubmitAssignmentDto)', () => {
     expect(hasAnswer({ linkUrl: ' https://a.example ' })).toBe(true)
   })
 
-  it('builds the smallest body: only what was typed, trimmed; nothing at all when both are blank', () => {
-    expect(buildSubmitInput({ textAnswer: '  الحل  ', linkUrl: '  ' })).toEqual({ textAnswer: 'الحل' })
-    expect(buildSubmitInput({ linkUrl: ' https://docs.example.com/x ' })).toEqual({ linkUrl: 'https://docs.example.com/x' })
-    expect(buildSubmitInput({ textAnswer: 'الحل', linkUrl: 'https://docs.example.com/x' })).toEqual({ textAnswer: 'الحل', linkUrl: 'https://docs.example.com/x' })
-    expect(buildSubmitInput({ textAnswer: ' ', linkUrl: '' })).toBeNull()
+  it('builds the smallest body: only what was typed, trimmed, with the attempt meant; nothing at all when both are blank', () => {
+    expect(buildSubmitInput({ textAnswer: '  الحل  ', linkUrl: '  ' }, 1)).toEqual({ textAnswer: 'الحل', attemptNo: 1 })
+    expect(buildSubmitInput({ linkUrl: ' https://docs.example.com/x ' }, 2)).toEqual({ linkUrl: 'https://docs.example.com/x', attemptNo: 2 })
+    expect(buildSubmitInput({ textAnswer: 'الحل', linkUrl: 'https://docs.example.com/x' }, 3)).toEqual({ textAnswer: 'الحل', linkUrl: 'https://docs.example.com/x', attemptNo: 3 })
+    expect(buildSubmitInput({ textAnswer: ' ', linkUrl: '' }, 1)).toBeNull()
+  })
+
+  it('numbers the attempt after the highest one, as the server does (lastAttemptNo + 1)', () => {
+    expect(nextAttemptNo(null)).toBe(1)
+    expect(nextAttemptNo({ attemptNo: 1 })).toBe(2)
+    expect(nextAttemptNo({ attemptNo: 4 })).toBe(5)
   })
 
   it('takes https links without whitespace up to 2,048 characters', () => {
@@ -60,6 +66,13 @@ describe('describeMyAssignmentsFailure', () => {
       params: { attempts: '2', allowed: '2' },
       terminal: true,
     })
+  })
+
+  it('ends the session on attempt_conflict — the attempt named exists already — with the numbers the server names (D-R49)', () => {
+    const conflict = describeMyAssignmentsFailure(refused(409, { code: 'attempt_conflict', expected: 1, next: 2 }))
+    expect(conflict).toEqual({ key: 'myAssignments.errors.attempt_conflict', params: { expected: '1', next: '2' }, terminal: true })
+    expect(isMyAssignmentsFailure(conflict, 'attempt_conflict')).toBe(true)
+    expect(describeMyAssignmentsFailure(refused(409, { code: 'attempt_conflict' })).params).toEqual({ expected: '—', next: '—' })
   })
 
   it('ends the session on not_enrolled, assignment_not_found and permission_denied (with the missing key)', () => {

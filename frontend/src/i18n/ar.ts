@@ -1597,7 +1597,6 @@ export const ar = {
       noLink: 'بلا رابط',
       notReviewed: 'لم يُراجَع بعد',
       reviewerGone: 'حساب محذوف',
-      earlierAttempts: 'هذه المحاولة رقم {{number}}؛ لا يتيح الخادم بعد قراءة المحاولات السابقة.',
       readOnly: 'تصحيح التسليمات يحتاج صلاحية التصحيح (assignments.grade).',
       form: {
         action: 'الإجراء',
@@ -1638,6 +1637,18 @@ export const ar = {
         content: 'في نموذج المراجعة ما لم يُحفظ بعد. الإغلاق يتجاهله.',
         ok: 'تجاهل وإغلاق',
         cancel: 'متابعة المراجعة',
+      },
+      // The student's attempts (SubmissionDto.history — MOD-08-T07, J-F47): each one opens in the panel.
+      history: {
+        title: 'محاولات الطالب',
+        current: 'المعروضة الآن',
+        open: 'فتح',
+        openAria: 'فتح المحاولة {{number}}',
+        discard: {
+          title: 'فتح محاولة أخرى وتجاهل المراجعة غير المحفوظة؟',
+          content: 'في نموذج المراجعة ما لم يُحفظ بعد. فتح محاولة أخرى يتجاهله.',
+          ok: 'تجاهل وفتح',
+        },
       },
     },
     patchFields: {
@@ -1694,6 +1705,9 @@ export const ar = {
       score_out_of_range: 'الدرجة من 0 إلى {{max}}.',
       feedback_required: 'الإعادة للتعديل تحتاج تغذية راجعة.',
       submission_invalid: 'التسليم يحتاج إجابة نصية أو رابطاً.',
+      // T07 (D-R49 — J-F47)
+      attempt_conflict: 'المحاولة {{expected}} ليست المحاولة التالية للطالب ({{next}})؛ ربما استلمها الخادم من قبل.',
+      review_conflict: 'راجع غيرك هذه المحاولة في أثناء ذلك فلم تُحفظ مراجعتك. أُعيد تحميلها لتعرض ما حُفظ؛ راجعها من جديد إن لزم.',
       permission_denied: 'ليست لديك الصلاحية اللازمة لهذا الإجراء {{list}}',
       origin_forbidden: 'رفض الخادم مصدر الطلب. أعد تحميل الصفحة ثم حاول مجدداً.',
       rate_limited: 'طلبات كثيرة في وقت قصير. انتظر قليلاً ثم حاول مجدداً.',
@@ -2455,10 +2469,11 @@ export const ar = {
     views: {
       label: 'العرض',
       open: 'المفتوحة',
-      pending: 'لم تُسلَّم بعد',
+      pending: 'بانتظار التسليم',
       closed: 'المغلقة',
       all: 'الكل',
-      pendingHint: 'لا يشمل هذا العرض المحاولات المُعادة للتعديل؛ تجدها في «المفتوحة».',
+      // D-R49 (6) — MOD-08-T07: `pending=true` keeps a returned attempt that still has an attempt left (J-F47).
+      pendingHint: 'يعرض الواجبات المفتوحة التي لم يُسلَّم فيها بعد، والتي أُعيدت محاولتها الأخيرة للتعديل وبقيت لها محاولة.',
     },
     filters: {
       student: 'الطالب',
@@ -2511,6 +2526,7 @@ export const ar = {
     },
     blocked: {
       not_enrolled: 'تسجيلك في الفصل لم يعد نشطاً',
+      not_published: 'الواجب لم يُنشر بعد',
       closed: 'الواجب مغلق',
       past_due: 'انتهى الموعد',
       attempts_exhausted: 'لا محاولات متبقية',
@@ -2564,8 +2580,14 @@ export const ar = {
       noText: 'بلا إجابة نصية',
       link: 'الرابط',
       noLink: 'بلا رابط',
-      latestOnly: 'تعرض هذه النافذة آخر محاولة؛ لا يتيح الخادم بعد قراءة المحاولات السابقة.',
       zone: 'الأوقات بتوقيت الواجب',
+      // The student's attempts (SubmissionDto.history — MOD-08-T07, J-F47): each one opens in the drawer.
+      history: {
+        title: 'كل المحاولات',
+        current: 'المعروضة الآن',
+        open: 'عرض',
+        openAria: 'عرض المحاولة {{number}}',
+      },
     },
     empty: {
       noEnrollment: 'لا تسجيلات نشطة أو مكتملة لك أو للطلاب المرتبطين بك بعد',
@@ -2576,6 +2598,9 @@ export const ar = {
       filtered: 'لا واجبات تطابق المرشّحات',
     },
     errors: {
+      // MOD-08-T07 (D-R49 — J-F47): the attempt this send named exists already — said as received, not refused.
+      attempt_conflict:
+        'استلم الخادم المحاولة {{expected}} من قبل — من إرسال سابق لهذه المحاولة أو من نافذة أخرى — فلم تُرسَل مرة ثانية. أُعيد تحميل قائمتك لتعرضها؛ افتح «تسليمي» لترى ما استُلم.',
       submission_invalid: 'أرسل نص الإجابة أو رابطاً على الأقل.',
       assignment_closed_not_published: 'الواجب لم يُنشر بعد فلا يقبل التسليم.',
       assignment_closed_closed: 'أُغلق الواجب فلم يعد يقبل التسليم.',
