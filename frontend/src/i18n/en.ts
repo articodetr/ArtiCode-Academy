@@ -1212,15 +1212,15 @@ export const en: Translation = {
       updatedAt: 'Last updated',
       timeZone: 'Time zone',
     },
-    // D-R41 (J-F28): a lesson's times are in its own zone; “today” and the filter days in the academy's.
+    // D-R41 (J-F28): a lesson's times are in its own zone (typed in the zone of the chosen room — J-F48); “today” and the filter days in the academy's.
     zone: {
       device: 'your device: {{zone}}',
       rows: 'Each lesson’s times are in its own time zone (its room’s branch, else the academy’s); the zone is named under the time when it differs from your device’s ({{zone}}).',
       days: '“Today” and the days you pick in the filters are the academy’s ({{zone}}).',
       lessonInput: 'Times in the lesson’s time zone: {{zone}}',
+      roomInput: 'Times in the chosen room’s time zone: {{zone}}',
       academyInput: 'Times in the academy’s time zone: {{zone}}',
       deviceInput: 'Times in your device’s time zone ({{zone}}); the academy’s could not be read',
-      followsRoom: 'The lesson’s time zone follows its room’s branch: once saved it may be shown in another zone; the saved time itself does not change.',
     },
     hints: {
       class: 'A planned, open or running class; the class of a lesson cannot change after creation',

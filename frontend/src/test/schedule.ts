@@ -25,6 +25,8 @@ export function makeRoom(overrides: Partial<Room> = {}): Room {
     kind: 'lab',
     branchId: null,
     branch: null,
+    // RoomDto.timeZone (CH-0189): the academy's zone of makeAcademy() — a room of the site, or of a branch without a zone.
+    timeZone: 'Asia/Riyadh',
     isActive: true,
     createdAt: '2026-11-04T09:00:00.000Z',
     updatedAt: '2026-11-04T09:00:00.000Z',

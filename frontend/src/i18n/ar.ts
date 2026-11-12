@@ -1212,15 +1212,15 @@ export const ar = {
       updatedAt: 'آخر تعديل',
       timeZone: 'المنطقة الزمنية',
     },
-    // D-R41 (J-F28): a lesson's times are in its own zone; «today» and the filter days in the academy's.
+    // D-R41 (J-F28): a lesson's times are in its own zone (typed in the zone of the chosen room — J-F48); «today» and the filter days in the academy's.
     zone: {
       device: 'منطقة جهازك: {{zone}}',
       rows: 'أوقات كل درس بمنطقته الزمنية (منطقة فرع قاعته، وإلا منطقة الأكاديمية)، ويظهر اسمها تحت الموعد حين تختلف عن منطقة جهازك ({{zone}}).',
       days: '«اليوم» والأيام التي تختارها في المرشّحات بتوقيت الأكاديمية ({{zone}}).',
       lessonInput: 'الأوقات بتوقيت الدرس: {{zone}}',
+      roomInput: 'الأوقات بتوقيت القاعة المختارة: {{zone}}',
       academyInput: 'الأوقات بتوقيت الأكاديمية: {{zone}}',
       deviceInput: 'الأوقات بتوقيت جهازك ({{zone}})؛ تعذّرت قراءة منطقة الأكاديمية',
-      followsRoom: 'منطقة عرض الدرس تتبع فرع قاعته: بعد الحفظ قد يُعرض بمنطقة أخرى، والموعد المحفوظ نفسه لا يتغيّر.',
     },
     hints: {
       class: 'فصل مخطَّط أو مفتوح أو جارٍ؛ لا يتغير فصل الدرس بعد إنشائه',

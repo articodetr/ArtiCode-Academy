@@ -5,21 +5,26 @@
 // inactive, syllabus item of another course, time range, conflict) is shown
 // on that field; anything else above the form. `initialClass` lets a class
 // screen open the modal for one class (the picker is then pre-filled). The day
-// and the times are read in the academy's zone (D-R41 — J-F28): the server
-// gives a lesson its zone from its room only once it exists, and a branch's
-// zone is not known here without a request, so the academy's — already in the
-// shared API-035 store — is the one rule; the form names it, and the drawer
-// that opens on the created lesson shows the server's `timeZone`.
+// and the times are read in the zone the server will give the lesson (D-R41 —
+// J-F48, the owner's review of #105): the chosen room's `timeZone` (RoomDto
+// since CH-0189 — its branch's, else the academy's — straight from the room
+// picker's item, no request of its own), else, without a room, the academy's
+// from the shared API-035 store, else this device's, which the form says. The
+// typed wall clock stays when the room changes and is read in the new zone at
+// submit, so 10:00 typed for a Berlin room is 10:00 in Berlin — the instant a
+// weekly slot at 10:00 in that room generates.
 import { Alert, Form, Modal } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { createLesson } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
+import type { Room } from '../api/rooms'
 import { LessonFormFields } from './LessonFormFields'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
 import { buildCreateLessonInput } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
+import { lessonZoneFor } from './lessons.format'
 import { useAcademyZone } from './useAcademyZone'
 
 interface CreateLessonModalProps {
@@ -74,8 +79,11 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
   const [klass, setKlass] = useState<AcademyClass | null>(initialClass ?? null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  // The academy's zone, or this device's when the academy could not be read — the form says which.
-  const { timeZone, source } = useAcademyZone()
+  // The room picked in the form (null = none): its zone is the lesson's (J-F48).
+  const [room, setRoom] = useState<Room | null>(null)
+  // The academy's zone, or this device's when the academy could not be read — the zone of a lesson without a room.
+  const academy = useAcademyZone()
+  const zone = lessonZoneFor(room, { timeZone: academy.timeZone, source: academy.source })
 
   // Hands the modal's OK button this session's form (onReady is stable; the form instance too), and takes it back
   // when the session ends — the next session's first frame then shows a disabled OK, never a stale one.
@@ -91,7 +99,8 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
     onSaving(true)
     setError(null)
     try {
-      const created = await createLesson(classId, buildCreateLessonInput(values, timeZone))
+      // The instants are built now, in the zone of the room chosen last (J-F48).
+      const created = await createLesson(classId, buildCreateLessonInput(values, zone.timeZone))
       onCreated(created)
     } catch (caught) {
       const failure = describeLessonsFailure(caught)
@@ -118,7 +127,8 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
         <LessonFormFields
           form={form}
           mode="create"
-          zone={{ timeZone, source }}
+          zone={zone}
+          onRoomChange={(_roomId, next) => setRoom(next ?? null)}
           klass={klass}
           onClassChange={(next) => {
             setKlass(next ?? null)

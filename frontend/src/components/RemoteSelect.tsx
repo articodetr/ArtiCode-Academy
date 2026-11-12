@@ -91,7 +91,9 @@ export function RemoteSelect<T>({ fetchOptions, toOption, value, onChange, empty
       onChange={(next) => {
         const item = items.find((candidate) => toOption(candidate).value === next)
         setChosen(item && next !== undefined ? { item, option: toOption(item) } : null)
-        onChange?.(next, item ?? (chosen?.option.value === next ? chosen.item : undefined))
+        // A clear sends `next` undefined; `chosen` is null until an option was picked here — e.g. a value from a form's
+        // initial values — so it must not be read then (J-F48: the edit form's room could not be cleared).
+        onChange?.(next, item ?? (chosen !== null && chosen.option.value === next ? chosen.item : undefined))
       }}
     />
   )

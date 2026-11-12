@@ -15,6 +15,7 @@ import {
   formatLessonDay,
   formatLessonTimes,
   lessonRoomLabel,
+  lessonZoneFor,
   nextDayRangeOf,
   rangeOf,
   rangeProblem,
@@ -166,6 +167,19 @@ describe('lessons.format', () => {
     expect(academyZoneOf({ timezone: 'Europe/Istanbul' })).toEqual({ timeZone: 'Europe/Istanbul', source: 'academy' })
     expect(academyZoneOf(null)).toEqual({ timeZone: deviceTimeZone(), source: 'device' })
     expect(academyZoneOf({ timezone: 'Mars/Base' })).toEqual({ timeZone: deviceTimeZone(), source: 'device' })
+  })
+
+  it('gives a lesson the zone of its room — RoomDto timeZone — else the academy’s, as the server does (D-R41 — J-F48)', () => {
+    const academy = { timeZone: RIYADH, source: 'academy' } as const
+    expect(lessonZoneFor({ timeZone: BERLIN }, academy)).toEqual({ timeZone: BERLIN, source: 'room' })
+    // A room of the site carries the academy's zone: it is still the room's.
+    expect(lessonZoneFor({ timeZone: RIYADH }, academy)).toEqual({ timeZone: RIYADH, source: 'room' })
+    // No room: the academy's (this device's when the academy could not be read).
+    expect(lessonZoneFor(null, academy)).toBe(academy)
+    expect(lessonZoneFor(undefined, { timeZone: FAR_TIME_ZONE, source: 'device' })).toEqual({ timeZone: FAR_TIME_ZONE, source: 'device' })
+    // A room read without a usable zone (a server before CH-0189, or an unknown name): the academy's.
+    expect(lessonZoneFor({}, academy)).toBe(academy)
+    expect(lessonZoneFor({ timeZone: 'Mars/Base' }, academy)).toBe(academy)
   })
 
   it('labels rooms and syllabus items like the schedule and syllabus screens', () => {
