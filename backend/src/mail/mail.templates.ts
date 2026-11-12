@@ -133,3 +133,53 @@ ${input.link}
       `إن لم يكن لديك حساب لدينا فتجاهل هذه الرسالة.`,
   };
 }
+
+/** MOD-12: the notifications page — where a notification e-mail sends its reader when the notification has no page of its own. */
+export const NOTIFICATIONS_PATH = '/notifications';
+/** A subject line stays one line and readable in a mailbox list. */
+export const NOTIFICATION_SUBJECT_TITLE_MAX = 160;
+
+export interface NotificationMailInput {
+  /** Academy name in the chosen locale. */
+  academyName: string;
+  recipientName: string;
+  /** The notification's title — the only event text an e-mail carries (D-R83). */
+  title: string;
+  /** Absolute or root-relative link to the page that shows the details after sign-in. */
+  link: string;
+}
+
+/** One line, trimmed and capped: a title typed with line breaks must not break the subject. */
+export function subjectTitle(title: string): string {
+  const oneLine = title.replace(/\s+/g, ' ').trim();
+  return oneLine.length > NOTIFICATION_SUBJECT_TITLE_MAX ? `${oneLine.slice(0, NOTIFICATION_SUBJECT_TITLE_MAX - 1)}…` : oneLine;
+}
+
+/**
+ * MOD-12 (D-R83): "you have a new notification" — the title and a link, and
+ * nothing else of the event: no score, amount, reason or note ever travels by
+ * e-mail; the reader signs in to see them.
+ */
+export function renderNotificationMail(locale: TemplateLocale, input: NotificationMailInput): RenderedMail {
+  const title = subjectTitle(input.title);
+  if (locale === 'en') {
+    return {
+      subject: `New notification: ${title}`,
+      text:
+        `Hello ${input.recipientName},\n\n` +
+        `You have a new notification from ${input.academyName}:\n${title}\n\n` +
+        `Sign in and open this link to read the details:\n${input.link}\n\n` +
+        `You receive this message because e-mail notifications are on in your account; ` +
+        `you can switch them off per category on your profile page.`,
+    };
+  }
+  return {
+    subject: `لديك إشعار جديد: ${title}`,
+    text:
+      `مرحباً ${input.recipientName}،\n\n` +
+      `لديك إشعار جديد من ${input.academyName}:\n${title}\n\n` +
+      `سجّل الدخول وافتح الرابط التالي لقراءة التفاصيل:\n${input.link}\n\n` +
+      `تصلك هذه الرسالة لأن إشعارات البريد مفعّلة في حسابك؛ ` +
+      `يمكنك إيقافها لكل فئة من صفحة الملف الشخصي.`,
+  };
+}
