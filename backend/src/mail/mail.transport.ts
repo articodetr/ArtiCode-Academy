@@ -12,7 +12,8 @@ export const MAIL_TRANSPORT = Symbol('MAIL_TRANSPORT');
 /** Names accepted by the `MAIL_TRANSPORT` variable (declared in env.schema.ts; `log` is refused in production). */
 export type MailTransportName = Env['MAIL_TRANSPORT'];
 
-export type MailKind = 'invitation' | 'password_reset' | 'email_verification';
+/** `notification` (MOD-12): the e-mail copy of an in-app notification — its delivery state lives in the notification row, not in the audit log (D-R86). */
+export type MailKind = 'invitation' | 'password_reset' | 'email_verification' | 'notification';
 
 /** A rendered, ready-to-send message. */
 export interface MailMessage {

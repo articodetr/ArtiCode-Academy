@@ -1,4 +1,5 @@
-// TEST-017 — MailService, the two built-in transports and the templates, with
+// TEST-017 — MailService, the two built-in transports and the templates (and,
+// since TEST-175, the notification e-mail of MOD-12), with
 // no network and no database (stubs for the transport, Prisma and ConfigService).
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
@@ -257,5 +258,64 @@ describe('MailService (TEST-017)', () => {
     expect(transport.sent[0]!.text).toContain(`https://academy.example/verify-email/${TOKEN}`);
     expect(transport.sent[1]!.subject).toBe('تأكيد بريدك الإلكتروني في أكاديمية آرتي');
     expect(service.emailVerificationLink(TOKEN)).toBe(`https://academy.example/verify-email/${TOKEN}`);
+  });
+
+  // TEST-175 — MOD-12-T02: the e-mail copy of a notification (D-R83/D-R86).
+  it('sends a notification e-mail with the title and the link only, in the recipient locale, and records no delivery event', async () => {
+    const transport = new CapturingTransport();
+    const audit = recordingAudit();
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'), audit);
+
+    const result = await service.sendNotification({ to: 'sara@example.test', recipientName: 'Sara', locale: 'en', title: 'Assignment graded: Essay', path: '/my-assignments' });
+    await service.sendNotification({ to: 'sara@example.test', recipientName: 'سارة', locale: null, title: 'صُحّح واجب: مقال', path: '/my-assignments' });
+
+    expect(result).toEqual({ transport: 'fake', status: 'sent', messageId: 'm-1' });
+    const [english, arabic] = transport.sent;
+    expect(english).toMatchObject({ kind: 'notification', to: 'sara@example.test', locale: 'en', subject: 'New notification: Assignment graded: Essay' });
+    expect(english!.text).toContain('Hello Sara,');
+    expect(english!.text).toContain('Arti Academy');
+    expect(english!.text).toContain('https://academy.example/my-assignments');
+    expect(english!.html).toContain('dir="ltr"');
+    // No locale of their own: the academy's default (Arabic), right to left.
+    expect(arabic).toMatchObject({ kind: 'notification', locale: 'ar', subject: 'لديك إشعار جديد: صُحّح واجب: مقال' });
+    expect(arabic!.text).toContain('أكاديمية آرتي');
+    expect(arabic!.html).toContain('dir="rtl"');
+    // D-R86: the notification row keeps the state of its e-mail; the audit log gets nothing.
+    expect(audit.entries).toEqual([]);
+  });
+
+  it('keeps a notification e-mail on this app and on one subject line, and survives a failing transport', async () => {
+    const transport = new CapturingTransport();
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'), recordingAudit());
+    const send = (title: string, path: string) => service.sendNotification({ to: 'sara@example.test', recipientName: 'Sara', locale: 'en', title, path });
+
+    // Anything but a root-relative path of the app falls back to the notifications page.
+    for (const path of ['https://evil.example/x', '//evil.example/x', 'my-assignments', '/my assignments', '/a\nb', '']) await send('T', path);
+    for (const message of transport.sent) {
+      expect(message.text).toContain('https://academy.example/notifications\n');
+      expect(message.text).not.toContain('evil.example');
+    }
+    await send('First line\nSecond   line', '/my-lessons?x=1#top');
+    const kept = transport.sent.at(-1)!;
+    expect(kept.subject).toBe('New notification: First line Second line');
+    expect(kept.text).toContain('https://academy.example/my-lessons?x=1#top');
+    await send('x'.repeat(400), '/my-lessons');
+    expect(transport.sent.at(-1)!.subject.length).toBeLessThanOrEqual('New notification: '.length + 160);
+    expect(transport.sent.at(-1)!.subject.endsWith('…')).toBe(true);
+    // Without APP_PUBLIC_URL the link is root-relative, as in the account e-mails.
+    const relative = new CapturingTransport();
+    await new MailService(relative, prismaWith(null), configWith(), recordingAudit()).sendNotification({ to: 'a@example.test', recipientName: 'A', locale: 'ar', title: 'عنوان', path: '/my-grades' });
+    expect(relative.sent[0]!.text).toContain('\n/my-grades\n');
+
+    const failing: MailTransport = {
+      name: 'fake',
+      send: async () => {
+        throw new Error('boom to sara@example.test');
+      },
+    };
+    const audit = recordingAudit();
+    const failed = await new MailService(failing, prismaWith(ACADEMY), configWith(), audit).sendNotification({ to: 'sara@example.test', recipientName: 'Sara', locale: 'en', title: 'T', path: '/x' });
+    expect(failed).toEqual({ transport: 'fake', status: 'failed', messageId: null, failure: { reason: 'error' } });
+    expect(audit.entries).toEqual([]);
   });
 });

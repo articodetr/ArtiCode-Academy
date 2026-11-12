@@ -10,16 +10,18 @@ import { renderMailHtml } from './mail.html.js';
 import {
   EMAIL_VERIFICATION_PATH,
   INVITATION_PATH,
+  NOTIFICATIONS_PATH,
   PASSWORD_RESET_PATH,
   formatExpiry,
   renderEmailVerification,
   renderInvitation,
+  renderNotificationMail,
   renderPasswordReset,
   templateLocale,
 } from './mail.templates.js';
 import type { AccountMailInput, RenderedMail, TemplateLocale } from './mail.templates.js';
 import { MAIL_TRANSPORT } from './mail.transport.js';
-import type { MailDeliveryResult, MailKind, MailTransport } from './mail.transport.js';
+import type { MailDeliveryResult, MailKind, MailMessage, MailTransport } from './mail.transport.js';
 
 /** Delivery events of the real transports (LR-01, D-R76): kind + provider id or failure code — never the address, the link or the body. */
 export const MAIL_AUDIT_ACTIONS = {
@@ -41,6 +43,23 @@ export interface AccountMail {
   expiresAt: Date;
 }
 
+/** The e-mail copy of an in-app notification (MOD-12, D-R83): the title and a path — never the body. */
+export interface NotificationMail {
+  /** A verified address (the notification engine sends to nothing else — D-R84). */
+  to: string;
+  recipientName: string;
+  /** Recipient's preferred locale; null = academy default. */
+  locale: LocaleCode | null;
+  title: string;
+  /** Root-relative frontend path of the notification (`data.link`); anything else falls back to the notifications page. */
+  path: string;
+}
+
+/** A path of this app only: one leading slash, no scheme, no host, no line break. */
+function appPath(path: string): string {
+  return /^\/(?!\/)[^\s\\]*$/.test(path) ? path : NOTIFICATIONS_PATH;
+}
+
 interface AcademyContext {
   name: LocalizedText;
   defaultLocale: LocaleCode;
@@ -57,7 +76,8 @@ function asLocalizedText(value: Prisma.JsonValue): LocalizedText | null {
 }
 
 /**
- * Renders the account e-mails (invitation, password reset) from the ar/en
+ * Renders the account e-mails (invitation, password reset, address
+ * confirmation) and the notification e-mails of MOD-12 from the ar/en
  * templates and hands them to the configured transport. It never throws
  * because of the transport: a delivery failure is reported in the result and
  * the manual link stays available to the admin (D-R01/D-R08). The academy
@@ -112,6 +132,25 @@ export class MailService {
     return this.deliver('email_verification', mail, this.emailVerificationLink(mail.token), renderEmailVerification);
   }
 
+  /**
+   * MOD-12 (D-R83/D-R86): "you have a new notification" with the title and a
+   * link to the page that shows the rest after sign-in. Unlike the account
+   * e-mails it records no `mail.delivery.*` event — the notification row
+   * keeps the state of its own e-mail — and like them it never throws.
+   */
+  async sendNotification(mail: NotificationMail): Promise<MailDeliveryResult> {
+    const academy = await this.academy();
+    const locale = templateLocale(mail.locale, academy.defaultLocale);
+    const rendered = renderNotificationMail(locale, {
+      academyName: pickLocalized(academy.name, locale, academy.defaultLocale),
+      recipientName: mail.recipientName,
+      title: mail.title,
+      link: `${this.publicUrl ?? ''}${appPath(mail.path)}`,
+    });
+    const html = renderMailHtml(rendered.text, locale, rendered.subject);
+    return this.transmit({ kind: 'notification', to: mail.to, locale, subject: rendered.subject, text: rendered.text, html });
+  }
+
   private async deliver(
     kind: MailKind,
     mail: AccountMail,
@@ -131,19 +170,23 @@ export class MailService {
       expiresAt: formatExpiry(mail.expiresAt, locale, academy.timezone),
     });
     const html = renderMailHtml(rendered.text, locale, rendered.subject);
-    let result: MailDeliveryResult;
+    const result = await this.transmit({ kind, to: mail.to, locale, subject: rendered.subject, text: rendered.text, html });
+    await this.recordDelivery(kind, mail.userId, result);
+    return result;
+  }
+
+  /** Hands a rendered message to the transport; a transport that throws becomes a `failed` result. */
+  private async transmit(message: MailMessage): Promise<MailDeliveryResult> {
     try {
-      result = await this.transport.send({ kind, to: mail.to, locale, subject: rendered.subject, text: rendered.text, html });
+      return await this.transport.send(message);
     } catch (error) {
       // Never the message, the address or the link: only that the transport failed.
       this.logger.error(
-        `mail delivery failed (transport=${this.transport.name}, kind=${kind})`,
+        `mail delivery failed (transport=${this.transport.name}, kind=${message.kind})`,
         error instanceof Error ? error.stack : String(error),
       );
-      result = { transport: this.transport.name, status: 'failed', messageId: null, failure: { reason: 'error' } };
+      return { transport: this.transport.name, status: 'failed', messageId: null, failure: { reason: 'error' } };
     }
-    await this.recordDelivery(kind, mail.userId, result);
-    return result;
   }
 
   /**
