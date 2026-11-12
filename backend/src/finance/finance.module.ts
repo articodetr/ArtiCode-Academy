@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 import { FeePlansController } from './fee-plans.controller.js';
 import { FeePlansService } from './fee-plans.service.js';
 import { ClassInvoicesController, InvoicesController } from './invoices.controller.js';
@@ -15,8 +16,11 @@ import { PaymentsService } from './payments.service.js';
  * (`/api/invoices/:id/payments`, `/api/payments`), «my invoices» since T05
  * (`/api/me/invoices`). Relies on the global guards, PrismaModule and
  * AuditModule; one error dictionary for the whole module (`finance.errors.ts`).
+ * Since MOD-12-T04 the invoice and payment writers call `NotificationsService`
+ * (an issued or cancelled invoice, a recorded or reversed payment).
  */
 @Module({
+  imports: [NotificationsModule],
   controllers: [FeePlansController, InvoicesController, ClassInvoicesController, InvoicePaymentsController, PaymentsController, MyInvoicesController],
   providers: [FeePlansService, InvoicesService, PaymentsService, MyInvoicesService],
   exports: [FeePlansService, InvoicesService, PaymentsService],

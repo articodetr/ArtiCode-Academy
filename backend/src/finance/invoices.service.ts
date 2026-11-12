@@ -7,6 +7,9 @@ import type { LocalizedText } from '../authorization/localized-text.js';
 import { STUDENT_ROLE_KEY } from '../classes/classes.policy.js';
 import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.js';
 import { Prisma } from '../generated/prisma/client.js';
+import type { NotificationEventParams } from '../notifications/notifications.events.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
+import type { NotificationBatch } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { escapeLikePattern } from '../users/users.validation.js';
@@ -130,6 +133,8 @@ const money = (value: Prisma.Decimal): number => Number(value.toFixed(2));
 const dayOf = (value: Date): string => value.toISOString().slice(0, 10);
 const dateOf = (day: string): Date => new Date(`${day}T00:00:00.000Z`);
 const localized = (value: Prisma.JsonValue, fallback: string): LocalizedText => readLocalizedText(value) ?? { ar: fallback };
+/** The earliest of some due days (`YYYY-MM-DD` compares as a date), or null without any — what `invoice.issued` words. */
+const firstDueOf = (days: readonly string[]): string | null => days.reduce<string | null>((first, day) => (first === null || day < first ? day : first), null);
 
 function allocationOf(row: InvoiceSummaryRow, today: string) {
   const parts = row.installments.map((part) => ({ seq: part.seq, amount: part.amount.toFixed(2), dueOn: dayOf(part.dueOn) }));
@@ -243,12 +248,18 @@ function balanceWhere(balance: PaymentState, total: Prisma.FieldRef<'Invoice', '
  * `invoices.manage` or `payments.record` (the controller); writing needs
  * `invoices.manage`. Academy-wide — no class visibility. Exactly one event per
  * effective write; no difference = no write and no event.
+ *
+ * MOD-12-T04: an invoice that becomes `issued` (API-149 `issue`, or the class
+ * batch with `issue: true`) and one that is cancelled notify the student and
+ * their guardians — `invoice.issued` / `invoice.cancelled`, written inside the
+ * same transaction and e-mailed after the commit. A draft notifies nobody.
  */
 @Injectable()
 export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** API-144 */
@@ -408,14 +419,18 @@ export class InvoicesService {
     });
   }
 
-  /** API-149 — issue (draft → issued, numbered) or cancel (issued → cancelled, with a reason, no completed payment). */
+  /**
+   * API-149 — issue (draft → issued, numbered) or cancel (issued → cancelled, with a reason, no completed payment).
+   * Either one notifies the student and their guardians (MOD-12-T04) inside this transaction, under the invoice-row lock.
+   */
   async changeStatus(id: string, input: ChangeInvoiceStatusDto, caller: AuthPrincipal, ctx: RequestContext): Promise<InvoiceDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const row = await this.lockedInvoice(tx, id, 'FOR NO KEY UPDATE');
       if (!nextInvoiceStatus(input.action, row.status)) throw financeError.invalidTransition(row.status, input.action, allowedInvoiceActions(row.status));
       const academy = await this.academyOf(tx);
       const now = new Date();
       const today = dayIn(academy.timezone, now);
+      let batch: NotificationBatch;
       if (input.action === 'issue') {
         const problems = checkInvoice(contentOf(row));
         if (problems.length > 0) throw financeError.invoiceInvalid(problems);
@@ -433,6 +448,18 @@ export class InvoicesService {
           },
           tx,
         );
+        batch = await this.notifications.notifyStudents(tx, 'invoice.issued', [
+          {
+            studentId: row.studentUserId,
+            params: {
+              invoiceId: id,
+              number,
+              total: row.totalAmount.toFixed(2),
+              currency: row.currency,
+              firstDueOn: firstDueOf(row.installments.map((part) => dayOf(part.dueOn))),
+            },
+          },
+        ]);
       } else {
         const paymentCount = await tx.payment.count({ where: { invoiceId: id, status: 'completed' } });
         if (paymentCount > 0) throw financeError.invoiceHasPayments(paymentCount);
@@ -449,9 +476,14 @@ export class InvoicesService {
           },
           tx,
         );
+        // The number only — never the reason. An issued invoice always carries its number (`ck_invoices_issued`).
+        batch = await this.notifications.notifyStudents(tx, 'invoice.cancelled', [{ studentId: row.studentUserId, params: { invoiceId: id, number: row.number! } }]);
       }
-      return toInvoiceDto(await tx.invoice.findUniqueOrThrow({ where: { id }, select: INVOICE_DETAIL_SELECT }), today);
+      const dto = toInvoiceDto(await tx.invoice.findUniqueOrThrow({ where: { id }, select: INVOICE_DETAIL_SELECT }), today);
+      return { dto, batch };
     });
+    this.notifications.dispatch(batch);
+    return dto;
   }
 
   /**
@@ -460,9 +492,11 @@ export class InvoicesService {
    * issued at once with consecutive numbers. Under the class-row lock, so two
    * batches never invoice an enrollment twice. One `invoices.batch_created`
    * event on the class; nothing to create = 200 without write or event.
+   * Drafts notify nobody; the invoices issued at once (`issue: true`) notify
+   * like API-149 `issue` — one `invoice.issued` per invoice, in one call.
    */
   async issueForClass(classId: string, input: IssueClassInvoicesDto, caller: AuthPrincipal, ctx: RequestContext): Promise<ClassInvoicesResultDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { result, batch } = await this.prisma.db.$transaction(async (tx): Promise<{ result: ClassInvoicesResultDto; batch: NotificationBatch }> => {
       const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM classes WHERE id = ${classId}::uuid FOR NO KEY UPDATE`;
       if (!locked[0]) throw financeError.classNotFound(classId);
       const klass = await tx.class.findUniqueOrThrow({ where: { id: classId }, select: { id: true, code: true, courseId: true } });
@@ -490,7 +524,7 @@ export class InvoicesService {
         if (reason) skipped.push({ enrollmentId: enrollment.id, studentId: enrollment.studentUserId, reason });
         else targets.push(enrollment);
       }
-      if (targets.length === 0) return { created: [], skipped };
+      if (targets.length === 0) return { result: { created: [], skipped }, batch: EMPTY_BATCH };
       const lines = readPlanLines(plan.lines).map((line) => ({ description: line.description, amount: moneyText(line.amount) }));
       const installments = splitInstallments(invoiceTotals({ lines, discountAmount: '0.00' }).total, readPlanShares(plan.installments), today);
       const template: Omit<InvoiceContent, 'enrollmentId'> = { lines, installments, discountAmount: '0.00', discountReason: null, notes: null };
@@ -499,21 +533,26 @@ export class InvoicesService {
       const year = today.slice(0, 4);
       const first = input.issue ? await reserveNumbers(tx, INVOICE_SEQUENCE_KEY, year, targets.length) : 0;
       const ids: string[] = [];
+      // What every invoice of the batch tells its student once issued: the same total and first due day, its own number.
+      const total = invoiceTotals(template).total;
+      const firstDueOn = firstDueOf(installments.map((part) => part.dueOn));
+      const issued: Array<{ studentId: string; params: NotificationEventParams['invoice.issued'] }> = [];
       for (const [index, enrollment] of targets.entries()) {
-        ids.push(
-          await this.insertInvoice(
-            tx,
-            {
-              studentId: enrollment.studentUserId,
-              enrollmentId: enrollment.id,
-              feePlanId: plan.id,
-              currency: academy.currency,
-              content: { ...template, enrollmentId: enrollment.id },
-              issue: input.issue ? { number: formatNumber(INVOICE_NUMBER_PREFIX, year, first + index), at: now } : null,
-            },
-            caller.id,
-          ),
+        const number = input.issue ? formatNumber(INVOICE_NUMBER_PREFIX, year, first + index) : null;
+        const invoiceId = await this.insertInvoice(
+          tx,
+          {
+            studentId: enrollment.studentUserId,
+            enrollmentId: enrollment.id,
+            feePlanId: plan.id,
+            currency: academy.currency,
+            content: { ...template, enrollmentId: enrollment.id },
+            issue: number ? { number, at: now } : null,
+          },
+          caller.id,
         );
+        ids.push(invoiceId);
+        if (number) issued.push({ studentId: enrollment.studentUserId, params: { invoiceId, number, total, currency: academy.currency, firstDueOn } });
       }
       await this.audit.record(
         {
@@ -535,9 +574,13 @@ export class InvoicesService {
         },
         tx,
       );
+      // One call for the whole batch. Empty for a batch of drafts: the engine then writes nothing and asks the database nothing.
+      const batch = await this.notifications.notifyStudents(tx, 'invoice.issued', issued);
       const rows = await tx.invoice.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' }, select: INVOICE_SUMMARY_SELECT });
-      return { created: rows.map((row) => toInvoiceSummaryDto(row, today)), skipped };
+      return { result: { created: rows.map((row) => toInvoiceSummaryDto(row, today)), skipped }, batch };
     });
+    this.notifications.dispatch(batch);
+    return result;
   }
 
   // ---------------------------------------------------------------------------
