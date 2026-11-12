@@ -66,6 +66,10 @@ const TABLES = [
   'invoice_lines',
   'invoice_installments',
   'payments',
+  // MOD-12-T01 (20261112083749_mod12_notifications) — details in TEST-174.
+  'notifications',
+  'notification_preferences',
+  'announcements',
 ] as const;
 
 // PostgreSQL SQLSTATE codes
@@ -146,7 +150,7 @@ describe.skipIf(!available)('database schema — first migration (e2e, TEST-007)
     return rows[0]!.id;
   }
 
-  it('records the applied migrations (first one first) and the 37 tables', async () => {
+  it('records the applied migrations (first one first) and the 40 tables', async () => {
     const migrations = await pool.query<{ migration_name: string; finished: boolean; rolled_back: boolean }>(
       `SELECT migration_name, finished_at IS NOT NULL AS finished, rolled_back_at IS NOT NULL AS rolled_back
          FROM _prisma_migrations ORDER BY started_at`,
