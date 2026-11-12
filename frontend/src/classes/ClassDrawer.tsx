@@ -22,7 +22,9 @@
 // too, so the list row follows (PR #66 review, note 4). Since J-F27 the same
 // unsaved work also holds a browser back/forward, which asks the same question
 // (NavigationBlocker), and a reload or a tab close gets the browser's own
-// prompt (useUnsavedChangesGuard — KI-055).
+// prompt (useUnsavedChangesGuard — KI-055). Since J-F51 a certificates tab
+// (ClassCertificatesTab — API-136 preview, API-132 issue) for holders of
+// `certificates.read_all` or `certificates.issue` (D-R57); it holds no editor.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -32,6 +34,8 @@ import { useTranslation } from 'react-i18next'
 import { changeClassStatus, deleteClass, getClass, updateClass } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
+import { ClassCertificatesTab } from '../certificates/ClassCertificatesTab'
+import { canReadCertificates } from '../certificates/certificates.policy'
 import { NavigationBlocker } from '../common/NavigationBlocker'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
@@ -60,10 +64,10 @@ const ICONS: Readonly<Record<ClassMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule'
+type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule' | 'certificates'
 
-/** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself. */
-type EditorTab = Exclude<DrawerTab, 'details'>
+/** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself, and the certificates tab holds no editor. */
+type EditorTab = Exclude<DrawerTab, 'details' | 'certificates'>
 
 const NOTHING_UNSAVED: Readonly<Record<EditorTab, boolean>> = { teachers: false, students: false, schedule: false }
 
@@ -279,6 +283,9 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
               children: <ClassScheduleTab cls={cls} onUnsavedChange={reportUnsaved.schedule} />,
               disabled: editing,
             },
+            ...(canReadCertificates(hasPermission)
+              ? [{ key: 'certificates', label: t('certificates.classTab.tab'), children: <ClassCertificatesTab cls={cls} />, disabled: editing }]
+              : []),
           ]}
         />
       ) : null}

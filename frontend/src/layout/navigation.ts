@@ -22,6 +22,7 @@ import {
   SafetyOutlined,
   SettingOutlined,
   TeamOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons'
 import { ROLES } from '../auth/roles'
 import type { Role } from '../auth/roles'
@@ -138,6 +139,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
   // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
   { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
+  // MOD-10 (J-F51): «my certificates» (API-135) — ownership with the 7.2 keys (`certificates.read_own` for one's own,
+  // `certificates.read_linked` with the guardian role for a child's — D-R57); shown to whoever holds the `student` or
+  // `guardian` server role key, like «my assignments» (MOD-12 notifications link here). A learner whose role lost both
+  // keys reaches the page and gets the server's 403 message.
+  { key: 'myCertificates', path: '/my-certificates', labelKey: 'nav.myCertificates', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-10' },
   // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
   // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
   // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams
@@ -151,7 +157,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
     exceptRoleKeysOnly: ['student', 'guardian'],
     module: 'MOD-09',
   },
-  { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), roles: ['admin', 'student', 'guardian'], module: 'MOD-10' },
+  // MOD-10 (J-F51): the certificates API is real — the list, the details and a class's preview open with
+  // `certificates.read_all` OR `certificates.issue` (D-R57: staff issue without read_all), so either key shows the entry.
+  // No learner holds either by seed (they read theirs in «my certificates»), so nobody is excepted; teachers hold none.
+  { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), permissions: ['certificates.read_all', 'certificates.issue'], module: 'MOD-10' },
   { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
   { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
   { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },

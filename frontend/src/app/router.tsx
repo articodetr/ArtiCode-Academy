@@ -6,6 +6,7 @@ import { RequireAccess, RequireAuth } from '../auth/RequireAuth'
 import { AppLayout } from '../layout/AppLayout'
 import { AssignmentsPage } from '../pages/AssignmentsPage'
 import { AuditLogPage } from '../pages/AuditLogPage'
+import { CertificatePrintPage } from '../pages/CertificatePrintPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
 import { ClassesPage } from '../pages/ClassesPage'
 import { CoursesPage } from '../pages/CoursesPage'
@@ -14,6 +15,7 @@ import { ExamsPage } from '../pages/ExamsPage'
 import { LessonsPage } from '../pages/LessonsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { MyAssignmentsPage } from '../pages/MyAssignmentsPage'
+import { MyCertificatesPage } from '../pages/MyCertificatesPage'
 import { MyClassesPage } from '../pages/MyClassesPage'
 import { MyLessonsPage } from '../pages/MyLessonsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -24,6 +26,7 @@ import { ReportsPage } from '../pages/ReportsPage'
 import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { UsersPage } from '../pages/UsersPage'
+import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
 
 /** The entry of NAV_ITEMS decides: permission keys where the module has an API, the role matrix elsewhere. */
 function guarded(navKey: string, page: ReactNode) {
@@ -36,6 +39,13 @@ const router = createBrowserRouter([
   // Public token pages (MOD-03-T12): the one-time link is the only credential.
   { path: '/invite/:token', element: <InvitationPage /> },
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+  // Public certificate verification (J-F51 — API-134, D-R56): no sign-in; the printed code is the only input.
+  { path: '/verify', element: <VerifyCertificatePage /> },
+  { path: '/verify/:code', element: <VerifyCertificatePage /> },
+  // Certificate print pages (J-F51 — D-R50): signed in, outside the layout so neither the screen nor the paper has the
+  // menu; API-131 for `certificates.read_all`/`certificates.issue`, API-135 for a student's or a guardian's own.
+  { path: '/certificates/:id/print', element: <RequireAuth>{guarded('certificates', <CertificatePrintPage source="academy" />)}</RequireAuth> },
+  { path: '/my-certificates/:id/print', element: <RequireAuth>{guarded('myCertificates', <CertificatePrintPage source="own" />)}</RequireAuth> },
   {
     path: '/',
     element: (
@@ -54,6 +64,7 @@ const router = createBrowserRouter([
       { path: 'my-lessons', element: guarded('myLessons', <MyLessonsPage />) }, // `student`/`guardian` role keys (J-F11, API-101 — ownership)
       { path: 'assignments', element: guarded('assignments', <AssignmentsPage />) },
       { path: 'my-assignments', element: guarded('myAssignments', <MyAssignmentsPage />) }, // `student`/`guardian` role keys (J-F42, API-112 — ownership)
+      { path: 'my-certificates', element: guarded('myCertificates', <MyCertificatesPage />) }, // `student`/`guardian` role keys (J-F51, API-135 — ownership + read_own/read_linked)
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },

@@ -29,15 +29,20 @@ function mockAcademyApi({ academy = makeAcademy(), write }: Options = {}) {
     writes.push(body)
     if (write) return write(body)
     const base = academy instanceof Response ? makeAcademy() : academy
-    const settings = mergeSettings(base.settings, body.settings as { scheduling?: Record<string, unknown> } | undefined)
+    const settings = mergeSettings(base.settings, body.settings as SettingsPatch | undefined)
     return jsonResponse(200, { ...base, ...body, settings, updatedAt: '2026-10-31T10:00:00.000Z' })
   })
   return { writes, fetchMock, gets: () => gets }
 }
 
+type SettingsPatch = { scheduling?: Record<string, unknown>; certificates?: Record<string, unknown> }
+
 /** What the server does with `settings` of a PATCH: key by key, `null` clears (days already sorted by the form). */
-function mergeSettings(current: AcademySettings, patch: { scheduling?: Record<string, unknown> } | undefined): AcademySettings {
-  return { scheduling: { ...current.scheduling, ...(patch?.scheduling ?? {}) } as AcademySettings['scheduling'] }
+function mergeSettings(current: AcademySettings, patch: SettingsPatch | undefined): AcademySettings {
+  return {
+    scheduling: { ...current.scheduling, ...(patch?.scheduling ?? {}) } as AcademySettings['scheduling'],
+    certificates: { ...current.certificates, ...(patch?.certificates ?? {}) } as AcademySettings['certificates'],
+  }
 }
 
 /** The Form.Item whose label has that text (the select shows its value inside it). */
@@ -197,7 +202,7 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
   const { sun, mon, tue, wed, thu, fri, sat } = ar.settings.weekdays
 
   it('shows the stored first day in the select and the working days checked, ordered from that first day', async () => {
-    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] } } }) })
+    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] }, certificates: { serialPrefix: null } } }) })
     renderForm()
 
     await screen.findByLabelText(ar.settings.academyNameAr)
@@ -230,7 +235,7 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
   })
 
   it('clears the working days with null when every day is unchecked, and leaves the first day out of the body', async () => {
-    const api = mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1] } } }) })
+    const api = mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1] }, certificates: { serialPrefix: null } } }) })
     renderForm()
 
     await screen.findByLabelText(ar.settings.academyNameAr)
@@ -243,7 +248,7 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
   })
 
   it('shows the schedule read-only to a viewer without academy.settings.manage', async () => {
-    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0] } } }) })
+    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0] }, certificates: { serialPrefix: null } } }) })
     renderForm(SETTINGS_READER_PERMISSIONS)
 
     await screen.findByLabelText(ar.settings.academyNameAr)
@@ -251,5 +256,68 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
     expect(dayBox(sun)).toBeDisabled()
     expect(dayBox(sat)).toBeDisabled()
     expect(screen.getByLabelText(ar.settings.scheduling.weekStartsOn)).toBeDisabled()
+  })
+})
+
+describe('GeneralSettingsForm — certificate prefix (J-F51)', () => {
+  const year = new Date().getFullYear()
+  const prefixField = () => screen.getByLabelText(ar.certificates.settings.serialPrefix) as HTMLInputElement
+  const withPrefix = (serialPrefix: string | null) => makeAcademy({ settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix } } })
+
+  it('shows the stored prefix with the first serial of the year, and the default CERT while none is set', async () => {
+    mockAcademyApi({ academy: withPrefix('ACA') })
+    const { unmount } = renderForm()
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(prefixField()).toHaveValue('ACA')
+    expect(within(fieldOf(ar.certificates.settings.serialPrefix)).getByText(new RegExp(`ACA-${year}-00001`))).toBeInTheDocument()
+    unmount()
+
+    mockAcademyApi()
+    renderForm()
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(prefixField()).toHaveValue('')
+    expect(within(fieldOf(ar.certificates.settings.serialPrefix)).getByText(new RegExp(`CERT-${year}-00001`))).toBeInTheDocument()
+  })
+
+  it('saves the prefix upper-cased under settings.certificates in the same single PATCH as the other fields, and shows the answer', async () => {
+    const api = mockAcademyApi()
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    fireEvent.change(prefixField(), { target: { value: 'aca' } })
+    expect(prefixField()).toHaveValue('ACA')
+    fireEvent.change(screen.getByLabelText(ar.settings.currency), { target: { value: 'try' } })
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(api.writes).toHaveLength(1))
+    expect(api.writes[0]).toEqual({ currency: 'TRY', settings: { certificates: { serialPrefix: 'ACA' } } })
+    expect(await screen.findByText(ar.settings.saved)).toBeInTheDocument()
+    await waitFor(() => expect(prefixField()).toHaveValue('ACA'))
+    expect(within(fieldOf(ar.certificates.settings.serialPrefix)).getByText(new RegExp(`ACA-${year}-00001`))).toBeInTheDocument()
+  })
+
+  it('clears the prefix with null (back to CERT) and refuses one the server would refuse, before any request', async () => {
+    const api = mockAcademyApi({ academy: withPrefix('ACA') })
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    fireEvent.change(prefixField(), { target: { value: 'A-1' } })
+    fireEvent.click(saveButton())
+    expect(await screen.findByText(ar.certificates.settings.invalid)).toBeInTheDocument()
+    expect(api.writes).toEqual([])
+
+    fireEvent.change(prefixField(), { target: { value: '' } })
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(api.writes).toHaveLength(1))
+    expect(api.writes[0]).toEqual({ settings: { certificates: { serialPrefix: null } } })
+  })
+
+  it('shows the prefix read-only to a viewer without academy.settings.manage', async () => {
+    mockAcademyApi({ academy: withPrefix('ACA') })
+    renderForm(SETTINGS_READER_PERMISSIONS)
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(prefixField()).toHaveValue('ACA')
+    expect(prefixField()).toBeDisabled()
   })
 })

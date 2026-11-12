@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { isWeekday, normaliseWorkingDays, orderedWeekdays, planSchedulingPatch, sameDays, schedulingFormValuesOf } from './academy.settings'
+import {
+  exampleSerial,
+  isSerialPrefixInput,
+  isWeekday,
+  normaliseSerialPrefix,
+  normaliseWorkingDays,
+  orderedWeekdays,
+  planCertificatesPatch,
+  planSchedulingPatch,
+  sameDays,
+  schedulingFormValuesOf,
+  serialPrefixOf,
+} from './academy.settings'
 
 const UNSET = { weekStartsOn: null, workingDays: null }
 
@@ -48,5 +60,38 @@ describe('planSchedulingPatch', () => {
       weekStartsOn: null,
       workingDays: null,
     })
+  })
+})
+
+describe('certificate prefix (J-F51 — mirror of serialPrefixSchema, D-R51)', () => {
+  it('accepts a blank field (the default CERT) or 2–10 upper-case letters or digits once trimmed and upper-cased', () => {
+    expect(normaliseSerialPrefix(' aca ')).toBe('ACA')
+    expect(normaliseSerialPrefix(undefined)).toBe('')
+    for (const value of ['', '  ', 'AC', 'aca', 'ACA2026', 'ABCDEFGHIJ']) expect(isSerialPrefixInput(value)).toBe(true)
+    for (const value of ['A', 'ABCDEFGHIJK', 'AC-1', 'A C', 'ÄCA', 'ACA_']) expect(isSerialPrefixInput(value)).toBe(false)
+  })
+
+  it('reads the stored prefix defensively: a missing domain or a value the schema refuses reads as not set', () => {
+    expect(serialPrefixOf({ scheduling: UNSET, certificates: { serialPrefix: 'ACA' } })).toBe('ACA')
+    expect(serialPrefixOf({ scheduling: UNSET, certificates: { serialPrefix: null } })).toBeNull()
+    expect(serialPrefixOf({ scheduling: UNSET })).toBeNull()
+    expect(serialPrefixOf({ certificates: { serialPrefix: 'aca' } })).toBeNull()
+    expect(serialPrefixOf({ certificates: 'ACA' })).toBeNull()
+    expect(serialPrefixOf(null)).toBeNull()
+  })
+
+  it('plans the smallest settings.certificates patch: unchanged → null, a new prefix upper-cased, a blank one clears it', () => {
+    expect(planCertificatesPatch(null, '')).toBeNull()
+    expect(planCertificatesPatch('ACA', ' aca')).toBeNull()
+    expect(planCertificatesPatch(null, 'aca')).toEqual({ serialPrefix: 'ACA' })
+    expect(planCertificatesPatch('ACA', 'ART')).toEqual({ serialPrefix: 'ART' })
+    expect(planCertificatesPatch('ACA', '  ')).toEqual({ serialPrefix: null })
+    expect(planCertificatesPatch('ACA', undefined)).toBeNull()
+  })
+
+  it('shows the first serial of a year with the typed prefix, the default one until it is valid', () => {
+    expect(exampleSerial('aca', 2026)).toBe('ACA-2026-00001')
+    expect(exampleSerial('', 2026)).toBe('CERT-2026-00001')
+    expect(exampleSerial('A', 2027)).toBe('CERT-2027-00001')
   })
 })
