@@ -2,7 +2,7 @@
 // when its tab opens; a review in the panel re-reads the roster and the
 // assignment, so the drawer's counts and the list row (onUpdated) follow the
 // server — the review's answer (API-111) carries the attempt only.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Assignment } from '../api/assignments'
@@ -114,6 +114,57 @@ describe('AssignmentDrawer — submissions tab (J-F41)', () => {
     // The roster sits in the drawer; the panel (its own portal) names the student too.
     const roster = screen.getByTestId('assignment-roster')
     await waitFor(() => expect(within(within(roster).getByText('سارة الطالبة').closest('tr') as HTMLElement).getByText('17.5 / 20')).toBeInTheDocument())
+  })
+
+  it('keeps the newest counts when two quick reviews re-read the assignment and the older read answers last (J-F47, #108 note 5)', async () => {
+    const initial = makeAssignment({ status: 'open', maxAttempts: 2, submissions: { students: 3, submitted: 1, graded: 1, returned: 1 } })
+    const older = makeAssignment({ status: 'open', maxAttempts: 2, submissions: { students: 3, submitted: 0, graded: 2, returned: 1 } })
+    const newest = makeAssignment({ status: 'open', maxAttempts: 2, submissions: { students: 3, submitted: 0, graded: 3, returned: 0 } })
+    let assignmentReads = 0
+    const held: { release?: () => void } = {}
+    mockFetch((url, init) => {
+      const method = init?.method ?? 'GET'
+      if (url === '/api/academy') return jsonResponse(200, makeAcademy())
+      if (method === 'GET' && url === ASSIGNMENT_URL) {
+        assignmentReads += 1
+        if (assignmentReads === 1) return jsonResponse(200, initial)
+        // The re-read after the first review is held until the second one has answered.
+        if (assignmentReads === 2) return new Promise<Response>((resolve) => (held.release = () => resolve(jsonResponse(200, older))))
+        return jsonResponse(200, newest)
+      }
+      if (method === 'GET' && url === ROSTER_URL) return jsonResponse(200, makeSubmissionRoster())
+      if (method === 'GET' && url === SUBMISSION_URL) return jsonResponse(200, makeSubmission())
+      if (method === 'POST' && url === `${SUBMISSION_URL}/review`) return jsonResponse(200, makeGradedSubmission({ feedback: null }))
+      return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
+    })
+    const { onUpdated } = renderDrawer()
+    await screen.findByText('حلّ تمارين الصفحة 12')
+    openSubmissionsTab()
+    const sara = (await screen.findByText('سارة الطالبة')).closest('tr') as HTMLElement
+    fireEvent.click(within(sara).getByLabelText(`${ar.assignments.roster.review}: سارة الطالبة`))
+    await screen.findByTestId('submission-text')
+
+    // First review: its re-read of the counts stays pending.
+    await userEvent.type(screen.getByLabelText('الدرجة (من 20)'), '17')
+    fireEvent.click(screen.getByText(ar.assignments.review.form.submit.grade).closest('button')!)
+    await waitFor(() => expect(assignmentReads).toBe(2))
+    // A correction right after: the second re-read answers at once.
+    await waitFor(() => expect(screen.getByText(ar.assignments.review.form.submit.grade).closest('button')).not.toHaveClass('ant-btn-loading'))
+    await userEvent.clear(screen.getByLabelText('الدرجة (من 20)'))
+    await userEvent.type(screen.getByLabelText('الدرجة (من 20)'), '18')
+    fireEvent.click(screen.getByText(ar.assignments.review.form.submit.grade).closest('button')!)
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(newest))
+    expect(within(screen.getByTestId('assignment-submissions')).getByText('مصحَّح: 3')).toBeInTheDocument()
+
+    // The older read answers last: it changes neither the counts nor the list row.
+    expect(held.release).toBeDefined()
+    await act(async () => {
+      held.release?.()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(within(screen.getByTestId('assignment-submissions')).getByText('مصحَّح: 3')).toBeInTheDocument()
+    expect(onUpdated).not.toHaveBeenCalledWith(older)
+    expect(onUpdated).toHaveBeenCalledTimes(1)
   })
 
   it('Escape reaches the review panel, not the drawer below it: it closes an untouched panel, and keeps a typed feedback (the panel mask too)', async () => {

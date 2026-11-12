@@ -1,25 +1,27 @@
 // Pure rules of «my assignments» (J-F42): the four views turned into API-112
 // parameters, the row key (an assignment repeats once per owned student), the
-// cells of the learner's own submission, whether a row may take an attempt
-// now — a mirror of the checks of SubmissionsService.submit()
-// (backend/src/assignments/submissions.service.ts + submissionWindow() and
-// summarizeAttempts() of submissions.policy.ts; keep them in sync) — and the
-// row update a submission answer (API-109/API-110) brings. The student and
-// class filter options, and the student column rule, are those of «my
-// lessons» (myLessons.view.ts — the same API-060 ownership). No React, no
-// i18next instance; unit-tested in myAssignments.view.test.ts.
+// cells of the learner's own submission, and the row update a submission
+// answer (API-109/API-110) brings. Whether a row takes an attempt now is the
+// server's verdict (MOD-08-T07, D-R49 — J-F47): the item's `submitBlocker` /
+// `submitsLate`, computed at the server's clock when the page is read, never
+// at this device's; an answer re-applies the server's submitState()
+// (backend/src/assignments/submissions.policy.ts — keep followSubmitState() in
+// sync) to what it says now. The student and class filter options, and the
+// student column rule, are those of «my lessons» (myLessons.view.ts — the same
+// API-060 ownership). No React, no i18next instance; unit-tested in
+// myAssignments.view.test.ts.
 import type { AssignmentSortOrder } from '../api/assignments'
-import type { EnrollmentStatus, MyClassItem, MyClassTeacher } from '../api/enrollments'
+import type { MyClassItem, MyClassTeacher } from '../api/enrollments'
 import type { ListMyAssignmentsParams, MyAssignmentItem, MySubmission, MySubmissionStatus } from '../api/myAssignments'
 import { dayEndIn, dayStartIn } from './assignments.zone'
 
 /**
  * `open` (default) = every open assignment, earliest due first — the work at
  * hand with its state, a returned attempt included; `pending` = the open
- * assignments a student has not submitted yet (API-112 `pending=true`: a
- * returned attempt counts as submitted, so it is not there); `closed` = the
- * closed ones, latest due first; `all` = both, with an optional due-day range
- * and a chosen order.
+ * assignments waiting for a student (API-112 `pending=true`): no attempt yet,
+ * or — since MOD-08-T07 (D-R49 (6)) — the latest attempt returned for rework
+ * with an attempt left; `closed` = the closed ones, latest due first; `all` =
+ * both, with an optional due-day range and a chosen order.
  */
 export const MY_ASSIGNMENT_VIEWS = ['open', 'pending', 'closed', 'all'] as const
 export type MyAssignmentView = (typeof MY_ASSIGNMENT_VIEWS)[number]
@@ -69,17 +71,6 @@ export function myAssignmentKey(item: Pick<MyAssignmentItem, 'id' | 'student'>):
 // The learner's own submission
 // ---------------------------------------------------------------------------
 
-function isPast(iso: string | null, now: Date): boolean {
-  if (!iso) return false
-  const at = Date.parse(iso)
-  return !Number.isNaN(at) && now.getTime() > at
-}
-
-/** Past the due date on this device's clock (an undated assignment never is) — the server's `now > due_at` (submissionWindow()). */
-export function isPastDue(item: Pick<MyAssignmentItem, 'dueAt'>, now: Date = new Date()): boolean {
-  return isPast(item.dueAt, now)
-}
-
 /** Tag colors of an attempt's status. */
 export const MY_SUBMISSION_COLORS: Readonly<Record<MySubmissionStatus, string>> = {
   submitted: 'gold',
@@ -93,23 +84,18 @@ export function feedbackExcerpt(text: string, max = 140): string {
   return flat.length > max ? `${flat.slice(0, max).trimEnd()}…` : flat
 }
 
-/** Past the due date and not taking late attempts, or closed: no attempt can come any more. */
-function windowShut(item: Pick<MyAssignmentItem, 'status' | 'dueAt' | 'allowLate'>, now: Date): boolean {
-  return item.status !== 'open' || (isPast(item.dueAt, now) && !item.allowLate)
-}
-
 export type MySubmissionCell =
   /** The latest attempt as the server reviewed it; `late` = `isLate` of that attempt (the server's mark). */
   | { kind: 'submitted' | 'graded' | 'returned'; attemptNo: number; late: boolean }
-  /** No attempt yet and one can still come. */
+  /** No attempt yet and the server takes one now (`submitBlocker` null — on time, or late under allowLate). */
   | { kind: 'none' }
-  /** No attempt, and the assignment no longer takes one (closed, or past due without late attempts). */
+  /** No attempt, and the server takes none from this student now: closed, past due without late attempts, or the enrollment no longer active. */
   | { kind: 'missed' }
 
-/** What the submission column shows. */
-export function submissionCellOf(item: Pick<MyAssignmentItem, 'latest' | 'status' | 'dueAt' | 'allowLate'>, now: Date = new Date()): MySubmissionCell {
+/** What the submission column shows — the server's verdict (`submitBlocker`), never this device's clock. */
+export function submissionCellOf(item: Pick<MyAssignmentItem, 'latest' | 'submitBlocker'>): MySubmissionCell {
   if (item.latest) return { kind: item.latest.status, attemptNo: item.latest.attemptNo, late: item.latest.isLate }
-  return windowShut(item, now) ? { kind: 'missed' } : { kind: 'none' }
+  return item.submitBlocker === null ? { kind: 'none' } : { kind: 'missed' }
 }
 
 /** The score shown with the latest attempt: graded only (a returned attempt has no score — D-R39). */
@@ -120,36 +106,6 @@ export function gradedScoreOf(item: Pick<MyAssignmentItem, 'latest'>): number | 
 /** `17.5 / 20` — numbers as the server sends them (no rounding, no penalty: the grades module applies it — D-R36). */
 export function scoreText(score: number, maxScore: number): string {
   return `${score} / ${maxScore}`
-}
-
-/** Why the student cannot send an attempt now, in the order the server checks (enrollment → window → attempts). */
-export type SubmitBlocker = 'not_enrolled' | 'closed' | 'past_due' | 'attempts_exhausted'
-
-export interface SubmitAvailability {
-  blocker: SubmitBlocker | null
-  /** The attempt would be marked late (past the due date, under allowLate). */
-  late: boolean
-}
-
-/**
- * Whether the row's student may send an attempt now — for a `self` row of a
- * holder of `assignments.submit` (the page decides that part). The
- * enrollment status comes from «my classes» (API-060 — API-112 does not carry
- * it); unknown (null) blocks nothing and leaves `not_enrolled` to the server.
- * The window reads this device's clock: a clock off by minutes near the due
- * date gets the server's 409 instead, which the modal shows.
- */
-export function submitAvailability(
-  item: Pick<MyAssignmentItem, 'status' | 'dueAt' | 'allowLate' | 'attempts' | 'attemptsAllowed'>,
-  enrollmentStatus: EnrollmentStatus | null,
-  now: Date = new Date(),
-): SubmitAvailability {
-  const late = isPast(item.dueAt, now)
-  if (enrollmentStatus !== null && enrollmentStatus !== 'active') return { blocker: 'not_enrolled', late }
-  if (item.status !== 'open') return { blocker: 'closed', late }
-  if (late && !item.allowLate) return { blocker: 'past_due', late }
-  if (item.attempts >= item.attemptsAllowed) return { blocker: 'attempts_exhausted', late }
-  return { blocker: null, late }
 }
 
 /** Only the student themselves submits: a guardian reads their children's rows (D-R40), and the key is `assignments.submit`. */
@@ -163,10 +119,39 @@ export function attemptsLeftAfterNext(item: Pick<MyAssignmentItem, 'attempts' | 
 }
 
 /**
+ * The row's submit state after an answer about one of its student's attempts
+ * (API-109 or API-110): the server's submitState() of
+ * backend/src/assignments/submissions.policy.ts (keep in sync) — enrollment,
+ * then the window, then an attempt left — re-applied to what the answer says
+ * now: the assignment's status and late policy, the attempts and the
+ * allowance. Whether the due date has passed is the server's word, never this
+ * device's clock: the `isLate` of an attempt the answer has just created (the
+ * server's clock at that moment), else the list's verdict (`submitsLate`, or
+ * `past_due`) — a row whose list verdict was another blocker counts as on
+ * time until the next read, and the server's 409 then says otherwise. The
+ * enrollment is the row's (an answer does not carry it).
+ */
+export function followSubmitState(
+  item: Pick<MyAssignmentItem, 'enrollmentStatus' | 'submitBlocker' | 'submitsLate' | 'latest'>,
+  submission: Pick<MySubmission, 'attemptNo' | 'isLate' | 'attempts' | 'attemptsAllowed' | 'assignment'>,
+): Pick<MyAssignmentItem, 'submitBlocker' | 'submitsLate'> {
+  if (item.enrollmentStatus !== 'active') return { submitBlocker: 'not_enrolled', submitsLate: false }
+  const { status, allowLate } = submission.assignment
+  if (status === 'draft') return { submitBlocker: 'not_published', submitsLate: false }
+  if (status !== 'open') return { submitBlocker: 'closed', submitsLate: false }
+  const created = !item.latest || submission.attemptNo > item.latest.attemptNo
+  const pastDue = created ? submission.isLate : item.submitsLate || item.submitBlocker === 'past_due'
+  if (pastDue && !allowLate) return { submitBlocker: 'past_due', submitsLate: false }
+  if (submission.attempts >= submission.attemptsAllowed) return { submitBlocker: 'attempts_exhausted', submitsLate: false }
+  return { submitBlocker: null, submitsLate: pastDue }
+}
+
+/**
  * The row after a submission answer of the server (API-109 or API-110): the
- * student's counts, the assignment as it is now, and — unless the answer is
- * an older attempt than the one on screen — the latest attempt. An answer
- * about another assignment or student leaves the row as it is.
+ * student's counts, the assignment as it is now, the submit state that
+ * follows from them (followSubmitState()), and — unless the answer is an
+ * older attempt than the one on screen — the latest attempt. An answer about
+ * another assignment or student leaves the row as it is.
  */
 export function applySubmission(item: MyAssignmentItem, submission: MySubmission): MyAssignmentItem {
   if (submission.assignment.id !== item.id || submission.student.id !== item.student.id) return item
@@ -179,8 +164,11 @@ export function applySubmission(item: MyAssignmentItem, submission: MySubmission
     status: assignment.status === 'open' || assignment.status === 'closed' ? assignment.status : item.status,
     maxScore: assignment.maxScore,
     dueAt: assignment.dueAt,
+    allowLate: assignment.allowLate,
+    timeZone: assignment.timeZone,
     attempts: submission.attempts,
     attemptsAllowed: submission.attemptsAllowed,
+    ...followSubmitState(item, submission),
     latest: newer
       ? {
           id: submission.id,
@@ -197,25 +185,21 @@ export function applySubmission(item: MyAssignmentItem, submission: MySubmission
 }
 
 // ---------------------------------------------------------------------------
-// What «my classes» (API-060) adds: the enrollment and the lead teacher
+// What «my classes» (API-060) adds: the lead teacher (the enrollment status
+// comes with API-112 itself since MOD-08-T07 — `enrollmentStatus`)
 // ---------------------------------------------------------------------------
 
-export type EnrollmentIndex = ReadonlyMap<string, Pick<MyClassItem, 'enrollmentStatus' | 'class'>>
+export type EnrollmentIndex = ReadonlyMap<string, Pick<MyClassItem, 'class'>>
 
 /** The owned enrollments of API-060 by class × student (API-112 rows join them by the same pair). */
-export function enrollmentIndexOf(items: readonly Pick<MyClassItem, 'enrollmentStatus' | 'class' | 'student'>[]): EnrollmentIndex {
-  const index = new Map<string, Pick<MyClassItem, 'enrollmentStatus' | 'class'>>()
+export function enrollmentIndexOf(items: readonly Pick<MyClassItem, 'class' | 'student'>[]): EnrollmentIndex {
+  const index = new Map<string, Pick<MyClassItem, 'class'>>()
   for (const item of items) index.set(`${item.class.id}:${item.student.id}`, item)
   return index
 }
 
 function enrollmentOf(index: EnrollmentIndex, item: Pick<MyAssignmentItem, 'class' | 'student'>) {
   return index.get(`${item.class.id}:${item.student.id}`) ?? null
-}
-
-/** The row's enrollment status, or null when «my classes» does not know it (still loading, failed). */
-export function enrollmentStatusOf(index: EnrollmentIndex, item: Pick<MyAssignmentItem, 'class' | 'student'>): EnrollmentStatus | null {
-  return enrollmentOf(index, item)?.enrollmentStatus ?? null
 }
 
 export type LeadTeacherCell = { kind: 'teacher'; teacher: MyClassTeacher } | { kind: 'none' } | { kind: 'unknown' }

@@ -5,7 +5,10 @@
 // review codes point at the grading form's fields (`score_out_of_range` →
 // score, `feedback_required` → feedback); the codes of a student's submission
 // (API-109) are worded now for «my assignments» (MOD-08-T04) — plus the
-// auth/permission guards. Unit-tested in assignments.errors.test.ts.
+// auth/permission guards. Since J-F47 also the T07 part (D-R49):
+// `review_conflict` (someone reviewed the attempt meanwhile — the review panel
+// reads it again) and `attempt_conflict` (with the attempt numbers the server
+// names). Unit-tested in assignments.errors.test.ts.
 import { ApiError } from '../api/client'
 import { failureMessage as usersFailureMessage } from '../users/users.errors'
 import type { UsersFailure } from '../users/users.errors'
@@ -37,6 +40,9 @@ const KNOWN_CODES = new Set([
   'score_out_of_range',
   'feedback_required',
   'submission_invalid',
+  // T07 (D-R49 — MOD-08-T07)
+  'attempt_conflict',
+  'review_conflict',
   'permission_denied',
   'origin_forbidden',
   'rate_limited',
@@ -65,6 +71,10 @@ function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
+function numberText(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '—'
+}
+
 export function describeAssignmentsFailure(error: unknown): AssignmentsFailure {
   if (!(error instanceof ApiError)) return { key: 'login.errors.network' }
   const body = (typeof error.body === 'object' && error.body !== null ? error.body : {}) as Record<string, unknown>
@@ -83,6 +93,8 @@ export function describeAssignmentsFailure(error: unknown): AssignmentsFailure {
     if (error.code === 'attempts_exhausted' && typeof body.maxAttempts === 'number' && typeof body.attempts === 'number') {
       failure.params = { allowed: String(body.maxAttempts), attempts: String(body.attempts) }
     }
+    // The attempt the request named and the one the server expected next.
+    if (error.code === 'attempt_conflict') failure.params = { expected: numberText(body.expected), next: numberText(body.next) }
     return failure
   }
   if (error.status === 400) return { key: 'assignments.errors.validation', params: { message: error.message } }

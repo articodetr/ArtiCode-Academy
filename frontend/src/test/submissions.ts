@@ -1,17 +1,23 @@
 // Fixtures for the submissions tab and the review panel (MOD-08-T03 — J-F41):
-// the shapes of API-108..API-111 as the backend returns them. The assignment is
-// the one of test/assignments.ts (PY-101-A, out of 20, due 2026-11-20 23:59 in
-// Asia/Riyadh), here open with two attempts per student.
+// the shapes of API-108..API-111 as the backend returns them, with the
+// MOD-08-T07 fields (D-R49 — the assignment's `allowLate` and `timeZone`, the
+// submission's `history`). The assignment is the one of test/assignments.ts
+// (PY-101-A, out of 20, due 2026-11-20 23:59 in Asia/Riyadh), here open with
+// late submissions accepted and two attempts per student.
 import type { Submission, SubmissionAssignment, SubmissionRoster, SubmissionRosterItem, SubmissionSummary } from '../api/submissions'
 import type { EnrollmentStudent } from '../api/enrollments'
-import { ASSIGNMENT_ID } from './assignments'
+import { ASSIGNMENT_ID, ASSIGNMENT_TIME_ZONE } from './assignments'
 import { CLASS_ID } from './classes'
 
 export const SUBMISSION_IDS = [
   '0193e000-0000-7000-8000-00000000c001',
   '0193e000-0000-7000-8000-00000000c002',
   '0193e000-0000-7000-8000-00000000c003',
+  '0193e000-0000-7000-8000-00000000c004',
 ] as const
+
+/** The reviewer of the graded fixtures. */
+export const REVIEWER = { fullName: 'خالد المعلم', displayName: null }
 
 export const ROSTER_STUDENT_IDS = [
   '0193e000-0000-7000-8000-00000000d001',
@@ -29,6 +35,8 @@ export function makeSubmissionAssignment(overrides: Partial<SubmissionAssignment
     status: 'open',
     maxScore: 20,
     dueAt: '2026-11-20T20:59:00.000Z',
+    allowLate: true,
+    timeZone: ASSIGNMENT_TIME_ZONE,
     ...overrides,
   }
 }
@@ -111,9 +119,18 @@ export function makeSubmissionRoster(overrides: Partial<SubmissionRoster> = {}):
   return { assignment: makeSubmissionAssignment(), maxAttempts: 2, items: rosterOfFour(), ...overrides }
 }
 
-/** Sara's first attempt as API-110 answers it: a text answer and a link, waiting for review. */
+/** The summary an attempt has in a `history` (and in the roster). */
+export function summaryOf(submission: Pick<Submission, 'id' | 'attemptNo' | 'submittedAt' | 'isLate' | 'status' | 'score' | 'gradedAt'>): SubmissionSummary {
+  const { id, attemptNo, submittedAt, isLate, status, score, gradedAt } = submission
+  return { id, attemptNo, submittedAt, isLate, status, score, gradedAt }
+}
+
+/**
+ * Sara's first attempt as API-110 answers it: a text answer and a link, waiting for review. Without a `history`
+ * override the history holds this attempt alone (as the server lists a single attempt).
+ */
 export function makeSubmission(overrides: Partial<Submission> = {}): Submission {
-  return {
+  const submission: Submission = {
     id: SUBMISSION_IDS[0],
     assignment: makeSubmissionAssignment(),
     student: { id: ROSTER_STUDENT_IDS[0], fullName: 'سارة الطالبة', displayName: null },
@@ -129,8 +146,10 @@ export function makeSubmission(overrides: Partial<Submission> = {}): Submission 
     gradedAt: null,
     attempts: 1,
     attemptsAllowed: 2,
+    history: [],
     ...overrides,
   }
+  return overrides.history ? submission : { ...submission, history: [summaryOf(submission)] }
 }
 
 /** The same attempt after `grade` 17.5 with feedback by خالد المعلم. */
@@ -139,8 +158,35 @@ export function makeGradedSubmission(overrides: Partial<Submission> = {}): Submi
     status: 'graded',
     score: 17.5,
     feedback: 'عمل جيد؛ راجع شرط التوقف',
-    gradedBy: { fullName: 'خالد المعلم', displayName: null },
+    gradedBy: REVIEWER,
     gradedAt: '2026-11-21T09:00:00.000Z',
     ...overrides,
   })
+}
+
+/**
+ * Sara's two attempts as API-110 answers each of them, both returned for rework (two attempts used of four
+ * allowed: two plus one per return), with the same `history` — the case where attempt 1 is graded after attempt 2
+ * was returned (MOD-08-T07). [attempt 1, attempt 2].
+ */
+export function saraTwoAttempts(): [Submission, Submission] {
+  const counts = { attempts: 2, attemptsAllowed: 4 }
+  const first = makeSubmission({ ...counts, status: 'returned', feedback: 'أكمل التمرين الثالث', gradedBy: REVIEWER, gradedAt: '2026-11-19T08:00:00.000Z' })
+  const second = makeSubmission({
+    ...counts,
+    id: SUBMISSION_IDS[3],
+    attemptNo: 2,
+    submittedAt: '2026-11-20T10:15:00.000Z',
+    textAnswer: 'المحاولة الثانية: الحلقة while مع شرط توقف',
+    linkUrl: null,
+    status: 'returned',
+    feedback: 'ما زال شرط التوقف ناقصاً',
+    gradedBy: REVIEWER,
+    gradedAt: '2026-11-21T08:00:00.000Z',
+  })
+  const history = [summaryOf(first), summaryOf(second)]
+  return [
+    { ...first, history },
+    { ...second, history },
+  ]
 }

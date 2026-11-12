@@ -21,10 +21,19 @@
 // attempt. Submitting needs `assignments.submit` and an `active` enrollment;
 // reading a submission needs nothing at the guard (the server answers 404 to
 // anyone but its student, their guardian and the class's teachers).
+//
+// MOD-08-T07 (D-R49 — J-F47): each item also carries that student's
+// enrollment status and whether an attempt now would be accepted
+// (`submitBlocker`, `submitsLate` — computed at the server's clock when the
+// page is read, in API-109's order); `pending=true` also keeps an item whose
+// latest attempt was returned with an attempt left; an attempt carries the
+// student's attempts (`history`) and its assignment's late policy and zone;
+// API-109 takes the attempt the client means to create (`attemptNo` → 409
+// `attempt_conflict` instead of a second attempt).
 import { ASSIGNMENTS_PATH } from './assignments'
 import type { AssignmentLesson, AssignmentSortOrder, AssignmentStatus } from './assignments'
 import { apiRequest } from './client'
-import type { MyClassRelation, MyClassStudent, MyClassTeacher } from './enrollments'
+import type { EnrollmentStatus, MyClassRelation, MyClassStudent, MyClassTeacher } from './enrollments'
 import type { ScheduleClass } from './timetable'
 import type { LocalizedLabel } from './users'
 
@@ -41,6 +50,17 @@ export const SUBMIT_TEXT_MAX_LENGTH = 20000
 export const SUBMIT_LINK_MAX_LENGTH = 2048
 /** `https://` and no whitespace (the CHECK `ck_assignment_submissions_link_url_https` is the server's backstop). */
 export const SUBMIT_LINK_PATTERN = /^https:\/\/\S+$/
+
+/**
+ * Why the item's student could not submit now, in the order API-109 checks (`SUBMIT_BLOCKERS` of
+ * backend/src/assignments/submissions.policy.ts — keep in sync): the enrollment, the assignment's window, then an
+ * attempt left. A learner's item is never a draft, so `not_published` does not come here in practice.
+ */
+export const MY_SUBMIT_BLOCKERS = ['not_enrolled', 'not_published', 'closed', 'past_due', 'attempts_exhausted'] as const
+export type MySubmitBlocker = (typeof MY_SUBMIT_BLOCKERS)[number]
+
+/** The owned enrollments of «my assignments» (`active` or `completed` — only `active` submits). */
+export type MyAssignmentEnrollmentStatus = Extract<EnrollmentStatus, 'active' | 'completed'>
 
 /** `MyAssignmentLatestDto`: the student's latest attempt — its review, never the reviewer or the answer (read through API-110). */
 export interface MyAssignmentLatest {
@@ -92,6 +112,15 @@ export interface MyAssignmentItem {
   attemptsAllowed: number
   /** That student's latest attempt; null before the first submission. */
   latest: MyAssignmentLatest | null
+  /** MOD-08-T07: that student's enrollment in the class — only `active` submits. */
+  enrollmentStatus: MyAssignmentEnrollmentStatus
+  /**
+   * MOD-08-T07: why that student could not submit now (API-109's order), null = an attempt now would be accepted.
+   * Computed at the server's clock when the page is read — never at this device's.
+   */
+  submitBlocker: MySubmitBlocker | null
+  /** MOD-08-T07: an attempt now would be accepted and marked late (false whenever `submitBlocker` is set). */
+  submitsLate: boolean
 }
 
 export interface MyAssignmentList {
@@ -107,7 +136,10 @@ export interface ListMyAssignmentsParams {
   /** Assignments owned through this student only — the caller or one of their children (anyone else matches nothing). */
   studentId?: string
   status?: MyAssignmentStatus
-  /** true: only the items of a student who has not submitted yet (a returned attempt counts as submitted); false = absent. */
+  /**
+   * true: only the items waiting for their student — no attempt yet, or (MOD-08-T07, D-R49 (6)) the latest attempt
+   * returned for rework with an attempt left; false = absent.
+   */
   pending?: boolean
   /** ISO 8601 instants with an offset or `Z`: assignments due in `[dueFrom, dueTo]` — one without a due date never matches. */
   dueFrom?: string
@@ -129,6 +161,24 @@ export interface MySubmissionAssignment {
   maxScore: number
   /** ISO 8601 (UTC) or null. */
   dueAt: string | null
+  /** Late submissions are taken after the due date (MOD-08-T07). */
+  allowLate: boolean
+  /** IANA zone to show the times in: the linked lesson's room branch, else the academy's (D-R41; MOD-08-T07). */
+  timeZone: string
+}
+
+/** `SubmissionSummaryDto`: one attempt in a submission's `history` — without the answer (read it through API-110). */
+export interface MySubmissionSummary {
+  id: string
+  attemptNo: number
+  /** ISO 8601. */
+  submittedAt: string
+  isLate: boolean
+  status: MySubmissionStatus
+  /** With `graded` only. */
+  score: number | null
+  /** ISO 8601 or null. */
+  gradedAt: string | null
 }
 
 /** `SubmissionDto` (API-109/API-110) as its student and their guardian read it. */
@@ -155,16 +205,23 @@ export interface MySubmission {
   attempts: number
   /** maxAttempts plus one per returned attempt (D-R39). */
   attemptsAllowed: number
+  /** MOD-08-T07: every attempt of the student on this assignment, in attempt order (this one included). */
+  history: MySubmissionSummary[]
 }
 
 /**
  * Body of API-109 (`SubmitAssignmentDto`): text and/or an `https://` link
  * (`submission_invalid` without either — D-R35); the server trims both and
- * treats a blank one as absent. The screen sends only what was typed.
+ * treats a blank one as absent. The screen sends only what was typed, and the
+ * number of the attempt it means to create (MOD-08-T07): a retry of the same
+ * send names the same number, so a request whose first try already created
+ * the attempt is refused with 409 `attempt_conflict` instead of using another.
  */
 export interface MySubmitInput {
   textAnswer?: string
   linkUrl?: string
+  /** The attempt meant: the latest attempt's number + 1 (a JSON integer, 1 for the first). */
+  attemptNo?: number
 }
 
 export const MY_ASSIGNMENTS_PATH = '/api/me/assignments'
@@ -199,8 +256,10 @@ export function listMyAssignments(params: ListMyAssignmentsParams = {}, signal?:
 /**
  * API-109: one new attempt of the calling student (201 with the attempt and
  * the student's new counts). 400 `submission_invalid`, 403 `not_enrolled` /
- * `permission_denied`, 404 `assignment_not_found`, 409 `assignment_closed`
- * `{ reason }` / `attempts_exhausted` `{ maxAttempts, attempts }`.
+ * `permission_denied`, 404 `assignment_not_found`, 409 `attempt_conflict`
+ * `{ expected, next }` (the attempt named is not the next one — checked before
+ * the window) / `assignment_closed` `{ reason }` / `attempts_exhausted`
+ * `{ maxAttempts, attempts }`.
  */
 export function submitMyAttempt(assignmentId: string, input: MySubmitInput): Promise<MySubmission> {
   return apiRequest<MySubmission>(submitAttemptPath(assignmentId), { method: 'POST', body: input })

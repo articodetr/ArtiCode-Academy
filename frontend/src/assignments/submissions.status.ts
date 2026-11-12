@@ -18,10 +18,13 @@
 //           submissions: an open assignment, before its due date or with allowLate
 //   same    a review equal to the stored state writes nothing on the server, so the
 //           panel sends nothing
+//   seen    every review sent carries the review the grader saw (`expectedGradedAt` =
+//           the submission's `gradedAt`, null before any review — D-R49, the mirror of
+//           reviewVersionMatches()): a review written meanwhile by someone else is
+//           409 `review_conflict`, never overwritten silently
 //
 // Grading a returned attempt takes back the attempt its return granted. Pure;
 // unit-tested in submissions.status.test.ts.
-import type { Assignment } from '../api/assignments'
 import { REVIEW_ACTIONS } from '../api/submissions'
 import type { ReviewAction, ReviewSubmissionInput, Submission, SubmissionAssignment, SubmissionStatus } from '../api/submissions'
 import { isTwoDecimalNumber } from './assignments.validation'
@@ -87,7 +90,11 @@ export function reviewDraftOf(submission: Pick<Submission, 'status' | 'score' | 
   return { action: 'grade', score: submission.score, feedback: submission.feedback ?? '' }
 }
 
-/** True when the form holds something its first values do not — a typed feedback, a score or another action. */
+/**
+ * True when the form holds something its first values do not — a typed feedback, a score or another action.
+ * `current` is the whole form store (`getFieldsValue(true)`): the score field unmounts while `return` is chosen
+ * but keeps its value, which comes back with `grade`.
+ */
 export function isReviewDraftDirty(initial: ReviewDraft, current: Partial<ReviewDraft>): boolean {
   const score = (draft: Partial<ReviewDraft>) => (typeof draft.score === 'number' ? draft.score : null)
   return (current.action ?? initial.action) !== initial.action || score(current) !== score(initial) || normalizeFeedback(current.feedback) !== normalizeFeedback(initial.feedback)
@@ -107,19 +114,25 @@ export type ReviewPlan =
  * two decimals (`score_out_of_range` / 400), then an identical review (nothing
  * written). The body is the smallest one: `{ action: 'grade', score }` plus the
  * feedback when it is not blank — absent clears the previous one — or
- * `{ action: 'return', feedback }`; never a score with `return`.
+ * `{ action: 'return', feedback }`; never a score with `return`. Every body
+ * ends with `expectedGradedAt`: the `gradedAt` of the submission the grader
+ * saw, null when it had no review yet (D-R49).
  */
-export function planReview(submission: Pick<Submission, 'status' | 'score' | 'feedback' | 'assignment'>, draft: ReviewDraft): ReviewPlan {
+export function planReview(submission: Pick<Submission, 'status' | 'score' | 'feedback' | 'gradedAt' | 'assignment'>, draft: ReviewDraft): ReviewPlan {
   const feedback = normalizeFeedback(draft.feedback)
   const current = reviewStateOf(submission)
+  const expectedGradedAt = submission.gradedAt
   if (draft.action === 'return') {
     if (feedback === null) return { kind: 'invalid', field: 'feedback' }
     if (sameReview(current, reviewTarget('return', null, feedback))) return { kind: 'unchanged' }
-    return { kind: 'send', body: { action: 'return', feedback } }
+    return { kind: 'send', body: { action: 'return', feedback, expectedGradedAt } }
   }
   if (!isScoreValid(draft.score, submission.assignment.maxScore)) return { kind: 'invalid', field: 'score' }
   if (sameReview(current, reviewTarget('grade', toDecimalText(draft.score), feedback))) return { kind: 'unchanged' }
-  return { kind: 'send', body: feedback === null ? { action: 'grade', score: draft.score } : { action: 'grade', score: draft.score, feedback } }
+  return {
+    kind: 'send',
+    body: feedback === null ? { action: 'grade', score: draft.score, expectedGradedAt } : { action: 'grade', score: draft.score, feedback, expectedGradedAt },
+  }
 }
 
 export interface ReviewEffects {
@@ -148,9 +161,10 @@ export type ReturnCaveat = 'closed' | 'noLate'
  * with a due date but without allowLate takes none after it (`past_due`). The
  * panel says so when a teacher returns work, since the contract accepts a
  * return in both cases (D-R39) — whether the due date has passed is never
- * decided from this device's clock.
+ * decided from this device's clock. The submission's own assignment carries
+ * its late policy (`allowLate`, MOD-08-T07).
  */
-export function returnCaveats(assignment: Pick<SubmissionAssignment, 'status' | 'dueAt'> & Pick<Assignment, 'allowLate'>): ReturnCaveat[] {
+export function returnCaveats(assignment: Pick<SubmissionAssignment, 'status' | 'dueAt' | 'allowLate'>): ReturnCaveat[] {
   const caveats: ReturnCaveat[] = []
   if (assignment.status !== 'open') caveats.push('closed')
   if (assignment.dueAt !== null && !assignment.allowLate) caveats.push('noLate')

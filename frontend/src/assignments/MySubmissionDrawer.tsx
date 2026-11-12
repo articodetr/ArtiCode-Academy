@@ -1,20 +1,22 @@
 // The learner's view of one attempt (J-F42): GET /api/submissions/:id (API-110
 // — no key at the guard; the server answers its student and their guardian,
 // 404 anyone else) for the latest attempt of a row of «my assignments» (the
-// `latest.id` of API-112 — the only attempt a learner can reach: no route lists
-// the earlier ones). It shows the attempt number out of those allowed, the
-// submission time with the server's late mark, the status, the score out of
-// the maximum once graded, the teacher's feedback, the reviewer by name and
+// `latest.id` of API-112). It shows the attempt number out of those allowed,
+// the submission time with the server's late mark, the status, the score out
+// of the maximum once graded, the teacher's feedback, the reviewer by name and
 // the review time — every instant in the assignment's zone (D-R41) — and the
-// answer itself (the text, and the link opened in a new tab). Nothing the DTO
-// hides is asked for, and no id is shown. The attempt read is handed to the
-// page, which keeps the row in step with it (applySubmission()).
-import { Alert, Button, Card, Descriptions, Drawer, Skeleton, Space, Tag, Typography } from 'antd'
+// answer itself (the text, and the link opened in a new tab). Since J-F47
+// (MOD-08-T07, D-R49) it also lists the student's attempts (`history`) and
+// opens any of them here through API-110, the same way. Nothing the DTO hides
+// is asked for, and no id is shown. Every attempt read is handed to the page,
+// which keeps the row in step with it (applySubmission() — an older attempt
+// brings the counts, never replaces the latest one).
+import { Alert, Button, Card, Descriptions, Drawer, Flex, Skeleton, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getMySubmission } from '../api/myAssignments'
-import type { MyAssignmentItem, MySubmission } from '../api/myAssignments'
+import type { MyAssignmentItem, MySubmission, MySubmissionSummary } from '../api/myAssignments'
 import { useLocalized } from '../i18n/useLocalized'
 import { displayNameOf } from '../users/users.format'
 import { assignmentTitle, formatZonedDateTime } from './assignments.format'
@@ -45,7 +47,9 @@ function isHttpsLink(value: string): boolean {
 export function MySubmissionDrawer({ item, onClose, onLoaded }: MySubmissionDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const submissionId = item?.latest?.id ?? null
+  // Another attempt picked in the history; the row's latest attempt otherwise (and again once the drawer closes).
+  const [pickedId, setPickedId] = useState<string | null>(null)
+  const submissionId = item?.latest ? (pickedId ?? item.latest.id) : null
   const [state, setState] = useState<DrawerState>({ id: null, submission: null, error: null })
   const [reloadTick, setReloadTick] = useState(0)
   // The page's callback changes with its rows; the request must not restart for that.
@@ -80,9 +84,14 @@ export function MySubmissionDrawer({ item, onClose, onLoaded }: MySubmissionDraw
       : t('myAssignments.drawer.titleMine', { title: assignmentTitle(item, language) })
     : ''
 
+  const close = () => {
+    setPickedId(null)
+    onClose()
+  }
+
   return (
     // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport.
-    <Drawer open={submissionId !== null} onClose={onClose} title={title} size="min(640px, 100vw)" destroyOnHidden>
+    <Drawer open={submissionId !== null} onClose={close} title={title} size="min(640px, 100vw)" destroyOnHidden>
       {current.error ? (
         <Alert
           type="error"
@@ -97,8 +106,62 @@ export function MySubmissionDrawer({ item, onClose, onLoaded }: MySubmissionDraw
         />
       ) : null}
       {!current.submission && !current.error ? <Skeleton active paragraph={{ rows: 6 }} data-testid="my-submission-loading" /> : null}
-      {current.submission && item ? <SubmissionDetails submission={current.submission} item={item} /> : null}
+      {current.submission && item ? (
+        <>
+          <AttemptHistory history={current.submission.history} openedId={current.submission.id} zone={item.timeZone} maxScore={current.submission.assignment.maxScore} onOpen={setPickedId} />
+          <SubmissionDetails submission={current.submission} item={item} />
+        </>
+      ) : null}
     </Drawer>
+  )
+}
+
+interface AttemptHistoryProps {
+  /** `SubmissionDto.history`: every attempt of the student on the assignment, in attempt order, the one shown included. */
+  history: MySubmissionSummary[]
+  /** The attempt shown. */
+  openedId: string
+  zone: string
+  maxScore: number
+  onOpen: (submissionId: string) => void
+}
+
+/** The student's attempts (MOD-08-T07): each with its status, the server's late mark, its score once graded and its time; the others open here. */
+function AttemptHistory({ history, openedId, zone, maxScore, onOpen }: AttemptHistoryProps) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  // One attempt: the details below are the whole history.
+  if (history.length < 2) return null
+  return (
+    <Card size="small" title={t('myAssignments.drawer.history.title')} style={{ marginBottom: 16 }} data-testid="my-submission-history">
+      <Flex vertical gap={8}>
+        {history.map((attempt) => {
+          const current = attempt.id === openedId
+          return (
+            <Flex key={attempt.id} gap={8} wrap align="center" justify="space-between" data-testid={`my-history-attempt-${attempt.attemptNo}`}>
+              <Space wrap size={4}>
+                <Typography.Text strong={current}>{t('myAssignments.submission.attempt', { number: attempt.attemptNo })}</Typography.Text>
+                <Tag color={MY_SUBMISSION_COLORS[attempt.status]}>{t(`myAssignments.submission.${attempt.status}`)}</Tag>
+                {attempt.isLate ? <Tag color="volcano">{t('myAssignments.submission.late')}</Tag> : null}
+                {attempt.status === 'graded' && attempt.score !== null ? <span dir="ltr">{scoreText(attempt.score, maxScore)}</span> : null}
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatZonedDateTime(attempt.submittedAt, zone, language)}
+                </Typography.Text>
+              </Space>
+              {current ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('myAssignments.drawer.history.current')}
+                </Typography.Text>
+              ) : (
+                <Button size="small" type="link" onClick={() => onOpen(attempt.id)} aria-label={t('myAssignments.drawer.history.openAria', { number: attempt.attemptNo })}>
+                  {t('myAssignments.drawer.history.open')}
+                </Button>
+              )}
+            </Flex>
+          )
+        })}
+      </Flex>
+    </Card>
   )
 }
 
@@ -164,7 +227,6 @@ function SubmissionDetails({ submission, item }: { submission: MySubmission; ite
 
   return (
     <>
-      {submission.attemptNo > 1 ? <Alert type="info" showIcon title={t('myAssignments.drawer.latestOnly')} style={{ marginBottom: 16 }} /> : null}
       <Descriptions size="small" column={1} bordered items={items} />
       {differsFromDevice(zone) ? (
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 8 }}>
