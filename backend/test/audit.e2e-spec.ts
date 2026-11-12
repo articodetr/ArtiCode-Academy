@@ -11,7 +11,11 @@
 // results, final grades) and MOD-10 (issuing and revoking certificates); since
 // CH-0196 (MOD-13-T05, Stage 5) also every writer route of MOD-11 (fee plans,
 // invoices, the class batch, payments and reversals) and the proof that the
-// MOD-13 reports record nothing.
+// MOD-13 reports record nothing; since CH-0206 (MOD-12-T06, the closure of the
+// notifications module) also its one recording writer — a manual announcement —
+// and the proof that nothing else of MOD-12 records an event: an automatic
+// notification, reading announcements, «my notifications», the unread
+// counter, the read marks and the e-mail preferences (D-R86).
 // Skipped when no database is reachable. Fixtures carry a unique suffix and are deleted at the
 // end (their audit rows stay with a NULL actor — the log is append-only by
 // design, KI-032).
@@ -25,7 +29,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadDotenv } from 'dotenv';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readSettings } from '../src/academy/academy.settings.js';
 import { AppModule } from '../src/app.module.js';
 import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
@@ -35,6 +39,7 @@ import { PERMISSION_KEYS } from '../src/authorization/permission-catalog.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { AnnouncementsService } from '../src/notifications/announcements.service.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 
@@ -51,6 +56,9 @@ const COURSES = '/api/courses';
 const CLASSES = '/api/classes';
 const LESSONS = '/api/lessons';
 const ROOMS = '/api/rooms';
+const ANNOUNCEMENTS = '/api/announcements';
+const INBOX = '/api/me/notifications';
+const PREFERENCES = '/api/me/notification-preferences';
 /** MOD-04 fixture codes (upper case, within LEVEL_CODE_PATTERN / COURSE_CODE_PATTERN). */
 const LEVEL_PREFIX = `T${RUN.toUpperCase()}`;
 const COURSE_PREFIX = `C${RUN.toUpperCase()}`;
@@ -120,6 +128,8 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
   /** Stage 4 (MOD-08..MOD-10, MOD-10-T05): the class, its assignment, the graded attempt, the exam, the grade schemes and the certificate. */
   const stage4 = { classId: '', assignmentId: '', submissionId: '', examId: '', certificateId: '', schemeIds: [] as string[] };
   const stage5 = { classId: '', feePlanId: '', invoiceId: '', paymentId: '' };
+  /** MOD-12 (MOD-12-T06): the class `-N` (lead = instructor, the learner enrolled), the announcement the admin sent to it, and the instructor's copy of it — a notification nobody marks. */
+  const mod12 = { classId: '', announcementId: '', unreadNotificationId: '' };
 
   // E-mail addresses are stored lower-case (CHECK ck_users_email_lowercase).
   const email = (name: string) => `${name.toLowerCase()}-${RUN}@example.test`;
@@ -206,9 +216,9 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     await createUser('admin', [superuser]);
     await createUser('auditor', [auditor]);
     await createUser('plain');
-    // Enrolled in the MOD-06 class and in the MOD-05 class; holds the seeded student role, never acts (the name "student" belongs to the T02 block).
+    // Enrolled in the MOD-06 class and in the MOD-05 class; holds the seeded student role and acts only as the learner — the submissions of Stage 4, «my notifications» of MOD-12 (the name "student" belongs to the T02 block).
     await createUser('enrolled', [(await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } })).id]);
-    // Lead teacher of the MOD-05 class; holds the seeded teacher role, never acts (the T02 "teacher" is suspended by the T06 block).
+    // Lead teacher of the MOD-05 class; holds the seeded teacher role and acts only in the MOD-12 refusals — a sender with `notifications.send` and without `classes.manage` (the T02 "teacher" is suspended by the T06 block).
     await createUser('instructor', [(await prisma.role.findUniqueOrThrow({ where: { key: 'teacher' }, select: { id: true } })).id]);
     for (const name of ['admin', 'auditor', 'plain']) tokens[name] = await login(email(name));
     const academy = await prisma.academy.findFirstOrThrow({ select: { settings: true } });
@@ -217,6 +227,8 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
 
   afterAll(async () => {
     try {
+      // MOD-12: an announcement outlives its sender and its class (both SET NULL), so it is found — and deleted — while they still exist; its notifications go with it (Cascade).
+      await prisma.announcement.deleteMany({ where: { OR: [{ senderUserId: { in: createdUserIds } }, { class: { code: { startsWith: CLASS_PREFIX } } }] } });
       // MOD-05/MOD-06 first: the enrollments (Restrict on the class), then the classes (their teachers, slots, lessons and attendance cascade) — a course is Restrict on classes, a room on slots and lessons.
       // Stage 5: payments hold their invoice and invoices their student (Restrict) — both go first; fee plans go with their class.
       const fixtureInvoices = await prisma.invoice.findMany({ where: { studentUserId: { in: createdUserIds } }, select: { id: true } });
@@ -1071,6 +1083,169 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     // Reports: a reversed period.
     expect((await api().get('/api/reports/financial/revenue?from=2026-03-10&to=2026-03-01').set(bearer('admin'))).body.code).toBe('report_range_invalid');
     await expectEvents(m, []);
+  });
+
+  // MOD-12 (MOD-12-T06 — the closure of the notifications module): the module has ONE recording writer, the manual announcement (API-173), and records
+  // nothing else by design (D-R86) — not the automatic notifications of the earlier writers, not a read of an announcement, nothing of «my notifications»
+  // or of the e-mail preferences. Every announcement here goes to a class of this suite: an academy audience would reach real accounts of the shared database.
+
+  it('MOD-12 (T06) — an announcement records one event; «my notifications», marks and e-mail preferences record nothing', async () => {
+    const admin = fx['admin']!;
+    const learner = fx['enrolled']!;
+    const instructor = fx['instructor']!;
+    const ev = (action: string, entityType: string, entityId: string, metadata?: Record<string, unknown>, actorUserId = admin): ExpectedEvent => ({
+      action,
+      actorUserId,
+      entityType,
+      entityId,
+      ...(metadata ? { metadata } : {}),
+    });
+    const code = `${CLASS_PREFIX}-N`;
+    // The sender's words, recognisable: they reach every recipient as typed and belong in no audit event.
+    const titleMark = `TITLE-${RUN}`;
+    const bodyMark = `BODY-${RUN}`;
+    const title = `${titleMark} إعلان الفصل`;
+    const body = `${bodyMark} نص يقرؤه المستلمون وحدهم`;
+    const readAtOf = async (notificationId: string) => (await prisma.notification.findUniqueOrThrow({ where: { id: notificationId }, select: { readAt: true } })).readAt;
+    // Preparation (MOD-05 and MOD-08 events, covered above): a class with its lead teacher, open, the learner enrolled — and a draft assignment.
+    const klass = await api().post(CLASSES).set(bearer('admin')).send({ courseId: mod04.courseA, code, name: { ar: 'فصل إشعارات MOD-12' }, capacity: 3 }).expect(201);
+    mod12.classId = klass.body.id as string;
+    await api().put(`${CLASSES}/${mod12.classId}/teachers`).set(bearer('admin')).send({ teachers: [{ userId: instructor, role: 'lead' }] }).expect(200);
+    await api().post(`${CLASSES}/${mod12.classId}/status`).set(bearer('admin')).send({ action: 'open' }).expect(200);
+    await api().post(`${CLASSES}/${mod12.classId}/enrollments`).set(bearer('admin')).send({ studentId: learner }).expect(201);
+    const assignment = await api().post(`${CLASSES}/${mod12.classId}/assignments`).set(bearer('admin')).send({ title: { ar: 'واجب الإشعار' }, maxScore: 10 }).expect(201);
+    const assignmentId = assignment.body.id as string;
+
+    // An automatic notification costs nothing in the audit trail: publishing the assignment — a Stage 4 writer that notifies the class since MOD-12-T03 —
+    // still records its one event, and the learner's notification is there (nobody else's: no guardian is linked to the learner, a teacher is never notified).
+    const aboutAssignment = () => prisma.notification.findMany({ where: { eventKey: 'assignment.published', data: { path: ['assignmentId'], equals: assignmentId } } });
+    expect(await aboutAssignment()).toEqual([]);
+    let m = await mark();
+    await api().post(`/api/assignments/${assignmentId}/status`).set(bearer('admin')).send({ action: 'publish' }).expect(200);
+    await expectEvents(m, [ev('assignments.status.changed', 'assignments', assignmentId, { classId: mod12.classId, code, action: 'publish', from: 'draft', to: 'open' })]);
+    const automatic = await aboutAssignment();
+    expect(automatic).toHaveLength(1);
+    expect(automatic[0]).toMatchObject({ recipientUserId: learner, studentUserId: learner, category: 'assignments', announcementId: null, readAt: null });
+
+    // The one recording writer of MOD-12: an announcement to the students and the teachers of the class (the admin holds `classes.manage` — any class).
+    m = await mark();
+    const sent = await api().post(ANNOUNCEMENTS).set(bearer('admin')).send({ audience: { kind: 'class', classId: mod12.classId, students: true, teachers: true }, title, body });
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+    mod12.announcementId = sent.body.id as string;
+    // Exactly one event, on the announcement: the audience as it was normalised (the three groups spelled out) and the number of recipients — nothing else.
+    const audience = { kind: 'class', classId: mod12.classId, students: true, guardians: false, teachers: true };
+    await expectEvents(m, [ev('notifications.announcement.sent', 'announcements', mod12.announcementId)]);
+    const recorded = await since(m);
+    expect(recorded[0]!.metadata).toEqual({ audience, recipients: 2 });
+    // The same event as API-011 serves it; the sender's words are in neither form of it.
+    const logged = await items('auditor', `entityType=announcements&entityId=${mod12.announcementId}`);
+    expect(logged.items.map((item) => [item.action, item.actorUserId, item.metadata])).toEqual([['notifications.announcement.sent', admin, { audience, recipients: 2 }]]);
+    for (const event of [JSON.stringify(recorded), JSON.stringify(logged.items)]) {
+      for (const words of [titleMark, bodyMark, 'إعلان الفصل', 'نص يقرؤه']) expect(event).not.toContain(words);
+    }
+    // The words went where they belong: one notification per recipient — the learner and the lead teacher, never the sender — and no e-mail copy is due (none was asked for).
+    const copies = await prisma.notification.findMany({ where: { announcementId: mod12.announcementId } });
+    expect(copies.map((copy) => copy.recipientUserId).sort()).toEqual([learner, instructor].sort());
+    for (const copy of copies) expect(copy).toMatchObject({ eventKey: 'announcement', category: 'announcements', title, body, studentUserId: null, readAt: null, emailStatus: 'none' });
+    const mine = copies.find((copy) => copy.recipientUserId === learner)!;
+    mod12.unreadNotificationId = copies.find((copy) => copy.recipientUserId === instructor)!.id;
+
+    // Everything else of the module records nothing (D-R86) — route by route, counted for every fixture actor: the sender, the learner and the instructor are all among them.
+    m = await mark();
+    const silent = async (route: string): Promise<void> => expect((await since(m)).map((row) => row.action), route).toEqual([]);
+    // The sender reads: the announcements sent to the class (API-174) and the announcement with what became of it (API-175).
+    const listed = await api().get(`${ANNOUNCEMENTS}?classId=${mod12.classId}`).set(bearer('admin')).expect(200);
+    expect((listed.body.items as { id: string }[]).map((item) => item.id)).toEqual([mod12.announcementId]);
+    await silent('GET /api/announcements');
+    const detail = await api().get(`${ANNOUNCEMENTS}/${mod12.announcementId}`).set(bearer('admin')).expect(200);
+    expect(detail.body).toMatchObject({ id: mod12.announcementId, title, body, recipientCount: 2, readCount: 0 });
+    await silent('GET /api/announcements/:id');
+    // A recipient: the inbox (API-167), the counter (API-168), one mark (API-169) and all of them (API-170) — both marks are real writes.
+    const inbox = await api().get(`${INBOX}?category=announcements`).set(bearer('enrolled')).expect(200);
+    expect((inbox.body.items as { id: string }[]).map((item) => item.id)).toContain(mine.id);
+    await silent('GET /api/me/notifications');
+    const counter = await api().get(`${INBOX}/unread-count`).set(bearer('enrolled')).expect(200);
+    // At least the two of this test: the published assignment and the announcement.
+    expect(counter.body.unread).toBeGreaterThanOrEqual(2);
+    await silent('GET /api/me/notifications/unread-count');
+    const marked = await api().post(`${INBOX}/${mine.id}/read`).set(bearer('enrolled')).expect(200);
+    expect(marked.body).toMatchObject({ id: mine.id, announcementId: mod12.announcementId });
+    expect(await readAtOf(mine.id)).toBeInstanceOf(Date);
+    expect(await readAtOf(automatic[0]!.id)).toBeNull();
+    await silent('POST /api/me/notifications/:id/read');
+    const all = await api().post(`${INBOX}/read-all`).set(bearer('enrolled')).expect(200);
+    expect(all.body.updated).toBeGreaterThanOrEqual(1);
+    expect(await readAtOf(automatic[0]!.id)).toBeInstanceOf(Date);
+    // Nobody else's notification moved: the instructor's copy stays unread.
+    expect(await readAtOf(mod12.unreadNotificationId)).toBeNull();
+    await silent('POST /api/me/notifications/read-all');
+    // The learner's e-mail switches: read (API-171), changed (API-172 — a real write) and sent again unchanged.
+    const preferences = await api().get(PREFERENCES).set(bearer('enrolled')).expect(200);
+    expect(preferences.body.categories).toContainEqual({ category: 'announcements', emailEnabled: true });
+    await silent('GET /api/me/notification-preferences');
+    const switchOff = { categories: [{ category: 'announcements', emailEnabled: false }] };
+    const changed = await api().put(PREFERENCES).set(bearer('enrolled')).send(switchOff).expect(200);
+    expect(changed.body.categories).toContainEqual({ category: 'announcements', emailEnabled: false });
+    expect(await prisma.notificationPreference.findMany({ where: { userId: learner }, select: { category: true, emailEnabled: true } })).toEqual([{ category: 'announcements', emailEnabled: false }]);
+    await silent('PUT /api/me/notification-preferences');
+    expect((await api().put(PREFERENCES).set(bearer('enrolled')).send(switchOff).expect(200)).body).toEqual(changed.body);
+    await silent('PUT /api/me/notification-preferences — the same body again');
+  });
+
+  it('MOD-12 — refused announcements record nothing', async () => {
+    const klass = mod12.classId;
+    // The sender these refusals need is the instructor, who signs in here for the first time: the seeded teacher role holds `notifications.send` and not `classes.manage`.
+    const teacherKeys = (
+      await prisma.rolePermission.findMany({ where: { role: { key: 'teacher' }, permissionKey: { in: ['notifications.send', 'classes.manage'] } }, select: { permissionKey: true } })
+    ).map((row) => row.permissionKey);
+    expect(teacherKeys, 'the seeded `teacher` role must hold notifications.send and not classes.manage').toEqual(['notifications.send']);
+    tokens['instructor'] = await login(email('instructor'));
+    const announce = (as: string, audience: Record<string, unknown>, title = 'إعلان مرفوض') => api().post(ANNOUNCEMENTS).set(bearer(as)).send({ audience, title, body: 'لا يُكتب ولا يُسجَّل' });
+    // What the fixture actors have sent so far: the announcement of the previous test and its two notifications — whoever received them.
+    const sentByFixtures = async () => (await prisma.announcement.findMany({ where: { senderUserId: { in: actors() } }, orderBy: { id: 'asc' }, select: { id: true } })).map((row) => row.id);
+    const copiesOfFixtures = () => prisma.notification.count({ where: { announcement: { senderUserId: { in: actors() } } } });
+    expect(await sentByFixtures()).toEqual([mod12.announcementId]);
+    expect(await copiesOfFixtures()).toBe(2);
+
+    const m = await mark();
+    // 400 — the shape of the audience (no recipient group; role keys on a class audience) and a blank title.
+    expect((await announce('admin', { kind: 'class', classId: klass }).expect(400)).body).toMatchObject({ code: 'audience_invalid', problems: ['recipient_group_required'] });
+    expect((await announce('instructor', { kind: 'class', classId: klass, students: true, roleKeys: ['student'] }).expect(400)).body).toMatchObject({
+      code: 'audience_invalid',
+      problems: ['role_keys_not_allowed'],
+    });
+    await announce('admin', { kind: 'class', classId: klass, students: true }, '   ').expect(400);
+    // 404 — a class the sender neither teaches nor manages (the instructor leads class `-N`, not the MOD-06 class), and an unknown class for a holder of `classes.manage`.
+    expect((await announce('instructor', { kind: 'class', classId: mod06.classId, students: true }).expect(404)).body).toMatchObject({ code: 'class_not_found', classId: mod06.classId });
+    expect((await announce('admin', { kind: 'class', classId: NIL_ID, students: true }).expect(404)).body).toMatchObject({ code: 'class_not_found', classId: NIL_ID });
+    // 403 — without `notifications.send` (no key at all; the seeded student role) the three routes are closed: sending to one's own class, listing, reading.
+    for (const as of ['plain', 'enrolled']) {
+      expect((await announce(as, { kind: 'class', classId: klass, students: true }).expect(403)).body).toMatchObject({ code: 'permission_denied', missing: ['notifications.send'] });
+      await api().get(ANNOUNCEMENTS).set(bearer(as)).expect(403);
+      await api().get(`${ANNOUNCEMENTS}/${mod12.announcementId}`).set(bearer(as)).expect(403);
+    }
+    // 422 — an audience that resolves to nobody but the sender: the teachers of a class whose only teacher announces.
+    expect((await announce('instructor', { kind: 'class', classId: klass, teachers: true }).expect(422)).body).toMatchObject({ code: 'audience_empty' });
+    // 403 — an academy audience needs `classes.manage` on top of `notifications.send`, and is refused before the audience is read. A VALID academy
+    // announcement would reach real accounts of the shared development database, so for this one request — the last announcement request of this file —
+    // the audience resolves to nobody: should the check ever let the request through, the answer is 422 and still nothing is written into anybody's inbox.
+    const members = vi.spyOn(app.get(AnnouncementsService), 'audienceMembers').mockResolvedValue([]);
+    try {
+      expect((await announce('instructor', { kind: 'academy', roleKeys: ['guardian'] }).expect(403)).body).toMatchObject({ code: 'permission_denied', missing: ['classes.manage'] });
+      expect(members).not.toHaveBeenCalled();
+    } finally {
+      members.mockRestore();
+    }
+    // «My notifications»: somebody else's notification answers 404 like an unknown one and stays unread; a preferences body that names no category is refused.
+    for (const notificationId of [mod12.unreadNotificationId, NIL_ID]) {
+      expect((await api().post(`${INBOX}/${notificationId}/read`).set(bearer('enrolled')).expect(404)).body).toMatchObject({ code: 'notification_not_found', notificationId });
+    }
+    expect((await prisma.notification.findUniqueOrThrow({ where: { id: mod12.unreadNotificationId }, select: { readAt: true } })).readAt).toBeNull();
+    expect((await api().put(PREFERENCES).set(bearer('enrolled')).send({ categories: [] }).expect(400)).body.code).toBe('nothing_to_update');
+    await expectEvents(m, []);
+    // No announcement and no notification either: the announcement of the previous test is still the only one a fixture sender has, with its two copies.
+    expect(await sentByFixtures()).toEqual([mod12.announcementId]);
+    expect(await copiesOfFixtures()).toBe(2);
   });
 
   it('filters by actor, action prefix (literal, `_` is no wildcard) and entity — audit.read alone suffices', async () => {
