@@ -337,7 +337,9 @@ describe('SubmitAttemptModal — the typed answer is never lost without asking (
 
     fireEvent.click(closeIcon())
     const first = await latestDiscardQuestion()
-    expect(within(first).getByText(ar.common.unsaved.content)).toBeInTheDocument()
+    // The question names the modal, not a drawer (J-F55).
+    expect(within(first).getByText(ar.common.unsaved.contentModal)).toBeInTheDocument()
+    expect(within(first).queryByText(ar.common.unsaved.content)).not.toBeInTheDocument()
     await answerDiscardQuestion(first, 'keep')
     expect(onClose).not.toHaveBeenCalled()
     expect(textField()).toHaveValue('جواب طويل كتبته للتو')

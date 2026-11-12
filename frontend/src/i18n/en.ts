@@ -34,6 +34,8 @@ export const en: Translation = {
     unsaved: {
       title: 'Discard unsaved changes?',
       content: 'An editor in this drawer is still open and its changes are not saved. Closing the drawer discards them.',
+      // J-F55: the same question asked by a modal that holds unsaved work (useUnsavedChangesGuard's `holder: 'modal'`).
+      contentModal: 'This dialog holds changes that are not saved yet. Closing the dialog discards them.',
       ok: 'Discard and close',
       cancel: 'Keep editing',
     },

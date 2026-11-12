@@ -4,6 +4,9 @@
 // per drawer, answered for the close button and for a router navigation the blocker
 // holds (browser back/forward) alike — never two on screen at once. The hook
 // useUnsavedChangesGuard puts the question on screen; NavigationBlocker holds the navigation.
+// Since J-F55 (the owner's note 1 on #104 and note 2 on #106) a question that is still on
+// screen when the work stops being unsaved — a save that was in flight finished, or the
+// editor left — is withdrawn: it goes unanswered, and a navigation it held is cancelled.
 
 /**
  * The `beforeunload` listener while unsaved work would be lost: the browser then asks
@@ -44,6 +47,12 @@ export interface DiscardQuestion {
    * the blocker gone): a held navigation joins the question on screen, or asks it.
    */
   hold: (navigation: BlockedNavigation | null) => void
+  /**
+   * Nothing is unsaved any more while the drawer stays (a save in flight finished, or the
+   * editor left): a question on screen is moot — it goes, unanswered, and a navigation it
+   * held is cancelled, so the page stays where it is. Nothing on screen: nothing happens.
+   */
+  withdraw: () => void
   /** The drawer left the page: takes a question on screen down, unanswered. */
   dispose: () => void
 }
@@ -81,6 +90,15 @@ export function createDiscardQuestion({ open, discard }: DiscardQuestionOptions)
     hold: (navigation) => {
       held = navigation
       if (navigation) ask()
+    },
+    withdraw: () => {
+      const question = onScreen
+      const navigation = held
+      onScreen = null
+      held = null
+      question?.takeDown()
+      // The blocker stays with its drawer: unanswered, the navigation it holds would hang there.
+      navigation?.reset()
     },
     dispose: () => {
       const question = onScreen

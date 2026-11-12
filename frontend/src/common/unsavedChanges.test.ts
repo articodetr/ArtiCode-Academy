@@ -141,4 +141,49 @@ describe('createDiscardQuestion', () => {
     question.ask()
     expect(shown).toHaveLength(2)
   })
+
+  // J-F55 (the owner's note 1 on #104, note 2 on #106): the work stopped being unsaved while the question was open.
+  it('withdraws a question on screen once nothing is unsaved: taken down unanswered, nothing dropped, asked afresh next time', () => {
+    const { question, shown, discard } = setUp()
+    question.ask()
+    question.withdraw()
+    expect(shown[0]!.takeDown).toHaveBeenCalledTimes(1)
+    // Its late answers do nothing: the work is not dropped (it was saved, or its editor left).
+    shown[0]!.answers.discard()
+    shown[0]!.answers.keep()
+    expect(discard).not.toHaveBeenCalled()
+
+    question.ask()
+    expect(shown).toHaveLength(2)
+  })
+
+  it('cancels the navigation a withdrawn question held: the page stays, and nothing proceeds or drops afterwards', () => {
+    const { question, shown, discard } = setUp()
+    const log: string[] = []
+    discard.mockImplementation(() => log.push('discard'))
+    question.hold(navigation(log))
+    question.withdraw()
+    expect(log).toEqual(['navigation.reset'])
+    expect(shown[0]!.takeDown).toHaveBeenCalledTimes(1)
+
+    // The blocker reports it holds nothing now: no new question.
+    question.hold(null)
+    expect(shown).toHaveLength(1)
+    shown[0]!.answers.discard()
+    expect(log).toEqual(['navigation.reset'])
+  })
+
+  it('does nothing when withdrawn with nothing on screen, nor after the question was answered', () => {
+    const { question, shown, discard } = setUp()
+    const log: string[] = []
+    question.withdraw()
+    expect(shown).toHaveLength(0)
+
+    question.hold(navigation(log))
+    shown[0]!.answers.keep()
+    question.withdraw()
+    expect(log).toEqual(['navigation.reset'])
+    expect(shown[0]!.takeDown).not.toHaveBeenCalled()
+    expect(discard).not.toHaveBeenCalled()
+  })
 })

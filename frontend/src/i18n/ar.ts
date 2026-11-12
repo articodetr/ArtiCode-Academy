@@ -32,6 +32,8 @@ export const ar = {
     unsaved: {
       title: 'تجاهل التعديلات غير المحفوظة؟',
       content: 'في هذا الدرج محرّر مفتوح لم تُحفظ تعديلاته بعد. إغلاق الدرج يتجاهلها.',
+      // J-F55: the same question asked by a modal that holds unsaved work (useUnsavedChangesGuard's `holder: 'modal'`).
+      contentModal: 'في هذه النافذة تعديلات لم تُحفظ بعد. إغلاق النافذة يتجاهلها.',
       ok: 'تجاهل وإغلاق',
       cancel: 'متابعة التعديل',
     },

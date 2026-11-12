@@ -24,7 +24,8 @@
 // holds typed text or a link, Escape and a mask click do nothing, × and
 // «cancel» ask first (common.unsaved.*), a browser back/forward asks the same
 // question (NavigationBlocker) and a reload or a tab close gets the browser's
-// own prompt (useUnsavedChangesGuard).
+// own prompt (useUnsavedChangesGuard). Since J-F55 the question names a modal
+// (common.unsaved.contentModal), not a drawer.
 import { Alert, App, Descriptions, Form, Input, Modal, Typography } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -67,9 +68,9 @@ export function SubmitAttemptModal({ item, onClose, onSubmitted, onStale }: Subm
   }
 
   // × and «cancel» (Escape and the mask too while nothing is typed) ask first while the answer holds something, and so
-  // does a browser back/forward (NavigationBlocker below) — one question (common.unsaved.*); a reload or a tab close
-  // gets the browser's own prompt.
-  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
+  // does a browser back/forward (NavigationBlocker below) — one question (common.unsaved.*, worded for a modal); a reload
+  // or a tab close gets the browser's own prompt.
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close, 'modal')
 
   return (
     <Modal

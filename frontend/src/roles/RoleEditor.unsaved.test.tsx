@@ -4,8 +4,9 @@
 // — the guard of the class, user and course drawers: KI-052, KI-054, KI-055), and a
 // reload or a tab close is held (beforeunload). The form is compared with the saved
 // values, so a change changed back holds nothing; academy_admin, shown read-only, never
-// holds anything. Browser back/forward: RoleEditor.navigation.test.tsx.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+// holds anything. Browser back/forward: RoleEditor.navigation.test.tsx. Since J-F55 a
+// question still open when the save finishes is withdrawn (the owner's note 1 on #104).
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Role } from '../api/roles'
 import { ar } from '../i18n/ar'
@@ -223,4 +224,39 @@ describe('RoleEditor — unsaved permissions and texts (KI-057)', () => {
     await waitFor(() => expect(unloadWouldPrompt()).toBe(false))
     expect(onClose).not.toHaveBeenCalled()
   })
+
+  it('withdraws a «discard?» question still open when the save finishes: it closes itself and an answer given to it does nothing (J-F55)', async () => {
+    const writes: string[] = []
+    let answer: (response: Response) => void = () => {}
+    mockFetch((url, init) => {
+      writes.push(`${init?.method ?? 'GET'} ${url}`)
+      return new Promise<Response>((resolve) => {
+        answer = resolve
+      })
+    })
+    const { onClose, onSaved } = renderEditor(LIBRARIAN)
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(permissionBox(dialog, 'exams.read'))
+    fireEvent.click(within(dialog).getByText(ar.common.save).closest('button')!)
+    await waitFor(() => expect(writes).toEqual([`PATCH /api/roles/${LIBRARIAN_ROLE.id}`]))
+
+    // The PATCH is still running: the close button asks.
+    const question = await openDiscardDialog()
+    expect(isLeaving(question)).toBe(false)
+
+    const saved: Role = { ...LIBRARIAN_ROLE, permissions: ['courses.read', 'exams.read'], updatedAt: '2026-11-09T18:00:00.000Z' }
+    await act(async () => answer(jsonResponse(200, saved)))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved, 'edit'))
+    // Nothing is left to lose: the question closes itself (its leave motion, which jsdom never ends).
+    await waitFor(() => expect(isLeaving(question)).toBe(true))
+    expect(unloadWouldPrompt()).toBe(false)
+    // «Discard and close» on it now drops nothing and closes nothing: the work is saved.
+    fireEvent.click(within(question).getByText(ar.common.unsaved.ok).closest('button')!)
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })
+
+/** A question taken down shows its leave motion: jsdom never ends it, so the dialog stays in the document (KI-060). */
+function isLeaving(dialog: HTMLElement): boolean {
+  return /-leave\b/.test(dialog.className)
+}

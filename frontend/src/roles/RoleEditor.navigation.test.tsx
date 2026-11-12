@@ -3,7 +3,8 @@
 // time with the close button's) — like the class, user and course drawers (KI-055).
 // Rendered in a data router (src/test/navigation.tsx), which useBlocker needs; Escape,
 // the mask, the close button and beforeunload stay in RoleEditor.unsaved.test.tsx.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+// Since J-F55 a back held while a save runs is cancelled once the save finishes.
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
 import { clickWhenSettled } from '../test/drawer'
@@ -126,5 +127,40 @@ describe('RoleEditor — browser back with unsaved work (KI-057)', () => {
     await goBack(router)
     await expectBackOnPrevious()
     expect(discardQuestionCount()).toBe(0)
+  })
+
+  it('cancels a back navigation held while the save runs once it finishes: the question withdraws, the page stays, the next back goes through (J-F55)', async () => {
+    const writes: string[] = []
+    let answer: (response: Response) => void = () => {}
+    mockFetch((url, init) => {
+      writes.push(`${init?.method ?? 'GET'} ${url}`)
+      return new Promise<Response>((resolve) => {
+        answer = resolve
+      })
+    })
+    const { router, onClose, dialog } = await renderEditor({ mode: 'edit', role: LIBRARIAN_ROLE })
+    fireEvent.click(permissionBox(dialog, 'exams.read'))
+    fireEvent.click(within(dialog).getByText(ar.common.save).closest('button')!)
+    await waitFor(() => expect(writes).toEqual([`PATCH /api/roles/${LIBRARIAN_ROLE.id}`]))
+
+    await goBack(router)
+    const question = await latestDiscardQuestion()
+    expect(router.state.location.pathname).toBe('/settings/roles')
+
+    await act(async () => answer(jsonResponse(200, { ...LIBRARIAN_ROLE, permissions: ['courses.read', 'exams.read'], updatedAt: '2026-11-09T18:00:00.000Z' })))
+    // Saved: nothing is left to lose — the question withdraws (its leave motion) and the held back is cancelled.
+    await waitFor(() => expect(blockerStates(router)).toEqual(['unblocked']))
+    expect(/-leave\b/.test(question.className)).toBe(true)
+    expect(router.state.location.pathname).toBe('/settings/roles')
+    expect(unloadWouldPrompt()).toBe(false)
+
+    // A late answer neither navigates nor closes; the next back goes through without a question.
+    await answerDiscardQuestion(question, 'discard')
+    expect(router.state.location.pathname).toBe('/settings/roles')
+    expect(onClose).not.toHaveBeenCalled()
+    const asked = discardQuestionCount()
+    await goBack(router)
+    await expectBackOnPrevious()
+    expect(discardQuestionCount()).toBe(asked)
   })
 })
