@@ -15,6 +15,8 @@ import { LessonsPage } from '../pages/LessonsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { MyAssignmentsPage } from '../pages/MyAssignmentsPage'
 import { MyClassesPage } from '../pages/MyClassesPage'
+import { MyExamsPage } from '../pages/MyExamsPage'
+import { MyGradesPage } from '../pages/MyGradesPage'
 import { MyLessonsPage } from '../pages/MyLessonsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
@@ -54,6 +56,8 @@ const router = createBrowserRouter([
       { path: 'my-lessons', element: guarded('myLessons', <MyLessonsPage />) }, // `student`/`guardian` role keys (J-F11, API-101 — ownership)
       { path: 'assignments', element: guarded('assignments', <AssignmentsPage />) },
       { path: 'my-assignments', element: guarded('myAssignments', <MyAssignmentsPage />) }, // `student`/`guardian` role keys (J-F42, API-112 — ownership)
+      { path: 'my-exams', element: guarded('myExams', <MyExamsPage />) }, // `student`/`guardian` role keys (J-F50, API-121 — ownership)
+      { path: 'my-grades', element: guarded('myGrades', <MyGradesPage />) }, // `student`/`guardian` role keys (J-F50, API-129 — ownership + grades.read_own/read_linked)
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },

@@ -263,6 +263,33 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('staff'), 'exams')).toBe(false)
     expect(canAccess(viewer('admin', []), 'exams')).toBe(false)
   })
+
+  it('gates «my exams» and «my grades» by the student/guardian server role keys, right after «my assignments» (J-F50, API-121/API-129, D-R48)', () => {
+    const myExams = NAV_ITEMS.find((item) => item.key === 'myExams')!
+    const myGrades = NAV_ITEMS.find((item) => item.key === 'myGrades')!
+    expect(myExams.roleKeys).toEqual(['student', 'guardian'])
+    expect(myExams.path).toBe('/my-exams')
+    expect(myExams.module).toBe('MOD-09')
+    expect(myGrades.roleKeys).toEqual(['student', 'guardian'])
+    expect(myGrades.path).toBe('/my-grades')
+    expect(myGrades.module).toBe('MOD-09')
+    const keys = NAV_ITEMS.map((item) => item.key)
+    expect(keys.slice(keys.indexOf('myAssignments'), keys.indexOf('myAssignments') + 3)).toEqual(['myAssignments', 'myExams', 'myGrades'])
+    for (const key of ['myExams', 'myGrades']) {
+      expect(canAccess(viewer('student'), key)).toBe(true)
+      expect(canAccess(viewer('guardian'), key)).toBe(true)
+      // A teacher who is also a guardian keeps them; a teacher, staff, an admin or a custom role alone get no entry.
+      expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.guardian], ['teacher', 'guardian']), key)).toBe(true)
+      expect(canAccess(viewer('teacher'), key)).toBe(false)
+      expect(canAccess(viewer('staff'), key)).toBe(false)
+      expect(canAccess(viewer('admin'), key)).toBe(false)
+      // Permissions never open them — not even the grades keys «my grades» needs on top of the ownership (the server's 403 is
+      // worded by the page for a learner role that lost both).
+      expect(canAccess(viewer(null, ['exams.read', 'exams.take', 'grades.read_own', 'grades.read_linked', 'grades.read_all'], ['auditor']), key)).toBe(false)
+    }
+    // A learner role that lost both grades keys still reaches «my grades»: the entry follows the role keys, the page words the refusal.
+    expect(canAccess(viewer('student', ['courses.read'], ['student']), 'myGrades')).toBe(true)
+  })
 })
 
 describe('navFor', () => {
@@ -291,9 +318,10 @@ describe('navFor', () => {
     // Students keep the lessons entry through lessons.read (an empty list there — their own lessons are in «my lessons», API-101).
     // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted — and gain
     // «my assignments» (J-F42, API-112) in its place, by their server role keys. Both lose the exams entry too (J-F45): exams.read
-    // is theirs by seed, but the learners are excepted — «my exams» (API-121) comes with a later part of MOD-09-T08.
-    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'myAssignments', 'certificates', 'payments', 'notifications'])
-    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'certificates', 'payments', 'notifications'])
+    // is theirs by seed, but the learners are excepted — and gain «my exams» (API-121) and «my grades» (API-129) right after
+    // «my assignments» (J-F50), by their server role keys.
+    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'certificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'certificates', 'payments', 'notifications'])
   })
 
   it('shows the users page to a teacher because the seed grants teachers users.read (reduced projection) (MOD-03-T15)', () => {
