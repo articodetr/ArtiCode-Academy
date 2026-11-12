@@ -1,6 +1,7 @@
 // Error vocabulary of MOD-12 notifications (roadmap §4j.4, owner decisions
-// D-R79..D-R86). One dictionary for the whole module, complete from T02 on so
-// T05 only uses it. Same shape as the other module dictionaries: the body is
+// D-R79..D-R86). One dictionary for the whole module, written in T02 with the
+// announcement codes T05 uses; T05 added `announcement_not_found`. Same shape
+// as the other module dictionaries: the body is
 // `{ statusCode, error, code, message, ...details }` and the frontend maps the
 // stable `code`. A detail is never named `code`.
 //
@@ -9,10 +10,13 @@
 //   nothing_to_update       400 — a preferences body that names no category
 //   -- announcements (T05) --
 //   audience_invalid        400 — unknown kind, a class audience with role keys, an academy
-//                                 audience with a class, or no recipient group ({ problems })
+//                                 audience with a class, or no recipient group ({ problems } —
+//                                 the eight problems are listed in announcements.audience.ts)
 //   audience_empty          422 — the audience resolves to nobody
 //   audience_too_large      422 — more recipients than one announcement may reach ({ recipients, max })
 //   class_not_found         404 — no such class among those the caller may announce to ({ classId })
+//   announcement_not_found  404 — no such announcement among those the caller may read
+//                                 ({ announcementId })
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -23,6 +27,7 @@ export const NOTIFICATIONS_ERROR_CODES = [
   'audience_empty',
   'audience_too_large',
   'class_not_found',
+  'announcement_not_found',
 ] as const;
 
 export type NotificationsErrorCode = (typeof NOTIFICATIONS_ERROR_CODES)[number];
@@ -62,4 +67,7 @@ export const notificationsError = {
       max: ANNOUNCEMENT_MAX_RECIPIENTS,
     }),
   classNotFound: (classId: string) => new NotificationsHttpException(HttpStatus.NOT_FOUND, 'class_not_found', 'No class with this id', { classId }),
+  /** Also the answer for another sender's announcement to a caller without `classes.manage`: its existence is not revealed. */
+  announcementNotFound: (announcementId: string) =>
+    new NotificationsHttpException(HttpStatus.NOT_FOUND, 'announcement_not_found', 'No announcement with this id', { announcementId }),
 };
