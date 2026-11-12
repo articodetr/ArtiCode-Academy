@@ -9,11 +9,14 @@
 // as it was keeps the stored instant (and its seconds) even when the form's
 // zone moved with another lesson (dueZoneOf()). A refused field
 // (`assignment_locked { fields }`) maps back onto the form through
-// lockedFieldUpdates(). Pure; unit-tested in assignments.patch.test.ts.
+// lockedFieldUpdates(). Whether the form holds unsaved work at all (the
+// drawer's guard — KI-062, J-F55) is assignmentFormHasChanges(). Pure;
+// unit-tested in assignments.patch.test.ts.
 import type { Assignment, UpdateAssignmentInput } from '../api/assignments'
-import { localizedOf, sameLabel } from '../courses/courses.form'
+import { englishWithoutArabic, localizedOf, sameLabel } from '../courses/courses.form'
 import { assignmentFormValuesOf, dueAtOf } from './assignments.form'
 import type { AssignmentFormValues } from './assignments.form'
+import { missingDuePart } from './assignments.validation'
 
 /** The PATCH fields of API-105 (`ASSIGNMENT_PATCH_FIELDS` of assignments.changes.ts). */
 export const ASSIGNMENT_PATCH_FIELDS = ['title', 'instructions', 'lessonId', 'maxScore', 'weight', 'dueAt', 'allowLate', 'latePenaltyPercent', 'maxAttempts'] as const
@@ -67,6 +70,31 @@ export function planAssignmentPatch(assignment: Assignment, values: AssignmentFo
   if (decimal(penalty) !== decimal(assignment.latePenaltyPercent)) body.latePenaltyPercent = penalty
   if (typeof values.maxAttempts === 'number' && values.maxAttempts !== assignment.maxAttempts) body.maxAttempts = values.maxAttempts
   return Object.keys(body).length > 0 ? body : null
+}
+
+const isBlank = (value: string | undefined) => typeof value === 'string' && value.trim() === ''
+
+/**
+ * Whether the edit form of the assignment drawer holds unsaved work (KI-062 —
+ * J-F55; the rule of examFormHasChanges() and lessonFormHasChanges() — KI-058),
+ * always compared with the assignment as loaded, so a field changed back holds
+ * nothing and spaces around a text are no change (the save trims them): the
+ * smallest PATCH is non-empty, or the form holds what the save would refuse
+ * instead of sending — an emptied Arabic title, an English text without its
+ * Arabic one, an emptied maximum score or attempt limit, or one half of the
+ * due date without the other (planAssignmentPatch() sends nothing for any of
+ * them). `zone` = the zone the due date is typed in, as for planAssignmentPatch().
+ */
+export function assignmentFormHasChanges(assignment: Assignment, values: AssignmentFormValues, zone: string): boolean {
+  return (
+    isBlank(values.titleAr) ||
+    englishWithoutArabic(values.titleAr, values.titleEn) ||
+    englishWithoutArabic(values.instructionsAr, values.instructionsEn) ||
+    values.maxScore === null ||
+    values.maxAttempts === null ||
+    missingDuePart(values.dueDate, values.dueTime) !== null ||
+    planAssignmentPatch(assignment, values, zone) !== null
+  )
 }
 
 /** One entry of antd's `form.setFields()`. */

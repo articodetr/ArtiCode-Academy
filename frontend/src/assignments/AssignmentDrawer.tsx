@@ -14,15 +14,27 @@
 // roster (AssignmentSubmissionsTab — API-108) and its review panel
 // (API-110/API-111); a review's answer carries the attempt only, so the drawer
 // then reads the assignment again for its counts and hands it to the list.
+// Since J-F55 (KI-062 — the owner's note 1 on #106; the guard of the class,
+// user, course, lesson and exam drawers: KI-052, KI-054, KI-055, KI-058): while
+// the edit form holds unsaved work — compared with the assignment as the server
+// holds it through assignmentFormHasChanges(), so a change changed back holds
+// nothing — Escape and a mask click no longer close the drawer, the close
+// button asks first (common.unsaved.*), a browser back/forward asks the same
+// question (NavigationBlocker), and a reload or a tab close gets the browser's
+// own prompt (useUnsavedChangesGuard). The edit form's Cancel stays an explicit
+// discard; switching to the submissions tab is no close. The review panel keeps
+// its own guard (Escape, mask, ×) and is not part of this one.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LockOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ASSIGNMENT_STATUS_REASON_MAX_LENGTH, changeAssignmentStatus, deleteAssignment, getAssignment, updateAssignment } from '../api/assignments'
 import type { Assignment } from '../api/assignments'
 import { useAuth } from '../auth/auth-context'
+import { NavigationBlocker } from '../common/NavigationBlocker'
+import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
@@ -32,7 +44,7 @@ import { describeAssignmentsFailure, failureMessage, isAssignmentsFailure } from
 import { assignmentTitle, formatZonedDateTime, formatZonedDay } from './assignments.format'
 import { assignmentFormValuesOf } from './assignments.form'
 import type { AssignmentFormValues } from './assignments.form'
-import { lockedFieldUpdates, planAssignmentPatch } from './assignments.patch'
+import { assignmentFormHasChanges, lockedFieldUpdates, planAssignmentPatch } from './assignments.patch'
 import { assignmentEditability, availableAssignmentActions, isClassOpenForAssignments, isDangerousAssignmentAction } from './assignments.status'
 import type { AssignmentMenuAction } from './assignments.status'
 import { differsFromDevice } from './assignments.zone'
@@ -79,6 +91,9 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<AssignmentMenuAction | null>(null)
   const [tab, setTab] = useState<DrawerTab>('details')
+  // KI-062: whether the edit form holds unsaved work — reported by the form on every change, false once it leaves.
+  const [formUnsaved, setFormUnsaved] = useState(false)
+  const unsaved = editing && formUnsaved
 
   useEffect(() => {
     if (!assignmentId) return
@@ -110,8 +125,14 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
     setEditing(false)
     setPending(null)
     setTab('details')
+    setFormUnsaved(false)
     onClose()
   }
+
+  // The close button (Escape and the mask too when nothing is unsaved) asks first while the edit form holds unsaved
+  // work, and so does a browser back/forward (NavigationBlocker below) — one question (common.unsaved.*); a reload or
+  // a tab close gets the browser's own prompt (KI-055, KI-062).
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
 
   const applyUpdate = (updated: Assignment) => {
     setAssignment(updated)
@@ -175,6 +196,7 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
         }}
         onRefresh={reload}
         onCancel={() => setEditing(false)}
+        onUnsavedChange={setFormUnsaved}
       />
     ) : (
       <AssignmentDetails assignment={current} />
@@ -183,7 +205,11 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
   return (
     <Drawer
       open={assignmentId !== null}
-      onClose={close}
+      onClose={requestClose}
+      // KI-062: unsaved work turns off the Escape key and the mask click; a modal, Select or Dropdown open on top
+      // (the review panel included) still closes on Escape — it sits above the drawer.
+      keyboard={!unsaved}
+      mask={{ closable: !unsaved }}
       title={
         assignment ? (
           <Space wrap>
@@ -222,6 +248,7 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
         ) : null
       }
     >
+      <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
       {loadError ? (
         <Alert
           type="error"
@@ -459,6 +486,8 @@ interface AssignmentEditFormProps {
   /** Re-read the assignment while the form stays open (a submission arrived meanwhile: the grading rules lock). */
   onRefresh: () => void
   onCancel: () => void
+  /** Whether a field holds unsaved work (KI-062): reported on every change, false once saved or left. */
+  onUnsavedChange: (unsaved: boolean) => void
 }
 
 /**
@@ -468,20 +497,37 @@ interface AssignmentEditFormProps {
  * (useAssignmentFormContext()). `assignment_locked` for the grading rules (a
  * student submitted meanwhile) puts the stored values back into those fields
  * with the reason, keeps the other changes and re-reads the assignment so the
- * fields lock; anything that makes the whole form stale closes it.
+ * fields lock; anything that makes the whole form stale closes it. It reports
+ * unsaved work (KI-062) from onValuesChange — synchronous, where Form.useWatch
+ * would report a task late, after an Escape (J-F23) — compared with the
+ * assignment as loaded through assignmentFormHasChanges().
  */
-function AssignmentEditForm({ assignment, gradingLocked, onSaved, onStale, onRefresh, onCancel }: AssignmentEditFormProps) {
+function AssignmentEditForm({ assignment, gradingLocked, onSaved, onStale, onRefresh, onCancel, onUnsavedChange }: AssignmentEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
   const context = useAssignmentFormContext(form, assignment.class.id, assignment)
+  const zone = context.dueZone.zone
+
+  /** What the form holds now, against the assignment as loaded. */
+  const holdsChanges = () => assignmentFormHasChanges(assignment, form.getFieldsValue() as AssignmentFormValues, zone)
+
+  // KI-062: the form left (saved, cancelled, stale, or the drawer closed) — nothing is held any more.
+  useEffect(() => () => onUnsavedChange(false), [onUnsavedChange])
+
+  // The due date's zone moved (another lesson linked, its zone or the academy's read only now) or the assignment was
+  // read again (after `assignment_locked`): what the form holds is compared again before the frame is painted.
+  useLayoutEffect(() => {
+    onUnsavedChange(assignmentFormHasChanges(assignment, form.getFieldsValue() as AssignmentFormValues, zone))
+  }, [assignment, form, onUnsavedChange, zone])
 
   const save = async (values: AssignmentFormValues) => {
-    const body = planAssignmentPatch(assignment, values, context.dueZone.zone)
+    const body = planAssignmentPatch(assignment, values, zone)
     if (!body) {
       message.info(t('assignments.drawer.nothingChanged'))
+      onUnsavedChange(false)
       onCancel()
       return
     }
@@ -489,6 +535,8 @@ function AssignmentEditForm({ assignment, gradingLocked, onSaved, onStale, onRef
     try {
       const updated = await updateAssignment(assignment.id, body)
       message.success(t('assignments.drawer.saved'))
+      // Saved: nothing is left to lose, even before the drawer closes the form.
+      onUnsavedChange(false)
       onSaved(updated)
     } catch (caught) {
       const failure = describeAssignmentsFailure(caught)
@@ -502,6 +550,8 @@ function AssignmentEditForm({ assignment, gradingLocked, onSaved, onStale, onRef
       if (locked && failure.lockedFields?.length) {
         message.warning(text)
         form.setFields(lockedFieldUpdates(assignment, failure.lockedFields, t('assignments.validation.lockedAfterSubmission')))
+        // The refused fields hold the stored values again (setFields reports no change): only the other changes are left.
+        onUnsavedChange(holdsChanges())
         onRefresh()
       } else if (failure.field && EDIT_FIELDS.has(failure.field[0] ?? '')) form.setFields([{ name: failure.field, errors: [text] }])
       else message.error(text)
@@ -515,6 +565,8 @@ function AssignmentEditForm({ assignment, gradingLocked, onSaved, onStale, onRef
       layout="vertical"
       requiredMark={false}
       initialValues={assignmentFormValuesOf(assignment)}
+      // KI-062: compared with the assignment as loaded on every change, so a change changed back holds nothing.
+      onValuesChange={(_changed, values) => onUnsavedChange(assignmentFormHasChanges(assignment, values as AssignmentFormValues, zone))}
       onFinish={(values) => void save(values as AssignmentFormValues)}
       disabled={saving}
     >

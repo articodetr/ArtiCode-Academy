@@ -9,15 +9,20 @@
 // of the server are mirrored (gradeSchemes.changes.ts — keep in sync) and
 // checked before any request; a refusal the mirror missed shows above the form.
 // While the form holds unsaved work, Escape and a mask click no longer close
-// the modal — the cancel button and × still do (a deliberate close). The parent
-// mounts it per session (KI-049: a form instance kept across sessions would
-// bring back an earlier scheme's values).
+// the modal, × and «cancel» ask first (common.unsaved.*, worded for a modal), a
+// browser back/forward asks the same question (NavigationBlocker), and a reload
+// or a tab close gets the browser's own prompt (useUnsavedChangesGuard — J-F55,
+// the owner's note 1 on #118; until then × and «cancel» closed without asking).
+// The parent mounts it per session (KI-049: a form instance kept across sessions
+// would bring back an earlier scheme's values).
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Switch, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BAND_LETTER_MAX_LENGTH, createGradeScheme, GRADE_SCHEME_BANDS_MAX, GRADE_SCHEME_BANDS_MIN, GRADE_SCHEME_TEXT_MAX_LENGTH, updateGradeScheme } from '../api/gradeSchemes'
 import type { GradeScheme } from '../api/gradeSchemes'
+import { NavigationBlocker } from '../common/NavigationBlocker'
+import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { GRADE_SCHEME_PROBLEMS } from './gradeSchemes.changes'
@@ -69,8 +74,13 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
   const bandListRules = [issueRule(COUNT_KEYS), ...GRADE_SCHEME_PROBLEMS.map((problem) => issueRule([`gradeSchemes.validation.${problem}`]))]
   const textMax = { max: GRADE_SCHEME_TEXT_MAX_LENGTH, message: t('gradeSchemes.validation.textMax', { max: GRADE_SCHEME_TEXT_MAX_LENGTH }) }
 
+  // × and «cancel» (Escape and the mask too while nothing is unsaved) ask first while the form holds unsaved work, and so
+  // does a browser back/forward (NavigationBlocker below) — one question (common.unsaved.*, worded for a modal); a reload
+  // or a tab close gets the browser's own prompt.
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(dirty, onClose, 'modal')
+
   const close = () => {
-    if (!saving) onClose()
+    if (!saving) requestClose()
   }
 
   const submit = async (values: GradeSchemeFormValues) => {
@@ -84,6 +94,8 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
     setSaving(true)
     try {
       const saved = scheme && patch ? await updateGradeScheme(scheme.id, patch) : await createGradeScheme(buildCreateGradeSchemeInput(values, firstScheme))
+      // Saved: nothing is left to lose, even before the parent closes the modal.
+      setDirty(false)
       onSaved(saved, scheme === null)
     } catch (caught) {
       const failure = describeGradeSchemesFailure(caught)
@@ -105,12 +117,13 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
       onOk={() => form.submit()}
       onCancel={close}
       confirmLoading={saving}
-      // Unsaved work turns off the Escape key and the mask click; the cancel button and × still close.
+      // Unsaved work turns off the Escape key and the mask click; × and «cancel» ask first.
       keyboard={!dirty}
       mask={{ closable: !dirty }}
       destroyOnHidden
       width={880}
     >
+      <NavigationBlocker when={dirty} onBlocked={holdNavigation} />
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       {usedCount > 0 ? <Alert type="info" showIcon title={t('gradeSchemes.hints.usedScheme', { count: usedCount })} style={{ marginBottom: 16 }} /> : null}
       <Form

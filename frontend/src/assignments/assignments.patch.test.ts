@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ASSIGNMENT_TIME_ZONE, LINKED_LESSON, makeAssignment } from '../test/assignments'
 import { assignmentFormValuesOf, buildCreateAssignmentInput, NEW_ASSIGNMENT_VALUES } from './assignments.form'
 import type { AssignmentFormValues } from './assignments.form'
-import { lockedFieldUpdates, planAssignmentPatch } from './assignments.patch'
+import { assignmentFormHasChanges, lockedFieldUpdates, planAssignmentPatch } from './assignments.patch'
 import { instantIn } from './assignments.zone'
 
 const stored = makeAssignment({ title: { ar: 'تمارين الحلقات', en: 'Loop exercises', tr: 'Döngü alıştırmaları' }, lesson: LINKED_LESSON, latePenaltyPercent: null })
@@ -102,5 +102,28 @@ describe('planAssignmentPatch — the smallest PATCH (API-105)', () => {
       { name: ['dueDate'], value: '2026-11-20', errors: ['مقفل'] },
       { name: ['dueTime'], value: '23:59', errors: [] },
     ])
+  })
+})
+
+describe('assignmentFormHasChanges — the drawer’s unsaved-work guard (KI-062, J-F55)', () => {
+  it('holds a real change; a change changed back, spaces around a text and a decimal with other zeros hold nothing', () => {
+    expect(assignmentFormHasChanges(stored, values(), ASSIGNMENT_TIME_ZONE)).toBe(false)
+    expect(assignmentFormHasChanges(stored, values({ weight: 12 }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ allowLate: true }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ lessonId: undefined }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ dueTime: '18:00' }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ titleAr: ' تمارين الحلقات ', weight: 10.0 }), ASSIGNMENT_TIME_ZONE)).toBe(false)
+  })
+
+  it('holds what the save would refuse instead of sending: an emptied Arabic title or score or attempt limit, English text alone, half a due date', () => {
+    expect(assignmentFormHasChanges(stored, values({ titleAr: '  ' }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ instructionsAr: '', instructionsEn: 'Solve page 12' }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ maxScore: null }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ maxAttempts: null }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(stored, values({ dueTime: '' }), ASSIGNMENT_TIME_ZONE)).toBe(true)
+    // An undated assignment: a date typed without its time is work the save would refuse.
+    const undated = makeAssignment({ dueAt: null })
+    expect(assignmentFormHasChanges(undated, { ...assignmentFormValuesOf(undated), dueDate: '2026-12-01' }, ASSIGNMENT_TIME_ZONE)).toBe(true)
+    expect(assignmentFormHasChanges(undated, assignmentFormValuesOf(undated), ASSIGNMENT_TIME_ZONE)).toBe(false)
   })
 })
