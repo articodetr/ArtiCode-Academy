@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
+import { readLocalizedText } from '../authorization/localized-text.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { AttendanceStatus } from '../generated/prisma/client.js';
+import type { NotificationEventParams } from '../notifications/notifications.events.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { displayTimeZone } from '../schedule/timetable.policy.js';
 import type { UsersProjection } from '../users/users.service.js';
 import { ATTENDANCE_ENROLLMENT_STATUSES, attendanceBlocker, isEmptyAttendancePlan, planAttendanceBatch } from './attendance.changes.js';
-import type { AttendanceEntry, AttendanceValues } from './attendance.changes.js';
+import type { AttendanceEntry, AttendancePlan, AttendanceValues } from './attendance.changes.js';
 import type { AttendanceCountsDto } from './lessons.dto.js';
 import type { AttendanceItemDto, AttendanceRecordDto, AttendanceSheetDto, RecordAttendanceDto } from './attendance.dto.js';
 import { lessonsError } from './lessons.errors.js';
@@ -18,16 +22,22 @@ import { ROSTER_STUDENT_SELECT, rosterProjectionOf, toRosterStudentDto } from '.
 /** The one audit event of attendance (12.4): recorded on the lesson when a batch writes something. */
 export const ATTENDANCE_AUDIT_ACTION = 'attendance.recorded';
 
+/** The academy's time zone for a lesson's display zone (D-R41), or UTC while the academy row is missing — as in lessons.service.ts. */
+const FALLBACK_TIME_ZONE = 'UTC';
+
 // The lesson as the sheet needs it: its class for the visibility rule, the
-// blockers and the event metadata.
+// blockers and the event metadata — and its title, room and class name for
+// the absence notification (MOD-12-T03), which no response carries.
 const SHEET_LESSON_SELECT = {
   id: true,
   classId: true,
+  roomId: true,
+  title: true,
   status: true,
   startsAt: true,
   endsAt: true,
   attendanceTakenAt: true,
-  class: { select: { code: true, status: true } },
+  class: { select: { code: true, name: true, status: true } },
 } satisfies Prisma.LessonSelect;
 
 const RECORD_SELECT = {
@@ -85,6 +95,19 @@ function toEntry(record: RecordAttendanceDto['records'][number]): AttendanceEntr
 }
 
 /**
+ * The students a batch newly marks absent (MOD-12 `attendance.absent`), in
+ * request order: a record created as `absent`, or one whose status changes to
+ * `absent`. A record that was absent already is not news, whatever else
+ * changed in it (its note); neither is a record that stops being absent.
+ */
+function newlyAbsent(plan: AttendancePlan, entries: readonly AttendanceEntry[]): string[] {
+  const absent = new Set<string>();
+  for (const entry of plan.created) if (entry.status === 'absent') absent.add(entry.studentId);
+  for (const update of plan.updated) if (update.data.status === 'absent' && update.fields.includes('status')) absent.add(update.studentId);
+  return entries.map((entry) => entry.studentId).filter((studentId) => absent.has(studentId));
+}
+
+/**
  * MOD-06-T03 — the attendance sheet of a lesson (roadmap §4f.5 T03, API-099
  * `GET` and API-100 `PUT /api/lessons/:id/attendance`). Reading needs
  * `attendance.read`, writing `attendance.record`, both through the lesson's
@@ -102,12 +125,19 @@ function toEntry(record: RecordAttendanceDto['records'][number]): AttendanceEntr
  * `attendance.recorded` event, and nothing is written or recorded for an
  * identical batch. The first write sets `attendance_taken_at`; `recorded_by`
  * is the last writer of each record.
+ *
+ * MOD-12-T03 — inside the same transaction every student the batch newly
+ * marks absent (a record created as `absent` or changed to it) and their
+ * guardians get an `attendance.absent` notification: the lesson, its class
+ * and its time — never the note, the minutes or who recorded. The e-mail
+ * copies are handed over after the commit.
  */
 @Injectable()
 export class AttendanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async sheet(lessonId: string, caller: AuthPrincipal): Promise<AttendanceSheetDto> {
@@ -119,7 +149,7 @@ export class AttendanceService {
   async record(lessonId: string, input: RecordAttendanceDto, caller: AuthPrincipal, ctx: RequestContext): Promise<AttendanceSheetDto> {
     const entries = input.records.map(toEntry);
     const view = rosterProjectionOf(caller);
-    return this.prisma.db.$transaction(async (tx) => {
+    const { sheet, batch } = await this.prisma.db.$transaction(async (tx) => {
       const lesson = await this.lockLesson(tx, lessonId, caller);
       const blocker = attendanceBlocker(lesson.class.status, lesson.status, lesson.startsAt);
       if (blocker === 'class_cancelled') throw lessonsError.classClosed(lesson.classId, lesson.class.status);
@@ -136,7 +166,7 @@ export class AttendanceService {
 
       const existing = await tx.attendanceRecord.findMany({ where: { lessonId, studentUserId: { in: studentIds } }, select: RECORD_SELECT });
       const plan = planAttendanceBatch(new Map(existing.map((row) => [row.studentUserId, valuesOf(row)])), entries);
-      if (isEmptyAttendancePlan(plan)) return this.buildSheet(tx, lesson, view);
+      if (isEmptyAttendancePlan(plan)) return { sheet: await this.buildSheet(tx, lesson, view), batch: EMPTY_BATCH };
 
       if (plan.created.length > 0) {
         await tx.attendanceRecord.createMany({
@@ -172,8 +202,20 @@ export class AttendanceService {
         },
         tx,
       );
-      return sheet;
+      // MOD-12: whoever this batch newly marks absent is told, with their guardians — one notification per (recipient × student).
+      const absentees = newlyAbsent(plan, entries);
+      if (absentees.length === 0) return { sheet, batch: EMPTY_BATCH };
+      const params = await this.absenceParams(tx, lesson);
+      const batch = await this.notifications.notifyStudents(
+        tx,
+        'attendance.absent',
+        absentees.map((studentId) => ({ studentId, params })),
+      );
+      return { sheet, batch };
     });
+    // After the commit: the e-mail copies leave in the background.
+    this.notifications.dispatch(batch);
+    return sheet;
   }
 
   // ---------------------------------------------------------------------------
@@ -185,6 +227,27 @@ export class AttendanceService {
     const lesson = await tx.lesson.findFirst({ where: { AND: [{ id: lessonId }, visibleLessonsWhere(caller)] }, select: SHEET_LESSON_SELECT });
     if (!lesson) throw lessonsError.lessonNotFound(lessonId);
     return lesson;
+  }
+
+  /**
+   * What an `attendance.absent` notification says about the lesson
+   * (MOD-12-T03): its title, its class and its start in the lesson's display
+   * zone — the room's branch, else the academy, exactly as `LessonDto.timeZone`
+   * (D-R41). The zone takes flat reads inside the writing transaction
+   * (KI-074), made only when somebody is newly absent.
+   */
+  private async absenceParams(tx: Tx, lesson: SheetLesson): Promise<NotificationEventParams['attendance.absent']> {
+    const room = lesson.roomId === null ? null : await tx.room.findUnique({ where: { id: lesson.roomId }, select: { branchId: true } });
+    const branch = room?.branchId ? await tx.branch.findUnique({ where: { id: room.branchId }, select: { timezone: true } }) : null;
+    const academy = await tx.academy.findFirst({ select: { timezone: true } });
+    return {
+      lessonId: lesson.id,
+      classId: lesson.classId,
+      lessonTitle: readLocalizedText(lesson.title) ?? { ar: '' },
+      className: readLocalizedText(lesson.class.name) ?? { ar: lesson.class.code },
+      startsAt: lesson.startsAt,
+      timeZone: displayTimeZone(branch?.timezone, academy?.timezone ?? FALLBACK_TIME_ZONE),
+    };
   }
 
   /**

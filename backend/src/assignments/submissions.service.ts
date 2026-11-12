@@ -5,6 +5,8 @@ import { readLocalizedText } from '../authorization/localized-text.js';
 import { seesChildren } from '../enrollments/my-classes.policy.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { toIso } from '../lessons/lessons.time.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
+import { formatNumber } from '../notifications/notifications.templates.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { toDecimalText } from './assignments.changes.js';
@@ -131,13 +133,16 @@ function toSummaryDto(row: SummaryRow): SubmissionSummaryDto {
  * (`FOR NO KEY UPDATE` — the T02 lock, so two attempts of one student, a PATCH
  * of the grading rules and a status action serialise); reviewing locks the
  * submission row. Every write is one transaction with exactly one audit event;
- * an identical review writes and records nothing.
+ * an identical review writes and records nothing. A written review notifies
+ * the student and their guardians inside that transaction (MOD-12-T03,
+ * `submission.graded` / `submission.returned`); submitting notifies nobody.
  */
 @Injectable()
 export class SubmissionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** API-108 — every student with an active or completed enrollment, plus anyone holding a submission, with their attempts. */
@@ -236,11 +241,16 @@ export class SubmissionsService {
     return this.toDto(this.prisma.db, row);
   }
 
-  /** API-111 — grade or return one attempt (D-R39); the whole review state is written, an identical one writes nothing. */
+  /**
+   * API-111 — grade or return one attempt (D-R39); the whole review state is
+   * written, an identical one writes nothing. A written review notifies the
+   * student and their guardians (MOD-12-T03); a refused or identical one
+   * notifies nobody.
+   */
   async review(submissionId: string, input: ReviewSubmissionDto, caller: AuthPrincipal, ctx: RequestContext): Promise<SubmissionDto> {
     const feedback = input.feedback ?? null;
     if (input.action === 'return' && feedback === null) throw assignmentsError.feedbackRequired();
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM assignment_submissions WHERE id = ${submissionId}::uuid FOR NO KEY UPDATE`;
       if (locked.length === 0) throw assignmentsError.submissionNotFound(submissionId);
       const row = await tx.assignmentSubmission.findFirst({ where: { id: submissionId, assignment: visibleAssignmentsWhere(caller) }, select: SUBMISSION_SELECT });
@@ -255,7 +265,7 @@ export class SubmissionsService {
       }
       const current = { status: row.status, score: toDecimalText(row.score === null ? null : row.score.toString()), feedback: row.feedback };
       const next = reviewTarget(input.action, score, feedback);
-      if (sameReview(current, next)) return this.toDto(tx, row);
+      if (sameReview(current, next)) return { dto: await this.toDto(tx, row), batch: EMPTY_BATCH };
       await tx.assignmentSubmission.update({
         where: { id: submissionId },
         data: { status: next.status, score: next.score, feedback: next.feedback, gradedById: caller.id, gradedAt: new Date() },
@@ -280,8 +290,26 @@ export class SubmissionsService {
         },
         tx,
       );
-      return this.read(tx, submissionId);
+      // MOD-12-T03: written with the review, for the attempt's student and their guardians. The feedback and the
+      // reviewer stay out of it (the student reads the feedback in «my assignments»); a grade states the score as
+      // stored on this attempt, out of the assignment's maximum — the late penalty is the gradebook's arithmetic.
+      const about = {
+        submissionId,
+        assignmentId: row.assignmentId,
+        classId: row.assignment.classId,
+        title: readLocalizedText(row.assignment.title) ?? { ar: '' },
+      };
+      const batch =
+        input.action === 'grade'
+          ? await this.notifications.notifyStudents(tx, 'submission.graded', [
+              { studentId: row.studentUserId, params: { ...about, score: formatNumber(score!), maxScore: formatNumber(row.assignment.maxScore) } },
+            ])
+          : await this.notifications.notifyStudents(tx, 'submission.returned', [{ studentId: row.studentUserId, params: about }]);
+      return { dto: await this.read(tx, submissionId), batch };
     });
+    // After the commit: the e-mail copies go out in the background, never inside the request.
+    this.notifications.dispatch(batch);
+    return dto;
   }
 
   // ---------------------------------------------------------------------------

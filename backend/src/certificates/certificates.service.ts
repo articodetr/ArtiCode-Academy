@@ -9,6 +9,8 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { ClassStatus } from '../generated/prisma/client.js';
 import { GradebookService } from '../grades/gradebook.service.js';
 import type { FinalGradeState } from '../grades/gradebook.service.js';
+import type { NotificationEventParams } from '../notifications/notifications.events.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.js';
 import { escapeLikePattern } from '../users/users.validation.js';
@@ -87,6 +89,30 @@ export function toCertificateDto(row: CertificateRow): CertificateDto {
   };
 }
 
+/** A stored JSON value as an object; null for anything else (an array, a scalar, nothing). */
+function jsonObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+/**
+ * The course as the certificate prints it (the snapshot of D-R50), so the two
+ * notifications about one certificate name it alike whatever the course is
+ * called later; the course's present name for a snapshot that holds none.
+ */
+function printedCourseName(row: Pick<CertificateRow, 'snapshot' | 'course'>): LocalizedText {
+  const printed = jsonObject(jsonObject(row.snapshot)?.['course'])?.['name'];
+  return readLocalizedText(printed) ?? localized(row.course.name, row.course.code);
+}
+
+/**
+ * MOD-12-T03: what `certificate.issued` and `certificate.revoked` are worded
+ * from — the serial and the course. Never the reason of a revocation, and
+ * never who issued or revoked.
+ */
+function certificateNotice(row: CertificateRow): { studentId: string; params: NotificationEventParams['certificate.issued' | 'certificate.revoked'] } {
+  return { studentId: row.student.id, params: { certificateId: row.id, serial: row.serial, courseName: printedCourseName(row) } };
+}
+
 interface ClassRow {
   id: string;
   code: string;
@@ -107,7 +133,12 @@ interface ClassRow {
  * (D-R53 — the year in the academy's time zone, the prefix from
  * `settings.certificates.serialPrefix`, else `CERT`); each certificate keeps a
  * snapshot of what is printed (D-R50). One `certificates.issued` event per
- * effective request; nothing eligible = 200 without write or event.
+ * effective request; nothing eligible = 200 without write or event. Since
+ * MOD-12-T03 an issuing request writes, in the same transaction, one
+ * `certificate.issued` notification per certificate it issued, and a
+ * revocation one `certificate.revoked` — to the student and their guardians
+ * (D-R80/D-R81), with the serial and the course and never the reason; the
+ * e-mail copies go out after the commit.
  */
 @Injectable()
 export class CertificatesService {
@@ -115,6 +146,7 @@ export class CertificatesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly gradebook: GradebookService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** API-136 */
@@ -147,7 +179,7 @@ export class CertificatesService {
 
   /** API-132 */
   async issue(classId: string, input: IssueCertificatesDto, caller: AuthPrincipal, ctx: RequestContext): Promise<IssueCertificatesResultDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { result, batch } = await this.prisma.db.$transaction(async (tx) => {
       const klass = await this.lockClass(tx, classId);
       const requested = await this.requestedEnrollments(tx, classId, input.enrollmentIds);
       if (klass.status !== 'completed') throw certificatesError.classNotCompleted(classId, klass.status);
@@ -164,7 +196,7 @@ export class CertificatesService {
         if (reason === null && state) eligible.push(state);
         else skipped.push({ enrollmentId: candidate.id, studentId: candidate.studentUserId, reason: reason ?? 'not_completed' });
       }
-      if (eligible.length === 0) return { issued: [], skipped };
+      if (eligible.length === 0) return { result: { issued: [], skipped }, batch: EMPTY_BATCH }; // nothing issued: nobody is told
 
       const now = new Date();
       const academy = await tx.academy.findFirst({ select: { name: true, timezone: true, settings: true } });
@@ -227,8 +259,12 @@ export class CertificatesService {
         },
         tx,
       );
-      return { issued: created.map(toCertificateDto), skipped };
+      // MOD-12-T03: after the writes, still under the class-row and serial locks — one notification per certificate issued here.
+      const batch = await this.notifications.notifyStudents(tx, 'certificate.issued', created.map(certificateNotice));
+      return { result: { issued: created.map(toCertificateDto), skipped }, batch };
     });
+    this.notifications.dispatch(batch); // after the commit
+    return result;
   }
 
   /** API-130 — newest first by the UUIDv7 id (insertion order), keyset pages. */
@@ -262,7 +298,7 @@ export class CertificatesService {
 
   /** API-133 — final (D-R55): issued → revoked under the certificate-row lock, one `certificates.revoked` event. */
   async revoke(certificateId: string, input: RevokeCertificateDto, caller: AuthPrincipal, ctx: RequestContext): Promise<CertificateDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<{ status: string; revoked_at: Date | null }[]>`SELECT status::text AS status, revoked_at FROM certificates WHERE id = ${certificateId}::uuid FOR NO KEY UPDATE`;
       const current = locked[0];
       if (!current) throw certificatesError.certificateNotFound();
@@ -283,8 +319,12 @@ export class CertificatesService {
         },
         tx,
       );
-      return toCertificateDto(row);
+      // MOD-12-T03: after the write, still under the certificate-row lock — the reason stays in the audit log, the notification never carries it.
+      const batch = await this.notifications.notifyStudents(tx, 'certificate.revoked', [certificateNotice(row)]);
+      return { dto: toCertificateDto(row), batch };
     });
+    this.notifications.dispatch(batch); // after the commit
+    return dto;
   }
 
   /** API-134 — the public verification (D-R56): a malformed or unknown code is the same 404. */

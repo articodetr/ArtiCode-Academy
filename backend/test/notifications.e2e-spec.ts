@@ -381,6 +381,43 @@ describe.skipIf(!available)('MOD-12 notification engine and «my notifications»
     expect(await emit((tx) => engine.notifyClass(tx, 'assignment.published', ZERO_ID, published()))).toEqual({ batch: { created: 0, queuedIds: [] }, rows: [] });
   });
 
+  it('a student event about a class follows the «my …» pages — an active or completed enrollment only; an event without a class has no such condition', async () => {
+    await prisma.guardianStudent.create({ data: { guardianUserId: id('guardian'), studentUserId: id('withdrawn'), relationship: 'father' }, select: { studentUserId: true } });
+    try {
+      // `withdrawn` left the class: nothing about their work in it reaches them, or anybody on their behalf.
+      const gone = await emit((tx) => engine.notifyStudents(tx, 'submission.graded', [{ studentId: id('withdrawn'), params: graded() }]));
+      expect(gone).toEqual({ batch: { created: 0, queuedIds: [] }, rows: [] });
+      // In one call with an enrolled student, only the enrolled one is told.
+      const mixed = await emit((tx) =>
+        engine.notifyStudents(tx, 'submission.graded', [
+          { studentId: id('withdrawn'), params: graded() },
+          { studentId: id('student'), params: graded() },
+        ]),
+      );
+      expect(recipientsOf(mixed.rows)).toEqual(['guardian', 'student']);
+      expect(mixed.rows.every((row) => row.studentUserId === id('student'))).toBe(true);
+
+      // A completed enrollment still shows the class on the «my …» pages, so its student is told…
+      await prisma.enrollment.updateMany({ where: { classId, studentUserId: id('sibling') }, data: { status: 'completed' } });
+      try {
+        const finished = await emit((tx) => engine.notifyStudents(tx, 'submission.graded', [{ studentId: id('sibling'), params: graded() }]));
+        expect(recipientsOf(finished.rows)).toEqual(['guardian', 'sibling', 'unverified']);
+        // …while a class event is for the students who are in the class now.
+        const current = await emit((tx) => engine.notifyClass(tx, 'assignment.published', classId, published()));
+        expect(recipientsOf(current.rows)).toEqual(['guardian', 'student']);
+      } finally {
+        await prisma.enrollment.updateMany({ where: { classId, studentUserId: id('sibling') }, data: { status: 'active' } });
+      }
+
+      // An event without a class — an invoice, a payment, a certificate — reaches the student whatever their enrollments.
+      const money = await emit((tx) => engine.notifyStudents(tx, 'payment.recorded', [{ studentId: id('withdrawn'), params: paid() }]));
+      expect(recipientsOf(money.rows)).toEqual(['guardian', 'withdrawn']);
+      expect(money.rows.every((row) => row.studentUserId === id('withdrawn') && row.category === 'finance')).toBe(true);
+    } finally {
+      await prisma.guardianStudent.deleteMany({ where: { guardianUserId: id('guardian'), studentUserId: id('withdrawn') } });
+    }
+  });
+
   it('AC4: the e-mail copy is `none` when none is due, `skipped` without a transport, `sent` or `failed` after the transport answered — and a failed e-mail never fails the write', async () => {
     // Not due: an address nobody confirmed (`unverified`), and a category the recipient switched off.
     await prisma.notificationPreference.create({ data: { userId: id('student'), category: 'finance', emailEnabled: false } });
