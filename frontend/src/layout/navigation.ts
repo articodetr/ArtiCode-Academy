@@ -20,8 +20,10 @@ import {
   ReadOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
+  ScheduleOutlined,
   SettingOutlined,
   TeamOutlined,
+  TrophyOutlined,
 } from '@ant-design/icons'
 import { ROLES } from '../auth/roles'
 import type { Role } from '../auth/roles'
@@ -138,6 +140,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
   // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
   { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
+  // MOD-09 (J-F50): «my exams» (API-121) needs no permission key — ownership, the API-060 rule (D-R48, as «my assignments»);
+  // «my grades» (API-129) adds the keys of matrix 7.2 to the same ownership (grades.read_own for one's own enrollments,
+  // grades.read_linked for the children's) and answers 403 to a caller holding neither. Both follow the `student` and
+  // `guardian` server role keys like the other learner pages (a teacher who is also a guardian keeps them; a teacher or an
+  // admin alone gets no entry); a learner role that lost both grades keys still reaches «my grades», which words the refusal.
+  { key: 'myExams', path: '/my-exams', labelKey: 'nav.myExams', icon: createElement(ScheduleOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-09' },
+  { key: 'myGrades', path: '/my-grades', labelKey: 'nav.myGrades', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-09' },
   // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
   // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
   // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams
