@@ -127,6 +127,9 @@ describe('RoomsManager (J-F06)', () => {
 
     fireEvent.click(screen.getByText(ar.rooms.add).closest('button')!)
     const dialog = (await screen.findByText(ar.rooms.createTitle)).closest('[role="dialog"]') as HTMLElement
+    // A new room has no current branch: the hint names the active branches alone (the owner's note 1 on #76).
+    expect(within(dialog).getByText(ar.rooms.hints.branchCreate)).toBeInTheDocument()
+    expect(within(dialog).queryByText(ar.rooms.hints.branch)).not.toBeInTheDocument()
     await userEvent.type(within(dialog).getByLabelText(ar.rooms.fields.code), 'V1')
     await pick(ar.rooms.fields.kind, ar.rooms.kinds.virtual, within(dialog))
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.rooms.fields.branch))

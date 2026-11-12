@@ -157,7 +157,7 @@ describe('ProfilePage (J-F36)', () => {
       const permissions = card(i18n.t('profile.permissions', { count: 57 }))
       const { titles, counts } = areasOf(permissions)
       expect(titles).toEqual([
-        ar.nav.settings,
+        ar.profile.permissionModules.academy,
         ar.nav.branches,
         ar.nav.users,
         ar.nav.roles,
@@ -170,7 +170,7 @@ describe('ProfilePage (J-F36)', () => {
         ar.profile.permissionModules.recordings,
         ar.profile.permissionModules.attendance,
         ar.nav.assignments,
-        ar.nav.exams,
+        ar.profile.permissionModules.exams,
         ar.profile.permissionModules.questions,
         ar.profile.permissionModules.grades,
         ar.nav.certificates,
@@ -216,7 +216,7 @@ describe('ProfilePage (J-F36)', () => {
           ar.nav.schedule,
           ar.nav.lessons,
           ar.nav.assignments,
-          ar.nav.exams,
+          ar.profile.permissionModules.exams,
           ar.profile.permissionModules.grades,
           ar.nav.certificates,
           ar.profile.permissionModules.invoices,

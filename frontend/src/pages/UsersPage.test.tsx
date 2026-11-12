@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { RoleList } from '../api/roles'
@@ -6,7 +6,8 @@ import type { UserDetail, UserList } from '../api/users'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { ADMIN_PERMISSIONS, READ_ONLY_PERMISSIONS, ROLE_LABELS, makeListItem, makeRoleList, makeUserDetail, makeUserList, reduced } from '../test/users'
+import { REGISTRAR_ROLE } from '../test/roles'
+import { ADMIN_PERMISSIONS, READ_ONLY_PERMISSIONS, ROLE_LABELS, ROLE_OPTIONS, makeListItem, makeRoleList, makeUserDetail, makeUserList, reduced } from '../test/users'
 import { UsersPage } from './UsersPage'
 
 const sara = makeListItem()
@@ -17,24 +18,29 @@ const layla = makeListItem({ id: '0192f0a0-0000-7000-8000-000000000004', fullNam
 /** The labels of the five system roles as the role filter lists them, in menu order. */
 const SYSTEM_ROLE_OPTIONS = [ar.roles.admin, ar.roles.staff, ar.roles.teacher, ar.roles.guardian, ar.roles.student]
 
+type RolesAnswer = RoleList | Response
+
 /**
  * Serves GET /api/users from `pages` keyed by cursor ('first' = no cursor),
- * GET /api/users/:id from `detail` and GET /api/roles from `roles`; records
- * every list query and every roles request for assertions.
+ * GET /api/users/:id from `detail`, GET /api/roles from `roles` (a function
+ * gets the 1-based attempt and the request's signal, and may answer later) and
+ * PUT /api/users/:id/roles with the detail holding the requested roles; records
+ * every list query, every roles request and every PUT body for assertions.
  */
 function mockUsersApi(
   pages: Record<string, UserList | Response>,
   detail: UserDetail = makeUserDetail(),
-  roles: RoleList | Response | ((attempt: number) => RoleList | Response) = makeRoleList(),
+  roles: RolesAnswer | ((attempt: number, signal: AbortSignal | null | undefined) => RolesAnswer | Promise<RolesAnswer>) = makeRoleList(),
 ) {
   const queries: URLSearchParams[] = []
   const rolesRequests: string[] = []
-  const fetchMock = mockFetch((url, init) => {
+  const puts: unknown[] = []
+  const fetchMock = mockFetch(async (url, init) => {
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
     if (parsed.pathname === '/api/roles' && method === 'GET') {
       rolesRequests.push(url)
-      const answer = typeof roles === 'function' ? roles(rolesRequests.length) : roles
+      const answer = await (typeof roles === 'function' ? roles(rolesRequests.length, init?.signal) : roles)
       return answer instanceof Response ? answer : jsonResponse(200, answer)
     }
     if (parsed.pathname === '/api/users' && method === 'GET') {
@@ -44,10 +50,36 @@ function mockUsersApi(
       return page ? jsonResponse(200, page) : jsonResponse(400, { statusCode: 400, code: 'cursor_invalid', message: 'bad cursor' })
     }
     if (parsed.pathname.startsWith('/api/users/') && method === 'GET') return jsonResponse(200, detail)
+    if (parsed.pathname === `/api/users/${detail.id}/roles` && method === 'PUT') {
+      const body = JSON.parse(String(init?.body)) as { roleKeys: (keyof typeof ROLE_LABELS)[] }
+      puts.push(body)
+      return jsonResponse(200, { ...detail, roles: body.roleKeys.map((key) => ({ key, label: ROLE_LABELS[key] })) })
+    }
     return jsonResponse(404, { statusCode: 404, code: 'user_not_found', message: 'User not found' })
   })
-  return { queries, rolesRequests, fetchMock, lastQuery: () => queries[queries.length - 1] }
+  return { queries, rolesRequests, puts, fetchMock, lastQuery: () => queries[queries.length - 1] }
 }
+
+/** A promise resolved from the test — an answer that arrives when the test says so. */
+function later<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+/** Opens the drawer of `name` from its row and its roles tab; resolves with the drawer. */
+async function openRolesTab(name: string) {
+  fireEvent.click(screen.getByLabelText(`${ar.common.view}: ${name}`))
+  const drawer = await screen.findByRole('dialog')
+  await within(drawer).findByRole('heading', { level: 4, name })
+  fireEvent.click(within(drawer).getByRole('tab', { name: ar.users.tabs.roles }))
+  return drawer
+}
+
+/** The option texts of the open roles dropdown of the drawer's tab. */
+const OPEN_ROLE_OPTION = '.ant-select-dropdown .ant-select-item-option-content'
 
 function renderPage(permissions: string[] = ADMIN_PERMISSIONS) {
   return renderWithProviders(<UsersPage />, { auth: makeAuth({ user: makeUser({ permissions }) }), route: '/users' })
@@ -272,5 +304,77 @@ describe('UsersPage', () => {
     expect(api.rolesRequests).toEqual(['/api/roles', '/api/roles'])
     fireEvent.mouseDown(select)
     expect(await screen.findByText(ROLE_LABELS.librarian.ar, { selector: '.ant-select-dropdown .ant-select-item-option-content' })).toBeInTheDocument()
+  })
+
+  it('drops the roles tab’s own read when the page’s roles arrive while it runs, and serves the tab from them (J-F23 race — the owner’s note 1 on #78)', async () => {
+    const detail = makeUserDetail({ id: sara.id, fullName: sara.fullName })
+    const pageRoles = later<RoleList>()
+    const tabRoles = later<RoleList>()
+    let tabSignal: AbortSignal | null | undefined
+    const api = mockUsersApi({ first: makeUserList([layla, sara]) }, detail, (attempt, signal) => {
+      if (attempt === 1) return pageRoles.promise
+      tabSignal = signal
+      return tabRoles.promise
+    })
+    renderPage()
+    await screen.findByText(sara.fullName)
+
+    // The page's read still runs, so the tab asks for the roles itself.
+    const drawer = await openRolesTab(sara.fullName)
+    await waitFor(() => expect(api.rolesRequests).toEqual(['/api/roles', '/api/roles']))
+    expect(tabSignal?.aborted).toBe(false)
+
+    await act(async () => pageRoles.resolve(makeRoleList()))
+    // The page's roles serve the tab: its own request is aborted…
+    expect(tabSignal?.aborted).toBe(true)
+    const select = await within(drawer).findByRole('combobox', { name: ar.users.rolesTab.label })
+    // …and its late answer changes nothing.
+    await act(async () => tabRoles.resolve(makeRoleList([...ROLE_OPTIONS, REGISTRAR_ROLE])))
+    fireEvent.mouseDown(select)
+    expect(await screen.findByText(ROLE_LABELS.librarian.ar, { selector: OPEN_ROLE_OPTION })).toBeInTheDocument()
+    expect(screen.queryByText(REGISTRAR_ROLE.label.ar, { selector: OPEN_ROLE_OPTION })).not.toBeInTheDocument()
+    expect(api.rolesRequests).toHaveLength(2)
+  })
+
+  it('keeps the roles tab’s own list and the selection being made when the page’s roles arrive after it (J-F23 race — the owner’s note 1 on #78)', async () => {
+    const detail = makeUserDetail({ id: sara.id, fullName: sara.fullName })
+    const pageRoles = later<RoleList>()
+    const api = mockUsersApi({ first: makeUserList([layla, sara]) }, detail, (attempt) => (attempt === 1 ? pageRoles.promise : makeRoleList()))
+    renderPage()
+    await screen.findByText(sara.fullName)
+
+    const drawer = await openRolesTab(sara.fullName)
+    const select = await within(drawer).findByRole('combobox', { name: ar.users.rolesTab.label })
+    expect(api.rolesRequests).toEqual(['/api/roles', '/api/roles'])
+    fireEvent.mouseDown(select)
+    fireEvent.click(await screen.findByText(ROLE_LABELS.teacher.ar, { selector: OPEN_ROLE_OPTION }))
+
+    // The page's answer arrives (a list of its own): Layla's custom role gets its label in the list behind the drawer.
+    await act(async () => pageRoles.resolve(makeRoleList()))
+    const laylaRow = screen.getByLabelText(`${ar.common.view}: ${layla.fullName}`).closest('tr') as HTMLElement
+    expect(within(laylaRow).getByText(ROLE_LABELS.librarian.ar)).toBeInTheDocument()
+
+    // The tab kept its list, so the form was not reset: the save sends the selection made before.
+    fireEvent.click(within(drawer).getByRole('button', { name: ar.users.rolesTab.save }))
+    await waitFor(() => expect(api.puts).toEqual([{ roleKeys: ['student', 'teacher'] }]))
+    expect(api.rolesRequests).toHaveLength(2)
+  })
+
+  it('reads the roles again with the refresh button: a role created meanwhile in /settings/roles gets its label and its place in the role filter (the owner’s note 2 on #78)', async () => {
+    const nour = makeListItem({ id: '0192f0a0-0000-7000-8000-000000000005', fullName: 'نور سالم', email: 'nour@test.local', username: 'nour', roles: ['registrar'] })
+    const api = mockUsersApi({ first: makeUserList([nour, layla]) }, undefined, (attempt) => (attempt === 1 ? makeRoleList() : makeRoleList([...ROLE_OPTIONS, REGISTRAR_ROLE])))
+    renderPage()
+    const rowOf = (name: string) => screen.getByLabelText(`${ar.common.view}: ${name}`).closest('tr') as HTMLElement
+    // The roles read when the page opened have landed (Layla's custom role has its label)…
+    await waitFor(() => expect(within(rowOf(layla.fullName)).getByText(ROLE_LABELS.librarian.ar)).toBeInTheDocument())
+    // …and the role created after them is not among them: the raw key.
+    expect(within(rowOf(nour.fullName)).getByText('registrar')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText(ar.users.refresh))
+
+    await waitFor(() => expect(within(rowOf(nour.fullName)).getByText(REGISTRAR_ROLE.label.ar)).toBeInTheDocument())
+    expect(api.rolesRequests).toEqual(['/api/roles', '/api/roles'])
+    expect(api.queries).toHaveLength(2)
+    expect(await roleFilterOptions()).toEqual([...SYSTEM_ROLE_OPTIONS, ROLE_LABELS.librarian.ar, REGISTRAR_ROLE.label.ar])
   })
 })

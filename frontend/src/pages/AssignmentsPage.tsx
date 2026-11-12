@@ -9,7 +9,8 @@
 // (their own assignments come with «my assignments», API-112 — MOD-08-T04).
 // Every due date is shown in the assignment's own zone (D-R41), named when it
 // is not this device's; the due-date filter reads its days in the academy's
-// zone (assignments.zone.ts).
+// zone (assignments.zone.ts) — again once that zone arrives, for a day picked
+// before it (J-F56).
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Flex, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -52,6 +53,11 @@ export function AssignmentsPage() {
   const filterZone = academyZoneOf(academy) ?? deviceTimeZone()
   const [defaults] = useState(() => defaultAssignmentFilters(filterZone))
   const list = useAssignmentsList(defaults)
+  // A due day picked before the academy's zone arrived was read in this device's zone: once the zone is known (or
+  // changes) the days are read again in it, so the request agrees with the zone the page names (the owner's note 3 on
+  // #87). Without a day the zone narrows nothing, and nothing is asked again. Adjusted in the render that sees the
+  // change — React's pattern for state that follows a value — so only the final filters are requested.
+  if ((list.filters.dueFrom || list.filters.dueTo) && list.filters.timeZone !== filterZone) list.setFilters({ timeZone: filterZone })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 

@@ -150,7 +150,8 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
         </Row>
         <Row gutter={12}>
           <Col xs={24} md={12}>
-            <Form.Item name="branchId" label={t('rooms.fields.branch')} extra={t('rooms.hints.branch')}>
+            {/* A new room has no current branch to keep: its hint names the active branches alone (the owner's note 1 on #76). */}
+            <Form.Item name="branchId" label={t('rooms.fields.branch')} extra={t(room ? 'rooms.hints.branch' : 'rooms.hints.branchCreate')}>
               <Select options={branchOptions} />
             </Form.Item>
           </Col>

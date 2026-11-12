@@ -179,6 +179,10 @@ export function MyAssignmentsPage() {
   const filterZone = academyZoneOf(academy) ?? deviceTimeZone()
   const [defaults] = useState(() => defaultMyAssignmentsFilters(filterZone))
   const list = useMyAssignments(defaults)
+  // A due day picked before the academy's zone arrived is read again in it once it is known (J-F56, as /assignments —
+  // the owner's note 3 on #87); only the «all» view sends the days, so the other views ask nothing again. Adjusted in
+  // the render that sees the change, so only the final filters are requested.
+  if (list.filters.view === 'all' && (list.filters.dueFrom || list.filters.dueTo) && list.filters.timeZone !== filterZone) list.setFilters({ timeZone: filterZone })
   const myClasses = useMyClasses()
   const { filters } = list
   const students = studentOptionsOf(myClasses.items)

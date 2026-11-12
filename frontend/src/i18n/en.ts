@@ -147,12 +147,15 @@ export const en: Translation = {
     noRoles: 'No role',
     permissions: 'Permissions ({{count}})',
     noPermissions: 'No permissions granted yet',
-    // Headings of the permission areas without a menu entry (J-F36); the other areas reuse `nav.*`
+    // Headings of the permission areas without a menu entry (J-F36), and of the two areas whose menu name says more than
+    // their keys — `nav.settings` and `nav.exams` (J-F56, the owner's note 1 on #84); the other areas reuse `nav.*`
     permissionModules: {
+      academy: 'Academy settings',
       guardians: 'Guardians',
       enrollments: 'Enrollments',
       recordings: 'Lesson recordings',
       attendance: 'Attendance',
+      exams: 'Exams',
       questions: 'Question banks',
       grades: 'Grades',
       invoices: 'Invoices',
@@ -1470,6 +1473,7 @@ export const en: Translation = {
       needsClassesRead: 'Adding an assignment needs the classes.read permission to choose its class',
       lesson: 'Optional: a lesson of the same class',
       lessonsTruncated: 'Showing the first {{count}} lessons of the class',
+      lessonsRecent: 'The class has more than {{count}} lessons: showing those of the last {{days}} days and the coming ones (up to {{count}})',
       due: 'Optional; leave both blank for no due date',
       maxScore: 'From 0.01 to 9999.99',
       weight: 'Optional (0–999.99): the weight in the final grade, applied by the grades module',
@@ -1484,6 +1488,7 @@ export const en: Translation = {
       lesson: 'The due date is in the linked lesson time zone',
       academy: 'The due date is in the academy time zone',
       device: 'The academy time zone could not be read; the due date is in this device time zone',
+      pending: 'Reading the academy time zone; until it arrives the due date is in this device time zone',
     },
     pickers: {
       classPlaceholder: 'Search a class by code or name',
@@ -1783,6 +1788,7 @@ export const en: Translation = {
       needsClassesRead: 'Adding an exam needs the permission to read classes (classes.read) to pick its class',
       lesson: 'Optional: a lesson of the same class the exam is held in',
       lessonsTruncated: 'The first {{count}} lessons of the class are shown',
+      lessonsRecent: 'The class has more than {{count}} lessons: those of the last {{days}} days and the coming ones are shown (up to {{count}})',
       scheduledAt: 'Optional; leave both empty for an exam without a date yet',
       duration: 'Optional: a whole number from 1 to {{max}}',
       maxScore: 'From 0.01 to 9999.99',
@@ -1795,6 +1801,7 @@ export const en: Translation = {
       lesson: 'The date is typed in the linked lesson’s time zone',
       academy: 'The date is typed in the academy’s time zone',
       device: 'The academy’s time zone could not be read; the date is typed in your device’s time zone',
+      pending: 'Reading the academy’s time zone; until it arrives the date is typed in your device’s time zone',
     },
     pickers: {
       classPlaceholder: 'Search a class by code or name',
@@ -2280,6 +2287,7 @@ export const en: Translation = {
     hints: {
       code: 'Saved in capitals: Latin letters, digits and . _ - (up to 16), unique inside the branch',
       branch: "Leave it on the academy site for a room without a branch; only the active branches and the room's current branch are offered",
+      branchCreate: 'Leave it on the academy site for a room without a branch; only the active branches are offered',
       capacity: 'Number of seats, when known; never compared with class capacity',
       isActive: 'An inactive room disappears from non-manager lists and accepts no new slots',
     },

@@ -54,6 +54,10 @@ export function ExamsPage() {
   const filterZone = academyZoneOf(academy) ?? deviceTimeZone()
   const [defaults] = useState(() => defaultExamFilters(filterZone))
   const list = useExamsList(defaults)
+  // A day picked before the academy's zone arrived is read again in it once it is known (J-F56, as /assignments — the
+  // owner's note 3 on #87); without a day nothing is asked again. Adjusted in the render that sees the change, so only
+  // the final filters are requested.
+  if ((list.filters.from || list.filters.to) && list.filters.timeZone !== filterZone) list.setFilters({ timeZone: filterZone })
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 

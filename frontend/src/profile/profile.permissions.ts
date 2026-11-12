@@ -15,11 +15,15 @@ export interface PermissionAreaDefinition {
 /**
  * Areas of the permission catalog in the declaration order of
  * backend/src/authorization/permission-catalog.ts — a manual mirror, keep it in
- * sync. The headings reuse the module names of the side menu (`nav.*`); only
- * the areas without a menu entry have their own `profile.permissionModules.*`.
+ * sync. The headings reuse the module names of the side menu (`nav.*`); the
+ * areas without a menu entry have their own `profile.permissionModules.*`, and
+ * so do two areas whose menu entry names more than their keys (the owner's
+ * note 1 on #84): `academy.*` is the academy's settings, not the whole
+ * «settings» menu, and `exams.*` the exams alone — `nav.exams` reads «exams
+ * and grades», and `grades.*` follows as its own area.
  */
 export const PERMISSION_AREAS: readonly PermissionAreaDefinition[] = [
-  { area: 'academy', labelKey: 'nav.settings' },
+  { area: 'academy', labelKey: 'profile.permissionModules.academy' },
   { area: 'branches', labelKey: 'nav.branches' },
   { area: 'users', labelKey: 'nav.users' },
   { area: 'roles', labelKey: 'nav.roles' },
@@ -32,7 +36,7 @@ export const PERMISSION_AREAS: readonly PermissionAreaDefinition[] = [
   { area: 'recordings', labelKey: 'profile.permissionModules.recordings' },
   { area: 'attendance', labelKey: 'profile.permissionModules.attendance' },
   { area: 'assignments', labelKey: 'nav.assignments' },
-  { area: 'exams', labelKey: 'nav.exams' },
+  { area: 'exams', labelKey: 'profile.permissionModules.exams' },
   { area: 'questions', labelKey: 'profile.permissionModules.questions' },
   { area: 'grades', labelKey: 'profile.permissionModules.grades' },
   { area: 'certificates', labelKey: 'nav.certificates' },

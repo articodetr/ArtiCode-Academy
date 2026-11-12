@@ -145,12 +145,15 @@ export const ar = {
     noRoles: 'بلا دور',
     permissions: 'الصلاحيات ({{count}})',
     noPermissions: 'لا صلاحيات ممنوحة بعد',
-    // Headings of the permission areas without a menu entry (J-F36); the other areas reuse `nav.*`
+    // Headings of the permission areas without a menu entry (J-F36), and of the two areas whose menu name says more than
+    // their keys — `nav.settings` and `nav.exams` (J-F56, the owner's note 1 on #84); the other areas reuse `nav.*`
     permissionModules: {
+      academy: 'إعدادات الأكاديمية',
       guardians: 'أولياء الأمور',
       enrollments: 'التسجيلات',
       recordings: 'التسجيلات المرئية',
       attendance: 'الحضور',
+      exams: 'الاختبارات',
       questions: 'بنوك الأسئلة',
       grades: 'الدرجات',
       invoices: 'الفواتير',
@@ -1470,6 +1473,8 @@ export const ar = {
       needsClassesRead: 'إضافة واجب تحتاج صلاحية قراءة الفصول (classes.read) لاختيار فصله',
       lesson: 'اختياري: درس من دروس الفصل نفسه',
       lessonsTruncated: 'تُعرض أول {{count}} درس من دروس الفصل',
+      // A class longer than one page: its recent and coming lessons (J-F56, the owner's note 2 on #87).
+      lessonsRecent: 'للفصل أكثر من {{count}} درس: تُعرض دروس آخر {{days}} يوماً والقادمة (حتى {{count}})',
       due: 'اختياري؛ اتركهما فارغين لواجب بلا موعد',
       maxScore: 'من 0.01 إلى 9999.99',
       weight: 'اختياري (0–999.99): وزن الواجب في الدرجة النهائية، تحسبه وحدة الدرجات',
@@ -1483,6 +1488,8 @@ export const ar = {
       lesson: 'يُكتب الموعد بتوقيت الدرس المرتبط',
       academy: 'يُكتب الموعد بتوقيت الأكاديمية',
       device: 'تعذّرت قراءة المنطقة الزمنية للأكاديمية؛ يُكتب الموعد بتوقيت جهازك',
+      // The academy's first read has not answered yet — nothing failed (J-F56, the owner's note 3 on #87).
+      pending: 'تُقرأ المنطقة الزمنية للأكاديمية؛ يُكتب الموعد بتوقيت جهازك حتى تصل',
     },
     pickers: {
       classPlaceholder: 'ابحث عن فصل بالرمز أو الاسم',
@@ -1786,6 +1793,7 @@ export const ar = {
       needsClassesRead: 'إضافة اختبار تحتاج صلاحية قراءة الفصول (classes.read) لاختيار فصله',
       lesson: 'اختياري: درس من دروس الفصل نفسه يُعقد فيه الاختبار',
       lessonsTruncated: 'تُعرض أول {{count}} درس من دروس الفصل',
+      lessonsRecent: 'للفصل أكثر من {{count}} درس: تُعرض دروس آخر {{days}} يوماً والقادمة (حتى {{count}})',
       scheduledAt: 'اختياري؛ اتركهما فارغين لاختبار لم يُحدَّد موعده بعد',
       duration: 'اختيارية: عدد صحيح من 1 إلى {{max}}',
       maxScore: 'من 0.01 إلى 9999.99',
@@ -1798,6 +1806,7 @@ export const ar = {
       lesson: 'يُكتب الموعد بتوقيت الدرس المرتبط',
       academy: 'يُكتب الموعد بتوقيت الأكاديمية',
       device: 'تعذّرت قراءة المنطقة الزمنية للأكاديمية؛ يُكتب الموعد بتوقيت جهازك',
+      pending: 'تُقرأ المنطقة الزمنية للأكاديمية؛ يُكتب الموعد بتوقيت جهازك حتى تصل',
     },
     pickers: {
       classPlaceholder: 'ابحث عن فصل بالرمز أو الاسم',
@@ -2283,6 +2292,8 @@ export const ar = {
     hints: {
       code: 'يُحفظ بأحرف كبيرة: أحرف لاتينية وأرقام و . _ - (حتى 16 حرفاً)، ولا يتكرر داخل الفرع نفسه',
       branch: 'اتركه على مقر الأكاديمية لقاعة بلا فرع؛ لا تُعرض إلا الفروع النشطة وفرع القاعة الحالي',
+      // A new room has no current branch (the owner's note 1 on #76).
+      branchCreate: 'اتركه على مقر الأكاديمية لقاعة بلا فرع؛ لا تُعرض إلا الفروع النشطة',
       capacity: 'عدد المقاعد إن عُرف؛ لا يُقارن بسعة الفصل',
       isActive: 'القاعة الموقوفة تختفي من قوائم غير المدير ولا تُقبل حصص جديدة عليها',
     },

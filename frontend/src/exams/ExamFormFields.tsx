@@ -5,16 +5,16 @@
 // the server decides. The class is chosen on creation only; the lesson comes
 // from that class. The exam's date is a native date and time typed in the zone
 // of `context.zone`, named in the hint whenever it is not this device's zone
-// (always when the academy could not be read). The maximum score is read-only
-// once a result exists.
+// (always when the academy could not be read, or is still being read — J-F56).
+// The maximum score is read-only once a result exists.
 import { Alert, Col, Form, Input, InputNumber, Row, Select } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { EXAM_DESCRIPTION_MAX_LENGTH, EXAM_DURATION_MAX, EXAM_TITLE_MAX_LENGTH, EXAM_TYPES } from '../api/exams'
 import type { Exam } from '../api/exams'
-import { LESSONS_PAGE_MAX } from '../api/lessons'
 import { AssignmentLessonSelect } from '../assignments/AssignmentPickers'
 import { differsFromDevice } from '../assignments/assignments.zone'
+import { lessonSelectHint } from '../assignments/useClassLessons'
 import { useAuth } from '../auth/auth-context'
 import { ExamClassPicker } from './ExamPickers'
 import { isDurationValid, isExamMaxScoreValid, isExamWeightValid, isPassScoreValid, missingSchedulePart, passScoreAboveMax } from './exams.validation'
@@ -39,7 +39,7 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
   const { t } = useTranslation()
   // GET /api/classes needs classes.read at the controller: without it the class list stays unknown.
   const canReadClasses = useAuth().hasPermission('classes.read')
-  const { lessons, canReadLessons, zone } = context
+  const { lessons, canReadLessons, zone, zonePending } = context
 
   const maxLength = (max: number) => ({ max, message: t('exams.validation.maxLength', { max }) })
 
@@ -86,11 +86,7 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item
-            name="lessonId"
-            label={t('exams.fields.lesson')}
-            extra={lessons.truncated ? t('exams.hints.lessonsTruncated', { count: LESSONS_PAGE_MAX }) : t('exams.hints.lesson')}
-          >
+          <Form.Item name="lessonId" label={t('exams.fields.lesson')} extra={lessonSelectHint(lessons, t, 'exams')}>
             <AssignmentLessonSelect lessons={lessons} hasClass={hasClass} canRead={canReadLessons} current={current?.lesson} currentZone={current?.timeZone} />
           </Form.Item>
         </Col>
@@ -139,7 +135,8 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
                 {t('exams.hints.scheduledAt')}
                 {showZone ? (
                   <span data-testid="exam-date-zone" style={{ display: 'block' }}>
-                    {t(`exams.zone.${zone.source}`)} (<span dir="ltr">{zone.zone}</span>)
+                    {/* Before the academy's first answer nothing has failed yet: «being read», not «could not be read». */}
+                    {t(zonePending ? 'exams.zone.pending' : `exams.zone.${zone.source}`)} (<span dir="ltr">{zone.zone}</span>)
                   </span>
                 ) : null}
               </>

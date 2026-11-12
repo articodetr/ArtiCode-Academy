@@ -6,6 +6,7 @@ import { AuthContext } from '../auth/auth-context'
 import type { FetchHandler } from '../test/http'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser } from '../test/render'
+import { REGISTRAR_ROLE } from '../test/roles'
 import { ROLE_LABELS, ROLE_OPTIONS, makeRoleList } from '../test/users'
 import { useRoleLabels } from './useRoleLabels'
 
@@ -58,6 +59,39 @@ describe('useRoleLabels (J-F12)', () => {
     await act(async () => {})
     expect(api.paths).toEqual([])
     expect(result.current.labels.size).toBe(0)
+    // The roles tab then reads them itself (PR #84 note 4).
+    expect(result.current.items).toBeNull()
+    // reload() asks nothing either.
+    act(() => result.current.reload())
+    await act(async () => {})
+    expect(api.paths).toEqual([])
+  })
+
+  it('reads the roles again on reload() — a role created meanwhile shows — and keeps the roles read last when a re-read fails (the owner’s note 2 on #78)', async () => {
+    let attempt = 0
+    const api = record(() => {
+      attempt += 1
+      if (attempt === 1) return jsonResponse(200, makeRoleList())
+      if (attempt === 2) return jsonResponse(200, makeRoleList([...ROLE_OPTIONS, REGISTRAR_ROLE]))
+      return jsonResponse(500, { statusCode: 500, message: 'Internal server error' })
+    })
+    const { result } = renderLabels(['users.read'])
+    await waitFor(() => expect(result.current.items).toEqual(ROLE_OPTIONS))
+    const { reload } = result.current
+    expect(result.current.labels.has('registrar')).toBe(false)
+
+    act(() => result.current.reload())
+    await waitFor(() => expect(result.current.labels.get('registrar')).toBe(REGISTRAR_ROLE.label.ar))
+    expect(result.current.items).toEqual([...ROLE_OPTIONS, REGISTRAR_ROLE])
+    expect(result.current.keys).toContain('registrar')
+
+    act(() => result.current.reload())
+    await waitFor(() => expect(api.paths).toEqual(['/api/roles', '/api/roles', '/api/roles']))
+    await act(async () => {})
+    expect(result.current.items).toEqual([...ROLE_OPTIONS, REGISTRAR_ROLE])
+    expect(result.current.labels.get('registrar')).toBe(REGISTRAR_ROLE.label.ar)
+    // A stable function: a page may hand it on without re-rendering its children.
+    expect(result.current.reload).toBe(reload)
   })
 
   it('stays empty without throwing when the request fails', async () => {

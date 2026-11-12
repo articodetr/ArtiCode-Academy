@@ -5,7 +5,9 @@
 // lesson's `timeZone` from the list already read, the assignment as the
 // server holds it (edit) and the academy's zone from the shared API-035 read.
 // The creation modal and the edit form call it with their own form instance,
-// so the zone they show is the zone they submit with.
+// so the zone they show is the zone they submit with. While the academy's
+// first read has not answered, the device zone stands in without a failure:
+// `zonePending` lets the hint say so (J-F56, the owner's note 3 on #87).
 import { Form } from 'antd'
 import type { FormInstance } from 'antd'
 import { useAcademy } from '../academy/useAcademy'
@@ -21,13 +23,15 @@ export interface AssignmentFormContext {
   /** API-093 needs `lessons.read`; without it the lesson select explains why it is empty. */
   canReadLessons: boolean
   dueZone: DueZone
+  /** The device zone stands in because the academy's first read is still running — not because it failed. */
+  zonePending: boolean
 }
 
 export function useAssignmentFormContext(form: FormInstance, classId: string | undefined, current?: Assignment): AssignmentFormContext {
   const canReadLessons = useAuth().hasPermission('lessons.read')
   const lessons = useClassLessons(classId, canReadLessons)
   const lessonId = Form.useWatch('lessonId', form) as string | undefined
-  const { academy } = useAcademy()
+  const { academy, error } = useAcademy()
   const lessonZone = lessonZoneOf(lessons.lessons.find((lesson) => lesson.id === lessonId))
   const dueZone = dueZoneOf({
     lessonId,
@@ -35,5 +39,5 @@ export function useAssignmentFormContext(form: FormInstance, classId: string | u
     current: current ? { lessonId: current.lesson?.id ?? null, timeZone: current.timeZone } : undefined,
     academyZone: academyZoneOf(academy),
   })
-  return { lessons, canReadLessons, dueZone }
+  return { lessons, canReadLessons, dueZone, zonePending: dueZone.source === 'device' && academy === null && error === null }
 }

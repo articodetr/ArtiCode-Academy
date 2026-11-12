@@ -29,7 +29,7 @@ describe('profile permission areas (J-F36)', () => {
     const areas = groupPermissions(['users.read', 'zeta.run', 'academy.settings.read', 'users.create', 'alpha.view', 'users.read'])
 
     expect(areas).toEqual([
-      { area: 'academy', labelKey: 'nav.settings', keys: ['academy.settings.read'] },
+      { area: 'academy', labelKey: 'profile.permissionModules.academy', keys: ['academy.settings.read'] },
       { area: 'users', labelKey: 'nav.users', keys: ['users.create', 'users.read'] },
       { area: 'alpha', labelKey: null, keys: ['alpha.view'] },
       { area: 'zeta', labelKey: null, keys: ['zeta.run'] },
@@ -56,7 +56,7 @@ describe('profile permission areas (J-F36)', () => {
     ])
   })
 
-  it('names every area in Arabic and English, reusing the menu names and adding only the areas without a menu entry', () => {
+  it('names every area in Arabic and English, reusing the menu names where they fit and naming the other areas itself', () => {
     for (const { area, labelKey } of PERMISSION_AREAS) {
       expect(lookup(ar, labelKey), `${area} → ${labelKey} (ar)`).toEqual(expect.stringMatching(/\S/))
       expect(lookup(en, labelKey), `${area} → ${labelKey} (en)`).toEqual(expect.stringMatching(/\S/))
@@ -64,6 +64,21 @@ describe('profile permission areas (J-F36)', () => {
     const own = PERMISSION_AREAS.filter(({ labelKey }) => !labelKey.startsWith('nav.')).map(({ area }) => area)
     expect(own).toEqual(Object.keys(ar.profile.permissionModules))
     expect(Object.keys(en.profile.permissionModules)).toEqual(Object.keys(ar.profile.permissionModules))
+  })
+
+  it('heads the exams and the academy areas by their own keys, and no two areas alike (the owner’s note 1 on #84)', () => {
+    const exams = PERMISSION_AREAS.find(({ area }) => area === 'exams')!
+    const academy = PERMISSION_AREAS.find(({ area }) => area === 'academy')!
+    // «الاختبارات والدرجات» above an area of exam keys, with «الدرجات» right after it, read twice.
+    expect(permissionAreaLabel(exams, t)).toBe('الاختبارات')
+    expect(permissionAreaLabel(exams, t)).not.toBe(ar.nav.exams)
+    // The two keys of `academy.*` are the academy's settings («عرض/تعديل إعدادات الأكاديمية» in the catalog).
+    expect(permissionAreaLabel(academy, t)).toBe('إعدادات الأكاديمية')
+    expect(en.profile.permissionModules).toMatchObject({ exams: 'Exams', academy: 'Academy settings' })
+    for (const dictionary of [ar, en]) {
+      const headings = PERMISSION_AREAS.map(({ labelKey }) => lookup(dictionary, labelKey))
+      expect(new Set(headings).size).toBe(PERMISSION_AREAS.length)
+    }
   })
 
   it('shows the translated heading, or the prefix of an unknown area', () => {
@@ -74,7 +89,7 @@ describe('profile permission areas (J-F36)', () => {
       ar.nav.schedule,
       ar.nav.lessons,
       ar.nav.assignments,
-      ar.nav.exams,
+      ar.profile.permissionModules.exams,
       ar.profile.permissionModules.grades,
       ar.nav.certificates,
       ar.profile.permissionModules.invoices,

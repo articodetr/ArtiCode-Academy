@@ -5,18 +5,19 @@
 // chosen on creation only; the lesson comes from that class. The due date is
 // a native date and time typed in the zone of `context.dueZone`, named in the
 // hint whenever it is not this device's zone (always when the academy could
-// not be read). The grading rules are read-only once a submission exists.
+// not be read, or is still being read — J-F56). The grading rules are
+// read-only once a submission exists.
 import { Alert, Col, Form, Input, InputNumber, Row, Select, Switch } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH, ASSIGNMENT_TITLE_MAX_LENGTH } from '../api/assignments'
 import type { Assignment } from '../api/assignments'
-import { LESSONS_PAGE_MAX } from '../api/lessons'
 import { useAuth } from '../auth/auth-context'
 import { AssignmentClassPicker, AssignmentLessonSelect } from './AssignmentPickers'
 import { isLatePenaltyValid, isMaxAttemptsValid, isMaxScoreValid, isWeightValid, latePenaltyWithoutAllowLate, missingDuePart } from './assignments.validation'
 import { differsFromDevice } from './assignments.zone'
 import type { AssignmentFormContext } from './useAssignmentFormContext'
+import { lessonSelectHint } from './useClassLessons'
 
 interface AssignmentFormFieldsProps {
   form: FormInstance
@@ -37,7 +38,7 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
   const { t } = useTranslation()
   // GET /api/classes needs classes.read at the controller: without it the class list stays unknown.
   const canReadClasses = useAuth().hasPermission('classes.read')
-  const { lessons, canReadLessons, dueZone } = context
+  const { lessons, canReadLessons, dueZone, zonePending } = context
 
   const maxLength = (max: number) => ({ max, message: t('assignments.validation.maxLength', { max }) })
 
@@ -77,11 +78,7 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
           )}
         </Form.Item>
       ) : null}
-      <Form.Item
-        name="lessonId"
-        label={t('assignments.fields.lesson')}
-        extra={lessons.truncated ? t('assignments.hints.lessonsTruncated', { count: LESSONS_PAGE_MAX }) : t('assignments.hints.lesson')}
-      >
+      <Form.Item name="lessonId" label={t('assignments.fields.lesson')} extra={lessonSelectHint(lessons, t, 'assignments')}>
         <AssignmentLessonSelect lessons={lessons} hasClass={hasClass} canRead={canReadLessons} current={current?.lesson} currentZone={current?.timeZone} />
       </Form.Item>
       <Row gutter={12}>
@@ -128,7 +125,8 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
                 {t('assignments.hints.due')}
                 {showZone ? (
                   <span data-testid="assignment-due-zone" style={{ display: 'block' }}>
-                    {t(`assignments.zone.${dueZone.source}`)} (<span dir="ltr">{dueZone.zone}</span>)
+                    {/* Before the academy's first answer nothing has failed yet: «being read», not «could not be read». */}
+                    {t(zonePending ? 'assignments.zone.pending' : `assignments.zone.${dueZone.source}`)} (<span dir="ltr">{dueZone.zone}</span>)
                   </span>
                 ) : null}
               </>

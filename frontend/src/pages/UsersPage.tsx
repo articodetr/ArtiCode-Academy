@@ -3,7 +3,8 @@
 // permission (`hasPermission`) — the server remains the security boundary.
 // Since J-F12 custom roles carry their server labels in the roles column and
 // in the role filter (GET /api/roles once per visit — useRoleLabels()); since
-// J-F23 the drawer's roles tab reuses that read (PR #62 review, note 1).
+// J-F23 the drawer's roles tab reuses that read (PR #62 review, note 1), and
+// the refresh button reads the roles again with the list (J-F56).
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Checkbox, Flex, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -174,7 +175,16 @@ export function UsersPage() {
               {t('users.includeDeleted')}
             </Checkbox>
           ) : null}
-          <Button icon={<ReloadOutlined />} onClick={list.reload} aria-label={t('users.refresh')} />
+          {/* The roles too: a role created or changed in /settings/roles meanwhile reaches the labels, the role
+              filter and the drawer's roles tab (the owner's note 2 on #78). */}
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              list.reload()
+              roles.reload()
+            }}
+            aria-label={t('users.refresh')}
+          />
         </Flex>
 
         {failure ? (
