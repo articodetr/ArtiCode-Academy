@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { MyAssignmentItem, MySubmission } from '../api/myAssignments'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
-import { GUARDIAN_LEARNER_PERMISSIONS, STUDENT_LEARNER_PERMISSIONS, SUBMISSION_ID, SUBMISSION_ID_2, makeLatest, makeMyAssignment, makeMySubmission } from '../test/myAssignments'
+import { GUARDIAN_LEARNER_PERMISSIONS, STUDENT_LEARNER_PERMISSIONS, SUBMISSION_ID, SUBMISSION_ID_2, makeLatest, makeMyAssignment, makeMySubmission, mySummaryOf } from '../test/myAssignments'
 import { CHILD_ONE, SELF_STUDENT } from '../test/myLessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { MySubmissionDrawer } from './MySubmissionDrawer'
@@ -63,8 +63,8 @@ describe('MySubmissionDrawer (API-110)', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     // The zone is named when it is not this device's (the fixture zone is neither CI's nor the developers').
     expect(within(panel).getByText('Asia/Riyadh')).toBeInTheDocument()
-    // One attempt: no «latest only» note; the student's own name is not repeated.
-    expect(within(panel).queryByText(ar.myAssignments.drawer.latestOnly)).not.toBeInTheDocument()
+    // One attempt: no list of attempts; the student's own name is not repeated.
+    expect(within(panel).queryByTestId('my-submission-history')).not.toBeInTheDocument()
     expect(within(panel).queryByText(ar.myAssignments.drawer.student)).not.toBeInTheDocument()
 
     expect(paths).toEqual([`/api/submissions/${SUBMISSION_ID}`])
@@ -89,19 +89,55 @@ describe('MySubmissionDrawer (API-110)', () => {
     expect(within(panel).getByText(ar.myAssignments.drawer.noText)).toBeInTheDocument()
   })
 
-  it('says the reviewer’s account is gone when a reviewed attempt names nobody, and that only the latest attempt is shown', async () => {
+  it('says the reviewer’s account is gone when a reviewed attempt names nobody', async () => {
     mockSubmissionApi(makeMySubmission({ id: SUBMISSION_ID_2, attemptNo: 2, attempts: 2, attemptsAllowed: 2, status: 'returned', feedback: 'أعد الحل', gradedAt: '2026-11-12T09:00:00.000Z', linkUrl: null }))
     renderDrawer(makeMyAssignment({ attempts: 2, attemptsAllowed: 2, latest: makeLatest({ id: SUBMISSION_ID_2, attemptNo: 2, status: 'returned', feedback: 'أعد الحل' }) }))
 
     const panel = await waitFor(() => {
       const found = drawer()
-      expect(within(found).getByText(ar.myAssignments.drawer.latestOnly)).toBeInTheDocument()
+      expect(within(found).getByText(ar.myAssignments.drawer.reviewerGone)).toBeInTheDocument()
       return found
     })
-    expect(within(panel).getByText(ar.myAssignments.drawer.reviewerGone)).toBeInTheDocument()
-    expect(within(panel).getByText(ar.myAssignments.submission.returned)).toBeInTheDocument()
+    expect(within(panel).getAllByText(ar.myAssignments.submission.returned).length).toBeGreaterThan(0)
     expect(within(panel).getByText(ar.myAssignments.notGraded)).toBeInTheDocument()
     expect(within(panel).getByText(ar.myAssignments.drawer.noLink)).toBeInTheDocument()
+  })
+
+  it('lists every attempt of the student (MOD-08-T07) and opens an earlier one through API-110 — the row keeps its latest', async () => {
+    const first = makeMySubmission({ status: 'graded', score: 12, feedback: 'جيد', gradedAt: '2026-11-10T12:00:00.000Z', attempts: 2, attemptsAllowed: 2 })
+    const second = makeMySubmission({ id: SUBMISSION_ID_2, attemptNo: 2, submittedAt: '2026-11-11T08:00:00.000Z', isLate: true, textAnswer: 'محاولتي الثانية', attempts: 2, attemptsAllowed: 2 })
+    const history = [mySummaryOf(first), mySummaryOf(second)]
+    const answers: Record<string, MySubmission> = { [SUBMISSION_ID]: { ...first, history }, [SUBMISSION_ID_2]: { ...second, history } }
+    const paths: string[] = []
+    mockFetch((url) => {
+      paths.push(url)
+      const id = url.split('/').at(-1)!
+      return answers[id] ? jsonResponse(200, answers[id]) : jsonResponse(404, { statusCode: 404, code: 'submission_not_found', message: 'No submission' })
+    })
+    const onLoaded = vi.fn()
+    renderWithProviders(
+      <MySubmissionDrawer item={makeMyAssignment({ attempts: 2, attemptsAllowed: 2, latest: makeLatest({ id: SUBMISSION_ID_2, attemptNo: 2, isLate: true }) })} onClose={vi.fn()} onLoaded={onLoaded} />,
+      { auth: makeAuth({ user: makeUser({ id: SELF_STUDENT.id, role: 'student', roles: ['student'], permissions: STUDENT_LEARNER_PERMISSIONS }) }), route: '/my-assignments' },
+    )
+
+    expect(await screen.findByTestId('my-submission-text')).toHaveTextContent('محاولتي الثانية')
+    const list = screen.getByTestId('my-submission-history')
+    expect(within(list).getByText(ar.myAssignments.drawer.history.title)).toBeInTheDocument()
+    const one = within(list).getByTestId('my-history-attempt-1')
+    expect(within(one).getByText(ar.myAssignments.submission.graded)).toBeInTheDocument()
+    expect(within(one).getByText('12 / 20')).toBeInTheDocument()
+    const two = within(list).getByTestId('my-history-attempt-2')
+    expect(within(two).getByText(ar.myAssignments.submission.late)).toBeInTheDocument()
+    expect(within(two).getByText(ar.myAssignments.drawer.history.current)).toBeInTheDocument()
+
+    fireEvent.click(within(list).getByLabelText('عرض المحاولة 1'))
+    await waitFor(() => expect(screen.getByTestId('my-submission-text')).toHaveTextContent('الحلقة for تكرر الأوامر'))
+    expect(within(drawer()).getByText('رقم 1 — 2 من 2 محاولة مسموحة')).toBeInTheDocument()
+    expect(within(drawer()).getByText('جيد')).toBeInTheDocument()
+    expect(paths).toEqual([`/api/submissions/${SUBMISSION_ID_2}`, `/api/submissions/${SUBMISSION_ID}`])
+    // Both reads reach the page, which keeps the row's latest attempt (applySubmission()).
+    expect(onLoaded).toHaveBeenCalledTimes(2)
+    expect(onLoaded).toHaveBeenLastCalledWith({ ...first, history })
   })
 
   it('shows submission_not_found without the old details and reads again on «refresh»', async () => {

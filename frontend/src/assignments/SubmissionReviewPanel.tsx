@@ -10,19 +10,26 @@
 // closed assignment. The smallest body goes out (planReview() of
 // submissions.status.ts — the mirror of backend/src/assignments/
 // submissions.policy.ts), nothing when the review equals the stored one; the
-// panel then shows the server's answer in a new form session (KI-049). Every
-// time is shown in the assignment's `timeZone` (D-R41), named when it is not
-// this device's. While the form holds something unsaved, Escape and a mask
-// click do nothing and the panel's own close (its × and «cancel») asks first;
-// the guard of the assignment drawer itself and of the browser's back and
-// reload comes when J-F27 meets J-F38.
+// panel then shows the server's answer in a new form session (KI-049).
+// Since J-F47 (MOD-08-T07, D-R49): every review carries the review the grader
+// saw (`expectedGradedAt`), so a review someone else saved meanwhile is a 409
+// `review_conflict` — the panel says so and reads the attempt again — never a
+// silent overwrite; the times and the late policy come from the submission's
+// own assignment (`timeZone`, D-R41, and `allowLate`); and the student's
+// attempts (`history`) are listed, each one opened here through API-110, so an
+// earlier attempt is still graded after a later one was returned. Every time
+// is shown in that zone, named when it is not this device's. While the form
+// holds something unsaved — the whole form store, so a score hidden by
+// «return» still counts — Escape and a mask click do nothing and the panel's
+// own close (its × and «cancel») asks first, as does opening another attempt.
+// The browser's back and reload are not held here yet: they come with the
+// assignment drawer's own guard, a later task (the owner's note 1 on #106).
 import { LinkOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Drawer, Flex, Form, Input, InputNumber, Radio, Skeleton, Typography } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Drawer, Flex, Form, Input, InputNumber, Radio, Skeleton, Space, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Assignment } from '../api/assignments'
 import { FEEDBACK_MAX_LENGTH, reviewSubmission } from '../api/submissions'
-import type { ReviewAction, Submission } from '../api/submissions'
+import type { ReviewAction, Submission, SubmissionSummary } from '../api/submissions'
 import { useAuth } from '../auth/auth-context'
 import { describeAssignmentsFailure, failureMessage, isAssignmentsFailure } from './assignments.errors'
 import { isHttpsLink, scoreText } from './submissions.format'
@@ -32,9 +39,8 @@ import { LateTag, SubmissionStatusTag, ZonedTime } from './SubmissionTags'
 import { useSubmission } from './useSubmission'
 
 interface SubmissionReviewPanelProps {
+  /** The attempt the roster opened (the student's latest); the panel's history opens the others. */
   submissionId: string
-  /** The drawer's assignment (API-103): its display zone and its late policy — a submission carries neither. */
-  assignment: Pick<Assignment, 'timeZone' | 'allowLate'>
   /** The name the roster shows, for the title until the submission is read. */
   studentName: string
   onClose: () => void
@@ -44,32 +50,51 @@ interface SubmissionReviewPanelProps {
   onStale: () => void
 }
 
-export function SubmissionReviewPanel({ submissionId, assignment, studentName, onClose, onReviewed, onStale }: SubmissionReviewPanelProps) {
+export function SubmissionReviewPanel({ submissionId, studentName, onClose, onReviewed, onStale }: SubmissionReviewPanelProps) {
   const { t } = useTranslation()
   const { modal } = App.useApp()
   const canGrade = useAuth().hasPermission('assignments.grade')
-  const { submission, error, version, reload, replace } = useSubmission(submissionId)
+  // The attempt on screen: the one the roster opened, or another of the student's attempts picked in the history.
+  const [openedId, setOpenedId] = useState(submissionId)
+  const { submission, error, version, reload, replace } = useSubmission(openedId)
   const [dirty, setDirty] = useState(false)
+  // A review someone else saved meanwhile (409 review_conflict): said above the attempt read again, until the next review.
+  const [conflict, setConflict] = useState(false)
   const failure = error ? describeAssignmentsFailure(error) : null
+  // While another attempt loads, the previous one is not shown in its place.
+  const shown = submission && submission.id === openedId ? submission : null
 
   // A submission that is gone (or out of reach) is no longer on the roster as it was: the roster re-reads.
   useEffect(() => {
     if (error && isAssignmentsFailure(describeAssignmentsFailure(error), 'submission_not_found')) onStale()
   }, [error, onStale])
 
-  /** The panel's × and «cancel» (Escape and the mask too while nothing is unsaved): asks first while the form holds unsaved work. */
-  const requestClose = () => {
+  /** Asks «discard?» first while the form holds unsaved work, then does `proceed`. */
+  const unlessUnsaved = (question: 'discard' | 'history.discard', proceed: () => void) => {
     if (!dirty) {
-      onClose()
+      proceed()
       return
     }
     modal.confirm({
-      title: t('assignments.review.discard.title'),
-      content: t('assignments.review.discard.content'),
-      okText: t('assignments.review.discard.ok'),
+      title: t(`assignments.review.${question}.title`),
+      content: t(`assignments.review.${question}.content`),
+      okText: t(`assignments.review.${question}.ok`),
       okButtonProps: { danger: true },
       cancelText: t('assignments.review.discard.cancel'),
-      onOk: onClose,
+      onOk: proceed,
+    })
+  }
+
+  /** The panel's × and «cancel» (Escape and the mask too while nothing is unsaved). */
+  const requestClose = () => unlessUnsaved('discard', onClose)
+
+  /** Another attempt of the student, read through API-110 in a new form session. */
+  const openAttempt = (id: string) => {
+    if (id === openedId) return
+    unlessUnsaved('history.discard', () => {
+      setDirty(false)
+      setConflict(false)
+      setOpenedId(id)
     })
   }
 
@@ -81,7 +106,7 @@ export function SubmissionReviewPanel({ submissionId, assignment, studentName, o
       // assignment drawer, so only it hears Escape (the rc portal stack) and its mask covers the drawer.
       keyboard={!dirty}
       mask={{ closable: !dirty }}
-      title={t('assignments.review.titleOf', { name: submission?.student.fullName ?? studentName })}
+      title={t('assignments.review.titleOf', { name: shown?.student.fullName ?? studentName })}
       // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport.
       size="min(640px, 100vw)"
       destroyOnHidden
@@ -99,26 +124,29 @@ export function SubmissionReviewPanel({ submissionId, assignment, studentName, o
           style={{ marginBottom: 16 }}
         />
       ) : null}
-      {!submission && !failure ? <Skeleton active paragraph={{ rows: 6 }} data-testid="submission-loading" /> : null}
-      {submission ? (
+      {conflict ? <Alert type="warning" showIcon title={t('assignments.errors.review_conflict')} style={{ marginBottom: 16 }} data-testid="review-conflict" /> : null}
+      {!shown && !failure ? <Skeleton active paragraph={{ rows: 6 }} data-testid="submission-loading" /> : null}
+      {shown ? (
         <>
-          <SubmissionDetails submission={submission} zone={assignment.timeZone} />
-          {submission.attemptNo > 1 ? (
-            <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-              {t('assignments.review.earlierAttempts', { number: submission.attemptNo })}
-            </Typography.Paragraph>
-          ) : null}
+          <SubmissionDetails submission={shown} />
+          <AttemptHistory history={shown.history} openedId={shown.id} zone={shown.assignment.timeZone} maxScore={shown.assignment.maxScore} onOpen={openAttempt} />
           {canGrade ? (
             <ReviewForm
               // One form session per server version of the submission (KI-049): after a review it starts from the answer.
-              key={`${submission.id}:${version}`}
-              submission={submission}
-              allowLate={assignment.allowLate}
+              key={`${shown.id}:${version}`}
+              submission={shown}
               onDirtyChange={setDirty}
               onReviewed={(answer) => {
                 setDirty(false)
+                setConflict(false)
                 replace(answer)
                 onReviewed(answer)
+              }}
+              onConflict={() => {
+                // What was typed goes with the stale form: the attempt is read again, with the review that was saved.
+                setDirty(false)
+                setConflict(true)
+                reload()
               }}
               onGone={() => {
                 setDirty(false)
@@ -136,10 +164,11 @@ export function SubmissionReviewPanel({ submissionId, assignment, studentName, o
   )
 }
 
-function SubmissionDetails({ submission, zone }: { submission: Submission; zone: string }) {
+function SubmissionDetails({ submission }: { submission: Submission }) {
   const { t } = useTranslation()
   const dash = '—'
   const { student, gradedBy } = submission
+  const zone = submission.assignment.timeZone
   const reviewer = gradedBy ? gradedBy.displayName?.trim() || gradedBy.fullName : t('assignments.review.reviewerGone')
 
   return (
@@ -206,12 +235,60 @@ function SubmissionDetails({ submission, zone }: { submission: Submission; zone:
   )
 }
 
+interface AttemptHistoryProps {
+  /** `SubmissionDto.history`: every attempt of the student on the assignment, in attempt order, this one included. */
+  history: SubmissionSummary[]
+  /** The attempt on screen. */
+  openedId: string
+  zone: string
+  maxScore: number
+  onOpen: (submissionId: string) => void
+}
+
+/** The student's attempts (MOD-08-T07): each with its state, the server's late mark, its score and time; the others open here. */
+function AttemptHistory({ history, openedId, zone, maxScore, onOpen }: AttemptHistoryProps) {
+  const { t } = useTranslation()
+  // One attempt: the details above are the whole history.
+  if (history.length < 2) return null
+  return (
+    <Card size="small" title={t('assignments.review.history.title')} style={{ marginBottom: 16 }} data-testid="submission-history">
+      <Flex vertical gap={8}>
+        {history.map((attempt) => {
+          const current = attempt.id === openedId
+          return (
+            <Flex key={attempt.id} gap={8} wrap align="center" justify="space-between" data-testid={`history-attempt-${attempt.attemptNo}`}>
+              <Space wrap size={4}>
+                <Typography.Text strong={current}>{t('assignments.roster.attempt', { number: attempt.attemptNo })}</Typography.Text>
+                <SubmissionStatusTag status={attempt.status} />
+                {attempt.isLate ? <LateTag /> : null}
+                {attempt.score !== null ? <span dir="ltr">{scoreText(attempt.score, maxScore)}</span> : null}
+                {/* The zone is named once, in the details above. */}
+                <ZonedTime iso={attempt.submittedAt} zone={zone} showZone={false} />
+              </Space>
+              {current ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('assignments.review.history.current')}
+                </Typography.Text>
+              ) : (
+                <Button size="small" type="link" onClick={() => onOpen(attempt.id)} aria-label={t('assignments.review.history.openAria', { number: attempt.attemptNo })}>
+                  {t('assignments.review.history.open')}
+                </Button>
+              )}
+            </Flex>
+          )
+        })}
+      </Flex>
+    </Card>
+  )
+}
+
 interface ReviewFormProps {
   submission: Submission
-  allowLate: boolean
   onDirtyChange: (dirty: boolean) => void
   /** The server's answer after a review that was sent. */
   onReviewed: (submission: Submission) => void
+  /** 409 review_conflict: someone else reviewed the attempt after it was read. */
+  onConflict: () => void
   /** 404: the submission is gone or out of reach. */
   onGone: () => void
   onCancel: () => void
@@ -220,11 +297,13 @@ interface ReviewFormProps {
 /**
  * The grading form of one session: it starts from the stored review
  * (reviewDraftOf()), so an untouched form sends nothing, and it reports
- * whether it holds unsaved work. Every rule words its own message; the server
- * stays the boundary — `score_out_of_range` and `feedback_required` come back
- * onto their fields, a 404 closes the panel and the roster re-reads.
+ * whether it holds unsaved work (false once it leaves). Every rule words its
+ * own message; the server stays the boundary — `score_out_of_range` and
+ * `feedback_required` come back onto their fields, `review_conflict` has the
+ * panel read the attempt again, a 404 closes the panel and the roster
+ * re-reads.
  */
-function ReviewForm({ submission, allowLate, onDirtyChange, onReviewed, onGone, onCancel }: ReviewFormProps) {
+function ReviewForm({ submission, onDirtyChange, onReviewed, onConflict, onGone, onCancel }: ReviewFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
@@ -236,13 +315,16 @@ function ReviewForm({ submission, allowLate, onDirtyChange, onReviewed, onGone, 
   const [error, setError] = useState<string | null>(null)
   const max = submission.assignment.maxScore
   const effects = reviewEffects(submission.status, action)
-  const caveats = action === 'return' ? returnCaveats({ ...submission.assignment, allowLate }) : []
+  const caveats = action === 'return' ? returnCaveats(submission.assignment) : []
   const notes = [
     effects.grantsAttempt ? t('assignments.review.effects.grantsAttempt') : null,
     effects.clearsScore ? t('assignments.review.effects.clearsScore') : null,
     effects.withdrawsAttempt ? t('assignments.review.effects.withdrawsAttempt') : null,
     ...caveats.map((caveat) => t(`assignments.review.effects.${caveat}`)),
   ].filter((note): note is string => note !== null)
+
+  // This session left (a new server version, another attempt, the panel closed): it holds nothing any more.
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
   const fieldMessage = (field: 'score' | 'feedback') =>
     field === 'score' ? t('assignments.review.validation.score', { max }) : t('assignments.review.validation.feedbackRequired')
@@ -273,6 +355,10 @@ function ReviewForm({ submission, allowLate, onDirtyChange, onReviewed, onGone, 
         onGone()
         return
       }
+      if (isAssignmentsFailure(failure, 'review_conflict')) {
+        onConflict()
+        return
+      }
       if (failure.field) form.setFields([{ name: failure.field, errors: [text] }])
       else setError(text)
     }
@@ -285,9 +371,10 @@ function ReviewForm({ submission, allowLate, onDirtyChange, onReviewed, onGone, 
       layout="vertical"
       requiredMark={false}
       initialValues={initial}
-      onValuesChange={(changed: Partial<ReviewDraft>, values: Partial<ReviewDraft>) => {
+      onValuesChange={(changed: Partial<ReviewDraft>) => {
         if (changed.action) setAction(changed.action)
-        onDirtyChange(isReviewDraftDirty(initial, values))
+        // The whole store, not the mounted fields: «return» unmounts the score field, which keeps its value for «grade».
+        onDirtyChange(isReviewDraftDirty(initial, form.getFieldsValue(true) as Partial<ReviewDraft>))
       }}
       onFinish={(values) => void save(values as ReviewDraft)}
       disabled={saving}

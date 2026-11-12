@@ -4,8 +4,12 @@
 // the learner's part of backend/src/assignments/assignments.errors.ts plus the
 // auth/permission guards. `terminal` marks a refusal no retry of the same
 // attempt can change (the assignment, the enrollment or the attempts moved on):
-// the modal stops offering to send and the page re-reads the list. Unit-tested
-// in myAssignments.errors.test.ts.
+// the modal stops offering to send and the page re-reads the list. Since
+// J-F47 (MOD-08-T07, D-R49) also `attempt_conflict { expected, next }`: the
+// attempt the request named exists already — an earlier try of the same send
+// reached the server (or another window sent one) — so it is terminal too,
+// and the modal says the attempt was received rather than refused.
+// Unit-tested in myAssignments.submit.test.ts.
 import { ApiError } from '../api/client'
 import { failureMessage as usersFailureMessage } from '../users/users.errors'
 import type { UsersFailure } from '../users/users.errors'
@@ -14,7 +18,7 @@ export interface MyAssignmentsFailure extends UsersFailure {
   terminal: boolean
 }
 
-const TERMINAL_CODES = new Set(['assignment_closed', 'attempts_exhausted', 'not_enrolled', 'assignment_not_found', 'permission_denied'])
+const TERMINAL_CODES = new Set(['attempt_conflict', 'assignment_closed', 'attempts_exhausted', 'not_enrolled', 'assignment_not_found', 'permission_denied'])
 
 const KNOWN_CODES = new Set([...TERMINAL_CODES, 'submission_invalid', 'submission_not_found', 'cursor_invalid', 'origin_forbidden', 'rate_limited'])
 
@@ -55,6 +59,10 @@ export function describeMyAssignmentsFailure(error: unknown): MyAssignmentsFailu
     if (code === 'attempts_exhausted') {
       // The server puts the effective limit (maxAttempts plus the returned attempts) in `maxAttempts`.
       return { key: 'myAssignments.errors.attempts_exhausted', params: { attempts: numberText(body.attempts), allowed: numberText(body.maxAttempts) }, terminal }
+    }
+    if (code === 'attempt_conflict') {
+      // `expected` = the attempt this send named, `next` = the one the server would create now.
+      return { key: 'myAssignments.errors.attempt_conflict', params: { expected: numberText(body.expected), next: numberText(body.next) }, terminal }
     }
     const failure: MyAssignmentsFailure = { key: `myAssignments.errors.${code}`, terminal }
     const field = FIELD_OF_CODE[code]

@@ -1,30 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { ASSIGNMENT_ID_2 } from '../test/assignments'
 import { makeMyClassItem } from '../test/enrollments'
-import { FUTURE_DUE, PAST_DUE, SUBMISSION_ID_2, makeLatest, makeMyAssignment, makeMySubmission } from '../test/myAssignments'
+import { PAST_DUE, SUBMISSION_ID_2, makeLatest, makeMyAssignment, makeMySubmission } from '../test/myAssignments'
 import { CHILD_ONE, SELF_STUDENT } from '../test/myLessons'
 import {
   applySubmission,
   attemptsLeftAfterNext,
   defaultMyAssignmentsFilters,
   enrollmentIndexOf,
-  enrollmentStatusOf,
   feedbackExcerpt,
+  followSubmitState,
   gradedScoreOf,
   isNarrowed,
-  isPastDue,
   leadTeacherOf,
   myAssignmentKey,
   myAssignmentsQuery,
   offersSubmit,
   scoreText,
   submissionCellOf,
-  submitAvailability,
 } from './myAssignments.view'
 import type { MyAssignmentsFilters } from './myAssignments.view'
 
 const ZONE = 'Asia/Riyadh'
-const NOW = new Date('2026-11-10T12:00:00.000Z')
 const filters = (patch: Partial<MyAssignmentsFilters> = {}): MyAssignmentsFilters => ({ ...defaultMyAssignmentsFilters(ZONE), ...patch })
 
 describe('myAssignmentsQuery (API-112 parameters of a view)', () => {
@@ -72,16 +69,21 @@ describe('myAssignmentsQuery (API-112 parameters of a view)', () => {
 
 describe('the learner’s own submission cell', () => {
   it('shows the latest attempt with the server’s late mark and its number', () => {
-    expect(submissionCellOf(makeMyAssignment({ latest: makeLatest({ status: 'graded', score: 18, isLate: true, attemptNo: 2 }) }), NOW)).toEqual({ kind: 'graded', attemptNo: 2, late: true })
-    expect(submissionCellOf(makeMyAssignment({ latest: makeLatest({ status: 'returned', feedback: 'أعد الحل' }) }), NOW)).toEqual({ kind: 'returned', attemptNo: 1, late: false })
+    expect(submissionCellOf(makeMyAssignment({ latest: makeLatest({ status: 'graded', score: 18, isLate: true, attemptNo: 2 }) }))).toEqual({ kind: 'graded', attemptNo: 2, late: true })
+    expect(submissionCellOf(makeMyAssignment({ latest: makeLatest({ status: 'returned', feedback: 'أعد الحل' }) }))).toEqual({ kind: 'returned', attemptNo: 1, late: false })
   })
 
-  it('tells «not submitted yet» from «missed»: closed, or past due without late submissions', () => {
-    expect(submissionCellOf(makeMyAssignment(), NOW)).toEqual({ kind: 'none' })
-    expect(submissionCellOf(makeMyAssignment({ dueAt: null }), NOW)).toEqual({ kind: 'none' })
-    expect(submissionCellOf(makeMyAssignment({ dueAt: PAST_DUE, allowLate: true }), NOW)).toEqual({ kind: 'none' })
-    expect(submissionCellOf(makeMyAssignment({ dueAt: PAST_DUE }), NOW)).toEqual({ kind: 'missed' })
-    expect(submissionCellOf(makeMyAssignment({ status: 'closed' }), NOW)).toEqual({ kind: 'missed' })
+  it('tells «not submitted yet» from «missed» by the server’s verdict: closed, past due without late submissions, or no active enrollment', () => {
+    expect(submissionCellOf(makeMyAssignment())).toEqual({ kind: 'none' })
+    expect(submissionCellOf(makeMyAssignment({ dueAt: null }))).toEqual({ kind: 'none' })
+    expect(submissionCellOf(makeMyAssignment({ dueAt: PAST_DUE, allowLate: true, submitsLate: true }))).toEqual({ kind: 'none' })
+    expect(submissionCellOf(makeMyAssignment({ dueAt: PAST_DUE, submitBlocker: 'past_due' }))).toEqual({ kind: 'missed' })
+    expect(submissionCellOf(makeMyAssignment({ status: 'closed', submitBlocker: 'closed' }))).toEqual({ kind: 'missed' })
+    expect(submissionCellOf(makeMyAssignment({ enrollmentStatus: 'completed', submitBlocker: 'not_enrolled' }))).toEqual({ kind: 'missed' })
+  })
+
+  it('never reads this device’s clock: a due date already past here is still open while the server says so (#109 note 1)', () => {
+    expect(submissionCellOf(makeMyAssignment({ dueAt: PAST_DUE, submitBlocker: null, submitsLate: false }))).toEqual({ kind: 'none' })
   })
 
   it('shows a score for a graded attempt only (a returned attempt has none — D-R39), as the server sends it', () => {
@@ -97,39 +99,44 @@ describe('the learner’s own submission cell', () => {
   })
 })
 
-describe('submitAvailability (mirror of SubmissionsService.submit(): enrollment → window → attempts)', () => {
-  it('lets the student send an attempt to an open assignment before its due date while attempts are left', () => {
-    expect(submitAvailability(makeMyAssignment(), 'active', NOW)).toEqual({ blocker: null, late: false })
-    expect(submitAvailability(makeMyAssignment({ dueAt: null }), null, NOW)).toEqual({ blocker: null, late: false })
+describe('followSubmitState (the server’s submitState() re-applied to a submission answer: enrollment → window → attempts)', () => {
+  const answer = (patch: Parameters<typeof makeMySubmission>[0] = {}) => makeMySubmission(patch)
+  const assignment = (patch: Partial<ReturnType<typeof makeMySubmission>['assignment']>) => ({ ...makeMySubmission().assignment, ...patch })
+
+  it('blocks a new attempt once the answer’s attempts reach the allowance, and frees one a return granted', () => {
+    // The last attempt was just sent.
+    expect(followSubmitState(makeMyAssignment(), answer({ attempts: 1, attemptsAllowed: 1 }))).toEqual({ submitBlocker: 'attempts_exhausted', submitsLate: false })
+    // The latest attempt (read again) was returned meanwhile: the allowance grew.
+    const used = makeMyAssignment({ attempts: 1, attemptsAllowed: 1, latest: makeLatest(), submitBlocker: 'attempts_exhausted' })
+    expect(followSubmitState(used, answer({ status: 'returned', feedback: 'أعد', attempts: 1, attemptsAllowed: 2 }))).toEqual({ submitBlocker: null, submitsLate: false })
   })
 
-  it('takes a late attempt under allowLate and marks it, and refuses one without (past_due)', () => {
-    expect(submitAvailability(makeMyAssignment({ dueAt: PAST_DUE, allowLate: true }), 'active', NOW)).toEqual({ blocker: null, late: true })
-    expect(submitAvailability(makeMyAssignment({ dueAt: PAST_DUE }), 'active', NOW)).toEqual({ blocker: 'past_due', late: true })
+  it('takes the window from the answer’s assignment: closed (or a draft) blocks, in the server’s order before the attempts', () => {
+    expect(followSubmitState(makeMyAssignment(), answer({ assignment: assignment({ status: 'closed' }), attempts: 1, attemptsAllowed: 1 }))).toEqual({ submitBlocker: 'closed', submitsLate: false })
+    expect(followSubmitState(makeMyAssignment(), answer({ assignment: assignment({ status: 'draft' }) }))).toEqual({ submitBlocker: 'not_published', submitsLate: false })
   })
 
-  it('refuses a closed assignment, and used-up attempts — a returned attempt grants one more through attemptsAllowed', () => {
-    expect(submitAvailability(makeMyAssignment({ status: 'closed' }), 'active', NOW).blocker).toBe('closed')
-    const used = makeMyAssignment({ attempts: 1, attemptsAllowed: 1, latest: makeLatest() })
-    expect(submitAvailability(used, 'active', NOW).blocker).toBe('attempts_exhausted')
-    const returned = makeMyAssignment({ attempts: 1, attemptsAllowed: 2, latest: makeLatest({ status: 'returned', feedback: 'أعد' }) })
-    expect(submitAvailability(returned, 'active', NOW).blocker).toBeNull()
+  it('checks the row’s enrollment first (an answer does not carry it)', () => {
+    const completed = makeMyAssignment({ enrollmentStatus: 'completed', submitBlocker: 'not_enrolled', latest: makeLatest(), attempts: 1, attemptsAllowed: 3 })
+    expect(followSubmitState(completed, answer({ attempts: 1, attemptsAllowed: 3 }))).toEqual({ submitBlocker: 'not_enrolled', submitsLate: false })
   })
 
-  it('checks the enrollment first when «my classes» knows it, and leaves an unknown one to the server', () => {
-    expect(submitAvailability(makeMyAssignment({ status: 'closed', dueAt: PAST_DUE }), 'completed', NOW).blocker).toBe('not_enrolled')
-    expect(submitAvailability(makeMyAssignment(), 'withdrawn', NOW).blocker).toBe('not_enrolled')
-    expect(submitAvailability(makeMyAssignment(), null, NOW).blocker).toBeNull()
-    // The window comes before the attempts, as on the server.
-    expect(submitAvailability(makeMyAssignment({ status: 'closed', attempts: 1, attemptsAllowed: 1 }), 'active', NOW).blocker).toBe('closed')
+  it('reads «past due» from the server only: the isLate of the attempt just created, else the list’s verdict — never this device’s clock', () => {
+    const open = makeMyAssignment({ maxAttempts: 3, attemptsAllowed: 3 })
+    // A late attempt was just created under allowLate: the next one is late too.
+    expect(followSubmitState(open, answer({ isLate: true, attempts: 1, attemptsAllowed: 3, assignment: assignment({ allowLate: true }) }))).toEqual({ submitBlocker: null, submitsLate: true })
+    // An attempt created on time: on time, whatever this device's clock says of the due date.
+    expect(followSubmitState(makeMyAssignment({ dueAt: PAST_DUE, attemptsAllowed: 3 }), answer({ isLate: false, attempts: 1, attemptsAllowed: 3 }))).toEqual({ submitBlocker: null, submitsLate: false })
+    // An older attempt read again keeps the list's verdict: late under allowLate…
+    const late = makeMyAssignment({ allowLate: true, submitsLate: true, attempts: 2, attemptsAllowed: 3, latest: makeLatest({ id: SUBMISSION_ID_2, attemptNo: 2 }) })
+    expect(followSubmitState(late, answer({ attemptNo: 1, isLate: false, attempts: 2, attemptsAllowed: 3, assignment: assignment({ allowLate: true }) }))).toEqual({ submitBlocker: null, submitsLate: true })
+    // …and past due without late submissions.
+    const shut = makeMyAssignment({ submitBlocker: 'past_due', attempts: 1, attemptsAllowed: 2, latest: makeLatest() })
+    expect(followSubmitState(shut, answer({ status: 'returned', feedback: 'أعد', attempts: 1, attemptsAllowed: 2 }))).toEqual({ submitBlocker: 'past_due', submitsLate: false })
   })
+})
 
-  it('reads the due date against the given clock', () => {
-    expect(isPastDue(makeMyAssignment({ dueAt: FUTURE_DUE }), NOW)).toBe(false)
-    expect(isPastDue(makeMyAssignment({ dueAt: '2026-11-10T11:59:59.000Z' }), NOW)).toBe(true)
-    expect(isPastDue(makeMyAssignment({ dueAt: null }), NOW)).toBe(false)
-  })
-
+describe('the attempt offer', () => {
   it('offers sending to the student themselves holding assignments.submit — never on a guardian’s child row', () => {
     expect(offersSubmit(makeMyAssignment(), true)).toBe(true)
     expect(offersSubmit(makeMyAssignment(), false)).toBe(false)
@@ -144,14 +151,26 @@ describe('submitAvailability (mirror of SubmissionsService.submit(): enrollment 
 })
 
 describe('applySubmission (the row follows the server’s answer)', () => {
-  it('takes the new attempt, the counts and the assignment as the server holds it', () => {
+  it('takes the new attempt, the counts, the assignment as the server holds it and the submit state that follows', () => {
     const row = makeMyAssignment({ attempts: 1, attemptsAllowed: 2, latest: makeLatest({ status: 'returned', feedback: 'أعد' }) })
-    const answer = makeMySubmission({ id: SUBMISSION_ID_2, attemptNo: 2, isLate: true, attempts: 2, attemptsAllowed: 2, assignment: { ...makeMySubmission().assignment, status: 'closed', maxScore: 25 } })
+    const answer = makeMySubmission({
+      id: SUBMISSION_ID_2,
+      attemptNo: 2,
+      isLate: true,
+      attempts: 2,
+      attemptsAllowed: 2,
+      assignment: { ...makeMySubmission().assignment, status: 'closed', maxScore: 25, allowLate: true, timeZone: 'Europe/Berlin' },
+    })
     const next = applySubmission(row, answer)
     expect(next.latest).toEqual({ id: SUBMISSION_ID_2, attemptNo: 2, submittedAt: answer.submittedAt, isLate: true, status: 'submitted', score: null, feedback: null, gradedAt: null })
-    expect(next).toMatchObject({ attempts: 2, attemptsAllowed: 2, status: 'closed', maxScore: 25 })
+    expect(next).toMatchObject({ attempts: 2, attemptsAllowed: 2, status: 'closed', maxScore: 25, allowLate: true, timeZone: 'Europe/Berlin', submitBlocker: 'closed', submitsLate: false })
     // The answer and the link never land on the row (API-112 does not carry them).
     expect(next.latest).not.toHaveProperty('textAnswer')
+  })
+
+  it('hides «submit» once the last attempt is sent — no second read of the list needed', () => {
+    const next = applySubmission(makeMyAssignment(), makeMySubmission({ attempts: 1, attemptsAllowed: 1 }))
+    expect(next).toMatchObject({ attempts: 1, submitBlocker: 'attempts_exhausted', submitsLate: false })
   })
 
   it('keeps a newer attempt on screen when the answer is about an older one, but takes the counts', () => {
@@ -173,16 +192,10 @@ describe('applySubmission (the row follows the server’s answer)', () => {
   })
 })
 
-describe('what «my classes» adds: the enrollment and the lead teacher', () => {
+describe('what «my classes» adds: the lead teacher', () => {
   const selfClass = makeMyClassItem({ student: SELF_STUDENT })
   const childClass = makeMyClassItem({ relation: 'child', student: CHILD_ONE, enrollmentStatus: 'completed', class: { ...selfClass.class, leadTeacher: null } })
   const index = enrollmentIndexOf([selfClass, childClass])
-
-  it('joins a row to the enrollment of its class and student', () => {
-    expect(enrollmentStatusOf(index, makeMyAssignment())).toBe('active')
-    expect(enrollmentStatusOf(index, makeMyAssignment({ relation: 'child', student: CHILD_ONE }))).toBe('completed')
-    expect(enrollmentStatusOf(enrollmentIndexOf([]), makeMyAssignment())).toBeNull()
-  })
 
   it('names the class’s lead teacher, says when the class has none, and when «my classes» does not know the class', () => {
     expect(leadTeacherOf(index, makeMyAssignment())).toEqual({ kind: 'teacher', teacher: { fullName: 'خالد المعلم', displayName: null } })

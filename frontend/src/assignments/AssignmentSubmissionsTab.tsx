@@ -9,9 +9,11 @@
 // one per returned attempt — the server's numbers, never recomputed). API-108
 // takes no filter, so the state filter works on the loaded rows: the whole
 // roster, unpaginated — exact. A row with an attempt opens the review panel
-// (SubmissionReviewPanel — API-110/API-111); after a review the roster is read
-// again (the review answers with that attempt only) and the drawer re-reads
-// the assignment for its counts (onReviewed).
+// (SubmissionReviewPanel — API-110/API-111) on the student's latest attempt;
+// the panel lists all their attempts (`history`, MOD-08-T07) and opens any of
+// them. After a review the roster is read again (the review answers with that
+// attempt only) and the drawer re-reads the assignment for its counts
+// (onReviewed).
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Flex, Select, Skeleton, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
@@ -215,7 +217,6 @@ export function AssignmentSubmissionsTab({ assignment, onReviewed, onAssignmentS
           key={reviewing.submissionId}
           submissionId={reviewing.submissionId}
           studentName={reviewing.studentName}
-          assignment={assignment}
           onClose={() => setReviewing(null)}
           onReviewed={(submission) => {
             reload()

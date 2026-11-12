@@ -17,7 +17,7 @@
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LockOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ASSIGNMENT_STATUS_REASON_MAX_LENGTH, changeAssignmentStatus, deleteAssignment, getAssignment, updateAssignment } from '../api/assignments'
@@ -118,20 +118,31 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
     onUpdated(updated)
   }
 
+  /** The re-read of the counts in flight: a newer one aborts it, so an older answer never lands after a newer one. */
+  const countsRequest = useRef<AbortController | null>(null)
+  useEffect(() => () => countsRequest.current?.abort(), [])
+
   /**
    * After a review (J-F41): the answer of API-111 carries the reviewed attempt only — not the assignment's
    * `submissions` counts — so the drawer reads the assignment again (API-103), shows its counts and hands it
-   * to the list row, as a write's answer would. A failed read re-reads the drawer the usual way.
+   * to the list row, as a write's answer would. A failed read re-reads the drawer the usual way. Two reviews in
+   * quick succession start two reads: the second aborts the first (J-F47), so the counts shown are the newest.
    */
   const refreshCounts = () => {
     if (!assignmentId) return
-    getAssignment(assignmentId)
+    countsRequest.current?.abort()
+    const controller = new AbortController()
+    countsRequest.current = controller
+    getAssignment(assignmentId, controller.signal)
       .then((fresh) => {
+        if (controller.signal.aborted) return
         // The drawer may show another assignment by now; the list row is right either way.
         setAssignment((current) => (current && current.id === fresh.id ? fresh : current))
         onUpdated(fresh)
       })
-      .catch(() => reload())
+      .catch(() => {
+        if (!controller.signal.aborted) reload()
+      })
   }
 
   const editability = assignment ? assignmentEditability(assignment, canManage) : { editable: false, gradingLocked: false }

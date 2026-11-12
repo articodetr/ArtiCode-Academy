@@ -5,7 +5,11 @@
 // whitespace; at least one of the two (`submission_invalid` otherwise — D-R35,
 // no files before MOD-15). The browser counts UTF-16 units, never fewer than
 // the server's characters, so a text the form accepts is never too long for
-// the server. Pure; unit-tested in myAssignments.submit.test.ts.
+// the server. Since J-F47 (MOD-08-T07, D-R49) the body also names the attempt
+// it means to create (`attemptNo`): the attempt modal computes it once per
+// session, so a retry sends the same number and the server answers 409
+// `attempt_conflict` instead of creating a second attempt. Pure; unit-tested
+// in myAssignments.submit.test.ts.
 import { SUBMIT_LINK_MAX_LENGTH, SUBMIT_LINK_PATTERN, SUBMIT_TEXT_MAX_LENGTH } from '../api/myAssignments'
 import type { MySubmitInput } from '../api/myAssignments'
 
@@ -44,13 +48,19 @@ export function hasAnswer(values: SubmitFormValues): boolean {
   return trimmedOrUndefined(values.textAnswer) !== undefined || trimmedOrUndefined(values.linkUrl) !== undefined
 }
 
-/** Body of API-109: only what was typed, trimmed; null when nothing was. */
-export function buildSubmitInput(values: SubmitFormValues): MySubmitInput | null {
+/** The number of the attempt a new submission creates: the server numbers it after the highest one (`lastAttemptNo + 1`). */
+export function nextAttemptNo(latest: { attemptNo: number } | null): number {
+  return (latest?.attemptNo ?? 0) + 1
+}
+
+/** Body of API-109: only what was typed, trimmed, and the attempt meant; null when nothing was typed. */
+export function buildSubmitInput(values: SubmitFormValues, attemptNo: number): MySubmitInput | null {
   const textAnswer = trimmedOrUndefined(values.textAnswer)
   const linkUrl = trimmedOrUndefined(values.linkUrl)
   if (textAnswer === undefined && linkUrl === undefined) return null
   const input: MySubmitInput = {}
   if (textAnswer !== undefined) input.textAnswer = textAnswer
   if (linkUrl !== undefined) input.linkUrl = linkUrl
+  input.attemptNo = attemptNo
   return input
 }

@@ -9,8 +9,13 @@
 // submission is read by the class's teachers, its student and their guardian
 // (no key at the guard — the server decides, 404 otherwise); a review needs
 // `assignments.grade` with the class's visibility. Instants are ISO 8601 (UTC);
-// neither the roster nor a submission carries the display zone — the screens
-// take it from the assignment (API-103 `timeZone`, D-R41).
+// since MOD-08-T07 (D-R49) the roster and a submission carry the display zone
+// and the late policy of their assignment (`assignment.timeZone` — D-R41 —
+// and `assignment.allowLate`), a submission lists the student's attempts
+// (`history`, without the answers — each one is read through API-110), API-109
+// takes the attempt the client means to create (`attemptNo` → 409
+// `attempt_conflict`) and API-111 the review the grader saw (`expectedGradedAt`
+// → 409 `review_conflict`).
 import { ASSIGNMENTS_PATH } from './assignments'
 import type { AssignmentStatus } from './assignments'
 import { apiRequest } from './client'
@@ -41,6 +46,10 @@ export interface SubmissionAssignment {
   maxScore: number
   /** ISO 8601 (UTC) or null. */
   dueAt: string | null
+  /** Late submissions are taken after the due date (MOD-08-T07). */
+  allowLate: boolean
+  /** IANA zone to show the due date (and the attempts' times) in: the linked lesson's room branch, else the academy's (D-R41; MOD-08-T07). */
+  timeZone: string
 }
 
 /** `SubmissionDto` (API-109/API-110/API-111): one attempt, as its student, their guardian and the class's teachers may know it. */
@@ -68,9 +77,11 @@ export interface Submission {
   attempts: number
   /** maxAttempts plus one per returned attempt (D-R39). */
   attemptsAllowed: number
+  /** MOD-08-T07: every attempt of this student on this assignment, in attempt order (this one included), without the answers. */
+  history: SubmissionSummary[]
 }
 
-/** `SubmissionSummaryDto`: an attempt in the roster — without the answer (read it through API-110). */
+/** `SubmissionSummaryDto`: an attempt in the roster and in a submission's `history` — without the answer (read it through API-110). */
 export interface SubmissionSummary {
   id: string
   attemptNo: number
@@ -106,6 +117,11 @@ export interface SubmissionRoster {
 export interface SubmitAssignmentInput {
   textAnswer?: string
   linkUrl?: string | null
+  /**
+   * MOD-08-T07: the attempt the client means to create (its `attempts` + 1, a JSON integer). Another number is
+   * `409 attempt_conflict { expected, next }` and writes nothing, so a retried request never uses a second attempt.
+   */
+  attemptNo?: number
 }
 
 /**
@@ -118,6 +134,12 @@ export interface ReviewSubmissionInput {
   action: ReviewAction
   score?: number
   feedback?: string
+  /**
+   * MOD-08-T07 (D-R49): the `gradedAt` the reviewer saw (ISO 8601), or null when they saw no review yet. A review
+   * written meanwhile is `409 review_conflict { submissionId, status, gradedAt }` and writes nothing; absent = no
+   * check — the screens always send it.
+   */
+  expectedGradedAt?: string | null
 }
 
 export const SUBMISSIONS_PATH = '/api/submissions'
@@ -132,7 +154,7 @@ export function getSubmissionRoster(assignmentId: string, signal?: AbortSignal):
   return apiRequest<SubmissionRoster>(assignmentSubmissionsPath(assignmentId), { signal })
 }
 
-/** API-109: one new attempt of the calling student (201). No screen sends it yet — «my assignments» (MOD-08-T04) will. */
+/** API-109: one new attempt of the calling student (201). «My assignments» sends it through submitMyAttempt() of api/myAssignments.ts (J-F42). */
 export function submitAssignment(assignmentId: string, input: SubmitAssignmentInput): Promise<Submission> {
   return apiRequest<Submission>(assignmentSubmissionsPath(assignmentId), { method: 'POST', body: input })
 }
@@ -142,7 +164,10 @@ export function getSubmission(submissionId: string, signal?: AbortSignal): Promi
   return apiRequest<Submission>(submissionPath(submissionId), { signal })
 }
 
-/** API-111: answers with the submission after the review (an identical review writes nothing and answers the same). */
+/**
+ * API-111: answers with the submission after the review (an identical review writes nothing and answers the same);
+ * 409 `review_conflict` when `expectedGradedAt` no longer matches the stored review (someone reviewed it meanwhile).
+ */
 export function reviewSubmission(submissionId: string, input: ReviewSubmissionInput): Promise<Submission> {
   return apiRequest<Submission>(`${submissionPath(submissionId)}/review`, { method: 'POST', body: input })
 }

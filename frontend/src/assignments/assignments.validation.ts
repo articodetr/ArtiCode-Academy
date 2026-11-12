@@ -4,11 +4,13 @@
 // server stays the boundary. Pure; unit-tested in assignments.validation.test.ts.
 import { ASSIGNMENT_DECIMAL_PLACES, LATE_PENALTY_LIMIT, MAX_ATTEMPTS_LIMIT, MAX_SCORE_LIMIT, MAX_SCORE_MIN, WEIGHT_LIMIT } from '../api/assignments'
 
-/** A finite JSON number with at most two decimals — class-validator's `IsNumber({ maxDecimalPlaces: 2 })`. */
+/**
+ * A finite JSON number with at most two decimals — class-validator's `IsNumber({ maxDecimalPlaces: 2 })`. Rounded
+ * to two places it is still the same number: `String()` writes a tiny value in exponent form (`1e-7`), which has
+ * no decimal point to count, so 0.0000001 is refused here rather than sent (J-F47, the owner's note 4 on #108).
+ */
 export function isTwoDecimalNumber(value: unknown): value is number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return false
-  if (value % 1 === 0) return true
-  return (String(value).split('.')[1] ?? '').length <= ASSIGNMENT_DECIMAL_PLACES
+  return typeof value === 'number' && Number.isFinite(value) && Number(value.toFixed(ASSIGNMENT_DECIMAL_PLACES)) === value
 }
 
 const blank = (value: unknown) => value === null || value === undefined

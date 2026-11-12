@@ -67,3 +67,21 @@ describe('describeAssignmentsFailure — the T03 codes (J-F41)', () => {
     }
   })
 })
+
+describe('describeAssignmentsFailure — the T07 codes (D-R49, J-F47)', () => {
+  it('words review_conflict — a review saved meanwhile — without pointing at a field', () => {
+    const conflict = describeAssignmentsFailure(apiError(409, { code: 'review_conflict', submissionId: 's-1', status: 'graded', gradedAt: '2026-11-21T10:30:00.000Z' }))
+    expect(conflict).toEqual({ key: 'assignments.errors.review_conflict' })
+    expect(isAssignmentsFailure(conflict, 'review_conflict')).toBe(true)
+    expect(failureMessage(t, conflict)).toBe('راجع غيرك هذه المحاولة في أثناء ذلك فلم تُحفظ مراجعتك. أُعيد تحميلها لتعرض ما حُفظ؛ راجعها من جديد إن لزم.')
+  })
+
+  it('words attempt_conflict with the attempt numbers the server names, in Arabic and English', () => {
+    const conflict = describeAssignmentsFailure(apiError(409, { code: 'attempt_conflict', expected: 2, next: 3 }))
+    expect(conflict).toEqual({ key: 'assignments.errors.attempt_conflict', params: { expected: '2', next: '3' } })
+    expect(failureMessage(t, conflict)).toBe('المحاولة 2 ليست المحاولة التالية للطالب (3)؛ ربما استلمها الخادم من قبل.')
+    const english = i18n.getFixedT('en')
+    expect(english('assignments.errors.attempt_conflict', conflict.params)).toBe('Attempt 2 is not the student’s next attempt (3); the server may already have received it.')
+    expect(english('assignments.errors.review_conflict')).toMatch(/^Someone else reviewed this attempt meanwhile/)
+  })
+})

@@ -32,6 +32,8 @@ const graded = makeMyAssignment({
   attempts: 1,
   attemptsAllowed: 1,
   latest: makeLatest({ isLate: true, status: 'graded', score: 18, feedback: 'أحسنت، راجع التمرين الثاني', gradedAt: '2026-11-11T09:00:00.000Z' }),
+  // The server's verdict (MOD-08-T07): no attempt left.
+  submitBlocker: 'attempts_exhausted',
 })
 
 const selfClass = makeMyClassItem({ student: SELF_STUDENT })
@@ -175,9 +177,9 @@ describe('MyAssignmentsPage', () => {
     expect(screen.getByText(ar.myAssignments.details.maxAttemptsValue.replace('{{count}}', '2'))).toBeInTheDocument()
   })
 
-  it('tells a past-due row that still takes a late attempt from one that missed the due date', async () => {
-    const late = makeMyAssignment({ dueAt: PAST_DUE, allowLate: true })
-    const missed = makeMyAssignment({ id: ASSIGNMENT_ID_2, title: { ar: 'واجب الدوال' }, dueAt: PAST_DUE })
+  it('tells a past-due row that still takes a late attempt from one that missed the due date — as the server says', async () => {
+    const late = makeMyAssignment({ dueAt: PAST_DUE, allowLate: true, submitsLate: true })
+    const missed = makeMyAssignment({ id: ASSIGNMENT_ID_2, title: { ar: 'واجب الدوال' }, dueAt: PAST_DUE, submitBlocker: 'past_due' })
     mockMyAssignmentsApi(makeMyAssignmentList([late, missed]))
     renderPage()
     const [first, second] = (await rowsOf(2)) as [HTMLElement, HTMLElement]
@@ -186,6 +188,23 @@ describe('MyAssignmentsPage', () => {
     expect(within(second).getByText(ar.myAssignments.submission.missed)).toBeInTheDocument()
     expect(within(second).getByText(ar.myAssignments.blocked.past_due)).toBeInTheDocument()
     expect(buttonIn(second, ar.myAssignments.actions.submit)).toBeNull()
+  })
+
+  it('follows the server’s verdict, never this device’s clock: a due date already past here still offers «submit» while the server takes it (#109 note 1)', async () => {
+    // A device clock minutes ahead puts the due date in the past; the server, which decides, still takes an attempt on time.
+    const onTime = makeMyAssignment({ dueAt: PAST_DUE, submitBlocker: null, submitsLate: false })
+    // And the other way round: the server says past due while the due date is still ahead on this device.
+    const shut = makeMyAssignment({ id: ASSIGNMENT_ID_2, title: { ar: 'واجب الدوال' }, dueAt: FUTURE_DUE, submitBlocker: 'past_due' })
+    mockMyAssignmentsApi(makeMyAssignmentList([onTime, shut]))
+    renderPage()
+    const [first, second] = (await rowsOf(2)) as [HTMLElement, HTMLElement]
+    expect(buttonIn(first, ar.myAssignments.actions.submit)).toBeEnabled()
+    expect(within(first).getByText(ar.myAssignments.submission.none)).toBeInTheDocument()
+    expect(within(first).queryByText(ar.myAssignments.submission.lateOpen)).not.toBeInTheDocument()
+    expect(within(first).queryByText(ar.myAssignments.blocked.past_due)).not.toBeInTheDocument()
+    expect(buttonIn(second, ar.myAssignments.actions.submit)).toBeNull()
+    expect(within(second).getByText(ar.myAssignments.blocked.past_due)).toBeInTheDocument()
+    expect(within(second).getByText(ar.myAssignments.submission.missed)).toBeInTheDocument()
   })
 
   it('gives a guardian one row per child with the relation tag, never a submit button, and the student filter', async () => {
@@ -227,7 +246,8 @@ describe('MyAssignmentsPage', () => {
     fireEvent.click(screen.getByText(ar.myAssignments.views.pending))
     await waitFor(() => expect(api.queries.at(-1)?.get('pending')).toBe('true'))
     expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ status: 'open', pending: 'true', order: 'asc', limit: '20' })
-    expect(screen.getByText(ar.myAssignments.views.pendingHint)).toBeInTheDocument()
+    // D-R49 (6): the hint names the returned attempts the view now keeps.
+    expect(screen.getByText(ar.myAssignments.views.pendingHint)).toHaveTextContent('أُعيدت محاولتها الأخيرة للتعديل')
     expect(await screen.findByText(ar.myAssignments.empty.pending)).toBeInTheDocument()
 
     fireEvent.click(screen.getByText(ar.myAssignments.views.closed))
@@ -303,7 +323,7 @@ describe('MyAssignmentsPage', () => {
     await sendAttempt('  حلّي  ')
 
     expect(await screen.findByText('أُرسلت المحاولة 1 للواجب «تمارين الحلقات»')).toBeInTheDocument()
-    expect(api.posts).toEqual([{ path: `/api/assignments/${ASSIGNMENT_ID}/submissions`, body: { textAnswer: 'حلّي' } }])
+    expect(api.posts).toEqual([{ path: `/api/assignments/${ASSIGNMENT_ID}/submissions`, body: { textAnswer: 'حلّي', attemptNo: 1 } }])
     const [updated] = await waitFor(() => {
       const rows = bodyRows()
       expect(within(rows[0]!).getByText(ar.myAssignments.submission.submitted)).toBeInTheDocument()
@@ -346,11 +366,12 @@ describe('MyAssignmentsPage', () => {
     expect(api.queries).toHaveLength(1)
   })
 
-  it('offers no attempt where the enrollment is no longer active, or without assignments.submit, and says why', async () => {
-    mockMyAssignmentsApi(makeMyAssignmentList([todo]), { classes: makeMyClassList([makeMyClassItem({ student: SELF_STUDENT, enrollmentStatus: 'completed' })]) })
+  it('offers no attempt where the enrollment is no longer active (API-112 says so), or without assignments.submit, and says why', async () => {
+    mockMyAssignmentsApi(makeMyAssignmentList([makeMyAssignment({ enrollmentStatus: 'completed', submitBlocker: 'not_enrolled' })]))
     const { unmount } = renderPage()
     const [row] = await rowsOf(1)
-    await waitFor(() => expect(within(row!).getByText(ar.myAssignments.blocked.not_enrolled)).toBeInTheDocument())
+    expect(within(row!).getByText(ar.myAssignments.blocked.not_enrolled)).toBeInTheDocument()
+    expect(within(row!).getByText(ar.myAssignments.submission.missed)).toBeInTheDocument()
     expect(buttonIn(row!, ar.myAssignments.actions.submit)).toBeNull()
     unmount()
 

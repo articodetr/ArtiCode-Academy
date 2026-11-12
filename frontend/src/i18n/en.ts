@@ -1597,7 +1597,6 @@ export const en: Translation = {
       noLink: 'No link',
       notReviewed: 'Not reviewed yet',
       reviewerGone: 'Deleted account',
-      earlierAttempts: 'This is attempt {{number}}; the server does not expose the earlier attempts yet.',
       readOnly: 'Grading submissions needs the grading permission (assignments.grade).',
       form: {
         action: 'Action',
@@ -1638,6 +1637,17 @@ export const en: Translation = {
         content: 'The review form holds something that is not saved yet. Closing discards it.',
         ok: 'Discard and close',
         cancel: 'Keep reviewing',
+      },
+      history: {
+        title: 'The student’s attempts',
+        current: 'Shown now',
+        open: 'Open',
+        openAria: 'Open attempt {{number}}',
+        discard: {
+          title: 'Open another attempt and discard the unsaved review?',
+          content: 'The review form holds something that is not saved yet. Opening another attempt discards it.',
+          ok: 'Discard and open',
+        },
       },
     },
     patchFields: {
@@ -1693,6 +1703,8 @@ export const en: Translation = {
       score_out_of_range: 'The score is from 0 to {{max}}.',
       feedback_required: 'A return for rework needs feedback.',
       submission_invalid: 'A submission needs a text answer or a link.',
+      attempt_conflict: 'Attempt {{expected}} is not the student’s next attempt ({{next}}); the server may already have received it.',
+      review_conflict: 'Someone else reviewed this attempt meanwhile, so your review was not saved. It was reloaded to show what was saved; review it again if needed.',
       permission_denied: 'You do not have the permission this action needs {{list}}',
       origin_forbidden: 'The server refused the request origin. Reload the page and try again.',
       rate_limited: 'Too many requests in a short time. Wait a moment and try again.',
@@ -2454,10 +2466,10 @@ export const en: Translation = {
     views: {
       label: 'View',
       open: 'Open',
-      pending: 'Not submitted yet',
+      pending: 'Awaiting submission',
       closed: 'Closed',
       all: 'All',
-      pendingHint: 'This view leaves out attempts returned for rework; you find them under «Open».',
+      pendingHint: 'Lists the open assignments nothing was submitted to yet, and those whose latest attempt was returned for rework while an attempt is left.',
     },
     filters: {
       student: 'Student',
@@ -2510,6 +2522,7 @@ export const en: Translation = {
     },
     blocked: {
       not_enrolled: 'Your enrollment in the class is no longer active',
+      not_published: 'The assignment is not published yet',
       closed: 'The assignment is closed',
       past_due: 'Past due',
       attempts_exhausted: 'No attempts left',
@@ -2563,8 +2576,13 @@ export const en: Translation = {
       noText: 'No text answer',
       link: 'Link',
       noLink: 'No link',
-      latestOnly: 'This panel shows the latest attempt; the server does not offer the earlier attempts yet.',
       zone: 'Times in the assignment’s time zone',
+      history: {
+        title: 'All attempts',
+        current: 'Shown now',
+        open: 'View',
+        openAria: 'View attempt {{number}}',
+      },
     },
     empty: {
       noEnrollment: 'No active or completed enrollments for you or the students linked to you yet',
@@ -2575,6 +2593,8 @@ export const en: Translation = {
       filtered: 'No assignments match the filters',
     },
     errors: {
+      attempt_conflict:
+        'The server had already received attempt {{expected}} — from an earlier send of this attempt or from another window — so it was not sent again. Your list was reloaded to show it; open «My submission» to see what was received.',
       submission_invalid: 'Send an answer text or a link at least.',
       assignment_closed_not_published: 'The assignment is not published yet, so it takes no submission.',
       assignment_closed_closed: 'The assignment was closed and takes no more submissions.',
