@@ -14,6 +14,21 @@
 !backend/src/
 !backend/scripts/
 
+# --- web image (deploy/web.Dockerfile)
+# `tsc -b` (npm run build) type-checks all of frontend/src — the *.test.tsx files
+# and src/test/ included (tsconfig.app.json: "include": ["src"]) — so they stay in;
+# none of them reaches the runtime stage, which takes the Vite dist only.
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/vite.config.ts
+!frontend/tsconfig.json
+!frontend/tsconfig.app.json
+!frontend/tsconfig.node.json
+!frontend/public/
+!frontend/src/
+!deploy/Caddyfile
+
 # Never, even inside the folders let in above.
 **/.env
 **/.env.*
