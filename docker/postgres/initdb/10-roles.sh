@@ -12,7 +12,12 @@
 #
 #   docker compose exec -T postgres bash /docker-entrypoint-initdb.d/10-roles.sh
 #
-# All values come from the root .env through compose.yaml; nothing is hard-coded.
+# All values come from the root .env through compose.yaml (development) or from the
+# academy env file through deploy/compose.academy.yaml (production); nothing is hard-coded.
+#
+#   DB_MIGRATOR_CREATEDB  optional, true (default) | false. `prisma migrate dev` needs
+#                         CREATEDB for its shadow database; `migrate deploy` does not,
+#                         so the production compose sets false (MOD-17-T03, D-R90).
 set -eo pipefail
 
 : "${POSTGRES_USER:?POSTGRES_USER is required}"
@@ -22,10 +27,16 @@ set -eo pipefail
 : "${DB_APP_USER:?DB_APP_USER is required}"
 : "${DB_APP_PASSWORD:?DB_APP_PASSWORD is required}"
 
+case "${DB_MIGRATOR_CREATEDB:-true}" in
+  true) migrator_createdb=CREATEDB ;;
+  false) migrator_createdb=NOCREATEDB ;;
+  *) echo "DB_MIGRATOR_CREATEDB must be true or false" >&2; exit 1 ;;
+esac
+
 # Local socket connection as the superuser (trusted inside the container).
 psql -v ON_ERROR_STOP=1 --no-password --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   -v db="$POSTGRES_DB" \
-  -v migrator="$DB_MIGRATOR_USER" -v migrator_password="$DB_MIGRATOR_PASSWORD" \
+  -v migrator="$DB_MIGRATOR_USER" -v migrator_password="$DB_MIGRATOR_PASSWORD"   -v migrator_createdb="$migrator_createdb" \
   -v app="$DB_APP_USER" -v app_password="$DB_APP_PASSWORD" <<'SQL'
 -- CREATE ROLE has no IF NOT EXISTS: generate the statement only when the role is missing.
 SELECT format('CREATE ROLE %I', :'migrator')
@@ -34,9 +45,11 @@ SELECT format('CREATE ROLE %I', :'app')
   WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app')\gexec
 
 -- Migrator: CREATEDB only because `prisma migrate dev` creates a temporary shadow
--- database locally; a production migrator role does not need it (migrate deploy).
+-- database locally; a production migrator role does not need it (migrate deploy), so
+-- DB_MIGRATOR_CREATEDB=false gives NOCREATEDB (:migrator_createdb is one of the two
+-- keywords, validated above).
 ALTER ROLE :"migrator" WITH LOGIN PASSWORD :'migrator_password'
-  NOSUPERUSER NOCREATEROLE CREATEDB NOREPLICATION NOBYPASSRLS NOINHERIT;
+  NOSUPERUSER NOCREATEROLE :migrator_createdb NOREPLICATION NOBYPASSRLS NOINHERIT;
 
 -- Application: no DDL, no database/role creation, cannot bypass row-level security.
 ALTER ROLE :"app" WITH LOGIN PASSWORD :'app_password'
@@ -60,4 +73,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO :"app";
 SQL
 
-echo "roles ready: ${DB_MIGRATOR_USER} (owner/migrations), ${DB_APP_USER} (application) on ${POSTGRES_DB}"
+echo "roles ready: ${DB_MIGRATOR_USER} (owner/migrations, ${migrator_createdb}), ${DB_APP_USER} (application) on ${POSTGRES_DB}"

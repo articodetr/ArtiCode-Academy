@@ -1,0 +1,2 @@
+# Real academy env files hold secrets (MOD-17, D-R95): never commit them.
+*.env

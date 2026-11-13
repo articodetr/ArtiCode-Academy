@@ -1,0 +1,159 @@
+# ArtiCode Academy — one academy = one Docker Compose project (MOD-17-T03, ADR-072).
+#
+# From the repository root, on the server (a git tag checked out, Docker running):
+#
+#   node deploy/scripts/new-academy-env.mjs <slug> --domain academy.example.com   # once: writes deploy/env/<slug>.env (mode 600)
+#   docker compose -p academy-<slug> -f deploy/compose.academy.yaml --env-file deploy/env/<slug>.env up -d --build
+#
+# Services
+#   db           PostgreSQL 18, its own volume, NO published port; the three roles of
+#                docker/postgres/initdb/10-roles.sh (the migrator without CREATEDB here).
+#   migrate      one shot before `api`: `prisma migrate deploy`, then the idempotent seed
+#                (the `tools` target of deploy/api.Dockerfile — D-R91). A failure keeps `api` stopped.
+#   api          the `runtime` target; healthy = readiness 200 (database up AND schema not
+#                behind the image — `GET /api/health/ready`, API-004).
+#   web          Caddy serving the built frontend and proxying /api to `api` on the same
+#                origin; automatic HTTPS for a real domain (deploy/web.Dockerfile, deploy/Caddyfile).
+#
+# Every value comes from the env file given with --env-file (template:
+# deploy/env/academy.env.example). Each service receives only the variables it needs.
+# The runbook (first admin, upgrade, backup/restore, rotation) is in the master doc 14.14.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# Services that run as a non-root user and need no Linux capability (Caddy binds 80/443
+# unprivileged: Docker sets ip_unprivileged_port_start=0 in a bridge network namespace).
+x-hardened: &hardened
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-api-build: &api-build
+  context: ..
+  dockerfile: deploy/api.Dockerfile
+
+# The application role, for the services that talk to the database as the app.
+x-app-db: &app-db
+  DB_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in the academy env file}
+  DB_APP_USER: ${DB_APP_USER:?set DB_APP_USER in the academy env file}
+  DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD in the academy env file}
+
+services:
+  db:
+    # Pinned to an exact version: the backups (MOD-17-T04) must use the same pg_dump.
+    image: postgres:18.7-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in the academy env file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the academy env file}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in the academy env file}
+      DB_MIGRATOR_USER: ${DB_MIGRATOR_USER:?set DB_MIGRATOR_USER in the academy env file}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD in the academy env file}
+      DB_APP_USER: ${DB_APP_USER:?set DB_APP_USER in the academy env file}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD in the academy env file}
+      # Production: `prisma migrate deploy` needs no shadow database (6.6.3, D-R90).
+      DB_MIGRATOR_CREATEDB: "false"
+    volumes:
+      - db_data:/var/lib/postgresql
+      - ../docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    logging: *logging
+
+  migrate:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: tools
+    image: articode-api-tools:${ACADEMY_IMAGE_TAG:-local}
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *app-db
+      DB_MIGRATOR_USER: ${DB_MIGRATOR_USER:?set DB_MIGRATOR_USER in the academy env file}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD in the academy env file}
+      SEED_ACADEMY_SLUG: ${SEED_ACADEMY_SLUG:?set SEED_ACADEMY_SLUG in the academy env file}
+      SEED_ACADEMY_NAME_AR: ${SEED_ACADEMY_NAME_AR:?set SEED_ACADEMY_NAME_AR in the academy env file}
+      SEED_ACADEMY_NAME_EN: ${SEED_ACADEMY_NAME_EN:-}
+      SEED_ACADEMY_TIMEZONE: ${SEED_ACADEMY_TIMEZONE:?set SEED_ACADEMY_TIMEZONE in the academy env file}
+      SEED_ACADEMY_CURRENCY: ${SEED_ACADEMY_CURRENCY:?set SEED_ACADEMY_CURRENCY in the academy env file}
+      SEED_ACADEMY_LOCALE: ${SEED_ACADEMY_LOCALE:-ar}
+    logging: *logging
+
+  api:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: runtime
+    image: articode-api:${ACADEMY_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-db
+      NODE_ENV: production
+      PORT: "3000"
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in the academy env file}
+      CORS_ORIGIN: ${ACADEMY_ORIGIN:?set ACADEMY_ORIGIN in the academy env file}
+      APP_PUBLIC_URL: ${ACADEMY_ORIGIN:?set ACADEMY_ORIGIN in the academy env file}
+      # One reverse proxy (Caddy) in front of the API (MOD-01-H01).
+      TRUST_PROXY: "1"
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-}
+      AUTH_REFRESH_FAMILY_MAX_DAYS: ${AUTH_REFRESH_FAMILY_MAX_DAYS:-}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-none}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      AUTH_SELF_SERVICE_RESET_ENABLED: ${AUTH_SELF_SERVICE_RESET_ENABLED:-false}
+    healthcheck:
+      # Readiness, not liveness: 200 only when the database answers and its schema is not
+      # behind the migrations this image carries (two queries of at most 5 s each).
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 12s
+      retries: 6
+      start_period: 30s
+      start_interval: 2s
+    logging: *logging
+
+  web:
+    <<: *hardened
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    image: articode-web:${ACADEMY_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      SITE_ADDRESS: ${ACADEMY_ORIGIN:?set ACADEMY_ORIGIN in the academy env file}
+      API_UPSTREAM: api:3000
+    ports:
+      - "${PUBLISH_ADDRESS:-0.0.0.0}:${HTTP_PORT:-80}:${HTTP_PORT:-80}"
+      - "${PUBLISH_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+      - "${PUBLISH_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *logging
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:

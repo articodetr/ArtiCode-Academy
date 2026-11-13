@@ -31,7 +31,7 @@ export class HealthController {
   @ApiOperation({
     summary: 'Readiness check',
     description:
-      'Runs a database round trip. 200 when every dependency answers, 503 when one is down or not configured. Public.',
+      'Runs a database round trip, then compares the newest migration shipped with this build (`prisma/migrations`) with the newest finished, not rolled-back row of `_prisma_migrations` (`checks.schema`). 200 when the database answers and the schema is `current`, `ahead` (an older build during an upgrade) or `unchecked` (no shipped migration found); 503 `not_ready` with a `reason`: `database_unavailable` (down or not configured), `schema_outdated` (the shipped migration is not applied — run `prisma migrate deploy`) or `schema_unverified` (`_prisma_migrations` could not be read). Public.',
   })
   @ApiOkResponse({ type: ReadinessResponseDto })
   @ApiServiceUnavailableResponse({ type: ReadinessResponseDto })
