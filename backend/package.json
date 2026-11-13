@@ -29,6 +29,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "start:platform": "node dist/platform/main.js",
+    "start:platform:dev": "nest start --watch --entryFile platform/main",
     "lint": "oxlint src/ test/ prisma/ scripts/",
     "test": "vitest run",
     "test:watch": "vitest",
