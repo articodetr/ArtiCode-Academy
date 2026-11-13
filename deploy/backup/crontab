@@ -1,0 +1,18 @@
+# ArtiCode Academy — the jobs of the `backup` container (MOD-17-T04, D-R92).
+#
+# A template: at start the entrypoint replaces the two placeholders with
+# BACKUP_SCHEDULE (default "30 2 * * *" — every night at 02:30) and
+# BACKUP_DRILL_SCHEDULE (default "0 4 1 * *" — the 1st of every month at 04:00),
+# checks them, and writes the result to /etc/cron.d/articode-backup (root, 0644).
+# Times are in the container's TZ (default UTC). To change a time, set the
+# variable in the academy's env file and recreate the container; to change the
+# jobs themselves, edit this file and rebuild the image.
+#
+# Jobs start as root only to open the container's stdout/stderr (/proc/1/fd/*);
+# each script re-executes itself as `postgres` before doing anything else.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+@BACKUP_SCHEDULE@ root /usr/local/bin/backup.sh >/proc/1/fd/1 2>/proc/1/fd/2
+@BACKUP_DRILL_SCHEDULE@ root /usr/local/bin/restore-drill.sh >/proc/1/fd/1 2>/proc/1/fd/2

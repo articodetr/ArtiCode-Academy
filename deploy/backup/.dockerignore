@@ -1,0 +1,9 @@
+# Build context of deploy/backup/Dockerfile: deny by default, let in what the
+# image copies — never a local env file or a dump.
+*
+!crontab
+!common.sh
+!entrypoint.sh
+!backup.sh
+!restore.sh
+!restore-drill.sh
