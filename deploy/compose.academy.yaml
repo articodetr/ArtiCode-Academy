@@ -16,6 +16,8 @@
 #                origin; automatic HTTPS for a real domain (deploy/web.Dockerfile, deploy/Caddyfile).
 #   backup       nightly pg_dump + retention + optional encrypted offsite copy + monthly
 #                restore drill (deploy/backup/).
+#   maintenance  the daily token cleanup (`node dist/maintenance/main.js`) from the runtime
+#                image, in a loop of its own process — no scheduler inside the API (D-R93).
 #
 # Every value comes from the env file given with --env-file (template:
 # deploy/env/academy.env.example). Each service receives only the variables it needs.
@@ -183,6 +185,27 @@ services:
     # Starts as root (cron); the jobs run as postgres (999). No `user:` here.
     volumes:
       - backups:/backups
+    logging: *logging
+
+  maintenance:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: runtime
+    image: articode-api:${ACADEMY_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-db
+      NODE_ENV: production
+      AUTH_REFRESH_FAMILY_MAX_DAYS: ${AUTH_REFRESH_FAMILY_MAX_DAYS:-}
+    # Once at start, then every 24 hours; a failed run is logged and retried the next day.
+    command: ["sh", "-c", "while :; do node dist/maintenance/main.js || echo 'maintenance run failed' >&2; sleep 86400; done"]
+    # The image HEALTHCHECK probes the HTTP API, which this service does not run.
+    healthcheck:
+      disable: true
     logging: *logging
 
 volumes:
