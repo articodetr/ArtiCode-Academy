@@ -1,6 +1,8 @@
 import {
+  PLATFORM_DEFAULTS,
   POSTGRES_DEFAULTS,
   buildPostgresUrl,
+  platformPostgresUrlFromEnv,
   postgresUrlFromEnv,
 } from './database-url.js';
 
@@ -66,5 +68,58 @@ describe('postgresUrlFromEnv', () => {
     expect(() => postgresUrlFromEnv({ DB_APP_PASSWORD: 'a', POSTGRES_PORT: 'abc' }, 'app')).toThrow(
       /POSTGRES_PORT/,
     );
+  });
+});
+
+describe('platformPostgresUrlFromEnv (MOD-18-T01)', () => {
+  it('returns undefined without the platform role password — the academy variables never count', () => {
+    expect(platformPostgresUrlFromEnv({}, 'app')).toBeUndefined();
+    expect(platformPostgresUrlFromEnv({ PLATFORM_DB_APP_PASSWORD: '' }, 'app')).toBeUndefined();
+    expect(platformPostgresUrlFromEnv({ PLATFORM_DB_APP_PASSWORD: 'x' }, 'migrator')).toBeUndefined();
+    expect(
+      platformPostgresUrlFromEnv({ DB_APP_PASSWORD: 'a', DB_MIGRATOR_PASSWORD: 'm' }, 'app'),
+    ).toBeUndefined();
+    expect(
+      platformPostgresUrlFromEnv({ DB_APP_PASSWORD: 'a', DB_MIGRATOR_PASSWORD: 'm' }, 'migrator'),
+    ).toBeUndefined();
+  });
+
+  it('applies the platform defaults on the shared host and port', () => {
+    expect(PLATFORM_DEFAULTS).toEqual({
+      database: 'articode_platform',
+      appUser: 'platform_app',
+      migratorUser: 'platform_migrator',
+    });
+    expect(platformPostgresUrlFromEnv({ PLATFORM_DB_APP_PASSWORD: 'a' }, 'app')).toBe(
+      'postgresql://platform_app:a@127.0.0.1:5432/articode_platform',
+    );
+    expect(platformPostgresUrlFromEnv({ PLATFORM_DB_MIGRATOR_PASSWORD: 'm' }, 'migrator')).toBe(
+      'postgresql://platform_migrator:m@127.0.0.1:5432/articode_platform',
+    );
+  });
+
+  it('reads PLATFORM_DB_* for the roles and the database, DB_HOST / POSTGRES_PORT for the server — never POSTGRES_DB', () => {
+    const env = {
+      DB_HOST: 'postgres',
+      POSTGRES_PORT: '5433',
+      POSTGRES_DB: 'academy_a',
+      DB_APP_USER: 'app_a',
+      DB_APP_PASSWORD: 'pa',
+      PLATFORM_DB_NAME: 'platform x',
+      PLATFORM_DB_APP_USER: 'papp',
+      PLATFORM_DB_APP_PASSWORD: 'p@ss',
+      PLATFORM_DB_MIGRATOR_USER: 'pmig',
+      PLATFORM_DB_MIGRATOR_PASSWORD: 'pm',
+    };
+    expect(platformPostgresUrlFromEnv(env, 'app')).toBe('postgresql://papp:p%40ss@postgres:5433/platform%20x');
+    expect(platformPostgresUrlFromEnv(env, 'migrator')).toBe('postgresql://pmig:pm@postgres:5433/platform%20x');
+    // The academy derivation is unchanged by the platform variables.
+    expect(postgresUrlFromEnv(env, 'app')).toBe('postgresql://app_a:pa@postgres:5433/academy_a');
+  });
+
+  it('rejects a POSTGRES_PORT that is not a port number', () => {
+    expect(() =>
+      platformPostgresUrlFromEnv({ PLATFORM_DB_APP_PASSWORD: 'a', POSTGRES_PORT: '70000' }, 'app'),
+    ).toThrow(/POSTGRES_PORT/);
   });
 });
