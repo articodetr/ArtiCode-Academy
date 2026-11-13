@@ -14,6 +14,8 @@
 #                behind the image — `GET /api/health/ready`, API-004).
 #   web          Caddy serving the built frontend and proxying /api to `api` on the same
 #                origin; automatic HTTPS for a real domain (deploy/web.Dockerfile, deploy/Caddyfile).
+#   backup       nightly pg_dump + retention + optional encrypted offsite copy + monthly
+#                restore drill (deploy/backup/).
 #
 # Every value comes from the env file given with --env-file (template:
 # deploy/env/academy.env.example). Each service receives only the variables it needs.
@@ -45,7 +47,7 @@ x-app-db: &app-db
 
 services:
   db:
-    # Pinned to an exact version: the backups (MOD-17-T04) must use the same pg_dump.
+    # The same major AND minor as pg_dump/pg_restore in deploy/backup/Dockerfile.
     image: postgres:18.7-trixie
     restart: unless-stopped
     environment:
@@ -153,7 +155,38 @@ services:
       - caddy_config:/config
     logging: *logging
 
+  backup:
+    build:
+      context: ./backup
+    image: articode-backup:${ACADEMY_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in the academy env file}
+      DB_MIGRATOR_USER: ${DB_MIGRATOR_USER:?set DB_MIGRATOR_USER in the academy env file}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?set DB_MIGRATOR_PASSWORD in the academy env file}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-30 2 * * *}
+      BACKUP_DRILL_SCHEDULE: ${BACKUP_DRILL_SCHEDULE:-0 4 1 * *}
+      TZ: ${BACKUP_TZ:-UTC}
+    # The offsite remote's settings and credentials (RCLONE_CONFIG_<REMOTE>_<OPTION>=...),
+    # kept apart from the academy env file: deploy/env/<slug>.rclone.env (git-ignored, mode 600).
+    env_file:
+      - path: ./env/${SEED_ACADEMY_SLUG:?set SEED_ACADEMY_SLUG in the academy env file}.rclone.env
+        required: false
+    # Starts as root (cron); the jobs run as postgres (999). No `user:` here.
+    volumes:
+      - backups:/backups
+    logging: *logging
+
 volumes:
   db_data:
+  backups:
   caddy_data:
   caddy_config:

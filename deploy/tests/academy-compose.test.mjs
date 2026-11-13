@@ -19,7 +19,7 @@
 //        migration than the database answers 503 `schema_outdated`;
 //   AC4  the database publishes no port on the host;
 //   AC5  the migrator role has no CREATEDB.
-// Then: web is running.
+// Then: backup and web are running.
 // The project, its volumes and its network are removed at the end (never another project's).
 
 import { spawnSync } from 'node:child_process';
@@ -236,7 +236,7 @@ async function main() {
   else fail('AC5 the migrator role has no CREATEDB in production', createdb);
 
   // --- the other services ------------------------------------------------------------------
-  for (const service of ['web']) {
+  for (const service of ['backup', 'web']) {
     const s = stateOf(service);
     if (s.status === 'running') pass(`${service} is running`);
     else fail(`${service} is running`, JSON.stringify(s));
