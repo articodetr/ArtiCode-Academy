@@ -3,10 +3,12 @@
 # Three independent jobs run on every push to `main` and on every pull request:
 #
 #   backend   npm ci → lint → prisma migrate deploy (migrator role) → drift guard
-#             (prisma migrate diff --exit-code) → seed → unit tests → e2e tests
-#             (application role) → build, against a throwaway PostgreSQL 18 service
-#             that gets the same two least-privilege roles as local development
-#             through the very same script (docker/postgres/initdb/10-roles.sh, ADR-019).
+#             (prisma migrate diff --exit-code) → the same two steps for the platform
+#             database (--config prisma.platform.config.ts, MOD-18) → seed → unit tests →
+#             e2e tests (application roles) → build, against a throwaway PostgreSQL 18
+#             service that gets the same least-privilege roles as local development
+#             through the very same scripts (docker/postgres/initdb/10-roles.sh, ADR-019,
+#             and 20-platform.sh for articode_platform).
 #   frontend  npm ci → lint → test → build (tsc -b + vite build), strictly in sequence:
 #             the jsdom suites must never share the CPU with tsc/build (KI-044).
 #   deploy    the per-academy package (MOD-17, ADR-072): builds the api, web and backup
@@ -60,6 +62,11 @@ jobs:
       MIGRATION_DATABASE_URL: postgresql://articode_migrator:ci-only-migrator-password@127.0.0.1:5432/articode_academy
       # Seed, runtime and e2e suites: DML-only application role — ADR-019.
       DATABASE_URL: postgresql://articode_app:ci-only-app-password@127.0.0.1:5432/articode_academy
+      # The platform database (MOD-18-T01, docs 6.6.2) on the same service, with roles of
+      # its own: the Prisma CLI with --config prisma.platform.config.ts as its owner, the
+      # platform e2e suite (TEST-206) as its DML-only application role.
+      PLATFORM_MIGRATION_DATABASE_URL: postgresql://platform_migrator:ci-only-platform-migrator-password@127.0.0.1:5432/articode_platform
+      PLATFORM_DATABASE_URL: postgresql://platform_app:ci-only-platform-app-password@127.0.0.1:5432/articode_platform
       # Identity of the CI academy, written once by prisma/seed.ts (no default for
       # timezone and currency by design — CH-0012).
       SEED_ACADEMY_SLUG: ci-academy
@@ -100,6 +107,28 @@ jobs:
             -e DB_APP_USER -e DB_APP_PASSWORD \
             "$container" bash /tmp/10-roles.sh
 
+      - name: Create the platform database and its roles (MOD-18-T01)
+        # The same path for docker/postgres/initdb/20-platform.sh: articode_platform owned
+        # by platform_migrator, DML for platform_app, CONNECT for those two roles only.
+        working-directory: .
+        env:
+          POSTGRES_USER: articode
+          POSTGRES_DB: articode_academy
+          PLATFORM_DB_NAME: articode_platform
+          PLATFORM_DB_MIGRATOR_USER: platform_migrator
+          PLATFORM_DB_MIGRATOR_PASSWORD: ci-only-platform-migrator-password
+          PLATFORM_DB_APP_USER: platform_app
+          PLATFORM_DB_APP_PASSWORD: ci-only-platform-app-password
+        run: |
+          container='${{ job.services.postgres.id }}'
+          docker cp docker/postgres/initdb/20-platform.sh "$container:/tmp/20-platform.sh"
+          docker exec \
+            -e POSTGRES_USER -e POSTGRES_DB \
+            -e PLATFORM_DB_NAME \
+            -e PLATFORM_DB_MIGRATOR_USER -e PLATFORM_DB_MIGRATOR_PASSWORD \
+            -e PLATFORM_DB_APP_USER -e PLATFORM_DB_APP_PASSWORD \
+            "$container" bash /tmp/20-platform.sh
+
       - name: Use npm 11 for the backend install (KI-015, KI-045)
         # Node 22.20.0 ships npm 10.9.3, which rejects the committed backend lockfile
         # ("Missing: typescript@5.9.3 from lock file": tsconfck's optional peer
@@ -120,6 +149,12 @@ jobs:
 
       - name: Drift guard — schema.prisma must match the applied migrations
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: Apply the platform migrations (platform migrator role)
+        run: npx prisma migrate deploy --config prisma.platform.config.ts
+
+      - name: Platform drift guard — prisma/platform/schema.prisma must match its migrations
+        run: npx prisma migrate diff --config prisma.platform.config.ts --from-config-datasource --to-schema prisma/platform/schema.prisma --exit-code
 
       - name: Seed (permission catalog, system roles, academy row)
         run: npm run prisma:seed

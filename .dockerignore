@@ -10,6 +10,7 @@
 !backend/tsconfig.json
 !backend/tsconfig.build.json
 !backend/prisma.config.ts
+!backend/prisma.platform.config.ts
 !backend/prisma/
 !backend/src/
 !backend/scripts/

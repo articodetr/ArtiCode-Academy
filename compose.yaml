@@ -26,6 +26,14 @@ services:
       DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:?Set DB_MIGRATOR_PASSWORD in .env}
       DB_APP_USER: ${DB_APP_USER:-articode_app}
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in .env}
+      # The platform database (MOD-18, master doc 6.6.2) on the same server, created
+      # by docker/postgres/initdb/20-platform.sh with roles of its own. Optional: an
+      # .env without the two passwords skips it (empty values here, never an error).
+      PLATFORM_DB_NAME: ${PLATFORM_DB_NAME:-}
+      PLATFORM_DB_MIGRATOR_USER: ${PLATFORM_DB_MIGRATOR_USER:-}
+      PLATFORM_DB_MIGRATOR_PASSWORD: ${PLATFORM_DB_MIGRATOR_PASSWORD:-}
+      PLATFORM_DB_APP_USER: ${PLATFORM_DB_APP_USER:-}
+      PLATFORM_DB_APP_PASSWORD: ${PLATFORM_DB_APP_PASSWORD:-}
     ports:
       # Loopback only: the database is never reachable from other machines.
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
