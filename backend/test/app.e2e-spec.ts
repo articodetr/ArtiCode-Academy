@@ -142,6 +142,8 @@ describe('API (e2e)', () => {
         .get('/api/docs-json')
         .expect(200);
       expect(res.body.openapi).toMatch(/^3\./);
+      // KI-081: the platform names its own document; the academy keeps this title.
+      expect(res.body.info).toMatchObject({ title: 'ArtiCode Academy API', description: 'Academy management & learning platform' });
       expect(res.body.paths).toHaveProperty('/api/health');
       expect(res.body.paths).toHaveProperty('/api/health/ready');
     },

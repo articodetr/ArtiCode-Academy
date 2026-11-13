@@ -16,7 +16,8 @@
 //   createPlatformTestApp(options?): Promise<NestExpressApplication>
 //     PlatformAppModule (+ options.imports / options.controllers / options.providers —
 //     e.g. a probe controller or a feature module before it joins the root module),
-//     created with APP_CREATE_OPTIONS and configureApp() like main.ts, then init().
+//     created with APP_CREATE_OPTIONS and configureApp(app, PLATFORM_APP_SETUP)
+//     like main.ts (the OpenAPI document `ArtiCode Platform API`, KI-081), then init().
 //     options.configure(builder) may override providers before compile, e.g.
 //       configure: (b) => b.overrideProvider(PLATFORM_MIGRATIONS_DIR).useValue(dir)
 //     Close it with `await app.close()`.
@@ -58,7 +59,7 @@ import { ENV_FILE_PATHS } from '../../src/config/env-files.js';
 import { PrismaClient } from '../../src/generated/platform/client.js';
 import type { PlatformRole, PlatformUserStatus } from '../../src/generated/platform/client.js';
 import { PlatformTokenService } from '../../src/platform/auth/platform-token.service.js';
-import { PlatformAppModule } from '../../src/platform/platform-app.module.js';
+import { PLATFORM_APP_SETUP, PlatformAppModule } from '../../src/platform/platform-app.module.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 
@@ -105,7 +106,7 @@ export async function createPlatformTestApp(options: PlatformTestAppOptions = {}
   if (options.configure) builder = options.configure(builder);
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>(APP_CREATE_OPTIONS);
-  configureApp(app);
+  configureApp(app, PLATFORM_APP_SETUP);
   await app.init();
   return app;
 }
