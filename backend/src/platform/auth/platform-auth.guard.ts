@@ -13,8 +13,9 @@ import { PlatformTokenService } from './platform-token.service.js';
  * needs a valid platform Bearer token unless marked with the shared @Public().
  * The token is verified with the PLATFORM secret, issuer and audience (an
  * academy token is `401 token_invalid`), then the user's row is read on every
- * request (PlatformPrincipalService), so a suspension, a lock or a password
- * change applies at once. The principal goes to `request.platformUser`. On a
+ * request (PlatformPrincipalService), so a suspension or a password change
+ * applies at once (a temporary sign-in lock does not end a session — T03).
+ * The principal goes to `request.platformUser`. On a
  * public route a token, if present, is resolved best-effort.
  */
 @Injectable()

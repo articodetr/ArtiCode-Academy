@@ -15,6 +15,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ENV_FILE_PATHS } from '../config/env-files.js';
 import { PlatformAuditModule } from './audit/platform-audit.module.js';
 import { PlatformAuthModule } from './auth/platform-auth.module.js';
+import { PlatformSessionModule } from './auth/platform-session.module.js';
 import { PlatformHealthModule } from './health/platform-health.module.js';
 import { validatePlatformEnv } from './platform.env.schema.js';
 import { PlatformPrismaModule } from './prisma/platform-prisma.module.js';
@@ -32,6 +33,8 @@ import { PlatformPrismaModule } from './prisma/platform-prisma.module.js';
     PlatformPrismaModule,
     PlatformAuditModule,
     PlatformAuthModule,
+    // MOD-18-T03: the session routes (API-178..182).
+    PlatformSessionModule,
     PlatformHealthModule,
   ],
 })
