@@ -16,6 +16,7 @@ import { ENV_FILE_PATHS } from '../config/env-files.js';
 import { PlatformAuditModule } from './audit/platform-audit.module.js';
 import { PlatformAuthModule } from './auth/platform-auth.module.js';
 import { PlatformSessionModule } from './auth/platform-session.module.js';
+import { FleetModule } from './fleet/fleet.module.js';
 import { PlatformHealthModule } from './health/platform-health.module.js';
 import { validatePlatformEnv } from './platform.env.schema.js';
 import { PlatformPrismaModule } from './prisma/platform-prisma.module.js';
@@ -37,6 +38,7 @@ import { PlatformRegistryModule } from './registry/registry.module.js';
     // MOD-18-T03: the session routes (API-178..182).
     PlatformSessionModule,
     PlatformHealthModule,
+    FleetModule, // MOD-18-T05: fleet health (API-196..198)
     PlatformRegistryModule, // MOD-18-T04: the academies registry (API-183..195)
   ],
 })
