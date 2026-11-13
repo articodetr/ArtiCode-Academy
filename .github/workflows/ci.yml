@@ -1,6 +1,6 @@
 # Continuous integration (S1-R02, ADR-043).
 #
-# Two independent jobs run on every push to `main` and on every pull request:
+# Three independent jobs run on every push to `main` and on every pull request:
 #
 #   backend   npm ci → lint → prisma migrate deploy (migrator role) → drift guard
 #             (prisma migrate diff --exit-code) → seed → unit tests → e2e tests
@@ -9,6 +9,9 @@
 #             through the very same script (docker/postgres/initdb/10-roles.sh, ADR-019).
 #   frontend  npm ci → lint → test → build (tsc -b + vite build), strictly in sequence:
 #             the jsdom suites must never share the CPU with tsc/build (KI-044).
+#   deploy    the per-academy package (MOD-17, ADR-072): builds the api, web and backup
+#             images and runs TEST-200..203 — the images, the backup container and a whole
+#             throwaway academy brought up with deploy/compose.academy.yaml (CH-0214).
 #
 # Node comes from .nvmrc (S1-R01). Every credential below is a throwaway value for
 # the CI database only: it exists nowhere else, nothing is copied from a local .env,
@@ -160,3 +163,43 @@ jobs:
 
       - name: Build (tsc -b && vite build)
         run: npm run build
+
+  deploy:
+    name: deploy (images, compose project, backup)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      # The deploy tests are plain Node scripts (no npm install); Node from .nvmrc.
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Docker and Compose versions
+        run: docker version --format '{{.Server.Version}}' && docker compose version
+
+      - name: Compose file is valid with the example env file
+        run: docker compose -p academy-example -f deploy/compose.academy.yaml --env-file deploy/env/academy.env.example config --quiet
+
+      # TEST-200: builds articode-api / articode-api-tools, boots runtime in production,
+      # checks layers, packages and user, then migrates and seeds a throwaway PostgreSQL.
+      - name: api image (TEST-200)
+        run: node deploy/tests/api-image.test.mjs --tag ci
+
+      # TEST-201: builds articode-web (Caddy + the Vite build), same origin, SPA fallback,
+      # proxy headers, OriginGuard through the proxy, automatic HTTPS configuration.
+      - name: web image (TEST-201)
+        run: node deploy/tests/web-image.test.mjs --tag ci --api-image articode-api:ci
+
+      # TEST-203: backup → restore, the restore drill (good, truncated and tampered dumps),
+      # retention, the encrypted offsite copy, no password in a command line or a log.
+      - name: backup container (TEST-203)
+        run: node deploy/tests/backup.test.mjs --tag ci --tools-tag ci
+
+      # TEST-202 (compose part): a whole throwaway academy on 127.0.0.1 — migrate, api
+      # healthy, first admin and sign-in through the web origin, a second up, a failed
+      # migration, schema_outdated, no published database port, no CREATEDB; then down -v
+      # of that throwaway project only.
+      - name: academy compose project (TEST-202)
+        run: node deploy/tests/academy-compose.test.mjs --tag ci --port 18202
