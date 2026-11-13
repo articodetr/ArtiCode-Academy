@@ -91,13 +91,21 @@ describe('API (e2e)', () => {
     expect(Number.isNaN(Date.parse(res.body.timestamp))).toBe(false);
 
     const database = res.body.checks.database;
+    // MOD-17-T03: the schema version is checked too (details in TEST-202).
+    expect(['current', 'ahead', 'outdated', 'unchecked', 'error']).toContain(res.body.checks.schema.status);
     if (res.status === 200) {
       expect(res.body.status).toBe('ready');
+      expect(res.body).not.toHaveProperty('reason');
       expect(database.status).toBe('up');
       expect(typeof database.latencyMs).toBe('number');
     } else {
       expect(res.body.status).toBe('not_ready');
-      expect(['down', 'not_configured']).toContain(database.status);
+      if (database.status === 'up') {
+        expect(['schema_outdated', 'schema_unverified']).toContain(res.body.reason);
+      } else {
+        expect(['down', 'not_configured']).toContain(database.status);
+        expect(res.body.reason).toBe('database_unavailable');
+      }
     }
   });
 
