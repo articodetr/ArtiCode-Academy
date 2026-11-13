@@ -22,6 +22,8 @@
     "platform:deploy": "prisma migrate deploy --config prisma.platform.config.ts",
     "platform:status": "prisma migrate status --config prisma.platform.config.ts",
     "auth:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
+    "platform:bootstrap-admin": "tsx scripts/platform-bootstrap-admin.ts",
+    "platform:create-user": "tsx scripts/platform-create-user.ts",
     "dev:demo-users": "tsx scripts/dev-demo-users.ts",
     "prisma:studio": "prisma studio",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.ts\"",

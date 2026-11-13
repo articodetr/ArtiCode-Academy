@@ -252,7 +252,7 @@ describe('platform app skeleton — MOD-18-T02 (e2e, TEST-207)', () => {
       expect(res.body).toMatchObject({ code: 'role_forbidden' });
     });
 
-    it('refuses a suspended (403), a locked (423) or a deleted (401 session_invalid) user, an expired token and a token older than the last password change', async () => {
+    it('refuses a suspended (403) or a deleted (401 session_invalid) user, an expired token and a token older than the last password change; a sign-in lock does not end a session', async () => {
       const suspended = await createPlatformUserFixture({ role: 'super_admin', status: 'suspended' });
       const locked = await createPlatformUserFixture({ role: 'super_admin', lockedUntil: new Date(Date.now() + 10 * 60_000) });
       const changed = await createPlatformUserFixture({ role: 'super_admin' });
@@ -264,9 +264,9 @@ describe('platform app skeleton — MOD-18-T02 (e2e, TEST-207)', () => {
       const s = await me(await platformAccessTokenFor(app, suspended));
       expect([s.status, s.body.code]).toEqual([403, 'account_suspended']);
 
+      // A lock blocks new sign-ins only (POST /api/auth/login, T03), never a running session.
       const l = await me(await platformAccessTokenFor(app, locked));
-      expect([l.status, l.body.code]).toEqual([423, 'account_locked']);
-      expect(l.body.retryAfterSeconds).toBeGreaterThan(500);
+      expect([l.status, l.body.id]).toEqual([200, locked.id]);
 
       const changedToken = await platformAccessTokenFor(app, changed);
       await platformTestDb().platformUser.update({

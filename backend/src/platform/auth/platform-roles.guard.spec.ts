@@ -78,21 +78,16 @@ describe('PlatformRolesGuard', () => {
 });
 
 describe('platformSessionGate / issuedBeforePasswordChange', () => {
-  const now = new Date('2026-11-13T10:00:00Z');
-
-  it('accepts an active, unlocked account and one whose lock has passed', () => {
-    expect(platformSessionGate({ status: 'active', lockedUntil: null }, now)).toBeNull();
-    expect(platformSessionGate({ status: 'active', lockedUntil: new Date('2026-11-13T09:59:59Z') }, now)).toBeNull();
+  it('accepts an active account — also while a sign-in lock is running (a lock blocks new sign-ins only, T03)', () => {
+    expect(platformSessionGate({ status: 'active' })).toBeNull();
+    const lockedRow = { status: 'active' as const, lockedUntil: new Date(Date.now() + 10 * 60_000) };
+    expect(platformSessionGate(lockedRow)).toBeNull();
   });
 
-  it('refuses a suspended account (403) and a locked one (423 with retryAfterSeconds)', () => {
-    expect(platformSessionGate({ status: 'suspended', lockedUntil: null }, now)?.getResponse()).toMatchObject({
-      statusCode: 403,
-      code: 'account_suspended',
-    });
-    const locked = platformSessionGate({ status: 'active', lockedUntil: new Date('2026-11-13T10:01:30.200Z') }, now);
-    expect(locked?.getStatus()).toBe(423);
-    expect(locked?.getResponse()).toMatchObject({ code: 'account_locked', retryAfterSeconds: 91 });
+  it('refuses a suspended account with 403 account_suspended', () => {
+    const refused = platformSessionGate({ status: 'suspended' });
+    expect(refused?.getStatus()).toBe(403);
+    expect(refused?.getResponse()).toMatchObject({ statusCode: 403, code: 'account_suspended' });
   });
 
   it('kills tokens issued in a second before the last password change, keeps same-second ones', () => {

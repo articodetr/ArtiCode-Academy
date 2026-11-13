@@ -13,28 +13,26 @@ export const PLATFORM_PRINCIPAL_SELECT = {
   fullName: true,
   role: true,
   status: true,
-  lockedUntil: true,
   passwordChangedAt: true,
 } as const;
 
 export type PlatformPrincipalRow = Pick<
   PlatformUser,
-  'id' | 'email' | 'fullName' | 'role' | 'status' | 'lockedUntil' | 'passwordChangedAt'
+  'id' | 'email' | 'fullName' | 'role' | 'status' | 'passwordChangedAt'
 >;
 
 /**
- * Why a platform account may not use (or open) a session right now, or null:
- * `403 account_suspended` for a suspended account, `423 account_locked
- * { retryAfterSeconds }` while `locked_until` is in the future. Pure.
+ * Why a platform account may not use (or keep) a session right now, or null:
+ * `403 account_suspended` for an account that is not active. Pure.
+ *
+ * A temporary lock (`locked_until`, set by failed sign-ins) is NOT checked
+ * here: it blocks NEW sign-ins only (`423 account_locked` from POST
+ * /api/auth/login — MOD-18-T03, platform-session.service.ts) and never ends an
+ * existing session or a refresh — the academy rule (AuthService.sessionGate()),
+ * otherwise anyone guessing a password could lock a signed-in super admin out.
  */
-export function platformSessionGate(
-  user: Pick<PlatformUser, 'status' | 'lockedUntil'>,
-  now: Date = new Date(),
-): PlatformHttpException | null {
+export function platformSessionGate(user: Pick<PlatformUser, 'status'>): PlatformHttpException | null {
   if (user.status !== 'active') return platformAuthError.accountSuspended();
-  if (user.lockedUntil && user.lockedUntil.getTime() > now.getTime()) {
-    return platformAuthError.accountLocked(Math.ceil((user.lockedUntil.getTime() - now.getTime()) / 1000));
-  }
   return null;
 }
 
@@ -58,7 +56,7 @@ export class PlatformPrincipalService {
 
   /**
    * `401 session_invalid` for an unknown user, the gate's error for a
-   * suspended or locked one, `401 token_invalid` for a token issued before the
+   * suspended one (a temporary lock does not end a session), `401 token_invalid` for a token issued before the
    * last password change; otherwise the principal (role read from the row,
    * not from the token).
    */
