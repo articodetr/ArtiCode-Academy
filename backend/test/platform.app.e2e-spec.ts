@@ -19,6 +19,7 @@ import { ModulesContainer } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ACADEMY_SWAGGER_TITLE } from '../src/app.setup.js';
 import { TokenService } from '../src/auth/token.service.js';
 import { PACKAGE_VERSION } from '../src/common/package-info.js';
 import { NODE_ENVS, validateEnv } from '../src/config/env.schema.js';
@@ -26,6 +27,7 @@ import type { Env } from '../src/config/env.schema.js';
 import { CurrentPlatformUser, PlatformRoles, Public } from '../src/platform/auth/platform.decorators.js';
 import type { PlatformPrincipal } from '../src/platform/auth/platform-principal.js';
 import { PLATFORM_MIGRATIONS_DIR } from '../src/platform/health/platform-health.service.js';
+import { PLATFORM_APP_SETUP } from '../src/platform/platform-app.module.js';
 import {
   PLATFORM_TEST_ORIGIN,
   closePlatformTestDb,
@@ -151,6 +153,26 @@ describe('platform app skeleton — MOD-18-T02 (e2e, TEST-207)', () => {
     const allowed = await api().post('/api/platform-probe/write').set('Origin', PLATFORM_TEST_ORIGIN).send({}).expect(401);
     expect(allowed.body).toMatchObject({ code: 'unauthenticated' });
   });
+
+  // KI-081: configureApp() used to give the platform the academy's OpenAPI title.
+  // 20 s: the first OpenAPI build can exceed Vitest's 5 s under parallel e2e load (KI-040).
+  it(
+    'serves its own OpenAPI document: `ArtiCode Platform API`, platform routes only (KI-081)',
+    async () => {
+      const res = await api().get('/api/docs-json').expect(200);
+      expect(res.body.info).toMatchObject({
+        title: PLATFORM_APP_SETUP.swaggerTitle,
+        description: PLATFORM_APP_SETUP.swaggerDescription,
+        version: PACKAGE_VERSION,
+      });
+      expect(res.body.info.title).toBe('ArtiCode Platform API');
+      expect(res.body.info.title).not.toBe(ACADEMY_SWAGGER_TITLE);
+      expect(res.body.paths).toHaveProperty('/api/health/ready');
+      expect(res.body.paths).toHaveProperty('/api/auth/login');
+      expect(res.body.paths).not.toHaveProperty('/api/academy');
+    },
+    20_000,
+  );
 
   describe.skipIf(!available)('with the platform database', () => {
     const fixtureIds: string[] = [];

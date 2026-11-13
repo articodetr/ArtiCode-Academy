@@ -3,16 +3,17 @@
 // `npm run start:platform:dev` in watch mode. Its own port (PLATFORM_PORT,
 // 3100), database (articode_platform) and tokens; the same HTTP setup as the
 // academy API (configureApp(): helmet, JSON-only bodies, CORS and OriginGuard
-// on PLATFORM_CORS_ORIGIN, validation, Swagger outside production).
+// on PLATFORM_CORS_ORIGIN, validation, Swagger outside production — its
+// OpenAPI document titled `ArtiCode Platform API`, KI-081).
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { APP_CREATE_OPTIONS, configureApp } from '../app.setup.js';
-import { PlatformAppModule } from './platform-app.module.js';
+import { PLATFORM_APP_SETUP, PlatformAppModule } from './platform-app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(PlatformAppModule, APP_CREATE_OPTIONS);
-  const runtime = configureApp(app);
+  const runtime = configureApp(app, PLATFORM_APP_SETUP);
   await app.listen(runtime.port);
 
   const logger = new Logger('PlatformBootstrap');

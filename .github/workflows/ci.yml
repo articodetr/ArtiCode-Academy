@@ -13,7 +13,9 @@
 #             the jsdom suites must never share the CPU with tsc/build (KI-044).
 #   deploy    the per-academy package (MOD-17, ADR-072): builds the api, web and backup
 #             images and runs TEST-200..203 — the images, the backup container and a whole
-#             throwaway academy brought up with deploy/compose.academy.yaml (CH-0214).
+#             throwaway academy brought up with deploy/compose.academy.yaml (CH-0214) —
+#             then TEST-211, a whole throwaway platform brought up with
+#             deploy/compose.platform.yaml (MOD-18-T06).
 #
 # Node comes from .nvmrc (S1-R01). Every credential below is a throwaway value for
 # the CI database only: it exists nowhere else, nothing is copied from a local .env,
@@ -200,9 +202,11 @@ jobs:
         run: npm run build
 
   deploy:
-    name: deploy (images, compose project, backup)
+    name: deploy (images, compose projects, backup)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 until MOD-18-T06; TEST-211 reuses the api images of TEST-200 (layer cache) and
+    # builds only the small edge image.
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v5
 
@@ -216,6 +220,9 @@ jobs:
 
       - name: Compose file is valid with the example env file
         run: docker compose -p academy-example -f deploy/compose.academy.yaml --env-file deploy/env/academy.env.example config --quiet
+
+      - name: Platform compose file is valid with the example env file
+        run: docker compose -p articode-platform-example -f deploy/compose.platform.yaml --env-file deploy/env/platform.env.example config --quiet
 
       # TEST-200: builds articode-api / articode-api-tools, boots runtime in production,
       # checks layers, packages and user, then migrates and seeds a throwaway PostgreSQL.
@@ -238,3 +245,11 @@ jobs:
       # of that throwaway project only.
       - name: academy compose project (TEST-202)
         run: node deploy/tests/academy-compose.test.mjs --tag ci --port 18202
+
+      # TEST-211: a whole throwaway platform on 127.0.0.1 (MOD-18-T06) — platform migrate,
+      # api healthy, readiness with the platform schema through the edge, the first super
+      # admin and sign-in, an academy registered and probed from inside the image, the fleet
+      # view, the probe service's first round, a second up, no published database port, no
+      # CREATEDB, no academy role; then down -v of that throwaway project only.
+      - name: platform compose project (TEST-211)
+        run: node deploy/tests/platform-compose.test.mjs --tag ci --port 18211

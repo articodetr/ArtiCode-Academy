@@ -74,6 +74,20 @@ export interface AppRuntimeInfo {
   swaggerPath: string | null;
 }
 
+/** Title and description of the academy API's OpenAPI document (the defaults of configureApp()). */
+export const ACADEMY_SWAGGER_TITLE = 'ArtiCode Academy API';
+export const ACADEMY_SWAGGER_DESCRIPTION = 'Academy management & learning platform';
+
+/**
+ * What differs between the applications that share configureApp() (KI-081):
+ * the academy API keeps the defaults; the platform API (MOD-18,
+ * src/platform/main.ts) names its own OpenAPI document.
+ */
+export interface ConfigureAppOptions {
+  swaggerTitle?: string;
+  swaggerDescription?: string;
+}
+
 /**
  * helmet's security headers (MOD-01-H04, ADR-064) with its defaults, which the
  * Swagger UI page also satisfies: its scripts are files under the docs path
@@ -94,9 +108,9 @@ export function securityHeaders(nodeEnv: Env['NODE_ENV']): ReturnType<typeof hel
  * Applies the cross-cutting HTTP setup (security headers, prefix, JSON-only
  * bodies, CORS, validation, Swagger). Shared by main.ts and the e2e tests so
  * both exercise the same configuration; the app must be created with
- * APP_CREATE_OPTIONS.
+ * APP_CREATE_OPTIONS. `options` only names the OpenAPI document (KI-081).
  */
-export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
+export function configureApp(app: NestExpressApplication, options: ConfigureAppOptions = {}): AppRuntimeInfo {
   const env: ConfigService<Env, true> = app.get(ConfigService);
   const prefix = env.get('API_PREFIX', { infer: true });
 
@@ -144,8 +158,8 @@ export function configureApp(app: NestExpressApplication): AppRuntimeInfo {
     const document = SwaggerModule.createDocument(
       app,
       new DocumentBuilder()
-        .setTitle('ArtiCode Academy API')
-        .setDescription('Academy management & learning platform')
+        .setTitle(options.swaggerTitle ?? ACADEMY_SWAGGER_TITLE)
+        .setDescription(options.swaggerDescription ?? ACADEMY_SWAGGER_DESCRIPTION)
         .setVersion(PACKAGE_VERSION)
         .addBearerAuth()
         .build(),

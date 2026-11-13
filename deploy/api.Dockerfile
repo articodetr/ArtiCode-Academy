@@ -13,12 +13,17 @@
 #   build    compiles the backend: npm 11 (KI-045), `npm ci`, `prisma generate`, `nest build`.
 #   tools    the build stage as a non-root image with the Prisma CLI and tsx — the
 #            one-shot `migrate` service (migrate deploy, then the idempotent seed,
-#            D-R91) and the first-admin command (`npm run auth:bootstrap-admin`).
+#            D-R91) and the first-admin command (`npm run auth:bootstrap-admin`);
+#            for the platform, its `migrate` service (`migrate deploy --config
+#            prisma.platform.config.ts`) and `npm run platform:bootstrap-admin`.
 #   runtime  production dependencies only (`--omit=dev --omit=optional` — the Prisma
 #            CLI and TypeScript are optional peers of runtime packages, so plain
 #            `--omit=dev` would keep them), `dist`, `package.json` (the health
-#            endpoint reads its version) and `prisma/migrations` (read-only — the
-#            schema check of MOD-17-T03); non-root; `node dist/main.js`.
+#            endpoint reads its version), `prisma/migrations` (read-only — the
+#            schema check of MOD-17-T03) and `prisma/platform/migrations` (read-only —
+#            the platform readiness check, MOD-18-T06); non-root; `node dist/main.js`
+#            by default, `node dist/platform/main.js` / `dist/platform/probe.js` for the
+#            platform (deploy/compose.platform.yaml, D-R97 — one image, two entries).
 #
 # Nothing secret is baked in: every setting comes from the environment at run
 # time (`NODE_ENV=production` requires JWT_SECRET and DATABASE_URL — env.schema.ts).
@@ -82,6 +87,7 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma/migrations ./prisma/migrations
+COPY --from=build /app/prisma/platform/migrations ./prisma/platform/migrations
 USER node
 EXPOSE 3000
 # Liveness only; readiness (database and schema) is the compose health check.

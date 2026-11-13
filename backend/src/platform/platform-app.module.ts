@@ -12,6 +12,7 @@
 // session routes, T04 the registry, T05 the fleet probe.
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import type { ConfigureAppOptions } from '../app.setup.js';
 import { ENV_FILE_PATHS } from '../config/env-files.js';
 import { PlatformAuditModule } from './audit/platform-audit.module.js';
 import { PlatformAuthModule } from './auth/platform-auth.module.js';
@@ -21,6 +22,17 @@ import { PlatformHealthModule } from './health/platform-health.module.js';
 import { validatePlatformEnv } from './platform.env.schema.js';
 import { PlatformPrismaModule } from './prisma/platform-prisma.module.js';
 import { PlatformRegistryModule } from './registry/registry.module.js';
+
+/**
+ * configureApp() options of the platform API (KI-081): its OpenAPI document is
+ * its own, not the academy's. Passed by main.ts and by the e2e helper
+ * (test/platform/helpers.ts) so both serve the same document.
+ */
+export const PLATFORM_APP_SETUP: ConfigureAppOptions = {
+  swaggerTitle: 'ArtiCode Platform API',
+  swaggerDescription:
+    'Control plane of the ArtiCode academies: platform accounts, the academies registry, plans and subscriptions, fleet health',
+};
 
 @Module({
   imports: [

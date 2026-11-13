@@ -111,7 +111,7 @@ async function waitHealthy(container, seconds) {
 // The paths the root .dockerignore lets in; anything untracked or git-ignored under
 // them (besides the generated client, which .dockerignore drops) would reach the
 // build context, so the image would no longer be built from the committed tree.
-const CONTEXT_PATHS = ['backend/package.json', 'backend/package-lock.json', 'backend/nest-cli.json', 'backend/tsconfig.json', 'backend/tsconfig.build.json', 'backend/prisma.config.ts', 'backend/prisma', 'backend/src', 'backend/scripts'];
+const CONTEXT_PATHS = ['backend/package.json', 'backend/package-lock.json', 'backend/nest-cli.json', 'backend/tsconfig.json', 'backend/tsconfig.build.json', 'backend/prisma.config.ts', 'backend/prisma.platform.config.ts', 'backend/prisma', 'backend/src', 'backend/scripts'];
 
 function checkCommittedContext() {
   const res = spawnSync('git', ['status', '--porcelain', '--ignored', '--untracked-files=all', '--', ...CONTEXT_PATHS], { cwd: ROOT, encoding: 'utf8' });
@@ -163,10 +163,11 @@ function checkNoEnvFiles(tag) {
 
 // --- AC4 + layout --------------------------------------------------------------
 function checkRuntimeLayout() {
-  const res = docker(['run', '--rm', '--entrypoint', 'sh', RUNTIME, '-c', 'ls -A /app | tr "\\n" " "; echo; ls -A /app/prisma | tr "\\n" " "']);
-  const [app = '', prisma = ''] = res.stdout.trim().split('\n').map((l) => l.trim());
-  if (app === 'dist node_modules package.json prisma' && prisma === 'migrations') pass('AC4 runtime holds dist, package.json and the migrations only', 'no sources, no schema, no scripts');
-  else fail('AC4 runtime holds dist, package.json and the migrations only', `/app: ${app}; /app/prisma: ${prisma}`);
+  const res = docker(['run', '--rm', '--entrypoint', 'sh', RUNTIME, '-c', 'ls -A /app | tr "\\n" " "; echo; ls -A /app/prisma | tr "\\n" " "; echo; ls -A /app/prisma/platform | tr "\\n" " "']);
+  const [app = '', prisma = '', platform = ''] = res.stdout.trim().split('\n').map((l) => l.trim());
+  // prisma/platform/migrations: the platform readiness check (MOD-18-T06) — the same image runs the platform.
+  if (app === 'dist node_modules package.json prisma' && prisma === 'migrations platform' && platform === 'migrations') pass('AC4 runtime holds dist, package.json and the migrations only', 'academy and platform migrations; no sources, no schema, no scripts');
+  else fail('AC4 runtime holds dist, package.json and the migrations only', `/app: ${app}; /app/prisma: ${prisma}; /app/prisma/platform: ${platform}`);
 }
 
 const WALKER = [

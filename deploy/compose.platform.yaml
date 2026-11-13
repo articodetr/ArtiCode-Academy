@@ -1,0 +1,203 @@
+# ArtiCode platform — the control plane of the Super Admin as one Docker Compose project
+# (MOD-18-T06, D-R97, D-R104). One platform per deployment, next to (never inside) the
+# academies' own projects: it reaches them only through their public endpoints (D-R103).
+#
+# From the repository root, on the server (a git tag checked out, Docker running):
+#
+#   node deploy/scripts/new-platform-env.mjs --domain platform.example.com   # once: writes deploy/env/platform.env (mode 600)
+#   docker compose -p articode-platform -f deploy/compose.platform.yaml --env-file deploy/env/platform.env up -d --build
+#
+# Services
+#   db       PostgreSQL 18, its own volume, NO published port. Only
+#            docker/postgres/initdb/20-platform.sh is mounted (10-roles.sh needs the academy
+#            variables and creates academy roles — none of them exist in this cluster): it
+#            creates the platform database owned by its migrator role (without CREATEDB here)
+#            and the DML-only application role. The image's own POSTGRES_DB stays `postgres`,
+#            the maintenance database, so the platform database is the script's from birth.
+#   migrate  one shot before `api` and `probe`: `prisma migrate deploy --config
+#            prisma.platform.config.ts` as the platform migrator (the `tools` target of
+#            deploy/api.Dockerfile). No seed. A failure keeps `api` and `probe` stopped. Also the
+#            container of the account commands (`npm run platform:bootstrap-admin`,
+#            `npm run platform:create-user`), which connect as the application role.
+#   api      the `runtime` target with `node dist/platform/main.js` (port 3100); healthy =
+#            platform readiness 200 (database up AND schema not behind the platform migrations
+#            this image carries — API-177).
+#   probe    the periodic fleet probe (`node dist/platform/probe.js`) from the same image, in a
+#            loop of its own process (D-R103 — no scheduler inside the API).
+#   edge     Caddy in front of `api` on the platform origin, automatic HTTPS for a real domain
+#            (deploy/platform-edge.Dockerfile, deploy/Caddyfile.platform). No static files yet.
+#
+# Every value comes from the env file given with --env-file (template:
+# deploy/env/platform.env.example). Each service receives only the variables it needs.
+# The images are the academy's own (articode-api, articode-api-tools): D-R97, one image, two entries.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# Services that run as a non-root user and need no Linux capability (Caddy binds 80/443
+# unprivileged: Docker sets ip_unprivileged_port_start=0 in a bridge network namespace).
+x-hardened: &hardened
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-api-build: &api-build
+  context: ..
+  dockerfile: deploy/api.Dockerfile
+
+# The platform APPLICATION role (DML only), for every service that talks to the database
+# as the app: PLATFORM_DATABASE_URL is derived from these (platform.env.schema.ts).
+x-app-db: &app-db
+  DB_HOST: db
+  POSTGRES_PORT: "5432"
+  PLATFORM_DB_NAME: ${PLATFORM_DB_NAME:?set PLATFORM_DB_NAME in the platform env file}
+  PLATFORM_DB_APP_USER: ${PLATFORM_DB_APP_USER:?set PLATFORM_DB_APP_USER in the platform env file}
+  PLATFORM_DB_APP_PASSWORD: ${PLATFORM_DB_APP_PASSWORD:?set PLATFORM_DB_APP_PASSWORD in the platform env file}
+
+services:
+  db:
+    # The same image as deploy/compose.academy.yaml.
+    image: postgres:18.7-trixie
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in the platform env file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the platform env file}
+      # The maintenance database: the image creates nothing more, 20-platform.sh creates
+      # PLATFORM_DB_NAME owned by the migrator (it connects to POSTGRES_DB for that step).
+      POSTGRES_DB: postgres
+      PLATFORM_DB_NAME: ${PLATFORM_DB_NAME:?set PLATFORM_DB_NAME in the platform env file}
+      PLATFORM_DB_MIGRATOR_USER: ${PLATFORM_DB_MIGRATOR_USER:?set PLATFORM_DB_MIGRATOR_USER in the platform env file}
+      PLATFORM_DB_MIGRATOR_PASSWORD: ${PLATFORM_DB_MIGRATOR_PASSWORD:?set PLATFORM_DB_MIGRATOR_PASSWORD in the platform env file}
+      PLATFORM_DB_APP_USER: ${PLATFORM_DB_APP_USER:?set PLATFORM_DB_APP_USER in the platform env file}
+      PLATFORM_DB_APP_PASSWORD: ${PLATFORM_DB_APP_PASSWORD:?set PLATFORM_DB_APP_PASSWORD in the platform env file}
+      # Production: `prisma migrate deploy` needs no shadow database (6.6.3, D-R90).
+      DB_MIGRATOR_CREATEDB: "false"
+    volumes:
+      - db_data:/var/lib/postgresql
+      # The platform script alone (never the folder: 10-roles.sh would fail without the
+      # academy variables and must not create academy roles here).
+      - ../docker/postgres/initdb/20-platform.sh:/docker-entrypoint-initdb.d/20-platform.sh:ro
+    shm_size: 256mb
+    healthcheck:
+      # -h 127.0.0.1: the image runs the init scripts on a socket-only server, so this
+      # answers only once 20-platform.sh is done and the real server listens.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$PLATFORM_DB_NAME\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    logging: *logging
+
+  migrate:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: tools
+    image: articode-api-tools:${PLATFORM_IMAGE_TAG:-local}
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *app-db
+      PLATFORM_DB_MIGRATOR_USER: ${PLATFORM_DB_MIGRATOR_USER:?set PLATFORM_DB_MIGRATOR_USER in the platform env file}
+      PLATFORM_DB_MIGRATOR_PASSWORD: ${PLATFORM_DB_MIGRATOR_PASSWORD:?set PLATFORM_DB_MIGRATOR_PASSWORD in the platform env file}
+    # The platform migrations only — never the academy schema, never a seed.
+    command: ["npx", "prisma", "migrate", "deploy", "--config", "prisma.platform.config.ts"]
+    logging: *logging
+
+  api:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: runtime
+    image: articode-api:${PLATFORM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-db
+      NODE_ENV: production
+      PLATFORM_PORT: "3100"
+      PLATFORM_JWT_SECRET: ${PLATFORM_JWT_SECRET:?set PLATFORM_JWT_SECRET in the platform env file}
+      PLATFORM_CORS_ORIGIN: ${PLATFORM_ORIGIN:?set PLATFORM_ORIGIN in the platform env file}
+      # One reverse proxy (Caddy, the `edge` service) in front of the API (MOD-01-H01).
+      TRUST_PROXY: "1"
+      # Optional (empty = the platform default, platform.env.schema.ts).
+      PLATFORM_COOKIE_SECURE: ${PLATFORM_COOKIE_SECURE:-}
+      PLATFORM_JWT_ACCESS_TTL_SECONDS: ${PLATFORM_JWT_ACCESS_TTL_SECONDS:-}
+      PLATFORM_REFRESH_TTL_DAYS: ${PLATFORM_REFRESH_TTL_DAYS:-}
+      PLATFORM_REFRESH_FAMILY_MAX_DAYS: ${PLATFORM_REFRESH_FAMILY_MAX_DAYS:-}
+      PLATFORM_LOCKOUT_THRESHOLD: ${PLATFORM_LOCKOUT_THRESHOLD:-}
+      PLATFORM_LOCKOUT_MINUTES: ${PLATFORM_LOCKOUT_MINUTES:-}
+      # The on-demand probe (API-196) and `stale` of the fleet view (API-198).
+      PLATFORM_PROBE_TIMEOUT_MS: ${PLATFORM_PROBE_TIMEOUT_MS:-}
+      PLATFORM_PROBE_INTERVAL_SECONDS: ${PLATFORM_PROBE_INTERVAL_SECONDS:-}
+    # The platform entry of the image (its default command is the academy API, dist/main.js).
+    command: ["node", "dist/platform/main.js"]
+    healthcheck:
+      # Readiness, not liveness: 200 only when the platform database answers and its schema
+      # is not behind the platform migrations this image carries (the image HEALTHCHECK
+      # probes the academy port 3000 and is replaced here).
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/api/health/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 12s
+      retries: 6
+      start_period: 30s
+      start_interval: 2s
+    logging: *logging
+
+  probe:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: runtime
+    image: articode-api:${PLATFORM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-db
+      NODE_ENV: production
+      PLATFORM_PROBE_TIMEOUT_MS: ${PLATFORM_PROBE_TIMEOUT_MS:-}
+      PLATFORM_PROBE_INTERVAL_SECONDS: ${PLATFORM_PROBE_INTERVAL_SECONDS:-}
+    # A round at start, then every PLATFORM_PROBE_INTERVAL_SECONDS; one JSON line per round
+    # (`platform.probe.round`), a failed round is one line on stderr and the loop goes on.
+    command: ["node", "dist/platform/probe.js"]
+    # The image HEALTHCHECK probes an HTTP API, which this service does not run.
+    healthcheck:
+      disable: true
+    logging: *logging
+
+  edge:
+    <<: *hardened
+    build:
+      context: ..
+      dockerfile: deploy/platform-edge.Dockerfile
+    image: articode-platform-edge:${PLATFORM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      SITE_ADDRESS: ${PLATFORM_ORIGIN:?set PLATFORM_ORIGIN in the platform env file}
+      API_UPSTREAM: api:3100
+    ports:
+      - "${PUBLISH_ADDRESS:-0.0.0.0}:${HTTP_PORT:-80}:${HTTP_PORT:-80}"
+      - "${PUBLISH_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443"
+      - "${PUBLISH_ADDRESS:-0.0.0.0}:${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *logging
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:

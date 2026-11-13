@@ -30,6 +30,9 @@
 !frontend/src/
 !deploy/Caddyfile
 
+# --- platform edge image (deploy/platform-edge.Dockerfile, MOD-18-T06)
+!deploy/Caddyfile.platform
+
 # Never, even inside the folders let in above.
 **/.env
 **/.env.*

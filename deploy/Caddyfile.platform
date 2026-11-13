@@ -1,0 +1,75 @@
+# ArtiCode platform — the `edge` server (MOD-18-T06, D-R104).
+#
+# The platform's one public origin: every request goes to the platform API
+# (`node dist/platform/main.js`, port 3100). No static files yet — the Super
+# Admin UI comes later and will be served from here on the same origin, so the
+# refresh cookie `pla_refresh` (SameSite=Strict, Path=/api/auth) keeps working.
+#
+# Environment (read once, at start):
+#   SITE_ADDRESS  the platform's origin, with its scheme — default http://localhost.
+#                 https://platform.example.com → automatic HTTPS (a Let's Encrypt
+#                     certificate; ports 80 and 443 must reach this container) and
+#                     an http → https redirect on port 80;
+#                 http://localhost[:port]      → plain HTTP only (a local trial).
+#                 Always give the scheme (a bare `localhost` would make Caddy issue
+#                 a certificate from its own local CA). PLATFORM_CORS_ORIGIN of the
+#                 API is the same origin.
+#   API_UPSTREAM  host:port of the platform API — default api:3100.
+#
+# The API runs with TRUST_PROXY=1: it trusts exactly one proxy, this one. Caddy
+# sets X-Forwarded-For, X-Forwarded-Proto and X-Forwarded-Host itself, keeps the
+# Host header and — with no `trusted_proxies` — drops whatever X-Forwarded-* a
+# client sends, so neither req.ip (the login rate limit) nor the request's own
+# origin of OriginGuard can be chosen by a client. Never add `trusted_proxies`
+# unless a load balancer sits in front of Caddy; then TRUST_PROXY must count it.
+#
+# TEST-211: deploy/tests/platform-compose.test.mjs.
+{
+	# Caddy's own log (start-up, certificates, proxy warnings): JSON on stderr.
+	log default {
+		output stderr
+		format json
+	}
+}
+
+{$SITE_ADDRESS:http://localhost} {
+	# No `Server: Caddy` on any response (handle_errors does the same for the
+	# responses Caddy writes itself).
+	header -Server
+
+	encode zstd gzip
+
+	# Access log: one JSON object per request on stdout. Caddy redacts the
+	# Cookie, Set-Cookie and Authorization headers itself; the platform has no
+	# token in a URL (no invitation or reset link in v1).
+	log {
+		output stdout
+		format json
+	}
+
+	# A response Caddy writes itself — 413 of a body over the limit, 502 while
+	# the API is down — is empty, carries no Server header, and its cause goes
+	# into the request's access-log entry as `error`. The API's own error
+	# answers (JSON from Nest) are passed through untouched.
+	handle_errors {
+		log_append error {err.message}
+		header -Server
+		respond "" {err.status_code}
+	}
+
+	# The API accepts JSON bodies of 100 KB (backend/src/app.setup.ts); anything
+	# above 1 MB is refused here with 413 before it reaches Node.
+	request_body {
+		max_size 1MB
+	}
+
+	# Passed through unchanged: path, query, Host and the API's own security
+	# headers (helmet, HSTS included).
+	reverse_proxy {$API_UPSTREAM:api:3100}
+}
+
+# Liveness for the image HEALTHCHECK, on the container's own loopback only.
+http://127.0.0.1:2020 {
+	bind 127.0.0.1
+	respond "ok" 200
+}
