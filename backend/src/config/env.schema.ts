@@ -4,6 +4,8 @@ import { POSTGRES_DEFAULTS, buildPostgresUrl } from './database-url.js';
 
 // Single source of truth for environment variables. Every variable read by the
 // application must be declared here so a typo or a missing value fails at boot.
+// The platform application (MOD-18) has its own schema,
+// src/platform/platform.env.schema.ts, built from the exported helpers below.
 
 export const NODE_ENVS = ['development', 'test', 'production'] as const;
 /** Outgoing-mail transports (src/mail/); `log` is for development only, `resend` is the real provider (LR-01, D-R74). */
@@ -18,7 +20,7 @@ export function isMailbox(value: string): boolean {
   return named ? MAIL_ADDRESS.test(named[2]!) : MAIL_ADDRESS.test(value);
 }
 
-function parseList(value: string): string[] {
+export function parseList(value: string): string[] {
   return value
     .split(',')
     .map((item) => item.trim())
@@ -26,16 +28,16 @@ function parseList(value: string): string[] {
 }
 
 /** Treats an empty assignment (`VAR=`) like an absent variable. */
-function emptyToUndefined(value: unknown): unknown {
+export function emptyToUndefined(value: unknown): unknown {
   return value === '' ? undefined : value;
 }
 
 /** A non-empty string with a default; `VAR=` falls back to the default too. */
-function stringWithDefault(defaultValue: string) {
+export function stringWithDefault(defaultValue: string) {
   return z.preprocess(emptyToUndefined, z.string().min(1).default(defaultValue));
 }
 
-const portSchema = z.coerce.number().int().min(1).max(65535);
+export const portSchema = z.coerce.number().int().min(1).max(65535);
 
 /** Address keywords Express accepts in `trust proxy` besides IPs and CIDR ranges. */
 export const TRUST_PROXY_KEYWORDS = ['loopback', 'linklocal', 'uniquelocal'] as const;

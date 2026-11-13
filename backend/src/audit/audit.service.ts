@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AuditLog, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { assertNoSecrets } from './audit-metadata.js';
 import type { AuditLogItemDto, AuditLogListDto } from './audit.dto.js';
 import { AUDIT_PAGE_DEFAULT, buildAuditWhere, pageOf } from './audit.query.js';
 import type { AuditListFilters } from './audit.query.js';
+
+// Lives in audit-metadata.ts since MOD-18-T02 (the platform reuses it); still
+// exported from here for the existing callers.
+export { assertNoSecrets };
 
 export interface AuditEntry {
   /** Dotted event name, e.g. `auth.login.succeeded`. */
@@ -15,21 +20,6 @@ export interface AuditEntry {
   metadata?: Record<string, unknown> | null;
   ip?: string | null;
   userAgent?: string | null;
-}
-
-const FORBIDDEN_METADATA_KEY = /(password|passwd|secret|token|hash|authorization|cookie)/i;
-
-/** Rejects metadata that looks like it carries a credential (defense in depth). */
-export function assertNoSecrets(metadata: Record<string, unknown> | null | undefined, path = 'metadata'): void {
-  if (!metadata) return;
-  for (const [key, value] of Object.entries(metadata)) {
-    if (FORBIDDEN_METADATA_KEY.test(key)) {
-      throw new Error(`audit metadata must not contain credentials (${path}.${key})`);
-    }
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      assertNoSecrets(value as Record<string, unknown>, `${path}.${key}`);
-    }
-  }
 }
 
 function toItem(row: AuditLog): AuditLogItemDto {
