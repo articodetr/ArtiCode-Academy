@@ -1,0 +1,24 @@
+# Build context of the deployment images (deploy/*.Dockerfile, MOD-17, ADR-072).
+# Deny by default: only what an image needs is let back in, so a local .env,
+# node_modules, dist, .git or the docs can never reach a layer.
+*
+
+# --- api image (deploy/api.Dockerfile)
+!backend/package.json
+!backend/package-lock.json
+!backend/nest-cli.json
+!backend/tsconfig.json
+!backend/tsconfig.build.json
+!backend/prisma.config.ts
+!backend/prisma/
+!backend/src/
+!backend/scripts/
+
+# Never, even inside the folders let in above.
+**/.env
+**/.env.*
+**/node_modules/
+**/dist/
+**/*.tsbuildinfo
+backend/src/generated/
+backend/scripts/acceptance/
