@@ -94,7 +94,8 @@ export class AuthController {
 
   @Post('logout')
   @Public()
-  @SkipThrottle()
+  // The throttler is named "login" (app.module.ts): a bare @SkipThrottle() skips only "default" (KI-082).
+  @SkipThrottle({ login: true })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Sign out of this device', description: 'Revokes the session behind the refresh cookie and clears it. Always 204.' })
   @ApiNoContentResponse()
@@ -104,7 +105,8 @@ export class AuthController {
   }
 
   @Post('logout-all')
-  @SkipThrottle()
+  // The throttler is named "login" (app.module.ts): a bare @SkipThrottle() skips only "default" (KI-082).
+  @SkipThrottle({ login: true })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Sign out of every device', description: 'Revokes all refresh tokens of the caller and clears the cookie.' })
@@ -120,7 +122,8 @@ export class AuthController {
   }
 
   @Get('me')
-  @SkipThrottle()
+  // The throttler is named "login" (app.module.ts): a bare @SkipThrottle() skips only "default" (KI-082).
+  @SkipThrottle({ login: true })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Current user with roles and permissions' })
   @ApiOkResponse({ type: AuthUserDto })

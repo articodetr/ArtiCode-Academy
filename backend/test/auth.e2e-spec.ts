@@ -403,6 +403,21 @@ describe.skipIf(!available)('MOD-01 authentication (e2e, TEST-008)', () => {
     expect((await login(`someone-else-${RUN}@example.test`, 'whatever')).status).toBe(401);
   });
 
+  it('never rate-limits /me, logout and logout-all (KI-082: @SkipThrottle must name the "login" throttler)', async () => {
+    const user = await createUser('unthrottled');
+    const session = await login(user.email).expect(200);
+    const bearer = `Bearer ${session.body.accessToken}`;
+    // 12 > the "login" throttler's 10 per 15 minutes per client and route.
+    for (let call = 1; call <= 12; call += 1) {
+      const me = await request(app.getHttpServer()).get('/api/auth/me').set('Authorization', bearer);
+      expect(me.status, `GET /api/auth/me call ${call}`).toBe(200);
+      const logout = await request(app.getHttpServer()).post('/api/auth/logout');
+      expect(logout.status, `POST /api/auth/logout call ${call}`).toBe(204);
+      const logoutAll = await request(app.getHttpServer()).post('/api/auth/logout-all').set('Authorization', bearer);
+      expect(logoutAll.status, `POST /api/auth/logout-all call ${call}`).toBe(204);
+    }
+  });
+
   it('bootstraps the first academy admin at most once and refuses a second one', async () => {
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { key: ACADEMY_ADMIN_ROLE_KEY }, select: { id: true } });
     const existingAdmins = await prisma.user.count({
