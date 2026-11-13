@@ -19,6 +19,7 @@ import { PlatformSessionModule } from './auth/platform-session.module.js';
 import { PlatformHealthModule } from './health/platform-health.module.js';
 import { validatePlatformEnv } from './platform.env.schema.js';
 import { PlatformPrismaModule } from './prisma/platform-prisma.module.js';
+import { PlatformRegistryModule } from './registry/registry.module.js';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { PlatformPrismaModule } from './prisma/platform-prisma.module.js';
     // MOD-18-T03: the session routes (API-178..182).
     PlatformSessionModule,
     PlatformHealthModule,
+    PlatformRegistryModule, // MOD-18-T04: the academies registry (API-183..195)
   ],
 })
 export class PlatformAppModule {}
