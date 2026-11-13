@@ -1,0 +1,130 @@
+# ArtiCode Academy — the `web` server (MOD-17-T02, D-R89, ADR-072).
+#
+# One origin per academy: `/` is the Vite build of frontend/ and `/api/*` is the
+# backend, so the refresh cookie (SameSite=Strict, Path=/api/auth — SEC-R-11)
+# and the Bearer calls of the UI stay on the same site.
+#
+# Environment (read once, at start):
+#   SITE_ADDRESS  the academy's origin, with its scheme — default http://localhost.
+#                 https://academy.example.com  → automatic HTTPS: a Let's Encrypt
+#                     certificate for that host (ports 80 and 443 must reach this
+#                     container) and an http → https redirect on port 80;
+#                 http://localhost             → plain HTTP on port 80 only — no
+#                     certificate, no local CA (the local trial on Docker Desktop).
+#                 Always give the scheme: a bare `localhost` would make Caddy issue
+#                 a certificate from its own local CA. A port in the address is
+#                 the port Caddy listens on (http://localhost:8080). Several
+#                 origins of one academy may be listed, separated by commas.
+#                 CORS_ORIGIN and APP_PUBLIC_URL of the API are the same origin.
+#   API_UPSTREAM  host:port of the backend — default api:3000 (the `api` service
+#                 of the academy's compose project, MOD-17-T03).
+#
+# The API runs with TRUST_PROXY=1: it trusts exactly one proxy, this one. Caddy
+# sets X-Forwarded-For (the client's address), X-Forwarded-Proto and
+# X-Forwarded-Host itself and keeps the Host header, and — with no
+# `trusted_proxies` — drops whatever X-Forwarded-* a client sends, so neither
+# req.ip, req.protocol nor the request's own origin of OriginGuard can be chosen
+# by a client. Never add `trusted_proxies` here unless a load balancer sits in
+# front of Caddy; then TRUST_PROXY must count it too.
+#
+# TEST-201: deploy/tests/web-image.test.mjs.
+{
+	# Caddy's own log (start-up, certificates, proxy warnings) stays JSON on
+	# stderr; a request it quotes loses its one-time token like the access log.
+	log default {
+		output stderr
+		format filter {
+			request>uri regexp /[A-Za-z0-9_-]{40,} /REDACTED
+			request>headers>Referer regexp /[A-Za-z0-9_-]{40,} /REDACTED
+			wrap json
+		}
+	}
+}
+
+{$SITE_ADDRESS:http://localhost} {
+	# Caddy announces itself with `Server: Caddy` on every response; not here
+	# (handle_errors below does the same for the responses Caddy writes itself).
+	header -Server
+
+	encode zstd gzip
+
+	# Access log: one JSON object per request on stdout. Cookie, Set-Cookie and
+	# Authorization are redacted by Caddy itself; the one-time tokens of
+	# /invite/<token>, /reset-password/<token>, /verify-email/<token> and of
+	# their /api/account/... calls (43 base64url characters) are cut from the URI
+	# and from the Referer a page sends with its own requests. Ids (uuid, 36
+	# characters) and cursors (query string) stay readable.
+	log {
+		output stdout
+		format filter {
+			request>uri regexp /[A-Za-z0-9_-]{40,} /REDACTED
+			request>headers>Referer regexp /[A-Za-z0-9_-]{40,} /REDACTED
+			error regexp /[A-Za-z0-9_-]{40,} /REDACTED
+			wrap json
+		}
+	}
+
+	# A response Caddy writes itself — 404 of a missing file, 413 of a body over
+	# the limit, 502 while the API is down — is empty, carries no Server header,
+	# and its cause goes into the request's access-log entry as `error` (Caddy
+	# would otherwise log it apart, at debug level once it is handled here).
+	# The API's own error answers (JSON from Nest) are passed through untouched.
+	handle_errors {
+		log_append error {err.message}
+		header -Server
+		respond "" {err.status_code}
+	}
+
+	# --- the backend -----------------------------------------------------------
+	# Passed through unchanged (path, query, Host and the API's own security
+	# headers from helmet). The largest JSON body the API accepts is 1 MB
+	# (LARGE_JSON_ROUTES of backend/src/app.setup.ts); anything above 2 MB is
+	# refused here with 413 before it reaches Node.
+	handle /api/* {
+		request_body {
+			max_size 2MB
+		}
+		reverse_proxy {$API_UPSTREAM:api:3000}
+	}
+
+	# --- the UI ----------------------------------------------------------------
+	handle {
+		root * /srv
+
+		header {
+			X-Content-Type-Options nosniff
+			Referrer-Policy strict-origin-when-cross-origin
+			X-Frame-Options DENY
+		}
+		# HSTS only where it means something: a browser ignores it over plain
+		# HTTP (RFC 6797 §8.1), and the value is helmet's, the one the API sends
+		# on /api/* — two policies for one host would overwrite each other.
+		@https protocol https
+		header @https Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+		# Vite's hashed bundles: a name never changes content. A missing file is
+		# a plain 404 — never index.html, never cached.
+		handle /assets/* {
+			header {
+				Cache-Control "public, max-age=31536000, immutable"
+				match status 200 304
+			}
+			file_server
+		}
+
+		# Everything else: the file when it exists (favicon.svg), else index.html
+		# — the client router handles /classes, /users/<id>, /invite/<token> …
+		# — always revalidated, so a new release is picked up at once.
+		handle {
+			header Cache-Control no-cache
+			try_files {path} /index.html
+			file_server
+		}
+	}
+}
+
+# Liveness for the image HEALTHCHECK, on the container's own loopback only.
+http://127.0.0.1:2020 {
+	bind 127.0.0.1
+	respond "ok" 200
+}
