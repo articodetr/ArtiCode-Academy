@@ -64,8 +64,9 @@ function mockDashboardApi() {
 describe('DashboardPage (redesign — the day timeline and its views)', () => {
   it('shows a viewer without any key only the Today view, no tabs, and asks the server for nothing but the academy', async () => {
     const urls = mockDashboardApi()
-    const learner = makeUser({ role: 'student', roles: ['student'], permissions: [] })
-    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: learner }) })
+    // A custom role without keys (a student or guardian gets the learner home instead — LearnerHome.test.tsx).
+    const viewer = makeUser({ role: null, roles: ['observer'], permissions: [] })
+    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: viewer }) })
 
     expect(await screen.findByText(ar.dashboard.noLessonsAccess, { exact: false })).toBeInTheDocument()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()

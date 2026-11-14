@@ -184,7 +184,8 @@ describe('NAV_ITEMS', () => {
     expect(keysFor(viewer(null, ['lessons.read']))).toEqual(['dashboard', 'lessons'])
     // A custom role holding lessons.manage without lessons.read would get 403 on the list — the entry stays hidden.
     expect(keysFor(viewer(null, ['lessons.manage']))).toEqual(['dashboard'])
-    expect(canAccess(viewer('student'), 'lessons')).toBe(true)
+    // Since the redesign (2026-11-14) a learner-only viewer has «my lessons» instead (the staff list showed them nothing).
+    expect(canAccess(viewer('student'), 'lessons')).toBe(false)
     expect(canAccess(viewer('guardian'), 'lessons')).toBe(false)
     expect(canAccess(viewer('admin', []), 'lessons')).toBe(false)
   })
@@ -357,14 +358,15 @@ describe('navFor', () => {
     // and the certificates entry (J-F51): the seed grants them certificates.issue, which opens the list too (D-R57).
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications', 'reports'])
     // Students and guardians gain «my classes» (J-F04) and «my lessons» (J-F11): ownership, by their server role keys.
-    // Students keep the lessons entry through lessons.read (an empty list there — their own lessons are in «my lessons», API-101).
+    // Since the redesign (2026-11-14) learner-only viewers lose the staff courses and lessons entries (`exceptRoleKeysOnly`):
+    // the lessons list showed them nothing — their own lessons are in «my lessons» (API-101), their classes in «my classes».
     // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted — and gain
     // «my assignments» (J-F42, API-112) in its place, by their server role keys. Both lose the exams entry too (J-F45): exams.read
     // is theirs by seed, but the learners are excepted — and gain «my exams» (API-121) and «my grades» (API-129) right after
     // «my assignments» (J-F50), by their server role keys. Since J-F51 the certificates entry follows
     // certificates.read_all/issue, which no learner holds: both see «my certificates» (API-135) instead, right after «my grades».
-    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
-    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
   })
 
   it('shows the users page to a teacher because the seed grants teachers users.read (reduced projection) (MOD-03-T15)', () => {
