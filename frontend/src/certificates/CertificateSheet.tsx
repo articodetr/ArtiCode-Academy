@@ -2,10 +2,12 @@
 // snapshot alone — the student's names, the course, the class, the academy
 // and the grade as they were at issuance, so a later edit never changes a
 // printed certificate — with the serial (D-R53), the completion and issue
-// days, and the verification link and code of the public page (D-R56). The
+// days, and a QR code of the public verification page with its code (D-R56; the
+// link became a QR code in the redesign, 2026-11-14 — the code stays printed for typing by hand). The
 // wording is the frontend's (certificates.sheet.*), in the language chosen for
 // the print, independent of the language of the app (a fixed `t`). A revoked
 // certificate carries a «revoked» watermark, on screen and on paper.
+import { QRCodeSVG } from 'qrcode.react'
 import type { CertificateSnapshot, CertificateStatus } from '../api/certificates'
 import { directionOf } from '../i18n/language'
 import type { Language } from '../i18n/language'
@@ -72,11 +74,23 @@ export function CertificateSheet({ serial, verificationCode, status, snapshot, l
           </dd>
         </div>
       </dl>
-      <p className="certificate-sheet__verify">
-        {t('certificates.sheet.verify')} <bdi dir="ltr">{verificationUrl(verificationCode, origin)}</bdi>
-        <br />
-        {t('certificates.sheet.code')} <bdi dir="ltr">{groupVerificationCode(verificationCode)}</bdi>
-      </p>
+      <div className="certificate-sheet__verify">
+        <QRCodeSVG
+          value={verificationUrl(verificationCode, origin)}
+          size={96}
+          level="M"
+          marginSize={0}
+          fgColor="#16305c"
+          title={t('certificates.sheet.qrLabel')}
+          className="certificate-sheet__qr"
+          data-testid="certificate-qr"
+        />
+        <p>
+          {t('certificates.sheet.verify')}
+          <br />
+          {t('certificates.sheet.code')} <bdi dir="ltr">{groupVerificationCode(verificationCode)}</bdi>
+        </p>
+      </div>
     </article>
   )
 }
