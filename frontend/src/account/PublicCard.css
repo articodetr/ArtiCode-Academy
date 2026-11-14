@@ -2,6 +2,8 @@
    the sign-in page's white form side and brand block, alone and centred — no sample day. */
 .login-page.public-page {
   grid-template-columns: minmax(0, 1fr);
+  /* Redesign: the page background with the content on a card, a navy edge on top — not a bare white page. */
+  background: var(--c-paper);
 }
 
 .public-page .login-form-side {
@@ -9,7 +11,18 @@
 }
 
 .public-page .login-form-box {
-  max-width: 440px;
+  max-width: 480px;
+  padding: 32px 36px 24px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-top: 4px solid var(--c-ink);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 520px) {
+  .public-page .login-form-box {
+    padding: 24px 20px 18px;
+  }
 }
 
 .public-page__intro {

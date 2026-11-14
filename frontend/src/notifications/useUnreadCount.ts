@@ -4,8 +4,10 @@
 // not 'visible' and the count is asked again the moment the page shows. The
 // notifications page calls refreshUnreadCount() after every mark-read, so a
 // mounted bell follows at once instead of at the next poll. A failed read
-// keeps the last count.
+// keeps the last count. A 401 (the session ended — signed out in another tab, or expired) stops the polling
+// until the page is shown again (redesign: a tab left open asked every minute and got 401 forever).
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ApiError } from '../api/client'
 import { getUnreadCount } from '../api/notifications'
 
 /** D-R86: how often the count is asked while the page is visible. */
@@ -34,6 +36,9 @@ export function useUnreadCount(): UnreadCount {
   const [unread, setUnread] = useState<number | null>(null)
   const [error, setError] = useState<unknown>(null)
   const inFlight = useRef<AbortController | null>(null)
+  /** Set on a 401: the poll stops until the page becomes visible again. */
+  const signedOut = useRef(false)
+  const stopPolling = useRef<() => void>(() => {})
 
   const load = useCallback(() => {
     inFlight.current?.abort()
@@ -46,7 +51,12 @@ export function useUnreadCount(): UnreadCount {
         setError(null)
       },
       (caught: unknown) => {
-        if (!controller.signal.aborted) setError(caught)
+        if (controller.signal.aborted) return
+        setError(caught)
+        if (caught instanceof ApiError && caught.status === 401) {
+          signedOut.current = true
+          stopPolling.current()
+        }
       },
     )
   }, [])
@@ -57,14 +67,16 @@ export function useUnreadCount(): UnreadCount {
       if (timer !== null) clearInterval(timer)
       timer = null
     }
+    stopPolling.current = stop
     const start = () => {
       stop()
+      signedOut.current = false
       load()
       timer = setInterval(load, UNREAD_POLL_MS)
     }
     const onVisibility = () => (pageVisible() ? start() : stop())
     const onRefresh = () => {
-      if (pageVisible()) load()
+      if (pageVisible() && !signedOut.current) load()
     }
     if (pageVisible()) start()
     document.addEventListener('visibilitychange', onVisibility)
