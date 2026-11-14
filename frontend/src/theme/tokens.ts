@@ -51,11 +51,6 @@ export const appTheme: ThemeConfig = {
     colorBorderSecondary: colors.line,
     colorBgLayout: colors.paper,
     colorBgContainer: colors.surface,
-    // antd's preset colours (Tag color="blue"…) take the palette's hues, so the tags left outside StatusTag match it.
-    blue: colors.ink,
-    green: colors.ok,
-    red: colors.bad,
-    gold: '#c9971f',
     borderRadius: 8,
     borderRadiusLG: 12,
     fontFamily: FONT_FAMILY,

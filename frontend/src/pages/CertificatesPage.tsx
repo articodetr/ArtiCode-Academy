@@ -24,6 +24,7 @@ import { certificatePrintPath } from '../certificates/certificates.links'
 import { CERTIFICATE_PAGE_SIZES, defaultCertificateFilters, hasActiveCertificateFilters, useCertificatesList } from '../certificates/useCertificatesList'
 import type { CertificatesListFilters } from '../certificates/useCertificatesList'
 import { CoursePicker, StudentPicker } from '../classes/ClassPickers'
+import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { useLocalized } from '../i18n/useLocalized'
 import { ClassPicker } from '../timetable/TimetablePickers'
@@ -40,6 +41,8 @@ export function CertificatesPage() {
   const [defaults] = useState(defaultCertificateFilters)
   const list = useCertificatesList(defaults)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Redesign (2026-11-14): on a wide screen the certificate opens in a side panel beside the table, not over it.
+  const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openCertificate, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
 
   const columns: TableProps<Certificate>['columns'] = [
     {
@@ -130,7 +133,7 @@ export function CertificatesPage() {
       key: 'actions',
       render: (_, row) => (
         <Space size={4} onClick={(event) => event.stopPropagation()}>
-          <Button type="link" size="small" onClick={() => setSelectedId(row.id)} aria-label={`${t('common.view')}: ${row.serial}`}>
+          <Button type="link" size="small" onClick={() => openCertificate(row.id)} aria-label={`${t('common.view')}: ${row.serial}`}>
             {t('common.view')}
           </Button>
           <Button
@@ -156,7 +159,8 @@ export function CertificatesPage() {
 
       <Alert type="info" showIcon title={t('certificates.issueHint')} style={{ marginBottom: 16 }} />
 
-      <Card>
+      <div className={layoutClassName}>
+      <Card className="list-with-panel__main">
         <Flex gap={12} wrap align="center" style={{ marginBottom: 16 }}>
           <Input.Search
             allowClear
@@ -225,13 +229,14 @@ export function CertificatesPage() {
 
         <Table<Certificate>
           rowKey="id"
-          columns={columns}
+          columns={docked ? columns.filter((column) => ['serial', 'student', 'status'].includes(String(column.key))) : columns}
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
           scroll={{ x: 'max-content' }}
           locale={{ emptyText }}
-          onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
+          onRow={(row) => ({ onClick: () => openCertificate(row.id), style: { cursor: 'pointer' } })}
+          rowClassName={(row) => (row.id === selectedId ? 'list-row--open' : '')}
         />
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
@@ -255,8 +260,17 @@ export function CertificatesPage() {
           </Space>
         </Flex>
       </Card>
+      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
+      </div>
 
-      <CertificateDrawer certificateId={selectedId} onClose={() => setSelectedId(null)} onUpdated={list.replaceItem} />
+      <CertificateDrawer
+        key={docked ? selectedId : 'overlay'}
+        certificateId={selectedId}
+        onClose={() => setSelectedId(null)}
+        onUpdated={list.replaceItem}
+        dockedIn={dockedIn}
+        onUnsavedChange={onUnsavedChange}
+      />
     </>
   )
 }

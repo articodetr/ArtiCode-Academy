@@ -37,6 +37,7 @@ import { useAuth } from '../auth/auth-context'
 import { ClassCertificatesTab } from '../certificates/ClassCertificatesTab'
 import { canReadCertificates } from '../certificates/certificates.policy'
 import { NavigationBlocker } from '../common/NavigationBlocker'
+import { dockedDrawerProps } from '../common/useDockedPanel'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { ClassEnrollmentsTab } from '../enrollments/ClassEnrollmentsTab'
@@ -228,11 +229,8 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, dockedIn, 
       // KI-052: unsaved work turns off the Escape key and the mask click; an open
       // Select or Dropdown still closes on Escape (it sits on top of the drawer).
       keyboard={!unsaved}
-      mask={dockedIn ? false : { closable: !unsaved }}
-      getContainer={dockedIn ?? undefined}
-      rootClassName={dockedIn ? 'class-drawer--docked' : undefined}
+      {...dockedDrawerProps(dockedIn, unsaved, 'large')}
       title={name}
-      size={dockedIn ? '100%' : 'large'}
       destroyOnHidden
       extra={
         canManage && cls && !editing ? (

@@ -32,6 +32,7 @@ import { getUser, updateUser } from '../api/users'
 import type { UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { NavigationBlocker } from '../common/NavigationBlocker'
+import { dockedDrawerProps } from '../common/useDockedPanel'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -58,6 +59,13 @@ interface UserDrawerProps {
   onClose: () => void
   /** Called with the detail returned by a successful write so the list can refresh its row. */
   onUpdated: (user: UserDetail) => void
+  /**
+   * Redesign (2026-11-14): the element of a side panel beside the list to open in, instead of over the page —
+   * no mask, the full width and height of the panel. Absent (phones, tests) = the usual overlay drawer.
+   */
+  dockedIn?: HTMLElement | null
+  /** Told whenever the drawer starts or stops holding unsaved work, so the list can ask before switching user. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
 /** The editors of the drawer that report unsaved work (KI-054): the edit form and one per tab. */
@@ -67,7 +75,7 @@ type UnsavedReporters = Readonly<Record<EditorPart, (unsaved: boolean) => void>>
 
 const NOTHING_UNSAVED: Readonly<Record<EditorPart, boolean>> = { details: false, roles: false, guardians: false, students: false }
 
-export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null, onClose, onUpdated }: UserDrawerProps) {
+export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null, onClose, onUpdated, dockedIn, onUnsavedChange }: UserDrawerProps) {
   const { t } = useTranslation()
   const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<EditorPart, boolean>>>(NOTHING_UNSAVED)
 
@@ -78,6 +86,11 @@ export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null,
   }, [])
   // KI-054: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
   const unsaved = unsavedParts.details || unsavedParts.roles || unsavedParts.guardians || unsavedParts.students
+
+  // The list asks before it switches to another user while this one holds unsaved work (docked panel).
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+  }, [unsaved, onUnsavedChange])
 
   const close = () => {
     setUnsavedParts(NOTHING_UNSAVED)
@@ -96,9 +109,8 @@ export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null,
       // KI-054: unsaved work turns off the Escape key and the mask click; a modal, Select or
       // Dropdown open on top still closes on Escape (it sits above the drawer).
       keyboard={!unsaved}
-      mask={{ closable: !unsaved }}
+      {...dockedDrawerProps(dockedIn, unsaved, 600)}
       title={t('users.detail.title')}
-      width={600}
       destroyOnHidden
     >
       <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />

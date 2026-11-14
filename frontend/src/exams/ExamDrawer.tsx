@@ -33,6 +33,7 @@ import { formatZonedDateTime, formatZonedDay } from '../assignments/assignments.
 import { differsFromDevice } from '../assignments/assignments.zone'
 import { useAuth } from '../auth/auth-context'
 import { NavigationBlocker } from '../common/NavigationBlocker'
+import { dockedDrawerProps } from '../common/useDockedPanel'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -80,9 +81,16 @@ interface ExamDrawerProps {
   onUpdated: (exam: Exam) => void
   /** An exam was deleted. */
   onDeleted: (examId: string) => void
+  /**
+   * Redesign (2026-11-14): the element of a side panel beside the list to open in, instead of over the page —
+   * no mask, the full width and height of the panel. Absent (phones, tests) = the usual overlay drawer.
+   */
+  dockedIn?: HTMLElement | null
+  /** Told whenever the drawer starts or stops holding unsaved work, so the list can ask before switching exam. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function ExamDrawer({ examId, onClose, onUpdated, onDeleted }: ExamDrawerProps) {
+export function ExamDrawer({ examId, onClose, onUpdated, onDeleted, dockedIn, onUnsavedChange }: ExamDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
@@ -103,6 +111,11 @@ export function ExamDrawer({ examId, onClose, onUpdated, onDeleted }: ExamDrawer
   }, [])
   // While the edit form or the results sheet holds unsaved work, Escape and a mask click must not drop it with the drawer.
   const unsaved = (editing && unsavedParts.details) || unsavedParts.results
+
+  // The list asks before it switches to another exam while this one holds unsaved work (docked panel).
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+  }, [unsaved, onUnsavedChange])
 
   useEffect(() => {
     if (!examId) return
@@ -195,7 +208,7 @@ export function ExamDrawer({ examId, onClose, onUpdated, onDeleted }: ExamDrawer
       // Unsaved work turns off the Escape key and the mask click; a modal, Select or Dropdown open on top still closes
       // on Escape (it sits above the drawer).
       keyboard={!unsaved}
-      mask={{ closable: !unsaved }}
+      {...dockedDrawerProps(dockedIn, unsaved, 'min(760px, 100vw)')}
       title={
         exam ? (
           <Space wrap>
@@ -206,8 +219,6 @@ export function ExamDrawer({ examId, onClose, onUpdated, onDeleted }: ExamDrawer
           title
         )
       }
-      // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport.
-      size="min(760px, 100vw)"
       destroyOnHidden
       extra={
         exam && !editing && (editability.editable || menu.length > 0) ? (

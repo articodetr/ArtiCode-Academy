@@ -21,6 +21,7 @@ import type { Exam } from '../api/exams'
 import { formatZonedDateTime } from '../assignments/assignments.format'
 import { academyZoneOf, differsFromDevice } from '../assignments/assignments.zone'
 import { useAuth } from '../auth/auth-context'
+import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { CreateExamModal } from '../exams/CreateExamModal'
@@ -55,6 +56,8 @@ export function ExamsPage() {
   const [defaults] = useState(() => defaultExamFilters(filterZone))
   const list = useExamsList(defaults)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Redesign (2026-11-14): on a wide screen the exam opens in a side panel beside the table, not over it.
+  const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openExam, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
   const [creating, setCreating] = useState(false)
 
   const columns: TableProps<Exam>['columns'] = [
@@ -141,7 +144,7 @@ export function ExamsPage() {
           size="small"
           onClick={(event) => {
             event.stopPropagation()
-            setSelectedId(row.id)
+            openExam(row.id)
           }}
           aria-label={`${t('common.view')}: ${examTitle(row, language)}`}
         >
@@ -175,7 +178,8 @@ export function ExamsPage() {
 
       {!seesEveryClass ? <Alert type="info" showIcon title={t('exams.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
 
-      <Card>
+      <div className={layoutClassName}>
+      <Card className="list-with-panel__main">
         <Flex gap={12} wrap align="center" style={{ marginBottom: 16 }}>
           {canPickClass ? (
             <ClassPicker
@@ -246,13 +250,14 @@ export function ExamsPage() {
 
         <Table<Exam>
           rowKey="id"
-          columns={columns}
+          columns={docked ? columns.filter((column) => ['exam', 'class', 'scheduledAt', 'status'].includes(String(column.key))) : columns}
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
           scroll={{ x: 'max-content' }}
           locale={{ emptyText }}
-          onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
+          onRow={(row) => ({ onClick: () => openExam(row.id), style: { cursor: 'pointer' } })}
+          rowClassName={(row) => (row.id === selectedId ? 'list-row--open' : '')}
         />
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
@@ -276,8 +281,18 @@ export function ExamsPage() {
           </Space>
         </Flex>
       </Card>
+      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
+      </div>
 
-      <ExamDrawer examId={selectedId} onClose={() => setSelectedId(null)} onUpdated={list.replaceItem} onDeleted={list.removeItem} />
+      <ExamDrawer
+        key={docked ? selectedId : 'overlay'}
+        examId={selectedId}
+        onClose={() => setSelectedId(null)}
+        onUpdated={list.replaceItem}
+        onDeleted={list.removeItem}
+        dockedIn={dockedIn}
+        onUnsavedChange={onUnsavedChange}
+      />
 
       <CreateExamModal
         open={creating}

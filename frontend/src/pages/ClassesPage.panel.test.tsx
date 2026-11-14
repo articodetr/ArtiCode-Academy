@@ -35,7 +35,7 @@ function wideScreen() {
   }))
 }
 
-const drawerTitle = () => document.querySelector('.class-drawer--docked .ant-drawer-title')
+const drawerTitle = () => document.querySelector('.record-drawer--docked .ant-drawer-title')
 
 describe('ClassesPage — the side panel on a wide screen (redesign)', () => {
   beforeEach(() => {
