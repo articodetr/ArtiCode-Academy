@@ -124,4 +124,12 @@ describe('LoginPage', () => {
     expect(screen.queryByRole('button', { name: ar.login.submit })).not.toBeInTheDocument()
     expect(document.querySelector('.ant-spin')).not.toBeNull()
   })
+
+  it('links to the forgotten-password page from the sign-in form', async () => {
+    renderLogin()
+    const link = screen.getByRole('link', { name: ar.forgotPassword.link })
+    expect(link).toHaveAttribute('href', '/forgot-password')
+    await userEvent.click(link)
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/forgot-password')
+  })
 })

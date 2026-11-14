@@ -179,13 +179,6 @@
   flex-shrink: 0;
 }
 
-.app-header__demo.ant-tag {
-  margin: 0;
-  background: var(--c-mark-soft);
-  color: var(--c-mark-text);
-  border-color: transparent;
-}
-
 .app-user {
   display: inline-flex;
   align-items: center;
@@ -218,13 +211,12 @@
   /*
    * Only a logo is left of the brand on a phone; without one the menu button starts the header.
    * The name stays readable by screen readers — the logo's alt is empty (J-F24) — so it is visually hidden,
-   * never display: none; without a logo the whole brand leaves the flow the same way. The user's name and the
-   * demo tag give way the same way, so the header never scrolls sideways.
+   * never display: none; without a logo the whole brand leaves the flow the same way. The user's name gives way the
+   * same way, so the header never scrolls sideways.
    */
   .app-header__title,
   .app-header__brand--no-logo,
-  .app-user__name,
-  .app-header__demo {
+  .app-user__name {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -240,4 +232,11 @@
     max-height: 28px;
     max-width: 72px;
   }
+}
+
+/* The unread count on the bell: chalk yellow with dark text, like every "needs you" count. */
+.app-bell .ant-badge-count {
+  color: #2a2006;
+  font-weight: 700;
+  box-shadow: none;
 }

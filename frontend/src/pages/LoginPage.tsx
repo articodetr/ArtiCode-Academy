@@ -2,7 +2,7 @@ import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Alert, Button, Form, Input, Spin, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
@@ -117,6 +117,10 @@ export function LoginPage() {
             >
               <Input.Password size="large" prefix={<LockOutlined />} autoComplete="current-password" />
             </Form.Item>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8, marginBottom: 20 }}>
+              <Link to="/forgot-password">{t('forgotPassword.link')}</Link>
+            </div>
 
             <Button type="primary" size="large" htmlType="submit" block loading={submitting}>
               {submitting ? t('login.signingIn') : t('login.submit')}

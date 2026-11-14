@@ -1,0 +1,64 @@
+/* The payments screens (MOD-11): overdue money in the palette's «bad» red, totals as three quiet figures. */
+.finance-overdue {
+  color: var(--c-bad);
+  font-weight: 600;
+}
+
+.finance-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.finance-totals > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-ink);
+  font-size: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.finance-totals > div > span {
+  color: var(--c-muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.finance-totals > .finance-totals__bad {
+  color: var(--c-bad);
+  border-color: var(--c-bad-soft);
+  background: var(--c-bad-soft);
+}
+
+.finance-totals--compact {
+  margin: 12px 0 8px;
+}
+
+.finance-totals--compact > div {
+  font-size: 15px;
+  padding: 8px 10px;
+}
+
+.my-invoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 480px) {
+  .finance-totals {
+    gap: 6px;
+  }
+
+  .finance-totals > div {
+    padding: 8px;
+    font-size: 14px;
+  }
+}

@@ -1,20 +1,7 @@
-import { Button, Result } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router'
+import { StatusPage } from '../components/StatusPage'
 
 export function NotFoundPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  return (
-    <Result
-      status="404"
-      title="404"
-      subTitle={t('errors.notFound')}
-      extra={
-        <Button type="primary" onClick={() => navigate('/')}>
-          {t('errors.backHome')}
-        </Button>
-      }
-    />
-  )
+  return <StatusPage code="404" message={t('errors.notFound')} />
 }

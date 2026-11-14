@@ -1,0 +1,27 @@
+/* The public account pages (invitation, reset, e-mail confirmation, forgotten password):
+   the sign-in page's white form side and brand block, alone and centred — no sample day. */
+.login-page.public-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.public-page .login-form-side {
+  align-items: center;
+}
+
+.public-page .login-form-box {
+  max-width: 440px;
+}
+
+.public-page__intro {
+  margin-top: 20px;
+}
+
+.public-page__body {
+  margin-top: 24px;
+}
+
+.public-page__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}

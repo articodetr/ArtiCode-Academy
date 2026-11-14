@@ -37,10 +37,15 @@ interface RecordedCall {
   authorization: string | null
 }
 
-/** Answers every request with `handler` and records method + path, the JSON body and the bearer header. */
+/**
+ * Answers every request with `handler` and records method + path, the JSON body and the bearer header.
+ * The read of one's own user detail (the e-mail confirmation state — ProfilePage.emailVerification.test.tsx)
+ * is answered 404 (state unknown) without reaching `handler` and is not recorded.
+ */
 function record(handler: FetchHandler = () => jsonResponse(404)) {
   const calls: RecordedCall[] = []
   mockFetch((url, init) => {
+    if ((init?.method ?? 'GET') === 'GET' && url.startsWith('/api/users/')) return jsonResponse(404)
     calls.push({
       request: `${init?.method ?? 'GET'} ${url}`,
       body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
