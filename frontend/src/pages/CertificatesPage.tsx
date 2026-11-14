@@ -29,6 +29,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useLocalized } from '../i18n/useLocalized'
 import { ClassPicker } from '../timetable/TimetablePickers'
 import { displayNameOf, formatDateTime, localizedLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function CertificatesPage() {
   const { t } = useTranslation()
@@ -41,6 +42,8 @@ export function CertificatesPage() {
   const [defaults] = useState(defaultCertificateFilters)
   const list = useCertificatesList(defaults)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   // Redesign (2026-11-14): on a wide screen the certificate opens in a side panel beside the table, not over it.
   const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openCertificate, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
 

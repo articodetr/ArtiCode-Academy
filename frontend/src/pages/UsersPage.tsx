@@ -23,6 +23,7 @@ import { PAGE_SIZES, useUsersList } from '../users/useUsersList'
 import type { UsersListFilters } from '../users/useUsersList'
 import { describeUsersFailure, failureMessage } from '../users/users.errors'
 import { displayNameOf, formatDateTime, roleFilterKeys, roleLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function UsersPage() {
   const { t } = useTranslation()
@@ -35,6 +36,8 @@ export function UsersPage() {
   const list = useUsersList()
   const roles = useRoleLabels()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
   // Redesign (2026-11-14): on a wide screen the user opens in a side panel beside the table, not over it.
   const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openUser, layoutClassName } = useDockedPanel(selectedId, setSelectedId)

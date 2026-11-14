@@ -27,6 +27,7 @@ import { formatMoney, personName } from './payments.format'
 import { INVOICE_PAGE_SIZES, useInvoicesList } from './useInvoicesList'
 import type { InvoicesListFilters } from './useInvoicesList'
 import './payments.css'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function OfficeInvoices() {
   const { t } = useTranslation()
@@ -38,6 +39,8 @@ export function OfficeInvoices() {
   const { academy } = useAcademy()
   const list = useInvoicesList()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
   const [batching, setBatching] = useState(false)
   const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openInvoice, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
