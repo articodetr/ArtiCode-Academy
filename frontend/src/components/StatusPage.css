@@ -1,0 +1,52 @@
+.status-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 64px 16px;
+  gap: 6px;
+}
+
+.status-page__art {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  margin-bottom: 18px;
+}
+
+.status-page__disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--c-ink-soft);
+  color: var(--c-ink);
+  display: grid;
+  place-items: center;
+  font-size: 56px;
+}
+
+.status-page__accent {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-end: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--c-mark);
+  transform: rotate(12deg);
+}
+
+.status-page__code {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--c-ink);
+  line-height: 1.1;
+}
+
+.status-page__message {
+  margin: 0 0 18px;
+  color: var(--c-muted);
+  font-size: 16px;
+  max-width: 34em;
+}

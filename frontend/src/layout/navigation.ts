@@ -177,9 +177,30 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // `certificates.read_all` OR `certificates.issue` (D-R57: staff issue without read_all), so either key shows the entry.
   // No learner holds either by seed (they read theirs in «my certificates»), so nobody is excepted; teachers hold none.
   { key: 'certificates', group: 'people', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), permissions: ['certificates.read_all', 'certificates.issue'], module: 'MOD-10' },
-  { key: 'payments', group: 'finance', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
+  // MOD-11 (redesign, 2026-11-14): the payments screen is real — the office view opens with any office key the
+  // server checks (invoices.read_all / invoices.manage / payments.record), «my invoices» (API-155) with
+  // invoices.read_own / invoices.read_linked; any of them shows the entry, whatever the role.
+  {
+    key: 'payments',
+    group: 'finance',
+    path: '/payments',
+    labelKey: 'nav.payments',
+    icon: createElement(CreditCardOutlined),
+    permissions: ['invoices.read_all', 'invoices.manage', 'payments.record', 'invoices.read_own', 'invoices.read_linked'],
+    module: 'MOD-11',
+  },
   { key: 'notifications', group: 'home', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
-  { key: 'reports', group: 'finance', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
+  // MOD-13 (redesign, 2026-11-14): the reports screen is real — each tab needs its own key, any one shows the entry
+  // (seeded staff hold the attendance and financial ones).
+  {
+    key: 'reports',
+    group: 'finance',
+    path: '/reports',
+    labelKey: 'nav.reports',
+    icon: createElement(BarChartOutlined),
+    permissions: ['reports.attendance.view', 'reports.academic.view', 'reports.financial.view'],
+    module: 'MOD-13',
+  },
   // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the
   // catalog keys (either one shows it; saving needs `manage`). By default only academy_admin holds them — no visible change.
   { key: 'settings', group: 'academy', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
