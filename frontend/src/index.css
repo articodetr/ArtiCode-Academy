@@ -107,15 +107,51 @@ body {
   background: var(--c-surface);
 }
 
-.class-drawer--docked.ant-drawer {
+.record-drawer--docked.ant-drawer {
   position: absolute;
   inset: 0;
 }
 
-.class-drawer--docked .ant-drawer-content-wrapper {
+.record-drawer--docked .ant-drawer-content-wrapper {
   box-shadow: none;
 }
 
-.class-drawer--docked .ant-drawer-content {
+.record-drawer--docked .ant-drawer-content {
   border-radius: var(--radius-lg);
+}
+
+/*
+ * The tags still coloured with antd's presets (Tag color="green"…, 60+ places) share the same five tones, so every
+ * tag of the app speaks one palette: blue family → live (navy), green/success → ok, gold/orange/volcano/warning →
+ * attention (chalk yellow), red/error → bad, the decorative hues (purple, cyan, magenta) → neutral. Scoped under
+ * #root so the rules outweigh antd's own preset styles, which are injected after this sheet.
+ */
+#root .ant-tag.ant-tag-filled:is(.ant-tag-blue, .ant-tag-geekblue, .ant-tag-processing) {
+  background: var(--c-ink-soft);
+  color: var(--c-ink);
+  border-color: transparent;
+}
+
+#root .ant-tag.ant-tag-filled:is(.ant-tag-green, .ant-tag-success) {
+  background: var(--c-ok-soft);
+  color: var(--c-ok);
+  border-color: transparent;
+}
+
+#root .ant-tag.ant-tag-filled:is(.ant-tag-gold, .ant-tag-orange, .ant-tag-volcano, .ant-tag-warning, .ant-tag-yellow) {
+  background: var(--c-mark-soft);
+  color: var(--c-mark-text);
+  border-color: transparent;
+}
+
+#root .ant-tag.ant-tag-filled:is(.ant-tag-red, .ant-tag-error) {
+  background: var(--c-bad-soft);
+  color: var(--c-bad);
+  border-color: transparent;
+}
+
+#root .ant-tag.ant-tag-filled:is(.ant-tag-purple, .ant-tag-cyan, .ant-tag-magenta, .ant-tag-lime) {
+  background: #eef0f3;
+  color: var(--c-muted);
+  border-color: transparent;
 }

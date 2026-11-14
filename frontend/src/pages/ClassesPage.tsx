@@ -7,7 +7,7 @@
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Flex, Input, Select, Space, Table, Typography } from 'antd'
 import type { TableProps } from 'antd'
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CLASS_SEARCH_MAX_LENGTH, CLASS_STATUSES } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
@@ -18,7 +18,7 @@ import { CreateClassModal } from '../classes/CreateClassModal'
 import { describeClassesFailure, failureMessage } from '../classes/classes.errors'
 import { CLASS_PAGE_SIZES, useClassesList } from '../classes/useClassesList'
 import type { ClassesListFilters } from '../classes/useClassesList'
-import { useMediaQuery } from '../common/useMediaQuery'
+import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -36,30 +36,7 @@ export function ClassesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   // Redesign (2026-11-14): on a wide screen the class opens in a side panel beside the table, not over it.
-  const wide = useMediaQuery('(min-width: 1360px)')
-  const [panel, setPanel] = useState<HTMLElement | null>(null)
-  const [drawerUnsaved, setDrawerUnsaved] = useState(false)
-  const { modal } = App.useApp()
-  const onUnsavedChange = useCallback((unsaved: boolean) => setDrawerUnsaved(unsaved), [])
-
-  /** Opens a class; switching away from one that holds unsaved work asks the drawers' own question first. */
-  const openClass = (id: string) => {
-    if (selectedId && id !== selectedId && drawerUnsaved) {
-      modal.confirm({
-        title: t('common.unsaved.title'),
-        content: t('common.unsaved.content'),
-        okText: t('common.unsaved.ok'),
-        cancelText: t('common.unsaved.cancel'),
-        onOk: () => {
-          setDrawerUnsaved(false)
-          setSelectedId(id)
-        },
-      })
-      return
-    }
-    setSelectedId(id)
-  }
-  const docked = wide && selectedId !== null
+  const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openClass, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
 
   const leadOf = (row: AcademyClass) => {
     if (row.teachers.length === 0) return <Typography.Text type="secondary">{t('classes.noTeacher')}</Typography.Text>
@@ -127,7 +104,7 @@ export function ClassesPage() {
 
       {!canManage ? <Alert type="info" showIcon message={t('classes.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
 
-      <div className={docked ? 'list-with-panel list-with-panel--open' : 'list-with-panel'}>
+      <div className={layoutClassName}>
       <Card className="list-with-panel__main">
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>
           <Input.Search
@@ -229,7 +206,7 @@ export function ClassesPage() {
           </Space>
         </Flex>
       </Card>
-      {wide ? <aside ref={setPanel} className="list-panel" aria-hidden={!docked} /> : null}
+      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
       </div>
 
       <ClassDrawer
@@ -238,7 +215,7 @@ export function ClassesPage() {
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
         onDeleted={list.removeItem}
-        dockedIn={docked ? panel : undefined}
+        dockedIn={dockedIn}
         onUnsavedChange={onUnsavedChange}
       />
 

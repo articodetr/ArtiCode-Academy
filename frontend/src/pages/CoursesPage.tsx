@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { COURSE_SEARCH_MAX_LENGTH, COURSE_STATUSES } from '../api/courses'
 import type { Course } from '../api/courses'
 import { useAuth } from '../auth/auth-context'
+import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { CourseDrawer } from '../courses/CourseDrawer'
@@ -35,18 +36,20 @@ export function CoursesPage() {
   const [tab, setTab] = useState<'courses' | 'levels'>('courses')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  // Redesign (2026-11-14): on a wide screen a course opens in a side panel beside the list, not over it.
+  const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openCourse, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
 
-  const columns: TableProps<Course>['columns'] = [
+  const allColumns: TableProps<Course>['columns'] = [
     {
-      title: t('courses.code'),
-      key: 'code',
+      title: t('common.name'),
+      key: 'name',
       render: (_, row) => (
-        <Typography.Text dir="ltr" strong>
-          {row.code}
-        </Typography.Text>
+        <span className="list-primary">
+          <b>{localizedLabel(row.name, language)}</b>
+          <bdi dir="ltr">{row.code}</bdi>
+        </span>
       ),
     },
-    { title: t('common.name'), key: 'name', render: (_, row) => localizedLabel(row.name, language) },
     { title: t('courses.level'), key: 'level', render: (_, row) => (row.level ? localizedLabel(row.level.name, language) : '—') },
     { title: t('common.status'), key: 'status', render: (_, row) => <StatusTag value={row.status} /> },
     { title: t('courses.columns.updatedAt'), key: 'updatedAt', render: (_, row) => formatDateTime(row.updatedAt, language) },
@@ -54,17 +57,19 @@ export function CoursesPage() {
       title: t('common.actions'),
       key: 'actions',
       render: (_, row) => (
-        <Button type="link" size="small" onClick={() => setSelectedId(row.id)} aria-label={`${t('common.view')}: ${row.code}`}>
+        <Button type="link" size="small" onClick={() => openCourse(row.id)} aria-label={`${t('common.view')}: ${row.code}`}>
           {t('common.view')}
         </Button>
       ),
     },
   ]
+  // While docked the table keeps the columns that identify a course; the panel shows the rest.
+  const columns = docked ? allColumns.filter((column) => ['name', 'level', 'status'].includes(String(column.key))) : allColumns
 
   const failure = list.error ? describeCoursesFailure(list.error) : null
 
   const coursesCard = (
-    <Card>
+    <Card className="list-with-panel__main">
       <Flex gap={12} wrap style={{ marginBottom: 16 }}>
         <Input.Search
           allowClear
@@ -129,7 +134,8 @@ export function CoursesPage() {
         loading={list.loading}
         pagination={false}
         locale={{ emptyText: t('courses.empty') }}
-        onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
+        rowClassName={(row) => (row.id === selectedId ? 'list-row--open' : '')}
+        onRow={(row) => ({ onClick: () => openCourse(row.id), style: { cursor: 'pointer' } })}
       />
 
       <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
@@ -169,8 +175,11 @@ export function CoursesPage() {
       />
 
       {!canManage ? <Alert type="info" showIcon message={t('courses.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
+      {/* The panel sits beside the tabs, so an open course stays put (and keeps its work) on the levels tab. */}
+      <div className={layoutClassName}>
       {canManage ? (
         <Tabs
+          className="list-with-panel__main"
           activeKey={tab}
           onChange={(key) => setTab(key as 'courses' | 'levels')}
           items={[
@@ -182,13 +191,18 @@ export function CoursesPage() {
       ) : (
         coursesCard
       )}
+      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
+      </div>
 
       <CourseDrawer
+        key={docked ? selectedId : 'overlay'}
         courseId={selectedId}
         levels={levels}
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
         onDeleted={list.removeItem}
+        dockedIn={dockedIn}
+        onUnsavedChange={onUnsavedChange}
       />
 
       <CreateCourseModal

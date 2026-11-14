@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { ASSIGNMENT_STATUS_REASON_MAX_LENGTH, changeAssignmentStatus, deleteAssignment, getAssignment, updateAssignment } from '../api/assignments'
 import type { Assignment } from '../api/assignments'
 import { useAuth } from '../auth/auth-context'
+import { dockedDrawerProps } from '../common/useDockedPanel'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
@@ -64,9 +65,19 @@ interface AssignmentDrawerProps {
   onUpdated: (assignment: Assignment) => void
   /** A draft was deleted. */
   onDeleted: (assignmentId: string) => void
+  /**
+   * Redesign (2026-11-14): the element of a side panel beside the list to open in, instead of over the page —
+   * no mask, the full width and height of the panel. Absent (phones, tests) = the usual overlay drawer.
+   */
+  dockedIn?: HTMLElement | null
+  /**
+   * Redesign (2026-11-14): told while the edit form is open, so the list asks before it switches to another
+   * assignment in the side panel (this drawer tracks no finer unsaved state — closing it behaves as before).
+   */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }: AssignmentDrawerProps) {
+export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted, dockedIn, onUnsavedChange }: AssignmentDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
@@ -77,6 +88,9 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
   const [editing, setEditing] = useState(false)
+  useEffect(() => {
+    onUnsavedChange?.(editing)
+  }, [editing, onUnsavedChange])
   const [pending, setPending] = useState<AssignmentMenuAction | null>(null)
   const [tab, setTab] = useState<DrawerTab>('details')
 
@@ -194,8 +208,9 @@ export function AssignmentDrawer({ assignmentId, onClose, onUpdated, onDeleted }
           title
         )
       }
-      // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport.
-      size="min(760px, 100vw)"
+      // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport. This drawer has no unsaved guard
+      // (the review panel above it keeps its own), so its mask stays closable as before.
+      {...dockedDrawerProps(dockedIn, false, 'min(760px, 100vw)')}
       destroyOnHidden
       extra={
         assignment && !editing && (editability.editable || menu.length > 0) ? (
