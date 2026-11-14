@@ -1,5 +1,7 @@
 export const ar = {
   common: {
+    pageSize: 'عدد العناصر في الصفحة',
+    sortOrder: 'الترتيب',
     appName: 'ArtiCode Academy',
     academyName: 'أكاديمية تجريبية',
     profile: 'حسابي',

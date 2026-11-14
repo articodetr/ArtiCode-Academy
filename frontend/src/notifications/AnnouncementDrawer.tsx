@@ -85,7 +85,7 @@ export function AnnouncementDrawer({ announcementId, onClose, dockedIn }: Announ
               )}
             </Descriptions.Item>
           </Descriptions>
-          <Typography.Title level={5} style={{ marginTop: 20 }}>
+          <Typography.Title level={2} className="section-title" style={{ marginTop: 20 }}>
             {t('notifications.announcements.fields.body')}
           </Typography.Title>
           <Typography.Paragraph className="notif-announcement-body">

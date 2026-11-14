@@ -144,7 +144,7 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
           </Col>
         </Row>
 
-        <Typography.Title level={5} style={{ marginTop: 0 }}>
+        <Typography.Title level={2} className="section-title" style={{ marginTop: 0 }}>
           {t('gradeSchemes.fields.bands')}
         </Typography.Title>
         <Typography.Paragraph type="secondary">{t('gradeSchemes.hints.bands')}</Typography.Paragraph>

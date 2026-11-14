@@ -167,6 +167,7 @@ export function UsersPage() {
             style={{ minWidth: 160 }}
           />
           <Select<UsersListFilters['sort']>
+              aria-label={t('common.sortOrder')}
             value={list.filters.sort}
             onChange={(value) => list.setFilters({ sort: value })}
             options={[
@@ -212,6 +213,7 @@ export function UsersPage() {
           <Space>
             <Typography.Text type="secondary">{t('users.pagination.page', { page: list.pageNumber })}</Typography.Text>
             <Select<UsersListFilters['limit']>
+              aria-label={t('common.pageSize')}
               size="small"
               value={list.filters.limit}
               onChange={(value) => list.setFilters({ limit: value })}

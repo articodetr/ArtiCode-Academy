@@ -25,7 +25,7 @@ export const colors = {
   muted: '#5d6779',
   /** The red "now" line of the timelines and real errors. */
   now: '#c2412d',
-  ok: '#2f7d5b',
+  ok: '#2a7253',
   okSoft: '#e3f2ea',
   bad: '#b4432f',
   badSoft: '#f8e4df',
@@ -46,7 +46,9 @@ export const appTheme: ThemeConfig = {
     colorError: colors.bad,
     colorText: colors.text,
     colorTextSecondary: colors.muted,
-    colorTextTertiary: '#7c8597',
+    // Accessible greys (redesign, quality pass): 4.7:1 on a selected row, 4.8:1 for placeholders on white — WCAG AA.
+    colorTextTertiary: '#5f6878',
+    colorTextPlaceholder: '#6b7383',
     colorBorder: '#cdd5e1',
     colorBorderSecondary: colors.line,
     colorBgLayout: colors.paper,

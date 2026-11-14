@@ -374,12 +374,12 @@ export function InvoiceDrawer({ invoiceId, onClose, onUpdated, onDeleted, docked
           </Descriptions>
 
           <section>
-            <Typography.Title level={5}>{t('payments.drawer.lines')}</Typography.Title>
+            <Typography.Title level={2} className="section-title">{t('payments.drawer.lines')}</Typography.Title>
             <Table<InvoiceLine> rowKey="sortOrder" size="small" columns={lineColumns} dataSource={shown.lines} pagination={false} scroll={{ x: 'max-content' }} />
           </section>
 
           <section>
-            <Typography.Title level={5}>{t('payments.drawer.installments')}</Typography.Title>
+            <Typography.Title level={2} className="section-title">{t('payments.drawer.installments')}</Typography.Title>
             <Table<InvoiceInstallment>
               rowKey="seq"
               size="small"
@@ -391,7 +391,7 @@ export function InvoiceDrawer({ invoiceId, onClose, onUpdated, onDeleted, docked
           </section>
 
           <section>
-            <Typography.Title level={5}>{t('payments.drawer.payments')}</Typography.Title>
+            <Typography.Title level={2} className="section-title">{t('payments.drawer.payments')}</Typography.Title>
             {shown.payments.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('payments.drawer.noPayments')} />
             ) : (

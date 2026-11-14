@@ -209,6 +209,7 @@ export function AuditLogPage() {
           <Space>
             <Typography.Text type="secondary">{t('audit.pagination.page', { page: log.pageNumber })}</Typography.Text>
             <Select<AuditFilters['limit']>
+              aria-label={t('common.pageSize')}
               size="small"
               value={log.filters.limit}
               onChange={(value) => log.setFilters({ limit: value })}

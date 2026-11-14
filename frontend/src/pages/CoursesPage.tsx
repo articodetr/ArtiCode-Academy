@@ -142,6 +142,7 @@ export function CoursesPage() {
         <Space>
           <Typography.Text type="secondary">{t('courses.pagination.page', { page: list.pageNumber })}</Typography.Text>
           <Select<CoursesListFilters['limit']>
+              aria-label={t('common.pageSize')}
             size="small"
             value={list.filters.limit}
             onChange={(value) => list.setFilters({ limit: value })}
