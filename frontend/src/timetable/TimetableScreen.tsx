@@ -38,11 +38,13 @@ import type { AcademyFilters } from './useTimetable'
 import { WeekGrid } from './WeekGrid'
 import type { GridDay } from './WeekGrid'
 import './timetable.css'
+import { colors } from '../theme/tokens'
 
 export type TimetableView = 'week' | 'day'
 
 /** The deep purple of the selected states; antd controls inside the calendar take it as their primary colour. */
-const ACCENT = '#6a4fe0'
+// Redesign (2026-11-14): the app's navy (theme/tokens.ts) instead of the calendar's own purple.
+const ACCENT = colors.ink
 /** "Upcoming" looks this many days ahead (today included) and lists at most this many slots. */
 const UPCOMING_DAYS = 7
 const UPCOMING_LIMIT = 5
