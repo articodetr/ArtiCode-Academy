@@ -74,7 +74,7 @@ export function RoleEditor({ target, groups, onClose, onSaved }: RoleEditorProps
       keyboard={!unsaved}
       mask={{ closable: !unsaved }}
       title={title}
-      width={720}
+      size={720}
       destroyOnHidden
     >
       <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />

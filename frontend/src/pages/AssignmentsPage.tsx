@@ -25,6 +25,7 @@ import { academyZoneOf, differsFromDevice } from '../assignments/assignments.zon
 import { ASSIGNMENT_FILTER_STATUSES, ASSIGNMENT_PAGE_SIZES, defaultAssignmentFilters, hasActiveAssignmentFilters, useAssignmentsList } from '../assignments/useAssignmentsList'
 import type { AssignmentsListFilters } from '../assignments/useAssignmentsList'
 import { useAuth } from '../auth/auth-context'
+import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -53,6 +54,8 @@ export function AssignmentsPage() {
   const [defaults] = useState(() => defaultAssignmentFilters(filterZone))
   const list = useAssignmentsList(defaults)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Redesign (2026-11-14): on a wide screen the assignment opens in a side panel beside the table, not over it.
+  const { docked, dockedIn, panelRef, wide, open: openAssignment, layoutClassName, onUnsavedChange } = useDockedPanel(selectedId, setSelectedId)
   const [creating, setCreating] = useState(false)
 
   const columns: TableProps<Assignment>['columns'] = [
@@ -134,7 +137,7 @@ export function AssignmentsPage() {
           size="small"
           onClick={(event) => {
             event.stopPropagation()
-            setSelectedId(row.id)
+            openAssignment(row.id)
           }}
           aria-label={`${t('common.view')}: ${assignmentTitle(row, language)}`}
         >
@@ -168,7 +171,8 @@ export function AssignmentsPage() {
 
       {!seesEveryClass ? <Alert type="info" showIcon title={t('assignments.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
 
-      <Card>
+      <div className={layoutClassName}>
+      <Card className="list-with-panel__main">
         <Flex gap={12} wrap align="center" style={{ marginBottom: 16 }}>
           {canPickClass ? (
             <ClassPicker
@@ -225,13 +229,14 @@ export function AssignmentsPage() {
 
         <Table<Assignment>
           rowKey="id"
-          columns={columns}
+          columns={docked ? columns.filter((column) => ['assignment', 'class', 'due', 'status'].includes(String(column.key))) : columns}
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
           scroll={{ x: 'max-content' }}
           locale={{ emptyText }}
-          onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
+          onRow={(row) => ({ onClick: () => openAssignment(row.id), style: { cursor: 'pointer' } })}
+          rowClassName={(row) => (row.id === selectedId ? 'list-row--open' : '')}
         />
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
@@ -255,8 +260,18 @@ export function AssignmentsPage() {
           </Space>
         </Flex>
       </Card>
+      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
+      </div>
 
-      <AssignmentDrawer assignmentId={selectedId} onClose={() => setSelectedId(null)} onUpdated={list.replaceItem} onDeleted={list.removeItem} />
+      <AssignmentDrawer
+        key={docked ? selectedId : 'overlay'}
+        assignmentId={selectedId}
+        onClose={() => setSelectedId(null)}
+        onUpdated={list.replaceItem}
+        onDeleted={list.removeItem}
+        dockedIn={dockedIn}
+        onUnsavedChange={onUnsavedChange}
+      />
 
       <CreateAssignmentModal
         open={creating}

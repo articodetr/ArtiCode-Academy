@@ -99,9 +99,9 @@ function renderGuarded(user: ReturnType<typeof makeUser>) {
   )
 }
 
-/** The rows of the list (the drawer's bordered Descriptions is a table too, so not by role). */
+/** The cards of the list (redesign: one card per assignment × student instead of a table row). */
 function bodyRows() {
-  return Array.from(document.querySelectorAll<HTMLElement>('.ant-table-tbody tr.ant-table-row'))
+  return Array.from(document.querySelectorAll<HTMLElement>('li[data-my-assignment]'))
 }
 
 async function rowsOf(count: number) {
@@ -161,17 +161,17 @@ describe('MyAssignmentsPage', () => {
     expect(buttonIn(second, ar.myAssignments.actions.submit)).toBeNull()
     expect(buttonIn(second, ar.myAssignments.actions.viewMine)).toBeEnabled()
 
-    // A student alone needs neither the student column nor the student filter.
-    expect(screen.queryByRole('columnheader', { name: ar.myAssignments.columns.student })).not.toBeInTheDocument()
+    // A student alone needs neither the student tag nor the student filter.
+    expect(document.querySelector('.my-assignment__student')).toBeNull()
     expect(screen.queryByLabelText(ar.myAssignments.filters.student)).not.toBeInTheDocument()
   })
 
-  it('shows the instructions and grading rules in the expanded row (learners never read API-103)', async () => {
+  it('shows the instructions and grading rules behind «details» (learners never read API-103)', async () => {
     mockMyAssignmentsApi(makeMyAssignmentList([makeMyAssignment({ allowLate: true, latePenaltyPercent: 10, maxAttempts: 2, attemptsAllowed: 2 })]))
     renderPage()
     const [row] = await rowsOf(1)
     expect(screen.queryByText('حلّ تمارين الصفحة 12')).not.toBeInTheDocument()
-    fireEvent.click(row!.querySelector('button.ant-table-row-expand-icon')!)
+    fireEvent.click(within(row!).getByText(ar.myAssignments.showDetails).closest('button')!)
     expect(await screen.findByText('حلّ تمارين الصفحة 12')).toBeInTheDocument()
     expect(screen.getByText(ar.myAssignments.details.lateAllowedWithPenalty.replace('{{percent}}', '10'))).toBeInTheDocument()
     expect(screen.getByText(ar.myAssignments.details.maxAttemptsValue.replace('{{count}}', '2'))).toBeInTheDocument()
@@ -214,7 +214,7 @@ describe('MyAssignmentsPage', () => {
     renderPage(['guardian'], GUARDIAN_LEARNER_PERMISSIONS)
 
     const [first, second] = (await rowsOf(2)) as [HTMLElement, HTMLElement]
-    expect(screen.getByRole('columnheader', { name: ar.myAssignments.columns.student })).toBeInTheDocument()
+    expect(first.querySelector('.my-assignment__student')).not.toBeNull()
     expect(within(first).getByText('عمر')).toBeInTheDocument()
     expect(within(first).getByText(ar.myClasses.relation.child)).toBeInTheDocument()
     expect(within(first).getByText('15 / 20')).toBeInTheDocument()

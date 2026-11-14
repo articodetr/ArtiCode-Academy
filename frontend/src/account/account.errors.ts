@@ -49,3 +49,55 @@ export function describeAccountFailure(error: unknown, flow: AccountFlow): Accou
   if (error.status >= 500) return { key: 'login.errors.server', terminal: false }
   return { key: 'login.errors.generic', terminal: false }
 }
+
+// ------------------------------------------------ LR-01-T02 and API-021
+
+/** The verification link in the URL is not even shaped like a token. */
+export function malformedVerificationFailure(): AccountFailure {
+  return { key: 'emailVerification.errors.verification_invalid', terminal: true }
+}
+
+/** A failed API-166 confirmation: an invalid or expired link is dead for good. */
+export function describeVerificationConfirmFailure(error: unknown): AccountFailure {
+  if (!(error instanceof ApiError)) return { key: 'login.errors.network', terminal: false }
+  if (error.code === 'verification_invalid' || error.code === 'verification_expired') {
+    return { key: `emailVerification.errors.${error.code}`, terminal: true }
+  }
+  if (error.code === 'rate_limited' || error.status === 429) return { key: 'login.errors.rate_limited', terminal: false }
+  if (error.code === 'origin_forbidden') return { key: 'users.errors.origin_forbidden', terminal: false }
+  if (error.status >= 500) return { key: 'login.errors.server', terminal: false }
+  return { key: 'login.errors.generic', terminal: false }
+}
+
+/** Outcome of a refused API-165 request; `info` = nothing is wrong (already confirmed). */
+export interface VerificationRequestFailure {
+  key: string
+  type: 'info' | 'warning' | 'error'
+}
+
+const VERIFICATION_REQUEST_CODES: Readonly<Record<string, VerificationRequestFailure['type']>> = {
+  email_already_verified: 'info',
+  email_missing: 'warning',
+  mail_unavailable: 'warning',
+  rate_limited: 'warning',
+}
+
+export function describeVerificationRequestFailure(error: unknown): VerificationRequestFailure {
+  if (!(error instanceof ApiError)) return { key: 'login.errors.network', type: 'error' }
+  const code = error.code ?? (error.status === 429 ? 'rate_limited' : null)
+  if (code && code in VERIFICATION_REQUEST_CODES) {
+    return { key: `emailVerification.errors.${code}`, type: VERIFICATION_REQUEST_CODES[code] }
+  }
+  if (error.status >= 500) return { key: 'login.errors.server', type: 'error' }
+  return { key: 'login.errors.generic', type: 'error' }
+}
+
+/** A refused API-021 request: switched off, too many, or something else. */
+export function describeForgotPasswordFailure(error: unknown): { key: string; type: 'warning' | 'error' } {
+  if (!(error instanceof ApiError)) return { key: 'login.errors.network', type: 'error' }
+  if (error.code === 'reset_disabled') return { key: 'forgotPassword.errors.reset_disabled', type: 'warning' }
+  if (error.code === 'rate_limited' || error.status === 429) return { key: 'forgotPassword.errors.rate_limited', type: 'warning' }
+  if (error.code === 'origin_forbidden') return { key: 'users.errors.origin_forbidden', type: 'error' }
+  if (error.status >= 500) return { key: 'login.errors.server', type: 'error' }
+  return { key: 'login.errors.generic', type: 'error' }
+}

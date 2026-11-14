@@ -25,7 +25,7 @@ interface CreateUserWizardProps {
 export function CreateUserWizard({ open, onClose, onCreated }: CreateUserWizardProps) {
   const { t } = useTranslation()
   return (
-    <Modal open={open} onCancel={onClose} title={t('users.create.title')} footer={null} width={640} maskClosable={false} destroyOnHidden>
+    <Modal open={open} onCancel={onClose} title={t('users.create.title')} footer={null} width={640} mask={{ closable: false }} destroyOnHidden>
       <WizardBody onClose={onClose} onCreated={onCreated} />
     </Modal>
   )

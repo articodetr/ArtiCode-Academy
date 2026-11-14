@@ -143,6 +143,23 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'certificates.',
   'certificates.issued',
   'certificates.revoked',
+  // MOD-11 finance (redesign — the real payments screen, 2026-11-14); names from backend/src/finance/*.service.ts.
+  'fee_plans.',
+  'fee_plans.created',
+  'fee_plans.updated',
+  'fee_plans.deleted',
+  'invoices.',
+  'invoices.created',
+  'invoices.updated',
+  'invoices.deleted',
+  'invoices.issued',
+  'invoices.cancelled',
+  'invoices.batch_created',
+  'payments.',
+  'payments.recorded',
+  'payments.reversed',
+  // MOD-12: the one event an announcement records (marks and preferences record none).
+  'notifications.announcement.sent',
 ]
 
 /** Translation keys of the problems of a filter set, by field; empty when the server would accept it. */

@@ -37,6 +37,7 @@ import { useAuth } from '../auth/auth-context'
 import { ClassCertificatesTab } from '../certificates/ClassCertificatesTab'
 import { canReadCertificates } from '../certificates/certificates.policy'
 import { NavigationBlocker } from '../common/NavigationBlocker'
+import { dockedDrawerProps } from '../common/useDockedPanel'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { ClassEnrollmentsTab } from '../enrollments/ClassEnrollmentsTab'
@@ -82,9 +83,16 @@ interface ClassDrawerProps {
   onUpdated: (cls: AcademyClass) => void
   /** A planned class was deleted. */
   onDeleted: (classId: string) => void
+  /**
+   * Redesign (2026-11-14): the element of a side panel beside the list to open in, instead of over the page —
+   * no mask, the full width and height of the panel. Absent (phones, tests) = the usual overlay drawer.
+   */
+  dockedIn?: HTMLElement | null
+  /** Told whenever the drawer starts or stops holding unsaved work, so the list can ask before switching class. */
+  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDrawerProps) {
+export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, dockedIn, onUnsavedChange }: ClassDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { user, hasPermission } = useAuth()
@@ -105,6 +113,11 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
   }, [])
   // KI-052: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
   const unsaved = (editing && detailsUnsaved) || unsavedTabs.teachers || unsavedTabs.students || unsavedTabs.schedule
+
+  // The list asks before it switches to another class while this one holds unsaved work (docked panel).
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+  }, [unsaved, onUnsavedChange])
 
   // The load below hands every re-read to the list; a ref, so a new `onUpdated` never restarts the load.
   const onUpdatedRef = useRef(onUpdated)
@@ -216,9 +229,8 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
       // KI-052: unsaved work turns off the Escape key and the mask click; an open
       // Select or Dropdown still closes on Escape (it sits on top of the drawer).
       keyboard={!unsaved}
-      mask={{ closable: !unsaved }}
+      {...dockedDrawerProps(dockedIn, unsaved, 'large')}
       title={name}
-      size="large"
       destroyOnHidden
       extra={
         canManage && cls && !editing ? (

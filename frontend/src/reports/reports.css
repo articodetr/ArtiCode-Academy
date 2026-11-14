@@ -1,0 +1,219 @@
+/* The reports page (redesign, 2026-11-14). Panels, KPI strip, month bars and the aging bar come from
+   dashboard.css; colours only from the --c-* tokens of index.css. */
+.rp {
+  width: 100%;
+  min-width: 0;
+}
+
+.rp-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.rp-period label {
+  display: grid;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--c-muted);
+}
+
+.rp-period input[type='date'] {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--c-line);
+  border-radius: 6px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.rp-period input[aria-invalid='true'] {
+  border-color: var(--c-bad);
+}
+
+.rp-period-error {
+  margin-bottom: 12px;
+}
+
+.rp-note {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.rp-print-period {
+  display: none;
+}
+
+.rp-panel {
+  min-width: 0;
+}
+
+.rp-panel__head {
+  flex-wrap: wrap;
+}
+
+.rp-panel__extra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rp-truncated {
+  margin-bottom: 12px;
+}
+
+.rp-table {
+  min-width: 0;
+}
+
+.rp-mark {
+  background: var(--c-mark-soft);
+  color: var(--c-mark-text);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+.rp-kpis b.rp-mark {
+  display: inline-block;
+}
+
+.rp-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.rp-rate__bar {
+  width: 64px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--c-ink-soft);
+  overflow: hidden;
+  display: inline-block;
+}
+
+.rp-rate__bar i {
+  display: block;
+  height: 100%;
+  background: var(--c-ink);
+}
+
+.rp-rate--low .rp-rate__bar i {
+  background: var(--c-mark);
+}
+
+.rp-rate--low .rp-rate__value {
+  color: var(--c-mark-text);
+  font-weight: 600;
+}
+
+.rp-bands {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rp-chart + .rp-chart {
+  margin-top: 18px;
+}
+
+.rp-chart {
+  overflow-x: auto;
+}
+
+.rp-chart .db-chart__col {
+  min-width: 44px;
+}
+
+.rp-chart .db-chart__col i {
+  background: var(--c-ink);
+}
+
+.rp-chart {
+  height: 160px;
+}
+
+.rp-aging + .rp-aging {
+  margin-top: 18px;
+}
+
+.rp-aging .rp-kpis {
+  margin-bottom: 14px;
+}
+
+.rp-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Invoiced (light) behind collected (navy) in one bar. */
+.rp-pair {
+  position: relative;
+  display: inline-block;
+  width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.rp-pair i {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+}
+
+.rp-pair__invoiced {
+  background: var(--c-ink-soft);
+}
+
+.rp-pair__collected {
+  background: var(--c-ink);
+}
+
+@media (max-width: 575.98px) {
+  .rp-period {
+    width: 100%;
+  }
+  .rp-period label {
+    flex: 1 1 130px;
+  }
+  .rp-period input[type='date'] {
+    width: 100%;
+  }
+}
+
+@media print {
+  .app-sider,
+  .app-drawer,
+  .app-header,
+  .rp-noprint,
+  .rp-tabs > .ant-tabs-nav,
+  .rp-subtabs > .ant-tabs-nav,
+  .ant-pagination {
+    display: none !important;
+  }
+  .app-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .rp-print-period {
+    display: block;
+    margin: 0 0 12px;
+  }
+  .rp-panel,
+  .db-kpis {
+    break-inside: avoid;
+    border-color: #999;
+  }
+  .rp-table .ant-table-content {
+    overflow: visible !important;
+  }
+}

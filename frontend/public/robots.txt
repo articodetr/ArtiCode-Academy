@@ -1,0 +1,3 @@
+# ArtiCode Academy is a private school system: nothing here is for search engines.
+User-agent: *
+Disallow: /

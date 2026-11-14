@@ -2,7 +2,10 @@
 // reset) consumed by the invitation and reset screens (MOD-03-T12):
 // API-015 POST /api/users/:id/invitations, API-016 GET /api/account/invitations/:token,
 // API-017 POST /api/account/invitations/:token/accept, API-019 POST /api/users/:id/password-reset,
-// API-020 POST /api/account/password-reset/:token/confirm. Types mirror
+// API-020 POST /api/account/password-reset/:token/confirm, and since the
+// account pages of LR-01-T02 API-021 POST /api/account/password-reset/request,
+// API-165 POST /api/account/email-verification/request and API-166
+// POST /api/account/email-verification/:token/confirm. Types mirror
 // backend/src/account/account.dto.ts. The raw token is sent only to its own
 // public route and is never stored anywhere (T12 AC1).
 import { setAccessToken } from '../auth/token-store'
@@ -49,7 +52,23 @@ export const ACCOUNT_PATHS = {
   invitation: (token: string) => `/api/account/invitations/${encodeURIComponent(token)}`,
   acceptInvitation: (token: string) => `/api/account/invitations/${encodeURIComponent(token)}/accept`,
   confirmPasswordReset: (token: string) => `/api/account/password-reset/${encodeURIComponent(token)}/confirm`,
+  requestPasswordReset: '/api/account/password-reset/request',
+  requestEmailVerification: '/api/account/email-verification/request',
+  confirmEmailVerification: (token: string) => `/api/account/email-verification/${encodeURIComponent(token)}/confirm`,
 } as const
+
+/** Body of API-165: when the e-mailed link stops working and what happened to the e-mail. Never the token. */
+export interface EmailVerificationRequested {
+  /** ISO 8601 */
+  expiresAt: string
+  delivery: MailDelivery
+}
+
+/** Body of API-166. */
+export interface EmailVerificationConfirmed {
+  /** ISO 8601 — when the address was confirmed. */
+  emailVerifiedAt: string
+}
 
 /** Needs `users.create`; the account must be `invited` (409 user_not_invitable otherwise). */
 export function issueInvitation(userId: string): Promise<IssuedLink> {
@@ -88,4 +107,37 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
   })
   setAccessToken(session.accessToken, session.user.id)
   return session
+}
+
+/**
+ * API-021, public "forgot my password": 202 whatever the identifier (nothing is
+ * revealed), or 403 `reset_disabled` while self-service reset is switched off.
+ */
+export async function requestPasswordReset(identifier: string): Promise<void> {
+  await apiRequest<void>(ACCOUNT_PATHS.requestPasswordReset, {
+    method: 'POST',
+    body: { identifier },
+    auth: false,
+    retry: false,
+  })
+}
+
+/**
+ * API-165, for the signed-in user: e-mails a confirmation link to their own
+ * address. 422 email_missing, 409 email_already_verified, 503 mail_unavailable, 429 rate_limited.
+ */
+export function requestEmailVerification(): Promise<EmailVerificationRequested> {
+  return apiRequest<EmailVerificationRequested>(ACCOUNT_PATHS.requestEmailVerification, { method: 'POST' })
+}
+
+/**
+ * API-166, public: consumes the token from the e-mailed link and confirms the
+ * address. Opens no session. 404 verification_invalid, 410 verification_expired.
+ */
+export function confirmEmailVerification(token: string): Promise<EmailVerificationConfirmed> {
+  return apiRequest<EmailVerificationConfirmed>(ACCOUNT_PATHS.confirmEmailVerification(token), {
+    method: 'POST',
+    auth: false,
+    retry: false,
+  })
 }

@@ -1,0 +1,40 @@
+/* The public account pages (invitation, reset, e-mail confirmation, forgotten password):
+   the sign-in page's white form side and brand block, alone and centred — no sample day. */
+.login-page.public-page {
+  grid-template-columns: minmax(0, 1fr);
+  /* Redesign: the page background with the content on a card, a navy edge on top — not a bare white page. */
+  background: var(--c-paper);
+}
+
+.public-page .login-form-side {
+  align-items: center;
+}
+
+.public-page .login-form-box {
+  max-width: 480px;
+  padding: 32px 36px 24px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-top: 4px solid var(--c-ink);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 520px) {
+  .public-page .login-form-box {
+    padding: 24px 20px 18px;
+  }
+}
+
+.public-page__intro {
+  margin-top: 20px;
+}
+
+.public-page__body {
+  margin-top: 24px;
+}
+
+.public-page__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}

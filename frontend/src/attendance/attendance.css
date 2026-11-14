@@ -1,0 +1,122 @@
+/* The attendance sheet (redesign, 2026-11-14): one compact row per student, so it fits the docked side panel
+   (about 600px) and a phone; colours from the --c-* tokens of index.css. */
+.att-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+}
+
+.att-row {
+  padding: 10px 14px;
+  border-top: 1px solid var(--c-line);
+}
+
+.att-row:first-child {
+  border-top: 0;
+}
+
+.att-row--changed {
+  box-shadow: inset 3px 0 0 var(--c-mark);
+}
+
+[dir='rtl'] .att-row--changed {
+  box-shadow: inset -3px 0 0 var(--c-mark);
+}
+
+.att-row--refused {
+  background: var(--c-bad-soft);
+}
+
+.att-row__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+
+.att-row__who {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.att-row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.att-row__meta {
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+.att-row__status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.att-row__status .ant-radio-button-wrapper {
+  padding-inline: 12px;
+}
+
+.att-row__extra {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 6px;
+}
+
+.att-row__extra:empty {
+  display: none;
+}
+
+.att-row__minutes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+
+.att-row__note {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.att-row__add-note.ant-btn {
+  padding-inline: 0;
+  height: auto;
+  font-size: 13px;
+}
+
+.att-row__note-text {
+  margin-top: 4px;
+  color: var(--c-muted);
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+
+.att-row__error {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+/* The save bar stays in view at the bottom of the drawer while the list scrolls. */
+.att-savebar {
+  position: sticky;
+  bottom: -24px;
+  z-index: 2;
+  margin: 12px -24px -24px;
+  padding: 12px 24px;
+  background: var(--c-surface);
+  border-top: 1px solid var(--c-line);
+}

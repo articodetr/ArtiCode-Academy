@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { USER_SEARCH_MAX_LENGTH, USER_STATUSES } from '../api/users'
 import type { UserListItem } from '../api/users'
 import { useAuth } from '../auth/auth-context'
+import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -22,6 +23,7 @@ import { PAGE_SIZES, useUsersList } from '../users/useUsersList'
 import type { UsersListFilters } from '../users/useUsersList'
 import { describeUsersFailure, failureMessage } from '../users/users.errors'
 import { displayNameOf, formatDateTime, roleFilterKeys, roleLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function UsersPage() {
   const { t } = useTranslation()
@@ -34,11 +36,15 @@ export function UsersPage() {
   const list = useUsersList()
   const roles = useRoleLabels()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
+  // Redesign (2026-11-14): on a wide screen the user opens in a side panel beside the table, not over it.
+  const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openUser, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
 
   const selected = list.items.find((item) => item.id === selectedId)
 
-  const columns: TableProps<UserListItem>['columns'] = [
+  const allColumns: TableProps<UserListItem>['columns'] = [
     {
       title: t('common.name'),
       key: 'name',
@@ -106,12 +112,14 @@ export function UsersPage() {
       title: t('common.actions'),
       key: 'actions',
       render: (_, row) => (
-        <Button type="link" size="small" onClick={() => setSelectedId(row.id)} aria-label={`${t('common.view')}: ${displayNameOf(row)}`}>
+        <Button type="link" size="small" onClick={() => openUser(row.id)} aria-label={`${t('common.view')}: ${displayNameOf(row)}`}>
           {t('common.view')}
         </Button>
       ),
     },
   ]
+  // While docked the table keeps the columns that identify a user; the panel shows the rest.
+  const columns = docked ? allColumns.filter((column) => ['name', 'roles', 'status'].includes(String(column.key))) : allColumns
 
   const failure = list.error ? describeUsersFailure(list.error) : null
 
@@ -131,7 +139,8 @@ export function UsersPage() {
 
       {!contact ? <Alert type="info" showIcon message={t('users.reducedHint')} style={{ marginBottom: 16 }} /> : null}
 
-      <Card>
+      <div className={layoutClassName}>
+      <Card className="list-with-panel__main">
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>
           <Input.Search
             allowClear
@@ -161,6 +170,7 @@ export function UsersPage() {
             style={{ minWidth: 160 }}
           />
           <Select<UsersListFilters['sort']>
+              aria-label={t('common.sortOrder')}
             value={list.filters.sort}
             onChange={(value) => list.setFilters({ sort: value })}
             options={[
@@ -198,13 +208,15 @@ export function UsersPage() {
           loading={list.loading}
           pagination={false}
           locale={{ emptyText: t('users.empty') }}
-          onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
+          rowClassName={(row) => (row.id === selectedId ? 'list-row--open' : '')}
+          onRow={(row) => ({ onClick: () => openUser(row.id), style: { cursor: 'pointer' } })}
         />
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
           <Space>
             <Typography.Text type="secondary">{t('users.pagination.page', { page: list.pageNumber })}</Typography.Text>
             <Select<UsersListFilters['limit']>
+              aria-label={t('common.pageSize')}
               size="small"
               value={list.filters.limit}
               onChange={(value) => list.setFilters({ limit: value })}
@@ -221,13 +233,18 @@ export function UsersPage() {
           </Space>
         </Flex>
       </Card>
+      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
+      </div>
 
       <UserDrawer
+        key={docked ? selectedId : 'overlay'}
         userId={selectedId}
         includeDeleted={Boolean(selected?.deletedAt)}
         loadedRoles={roles.items}
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
+        dockedIn={dockedIn}
+        onUnsavedChange={onUnsavedChange}
       />
 
       <CreateUserWizard

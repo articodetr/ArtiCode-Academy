@@ -6,6 +6,8 @@ import { ar } from '../i18n/ar'
 import { ADMIN_ID, TARGET_ID, makeAuditItem, makeAuditList } from '../test/audit'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { forgetUserNames } from '../audit/useUserNames'
+import { makeUserDetail } from '../test/users'
 import { AuditLogPage } from './AuditLogPage'
 
 const OTHER_ACTOR = '0192f0a0-0000-7000-8000-000000000009'
@@ -202,5 +204,22 @@ describe('AuditLogPage', () => {
     await waitFor(() => expect(api.queries).toHaveLength(3))
     expect(Object.fromEntries(api.lastQuery())).toEqual({ limit: '50' })
     expect(screen.getByLabelText(ar.audit.filters.entityType)).toHaveValue('')
+  })
+})
+
+describe('AuditLogPage — names instead of ids (redesign)', () => {
+  it('reads each actor once for a holder of users.read and shows the name; without the key it keeps the short id', async () => {
+    forgetUserNames()
+    const urls: string[] = []
+    mockFetch((url) => {
+      urls.push(url)
+      const path = new URL(url, 'http://localhost').pathname
+      if (path === '/api/audit-logs') return jsonResponse(200, makeAuditList([roleCreated, { ...roleCreated, id: '0192f0a0-0000-7000-8000-0000000000a4' }]))
+      if (path === `/api/users/${OTHER_ACTOR}`) return jsonResponse(200, makeUserDetail({ id: OTHER_ACTOR, fullName: 'نورة المسؤولة', displayName: null }))
+      return jsonResponse(404, { statusCode: 404, message: 'Not found' })
+    })
+    renderWithProviders(<AuditLogPage />, { auth: makeAuth({ user: makeUser({ id: ADMIN_ID, permissions: ['audit.read', 'users.read'] }) }), route: '/audit-logs' })
+    expect((await screen.findAllByText('نورة المسؤولة')).length).toBe(2)
+    expect(urls.filter((url) => url.startsWith(`/api/users/${OTHER_ACTOR}`))).toHaveLength(1)
   })
 })

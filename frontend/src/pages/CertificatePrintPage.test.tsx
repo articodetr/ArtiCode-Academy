@@ -59,7 +59,11 @@ describe('CertificatePrintPage', () => {
     expect(within(sheet).getByText('1 يناير 2027')).toBeInTheDocument()
     expect(within(sheet).getByText('31 ديسمبر 2026')).toBeInTheDocument()
     expect(within(sheet).getByText('CERT-2027-00001')).toBeInTheDocument()
-    expect(within(sheet).getByText(`${window.location.origin}/verify/K7Q2M4XWZPLR5TBC3NHD`)).toBeInTheDocument()
+    // The verification page is a QR code now (redesign); the link itself is not printed, the code is.
+    const qr = within(sheet).getByTestId('certificate-qr')
+    expect(qr.tagName.toLowerCase()).toBe('svg')
+    expect(within(qr).getByText(ar.certificates.sheet.qrLabel)).toBeInTheDocument()
+    expect(within(sheet).queryByText(/\/verify\//)).not.toBeInTheDocument()
     expect(within(sheet).getByText('K7Q2-M4XW-ZPLR-5TBC-3NHD')).toBeInTheDocument()
     expect(screen.queryByTestId('certificate-revoked-mark')).not.toBeInTheDocument()
     expect(screen.getByText(ar.certificates.print.back).closest('a')).toHaveAttribute('href', '/certificates')

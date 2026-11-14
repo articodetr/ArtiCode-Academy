@@ -18,10 +18,12 @@ import { CreateClassModal } from '../classes/CreateClassModal'
 import { describeClassesFailure, failureMessage } from '../classes/classes.errors'
 import { CLASS_PAGE_SIZES, useClassesList } from '../classes/useClassesList'
 import type { ClassesListFilters } from '../classes/useClassesList'
+import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDay, localizedLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function ClassesPage() {
   const { t } = useTranslation()
@@ -33,7 +35,11 @@ export function ClassesPage() {
   const canPickTeacher = canManage && hasPermission('users.read')
   const list = useClassesList()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
+  // Redesign (2026-11-14): on a wide screen the class opens in a side panel beside the table, not over it.
+  const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openClass, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
 
   const leadOf = (row: AcademyClass) => {
     if (row.teachers.length === 0) return <Typography.Text type="secondary">{t('classes.noTeacher')}</Typography.Text>
@@ -42,16 +48,17 @@ export function ClassesPage() {
   }
 
   const columns: TableProps<AcademyClass>['columns'] = [
+    // Redesign (2026-11-14): the class's name and its code in one cell — the name first, the code under it.
     {
-      title: t('classes.columns.code'),
-      key: 'code',
+      title: t('common.name'),
+      key: 'name',
       render: (_, row) => (
-        <Typography.Text dir="ltr" strong>
-          {row.code}
-        </Typography.Text>
+        <span className="list-primary">
+          <b>{localizedLabel(row.name, language)}</b>
+          <bdi dir="ltr">{row.code}</bdi>
+        </span>
       ),
     },
-    { title: t('common.name'), key: 'name', render: (_, row) => localizedLabel(row.name, language) },
     { title: t('common.course'), key: 'course', render: (_, row) => localizedLabel(row.course.name, language) },
     { title: t('classes.columns.teachers'), key: 'teachers', render: (_, row) => leadOf(row) },
     { title: t('classes.columns.seats'), key: 'seats', render: (_, row) => <SeatsBar cls={row} /> },
@@ -70,7 +77,7 @@ export function ClassesPage() {
           size="small"
           onClick={(event) => {
             event.stopPropagation()
-            setSelectedId(row.id)
+            openClass(row.id)
           }}
           aria-label={`${t('common.view')}: ${row.code}`}
         >
@@ -100,7 +107,8 @@ export function ClassesPage() {
 
       {!canManage ? <Alert type="info" showIcon message={t('classes.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
 
-      <Card>
+      <div className={layoutClassName}>
+      <Card className="list-with-panel__main">
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>
           <Input.Search
             allowClear
@@ -169,13 +177,15 @@ export function ClassesPage() {
 
         <Table<AcademyClass>
           rowKey="id"
-          columns={columns}
+          // With the side panel open the table keeps the columns that tell classes apart; the panel shows the rest.
+          columns={docked ? columns.filter((column) => ['name', 'teachers', 'seats', 'status'].includes(String(column.key))) : columns}
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
           scroll={{ x: 'max-content' }}
           locale={{ emptyText }}
-          onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
+          onRow={(row) => ({ onClick: () => openClass(row.id), style: { cursor: 'pointer' } })}
+          rowClassName={(row) => (row.id === selectedId ? 'list-row--open' : '')}
         />
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
@@ -199,8 +209,18 @@ export function ClassesPage() {
           </Space>
         </Flex>
       </Card>
+      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
+      </div>
 
-      <ClassDrawer classId={selectedId} onClose={() => setSelectedId(null)} onUpdated={list.replaceItem} onDeleted={list.removeItem} />
+      <ClassDrawer
+        key={docked ? selectedId : 'overlay'}
+        classId={selectedId}
+        onClose={() => setSelectedId(null)}
+        onUpdated={list.replaceItem}
+        onDeleted={list.removeItem}
+        dockedIn={dockedIn}
+        onUnsavedChange={onUnsavedChange}
+      />
 
       <CreateClassModal
         open={creating}

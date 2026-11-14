@@ -173,7 +173,7 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
         <Input dir="ltr" placeholder="+966500000000" />
       </Form.Item>
 
-      <Typography.Title level={5} style={{ marginTop: 8 }}>
+      <Typography.Title level={2} className="section-title" style={{ marginTop: 8 }}>
         {t('settings.scheduling.title')}
       </Typography.Title>
       <Typography.Paragraph type="secondary">{t('settings.scheduling.intro')}</Typography.Paragraph>
@@ -184,7 +184,7 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
         <Checkbox.Group options={workingDayOptions} />
       </Form.Item>
 
-      <Typography.Title level={5} style={{ marginTop: 8 }}>
+      <Typography.Title level={2} className="section-title" style={{ marginTop: 8 }}>
         {t('certificates.settings.title')}
       </Typography.Title>
       <Typography.Paragraph type="secondary">{t('certificates.settings.intro')}</Typography.Paragraph>

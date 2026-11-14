@@ -3,6 +3,7 @@ import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Row, Space, T
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
+import { EmailVerificationAction } from '../account/EmailVerificationAction'
 import { changePassword } from '../api/auth'
 import { useAuth } from '../auth/auth-context'
 import { uiRoleFor } from '../auth/roles'
@@ -105,6 +106,7 @@ export function ProfilePage() {
                 )}
               </Descriptions.Item>
             </Descriptions>
+            <EmailVerificationAction user={user} />
           </Card>
 
           <Card title={t('profile.permissions', { count: user.permissions.length })} style={{ marginTop: 16 }}>

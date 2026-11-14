@@ -53,8 +53,8 @@ function renderTab(permissions: string[], timeZone: string = LESSON_TIME_ZONE) {
 /** The last flag the sheet reported to the drawer. */
 const lastReported = (onUnsavedChange: ReturnType<typeof vi.fn>) => onUnsavedChange.mock.calls.at(-1)?.[0] as boolean | undefined
 
-const row = (name: string) => screen.getByText(name).closest('tr') as HTMLElement
-const findRow = async (name: string) => (await screen.findByText(name)).closest('tr') as HTMLElement
+const row = (name: string) => screen.getByText(name).closest('[data-attendance-row]') as HTMLElement
+const findRow = async (name: string) => (await screen.findByText(name)).closest('[data-attendance-row]') as HTMLElement
 const saveButton = () => screen.getByText(ar.attendance.save).closest('button') as HTMLButtonElement
 const puts = (calls: Call[]) => calls.filter((call) => call.method === 'PUT')
 const minutesOf = (name: string) => within(row(name)).getByLabelText(`${ar.attendance.columns.minutesLate}: ${name}`)
@@ -66,7 +66,8 @@ describe('AttendanceSheetTab', () => {
     renderTab(ATTENDANCE_TEACHER_PERMISSIONS)
 
     const yousef = await findRow('يوسف الطالب')
-    expect(within(yousef).getByText(ar.attendance.enrollment.active)).toBeInTheDocument()
+    // An active enrollment is the normal case and carries no tag (redesign); the others do.
+    expect(within(yousef).queryByText(ar.attendance.enrollment.active)).not.toBeInTheDocument()
     expect(within(yousef).getByLabelText(ar.lessons.attendance.late)).toBeChecked()
     expect(minutesOf('يوسف الطالب')).toHaveValue('10')
     expect(noteOf('يوسف الطالب')).toHaveValue('زحمة السير')
@@ -161,7 +162,8 @@ describe('AttendanceSheetTab', () => {
     const yousef = await findRow('يوسف الطالب')
 
     fireEvent.click(within(yousef).getByLabelText(ar.lessons.attendance.present))
-    expect(minutesOf('يوسف الطالب')).toBeDisabled()
+    // The minutes show only while the status is «late» (redesign).
+    expect(within(row('يوسف الطالب')).queryByLabelText(`${ar.attendance.columns.minutesLate}: يوسف الطالب`)).not.toBeInTheDocument()
     await userEvent.clear(noteOf('يوسف الطالب'))
     fireEvent.click(saveButton())
 
@@ -307,6 +309,7 @@ describe('AttendanceSheetTab', () => {
     fireEvent.click(within(yousef).getByText(ar.attendance.revert).closest('button')!)
     expect(lastReported(onUnsavedChange)).toBe(false)
     // A note on a row without a status is nothing the save sends (the sheet says so too).
+    fireEvent.click(within(row('سارة الطالبة')).getByText(ar.attendance.addNote).closest('button')!)
     await userEvent.type(noteOf('سارة الطالبة'), 'تأخرت')
     expect(screen.getByText(ar.attendance.noChanges)).toBeInTheDocument()
     expect(lastReported(onUnsavedChange)).toBe(false)
