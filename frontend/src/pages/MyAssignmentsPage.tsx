@@ -23,8 +23,8 @@
 // opens to the holders of the `student` or `guardian` server role key only
 // (nav entry `myAssignments`, like «my lessons»).
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Flex, Segmented, Select, Space, Table, Tag, Typography } from 'antd'
-import type { DescriptionsProps, TableProps } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Empty, Flex, Segmented, Select, Skeleton, Space, Tag, Typography } from 'antd'
+import type { DescriptionsProps } from 'antd'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAcademy } from '../academy/useAcademy'
@@ -61,6 +61,7 @@ import { classOptionsOf, showsStudents, studentOptionsOf } from '../lessons/myLe
 import { isCalendarDate } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { displayNameOf, localizedLabel } from '../users/users.format'
+import './MyAssignmentsPage.css'
 
 type Translate = (key: string, options?: Record<string, unknown>) => string
 
@@ -191,6 +192,7 @@ export function MyAssignmentsPage() {
   )
   const [submitFor, setSubmitFor] = useState<MyAssignmentItem | null>(null)
   const [viewFor, setViewFor] = useState<MyAssignmentItem | null>(null)
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
   const showStudent = showsStudents(roleKeys, rows)
   // The student filter helps whoever owns assignments through more than one student (a guardian, or a student who is also one).
   const canPickStudent = students.length > 1 || students.some((student) => student.relation === 'child')
@@ -217,117 +219,124 @@ export function MyAssignmentsPage() {
     [list.items],
   )
 
-  const columns: TableProps<MyAssignmentItem>['columns'] = [
-    {
-      title: t('myAssignments.columns.due'),
-      key: 'due',
-      render: (_, row) =>
-        row.dueAt ? (
-          <span>
-            <Typography.Text>{formatZonedDateTime(row.dueAt, row.timeZone, language)}</Typography.Text>
-            {differsFromDevice(row.timeZone) ? (
-              <>
-                <br />
-                <span dir="ltr" style={{ fontSize: 12, opacity: 0.65 }}>
-                  {row.timeZone}
-                </span>
-              </>
-            ) : null}
-          </span>
-        ) : (
-          <Typography.Text type="secondary">{t('myAssignments.noDue')}</Typography.Text>
-        ),
-    },
-    {
-      title: t('myAssignments.columns.assignment'),
-      key: 'assignment',
-      render: (_, row) => (
-        <span>
-          <Typography.Text strong>{assignmentTitle(row, language)}</Typography.Text>
-          {row.lesson ? (
-            <>
-              <br />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {localizedLabel(row.lesson.title, language)}
-              </Typography.Text>
-            </>
-          ) : null}
-        </span>
-      ),
-    },
-    {
-      title: t('myAssignments.columns.class'),
-      key: 'class',
-      render: (_, row) => (
-        <span>
-          <Typography.Text dir="ltr" strong>
-            {row.class.code}
-          </Typography.Text>
-          <br />
-          <Typography.Text type="secondary">{`${localizedLabel(row.class.name, language)} · ${localizedLabel(row.class.course.name, language)}`}</Typography.Text>
-        </span>
-      ),
-    },
-    { title: t('myAssignments.columns.teacher'), key: 'teacher', render: (_, row) => <TeacherCell item={row} enrollments={enrollments} /> },
-    { title: t('myAssignments.columns.status'), key: 'status', render: (_, row) => <StatusTag value={row.status} /> },
-    { title: t('myAssignments.columns.submission'), key: 'submission', render: (_, row) => <SubmissionCell item={row} /> },
-    {
-      title: t('myAssignments.columns.attempts'),
-      key: 'attempts',
-      render: (_, row) => (
-        <span dir="ltr" title={t('myAssignments.attemptsTitle')}>
-          {`${row.attempts} / ${row.attemptsAllowed}`}
-        </span>
-      ),
-    },
-    { title: t('myAssignments.columns.score'), key: 'score', render: (_, row) => <ScoreCell item={row} /> },
-    {
-      title: t('myAssignments.columns.actions'),
-      key: 'actions',
-      render: (_, row) => {
-        const offered = offersSubmit(row, holdsSubmitKey)
-        // The server's verdict when the page was read (MOD-08-T07): the button and its reason never follow this device's clock.
-        const takesAttempt = offered && row.submitBlocker === null
-        // A closed assignment says so in its status column; the other reasons are not visible elsewhere.
-        const blocker = offered && row.submitBlocker !== null && row.submitBlocker !== 'closed' ? row.submitBlocker : null
-        return (
-          <Space orientation="vertical" size={4}>
-            {takesAttempt ? (
-              <Button type="primary" size="small" onClick={() => setSubmitFor(row)}>
-                {t(row.attempts > 0 ? 'myAssignments.actions.submitAgain' : 'myAssignments.actions.submit')}
-              </Button>
-            ) : null}
-            {blocker ? (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t(`myAssignments.blocked.${blocker}`)}
-              </Typography.Text>
-            ) : null}
-            {row.relation === 'self' && !holdsSubmitKey && row.status === 'open' ? (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('myAssignments.blocked.noPermission')}
-              </Typography.Text>
-            ) : null}
-            {row.latest ? (
-              <Button size="small" icon={<EyeOutlined />} onClick={() => setViewFor(row)}>
-                {t(row.relation === 'self' ? 'myAssignments.actions.viewMine' : 'myAssignments.actions.viewChild')}
-              </Button>
-            ) : null}
-          </Space>
-        )
-      },
-    },
-  ]
-  if (showStudent) {
-    columns.splice(1, 0, {
-      title: t('myAssignments.columns.student'),
-      key: 'student',
-      render: (_, row) => (
-        <Space size={4} wrap>
-          <span>{displayNameOf(row.student)}</span>
-          <Tag color={row.relation === 'self' ? 'green' : 'blue'}>{t(`myClasses.relation.${row.relation}`)}</Tag>
-        </Space>
-      ),
-    })
+  // Redesign (2026-11-14): one card per assignment × student instead of a nine-column table that scrolled sideways
+  // and hid the hand-in button off the edge. The card reads top to bottom — what and for which class, when it is
+  // due, where the student stands, the score — with the actions always in view and the rules behind «details».
+  const actionsOf = (row: MyAssignmentItem) => {
+    const offered = offersSubmit(row, holdsSubmitKey)
+    // The server's verdict when the page was read (MOD-08-T07): the button and its reason never follow this device's clock.
+    const takesAttempt = offered && row.submitBlocker === null
+    // A closed assignment says so in its status tag; the other reasons are not visible elsewhere.
+    const blocker = offered && row.submitBlocker !== null && row.submitBlocker !== 'closed' ? row.submitBlocker : null
+    return (
+      <div className="my-assignment__actions">
+        {takesAttempt ? (
+          <Button type="primary" onClick={() => setSubmitFor(row)}>
+            {t(row.attempts > 0 ? 'myAssignments.actions.submitAgain' : 'myAssignments.actions.submit')}
+          </Button>
+        ) : null}
+        {row.latest ? (
+          <Button icon={<EyeOutlined />} onClick={() => setViewFor(row)}>
+            {t(row.relation === 'self' ? 'myAssignments.actions.viewMine' : 'myAssignments.actions.viewChild')}
+          </Button>
+        ) : null}
+        {blocker ? <Typography.Text type="secondary" className="my-assignment__note">{t(`myAssignments.blocked.${blocker}`)}</Typography.Text> : null}
+        {row.relation === 'self' && !holdsSubmitKey && row.status === 'open' ? (
+          <Typography.Text type="secondary" className="my-assignment__note">{t('myAssignments.blocked.noPermission')}</Typography.Text>
+        ) : null}
+      </div>
+    )
+  }
+
+  const renderCard = (row: MyAssignmentItem) => {
+    const key = myAssignmentKey(row)
+    const open = expanded.has(key)
+    return (
+      <li key={key} className="my-assignment" data-my-assignment={key}>
+        <div className="my-assignment__main">
+          <div className="my-assignment__what">
+            <div className="my-assignment__title">
+              <Typography.Text strong>{assignmentTitle(row, language)}</Typography.Text>
+              <StatusTag value={row.status} />
+              {showStudent ? (
+                <Tag color={row.relation === 'self' ? 'green' : 'blue'} className="my-assignment__student">
+                  <span>{displayNameOf(row.student)}</span>
+                  {' · '}
+                  <span>{t(`myClasses.relation.${row.relation}`)}</span>
+                </Tag>
+              ) : null}
+            </div>
+            <Typography.Text type="secondary" className="my-assignment__class">
+              <bdi dir="ltr">{row.class.code}</bdi>
+              {' · '}
+              <span>{`${localizedLabel(row.class.name, language)} · ${localizedLabel(row.class.course.name, language)}`}</span>
+              {' · '}
+              <TeacherCell item={row} enrollments={enrollments} />
+              {row.lesson ? ` · ${localizedLabel(row.lesson.title, language)}` : ''}
+            </Typography.Text>
+          </div>
+          {actionsOf(row)}
+        </div>
+
+        <dl className="my-assignment__facts">
+          <div>
+            <dt>{t('myAssignments.columns.due')}</dt>
+            <dd>
+              {row.dueAt ? (
+                <>
+                  {formatZonedDateTime(row.dueAt, row.timeZone, language)}
+                  {differsFromDevice(row.timeZone) ? <span dir="ltr" className="my-assignment__zone">{` ${row.timeZone}`}</span> : null}
+                </>
+              ) : (
+                <Typography.Text type="secondary">{t('myAssignments.noDue')}</Typography.Text>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt>{t('myAssignments.columns.submission')}</dt>
+            <dd>
+              <SubmissionCell item={row} />
+            </dd>
+          </div>
+          <div>
+            <dt>{t('myAssignments.columns.attempts')}</dt>
+            <dd>
+              <span dir="ltr" title={t('myAssignments.attemptsTitle')} className="tabular-nums">
+                {`${row.attempts} / ${row.attemptsAllowed}`}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt>{t('myAssignments.columns.score')}</dt>
+            <dd>
+              <ScoreCell item={row} />
+            </dd>
+          </div>
+        </dl>
+
+        <Button
+          type="link"
+          size="small"
+          className="my-assignment__toggle"
+          aria-expanded={open}
+          onClick={() =>
+            setExpanded((current) => {
+              const next = new Set(current)
+              if (next.has(key)) next.delete(key)
+              else next.add(key)
+              return next
+            })
+          }
+        >
+          {t(open ? 'myAssignments.hideDetails' : 'myAssignments.showDetails')}
+        </Button>
+        {open ? (
+          <div className="my-assignment__details">
+            <AssignmentDetails item={row} />
+          </div>
+        ) : null}
+      </li>
+    )
   }
 
   const failure = list.error ? describeMyAssignmentsFailure(list.error) : null
@@ -428,16 +437,12 @@ export function MyAssignmentsPage() {
           />
         ) : null}
 
-        <Table<MyAssignmentItem>
-          rowKey={myAssignmentKey}
-          columns={columns}
-          dataSource={rows}
-          loading={list.loading}
-          pagination={false}
-          scroll={{ x: 'max-content' }}
-          locale={{ emptyText }}
-          expandable={{ expandedRowRender: (row) => <AssignmentDetails item={row} /> }}
-        />
+        {list.loading && rows.length === 0 ? <Skeleton active paragraph={{ rows: 4 }} title={false} /> : null}
+        {rows.length ? (
+          <ul className={list.loading ? 'my-assignments my-assignments--loading' : 'my-assignments'}>{rows.map(renderCard)}</ul>
+        ) : !list.loading ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
+        ) : null}
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
           <Space wrap>

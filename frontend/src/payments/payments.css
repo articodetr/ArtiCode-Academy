@@ -47,9 +47,129 @@
 }
 
 .my-invoices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-  gap: 16px;
+  gap: 12px;
+}
+
+.my-invoice {
+  padding: 16px 18px 6px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+}
+
+.my-invoice--cancelled {
+  opacity: 0.75;
+}
+
+.my-invoice__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+
+.my-invoice__money {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 14px 0 8px;
+}
+
+.my-invoice__bar {
+  flex: 1 1 220px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--c-ink-soft);
+  overflow: hidden;
+}
+
+.my-invoice__bar i {
+  display: block;
+  height: 100%;
+  background: var(--c-ok);
+  border-radius: inherit;
+}
+
+.my-invoice__bar--overdue i {
+  background: var(--c-mark);
+}
+
+.my-invoice__totals {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+
+.my-invoice__totals dt {
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+.my-invoice__totals dd {
+  margin: 0;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.my-invoice__totals .finance-totals__bad dd {
+  color: var(--c-bad);
+}
+
+.my-invoice__more .ant-collapse-header {
+  padding-inline: 0 !important;
+}
+
+.my-invoice__lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px 32px;
+}
+
+.my-invoice__lists h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-muted);
+}
+
+.my-invoice__lists ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.my-invoice__lists li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--c-line);
+}
+
+.my-invoice__lists li:first-child {
+  border-top: 0;
+}
+
+.my-invoice__lists li > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.my-invoice__lists small {
+  display: block;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+.my-invoice__lists .ant-tag {
+  margin: 0;
 }
 
 @media (max-width: 480px) {
