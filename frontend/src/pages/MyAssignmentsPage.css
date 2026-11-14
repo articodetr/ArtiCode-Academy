@@ -1,0 +1,96 @@
+/* «My assignments» as cards (redesign, 2026-11-14): one per assignment × student, readable from 320px up. */
+.my-assignments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.my-assignments--loading {
+  opacity: 0.6;
+}
+
+.my-assignment {
+  padding: 16px 18px 10px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-lg);
+  background: var(--c-surface);
+}
+
+.my-assignment__main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+}
+
+.my-assignment__what {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.my-assignment__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 15px;
+}
+
+.my-assignment__title .ant-tag {
+  margin: 0;
+}
+
+.my-assignment__class {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.my-assignment__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.my-assignment__note {
+  font-size: 12px;
+  max-width: 260px;
+}
+
+.my-assignment__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px 20px;
+  margin: 14px 0 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-line);
+}
+
+.my-assignment__facts dt {
+  color: var(--c-muted);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.my-assignment__facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.my-assignment__zone {
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+.my-assignment__toggle.ant-btn {
+  padding-inline: 0;
+}
+
+.my-assignment__details {
+  padding: 8px 0 6px;
+}

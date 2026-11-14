@@ -3459,6 +3459,8 @@ export const en: Translation = {
   // MOD-08 «my assignments» (J-F42, API-112 + the student's attempts API-109/API-110); the due-day filter, order and
   // pagination labels come from `assignments.*`, the relation tags from `myClasses.relation.*`.
   myAssignments: {
+    showDetails: 'Instructions and grading rules',
+    hideDetails: 'Hide details',
     title: 'My assignments',
     subtitle: 'Assignments of the classes you or the students linked to you are enrolled in: due dates, submissions and grades',
     optionsFailed: 'Your classes could not be loaded, so the student and class filters and the class teacher’s name are not available right now.',

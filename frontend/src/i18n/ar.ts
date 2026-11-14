@@ -3465,6 +3465,8 @@ export const ar = {
   // MOD-08 «my assignments» (J-F42, API-112 + the student's attempts API-109/API-110); the due-day filter, order and
   // pagination labels come from `assignments.*`, the relation tags from `myClasses.relation.*`.
   myAssignments: {
+    showDetails: 'التعليمات وقواعد التصحيح',
+    hideDetails: 'إخفاء التفاصيل',
     title: 'واجباتي',
     subtitle: 'واجبات الفصول المسجَّل فيها أنت أو الطلاب المرتبطون بك: مواعيدها وتسليماتها ودرجاتها',
     optionsFailed: 'تعذّر تحميل فصولك، فخيارات مرشّحَي الطالب والفصل واسم معلم الفصل غير متاحة الآن.',
