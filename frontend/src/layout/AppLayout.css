@@ -1,17 +1,81 @@
-.app-brand {
-  height: 64px;
+/* The app shell (redesign, 2026-11-14): a navy side menu in sections, a white header, a cool grey page. */
+.app-shell {
+  min-height: 100vh;
+}
+
+/* ---------- side menu ---------- */
+.app-sider {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+/* A long menu scrolls inside the navy column, above the collapse trigger, with a slim navy scrollbar. */
+.app-sider .ant-layout-sider-children {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.app-sider .ant-layout-sider-children:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+/* A collapsed menu has no room for the section names: a short line separates the sections instead. */
+.app-menu.ant-menu-inline-collapsed .ant-menu-item-group-title {
+  font-size: 0;
+  padding: 10px 0 6px;
   display: flex;
-  flex-direction: column;
   justify-content: center;
-  padding: 0 16px;
+}
+
+.app-menu.ant-menu-inline-collapsed .ant-menu-item-group-title::after {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* The collapse trigger at the bottom of the side menu takes the menu's navy, a shade darker. */
+.app-sider .ant-layout-sider-trigger {
+  background: #0f2447;
+  color: var(--c-side-text);
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px 18px;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.app-brand--compact {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.app-brand__mark {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--c-mark);
+}
+
+.app-brand__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .app-brand__title {
   font-weight: 700;
   font-size: 16px;
   line-height: 1.3;
+  color: #fff;
 }
 
 .app-brand__sub {
@@ -19,21 +83,66 @@
   /* One line is kept while the name is still empty (the first read — J-F24), so the product name above does not move when it arrives. */
   line-height: 1.5;
   min-height: 1.5em;
-  opacity: 0.65;
+  color: var(--c-side-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   /* Aligned like the product name above it, whatever the direction of the academy's name (dir="auto"). */
   text-align: match-parent;
 }
 
-.app-header {
+.app-menu.ant-menu {
+  border-inline-end: 0 !important;
+  padding-bottom: 16px;
+}
+
+.app-menu .ant-menu-item-group-title {
+  padding-top: 14px;
+}
+
+/* The selected entry carries a chalk-yellow edge on its starting side. */
+.app-menu .ant-menu-item {
+  position: relative;
+}
+
+.app-menu .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--c-mark);
+}
+
+/* The phone drawer is the side menu, navy from edge to edge. */
+.app-drawer .ant-drawer-content,
+.app-drawer .ant-drawer-body {
+  background: var(--c-ink);
+}
+
+/* ---------- header ---------- */
+.app-header.ant-layout-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 24px;
   height: 64px;
   line-height: normal;
+  border-bottom: 1px solid var(--c-line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header__start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-header__menu {
+  flex: none;
 }
 
 /* The academy's logo and name (J-F13): the name gives way first and ends in an ellipsis. */
@@ -60,19 +169,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 600;
+  color: var(--c-text);
 }
 
 .app-header__actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 14px;
   flex-shrink: 0;
 }
 
-.app-content {
-  padding: 24px;
-  min-height: calc(100vh - 64px);
+.app-header__demo.ant-tag {
+  margin: 0;
+  background: var(--c-mark-soft);
+  color: var(--c-mark-text);
+  border-color: transparent;
 }
 
 .app-user {
@@ -82,17 +193,38 @@
   cursor: pointer;
 }
 
-@media (max-width: 768px) {
-  .app-header {
+/* ---------- page ---------- */
+.app-content {
+  padding: 28px 32px 40px;
+  min-width: 0;
+}
+
+@media (max-width: 991.98px) {
+  .app-header.ant-layout-header {
     padding: 0 12px;
+    gap: 8px;
   }
+  .app-header__actions {
+    gap: 8px;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .app-content {
+    padding: 16px 14px 32px;
+  }
+}
+
+@media (max-width: 575.98px) {
   /*
-   * Only a logo is left of the brand on a phone; without one the actions start the header, as before J-F13.
+   * Only a logo is left of the brand on a phone; without one the menu button starts the header.
    * The name stays readable by screen readers — the logo's alt is empty (J-F24) — so it is visually hidden,
-   * never display: none; without a logo the whole brand leaves the flow the same way.
+   * never display: none; without a logo the whole brand leaves the flow the same way. The user's name and the
+   * demo tag give way the same way, so the header never scrolls sideways.
    */
   .app-header__title,
-  .app-header__brand--no-logo {
+  .app-header__brand--no-logo,
+  .app-user__name,
+  .app-header__demo {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -107,11 +239,5 @@
   .app-header__logo {
     max-height: 28px;
     max-width: 72px;
-  }
-  .app-header__actions {
-    flex-shrink: 1;
-  }
-  .app-content {
-    padding: 12px;
   }
 }

@@ -337,12 +337,13 @@ describe('navFor', () => {
     // Since J-F05 the schedule entry is permission-gated too (schedule.read / schedule.manage / classes.manage), since J-F09 the
     // lessons entry (lessons.read), since J-F38 the assignments entry (assignments.read), since J-F45 the exams entry (exams.read)
     // and since J-F51 the certificates entry (certificates.read_all / certificates.issue).
-    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'payments', 'notifications', 'reports'])
+    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'payments', 'notifications', 'reports', 'roles'])
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
-    // academy.settings.manage also opens the grade schemes tab (J-F44), right after the rooms tab.
-    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'rooms', 'gradeSchemes'])
+    // academy.settings.manage also opens the grade schemes tab (J-F44), right after the rooms tab. Since the redesign
+    // (2026-11-14) roles and the audit log close the list — they end the academy section of the side menu.
+    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'settings', 'rooms', 'gradeSchemes', 'roles', 'audit'])
     // Staff gain the courses entry (MOD-04-T05) and the lessons entry (J-F09): the seed grants them courses.read and lessons.read;
     // and the certificates entry (J-F51): the seed grants them certificates.issue, which opens the list too (D-R57).
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications'])

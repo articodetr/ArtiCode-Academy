@@ -1,0 +1,46 @@
+/* Status tags in the five tones of the Classroom palette (redesign, 2026-11-14): a soft fill, a dot, no border. */
+.status-tag.ant-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 0;
+  border: 0;
+  border-radius: 20px;
+  padding: 1px 10px;
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+.status-tag.ant-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.status-tag--ok.ant-tag {
+  background: var(--c-ok-soft);
+  color: var(--c-ok);
+}
+
+.status-tag--live.ant-tag {
+  background: var(--c-ink-soft);
+  color: var(--c-ink);
+}
+
+.status-tag--attention.ant-tag {
+  background: var(--c-mark-soft);
+  color: var(--c-mark-text);
+}
+
+.status-tag--bad.ant-tag {
+  background: var(--c-bad-soft);
+  color: var(--c-bad);
+}
+
+.status-tag--neutral.ant-tag {
+  background: #eef0f3;
+  color: var(--c-muted);
+}

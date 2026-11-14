@@ -1,0 +1,29 @@
+.seats-bar {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+
+.seats-bar__count {
+  font-size: 13px;
+  align-self: flex-start;
+}
+
+.seats-bar__track {
+  height: 6px;
+  border-radius: 3px;
+  background: #e3e8ef;
+  overflow: hidden;
+}
+
+.seats-bar__track i {
+  display: block;
+  height: 100%;
+  background: var(--c-ink);
+  border-radius: 3px;
+}
+
+.seats-bar--full .seats-bar__track i {
+  background: var(--c-mark);
+}

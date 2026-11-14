@@ -38,8 +38,17 @@ export interface NavViewer {
   permissions: readonly string[]
 }
 
+/**
+ * The menu sections, in the order the side menu shows them (redesign, 2026-11-14): an entry's place
+ * inside its section follows NAV_ITEMS.
+ */
+export const NAV_GROUPS = ['home', 'teaching', 'people', 'finance', 'academy'] as const
+export type NavGroup = (typeof NAV_GROUPS)[number]
+
 interface NavItemBase {
   key: string
+  /** The side-menu section the entry belongs to. */
+  group: NavGroup
   path: string
   labelKey: string
   icon: ReactNode
@@ -99,35 +108,34 @@ const KNOWN_ROLES: readonly Role[] = ROLES
 
 export const NAV_ITEMS: readonly NavItem[] = [
   // The landing page of every signed-in user (and the exit of the 403 page).
-  { key: 'dashboard', path: '/', labelKey: 'nav.dashboard', icon: createElement(DashboardOutlined), roles: 'everyone', module: 'MOD-FE-01' },
-  { key: 'users', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], module: 'MOD-03' },
-  { key: 'roles', path: '/settings/roles', labelKey: 'nav.roles', icon: createElement(SafetyOutlined), permissions: ['roles.manage'], module: 'MOD-03' },
+  { key: 'dashboard', group: 'home', path: '/', labelKey: 'nav.dashboard', icon: createElement(DashboardOutlined), roles: 'everyone', module: 'MOD-FE-01' },
+  { key: 'users', group: 'people', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], module: 'MOD-03' },
   // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too.
-  { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], module: 'MOD-04' },
+  { key: 'courses', group: 'teaching', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], module: 'MOD-04' },
   // MOD-05 (J-F01): the classes API is real — gated by the one key every read of `/api/classes` requires
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
   // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16).
-  { key: 'classes', path: '/classes', labelKey: 'nav.classes', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
+  { key: 'classes', group: 'teaching', path: '/classes', labelKey: 'nav.classes', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
   // MOD-05 (J-F04): «my classes» (API-060) needs no permission key — ownership; shown to whoever holds the
   // `student` or `guardian` server role, as the server reads them (an admin or a teacher alone gets an empty list).
-  { key: 'myClasses', path: '/my-classes', labelKey: 'nav.myClasses', icon: createElement(ReadOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-05' },
+  { key: 'myClasses', group: 'teaching', path: '/my-classes', labelKey: 'nav.myClasses', icon: createElement(ReadOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-05' },
   // MOD-07 (J-F05): the schedule API is real — «my schedule» needs `schedule.read` (every seeded role holds it) and the
   // academy view `schedule.manage` or `classes.manage` (D-R27); any of the three shows the entry (ADR-042 pattern).
-  { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), permissions: ['schedule.read', 'schedule.manage', 'classes.manage'], module: 'MOD-07' },
+  { key: 'schedule', group: 'teaching', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), permissions: ['schedule.read', 'schedule.manage', 'classes.manage'], module: 'MOD-07' },
   // MOD-06 (J-F09): the lessons API is real — gated by the one key every read of `/api/lessons` requires (`lessons.read` at
   // controller level; `lessons.manage` only adds writes). Staff gain the entry (the seed grants them lessons.read); a student
   // holds it too but is assigned to no class, so the server answers an empty list there — their own lessons are in «my lessons».
-  { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], module: 'MOD-06' },
+  { key: 'lessons', group: 'teaching', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], module: 'MOD-06' },
   // MOD-06 (J-F11): «my lessons» (API-101) needs no permission key — ownership, the API-060 rule; shown to whoever holds the
   // `student` or `guardian` server role, like «my classes» (a teacher who is also a guardian keeps it; a teacher or an admin
   // alone gets no entry — the server would answer an empty list, and the lessons they teach are on /lessons).
-  { key: 'myLessons', path: '/my-lessons', labelKey: 'nav.myLessons', icon: createElement(PlaySquareOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-06' },
+  { key: 'myLessons', group: 'teaching', path: '/my-lessons', labelKey: 'nav.myLessons', icon: createElement(PlaySquareOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-06' },
   // MOD-08 (J-F38): the assignments API is real — gated by the one key every read of `/api/assignments` requires
   // (`assignments.read` at controller level; `assignments.manage` only adds writes), with the learners excepted (roadmap
   // §4g T06): students and guardians hold the key by seed but are assigned to no class, so the list would stay empty —
   // their own assignments come with «my assignments» (API-112, MOD-08-T04). Staff hold no assignments.* key (matrix 7.2).
   {
-    key: 'assignments',
+    key: 'assignments', group: 'teaching',
     path: '/assignments',
     labelKey: 'nav.assignments',
     icon: createElement(FileTextOutlined),
@@ -139,25 +147,25 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // holds the `student` or `guardian` server role, like «my lessons» (a teacher who is also a guardian keeps it next to
   // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
   // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
-  { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
+  { key: 'myAssignments', group: 'teaching', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
   // MOD-09 (J-F50): «my exams» (API-121) needs no permission key — ownership, the API-060 rule (D-R48, as «my assignments»);
   // «my grades» (API-129) adds the keys of matrix 7.2 to the same ownership (grades.read_own for one's own enrollments,
   // grades.read_linked for the children's) and answers 403 to a caller holding neither. Both follow the `student` and
   // `guardian` server role keys like the other learner pages (a teacher who is also a guardian keeps them; a teacher or an
   // admin alone gets no entry); a learner role that lost both grades keys still reaches «my grades», which words the refusal.
-  { key: 'myExams', path: '/my-exams', labelKey: 'nav.myExams', icon: createElement(ScheduleOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-09' },
-  { key: 'myGrades', path: '/my-grades', labelKey: 'nav.myGrades', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-09' },
+  { key: 'myExams', group: 'teaching', path: '/my-exams', labelKey: 'nav.myExams', icon: createElement(ScheduleOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-09' },
+  { key: 'myGrades', group: 'teaching', path: '/my-grades', labelKey: 'nav.myGrades', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-09' },
   // MOD-10 (J-F51): «my certificates» (API-135) — ownership with the 7.2 keys (`certificates.read_own` for one's own,
   // `certificates.read_linked` with the guardian role for a child's — D-R57); shown to whoever holds the `student` or
   // `guardian` server role key, like «my assignments» (MOD-12 notifications link here). A learner whose role lost both
   // keys reaches the page and gets the server's 403 message.
-  { key: 'myCertificates', path: '/my-certificates', labelKey: 'nav.myCertificates', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-10' },
+  { key: 'myCertificates', group: 'people', path: '/my-certificates', labelKey: 'nav.myCertificates', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-10' },
   // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
   // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
   // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams
   // come with «my exams» (API-121, a later part of MOD-09-T08). Staff hold no exams.* key (matrix 7.2).
   {
-    key: 'exams',
+    key: 'exams', group: 'teaching',
     path: '/exams',
     labelKey: 'nav.exams',
     icon: createElement(FormOutlined),
@@ -168,30 +176,32 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // MOD-10 (J-F51): the certificates API is real — the list, the details and a class's preview open with
   // `certificates.read_all` OR `certificates.issue` (D-R57: staff issue without read_all), so either key shows the entry.
   // No learner holds either by seed (they read theirs in «my certificates»), so nobody is excepted; teachers hold none.
-  { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), permissions: ['certificates.read_all', 'certificates.issue'], module: 'MOD-10' },
-  { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
-  { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
-  { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
-  { key: 'audit', path: '/audit-logs', labelKey: 'nav.audit', icon: createElement(AuditOutlined), permissions: ['audit.read'], module: 'MOD-03' },
+  { key: 'certificates', group: 'people', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), permissions: ['certificates.read_all', 'certificates.issue'], module: 'MOD-10' },
+  { key: 'payments', group: 'finance', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
+  { key: 'notifications', group: 'home', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
+  { key: 'reports', group: 'finance', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
   // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the
   // catalog keys (either one shows it; saving needs `manage`). By default only academy_admin holds them — no visible change.
-  { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
+  { key: 'settings', group: 'academy', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
   // MOD-02-T06 screen: the branches tab of the settings lives under /settings/branches behind the one key the server enforces for writes.
-  { key: 'branches', path: '/settings/branches', labelKey: 'nav.branches', icon: createElement(EnvironmentOutlined), permissions: ['branches.manage'], module: 'MOD-02' },
+  { key: 'branches', group: 'academy', path: '/settings/branches', labelKey: 'nav.branches', icon: createElement(EnvironmentOutlined), permissions: ['branches.manage'], module: 'MOD-02' },
   // J-F06 (MOD-07-T02 screen): the rooms tab of the settings lives under /settings/rooms behind the one key the server
   // enforces for writes (`schedule.manage` — reads need no key, D-R27; by seed only academy_admin holds it).
-  { key: 'rooms', path: '/settings/rooms', labelKey: 'nav.rooms', icon: createElement(HomeOutlined), permissions: ['schedule.manage'], module: 'MOD-07' },
+  { key: 'rooms', group: 'academy', path: '/settings/rooms', labelKey: 'nav.rooms', icon: createElement(HomeOutlined), permissions: ['schedule.manage'], module: 'MOD-07' },
   // J-F44 (MOD-09-T08 part a): the grade schemes tab of the settings lives under /settings/grade-schemes behind the one key
   // every write of /api/grade-schemes requires (`academy.settings.manage` — reads need none, D-R46; by seed only academy_admin
   // holds it). The `settings` entry above opens with `academy.settings.read` too; this one is management only.
   {
-    key: 'gradeSchemes',
+    key: 'gradeSchemes', group: 'academy',
     path: '/settings/grade-schemes',
     labelKey: 'nav.gradeSchemes',
     icon: createElement(PercentageOutlined),
     permissions: ['academy.settings.manage'],
     module: 'MOD-09',
   },
+  // The academy section ends with the people-and-access tools: roles (MOD-03-T13) and the audit log (MOD-03-T15).
+  { key: 'roles', group: 'academy', path: '/settings/roles', labelKey: 'nav.roles', icon: createElement(SafetyOutlined), permissions: ['roles.manage'], module: 'MOD-03' },
+  { key: 'audit', group: 'academy', path: '/audit-logs', labelKey: 'nav.audit', icon: createElement(AuditOutlined), permissions: ['audit.read'], module: 'MOD-03' },
 ]
 
 /** True when the viewer holds at least one server role key and every one of them is in `keys`. */
