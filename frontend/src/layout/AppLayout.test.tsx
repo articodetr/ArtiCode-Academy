@@ -25,6 +25,15 @@ describe('AppLayout navigation', () => {
     expect(menuLabels()).toEqual([ar.nav.dashboard, ar.nav.users])
   })
 
+  it('groups the entries under section headings in the order of NAV_GROUPS, leaving out empty sections (redesign)', () => {
+    const user = makeUser({ role: null, roles: ['coordinator'], permissions: ['users.read', 'courses.read', 'roles.manage'] })
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user }), route: '/' })
+    const menu = screen.getByRole('menu')
+    const headings = [...menu.querySelectorAll('.ant-menu-item-group-title')].map((node) => node.textContent?.trim())
+    expect(headings).toEqual([ar.nav.groups.home, ar.nav.groups.teaching, ar.nav.groups.people, ar.nav.groups.academy])
+    expect(headings).not.toContain(ar.nav.groups.finance)
+  })
+
   it('adds the roles and audit entries for their permission holders and hides them from a student', () => {
     const { unmount } = renderWithProviders(<AppLayout />, {
       auth: makeAuth({ user: makeUser({ permissions: ['users.read', 'roles.manage', 'audit.read', 'academy.settings.read'] }) }),
@@ -33,8 +42,9 @@ describe('AppLayout navigation', () => {
     const admin = menuLabels()
     expect(admin).toContain(ar.nav.roles)
     expect(admin).toContain(ar.nav.audit)
-    expect(admin.indexOf(ar.nav.roles)).toBe(admin.indexOf(ar.nav.users) + 1)
-    expect(admin.indexOf(ar.nav.audit)).toBe(admin.indexOf(ar.nav.settings) - 1)
+    // Redesign (2026-11-14): both sit in the academy section, after the settings, the audit log last.
+    expect(admin.indexOf(ar.nav.roles)).toBe(admin.indexOf(ar.nav.settings) + 1)
+    expect(admin.indexOf(ar.nav.audit)).toBe(admin.length - 1)
     unmount()
 
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read'] })

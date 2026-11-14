@@ -1,0 +1,766 @@
+/* The dashboard (redesign, 2026-11-14). Colours come from the --c-* tokens of index.css. */
+/* The dashboard fills the content area like every other page (no width cap — on a wide screen it left a blank strip). */
+.db {
+  width: 100%;
+}
+
+.db-head {
+  margin-bottom: 18px;
+}
+
+.db-head__date {
+  color: var(--c-muted);
+  font-size: 14px;
+}
+
+.db-head h1 {
+  margin: 2px 0 4px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.db-head p {
+  margin: 0;
+  color: var(--c-muted);
+}
+
+.db-tabs .ant-tabs-nav {
+  margin-bottom: 18px;
+}
+
+/*
+ * The active tab carries its own underline: antd's moving ink bar is measured before the count badges and the web
+ * font arrive, and stayed one tab off.
+ */
+.db-tabs .ant-tabs-ink-bar {
+  display: none;
+}
+
+.db-tabs .ant-tabs-tab-active {
+  box-shadow: inset 0 -2px 0 var(--c-ink);
+}
+
+.db-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.db-badge {
+  min-width: 19px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--c-mark);
+  color: #2a2006;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+}
+
+.db-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.db-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.db-panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  min-width: 0;
+}
+
+.db-panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.db-panel__head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.db-panel__head a,
+.db-todo a {
+  color: var(--c-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.db-muted {
+  color: var(--c-muted);
+  margin: 0;
+}
+
+.db-clear {
+  margin: 0;
+  color: var(--c-ok);
+}
+
+.db-bad {
+  color: var(--c-bad);
+}
+
+/* ---------- day timeline ---------- */
+.dt-scroll {
+  overflow-x: auto;
+}
+
+.dt {
+  position: relative;
+  min-width: 680px;
+  --label: 0px;
+}
+
+.dt--labelled {
+  --label: 150px;
+}
+
+.dt-hours,
+.dt-lane {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.dt--labelled .dt-hours,
+.dt--labelled .dt-lane {
+  grid-template-columns: var(--label) 1fr;
+}
+
+.dt-hours {
+  border-bottom: 1px solid var(--c-line);
+  height: 24px;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+.dt-hours__track {
+  position: relative;
+}
+
+.dt-hours__track span {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+}
+
+[dir='rtl'] .dt-hours__track span {
+  transform: translateX(50%);
+}
+
+.dt-hours__track span:first-child {
+  transform: none;
+}
+
+.dt-lane {
+  border-bottom: 1px solid var(--c-line);
+  min-height: 62px;
+}
+
+.dt-lane:last-of-type {
+  border-bottom: 0;
+}
+
+.dt-label {
+  display: flex;
+  align-items: center;
+  padding-inline-end: 12px;
+  min-width: 0;
+}
+
+.db-lane-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.db-lane-label b,
+.dt-label b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.db-lane-label small {
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+/* The hour grid: one vertical line at the start of each hour. */
+.dt-track {
+  position: relative;
+  background-image: linear-gradient(to right, var(--c-line) 1px, transparent 1px);
+}
+
+[dir='rtl'] .dt-track {
+  background-image: linear-gradient(to left, var(--c-line) 1px, transparent 1px);
+  background-position: right top;
+}
+
+.dt-block {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--c-ink-soft);
+  border-inline-start: 4px solid var(--c-ink);
+  color: var(--c-text);
+  font-size: 12.5px;
+  line-height: 1.35;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: box-shadow 0.15s ease;
+}
+
+.dt-block:hover {
+  color: var(--c-text);
+  box-shadow: 0 2px 8px rgba(22, 48, 92, 0.15);
+  z-index: 3;
+}
+
+.dt-block:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 1px;
+  z-index: 3;
+}
+
+.dt-block b {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt-block span {
+  color: var(--c-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt-block--needsAttendance {
+  background: var(--c-mark-soft);
+  border-color: var(--c-mark);
+}
+
+.dt-block--needsAttendance span {
+  color: var(--c-mark-text);
+}
+
+.dt-block--done {
+  opacity: 0.55;
+}
+
+.dt-block--cancelled {
+  opacity: 0.5;
+  background: #eef0f3;
+  border-color: #b8c0cc;
+}
+
+.dt-block--cancelled b {
+  text-decoration: line-through;
+}
+
+.dt-now-layer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline: var(--label) 0;
+  pointer-events: none;
+}
+
+.dt-now {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  width: 2px;
+  background: var(--c-now);
+  z-index: 2;
+}
+
+.dt-now span {
+  position: absolute;
+  top: -16px;
+  inset-inline-start: -12px;
+  font-size: 11px;
+  color: var(--c-now);
+  white-space: nowrap;
+}
+
+/* ---------- needs you / numbers ---------- */
+.db-todo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.db-todo li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--c-line);
+}
+
+.db-todo li:first-child {
+  border-top: 0;
+}
+
+.db-count {
+  flex: none;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--c-mark-soft);
+  color: var(--c-mark-text);
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.db-todo__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.db-todo__text small {
+  display: block;
+  color: var(--c-muted);
+}
+
+.db-numbers {
+  margin: 0;
+}
+
+.db-numbers div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--c-line);
+}
+
+.db-numbers div:first-child {
+  border-top: 0;
+}
+
+.db-numbers dt {
+  color: var(--c-muted);
+}
+
+.db-numbers dd {
+  margin: 0;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+/* ---------- week ---------- */
+.db-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.db-day {
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  padding: 10px;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.db-day--today {
+  border-color: var(--c-ink);
+  box-shadow: inset 0 3px 0 var(--c-mark);
+}
+
+.db-day h3 {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.db-day h3 span {
+  color: var(--c-muted);
+  font-weight: 400;
+}
+
+.db-day__today {
+  font-size: 12px;
+  color: var(--c-ink);
+  font-weight: 600;
+  margin-top: -6px;
+}
+
+.db-day__empty {
+  margin: 0;
+  color: #9aa3b2;
+  font-size: 13px;
+}
+
+.db-chip {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--c-ink-soft);
+  border-inline-start: 3px solid var(--c-ink);
+  color: var(--c-text);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.db-chip:hover {
+  color: var(--c-text);
+}
+
+.db-chip b {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-chip span {
+  color: var(--c-muted);
+}
+
+.db-chip--needsAttendance {
+  background: var(--c-mark-soft);
+  border-color: var(--c-mark);
+}
+
+.db-chip--done,
+.db-chip--cancelled {
+  opacity: 0.55;
+}
+
+.db-chip--cancelled b {
+  text-decoration: line-through;
+}
+
+/* ---------- classes ---------- */
+.db-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.db-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  color: var(--c-text);
+  transition: border-color 0.15s ease;
+}
+
+.db-tile:hover {
+  color: var(--c-text);
+  border-color: #b9c5d8;
+}
+
+.db-tile--alert {
+  border-color: var(--c-mark);
+  box-shadow: inset 0 3px 0 var(--c-mark);
+}
+
+.db-tile__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.db-tile__top b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.db-tile__top small,
+.db-tile__who {
+  color: var(--c-muted);
+  font-size: 13px;
+}
+
+.db-flag {
+  color: var(--c-mark-text);
+  background: var(--c-mark-soft);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.db-ring {
+  --p: 0;
+  flex: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: conic-gradient(var(--c-ink) calc(var(--p) * 1%), #e3e8ef 0);
+  display: grid;
+  place-items: center;
+}
+
+.db-ring--low {
+  background: conic-gradient(var(--c-mark) calc(var(--p) * 1%), #e3e8ef 0);
+}
+
+.db-ring span {
+  width: 39px;
+  height: 39px;
+  border-radius: 50%;
+  background: var(--c-surface);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.db-seats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--c-muted);
+}
+
+.db-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #e3e8ef;
+  overflow: hidden;
+}
+
+.db-bar i {
+  display: block;
+  height: 100%;
+  background: var(--c-ink);
+}
+
+.db-bar--full i {
+  background: var(--c-mark);
+}
+
+/* ---------- rooms ---------- */
+.db-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.db-tag {
+  padding: 3px 11px;
+  border-radius: 20px;
+  background: var(--c-ink-soft);
+  color: var(--c-ink);
+  font-size: 13px;
+}
+
+/* ---------- finance ---------- */
+.db-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-lg);
+}
+
+.db-kpis div {
+  padding: 16px 20px;
+  border-inline-start: 1px solid var(--c-line);
+}
+
+.db-kpis div:first-child {
+  border-inline-start: 0;
+}
+
+.db-kpis b {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.db-kpis small {
+  color: var(--c-muted);
+}
+
+.db-chart {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  height: 190px;
+}
+
+.db-chart__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.db-chart__col small {
+  font-size: 11px;
+  color: var(--c-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.db-chart__col i {
+  width: 100%;
+  max-width: 64px;
+  border-radius: 5px 5px 0 0;
+  background: var(--c-ink-soft);
+}
+
+.db-chart__col--now i {
+  background: var(--c-ink);
+}
+
+.db-chart__col span {
+  font-size: 12px;
+  color: var(--c-muted);
+  border-top: 1px solid var(--c-line);
+  width: 100%;
+  text-align: center;
+  padding-top: 4px;
+}
+
+.db-aging {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  background: #e3e8ef;
+}
+
+.db-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  font-size: 13.5px;
+}
+
+.db-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.db-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.db-age1 {
+  background: #7d93ba;
+}
+
+.db-age2 {
+  background: var(--c-mark);
+}
+
+.db-age3 {
+  background: #d9822b;
+}
+
+.db-age4 {
+  background: var(--c-bad);
+}
+
+.db-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.db-table th {
+  text-align: start;
+  font-weight: 500;
+  color: var(--c-muted);
+  font-size: 13px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.db-table td {
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.db-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.db-pill {
+  font-size: 12.5px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--c-mark-soft);
+  color: var(--c-mark-text);
+  white-space: nowrap;
+}
+
+.db-pill--bad {
+  background: var(--c-bad-soft);
+  color: var(--c-bad);
+}
+
+@media (max-width: 1099.98px) {
+  .db-split {
+    grid-template-columns: 1fr;
+  }
+  .db-week {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .db-day {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .db-head h1 {
+    font-size: 23px;
+  }
+  .db-panel {
+    padding: 14px;
+  }
+  .db-legend {
+    grid-template-columns: 1fr;
+  }
+}
