@@ -1452,6 +1452,8 @@ export const en: Translation = {
     refusedRow: 'Not saved: no longer enrolled',
     notRecorded: 'Not recorded',
     recordedBy: 'Recorded by {{name}}',
+    addNote: 'Add note',
+    minutesShort: '{{count}} min',
     notePlaceholder: 'Note (optional)',
     empty: 'No students are enrolled in the class',
     markAllPresent: 'Mark all present',

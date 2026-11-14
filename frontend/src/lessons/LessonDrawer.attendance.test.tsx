@@ -45,7 +45,7 @@ function renderDrawer(permissions: string[]) {
 
 const sheetTab = () => screen.getByRole('tab', { name: ar.attendance.drawerTabs.sheet })
 const detailsTab = () => screen.getByRole('tab', { name: ar.attendance.drawerTabs.details })
-const row = (name: string) => screen.getByText(name).closest('tr') as HTMLElement
+const row = (name: string) => screen.getByText(name).closest('[data-attendance-row]') as HTMLElement
 
 describe('LessonDrawer — the attendance tab (J-F10)', () => {
   it('gives a holder of attendance.read a details tab and an attendance tab, reads the sheet only when it opens, and the summary links to it', async () => {
@@ -95,7 +95,7 @@ describe('LessonDrawer — the attendance tab (J-F10)', () => {
     renderDrawer(ATTENDANCE_TEACHER_PERMISSIONS)
     await screen.findByText('PY-101-A')
     fireEvent.click(sheetTab())
-    fireEvent.click(within(await screen.findByText('سارة الطالبة').then((cell) => cell.closest('tr') as HTMLElement)).getByLabelText(ar.lessons.attendance.absent))
+    fireEvent.click(within(await screen.findByText('سارة الطالبة').then((cell) => cell.closest('[data-attendance-row]') as HTMLElement)).getByLabelText(ar.lessons.attendance.absent))
 
     fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
     expect(await screen.findByLabelText(ar.lessons.fields.titleAr)).toBeInTheDocument()

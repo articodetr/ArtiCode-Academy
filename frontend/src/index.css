@@ -100,7 +100,8 @@ body {
   display: block;
   position: sticky;
   top: 80px;
-  height: calc(100vh - 96px);
+  /* Set by useDockedPanel from where the panel actually starts; the fallback is its stuck position. */
+  height: var(--list-panel-height, calc(100vh - 96px));
   overflow: hidden;
   border: 1px solid var(--c-line);
   border-radius: var(--radius-lg);

@@ -17,8 +17,7 @@
 // and a reload; a row changed back holds nothing, a read-only sheet never
 // holds, and the saved answer starts a clean session.
 import { ReloadOutlined, UndoOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Flex, Input, InputNumber, Popconfirm, Radio, Skeleton, Space, Table, Tag, Typography, theme } from 'antd'
-import type { TableProps } from 'antd'
+import { Alert, App, Button, Flex, Input, InputNumber, Popconfirm, Radio, Skeleton, Space, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ATTENDANCE_BATCH_MAX, ATTENDANCE_NOTE_MAX_LENGTH, ATTENDANCE_STATUSES, MINUTES_LATE_MAX, recordAttendance } from '../api/attendance'
@@ -33,6 +32,7 @@ import type { AttendanceDraft } from './attendance.changes'
 import { describeAttendanceFailure, failureMessage } from './attendance.errors'
 import { ATTENDANCE_STATUS_COLORS } from './attendance.format'
 import { useAttendanceSheet } from './useAttendanceSheet'
+import './attendance.css'
 
 interface AttendanceSheetTabProps {
   /** The lesson's id, and its zone for the times the sheet shows. */
@@ -109,12 +109,13 @@ function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStal
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
-  const { token } = theme.useToken()
   const [drafts, setDrafts] = useState<ReadonlyMap<string, AttendanceDraft>>(() => new Map())
   const [refused, setRefused] = useState<ReadonlySet<string>>(() => new Set())
   const [showProblems, setShowProblems] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // Rows whose note field the user opened with «add note» (a row that holds a note always shows it).
+  const [openNotes, setOpenNotes] = useState<ReadonlySet<string>>(() => new Set())
 
   const editable = canRecord && sheet.recordable
   const changed = changedItems(sheet.items, drafts)
@@ -191,124 +192,111 @@ function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStal
 
   const statusTag = (status: AttendanceStatus) => <Tag color={ATTENDANCE_STATUS_COLORS[status]}>{t(`lessons.attendance.${status}`)}</Tag>
 
-  const columns: TableProps<AttendanceItem>['columns'] = [
-    {
-      title: t('attendance.columns.student'),
-      key: 'student',
-      render: (_, item) => (
-        <Space orientation="vertical" size={2}>
-          <Typography.Text strong>{item.student.fullName}</Typography.Text>
-          {item.student.displayName && item.student.displayName !== item.student.fullName ? <Typography.Text type="secondary">{item.student.displayName}</Typography.Text> : null}
-          <Space size={4} wrap>
-            <Tag color={isRecordableItem(item) ? undefined : 'default'}>{t(`attendance.enrollment.${item.enrollmentStatus ?? 'none'}`)}</Tag>
-            {item.student.deletedAt ? <Tag color="volcano">{t('attendance.deleted')}</Tag> : null}
-            {canRecord && sheet.recordable && !isRecordableItem(item) ? <Tag>{t('attendance.readOnlyRow')}</Tag> : null}
-            {refused.has(item.student.id) ? <Tag color="red">{t('attendance.refusedRow')}</Tag> : null}
-          </Space>
-          {item.record ? (
-            // Who wrote the record last, and when — under the name, so the table fits the drawer.
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t('attendance.recordedBy', { name: item.record.recordedBy?.fullName ?? '—' })}
-              <br />
-              {formatLessonDateTime(item.record.updatedAt, language, timeZone)}
-            </Typography.Text>
-          ) : null}
-        </Space>
-      ),
-    },
-    {
-      title: t('attendance.columns.status'),
-      key: 'status',
-      render: (_, item) => {
-        const draft = currentDraft(item, drafts)
-        if (!editable || !isRecordableItem(item)) return item.record ? statusTag(item.record.status) : <Typography.Text type="secondary">{t('attendance.notRecorded')}</Typography.Text>
-        return (
-          <Radio.Group
-            // One radio group per student: a shared generated name would make the whole table one group.
-            name={`attendance-status-${item.student.id}`}
-            optionType="button"
-            buttonStyle="solid"
-            size="small"
-            value={draft.status}
-            disabled={saving}
-            onChange={(event) => update(item.student.id, withStatus(draft, event.target.value as AttendanceStatus))}
-            options={ATTENDANCE_STATUSES.map((status) => ({ value: status, label: t(`lessons.attendance.${status}`) }))}
-            aria-label={`${t('attendance.columns.status')}: ${item.student.fullName}`}
-          />
-        )
-      },
-    },
-    {
-      title: t('attendance.columns.minutesLate'),
-      key: 'minutesLate',
-      render: (_, item) => {
-        const draft = currentDraft(item, drafts)
-        if (!editable || !isRecordableItem(item)) return item.record?.minutesLate ?? '—'
-        const invalid = showProblems && problems.get(item.student.id) === 'minutes_invalid'
-        return (
-          <Space orientation="vertical" size={0}>
-            <InputNumber
-              size="small"
-              min={1}
-              max={MINUTES_LATE_MAX}
-              precision={0}
-              value={draft.minutesLate}
-              disabled={saving || draft.status !== 'late'}
-              status={invalid ? 'error' : undefined}
-              onChange={(value) => update(item.student.id, { ...draft, minutesLate: typeof value === 'number' ? value : null })}
-              aria-label={`${t('attendance.columns.minutesLate')}: ${item.student.fullName}`}
-              style={{ width: 84 }}
-            />
-            {invalid ? (
-              <Typography.Text type="danger" style={{ fontSize: 12 }}>
-                {t('attendance.validation.minutesLate', { max: MINUTES_LATE_MAX })}
-              </Typography.Text>
+  // Redesign (2026-11-14): one compact row per student instead of a five-column table, so the sheet fits the
+  // docked side panel and a phone — the status buttons beside the name, the minutes only for «late», the note
+  // behind «add note» unless the row already holds one, and the save bar pinned to the bottom of the drawer.
+  const renderRow = (item: AttendanceItem) => {
+    const draft = currentDraft(item, drafts)
+    const recordable = editable && isRecordableItem(item)
+    const id = item.student.id
+    const minutesInvalid = showProblems && problems.get(id) === 'minutes_invalid'
+    const noteInvalid = showProblems && problems.get(id) === 'note_too_long'
+    const showNote = recordable && (openNotes.has(id) || Boolean(item.record?.note) || draft.note.length > 0 || noteInvalid)
+    const classes = ['att-row']
+    if (refused.has(id)) classes.push('att-row--refused')
+    if (changedIds.has(id)) classes.push('att-row--changed')
+    return (
+      <li key={id} className={classes.join(' ')} data-attendance-row={id}>
+        <div className="att-row__main">
+          <div className="att-row__who">
+            <Typography.Text strong>{item.student.fullName}</Typography.Text>
+            {item.student.displayName && item.student.displayName !== item.student.fullName ? <Typography.Text type="secondary"> ({item.student.displayName})</Typography.Text> : null}
+            {item.enrollmentStatus !== 'active' || item.student.deletedAt || refused.has(id) || (canRecord && sheet.recordable && !isRecordableItem(item)) ? (
+              <div className="att-row__tags">
+                {item.enrollmentStatus !== 'active' ? <Tag>{t(`attendance.enrollment.${item.enrollmentStatus ?? 'none'}`)}</Tag> : null}
+                {item.student.deletedAt ? <Tag color="volcano">{t('attendance.deleted')}</Tag> : null}
+                {canRecord && sheet.recordable && !isRecordableItem(item) ? <Tag>{t('attendance.readOnlyRow')}</Tag> : null}
+                {refused.has(id) ? <Tag color="red">{t('attendance.refusedRow')}</Tag> : null}
+              </div>
             ) : null}
-          </Space>
-        )
-      },
-    },
-    {
-      title: t('attendance.columns.note'),
-      key: 'note',
-      render: (_, item) => {
-        const draft = currentDraft(item, drafts)
-        if (!editable || !isRecordableItem(item)) return item.record?.note ? <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{item.record.note}</Typography.Text> : '—'
-        const invalid = showProblems && problems.get(item.student.id) === 'note_too_long'
-        return (
-          <Space orientation="vertical" size={0}>
-            <Input
-              size="small"
-              maxLength={ATTENDANCE_NOTE_MAX_LENGTH}
-              value={draft.note}
-              disabled={saving}
-              status={invalid ? 'error' : undefined}
-              placeholder={t('attendance.notePlaceholder')}
-              onChange={(event) => update(item.student.id, { ...draft, note: event.target.value })}
-              aria-label={`${t('attendance.columns.note')}: ${item.student.fullName}`}
-              style={{ minWidth: 150 }}
-            />
-            {invalid ? (
-              <Typography.Text type="danger" style={{ fontSize: 12 }}>
-                {t('attendance.validation.noteTooLong', { max: ATTENDANCE_NOTE_MAX_LENGTH })}
-              </Typography.Text>
+            {item.record ? (
+              <div className="att-row__meta">
+                {`${t('attendance.recordedBy', { name: item.record.recordedBy?.fullName ?? '—' })} · ${formatLessonDateTime(item.record.updatedAt, language, timeZone)}`}
+              </div>
             ) : null}
-          </Space>
-        )
-      },
-    },
-  ]
-  if (editable) {
-    columns.push({
-      title: t('common.actions'),
-      key: 'actions',
-      render: (_, item) =>
-        changedIds.has(item.student.id) ? (
-          <Button size="small" type="link" icon={<UndoOutlined />} disabled={saving} onClick={() => revert(item.student.id)} aria-label={`${t('attendance.revert')}: ${item.student.fullName}`}>
-            {t('attendance.revert')}
-          </Button>
-        ) : null,
-    })
+          </div>
+          <div className="att-row__status">
+            {recordable ? (
+              <Radio.Group
+                // One radio group per student: a shared generated name would make the whole sheet one group.
+                name={`attendance-status-${id}`}
+                optionType="button"
+                buttonStyle="solid"
+                value={draft.status}
+                disabled={saving}
+                onChange={(event) => update(id, withStatus(draft, event.target.value as AttendanceStatus))}
+                options={ATTENDANCE_STATUSES.map((status) => ({ value: status, label: t(`lessons.attendance.${status}`) }))}
+                aria-label={`${t('attendance.columns.status')}: ${item.student.fullName}`}
+              />
+            ) : item.record ? (
+              <>
+                {statusTag(item.record.status)}
+                {item.record.minutesLate ? <span className="att-row__meta tabular-nums">{t('attendance.minutesShort', { count: item.record.minutesLate })}</span> : null}
+              </>
+            ) : (
+              <Typography.Text type="secondary">{t('attendance.notRecorded')}</Typography.Text>
+            )}
+          </div>
+        </div>
+        {!recordable && item.record?.note ? <div className="att-row__note-text">{item.record.note}</div> : null}
+        {recordable ? (
+          <div className="att-row__extra">
+            {draft.status === 'late' ? (
+              <label className="att-row__minutes">
+                <span>{t('attendance.columns.minutesLate')}</span>
+                <InputNumber
+                  size="small"
+                  min={1}
+                  max={MINUTES_LATE_MAX}
+                  precision={0}
+                  value={draft.minutesLate}
+                  disabled={saving}
+                  status={minutesInvalid ? 'error' : undefined}
+                  onChange={(value) => update(id, { ...draft, minutesLate: typeof value === 'number' ? value : null })}
+                  aria-label={`${t('attendance.columns.minutesLate')}: ${item.student.fullName}`}
+                  style={{ width: 72 }}
+                />
+              </label>
+            ) : null}
+            {showNote ? (
+              <Input
+                size="small"
+                className="att-row__note"
+                maxLength={ATTENDANCE_NOTE_MAX_LENGTH}
+                value={draft.note}
+                disabled={saving}
+                status={noteInvalid ? 'error' : undefined}
+                placeholder={t('attendance.notePlaceholder')}
+                onChange={(event) => update(id, { ...draft, note: event.target.value })}
+                aria-label={`${t('attendance.columns.note')}: ${item.student.fullName}`}
+                autoFocus={openNotes.has(id) && draft.note.length === 0}
+              />
+            ) : (
+              <Button size="small" type="link" className="att-row__add-note" disabled={saving} onClick={() => setOpenNotes((previous) => new Set(previous).add(id))} aria-label={`${t('attendance.addNote')}: ${item.student.fullName}`}>
+                {t('attendance.addNote')}
+              </Button>
+            )}
+            {changedIds.has(id) ? (
+              <Button size="small" type="link" icon={<UndoOutlined />} disabled={saving} onClick={() => revert(id)} aria-label={`${t('attendance.revert')}: ${item.student.fullName}`}>
+                {t('attendance.revert')}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+        {minutesInvalid ? <Typography.Text type="danger" className="att-row__error">{t('attendance.validation.minutesLate', { max: MINUTES_LATE_MAX })}</Typography.Text> : null}
+        {noteInvalid ? <Typography.Text type="danger" className="att-row__error">{t('attendance.validation.noteTooLong', { max: ATTENDANCE_NOTE_MAX_LENGTH })}</Typography.Text> : null}
+      </li>
+    )
   }
 
   return (
@@ -343,20 +331,11 @@ function AttendanceEditor({ sheet, timeZone, canRecord, loading, onSaved, onStal
       {sheet.recordable && !canRecord ? <Alert type="info" showIcon title={t('attendance.readOnly')} style={{ marginBottom: 12 }} /> : null}
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} /> : null}
 
-      <Table<AttendanceItem>
-        rowKey={(item) => item.student.id}
-        columns={columns}
-        dataSource={sheet.items}
-        loading={loading}
-        pagination={false}
-        size="small"
-        scroll={{ x: 'max-content' }}
-        locale={{ emptyText: t('attendance.empty') }}
-        onRow={(item) => ({ style: refused.has(item.student.id) ? { background: token.colorErrorBg } : undefined })}
-      />
+      {loading && !sheet.items.length ? <Skeleton active paragraph={{ rows: 4 }} title={false} /> : null}
+      {sheet.items.length ? <ul className="att-list">{sheet.items.map(renderRow)}</ul> : !loading ? <Typography.Paragraph type="secondary">{t('attendance.empty')}</Typography.Paragraph> : null}
 
       {editable ? (
-        <Flex justify="space-between" align="center" wrap gap={8} style={{ marginTop: 12 }}>
+        <Flex justify="space-between" align="center" wrap gap={8} className="att-savebar">
           <Typography.Text type="secondary">{changed.length > 0 ? t('attendance.unsaved', { count: changed.length }) : t('attendance.noChanges')}</Typography.Text>
           <Space wrap>
             <Button onClick={() => setDrafts((previous) => markAllPresent(sheet.items, previous))} disabled={saving || unrecorded.length === 0} title={t('attendance.markAllPresentHint')}>

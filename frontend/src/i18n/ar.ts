@@ -1455,6 +1455,8 @@ export const ar = {
     refusedRow: 'لم يُحفظ: لم يعد مسجَّلاً',
     notRecorded: 'لم يُسجَّل',
     recordedBy: 'سجّله {{name}}',
+    addNote: 'إضافة ملاحظة',
+    minutesShort: '{{count}} د',
     notePlaceholder: 'ملاحظة (اختيارية)',
     empty: 'لا طلاب مسجَّلون في الفصل',
     markAllPresent: 'تحضير الكل',
