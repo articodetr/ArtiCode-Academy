@@ -12327,7 +12327,7 @@ node deploy/tests/platform-compose.test.mjs      # TEST-211
 | المعرّف | **مؤقّت** كسابقيه |
 | النوع | MODIFIED (واجهة) + CONFIGURATION (تبعية جديدة) |
 | الوحدة | MOD-10 (الواجهة) |
-| الوصف | الشهادة المطبوعة (`frontend/src/certificates/CertificateSheet.tsx`) تعرض رمز QR (SVG، 96px، مستوى تصحيح M، بلون الكحلي) يحمل رابط صفحة التحقق العامة `/verify/:code` بدل طباعة الرابط نصاً؛ يبقى رمز التحقق المجمّع مطبوعاً بجانبه. النصّ `certificates.sheet.verify` صار «امسح الرمز للتحقق…»، ومفتاح جديد `certificates.sheet.qrLabel` عنواناً للرمز. الرابط مبنيّ من أصل التطبيق الحالي، فرمز شهادة طُبعت من `localhost` لا يعمل من هاتف — على الخادم المنشور يحمل النطاق الحقيقي |
+| الوصف | الشهادة المطبوعة (`frontend/src/certificates/CertificateSheet.tsx`) تعرض رمز QR (SVG، 96px، مستوى تصحيح M، بلون الكحلي) يحمل رابط صفحة التحقق العامة `/verify/:code` بدل طباعة الرابط نصاً؛ الرمز في وسط الشهادة، وتحته في الوسط عبارة «امسح الرمز…» ورمز التحقق المجمّع مطبوعاً للإدخال اليدوي. النصّ `certificates.sheet.verify` صار «امسح الرمز للتحقق…»، ومفتاح جديد `certificates.sheet.qrLabel` عنواناً للرمز. الرابط مبنيّ من أصل التطبيق الحالي، فرمز شهادة طُبعت من `localhost` لا يعمل من هاتف — على الخادم المنشور يحمل النطاق الحقيقي |
 | السبب | طلب المطوّر: رمز QR بدل الرابط في الشهادات |
 | الملفات | `frontend/src/certificates/CertificateSheet.tsx`، `frontend/src/certificates/certificates.css`، `frontend/src/i18n/{ar,en}.ts`، `frontend/src/pages/CertificatePrintPage.test.tsx`، `frontend/package.json` + `package-lock.json` (`qrcode.react` 4.2.0 مثبّتة) |
 | أثر قاعدة البيانات / API / الصلاحيات | لا شيء |
