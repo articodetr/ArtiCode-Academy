@@ -98,9 +98,23 @@
 
 .certificate-sheet__verify {
   margin-top: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   font-size: 13px;
   color: #595959;
-  word-break: break-all;
+  text-align: start;
+}
+
+.certificate-sheet__verify p {
+  margin: 0;
+}
+
+.certificate-sheet__qr {
+  flex: none;
+  width: 96px;
+  height: 96px;
 }
 
 .certificate-sheet__watermark {
