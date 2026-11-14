@@ -23,6 +23,7 @@ import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDay, localizedLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function ClassesPage() {
   const { t } = useTranslation()
@@ -34,6 +35,8 @@ export function ClassesPage() {
   const canPickTeacher = canManage && hasPermission('users.read')
   const list = useClassesList()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
   // Redesign (2026-11-14): on a wide screen the class opens in a side panel beside the table, not over it.
   const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openClass, layoutClassName } = useDockedPanel(selectedId, setSelectedId)

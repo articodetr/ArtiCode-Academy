@@ -12,6 +12,7 @@ import { isLearnerOnly } from '../dashboard/learner.data'
 import { NAV_GROUPS, navFor } from './navigation'
 import type { NavItem } from './navigation'
 import { useUnreadCount } from '../notifications/useUnreadCount'
+import { GlobalSearch } from '../search/GlobalSearch'
 import { useIsPhone } from './useIsPhone'
 import './AppLayout.css'
 
@@ -170,6 +171,8 @@ export function AppLayout() {
           </div>
 
           <div className="app-header__actions">
+            {/* The global search (redesign): Ctrl/Cmd+K or «/» from any page. */}
+            <GlobalSearch />
             <NotificationBell />
             <LanguageSwitcher />
             <Dropdown menu={{ items: userMenu }} trigger={['click']}>
