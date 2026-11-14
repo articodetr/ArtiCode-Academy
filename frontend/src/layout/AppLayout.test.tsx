@@ -40,11 +40,12 @@ describe('AppLayout navigation', () => {
       route: '/',
     })
     const admin = menuLabels()
-    expect(admin).toContain(ar.nav.roles)
-    expect(admin).toContain(ar.nav.audit)
-    // Redesign (2026-11-14): both sit in the academy section, after the settings, the audit log last.
-    expect(admin.indexOf(ar.nav.roles)).toBe(admin.indexOf(ar.nav.settings) + 1)
+    // Redesign (2026-11-14): the roles tab is one of the settings tabs, so the menu shows the one settings entry;
+    // the audit log follows it, last.
+    expect(admin).not.toContain(ar.nav.roles)
+    expect(admin).toContain(ar.nav.settings)
     expect(admin.indexOf(ar.nav.audit)).toBe(admin.length - 1)
+    expect(admin.indexOf(ar.nav.audit)).toBe(admin.indexOf(ar.nav.settings) + 1)
     unmount()
 
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read'] })
@@ -68,16 +69,16 @@ describe('AppLayout navigation', () => {
     expect(selected[0]).toHaveTextContent(ar.nav.roles)
   })
 
-  it('shows the grade schemes entry right after the settings entry to a holder of academy.settings.manage, and selects it on /settings/grade-schemes (J-F44)', () => {
+  it('folds the settings tabs into one settings entry, selected on /settings/grade-schemes (J-F44; redesign)', () => {
     renderWithProviders(<AppLayout />, {
       auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read', 'academy.settings.manage'] }) }),
       route: '/settings/grade-schemes',
     })
     const labels = menuLabels()
-    expect(labels.indexOf(ar.nav.gradeSchemes)).toBe(labels.indexOf(ar.nav.settings) + 1)
+    expect(labels).not.toContain(ar.nav.gradeSchemes)
     const selected = document.querySelectorAll('.ant-menu-item-selected')
     expect(selected).toHaveLength(1)
-    expect(selected[0]).toHaveTextContent(ar.nav.gradeSchemes)
+    expect(selected[0]).toHaveTextContent(ar.nav.settings)
   })
 
   it('shows a student «my lessons» in place of «lessons» and selects it on /my-lessons (J-F11; redesign)', () => {

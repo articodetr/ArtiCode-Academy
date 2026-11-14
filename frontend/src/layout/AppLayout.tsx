@@ -1,7 +1,7 @@
-import { BellOutlined, LogoutOutlined, MenuOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons'
+import { BellOutlined, LogoutOutlined, MenuOutlined, ProfileOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons'
 import { Avatar, Badge, Button, Drawer, Dropdown, Layout, Menu, Typography } from 'antd'
 import type { MenuProps } from 'antd'
-import { useState } from 'react'
+import { createElement, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/auth-context'
@@ -37,6 +37,17 @@ function groupedMenu(items: NavItem[], t: (key: string) => string, learner: bool
   })
 }
 
+const SETTINGS_ENTRY_KEY = 'settings'
+
+/** Folds the /settings/* entries into one «settings» entry at the place of the first of them. */
+function withOneSettingsEntry(items: NavItem[]): NavItem[] {
+  const settings = items.filter((item) => item.path === '/settings' || item.path.startsWith('/settings/'))
+  if (settings.length <= 1) return items
+  const first = settings[0]!
+  const merged = { ...first, key: SETTINGS_ENTRY_KEY, labelKey: 'nav.settings', icon: createElement(SettingOutlined) } as NavItem
+  return items.flatMap((item) => (item === first ? [merged] : settings.includes(item) ? [] : [item]))
+}
+
 /** The product mark and the academy's name at the top of the side menu (and of the phone drawer). */
 function SiderBrand({ compact }: { compact: boolean }) {
   const { t } = useTranslation()
@@ -64,12 +75,18 @@ export function AppLayout() {
 
   if (!user) return <Navigate to="/login" replace />
 
-  // Entries by permission where the module has an API, by the role matrix elsewhere (MOD-03-T15).
-  const navItems = navFor(user)
-  const selected = selectedPath(
-    location.pathname,
-    navItems.map((item) => item.path),
-  )
+  // Entries by permission where the module has an API, by the role matrix elsewhere (MOD-03-T15). The settings
+  // pages (general, branches, rooms, grade schemes, roles) are tabs of one screen, so the menu shows them as one
+  // entry (redesign) — it opens the first tab the viewer may use and stays selected on every /settings path.
+  const navItems = withOneSettingsEntry(navFor(user))
+  const settingsEntry = navItems.find((item) => item.key === SETTINGS_ENTRY_KEY)
+  const selected =
+    settingsEntry && location.pathname.startsWith('/settings')
+      ? settingsEntry.path
+      : selectedPath(
+          location.pathname,
+          navItems.map((item) => item.path),
+        )
   const language = isLanguage(i18n.resolvedLanguage) ? i18n.resolvedLanguage : 'ar'
 
   const menu = (

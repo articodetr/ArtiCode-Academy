@@ -12,6 +12,7 @@ import { familyColor, metadataSummary, metadataText, shortId } from '../audit/au
 import { AUDIT_ACTION_SUGGESTIONS, AUDIT_PAGE_SIZES, EMPTY_FILTER_VALUES, validateAuditFilters } from '../audit/audit.query'
 import type { AuditFilterValues, AuditFilters } from '../audit/audit.query'
 import { useAuditLog } from '../audit/useAuditLog'
+import { useUserNames } from '../audit/useUserNames'
 import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
 import { useLocalized } from '../i18n/useLocalized'
@@ -25,7 +26,7 @@ const EMPTY = '—'
 export function AuditLogPage() {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
   const log = useAuditLog()
   const [form] = Form.useForm<AuditFilterValues>()
 
@@ -49,6 +50,16 @@ export function AuditLogPage() {
     apply(values)
   }
 
+  // Names instead of ids where the caller may read users (redesign): the id stays in the title and the filter.
+  const names = useUserNames(
+    log.items.flatMap((row) => [row.actorUserId, row.entityType === 'users' ? row.entityId : null].filter((id): id is string => Boolean(id))),
+    hasPermission('users.read'),
+  )
+  const idLabel = (id: string) => {
+    const name = names.get(id)
+    return name ? <Typography.Text>{name}</Typography.Text> : <Typography.Text code dir="ltr">{shortId(id)}</Typography.Text>
+  }
+
   const actorCell = (row: AuditLogItem) => {
     if (!row.actorUserId) return <Typography.Text type="secondary">{t('audit.system')}</Typography.Text>
     const id = row.actorUserId
@@ -62,9 +73,7 @@ export function AuditLogPage() {
         style={{ paddingInline: 0 }}
       >
         {id === user?.id ? <Tag color="green">{t('audit.you')}</Tag> : null}
-        <Typography.Text code dir="ltr">
-          {shortId(id)}
-        </Typography.Text>
+        {idLabel(id)}
       </Button>
     )
   }
@@ -84,9 +93,11 @@ export function AuditLogPage() {
             onClick={() => filterBy({ entityType, entityId })}
             style={{ paddingInline: 0 }}
           >
-            <Typography.Text code dir="ltr">
-              {shortId(entityId)}
-            </Typography.Text>
+            {entityType === 'users' ? idLabel(entityId) : (
+              <Typography.Text code dir="ltr">
+                {shortId(entityId)}
+              </Typography.Text>
+            )}
           </Button>
         ) : null}
       </Space>
@@ -123,7 +134,8 @@ export function AuditLogPage() {
     {
       title: t('audit.columns.ip'),
       key: 'ip',
-      render: (_, row) => (row.ipAddress ? <Typography.Text dir="ltr">{row.ipAddress}</Typography.Text> : EMPTY),
+      // An IPv4 address the server saw through an IPv6 socket reads `::ffff:127.0.0.1`; show the IPv4 part.
+      render: (_, row) => (row.ipAddress ? <Typography.Text dir="ltr" style={{ whiteSpace: 'nowrap' }}>{row.ipAddress.replace(/^::ffff:/i, '')}</Typography.Text> : EMPTY),
     },
   ]
 
