@@ -49,7 +49,7 @@ async function renderDrawer() {
 }
 
 const closeButton = () => document.querySelector<HTMLButtonElement>('.ant-drawer-close')!
-const row = (name: string) => screen.getByText(name).closest('tr') as HTMLElement
+const row = (name: string) => screen.getByText(name).closest('[data-attendance-row]') as HTMLElement
 const saraAbsent = () => within(row('سارة الطالبة')).getByLabelText(ar.lessons.attendance.absent)
 const expectBackOnPrevious = async () => expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
 

@@ -72,7 +72,7 @@ const expectNoDiscardQuestion = () => expect(screen.queryByText(ar.common.unsave
 
 const detailsTab = () => screen.getByRole('tab', { name: ar.attendance.drawerTabs.details })
 const sheetTab = () => screen.getByRole('tab', { name: ar.attendance.drawerTabs.sheet })
-const row = (name: string) => screen.getByText(name).closest('tr') as HTMLElement
+const row = (name: string) => screen.getByText(name).closest('[data-attendance-row]') as HTMLElement
 const titleInput = () => screen.getByLabelText(ar.lessons.fields.titleAr)
 
 /** Opens the edit form of the details tab and returns its Arabic title. */

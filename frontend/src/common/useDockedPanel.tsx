@@ -4,7 +4,7 @@
 // unsaved work through `onUnsavedChange`, so switching to another record asks the drawers' own question first.
 import { App } from 'antd'
 import type { DrawerProps } from 'antd'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from './useMediaQuery'
 
@@ -35,6 +35,25 @@ export function useDockedPanel(selectedId: string | null, select: (id: string) =
   const [unsaved, setUnsaved] = useState(false)
   const onUnsavedChange = useCallback((value: boolean) => setUnsaved(value), [])
   const docked = wide && selectedId !== null
+
+  // The panel sticks 80px below the top, but before the page scrolls it starts lower (under the page title), so a
+  // fixed `100vh - 96px` ran past the bottom of the window and hid the drawer's footer (the attendance save bar).
+  // Its height follows where it actually starts: from its top to 16px above the window's bottom.
+  useEffect(() => {
+    if (!docked || !panel) return
+    const fit = () => {
+      const top = Math.max(0, panel.getBoundingClientRect().top)
+      document.documentElement.style.setProperty('--list-panel-height', `${Math.max(320, window.innerHeight - top - 16)}px`)
+    }
+    fit()
+    window.addEventListener('scroll', fit, { passive: true })
+    window.addEventListener('resize', fit)
+    return () => {
+      window.removeEventListener('scroll', fit)
+      window.removeEventListener('resize', fit)
+      document.documentElement.style.removeProperty('--list-panel-height')
+    }
+  }, [docked, panel])
 
   const open = (id: string) => {
     if (selectedId && id !== selectedId && unsaved) {
