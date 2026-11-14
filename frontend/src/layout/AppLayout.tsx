@@ -8,6 +8,7 @@ import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { directionOf, isLanguage } from '../i18n/language'
 import { HeaderBrand, SiderAcademyName } from './AcademyBrand'
+import { isLearnerOnly } from '../dashboard/learner.data'
 import { NAV_GROUPS, navFor } from './navigation'
 import type { NavItem } from './navigation'
 import { useUnreadCount } from '../notifications/useUnreadCount'
@@ -23,13 +24,16 @@ function selectedPath(pathname: string, paths: string[]): string | undefined {
     .sort((a, b) => b.length - a.length)[0]
 }
 
-/** The entries the viewer sees, as side-menu sections in NAV_GROUPS order; a section with no entry is left out. */
-function groupedMenu(items: NavItem[], t: (key: string) => string): MenuProps['items'] {
+/**
+ * The entries the viewer sees, as side-menu sections in NAV_GROUPS order; a section with no entry is left out. For a
+ * student or guardian the «teaching» section is headed «my studies» — the same entries, seen from the other side.
+ */
+function groupedMenu(items: NavItem[], t: (key: string) => string, learner: boolean): MenuProps['items'] {
   return NAV_GROUPS.flatMap((group) => {
     const children = items
       .filter((item) => item.group === group)
       .map((item) => ({ key: item.path, icon: item.icon, label: t(item.labelKey) }))
-    return children.length ? [{ type: 'group' as const, key: `group:${group}`, label: t(`nav.groups.${group}`), children }] : []
+    return children.length ? [{ type: 'group' as const, key: `group:${group}`, label: t(`nav.groups.${learner && group === 'teaching' ? 'study' : group}`), children }] : []
   })
 }
 
@@ -73,7 +77,7 @@ export function AppLayout() {
       className="app-menu"
       mode="inline"
       theme="dark"
-      items={groupedMenu(navItems, t)}
+      items={groupedMenu(navItems, t, isLearnerOnly(user.roles))}
       selectedKeys={selected ? [selected] : []}
       onClick={({ key }) => {
         // Choosing an entry also closes the phone menu.

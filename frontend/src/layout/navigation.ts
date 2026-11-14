@@ -111,7 +111,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'dashboard', group: 'home', path: '/', labelKey: 'nav.dashboard', icon: createElement(DashboardOutlined), roles: 'everyone', module: 'MOD-FE-01' },
   { key: 'users', group: 'people', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], module: 'MOD-03' },
   // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too.
-  { key: 'courses', group: 'teaching', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], module: 'MOD-04' },
+  { key: 'courses', group: 'teaching', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-04' },
   // MOD-05 (J-F01): the classes API is real — gated by the one key every read of `/api/classes` requires
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
   // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16).
@@ -125,7 +125,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // MOD-06 (J-F09): the lessons API is real — gated by the one key every read of `/api/lessons` requires (`lessons.read` at
   // controller level; `lessons.manage` only adds writes). Staff gain the entry (the seed grants them lessons.read); a student
   // holds it too but is assigned to no class, so the server answers an empty list there — their own lessons are in «my lessons».
-  { key: 'lessons', group: 'teaching', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], module: 'MOD-06' },
+  { key: 'lessons', group: 'teaching', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-06' },
   // MOD-06 (J-F11): «my lessons» (API-101) needs no permission key — ownership, the API-060 rule; shown to whoever holds the
   // `student` or `guardian` server role, like «my classes» (a teacher who is also a guardian keeps it; a teacher or an admin
   // alone gets no entry — the server would answer an empty list, and the lessons they teach are on /lessons).
@@ -159,7 +159,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // `certificates.read_linked` with the guardian role for a child's — D-R57); shown to whoever holds the `student` or
   // `guardian` server role key, like «my assignments» (MOD-12 notifications link here). A learner whose role lost both
   // keys reaches the page and gets the server's 403 message.
-  { key: 'myCertificates', group: 'people', path: '/my-certificates', labelKey: 'nav.myCertificates', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-10' },
+  { key: 'myCertificates', group: 'teaching', path: '/my-certificates', labelKey: 'nav.myCertificates', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-10' },
   // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
   // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
   // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams

@@ -21,6 +21,8 @@ import type { DashboardView } from './dashboard.data'
 import { loadAllClasses, loadLessonsBetween } from './dashboard.load'
 import { ClassesView, FinanceView, RoomsView, TeachersView, TodayView, WeekView } from './DashboardViews'
 import type { DayContext } from './DashboardViews'
+import { isLearnerOnly } from './learner.data'
+import { LearnerHome } from './LearnerHome'
 import { useLoad } from './useLoad'
 import './dashboard.css'
 
@@ -35,6 +37,33 @@ function useNow(): number {
 }
 
 export function DashboardPage() {
+  const { user } = useAuth()
+  // A student or guardian with no other role gets their own home (redesign): the staff reads below show them nothing.
+  return isLearnerOnly(user?.roles ?? []) ? <LearnerDashboard /> : <StaffDashboard />
+}
+
+/** The greeting, the date line and the day context shared by both homes. */
+function useHomeHeader() {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const { user } = useAuth()
+  const { academy, loading } = useAcademy()
+  const now = useNow()
+  const zone = academyTimeZoneOf(academy) ?? deviceTimeZone()
+  const day: DayContext = { zone, today: calendarDateIn(zone, now), now, nowMinutes: minutesNowIn(zone, now) }
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: zone }).format(now))
+  const greeting = t(hour < 12 ? 'dashboard.greeting.morning' : 'dashboard.greeting.evening', { name: user?.name ?? '' })
+  const dateLine = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : language, { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone }).format(now)
+  return { day, greeting, dateLine, academyLoading: loading }
+}
+
+function LearnerDashboard() {
+  const { day, greeting, dateLine, academyLoading } = useHomeHeader()
+  if (academyLoading) return null
+  return <LearnerHome day={day} greeting={greeting} dateLine={dateLine} />
+}
+
+function StaffDashboard() {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { user, hasPermission } = useAuth()
