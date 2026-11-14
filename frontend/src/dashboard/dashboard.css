@@ -770,8 +770,23 @@
   margin-bottom: 16px;
 }
 
+.lh-switch--pending {
+  height: 32px;
+  width: 240px;
+  max-width: 100%;
+  border-radius: var(--radius);
+  background: var(--c-ink-soft);
+  opacity: 0.6;
+}
+
 .lh-top {
   margin-bottom: 16px;
+}
+
+/* The coming lessons and the waiting list are about this tall once loaded; reserving it while the skeletons show
+   keeps the panels below from jumping (layout shift). */
+.lh-top .db-panel {
+  min-height: 360px;
 }
 
 .lh-agenda {

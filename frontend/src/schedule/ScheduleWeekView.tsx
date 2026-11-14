@@ -25,7 +25,7 @@ export function ScheduleWeekView({ slots, weekStartsOn }: ScheduleWeekViewProps)
     <div data-testid="schedule-week">
       {groups.map((group) => (
         <section key={group.weekday} style={{ marginBottom: 16 }} aria-label={t(`classSchedule.weekdays.${group.weekday}`)}>
-          <Typography.Title level={5} style={{ marginTop: 0 }}>
+          <Typography.Title level={2} className="section-title" style={{ marginTop: 0 }}>
             {t(`classSchedule.weekdays.${group.weekday}`)}
           </Typography.Title>
           <Flex vertical gap={8}>

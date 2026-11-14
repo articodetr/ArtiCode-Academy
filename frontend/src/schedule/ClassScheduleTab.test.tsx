@@ -89,7 +89,7 @@ describe('ClassScheduleTab', () => {
     expect(screen.getByText(ar.classSchedule.noRoom)).toBeInTheDocument()
     expect(screen.getByText(`المعلم: ${ar.classSchedule.defaultTeacher}`)).toBeInTheDocument()
     expect(screen.getByText(ar.classSchedule.effectiveRange.replace('{{from}}', formatDay('2026-11-10', 'ar')).replace('{{to}}', formatDay('2026-12-20', 'ar')))).toBeInTheDocument()
-    const headings = within(screen.getByTestId('schedule-week')).getAllByRole('heading', { level: 5 }).map((heading) => heading.textContent)
+    const headings = within(screen.getByTestId('schedule-week')).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
     expect(headings).toEqual([ar.classSchedule.weekdays[0], ar.classSchedule.weekdays[2]])
     expect(screen.queryByText(ar.classSchedule.edit)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.classSchedule.frozen)).not.toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('ClassScheduleTab', () => {
     renderTab(SCHEDULE_ADMIN_PERMISSIONS, makeClass({ status: 'completed' }))
 
     await screen.findByTestId('schedule-week')
-    await waitFor(() => expect(within(screen.getByTestId('schedule-week')).getAllByRole('heading', { level: 5 }).map((heading) => heading.textContent)).toEqual([ar.classSchedule.weekdays[6], ar.classSchedule.weekdays[0]]))
+    await waitFor(() => expect(within(screen.getByTestId('schedule-week')).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([ar.classSchedule.weekdays[6], ar.classSchedule.weekdays[0]]))
     expect(screen.getByText(ar.classSchedule.frozen)).toBeInTheDocument()
     expect(screen.queryByText(ar.classSchedule.edit)).not.toBeInTheDocument()
     expect(screen.getByText(ar.labels.completed)).toBeInTheDocument()

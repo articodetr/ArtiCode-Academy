@@ -17,7 +17,7 @@
   --c-text: #1b2433;
   --c-muted: #5d6779;
   --c-now: #c2412d;
-  --c-ok: #2f7d5b;
+  --c-ok: #2a7253;
   --c-ok-soft: #e3f2ea;
   --c-bad: #b4432f;
   --c-bad-soft: #f8e4df;
@@ -127,32 +127,42 @@ body {
  * attention (chalk yellow), red/error → bad, the decorative hues (purple, cyan, magenta) → neutral. Scoped under
  * #root so the rules outweigh antd's own preset styles, which are injected after this sheet.
  */
-#root .ant-tag.ant-tag-filled:is(.ant-tag-blue, .ant-tag-geekblue, .ant-tag-processing) {
+:root body .ant-tag.ant-tag-filled:is(.ant-tag-blue, .ant-tag-geekblue, .ant-tag-processing) {
   background: var(--c-ink-soft);
   color: var(--c-ink);
   border-color: transparent;
 }
 
-#root .ant-tag.ant-tag-filled:is(.ant-tag-green, .ant-tag-success) {
+:root body .ant-tag.ant-tag-filled:is(.ant-tag-green, .ant-tag-success) {
   background: var(--c-ok-soft);
   color: var(--c-ok);
   border-color: transparent;
 }
 
-#root .ant-tag.ant-tag-filled:is(.ant-tag-gold, .ant-tag-orange, .ant-tag-volcano, .ant-tag-warning, .ant-tag-yellow) {
+:root body .ant-tag.ant-tag-filled:is(.ant-tag-gold, .ant-tag-orange, .ant-tag-volcano, .ant-tag-warning, .ant-tag-yellow) {
   background: var(--c-mark-soft);
   color: var(--c-mark-text);
   border-color: transparent;
 }
 
-#root .ant-tag.ant-tag-filled:is(.ant-tag-red, .ant-tag-error) {
+:root body .ant-tag.ant-tag-filled:is(.ant-tag-red, .ant-tag-error) {
   background: var(--c-bad-soft);
   color: var(--c-bad);
   border-color: transparent;
 }
 
-#root .ant-tag.ant-tag-filled:is(.ant-tag-purple, .ant-tag-cyan, .ant-tag-magenta, .ant-tag-lime) {
+:root body .ant-tag.ant-tag-filled:is(.ant-tag-purple, .ant-tag-cyan, .ant-tag-magenta, .ant-tag-lime) {
   background: #eef0f3;
   color: var(--c-muted);
   border-color: transparent;
+}
+
+/*
+ * A section heading inside a page, a drawer or a modal (quality pass): an h2 for the document outline — the page
+ * title is the h1 and headings must not skip levels — at the size of a small heading.
+ */
+body h2.ant-typography.section-title {
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 8px;
 }

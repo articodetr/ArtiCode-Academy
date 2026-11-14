@@ -72,7 +72,7 @@ async function allPages<T>(read: (cursor: string | undefined) => Promise<{ items
 export function LearnerHome({ day, greeting, dateLine }: { day: DayContext; greeting: string; dateLine: string }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { hasPermission } = useAuth()
+  const { user, hasPermission } = useAuth()
   const [params, setParams] = useSearchParams()
   const { unread } = useUnreadCount()
   const localized = (text: Parameters<typeof labelIn>[0]) => labelIn(text, language)
@@ -115,10 +115,15 @@ export function LearnerHome({ day, greeting, dateLine }: { day: DayContext; gree
       <header className="db-head">
         <span className="db-head__date">{dateLine}</span>
         <h1>{greeting}</h1>
-        <p>{summary}</p>
+        {/* A non-breaking space keeps the line's height while the lessons load (no shift when it fills). */}
+        <p>{summary || '\u00a0'}</p>
       </header>
 
-      {many ? (
+      {classes.loading && user?.roles.includes('guardian') ? (
+        // The switch appears once «my classes» answers; a guardian most likely gets one, so its place is kept
+        // meanwhile instead of pushing the page down when it arrives (a 0.58 layout shift on a phone).
+        <div className="lh-switch lh-switch--pending" aria-hidden="true" />
+      ) : many ? (
         <Segmented
           className="lh-switch"
           value={scope}

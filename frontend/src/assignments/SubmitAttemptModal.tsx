@@ -258,7 +258,7 @@ function SubmitAttemptBody({ item, onSaving, onReady, onUnsavedChange, onSubmitt
         />
       ) : null}
 
-      <Typography.Title level={5}>{t('myAssignments.details.instructions')}</Typography.Title>
+      <Typography.Title level={2} className="section-title">{t('myAssignments.details.instructions')}</Typography.Title>
       {item.instructions ? (
         // A plain element: antd Typography's RTL class would override dir="auto".
         <div dir="auto" style={{ whiteSpace: 'pre-wrap', marginBottom: 16 }}>
