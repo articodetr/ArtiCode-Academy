@@ -99,12 +99,12 @@
 .certificate-sheet__verify {
   margin-top: 28px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
+  gap: 10px;
   font-size: 13px;
   color: #595959;
-  text-align: start;
+  text-align: center;
 }
 
 .certificate-sheet__verify p {
