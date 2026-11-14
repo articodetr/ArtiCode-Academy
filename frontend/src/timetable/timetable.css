@@ -7,55 +7,55 @@
  * the pastel tones meet WCAG AA (4.5:1) — the tones below were checked.
  */
 .tt {
-  --tt-accent: #6a4fe0;
-  --tt-accent-strong: #5a40cf;
-  --tt-accent-soft: #eee9fd;
-  --tt-accent-wash: #f7f5fe;
-  --tt-accent-ink: #4b36b8;
-  --tt-ink: #25204a;
-  --tt-text: #3f3b5f;
-  --tt-muted: #6f6a8c;
-  --tt-line: #ece9f5;
-  --tt-hourline: #f3f1f9;
-  --tt-surface: #ffffff;
+  /* Redesign (2026-11-14): the Classroom palette (index.css tokens) instead of the purple of J-F08. */
+  --tt-accent: var(--c-ink);
+  --tt-accent-strong: #0f2447;
+  --tt-accent-soft: var(--c-ink-soft);
+  --tt-accent-wash: var(--c-paper);
+  --tt-accent-ink: var(--c-ink);
+  --tt-ink: var(--c-text);
+  --tt-text: #2c3648;
+  --tt-muted: var(--c-muted);
+  --tt-line: var(--c-line);
+  --tt-hourline: #edf0f5;
+  --tt-surface: var(--c-surface);
   --tt-axis: 56px;
   container-type: inline-size;
   color: var(--tt-text);
 }
 
+/* Four calm class tones (navy, green, teal, plum) — never the chalk yellow, which marks what needs the user. */
 .tt-tone-0 {
-  --tt-tone-bg: #dcf0f7;
-  --tt-tone-ink: #0d4f69;
-  --tt-tone-sub: #2c6b84;
+  --tt-tone-bg: #e6ecf6;
+  --tt-tone-ink: #16305c;
+  --tt-tone-sub: #3d5784;
 }
 
 .tt-tone-1 {
-  --tt-tone-bg: #efe5f8;
-  --tt-tone-ink: #4c2a72;
-  --tt-tone-sub: #6d4b90;
+  --tt-tone-bg: #e3f2ea;
+  --tt-tone-ink: #1f5a40;
+  --tt-tone-sub: #3a7259;
 }
 
 .tt-tone-2 {
-  --tt-tone-bg: #fbedf3;
-  --tt-tone-ink: #7b2b4f;
-  --tt-tone-sub: #95506e;
+  --tt-tone-bg: #e2f0f1;
+  --tt-tone-ink: #0f4c52;
+  --tt-tone-sub: #2f6a70;
 }
 
 .tt-tone-3 {
-  --tt-tone-bg: #e5e9fb;
-  --tt-tone-ink: #26357f;
-  --tt-tone-sub: #4a5799;
+  --tt-tone-bg: #efe9f4;
+  --tt-tone-ink: #4a3366;
+  --tt-tone-sub: #65507e;
 }
 
 /* ---- surface and layout ---------------------------------------------- */
 
 .tt-surface {
   background: var(--tt-surface);
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   padding: 20px 24px 24px;
-  box-shadow:
-    0 1px 2px rgba(37, 32, 74, 0.05),
-    0 18px 40px -28px rgba(76, 54, 184, 0.35);
+  border: 1px solid var(--c-line);
 }
 
 .tt-toolbar {
@@ -228,7 +228,7 @@
 .tt-dayhead.is-selected {
   background: var(--tt-accent);
   color: #fff;
-  box-shadow: 0 8px 18px -10px rgba(106, 79, 224, 0.9);
+  box-shadow: 0 8px 18px -10px rgba(22, 48, 92, 0.9);
 }
 
 .tt-dayhead.is-selected .tt-dayhead__num {
@@ -277,11 +277,11 @@
 }
 
 .tt-col.is-selected {
-  background-color: #fcfbff;
+  background-color: #fafbfd;
 }
 
 .tt-col.is-off {
-  background-color: #fbfafd;
+  background-color: #fafbfd;
 }
 
 .tt-col__list {
@@ -337,11 +337,11 @@
   pointer-events: auto;
   max-width: 360px;
   padding: 20px 24px;
-  border: 1px dashed #d8d1f5;
+  border: 1px dashed #cdd5e1;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.94);
   text-align: center;
-  box-shadow: 0 12px 30px -24px rgba(37, 32, 74, 0.5);
+  box-shadow: 0 12px 30px -24px rgba(27, 36, 51, 0.5);
 }
 
 .tt-empty__title {
@@ -387,7 +387,7 @@
 }
 
 .tt-event:hover {
-  box-shadow: 0 10px 22px -14px rgba(37, 32, 74, 0.55);
+  box-shadow: 0 10px 22px -14px rgba(27, 36, 51, 0.55);
   transform: translateY(-1px);
 }
 
@@ -805,7 +805,7 @@
 }
 
 .tt-month__day:hover {
-  background: #e3dcfb;
+  background: #dbe4f2;
 }
 
 .tt-month__day.is-today {
@@ -1183,7 +1183,7 @@
 
 .tt-mobile-empty {
   padding: 28px 16px;
-  border: 1px dashed #d8d1f5;
+  border: 1px dashed #cdd5e1;
   border-radius: 16px;
   text-align: center;
 }
