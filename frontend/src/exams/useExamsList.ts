@@ -14,6 +14,8 @@ import type { KeysetLoader } from '../common/useKeysetList'
 export const EXAM_PAGE_SIZES = [20, 50, 100] as const
 
 export interface ExamsListFilters {
+  /** Part of the title (CH-0226 — `q`). */
+  q?: string
   classId: string | undefined
   status: ExamStatus | undefined
   type: ExamType | undefined
@@ -33,12 +35,13 @@ export function defaultExamFilters(timeZone: string): ExamsListFilters {
 
 /** True when the list is narrowed: a class, a status, a type or a day (the order, the page size and the zone narrow nothing). */
 export function hasActiveExamFilters(filters: ExamsListFilters): boolean {
-  return Boolean(filters.classId || filters.status || filters.type || filters.from || filters.to)
+  return Boolean(filters.q || filters.classId || filters.status || filters.type || filters.from || filters.to)
 }
 
 const loadExams: KeysetLoader<Exam, ExamsListFilters> = (filters, cursor, signal) =>
   listExams(
     {
+      q: filters.q,
       classId: filters.classId,
       status: filters.status,
       type: filters.type,

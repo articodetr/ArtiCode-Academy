@@ -99,6 +99,8 @@ export interface AssignmentList {
 }
 
 export interface ListAssignmentsParams {
+  /** Part of the Arabic or English title, 1–100 characters (CH-0226). */
+  q?: string
   classId?: string
   lessonId?: string
   status?: AssignmentStatus
@@ -159,6 +161,7 @@ export const ASSIGNMENTS_PATH = '/api/assignments'
 /** `/api/assignments?…` with the given parameters only, in a fixed order. */
 export function assignmentsListPath(params: ListAssignmentsParams = {}): string {
   const query = new URLSearchParams()
+  if (params.q?.trim()) query.set('q', params.q.trim().slice(0, 100))
   if (params.classId) query.set('classId', params.classId)
   if (params.lessonId) query.set('lessonId', params.lessonId)
   if (params.status) query.set('status', params.status)

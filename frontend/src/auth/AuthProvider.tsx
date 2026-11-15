@@ -24,6 +24,7 @@ function toAuthUser(user: SessionUser): AuthUser {
     roles: user.roles,
     permissions: user.permissions,
     mustChangePassword: user.mustChangePassword,
+    emailVerifiedAt: user.emailVerifiedAt,
   }
 }
 

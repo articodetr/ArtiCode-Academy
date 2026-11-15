@@ -9,7 +9,10 @@ import {
   BellOutlined,
   BookOutlined,
   ClockCircleOutlined,
+  FileDoneOutlined,
   FileTextOutlined,
+  FormOutlined,
+  PlayCircleOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   ThunderboltOutlined,
@@ -24,8 +27,11 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { listCertificates } from '../api/certificates'
 import { listClasses } from '../api/classes'
+import { listAssignments } from '../api/assignments'
 import { listCourses } from '../api/courses'
+import { listExams } from '../api/exams'
 import { listInvoices } from '../api/invoices'
+import { listLessons } from '../api/lessons'
 import { listMyAssignments } from '../api/myAssignments'
 import { listPayments } from '../api/payments'
 import { REPORT_KEYS, getReportsOverview } from '../api/reports'
@@ -40,7 +46,7 @@ import { PAGE_KEYWORDS, SEARCH_MIN_LENGTH, actionsFor, forgetRecent, matchScore,
 import type { QueryKind, RecentEntry } from './search.data'
 import './search.css'
 
-type Group = 'recent' | 'suggested' | 'pages' | 'users' | 'classes' | 'courses' | 'invoices' | 'receipts' | 'certificates'
+type Group = 'recent' | 'suggested' | 'pages' | 'users' | 'classes' | 'courses' | 'lessons' | 'assignments' | 'exams' | 'invoices' | 'receipts' | 'certificates'
 
 interface Result {
   key: string
@@ -58,6 +64,9 @@ const GROUP_ICONS: Record<Group, ReactNode> = {
   users: <UserOutlined />,
   classes: <AppstoreOutlined />,
   courses: <BookOutlined />,
+  lessons: <PlayCircleOutlined />,
+  assignments: <FileDoneOutlined />,
+  exams: <FormOutlined />,
   invoices: <FileTextOutlined />,
   receipts: <WalletOutlined />,
   certificates: <SafetyCertificateOutlined />,
@@ -71,7 +80,7 @@ function remoteOrder(kind: QueryKind): Group[] {
   if (kind === 'receipt') return ['receipts']
   if (kind === 'serial') return ['certificates', 'invoices', 'receipts']
   if (kind === 'email') return ['users']
-  return ['users', 'classes', 'courses', 'certificates', 'invoices', 'receipts']
+  return ['users', 'classes', 'courses', 'lessons', 'assignments', 'exams', 'certificates', 'invoices', 'receipts']
 }
 
 export function GlobalSearch() {
@@ -171,6 +180,27 @@ export function GlobalSearch() {
         readers.courses = () =>
           listCourses({ q: trimmed.slice(0, 100), limit: 5 }, signal).then((list) =>
             list.items.map((item) => ({ key: `c:${item.id}`, group: 'courses', title: localizedLabel(item.name, language), subtitle: item.code, path: openPath('/courses', item.id), icon: GROUP_ICONS.courses })),
+          )
+      }
+      // Titles of lessons, assignments and exams (`q`, CH-0226), each through the class visibility of its list.
+      const day = (iso: string | null, zone: string) =>
+        iso ? new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : language, { day: 'numeric', month: 'short', timeZone: zone }).format(new Date(iso)) : ''
+      if (can('lessons')) {
+        readers.lessons = () =>
+          listLessons({ q: trimmed.slice(0, 100), limit: 5, order: 'desc' }, signal).then((list) =>
+            list.items.map((item) => ({ key: `l:${item.id}`, group: 'lessons', title: localizedLabel(item.title, language), subtitle: [item.class.code, day(item.startsAt, item.timeZone)].filter(Boolean).join(' · '), path: openPath('/lessons', item.id), icon: GROUP_ICONS.lessons })),
+          )
+      }
+      if (can('assignments')) {
+        readers.assignments = () =>
+          listAssignments({ q: trimmed.slice(0, 100), limit: 5 }, signal).then((list) =>
+            list.items.map((item) => ({ key: `s:${item.id}`, group: 'assignments', title: localizedLabel(item.title, language), subtitle: [item.class.code, day(item.dueAt, item.timeZone)].filter(Boolean).join(' · '), path: openPath('/assignments', item.id), icon: GROUP_ICONS.assignments })),
+          )
+      }
+      if (can('exams')) {
+        readers.exams = () =>
+          listExams({ q: trimmed.slice(0, 100), limit: 5 }, signal).then((list) =>
+            list.items.map((item) => ({ key: `x:${item.id}`, group: 'exams', title: localizedLabel(item.title, language), subtitle: [item.class.code, day(item.scheduledAt, item.timeZone)].filter(Boolean).join(' · '), path: openPath('/exams', item.id), icon: GROUP_ICONS.exams })),
           )
       }
       const financeReader = ['invoices.read_all', 'invoices.manage', 'payments.record'].some((key) => hasPermission(key)) && can('payments')
