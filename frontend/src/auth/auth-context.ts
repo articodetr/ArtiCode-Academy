@@ -15,6 +15,8 @@ export interface AuthUser {
   /** Permission keys granted through the roles (ADR-023). */
   permissions: string[]
   mustChangePassword: boolean
+  /** From the session (CH-0226): when the current address was confirmed, null while not; undefined when the server does not say. */
+  emailVerifiedAt?: string | null
 }
 
 export type AuthStatus = 'loading' | 'anonymous' | 'authenticated'

@@ -125,6 +125,8 @@ export interface SessionUser {
   mustChangePassword: boolean
   roles: string[]
   permissions: string[]
+  /** When the user confirmed their current address (CH-0226); null while unconfirmed. Absent from an older server. */
+  emailVerifiedAt?: string | null
 }
 
 export interface SessionResponse {

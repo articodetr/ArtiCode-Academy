@@ -180,3 +180,27 @@ export function changeEnrollmentStatus(id: string, input: ChangeEnrollmentStatus
 export function listMyClasses(params: ListMyClassesParams = {}, signal?: AbortSignal): Promise<MyClassList> {
   return apiRequest<MyClassList>(myClassesPath(params), { signal })
 }
+
+// ---------------------------------------------------------------------------
+// API-200 — one student's enrollments (CH-0226)
+// ---------------------------------------------------------------------------
+
+/** `StudentEnrollmentItemDto`: an enrollment of one student with the «my classes» class summary. */
+export interface StudentEnrollmentItem {
+  id: string
+  status: EnrollmentStatus
+  source: EnrollmentSource
+  enrolledAt: string
+  activatedAt: string | null
+  completedAt: string | null
+  withdrawnAt: string | null
+  /** Null for a caller without `enrollments.manage`. */
+  withdrawalReason: string | null
+  class: MyClassSummary
+}
+
+/** API-200: `enrollments.manage` or `invoices.manage`; newest first, every class, no pagination. */
+export function listStudentEnrollments(studentId: string, params: { status?: EnrollmentStatus } = {}, signal?: AbortSignal): Promise<{ items: StudentEnrollmentItem[] }> {
+  const query = params.status ? `?status=${encodeURIComponent(params.status)}` : ''
+  return apiRequest<{ items: StudentEnrollmentItem[] }>(`/api/users/${encodeURIComponent(studentId)}/enrollments${query}`, { signal })
+}
