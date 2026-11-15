@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { Env } from '../config/env.schema.js';
 import { PrismaClient } from '../generated/prisma/client.js';
-import { DB_TIMEOUT_MS, errorMessageOf, isUndefinedTable, withTimeout } from './database-checks.js';
+import { DB_TIMEOUT_MS, errorMessageOf, isTimeout, isUndefinedTable, withTimeout } from './database-checks.js';
 import type { AppliedMigrations, DatabasePing } from './database-checks.js';
 
 // The result shapes and the driver helpers live in database-checks.ts since
@@ -67,6 +67,7 @@ export class PrismaService implements OnModuleDestroy {
         ok: false,
         configured: true,
         error: error instanceof Error ? error.message : String(error),
+        timedOut: isTimeout(error),
       };
     }
   }
@@ -89,7 +90,7 @@ export class PrismaService implements OnModuleDestroy {
       return { ok: true, names: rows.map((row) => row.migration_name) };
     } catch (error) {
       if (isUndefinedTable(error)) return { ok: true, names: [] };
-      return { ok: false, error: errorMessageOf(error) };
+      return { ok: false, error: errorMessageOf(error), timedOut: isTimeout(error) };
     }
   }
 

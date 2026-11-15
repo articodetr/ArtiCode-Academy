@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PACKAGE_VERSION } from '../../common/package-info.js';
 import type { DatabaseCheckDto } from '../../health/health.dto.js';
+import { ReadinessFailureLog, databaseErrorCode } from '../../health/readiness-errors.js';
 import { readNewestMigration, readinessReason, schemaCheck } from '../../health/schema-version.js';
 import type { PlatformEnv } from '../platform.env.schema.js';
 import { PlatformPrismaService } from '../prisma/platform-prisma.service.js';
@@ -27,6 +28,8 @@ export class PlatformHealthService {
   private readonly logger = new Logger(PlatformHealthService.name);
   /** The build's newest platform migration, read once: the shipped folder never changes. */
   private shippedMigration?: Promise<string | null>;
+  /** The driver's message of a failing check goes here, never into the answer (KI-084). */
+  private readonly failures = new ReadinessFailureLog(this.logger);
 
   constructor(
     private readonly config: ConfigService<PlatformEnv, true>,
@@ -52,15 +55,17 @@ export class PlatformHealthService {
    */
   async readiness(): Promise<PlatformReadinessResponseDto> {
     const ping = await this.prisma.ping();
+    this.failures.record('database', !ping.ok && ping.configured ? (ping.error ?? 'unknown error') : null);
     const database: DatabaseCheckDto = ping.ok
       ? { status: 'up', latencyMs: ping.latencyMs }
       : ping.configured
-        ? { status: 'down', error: ping.error }
+        ? { status: 'down', error: databaseErrorCode(ping) }
         : { status: 'not_configured' };
 
     const expected = await this.expectedMigration();
     const databaseUp = database.status === 'up';
     const applied = expected !== null && databaseUp ? await this.prisma.appliedMigrations() : null;
+    if (applied !== null) this.failures.record('schema', applied.ok ? null : applied.error);
     const schema = schemaCheck(expected, applied);
     const reason = readinessReason(databaseUp, schema.status);
 

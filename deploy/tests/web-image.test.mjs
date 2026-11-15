@@ -42,7 +42,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { closeSync, createReadStream, existsSync, mkdtempSync, openSync, readFileSync, readSync, rmSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -217,6 +217,19 @@ function build() {
 }
 
 // --- image facts -------------------------------------------------------------
+/** What /srv must hold: index.html, assets/ and every file of frontend/public/. */
+function expectedDist() {
+  const publicDir = join(ROOT, 'frontend', 'public');
+  const publicFiles = existsSync(publicDir)
+    ? readdirSync(publicDir, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name).slice(publicDir.length + 1).split('\\').join('/'))
+    : [];
+  const top = [...new Set(['assets', 'index.html', ...publicFiles.map((file) => file.split('/')[0])])].sort().join(' ');
+  const files = ['index.html', ...publicFiles].map((file) => `/srv/${file}`).sort().join(' ');
+  return { top, files };
+}
+
 function checkImage() {
   const user = docker(['image', 'inspect', '--format', '{{.Config.User}}', WEB]).stdout.trim();
   const uid = docker(['run', '--rm', '--entrypoint', 'id', WEB, '-u']).stdout.trim();
@@ -233,10 +246,13 @@ function checkImage() {
     'find /data /config -mindepth 2 | head -5 | tr "\\n" " "; echo',
   ].join('; ')]);
   const [srv = '', files = '', sources = '', owners = '', state = ''] = layout.stdout.split('\n').map((l) => l.trim());
+  // Vite copies frontend/public/ as is next to index.html and assets/, so the expected
+  // list follows that folder (CH-0226 — a new public file such as robots.txt is no failure).
+  const { top, files: expectedFiles } = expectedDist();
   check(
-    srv === 'assets favicon.svg index.html' && files === '/srv/favicon.svg /srv/index.html' && sources === '',
+    srv === top && files === expectedFiles && sources === '',
     'the image holds the Vite dist only',
-    '/srv = assets, favicon.svg, index.html; no source, source map, node_modules or package.json anywhere',
+    `/srv = ${top.split(' ').join(', ')} (index.html, assets/ and frontend/public/); no source, source map, node_modules or package.json anywhere`,
     `/srv: ${srv}; files: ${files}; found: ${sources}`,
   );
   check(owners === 'web web' && state === '', '/data and /config belong to the process user and start empty', 'owner web, nothing written at build time', `owners: ${owners}; content: ${state}`);

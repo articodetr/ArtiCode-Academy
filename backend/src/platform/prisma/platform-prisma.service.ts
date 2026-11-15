@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/platform/client.js';
 import type { Prisma } from '../../generated/platform/client.js';
-import { DB_TIMEOUT_MS, errorMessageOf, isUndefinedTable, withTimeout } from '../../prisma/database-checks.js';
+import { DB_TIMEOUT_MS, errorMessageOf, isTimeout, isUndefinedTable, withTimeout } from '../../prisma/database-checks.js';
 import type { AppliedMigrations, DatabasePing } from '../../prisma/database-checks.js';
 import type { PlatformEnv } from '../platform.env.schema.js';
 
@@ -59,7 +59,7 @@ export class PlatformPrismaService implements OnModuleDestroy {
       await withTimeout(this.client.$queryRaw`SELECT 1`, DB_TIMEOUT_MS);
       return { ok: true, latencyMs: Math.round(performance.now() - started) };
     } catch (error) {
-      return { ok: false, configured: true, error: error instanceof Error ? error.message : String(error) };
+      return { ok: false, configured: true, error: error instanceof Error ? error.message : String(error), timedOut: isTimeout(error) };
     }
   }
 
@@ -81,7 +81,7 @@ export class PlatformPrismaService implements OnModuleDestroy {
       return { ok: true, names: rows.map((row) => row.migration_name) };
     } catch (error) {
       if (isUndefinedTable(error)) return { ok: true, names: [] };
-      return { ok: false, error: errorMessageOf(error) };
+      return { ok: false, error: errorMessageOf(error), timedOut: isTimeout(error) };
     }
   }
 
