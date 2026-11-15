@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ArtiCode Academy — the monthly restore drill (MOD-17-T04, D-R92). Run by cron in
-# the `backup` container, or by hand: `docker compose exec backup restore-drill.sh [dump]`.
+# ArtiCode — the monthly restore drill (MOD-17-T04, D-R92; the platform: KI-083). Run by
+# cron in the `backup` container, or by hand: `docker compose exec backup restore-drill.sh [dump]`.
 #
 # Proves a dump (default: the newest in BACKUP_DIR) restores, without touching the
 # live server and without CREATEDB anywhere:
@@ -12,8 +12,13 @@
 #      the database owned by the migrator; restores the dump as the migrator through
 #      the same one-transaction path as restore.sh;
 #   4. checks: `_prisma_migrations` has finished rows, none failed or only rolled back,
-#      and its newest finished migration equals the live one; `academy` holds exactly
-#      one row; `roles` and `permissions` are not empty; prints core row counts;
+#      and its newest finished migration equals the live one; then by BACKUP_DB_KIND —
+#        academy (the default): `academy` holds exactly one row, `roles` and
+#                   `permissions` are not empty;
+#        platform:  the platform tables (`platform_users`, `academies`, `domains`,
+#                   `plans`, `subscriptions`, `platform_audit_logs`) exist — an empty
+#                   platform (no super admin yet) is a valid backup;
+#      prints core row counts;
 #   5. stops and deletes the cluster.
 # Writes a one-line JSON result to stdout and to BACKUP_DIR/drill-last.json
 # ({"result":"pass"|"fail",…}); exits 1 with the reason when the dump is damaged,
@@ -23,8 +28,13 @@ ARTICODE_JOB=restore-drill
 # shellcheck source=common.sh
 . /usr/local/lib/articode-backup/common.sh
 
-CORE_TABLES=(academy users roles permissions user_roles audit_logs courses classes enrollments lessons
+# The tables whose row counts the result reports, by BACKUP_DB_KIND (missing ones are skipped).
+ACADEMY_TABLES=(academy users roles permissions user_roles audit_logs courses classes enrollments lessons
   attendance_records assignments exams final_grades certificates invoices payments notifications)
+# The platform tables that must exist in a restored platform database
+# (backend/prisma/platform/schema.prisma), then the ones only counted.
+PLATFORM_REQUIRED_TABLES=(platform_users academies domains plans subscriptions platform_audit_logs)
+PLATFORM_TABLES=("${PLATFORM_REQUIRED_TABLES[@]}" platform_refresh_tokens academy_health_checks)
 
 started=$(date -u +%s)
 dump_name='' work='' cluster_up=false
@@ -138,23 +148,39 @@ IFS='|' read -r finished failed rolled_back newest <<<"$stats"
 ((rolled_back == 0)) || fail "_prisma_migrations holds $rolled_back migration(s) that were only rolled back"
 [[ $newest == "$live_newest" ]] ||
   fail "the dump's newest migration ($newest) differs from the live database's (${live_newest:-none}) - take a new backup"
-core=$(q "SELECT (SELECT count(*) FROM public.academy), (SELECT count(*) FROM public.roles), (SELECT count(*) FROM public.permissions)") ||
-  fail "a core table is missing from the restored database: $(error_summary "$core")"
-IFS='|' read -r academy roles permissions <<<"$core"
-((academy == 1)) || fail "the academy table holds $academy rows (expected exactly 1)"
-((roles > 0)) || fail "the roles table is empty"
-((permissions > 0)) || fail "the permissions table is empty"
-tables=$(printf "'%s'," "${CORE_TABLES[@]}")
+# sql_names <table…>: an SQL array literal of table names (plain identifiers from the lists above).
+sql_names() {
+  local names
+  names=$(printf "'%s'," "$@")
+  printf 'ARRAY[%s]' "${names%,}"
+}
+case $BACKUP_DB_KIND in
+  platform)
+    missing=$(q "SELECT coalesce(string_agg(t, ', ' ORDER BY o), '') FROM unnest($(sql_names "${PLATFORM_REQUIRED_TABLES[@]}")) WITH ORDINALITY AS u(t, o)
+                  WHERE to_regclass(format('public.%I', t)) IS NULL") || fail "cannot query the restored database: $(error_summary "$missing")"
+    [[ -z $missing ]] || fail "the restored database lacks the platform table(s) $missing - not a platform database (BACKUP_DB_KIND=platform)"
+    count_tables=("${PLATFORM_TABLES[@]}")
+    ;;
+  *)
+    core=$(q "SELECT (SELECT count(*) FROM public.academy), (SELECT count(*) FROM public.roles), (SELECT count(*) FROM public.permissions)") ||
+      fail "a core table is missing from the restored database: $(error_summary "$core")"
+    IFS='|' read -r academy roles permissions <<<"$core"
+    ((academy == 1)) || fail "the academy table holds $academy rows (expected exactly 1)"
+    ((roles > 0)) || fail "the roles table is empty"
+    ((permissions > 0)) || fail "the permissions table is empty"
+    count_tables=("${ACADEMY_TABLES[@]}")
+    ;;
+esac
 counts=$(q "SELECT coalesce(json_object_agg(t, n ORDER BY o), '{}')::text FROM (
               SELECT t, o, (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM public.%I', t), false, true, '')))[1]::text::bigint AS n
-                FROM unnest(ARRAY[${tables%,}]) WITH ORDINALITY AS u(t, o)
+                FROM unnest($(sql_names "${count_tables[@]}")) WITH ORDINALITY AS u(t, o)
                WHERE to_regclass(format('public.%I', t)) IS NOT NULL) s") || fail "cannot count rows: $(error_summary "$counts")"
 counts=${counts//' : '/:}
 counts=${counts//', '/,}
 counts=${counts/#'{ '/'{'}
 counts=${counts/%' }'/'}'}
-log "drill: checks passed - $finished migrations (newest $newest = live), row counts $counts"
+log "drill: $BACKUP_DB_KIND checks passed - $finished migrations (newest $newest = live), row counts $counts"
 
 # 5. the cluster goes away (trap), the result stays
 pg_ctl --pgdata="$work/data" --mode=fast --wait stop >/dev/null 2>&1 && cluster_up=false
-record "{\"result\":\"pass\",\"at\":\"$(now_iso)\",\"dump\":$(json_str "$dump_name"),\"bytes\":$bytes,\"sha256\":\"$DUMP_SHA256\",\"seconds\":$(($(date -u +%s) - started)),\"migrations\":{\"finished\":$finished,\"newest\":$(json_str "$newest"),\"live\":$(json_str "$live_newest")},\"counts\":$counts}"
+record "{\"result\":\"pass\",\"at\":\"$(now_iso)\",\"kind\":\"$BACKUP_DB_KIND\",\"dump\":$(json_str "$dump_name"),\"bytes\":$bytes,\"sha256\":\"$DUMP_SHA256\",\"seconds\":$(($(date -u +%s) - started)),\"migrations\":{\"finished\":$finished,\"newest\":$(json_str "$newest"),\"live\":$(json_str "$live_newest")},\"counts\":$counts}"

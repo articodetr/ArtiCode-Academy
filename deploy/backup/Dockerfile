@@ -1,16 +1,18 @@
 # syntax=docker/dockerfile:1
 #
-# ArtiCode Academy — the `backup` image (MOD-17-T04, D-R92, ADR-072).
+# ArtiCode — the `backup` image (MOD-17-T04, D-R92, ADR-072), one image for an academy
+# and for the platform (KI-083).
 #
 # The build context is this folder, deploy/backup/ (its own .dockerignore lets in
 # the scripts and the crontab only):
 #
 #   docker build -t articode-backup:<tag> deploy/backup
 #
-# One container per academy, beside the `db` service of the compose project
-# (reachable as host `db`). It holds no secret: every setting comes from the
-# environment at run time, and the entrypoint turns DB_MIGRATOR_PASSWORD into a
-# password file (mode 600) — never a command-line argument.
+# One container per academy, and one for the platform, beside the `db` service of
+# its compose project (reachable as host `db`). BACKUP_DB_KIND (academy, the
+# default | platform) selects the restore drill's checks. It holds no secret: every
+# setting comes from the environment at run time, and the entrypoint turns
+# DB_MIGRATOR_PASSWORD into a password file (mode 600) — never a command-line argument.
 #
 #   cron (PID 1, root)  runs the jobs of /etc/cron.d/articode-backup, rendered at
 #                       start from ./crontab and BACKUP_SCHEDULE / BACKUP_DRILL_SCHEDULE;
@@ -24,8 +26,9 @@
 #
 # PostgreSQL client and server binaries of the base image share the server's major
 # version (pg_dump refuses a newer server major) — keep this tag in step with the
-# `db` service image of deploy/compose.academy.yaml (same major; same minor
-# recommended). TEST-203: deploy/tests/backup.test.mjs.
+# `db` service image of deploy/compose.academy.yaml and deploy/compose.platform.yaml
+# (same major; same minor recommended). TEST-203: deploy/tests/backup.test.mjs;
+# the platform side (TEST-217): deploy/tests/platform-compose.test.mjs.
 
 ARG POSTGRES_VERSION=18.7
 FROM postgres:${POSTGRES_VERSION}-trixie

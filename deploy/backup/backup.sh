@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ArtiCode Academy — the nightly backup (MOD-17-T04, D-R92). Run by cron in the
+# ArtiCode — the nightly backup (MOD-17-T04, D-R92; the platform: KI-083). Run by cron in the
 # `backup` container, or by hand: `docker compose exec backup backup.sh`.
 #
 #   backup.sh               dump, checksum, retention, optional offsite copy

@@ -26,6 +26,11 @@
 #            loop of its own process (D-R103 — no scheduler inside the API).
 #   edge     Caddy in front of `api` on the platform origin, automatic HTTPS for a real domain
 #            (deploy/platform-edge.Dockerfile, deploy/Caddyfile.platform). No static files yet.
+#   backup   nightly pg_dump of the platform database + retention + optional encrypted
+#            offsite copy + monthly restore drill — the academy's own image and scripts
+#            (deploy/backup/) with BACKUP_DB_KIND=platform, which selects the drill's
+#            platform checks (KI-083). Its dumps: the `backups` volume,
+#            /backups/<PLATFORM_DB_NAME>-YYYYMMDDTHHMMSSZ.dump + .sha256.
 #
 # Every value comes from the env file given with --env-file (template:
 # deploy/env/platform.env.example). Each service receives only the variables it needs.
@@ -197,7 +202,46 @@ services:
       - caddy_config:/config
     logging: *logging
 
+  backup:
+    # One image for the academies and the platform (deploy/backup/Dockerfile — keep its
+    # postgres tag in step with `db` above). The variable names inside the container are
+    # the image's own (POSTGRES_DB, DB_MIGRATOR_*), filled from the platform env file.
+    build:
+      context: ./backup
+    image: articode-backup:${PLATFORM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      # The platform database, dumped as its owner, the platform migrator (never the superuser).
+      POSTGRES_DB: ${PLATFORM_DB_NAME:?set PLATFORM_DB_NAME in the platform env file}
+      DB_MIGRATOR_USER: ${PLATFORM_DB_MIGRATOR_USER:?set PLATFORM_DB_MIGRATOR_USER in the platform env file}
+      DB_MIGRATOR_PASSWORD: ${PLATFORM_DB_MIGRATOR_PASSWORD:?set PLATFORM_DB_MIGRATOR_PASSWORD in the platform env file}
+      # The restore drill checks the platform tables (not the academy row) and the restore
+      # hints name api, probe and edge.
+      BACKUP_DB_KIND: platform
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-30 2 * * *}
+      BACKUP_DRILL_SCHEDULE: ${BACKUP_DRILL_SCHEDULE:-0 4 1 * *}
+      TZ: ${BACKUP_TZ:-UTC}
+    # The offsite remote's settings and credentials (RCLONE_CONFIG_<REMOTE>_<OPTION>=...),
+    # kept apart from the platform env file: deploy/env/platform.rclone.env (git-ignored, mode 600).
+    env_file:
+      - path: ./env/platform.rclone.env
+        required: false
+    # Starts as root (cron); the jobs run as postgres (999). No `user:` and no `<<: *hardened`
+    # here — like the academy's backup service (cron and gosu change user).
+    volumes:
+      - backups:/backups
+    logging: *logging
+
 volumes:
   db_data:
+  backups:
   caddy_data:
   caddy_config:

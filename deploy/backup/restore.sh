@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# ArtiCode Academy — restore a dump into the LIVE database (MOD-17-T04, D-R92).
+# ArtiCode — restore a dump into the LIVE database of an academy (MOD-17-T04, D-R92)
+# or of the platform (KI-083).
 #
 #   restore.sh [--yes] [--force] <dump>
 #
 # <dump> is a file name in BACKUP_DIR or a path inside the container. Without --yes
 # it only checks and reports (a dry run). It is the in-container step of the
-# documented procedure — stop `api`, `web` and `maintenance`; restore; run the
-# `migrate` service (`prisma migrate deploy`); start them again:
+# documented procedure — stop the services that connect to the database (an academy:
+# `api`, `web` and `maintenance`; the platform, BACKUP_DB_KIND=platform: `api`,
+# `probe` and `edge`); restore; run the `migrate` service (`prisma migrate deploy`,
+# with `--config prisma.platform.config.ts` for the platform); start them again:
 #   1. the dump must match its <dump>.sha256 and be a readable pg_dump archive;
 #   2. no other session may be connected to the database (--force skips this check);
 #   3. as DB_MIGRATOR_USER (the database owner), in ONE transaction: every object the
@@ -21,7 +24,7 @@ ARTICODE_JOB=restore
 . /usr/local/lib/articode-backup/common.sh
 
 usage() {
-  sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
 }
 refuse() {
   log "REFUSED: $*" >&2
@@ -70,7 +73,7 @@ if ((sessions > 0)); then
   if $force; then
     warn "$sessions other session(s) connected to $POSTGRES_DB - continuing (--force)"
   else
-    refuse "$sessions other session(s) are connected to $POSTGRES_DB: stop api, web and maintenance first (or pass --force)"
+    refuse "$sessions other session(s) are connected to $POSTGRES_DB: stop $(db_clients) first (or pass --force)"
   fi
 fi
 
@@ -84,4 +87,4 @@ fi
 newest=$(psql "${LIVE[@]}" --no-psqlrc --tuples-only --no-align --command \
   "SELECT coalesce(max(migration_name), 'none') FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL" 2>/dev/null || echo unknown)
 log "restore: done in $(($(date -u +%s) - started)) s - newest migration in the database: $newest"
-log "next: run the migrate service (prisma migrate deploy), then start api, web and maintenance"
+log "next: run the migrate service (prisma migrate deploy), then start $(db_clients)"
