@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# ArtiCode Academy — shared by backup.sh, restore.sh and restore-drill.sh
-# (MOD-17-T04, D-R92). Sourced, never run. It
+# ArtiCode — shared by backup.sh, restore.sh and restore-drill.sh of an academy
+# (MOD-17-T04, D-R92) and of the platform (KI-083). Sourced, never run. It
 #   - re-executes the calling script as `postgres` when started as root (cron and
 #     `docker exec` start as root; initdb refuses root; the dumps belong to the
 #     user that prunes them);
@@ -35,6 +35,19 @@ export PGAPPNAME="articode-${ARTICODE_JOB:-backup}"
 unset PGPASSWORD DB_MIGRATOR_PASSWORD
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+# Which ArtiCode database this container protects (KI-083): `academy` (the default —
+# deploy/compose.academy.yaml sets nothing) or `platform` (deploy/compose.platform.yaml).
+# It selects the restore drill's checks and the service names of the restore hints;
+# the dump, the checksum, the retention and the restore itself are the same for both.
+BACKUP_DB_KIND="${BACKUP_DB_KIND:-academy}"
+
+# The services that hold connections to the database, stopped before a restore.
+db_clients() {
+  case $BACKUP_DB_KIND in
+    platform) printf 'api, probe and edge' ;;
+    *) printf 'api, web and maintenance' ;;
+  esac
+}
 
 log() { printf '%s %s: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${ARTICODE_JOB:-backup}" "$*"; }
 warn() { log "WARNING: $*" >&2; }
@@ -48,6 +61,8 @@ require_config() {
   [[ -n ${POSTGRES_DB:-} ]] || die "POSTGRES_DB is not set"
   [[ $POSTGRES_DB =~ ^[A-Za-z0-9_][A-Za-z0-9_-]*$ ]] || die "POSTGRES_DB may hold letters, digits, '_' and '-' only (it names the dump files)"
   [[ -n ${DB_MIGRATOR_USER:-} ]] || die "DB_MIGRATOR_USER is not set"
+  [[ $BACKUP_DB_KIND == academy || $BACKUP_DB_KIND == platform ]] ||
+    die "BACKUP_DB_KIND must be academy or platform (is '$BACKUP_DB_KIND')"
   [[ $BACKUP_RETENTION_DAYS =~ ^[0-9]{1,4}$ ]] && ((10#$BACKUP_RETENTION_DAYS >= 1)) ||
     die "BACKUP_RETENTION_DAYS must be a whole number of days, 1 to 9999 (is '$BACKUP_RETENTION_DAYS')"
   [[ -r $PGPASSFILE ]] || die "no password file at $PGPASSFILE — the container entrypoint writes it from DB_MIGRATOR_PASSWORD"

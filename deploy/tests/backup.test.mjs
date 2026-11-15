@@ -19,7 +19,10 @@
 //        session and a damaged dump are refused and leave the database untouched;
 //   AC2  the drill passes on the good dump without touching the live server (the
 //        migrator has no CREATEDB) and fails clearly on a wrong checksum, a truncated
-//        dump, a corrupt dump with a matching checksum and incomplete dumps;
+//        dump, a corrupt dump with a matching checksum and incomplete dumps; its checks
+//        are the academy ones by default, and the platform checks (BACKUP_DB_KIND=platform,
+//        KI-083 — the platform side is TEST-217 in platform-compose.test.mjs) refuse an
+//        academy dump;
 //   AC3  retention removes old dumps by their name date only, never the newest, never
 //        a file outside the naming pattern;
 //   AC4  no password in `docker logs`, in the container's command (`docker inspect`),
@@ -187,6 +190,7 @@ function checkRefusals() {
     ['a malformed BACKUP_SCHEDULE', ['-e', 'DB_MIGRATOR_PASSWORD', '-e', 'BACKUP_SCHEDULE=every night'], /BACKUP_SCHEDULE must be five cron fields/],
     ['credentials inside BACKUP_REMOTE', ['-e', 'DB_MIGRATOR_PASSWORD', '-e', 'BACKUP_REMOTE=:s3,secret_access_key=x:bucket', '-e', `BACKUP_AGE_RECIPIENT=${ageKey.public}`], /BACKUP_REMOTE holds '='/],
     ['a non-numeric BACKUP_RETENTION_DAYS', ['-e', 'DB_MIGRATOR_PASSWORD', '-e', 'BACKUP_RETENTION_DAYS=two weeks'], /BACKUP_RETENTION_DAYS must be a whole number/],
+    ['an unknown BACKUP_DB_KIND', ['-e', 'DB_MIGRATOR_PASSWORD', '-e', 'BACKUP_DB_KIND=tenant'], /BACKUP_DB_KIND must be academy or platform/],
   ];
   for (const [what, extra, expected] of cases) {
     const res = docker(['run', '--rm', '-e', `POSTGRES_DB=${DB_NAME}`, '-e', `DB_MIGRATOR_USER=${MIGRATOR}`, ...extra, IMAGE], { env: SECRETS, timeout: 60_000 });
@@ -412,9 +416,9 @@ function checkDrills(dumpName, liveNewest) {
   const stored = lastJsonLine(sh(MAIN, 'cat /backups/drill-last.json').stdout);
   const r = good.result ?? {};
   check(
-    good.run.code === 0 && r.result === 'pass' && r.dump === dumpName && r.migrations?.newest === liveNewest && r.migrations?.live === liveNewest && r.counts?.academy === 1 && r.counts?.roles > 0 && r.counts?.permissions > 0 && stored?.result === 'pass',
-    'AC2 the drill restores the newest dump into a throwaway cluster and passes',
-    `${r.migrations?.finished} migrations, newest = live, academy 1, roles ${r.counts?.roles}, permissions ${r.counts?.permissions}; drill-last.json pass`,
+    good.run.code === 0 && r.result === 'pass' && r.kind === 'academy' && r.dump === dumpName && r.migrations?.newest === liveNewest && r.migrations?.live === liveNewest && r.counts?.academy === 1 && r.counts?.roles > 0 && r.counts?.permissions > 0 && stored?.result === 'pass',
+    'AC2 the drill restores the newest dump into a throwaway cluster and passes (the academy checks by default)',
+    `kind ${r.kind}; ${r.migrations?.finished} migrations, newest = live, academy 1, roles ${r.counts?.roles}, permissions ${r.counts?.permissions}; drill-last.json pass`,
     `exit ${good.run.code}: ${tail(good.run.log, 6)}`,
   );
   check(databases() === before, 'AC2 the drill leaves the live server alone (no database created there)', before, `${before} -> ${databases()}`);
@@ -445,6 +449,10 @@ function checkDrills(dumpName, liveNewest) {
     ['a dump without the academy row', 'noacademy.dump', /academy table holds 0 rows/],
     ['a dump without _prisma_migrations', 'nomigrations.dump', /no _prisma_migrations table/],
   ];
+  // The platform checks (KI-083) on this academy dump: the platform tables are missing.
+  const kind = runWithPs(MAIN, ['restore-drill.sh', dumpName], ['-e', 'BACKUP_DB_KIND=platform']);
+  const kindResult = lastJsonLine(kind.log) ?? {};
+  check(kind.code === 1 && kindResult.result === 'fail' && /lacks the platform table\(s\) platform_users/.test(kindResult.reason ?? ''), 'AC2 the drill with BACKUP_DB_KIND=platform refuses an academy dump', (kindResult.reason ?? '').slice(0, 110), `exit ${kind.code}: ${tail(kind.log, 3)}`);
   for (const [what, file, reason] of cases) {
     const bad = drill([`/tmp/t203/${file}`]);
     const res = bad.result ?? {};

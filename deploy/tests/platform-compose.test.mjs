@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// TEST-211 — the platform as a Docker Compose project (MOD-18-T06, roadmap §4m.5, D-R104).
+// TEST-211 — the platform as a Docker Compose project (MOD-18-T06, roadmap §4m.5, D-R104),
+// and TEST-217 — its `backup` service (KI-083).
 //
 // Run from the repository root with Docker running (Node >= 22, no npm install):
 //
 //   node deploy/tests/platform-compose.test.mjs               build the images, bring a platform up, check, take it down
-//   node deploy/tests/platform-compose.test.mjs --no-build    use images already tagged articode-api*:<tag> / articode-platform-edge:<tag>
+//   node deploy/tests/platform-compose.test.mjs --no-build    use images already tagged articode-api*:<tag> / articode-platform-edge:<tag> / articode-backup:<tag>
 //   node deploy/tests/platform-compose.test.mjs --keep        leave the project running (prints how to remove it)
 //   node deploy/tests/platform-compose.test.mjs --tag t211 --port 18211
 //
@@ -28,7 +29,21 @@
 //     the platform database, and no academy role or database exists in this cluster
 //     (10-roles.sh is not mounted);
 //   - api, probe and edge run as non-root users with every capability dropped and
-//     no-new-privileges.
+//     no-new-privileges;
+//   TEST-217 (KI-083) — the `backup` service, built from deploy/backup/ like an academy's:
+//   - the generated env file carries the backup settings with their defaults, and the
+//     service starts for the platform database as the platform migrator;
+//   - a backup on demand writes <PLATFORM_DB_NAME>-<UTC stamp>.dump + .sha256 (mode 600,
+//     owned by postgres) that verify;
+//   - the restore drill with the platform checks passes on it (newest migration = live,
+//     the super admin and the academy counted) without creating a database on the live
+//     server, while the academy checks (BACKUP_DB_KIND=academy) refuse that dump; the
+//     container's health check is green afterwards;
+//   - the documented restore: stop api, probe and edge; restore.sh refuses without --yes,
+//     then puts back the deleted rows and drops a table the dump does not hold (in one
+//     transaction, with the app role's grants and the audit triggers); `run --rm migrate`
+//     has nothing pending; started again, api is healthy and the super admin signs in;
+//   - no password in the backup container's logs.
 // The project, its volumes and its network are removed at the end (never another project's).
 
 import { spawnSync } from 'node:child_process';
@@ -93,9 +108,9 @@ function envValue(name) {
   return line ? line.slice(name.length + 1) : '';
 }
 
-function psql(sql, database = '"$PLATFORM_DB_NAME"') {
-  // As the superuser, over the container's local socket (trust) — this test's own throwaway cluster.
-  const res = compose(['exec', '-T', 'db', 'sh', '-c', `psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d ${database} -Atc "$0"`, sql]);
+function psql(sql, database = '"$PLATFORM_DB_NAME"', user = '"$POSTGRES_USER"') {
+  // As the superuser (by default), over the container's local socket (trust) — this test's own throwaway cluster.
+  const res = compose(['exec', '-T', 'db', 'sh', '-c', `psql -v ON_ERROR_STOP=1 -U ${user} -d ${database} -Atc "$0"`, sql]);
   if (res.code !== 0) throw new Error(`psql: ${tail(res.out, 3)}`);
   return res.out.trim();
 }
@@ -144,6 +159,95 @@ async function http(path, { token, origin, method = 'GET', body } = {}) {
 }
 
 const apiHealthy = (seconds) => waitFor(() => stateOf('api').health === 'healthy', seconds);
+
+const lastJsonLine = (text) => {
+  const line = text.trim().split('\n').reverse().find((l) => l.startsWith('{'));
+  try {
+    return line ? JSON.parse(line) : null;
+  } catch {
+    return null;
+  }
+};
+
+// --- TEST-217: the backup service (KI-083) ----------------------------------------------------
+async function checkBackup({ email, password, migration }) {
+  const dbName = envValue('PLATFORM_DB_NAME');
+  const migrator = envValue('PLATFORM_DB_MIGRATOR_USER');
+  const app = envValue('PLATFORM_DB_APP_USER');
+
+  const settings = ['BACKUP_RETENTION_DAYS', 'BACKUP_SCHEDULE', 'BACKUP_DRILL_SCHEDULE', 'BACKUP_TZ', 'BACKUP_REMOTE', 'BACKUP_AGE_RECIPIENT'].map((n) => `${n}=${envValue(n)}`).join(', ');
+  if (settings === 'BACKUP_RETENTION_DAYS=14, BACKUP_SCHEDULE=30 2 * * *, BACKUP_DRILL_SCHEDULE=0 4 1 * *, BACKUP_TZ=UTC, BACKUP_REMOTE=, BACKUP_AGE_RECIPIENT=') pass('backup: the generated env file carries the backup settings with their defaults', settings);
+  else fail('backup: the generated env file carries the backup settings with their defaults', settings);
+
+  let logs = '';
+  await waitFor(() => {
+    logs = compose(['logs', '--no-log-prefix', 'backup']).out;
+    return /entrypoint: ready/.test(logs);
+  }, 60);
+  const readyLine = logs.split('\n').find((l) => l.includes('entrypoint: ready')) ?? '';
+  if (stateOf('backup').status === 'running' && readyLine.includes(`ready: platform database ${dbName} on db:5432 as ${migrator}`)) pass('backup: the service runs for the platform database as the platform migrator', readyLine.replace(/^\S+ /, '').trim());
+  else return fail('backup: the service runs for the platform database as the platform migrator', `${JSON.stringify(stateOf('backup'))} ${tail(logs, 5)}`);
+
+  // --- a backup on demand ---
+  const backup = compose(['exec', '-T', 'backup', 'backup.sh']);
+  const name = (backup.out.match(/complete: (\S+\.dump)/) ?? [])[1] ?? '';
+  const files = name ? compose(['exec', '-T', 'backup', 'bash', '-c', 'cd /backups && stat -c "%n %a %U" "$1" "$1.sha256" && sha256sum -c "$1.sha256" && cat backup-last.json', '_', name]).out : '';
+  if (backup.code === 0 && new RegExp(`^${dbName}-\\d{8}T\\d{6}Z\\.dump$`).test(name) && files.includes(`${name} 600 postgres`) && files.includes(`${name}.sha256 600 postgres`) && files.includes(`${name}: OK`) && /"result":"pass"/.test(files)) pass('backup: backup.sh on demand writes a dump and its .sha256 of the platform database', `${name}, mode 600, owned by postgres, sha256sum -c OK, backup-last.json pass`);
+  else return fail('backup: backup.sh on demand writes a dump and its .sha256 of the platform database', `exit ${backup.code}: ${tail(backup.out + files, 8)}`);
+
+  // --- the restore drill: the academy checks refuse a platform dump, the platform checks pass ---
+  const databases = () => psql("select string_agg(datname, ',' order by datname) from pg_database where not datistemplate", 'postgres');
+  const before = databases();
+  const academyKind = compose(['exec', '-T', '-e', 'BACKUP_DB_KIND=academy', 'backup', 'restore-drill.sh']);
+  const refused = lastJsonLine(academyKind.out) ?? {};
+  if (academyKind.code === 1 && refused.result === 'fail' && /core table is missing.*academy/.test(refused.reason ?? '')) pass('backup: the drill with the academy checks (BACKUP_DB_KIND=academy) refuses the platform dump', (refused.reason ?? '').slice(0, 120));
+  else fail('backup: the drill with the academy checks (BACKUP_DB_KIND=academy) refuses the platform dump', `exit ${academyKind.code}: ${tail(academyKind.out, 4)}`);
+
+  const drill = compose(['exec', '-T', 'backup', 'restore-drill.sh']);
+  const r = lastJsonLine(drill.out) ?? {};
+  const stored = lastJsonLine(compose(['exec', '-T', 'backup', 'cat', '/backups/drill-last.json']).out);
+  const after = databases();
+  if (drill.code === 0 && r.result === 'pass' && r.kind === 'platform' && r.dump === name && r.migrations?.newest === migration && r.migrations?.live === migration && r.counts?.platform_users === 1 && r.counts?.academies === 1 && stored?.result === 'pass' && before === after) pass('backup: the restore drill with the platform checks passes on that dump', `kind platform, newest = live = ${migration}, counts ${JSON.stringify(r.counts)}; live databases unchanged (${after})`);
+  else fail('backup: the restore drill with the platform checks passes on that dump', `exit ${drill.code}: ${tail(drill.out, 6)}; databases ${before} -> ${after}`);
+
+  const test = JSON.parse(run('docker', ['inspect', '--format', '{{json .Config.Healthcheck.Test}}', containerOf('backup')]).out.trim() || '[]');
+  const health = test[0] === 'CMD-SHELL' ? compose(['exec', '-T', 'backup', 'sh', '-c', test[1]]).code : null;
+  if (health === 0) pass('backup: the container health check is green after the passing drill', 'cron running, backup-last.json and drill-last.json pass');
+  else fail('backup: the container health check is green after the passing drill', `health check exit ${health}`);
+
+  // --- the documented restore: stop the database clients, restore, migrate, start ---
+  const stateSql = `select (select count(*) from academies) || ',' || (select count(*) from platform_users) || ',' || (select count(*) from _prisma_migrations) || ',' || (to_regclass('public.t217_extra') is not null) || ',' || (has_table_privilege('${app}', 'public.academies', 'SELECT') and has_table_privilege('${app}', 'public.academies', 'INSERT') and has_table_privilege('${app}', 'public.academies', 'DELETE')) || ',' || (select count(*) from pg_trigger where tgname like 'trg_platform_audit_logs_%')`;
+  const good = psql(stateSql);
+  psql('delete from academies');
+  psql('create table t217_extra (id int)', '"$PLATFORM_DB_NAME"', migrator);
+  const damaged = psql(stateSql);
+  const stop = compose(['stop', 'api', 'probe', 'edge']);
+  const dry = compose(['exec', '-T', 'backup', 'restore.sh', name]);
+  const untouched = psql(stateSql) === damaged;
+  if (stop.code === 0 && dry.code === 2 && /--yes/.test(dry.out) && untouched) pass('backup: with api, probe and edge stopped, restore.sh without --yes only verifies and refuses', tail(dry.out, 1).replace(/^\S+ /, ''));
+  else fail('backup: with api, probe and edge stopped, restore.sh without --yes only verifies and refuses', `stop ${stop.code}, dry run ${dry.code}: ${tail(dry.out, 3)}; untouched ${untouched}`);
+
+  const restore = compose(['exec', '-T', 'backup', 'restore.sh', '--yes', name]);
+  const restored = psql(stateSql);
+  if (restore.code === 0 && /restore: done/.test(restore.out) && /start api, probe and edge/.test(restore.out) && restored === good && good.endsWith(',false,true,2')) pass('backup: restore.sh --yes puts the platform database back in one transaction', `academies,platform_users,_prisma_migrations,extra table,app grants,audit triggers: ${damaged} -> ${restored}`);
+  else fail('backup: restore.sh --yes puts the platform database back in one transaction', `exit ${restore.code}: ${tail(restore.out, 4)}; before ${good}, damaged ${damaged}, after ${restored}`);
+
+  const migrate = compose(['run', '--rm', '-T', 'migrate']);
+  if (migrate.code === 0 && /No pending migrations to apply/i.test(migrate.out)) pass('backup: `run --rm migrate` after the restore has nothing pending');
+  else fail('backup: `run --rm migrate` after the restore has nothing pending', `exit ${migrate.code}: ${tail(migrate.out, 6)}`);
+
+  const start = compose(['start', 'api', 'probe', 'edge']);
+  const healthy = start.code === 0 && (await apiHealthy(120));
+  await waitFor(async () => (await http('/api/health').catch(() => ({ status: 0 }))).body?.status === 'ok', 60);
+  const login = healthy ? await http('/api/auth/login', { method: 'POST', origin: ORIGIN, body: { identifier: email, password } }) : { status: 0 };
+  if (healthy && login.status === 200 && login.body?.user?.role === 'super_admin') pass('backup: started again, api is healthy and the restored super admin signs in through the edge', 'POST /api/auth/login 200');
+  else fail('backup: started again, api is healthy and the restored super admin signs in through the edge', `start ${start.code}, api ${JSON.stringify(stateOf('api'))}, login ${login.status}`);
+
+  const allLogs = compose(['logs', '--no-log-prefix', 'backup']).out;
+  const leaked = secrets.filter((secret) => secret && allLogs.includes(secret)).length;
+  if (leaked === 0) pass('backup: no password in the backup container\'s logs', `${allLogs.trim().split('\n').length} log lines`);
+  else fail('backup: no password in the backup container\'s logs', `${leaked} secret values`);
+}
 
 /** The newest platform migration of the committed tree (the name readiness must report). */
 function newestPlatformMigration() {
@@ -295,6 +399,9 @@ async function main() {
   const databases = psql('select string_agg(datname, \',\' order by datname) from pg_database where not datistemplate', 'postgres');
   if (academyRoles === '0' && databases === `${envValue('PLATFORM_DB_NAME')},postgres`) pass('no academy role or database in the platform cluster', `databases ${databases} (10-roles.sh is not mounted)`);
   else fail('no academy role or database in the platform cluster', `academy roles ${academyRoles}, databases ${databases}`);
+
+  // --- TEST-217: backup, drill, restore (KI-083) --------------------------------------------
+  await checkBackup({ email, password, migration });
 
   // --- hardening ------------------------------------------------------------------------------
   for (const service of ['api', 'probe', 'edge']) {

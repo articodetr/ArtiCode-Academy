@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# ArtiCode Academy — entrypoint of the `backup` container (MOD-17-T04, D-R92, D-R95).
+# ArtiCode — entrypoint of the `backup` container of an academy (MOD-17-T04, D-R92,
+# D-R95) or of the platform (KI-083).
 #
 #   (no arguments)   prepares the jobs, then runs cron in the foreground as PID 1;
 #   <command…>       prepares the jobs, then runs that command instead — e.g.
@@ -14,6 +15,8 @@
 # Settings (environment):
 #   POSTGRES_DB, DB_MIGRATOR_USER, DB_MIGRATOR_PASSWORD   required
 #   PGHOST (db), PGPORT (5432)                            the database server
+#   BACKUP_DB_KIND (academy)                              academy | platform: the restore
+#        drill's checks and the restore hints (deploy/compose.platform.yaml sets platform)
 #   BACKUP_RETENTION_DAYS (14)                            local dumps kept, by name date
 #   BACKUP_REMOTE + BACKUP_AGE_RECIPIENT                  both set = offsite copy:
 #        an rclone destination (`remote:bucket/path`; credentials in RCLONE_CONFIG_*
@@ -44,7 +47,10 @@ export PGHOST="${PGHOST:-db}" PGPORT="${PGPORT:-5432}"
 export BACKUP_DIR="${BACKUP_DIR:-/backups}" BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 export BACKUP_SCHEDULE="${BACKUP_SCHEDULE:-30 2 * * *}" BACKUP_DRILL_SCHEDULE="${BACKUP_DRILL_SCHEDULE:-0 4 1 * *}"
 export TZ="${TZ:-UTC}"
+export BACKUP_DB_KIND="${BACKUP_DB_KIND:-academy}"
 
+[[ $BACKUP_DB_KIND == academy || $BACKUP_DB_KIND == platform ]] ||
+  die "BACKUP_DB_KIND must be academy or platform (is '$BACKUP_DB_KIND')"
 [[ $POSTGRES_DB =~ ^[A-Za-z0-9_][A-Za-z0-9_-]*$ ]] || die "POSTGRES_DB may hold letters, digits, '_' and '-' only (it names the dump files)"
 [[ $PGPORT =~ ^[0-9]{1,5}$ ]] || die "PGPORT must be a port number"
 [[ $BACKUP_RETENTION_DAYS =~ ^[0-9]{1,4}$ ]] && ((10#$BACKUP_RETENTION_DAYS >= 1)) ||
@@ -138,6 +144,6 @@ if [[ $# -gt 0 ]]; then
   exec "$@"
 fi
 
-log "ready: database $POSTGRES_DB on $PGHOST:$PGPORT as $DB_MIGRATOR_USER; dumps in $BACKUP_DIR kept $BACKUP_RETENTION_DAYS days; offsite copy $offsite"
+log "ready: $BACKUP_DB_KIND database $POSTGRES_DB on $PGHOST:$PGPORT as $DB_MIGRATOR_USER; dumps in $BACKUP_DIR kept $BACKUP_RETENTION_DAYS days; offsite copy $offsite"
 log "schedule ($TZ): backup '$BACKUP_SCHEDULE', restore drill '$BACKUP_DRILL_SCHEDULE'"
 exec cron -f
