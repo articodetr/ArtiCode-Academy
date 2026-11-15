@@ -55,6 +55,16 @@ export class AuthUserDto {
   @ApiProperty({ description: 'True when the user must set a new password before working' })
   mustChangePassword: boolean;
 
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    example: '2026-11-12T09:30:00.000Z',
+    description:
+      'When the user confirmed their current e-mail address (API-166, LR-01-T02); null while it is unconfirmed or there is none — an e-mail change clears it. The caller’s own value, whatever their permissions (CH-0226)',
+  })
+  emailVerifiedAt: string | null;
+
   @ApiProperty({ type: [String], example: ['academy_admin'] })
   roles: string[];
 

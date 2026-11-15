@@ -84,7 +84,7 @@ export class AssignmentsController {
   @ApiOperation({
     summary: 'List assignments',
     description:
-      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) by due date — assignments without one last — then id (`order` asc by default), with filters `classId`, `lessonId`, `status`, `dueFrom` and `dueTo` (inclusive instants; an assignment without a due date never matches them). ' +
+      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) by due date — assignments without one last — then id (`order` asc by default), with filters `classId`, `lessonId`, `status`, `dueFrom` and `dueTo` (inclusive instants; an assignment without a due date never matches them) and `q` (a substring of the Arabic or English title, case-insensitive, `%`/`_` literal). ' +
       'Holders of `assignments.read` alone see only the assignments of the classes they are assigned to; holders of `classes.manage` see every assignment. ' +
       'Each item carries its class and course, the linked lesson, the students’ latest submissions by status and the active enrollments of the class.',
   })

@@ -67,6 +67,7 @@ function toPrincipal(user: UserWithAccess, tokenId: string): AuthPrincipal {
     locale: user.locale,
     status: user.status,
     mustChangePassword: user.mustChangePassword,
+    emailVerifiedAt: user.emailVerifiedAt,
     roles: user.roles.map((grant) => grant.role.key),
     permissions: [...permissions].sort(),
     tokenId,

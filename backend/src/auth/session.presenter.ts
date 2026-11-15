@@ -31,6 +31,7 @@ export function toUserDto(user: AuthPrincipal): AuthUserDto {
     locale: user.locale,
     status: user.status,
     mustChangePassword: user.mustChangePassword,
+    emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
     roles: user.roles,
     permissions: user.permissions,
   };

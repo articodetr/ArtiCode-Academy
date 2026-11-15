@@ -88,7 +88,7 @@ export class LessonsController {
   @ApiOperation({
     summary: 'List lessons',
     description:
-      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) by start time then id (`order` asc by default), with filters `classId`, `teacherId`, `status`, `from` and `to` (lessons starting inside the instants, inclusive). ' +
+      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) by start time then id (`order` asc by default), with filters `classId`, `teacherId`, `status`, `from` and `to` (lessons starting inside the instants, inclusive) and `q` (a substring of the Arabic or English title, case-insensitive, `%`/`_` literal). ' +
       'Holders of `lessons.read` alone see only the lessons of the classes they are assigned to; holders of `classes.manage` see every lesson. Each item carries its class, course, room, teacher, syllabus item and attendance counts.',
   })
   @ApiOkResponse({ type: LessonListDto })

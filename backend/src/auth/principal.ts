@@ -11,6 +11,8 @@ export interface AuthPrincipal {
   locale: Locale | null;
   status: UserStatus;
   mustChangePassword: boolean;
+  /** When the caller's current e-mail address was confirmed (LR-01-T02), else null. */
+  emailVerifiedAt: Date | null;
   /** Role keys (e.g. `academy_admin`, `teacher`). */
   roles: string[];
   /** Active permission keys derived from the roles (deprecated keys excluded). */
