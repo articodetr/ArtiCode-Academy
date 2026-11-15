@@ -1,9 +1,10 @@
 // The profile's "confirm my e-mail" action (LR-01-T02, API-165).
 //
-// Whether the address is already confirmed is not in the session user
-// (AuthUserDto of /api/auth/me carries no `emailVerifiedAt`). The only screen
-// field that holds it is the user detail of API-013, and it is filled only for
-// a reader holding `users.read` + `users.read_contact` (D-R07). So:
+// Whether the address is already confirmed comes from the session user since
+// CH-0226 (`emailVerifiedAt` in AuthUserDto and /api/auth/me) — no read at all.
+// An older server does not send it (undefined); then the only screen field that
+// holds it is the user detail of API-013, filled only for a reader holding
+// `users.read` + `users.read_contact` (D-R07). So, on such a server:
 //   - with both keys, the detail of one's own account is read once and the
 //     action shows only while the address is unconfirmed;
 //   - without them the state is unknown: the action shows for every account
@@ -27,10 +28,12 @@ interface Outcome {
   text: string
 }
 
-export function EmailVerificationAction({ user }: { user: Pick<AuthUser, 'id' | 'email' | 'permissions'> }) {
+export function EmailVerificationAction({ user }: { user: Pick<AuthUser, 'id' | 'email' | 'permissions' | 'emailVerifiedAt'> }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const readable = Boolean(user.email) && canReadOwnVerification(user)
+  // The session says it (CH-0226): no read. Otherwise API-013, when the caller may read their own contact fields.
+  const fromSession = user.emailVerifiedAt !== undefined
+  const readable = !fromSession && Boolean(user.email) && canReadOwnVerification(user)
   // Keyed by the account and address, so a stale answer for another account never shows.
   const lookupKey = readable ? `${user.id}:${user.email}` : null
   const [lookup, setLookup] = useState<{ key: string; known: Known } | null>(null)
@@ -60,7 +63,11 @@ export function EmailVerificationAction({ user }: { user: Pick<AuthUser, 'id' | 
 
   const known: Known | null = alreadyVerified
     ? { state: 'verified', at: null }
-    : !readable
+    : fromSession
+      ? user.emailVerifiedAt
+        ? { state: 'verified', at: user.emailVerifiedAt }
+        : { state: 'unverified' }
+      : !readable
       ? { state: 'unknown' }
       : lookup?.key === lookupKey
         ? lookup.known

@@ -13,6 +13,8 @@ import { dayEndInstant, dayStartInstant, todayIn } from './lessons.format'
 export const LESSON_PAGE_SIZES = [20, 50, 100] as const
 
 export interface LessonsListFilters {
+  /** Part of the title (CH-0226 — `q`). */
+  q?: string
   classId: string | undefined
   /** Lessons assigned to this teacher — offered to managers only (a teacher sees only their classes anyway). */
   teacherId: string | undefined
@@ -36,7 +38,7 @@ export function defaultLessonFilters(dayZone: string, now: Date = new Date()): L
  * then says «no lessons from today on», not «nothing matches the filters».
  */
 export function hasActiveLessonFilters(filters: LessonsListFilters, defaults: LessonsListFilters): boolean {
-  return Boolean(filters.classId || filters.teacherId || filters.status || filters.to) || filters.from !== defaults.from
+  return Boolean(filters.q || filters.classId || filters.teacherId || filters.status || filters.to) || filters.from !== defaults.from
 }
 
 /** API-093 with the filter days of `dayZone` turned into instants. */
@@ -44,6 +46,7 @@ function lessonsLoader(dayZone: string): KeysetLoader<Lesson, LessonsListFilters
   return (filters, cursor, signal) =>
     listLessons(
       {
+        q: filters.q,
         classId: filters.classId,
         teacherId: filters.teacherId,
         status: filters.status,

@@ -2,6 +2,7 @@ import type { Translation } from './ar'
 
 export const en: Translation = {
   common: {
+    searchByTitle: 'Search titles',
     pageSize: 'Items per page',
     sortOrder: 'Sort order',
     appName: 'ArtiCode Academy',
@@ -280,6 +281,9 @@ export const en: Translation = {
       users: 'People',
       classes: 'Classes',
       courses: 'Courses',
+      lessons: 'Lessons',
+      assignments: 'Assignments',
+      exams: 'Exams',
       invoices: 'Invoices',
       receipts: 'Receipts',
       certificates: 'Certificates',

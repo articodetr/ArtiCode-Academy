@@ -18,6 +18,8 @@ export const ASSIGNMENT_PAGE_SIZES = [20, 50, 100] as const
 export const ASSIGNMENT_FILTER_STATUSES = ['draft', 'open', 'closed'] as const satisfies readonly AssignmentStatus[]
 
 export interface AssignmentsListFilters {
+  /** Part of the title (CH-0226 — `q`). */
+  q?: string
   classId: string | undefined
   status: AssignmentStatus | undefined
   /** Calendar days (`YYYY-MM-DD`) of `timeZone`; blank = open-ended. */
@@ -36,12 +38,13 @@ export function defaultAssignmentFilters(timeZone: string): AssignmentsListFilte
 
 /** True when the list is narrowed: a class, a status or a due day (the order, the page size and the zone narrow nothing). */
 export function hasActiveAssignmentFilters(filters: AssignmentsListFilters): boolean {
-  return Boolean(filters.classId || filters.status || filters.dueFrom || filters.dueTo)
+  return Boolean(filters.q || filters.classId || filters.status || filters.dueFrom || filters.dueTo)
 }
 
 const loadAssignments: KeysetLoader<Assignment, AssignmentsListFilters> = (filters, cursor, signal) =>
   listAssignments(
     {
+      q: filters.q,
       classId: filters.classId,
       status: filters.status,
       dueFrom: dayStartIn(filters.dueFrom, filters.timeZone),

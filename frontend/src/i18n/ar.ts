@@ -1,5 +1,6 @@
 export const ar = {
   common: {
+    searchByTitle: 'بحث في العناوين',
     pageSize: 'عدد العناصر في الصفحة',
     sortOrder: 'الترتيب',
     appName: 'ArtiCode Academy',
@@ -280,6 +281,9 @@ export const ar = {
       users: 'الأشخاص',
       classes: 'الفصول',
       courses: 'الدورات',
+      lessons: 'الدروس',
+      assignments: 'الواجبات',
+      exams: 'الاختبارات',
       invoices: 'الفواتير',
       receipts: 'الإيصالات',
       certificates: 'الشهادات',
