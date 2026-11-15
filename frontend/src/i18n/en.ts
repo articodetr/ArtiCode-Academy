@@ -3850,6 +3850,7 @@ export const en: Translation = {
     backHome: 'Back to dashboard',
   },
   server: {
+    dbErrors: { database_timeout: 'The database did not answer in time', database_unreachable: 'The database cannot be reached' },
     title: 'Server connection',
     checking: 'Checking...',
     online: 'Online',
