@@ -1,0 +1,35 @@
+/* «Where you're signed in» (CH-0265). */
+.profile-sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.profile-sessions li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--c-line, #f0f0f0);
+}
+
+.profile-sessions li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.profile-sessions__icon {
+  font-size: 18px;
+  color: var(--c-muted, rgba(0, 0, 0, 0.55));
+}
+
+.profile-sessions__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-sessions li .ant-tag {
+  margin: 0;
+}

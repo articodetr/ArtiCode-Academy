@@ -46,6 +46,8 @@ function record(handler: FetchHandler = () => jsonResponse(404)) {
   const calls: RecordedCall[] = []
   mockFetch((url, init) => {
     if ((init?.method ?? 'GET') === 'GET' && url.startsWith('/api/users/')) return jsonResponse(404)
+    // The devices card (CH-0265) reads its own list; these tests look at the other requests.
+    if (url === '/api/auth/sessions') return jsonResponse(200, { items: [] })
     calls.push({
       request: `${init?.method ?? 'GET'} ${url}`,
       body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
