@@ -87,22 +87,22 @@ export class AuditLogItemDto {
   @ApiProperty({ example: 'auth.login.succeeded' })
   action: string;
 
-  @ApiProperty({ nullable: true, format: 'uuid' })
+  @ApiProperty({ type: String, nullable: true, format: 'uuid' })
   actorUserId: string | null;
 
-  @ApiProperty({ nullable: true, example: 'users' })
+  @ApiProperty({ type: String, nullable: true, example: 'users' })
   entityType: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   entityId: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Identifiers and non-sensitive values only' })
+  @ApiProperty({ type: 'object', additionalProperties: true, nullable: true, description: 'Identifiers and non-sensitive values only' })
   metadata: unknown;
 
-  @ApiProperty({ nullable: true, example: '127.0.0.1' })
+  @ApiProperty({ type: String, nullable: true, example: '127.0.0.1' })
   ipAddress: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   userAgent: string | null;
 
   @ApiProperty({ example: '2026-10-29T15:00:00.000Z' })
@@ -114,6 +114,7 @@ export class AuditLogListDto {
   items: AuditLogItemDto[];
 
   @ApiProperty({
+    type: String,
     nullable: true,
     description: 'Pass as `cursor` with the same filters to fetch the next (older) page; null when exhausted.',
   })

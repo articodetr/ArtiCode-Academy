@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsUUID } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { ExamType } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { ReportClassRefDto, ReportCourseRefDto, ReportPeriodDto, ReportPeriodQueryDto } from './reports.dto.js';
 
 const EXAM_TYPES = Object.values(ExamType) as ExamType[];
@@ -40,7 +41,7 @@ export class AcademicExamsQueryDto extends CourseClassFilterDto {
 // --- API-158 -------------------------------------------------------------
 
 export class GradeBandCountDto {
-  @ApiProperty({ description: 'The band’s label as frozen in the final grades (snapshot — D-R44)', example: { ar: 'جيد جداً' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'The band’s label as frozen in the final grades (snapshot — D-R44)', example: { ar: 'جيد جداً' } })
   label: LocalizedText;
 
   @ApiProperty({ type: String, nullable: true, example: 'B' })
@@ -139,7 +140,7 @@ export class ReportAssignmentRefDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
   @ApiProperty({ enum: ['open', 'closed', 'grading', 'graded'] })
@@ -266,7 +267,7 @@ export class ReportExamRefDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
   @ApiProperty({ enum: EXAM_TYPES })

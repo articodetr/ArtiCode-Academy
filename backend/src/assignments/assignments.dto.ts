@@ -43,7 +43,7 @@ export class AssignmentInstructionsDto {
   @Length(1, INSTRUCTIONS_MAX_LENGTH)
   ar: string;
 
-  @ApiPropertyOptional({ maxLength: INSTRUCTIONS_MAX_LENGTH })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: INSTRUCTIONS_MAX_LENGTH })
   @IsOptional()
   @Transform(nullableTextParam)
   @ValidateIf((_dto, value) => value !== null)
@@ -51,7 +51,7 @@ export class AssignmentInstructionsDto {
   @Length(1, INSTRUCTIONS_MAX_LENGTH)
   en?: string | null;
 
-  @ApiPropertyOptional({ maxLength: INSTRUCTIONS_MAX_LENGTH })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: INSTRUCTIONS_MAX_LENGTH })
   @IsOptional()
   @Transform(nullableTextParam)
   @ValidateIf((_dto, value) => value !== null)
@@ -291,7 +291,7 @@ export class AssignmentLessonDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
   @ApiProperty({ description: 'ISO 8601 (UTC)' })
@@ -323,10 +323,10 @@ export class AssignmentDto {
   @ApiProperty({ type: AssignmentLessonDto, nullable: true, description: 'The linked lesson, if any' })
   lesson: AssignmentLessonDto | null;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
-  @ApiProperty({ type: Object, nullable: true, description: 'Localized instructions or null' })
+  @ApiProperty({ type: () => AssignmentInstructionsDto, nullable: true, description: 'Localized instructions or null' })
   instructions: LocalizedText | null;
 
   @ApiProperty({ example: 20 })
@@ -376,6 +376,6 @@ export class AssignmentListDto {
   @ApiProperty({ type: [AssignmentDto], description: 'By due date (none last), then id' })
   items: AssignmentDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }

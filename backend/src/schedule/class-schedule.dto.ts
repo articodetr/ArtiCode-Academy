@@ -4,6 +4,7 @@ import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, Min, V
 import type { ValidationArguments, ValidationOptions } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { rawNumber } from '../courses/courses.validation.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { IsCalendarDate, isCalendarDate } from '../users/users.validation.js';
 import { RoomBranchDto } from './rooms.dto.js';
 import { IsClockTime, clockMinutes, isClockTime } from './schedule.time.js';
@@ -117,7 +118,7 @@ export class ScheduleRoomDto {
   @ApiProperty({ example: 'LAB-1' })
   code: string;
 
-  @ApiProperty({ type: Object, nullable: true, description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText | null;
 
   @ApiProperty({ type: RoomBranchDto, nullable: true, description: 'null = the academy’s own site' })

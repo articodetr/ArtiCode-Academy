@@ -74,7 +74,7 @@ export class PlanDto {
   @ApiProperty({ example: 'standard' })
   key: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الخطة القياسية', en: 'Standard' } })
+  @ApiProperty({ type: () => PlatformLocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الخطة القياسية', en: 'Standard' } })
   name: LocalizedText;
 
   @ApiProperty({ type: 'object', additionalProperties: { type: 'integer', nullable: true }, description: 'Keys sorted', example: { storageGb: null, students: 500 } })

@@ -3,6 +3,7 @@ import { IsOptional, IsUUID } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
 import { ClassStatus, EnrollmentStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import type { CellStatus, ComponentKind } from './gradebook.calc.js';
 
 const KINDS: ComponentKind[] = ['assignment', 'exam'];
@@ -25,7 +26,7 @@ export class GradebookClassDto {
   @ApiProperty()
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 
   @ApiProperty({ enum: CLASS_STATUSES })
@@ -39,7 +40,7 @@ export class GradebookComponentDto {
   @ApiProperty({ format: 'uuid', description: 'The assignment or exam' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title' })
   title: LocalizedText;
 
   @ApiProperty({ type: Number, nullable: true, description: 'null or 0 = informational (not counted — D-R43)' })
@@ -93,7 +94,7 @@ export class FinalGradeDto {
   @ApiProperty({ format: 'uuid' })
   schemeId: string;
 
-  @ApiProperty({ description: 'The band’s label at finalization (snapshot)' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'The band’s label at finalization (snapshot)' })
   label: LocalizedText;
 
   @ApiProperty({ type: String, nullable: true })
@@ -156,7 +157,7 @@ export class GradebookSchemeDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ description: 'Localized name' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name' })
   name: LocalizedText;
 }
 

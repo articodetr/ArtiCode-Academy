@@ -7,6 +7,7 @@ import type { LocalizedText } from '../authorization/localized-text.js';
 import { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
 import { MyClassStudentDto, MyClassTeacherDto } from '../enrollments/my-classes.dto.js';
 import { AssignmentStatus, EnrollmentStatus, SubmissionStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { nullableTextParam, textParam } from '../users/users.validation.js';
 import { REVIEW_ACTIONS } from './submissions.policy.js';
 import type { ReviewAction } from './submissions.policy.js';
@@ -48,7 +49,7 @@ export class SubmitAssignmentDto {
   @Length(1, TEXT_ANSWER_MAX_LENGTH)
   textAnswer?: string;
 
-  @ApiPropertyOptional({ maxLength: LINK_URL_MAX_LENGTH, example: 'https://docs.example.com/my-answer', description: '`https://` only; trimmed, blank = absent' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: LINK_URL_MAX_LENGTH, example: 'https://docs.example.com/my-answer', description: '`https://` only; trimmed, blank = absent' })
   @IsOptional()
   @Transform(nullableTextParam)
   @ValidateIf((_dto, value) => value !== null)
@@ -114,7 +115,7 @@ export class SubmissionAssignmentDto {
   @ApiProperty({ format: 'uuid' })
   classId: string;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
   @ApiProperty({ enum: ASSIGNMENT_STATUSES })

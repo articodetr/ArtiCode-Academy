@@ -5,6 +5,7 @@ import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { rawBoolean, rawNumber } from '../courses/courses.validation.js';
 import { InvoiceStatus, PaymentMethod, PaymentStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { IsCalendarDate, trimParam } from '../users/users.validation.js';
 import { FEE_PLAN_INSTALLMENTS_MAX, FEE_PLAN_LINES_MAX, FeePlanLineDto, MONEY_MAX } from './fee-plans.dto.js';
 import { INVOICE_STATUS_ACTIONS } from './invoices.calc.js';
@@ -91,7 +92,7 @@ export class CreateInvoiceDto {
 
 /** API-147 body (a draft only): absent = unchanged, `null` clears; lines and installments are replaced whole. */
 export class UpdateInvoiceDto {
-  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
   @ValidateIf((dto: UpdateInvoiceDto) => dto.enrollmentId !== undefined && dto.enrollmentId !== null)
   @IsUUID('all')
   enrollmentId?: string | null;
@@ -122,14 +123,14 @@ export class UpdateInvoiceDto {
   @Max(MONEY_MAX)
   discountAmount?: number;
 
-  @ApiPropertyOptional({ maxLength: REASON_MAX, nullable: true })
+  @ApiPropertyOptional({ type: String, maxLength: REASON_MAX, nullable: true })
   @ValidateIf((dto: UpdateInvoiceDto) => dto.discountReason !== undefined && dto.discountReason !== null)
   @Transform(trimParam)
   @IsString()
   @Length(1, REASON_MAX)
   discountReason?: string | null;
 
-  @ApiPropertyOptional({ maxLength: INVOICE_NOTES_MAX, nullable: true })
+  @ApiPropertyOptional({ type: String, maxLength: INVOICE_NOTES_MAX, nullable: true })
   @ValidateIf((dto: UpdateInvoiceDto) => dto.notes !== undefined && dto.notes !== null)
   @Transform(trimParam)
   @IsString()
@@ -256,7 +257,7 @@ export class InvoiceClassDto {
   @ApiProperty()
   code: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   name: LocalizedText;
 }
 
@@ -272,7 +273,7 @@ export class InvoicePlanRefDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   name: LocalizedText;
 }
 
@@ -362,7 +363,7 @@ export class InvoiceLineOutDto {
   @ApiProperty()
   sortOrder: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   description: LocalizedText;
 
   @ApiProperty()

@@ -86,14 +86,14 @@ export class CreateAcademyDto {
   @Type(() => PlatformLocalizedTextDto)
   name: PlatformLocalizedTextDto;
 
-  @ApiPropertyOptional({ maxLength: ORIGIN_MAX_LENGTH, example: 'https://al-noor.example.com', description: ORIGIN_DESCRIPTION })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: ORIGIN_MAX_LENGTH, example: 'https://al-noor.example.com', description: ORIGIN_DESCRIPTION })
   @IsOptional()
   @Transform(rawNullableOrigin)
   @ValidateIf((_dto, value) => value !== null)
   @IsAcademyOrigin()
   origin?: string | null;
 
-  @ApiPropertyOptional({ maxLength: EMAIL_MAX_LENGTH, example: 'owner@al-noor.example.com', description: 'Trimmed and lower-cased' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: EMAIL_MAX_LENGTH, example: 'owner@al-noor.example.com', description: 'Trimmed and lower-cased' })
   @IsOptional()
   @Transform(rawNullableEmail)
   @ValidateIf((_dto, value) => value !== null)
@@ -102,7 +102,7 @@ export class CreateAcademyDto {
   @IsEmail({}, { message: 'contactEmail must be an e-mail address' })
   contactEmail?: string | null;
 
-  @ApiPropertyOptional({ maxLength: NOTES_MAX_LENGTH, description: 'Internal notes of the platform team (plain text, trimmed)' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: NOTES_MAX_LENGTH, description: 'Internal notes of the platform team (plain text, trimmed)' })
   @IsOptional()
   @Transform(rawNullableText)
   @ValidateIf((_dto, value) => value !== null)
@@ -124,14 +124,14 @@ export class UpdateAcademyDto {
   @Type(() => PlatformLocalizedTextDto)
   name?: PlatformLocalizedTextDto;
 
-  @ApiPropertyOptional({ maxLength: ORIGIN_MAX_LENGTH, nullable: true, description: `${ORIGIN_DESCRIPTION}. \`null\` clears it — refused while the academy is active (\`422 origin_required\`)` })
+  @ApiPropertyOptional({ type: String, maxLength: ORIGIN_MAX_LENGTH, nullable: true, description: `${ORIGIN_DESCRIPTION}. \`null\` clears it — refused while the academy is active (\`422 origin_required\`)` })
   @IsOptional()
   @Transform(rawNullableOrigin)
   @ValidateIf((_dto, value) => value !== null)
   @IsAcademyOrigin()
   origin?: string | null;
 
-  @ApiPropertyOptional({ maxLength: EMAIL_MAX_LENGTH, nullable: true })
+  @ApiPropertyOptional({ type: String, maxLength: EMAIL_MAX_LENGTH, nullable: true })
   @IsOptional()
   @Transform(rawNullableEmail)
   @ValidateIf((_dto, value) => value !== null)
@@ -140,7 +140,7 @@ export class UpdateAcademyDto {
   @IsEmail({}, { message: 'contactEmail must be an e-mail address' })
   contactEmail?: string | null;
 
-  @ApiPropertyOptional({ maxLength: NOTES_MAX_LENGTH, nullable: true })
+  @ApiPropertyOptional({ type: String, maxLength: NOTES_MAX_LENGTH, nullable: true })
   @IsOptional()
   @Transform(rawNullableText)
   @ValidateIf((_dto, value) => value !== null)
@@ -158,7 +158,7 @@ export class ChangeAcademyStatusDto {
   @IsIn(ACADEMY_STATUS_ACTIONS)
   action: AcademyStatusAction;
 
-  @ApiPropertyOptional({ maxLength: REASON_MAX_LENGTH, description: 'Why — kept in the audit event (plain text, trimmed)' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: REASON_MAX_LENGTH, description: 'Why — kept in the audit event (plain text, trimmed)' })
   @IsOptional()
   @Transform(rawNullableText)
   @ValidateIf((_dto, value) => value !== null)
@@ -212,10 +212,10 @@ export class AcademyCurrentSubscriptionDto {
   @ApiProperty({ description: 'ISO 8601' })
   startsAt: string;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   endsAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   trialEndsAt: string | null;
 }
 
@@ -230,28 +230,28 @@ export class AcademyLatestHealthCheckDto {
   @ApiProperty({ enum: Object.values(ProbeOutcome) })
   outcome: ProbeOutcome;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: 'integer', nullable: true })
   httpStatus: number | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: 'integer', nullable: true })
   latencyMs: number | null;
 
-  @ApiProperty({ nullable: true, description: 'The academy API version (its GET /api/health)' })
+  @ApiProperty({ type: String, nullable: true, description: 'The academy API version (its GET /api/health)' })
   apiVersion: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   environment: string | null;
 
-  @ApiProperty({ nullable: true, description: '`checks.schema.status` of the academy readiness answer' })
+  @ApiProperty({ type: String, nullable: true, description: '`checks.schema.status` of the academy readiness answer' })
   schemaStatus: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Newest migration the academy build expects' })
+  @ApiProperty({ type: String, nullable: true, description: 'Newest migration the academy build expects' })
   schemaExpected: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Newest migration applied to the academy database' })
+  @ApiProperty({ type: String, nullable: true, description: 'Newest migration applied to the academy database' })
   schemaApplied: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   reason: string | null;
 }
 
@@ -262,19 +262,19 @@ export class AcademyItemDto {
   @ApiProperty({ example: 'al-noor' })
   slug: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'أكاديمية النور', en: 'Al-Noor Academy' } })
+  @ApiProperty({ type: () => PlatformLocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'أكاديمية النور', en: 'Al-Noor Academy' } })
   name: LocalizedText;
 
   @ApiProperty({ enum: ACADEMY_STATUSES })
   status: AcademyStatus;
 
-  @ApiProperty({ nullable: true, example: 'https://al-noor.example.com' })
+  @ApiProperty({ type: String, nullable: true, example: 'https://al-noor.example.com' })
   origin: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   contactEmail: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Hostname of the primary domain' })
+  @ApiProperty({ type: String, nullable: true, description: 'Hostname of the primary domain' })
   primaryDomain: string | null;
 
   @ApiProperty({ type: AcademyCurrentSubscriptionDto, nullable: true, description: 'The trial | active | past_due subscription' })
@@ -294,7 +294,7 @@ export class AcademyListDto {
   @ApiProperty({ type: [AcademyItemDto] })
   items: AcademyItemDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }
 
@@ -311,7 +311,7 @@ export class DomainDto {
   @ApiProperty()
   isPrimary: boolean;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601; ownership is not verified in v1 (D-R102), so always null' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601; ownership is not verified in v1 (D-R102), so always null' })
   verifiedAt: string | null;
 
   @ApiProperty({ description: 'ISO 8601' })
@@ -327,10 +327,10 @@ export class PlatformUserRefDto {
 }
 
 export class AcademyDetailDto extends AcademyItemDto {
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   notes: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601; set exactly while archived' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601; set exactly while archived' })
   archivedAt: string | null;
 
   @ApiProperty({ type: PlatformUserRefDto, nullable: true, description: 'The platform user who registered it (null once that account is deleted)' })

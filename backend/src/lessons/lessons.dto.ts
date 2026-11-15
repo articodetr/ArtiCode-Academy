@@ -240,7 +240,7 @@ export class LessonSyllabusItemDto {
   @ApiProperty({ example: 1 })
   sortOrder: number;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 }
 
@@ -269,10 +269,10 @@ export class LessonDto {
   @ApiProperty({ type: TimetableClassDto, description: 'The class with its course' })
   class: TimetableClassDto;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
-  @ApiProperty({ type: Object, nullable: true, description: 'Localized description or null' })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized description or null' })
   description: LocalizedText | null;
 
   @ApiProperty({ enum: DELIVERY_MODES })
@@ -325,6 +325,6 @@ export class LessonListDto {
   @ApiProperty({ type: [LessonDto], description: 'By start time, then id' })
   items: LessonDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }

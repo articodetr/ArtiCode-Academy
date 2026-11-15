@@ -4,6 +4,7 @@ import { IsInt, IsOptional, IsString, IsUUID, Max, Min, ValidateIf } from 'class
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { MyClassCourseDto, MyClassStudentDto, MyClassTeacherDto } from '../enrollments/my-classes.dto.js';
 import { ClassStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { IsCalendarDate, trimParam } from '../users/users.validation.js';
 import { ScheduleRoomDto, ScheduleSlotDto } from './class-schedule.dto.js';
 import { NO_BRANCH_FILTER } from './timetable.policy.js';
@@ -75,7 +76,7 @@ export class TimetableClassDto {
   @ApiProperty({ example: 'PY-101-A' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 
   @ApiProperty({ enum: CLASS_STATUSES })

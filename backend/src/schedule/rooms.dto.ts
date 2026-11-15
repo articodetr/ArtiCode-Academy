@@ -127,7 +127,7 @@ export class RoomBranchDto {
   @ApiProperty({ example: 'MAIN' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الفرع الرئيسي' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الفرع الرئيسي' } })
   name: LocalizedText;
 }
 
@@ -138,7 +138,7 @@ export class RoomDto {
   @ApiProperty({ example: 'LAB-1' })
   code: string;
 
-  @ApiProperty({ type: Object, nullable: true, description: 'Localized name `{ ar, en?, tr? }`; null = the code alone', example: { ar: 'مختبر 1' } })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized name `{ ar, en?, tr? }`; null = the code alone', example: { ar: 'مختبر 1' } })
   name: LocalizedText | null;
 
   @ApiProperty({ type: Number, nullable: true, description: 'Seats, when known' })

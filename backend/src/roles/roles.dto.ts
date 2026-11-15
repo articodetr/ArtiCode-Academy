@@ -34,7 +34,7 @@ export class LocalizedTextDto {
   @Length(1, LOCALIZED_TEXT_MAX_LENGTH)
   ar: string;
 
-  @ApiPropertyOptional({ maxLength: LOCALIZED_TEXT_MAX_LENGTH, example: 'Librarian' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: LOCALIZED_TEXT_MAX_LENGTH, example: 'Librarian' })
   @IsOptional()
   @Transform(nullableTextParam)
   @ValidateIf((_dto, value) => value !== null)
@@ -42,7 +42,7 @@ export class LocalizedTextDto {
   @Length(1, LOCALIZED_TEXT_MAX_LENGTH)
   en?: string | null;
 
-  @ApiPropertyOptional({ maxLength: LOCALIZED_TEXT_MAX_LENGTH, example: 'Kütüphaneci' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: LOCALIZED_TEXT_MAX_LENGTH, example: 'Kütüphaneci' })
   @IsOptional()
   @Transform(nullableTextParam)
   @ValidateIf((_dto, value) => value !== null)
@@ -141,10 +141,10 @@ export class RoleDto {
   @ApiProperty({ example: 'teacher' })
   key: string;
 
-  @ApiProperty({ description: 'Localized label `{ ar, en?, tr? }`', example: { ar: 'معلم', en: 'Teacher' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized label `{ ar, en?, tr? }`', example: { ar: 'معلم', en: 'Teacher' } })
   label: LocalizedText;
 
-  @ApiProperty({ nullable: true, description: 'Localized description `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized description `{ ar, en?, tr? }`' })
   description: LocalizedText | null;
 
   @ApiProperty({ description: 'Seeded system role: cannot be deleted; `academy_admin` cannot be changed at all' })
@@ -175,7 +175,7 @@ export class PermissionDto {
   @ApiProperty({ example: 'users.read' })
   key: string;
 
-  @ApiProperty({ nullable: true, description: 'Localized description `{ ar, en? }`', example: { ar: 'عرض المستخدمين', en: 'View users' } })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized description `{ ar, en? }`', example: { ar: 'عرض المستخدمين', en: 'View users' } })
   description: LocalizedText | null;
 }
 

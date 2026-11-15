@@ -4,6 +4,7 @@ import type { LocalizedText } from '../authorization/localized-text.js';
 import { MyClassStudentDto } from '../enrollments/my-classes.dto.js';
 import type { MyClassRelation } from '../enrollments/my-classes.policy.js';
 import { EnrollmentStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import type { CellStatus, ComponentKind } from './gradebook.calc.js';
 
@@ -31,7 +32,7 @@ export class MyGradeComponentDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title' })
   title: LocalizedText;
 
   @ApiProperty({ type: Number, nullable: true, description: 'Its weight in the final grade; null or 0 = not counted (D-R43)' })
@@ -57,7 +58,7 @@ export class MyFinalGradeDto {
   @ApiProperty({ example: 87.5 })
   percent: number;
 
-  @ApiProperty({ description: 'The grade scheme band at finalization (e.g. «جيد جداً»)' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'The grade scheme band at finalization (e.g. «جيد جداً»)' })
   label: LocalizedText;
 
   @ApiProperty({ type: String, nullable: true })

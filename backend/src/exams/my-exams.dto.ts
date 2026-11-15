@@ -1,12 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
-import { AssignmentLessonDto } from '../assignments/assignments.dto.js';
+import { AssignmentInstructionsDto, AssignmentLessonDto } from '../assignments/assignments.dto.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { MyClassStudentDto } from '../enrollments/my-classes.dto.js';
 import type { MyClassRelation } from '../enrollments/my-classes.policy.js';
 import { ExamResultStatus, ExamType } from '../generated/prisma/client.js';
 import { IsInstant } from '../lessons/lessons.time.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { EXAMS_PAGE_DEFAULT, EXAMS_PAGE_MAX } from './exams.dto.js';
 import { MY_EXAM_STATUSES } from './my-exams.policy.js';
@@ -77,10 +78,10 @@ export class MyExamItemDto {
   @ApiProperty({ format: 'uuid', description: 'The exam (repeated when the caller owns it through several students)' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
-  @ApiProperty({ type: Object, nullable: true })
+  @ApiProperty({ type: () => AssignmentInstructionsDto, nullable: true })
   description: LocalizedText | null;
 
   @ApiProperty({ enum: EXAM_TYPES })
@@ -127,6 +128,6 @@ export class MyExamListDto {
   @ApiProperty({ type: [MyExamItemDto], description: 'By exam date (undated last), then id; inside one exam `self` before `child`, then the student’s id' })
   items: MyExamItemDto[];
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   nextCursor: string | null;
 }

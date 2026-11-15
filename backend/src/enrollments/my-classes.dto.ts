@@ -3,6 +3,7 @@ import { IsIn, IsOptional } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { ClassStatus } from '../generated/prisma/client.js';
 import type { EnrollmentStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { ENROLLMENT_STATUSES } from './enrollments.dto.js';
 import { MY_CLASSES_DEFAULT_STATUSES } from './my-classes.policy.js';
 import type { MyClassRelation } from './my-classes.policy.js';
@@ -28,7 +29,7 @@ export class MyClassStudentDto {
   @ApiProperty()
   fullName: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   displayName: string | null;
 }
 
@@ -39,7 +40,7 @@ export class MyClassCourseDto {
   @ApiProperty({ example: 'PY-101' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 }
 
@@ -48,7 +49,7 @@ export class MyClassTeacherDto {
   @ApiProperty()
   fullName: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   displayName: string | null;
 }
 
@@ -59,16 +60,16 @@ export class MyClassSummaryDto {
   @ApiProperty({ example: 'PY-101-A' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 
   @ApiProperty({ enum: CLASS_STATUSES })
   status: ClassStatus;
 
-  @ApiProperty({ nullable: true, example: '2026-11-10', description: 'YYYY-MM-DD' })
+  @ApiProperty({ type: String, nullable: true, example: '2026-11-10', description: 'YYYY-MM-DD' })
   startsOn: string | null;
 
-  @ApiProperty({ nullable: true, example: '2026-12-20', description: 'YYYY-MM-DD' })
+  @ApiProperty({ type: String, nullable: true, example: '2026-12-20', description: 'YYYY-MM-DD' })
   endsOn: string | null;
 
   @ApiProperty({ type: MyClassCourseDto })
@@ -88,10 +89,10 @@ export class MyClassItemDto {
   @ApiProperty({ description: 'ISO 8601' })
   enrolledAt: string;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   completedAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601 — set while the enrollment is `withdrawn` (the reason is never shown here)' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601 — set while the enrollment is `withdrawn` (the reason is never shown here)' })
   withdrawnAt: string | null;
 
   @ApiProperty({ enum: RELATIONS, description: '`self` = the caller is the student; `child` = a student linked to the caller as guardian' })

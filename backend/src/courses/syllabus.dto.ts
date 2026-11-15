@@ -31,7 +31,7 @@ export class SyllabusItemInputDto {
   @Type(() => LocalizedTextDto)
   description?: LocalizedTextDto | null;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 1, maximum: SYLLABUS_MINUTES_MAX, example: 45, description: 'Absent or null = no estimate; a JSON number' })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 1, maximum: SYLLABUS_MINUTES_MAX, example: 45, description: 'Absent or null = no estimate; a JSON number' })
   @IsOptional()
   @Transform(rawNumber)
   @ValidateIf((_dto, value) => value !== null)
@@ -62,13 +62,13 @@ export class SyllabusItemDto {
   @ApiProperty({ description: 'Position (0 first)' })
   sortOrder: number;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true })
   description: LocalizedText | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: 'integer', nullable: true })
   estimatedMinutes: number | null;
 
   @ApiProperty({ description: 'ISO 8601' })

@@ -19,7 +19,7 @@ export class PlatformLocalizedTextDto {
   @HasCharacters(1, LOCALIZED_NAME_MAX_LENGTH)
   ar: string;
 
-  @ApiPropertyOptional({ maxLength: LOCALIZED_NAME_MAX_LENGTH, nullable: true, example: 'Al-Noor Academy' })
+  @ApiPropertyOptional({ type: String, maxLength: LOCALIZED_NAME_MAX_LENGTH, nullable: true, example: 'Al-Noor Academy' })
   @IsOptional()
   @Transform(rawNullableText)
   @ValidateIf((_dto, value) => value !== null)
@@ -27,7 +27,7 @@ export class PlatformLocalizedTextDto {
   @HasCharacters(1, LOCALIZED_NAME_MAX_LENGTH)
   en?: string | null;
 
-  @ApiPropertyOptional({ maxLength: LOCALIZED_NAME_MAX_LENGTH, nullable: true })
+  @ApiPropertyOptional({ type: String, maxLength: LOCALIZED_NAME_MAX_LENGTH, nullable: true })
   @IsOptional()
   @Transform(rawNullableText)
   @ValidateIf((_dto, value) => value !== null)
