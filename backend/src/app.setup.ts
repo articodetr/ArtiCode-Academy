@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import type { IncomingMessage } from 'node:http';
+import { rejectNulCharacters } from './common/nul-character.js';
 import { PACKAGE_VERSION } from './common/package-info.js';
 import type { Env } from './config/env.schema.js';
 
@@ -106,8 +107,9 @@ export function securityHeaders(nodeEnv: Env['NODE_ENV']): ReturnType<typeof hel
 
 /**
  * Applies the cross-cutting HTTP setup (security headers, prefix, JSON-only
- * bodies, CORS, validation, Swagger). Shared by main.ts and the e2e tests so
- * both exercise the same configuration; the app must be created with
+ * bodies, CORS, no NUL character, validation, Swagger). Shared by main.ts,
+ * the platform's main.ts and the e2e tests so
+ * they all exercise the same configuration; the app must be created with
  * APP_CREATE_OPTIONS. `options` only names the OpenAPI document (KI-081).
  */
 export function configureApp(app: NestExpressApplication, options: ConfigureAppOptions = {}): AppRuntimeInfo {
@@ -142,6 +144,11 @@ export function configureApp(app: NestExpressApplication, options: ConfigureAppO
     origin: env.get('CORS_ORIGIN', { infer: true }),
     credentials: true,
   });
+  // KI-078: a NUL character (U+0000) in any string or key of the parsed JSON
+  // body or of the query string is `400 nul_character { location }` here —
+  // after every JSON parser (LARGE_JSON_ROUTES included) and after CORS, so a
+  // browser can read the answer, and before routing, the guards and the pipes.
+  app.use(rejectNulCharacters);
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

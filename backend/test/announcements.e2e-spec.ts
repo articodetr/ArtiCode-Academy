@@ -653,8 +653,6 @@ describe.skipIf(!available)('MOD-12 announcements (e2e, TEST-178)', () => {
       message(audience, { body: true }),
       message(audience, { title: null }),
       message(audience, { title: ['a title'] }),
-      message(audience, { title: `nul\u0000byte` }),
-      message(audience, { body: `nul\u0000byte` }),
       message(audience, { sendEmail: 'yes' }),
       message(audience, { sendEmail: 1 }),
       message(audience, { scheduledAt: '2030-01-01T08:00:00Z' }), // no scheduling
@@ -677,6 +675,12 @@ describe.skipIf(!available)('MOD-12 announcements (e2e, TEST-178)', () => {
       expect(res.status, JSON.stringify(body).slice(0, 160)).toBe(400);
       // An ordinary validation error: no `code` of the dictionary.
       expect(res.body.code, JSON.stringify(body).slice(0, 160)).toBeUndefined();
+    }
+    // A NUL in the title or the body never reaches the DTO since KI-078: configureApp() answers `nul_character` first (TEST-216).
+    for (const body of [message(audience, { title: `nul\u0000byte` }), message(audience, { body: `nul\u0000byte` })]) {
+      const res = await post('manager', body);
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ statusCode: 400, code: 'nul_character', location: 'body' });
     }
     expect(await since(m)).toEqual(NOTHING);
 
