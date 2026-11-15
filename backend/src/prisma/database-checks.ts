@@ -3,9 +3,15 @@
 // No Prisma client import: each service runs its own queries on its own
 // generated client and hands the outcome to these helpers.
 
+/**
+ * The outcome of a readiness round trip. On failure `error` is the driver's
+ * raw message — for the server log only, never for a response (KI-084: it can
+ * name the host or the database role); `timedOut` says whether
+ * `withTimeout()` gave up first.
+ */
 export type DatabasePing =
   | { ok: true; latencyMs: number }
-  | { ok: false; configured: boolean; error?: string };
+  | { ok: false; configured: boolean; error?: string; timedOut?: boolean };
 
 /**
  * The migrations the database has finished and not rolled back, for the
@@ -14,7 +20,7 @@ export type DatabasePing =
  */
 export type AppliedMigrations =
   | { ok: true; names: string[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; timedOut?: boolean };
 
 /** PostgreSQL `undefined_table`. */
 const UNDEFINED_TABLE = '42P01';
@@ -57,10 +63,22 @@ export function errorMessageOf(error: unknown): string {
 /** Upper bound for a connection attempt or the readiness round trip. */
 export const DB_TIMEOUT_MS = 5000;
 
+/** The rejection of `withTimeout()`, told apart from a driver error by `isTimeout()`. */
+export class DatabaseTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`timed out after ${ms} ms`);
+    this.name = 'DatabaseTimeoutError';
+  }
+}
+
+export function isTimeout(error: unknown): boolean {
+  return error instanceof DatabaseTimeoutError;
+}
+
 export function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
+    timer = setTimeout(() => reject(new DatabaseTimeoutError(ms)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }

@@ -7,6 +7,8 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AppliedMigrations } from '../prisma/prisma.service.js';
+import { schemaErrorCode } from './readiness-errors.js';
+import type { SchemaErrorCode } from './readiness-errors.js';
 
 /** Injection token of the migrations folder (tests point it elsewhere). */
 export const MIGRATIONS_DIR = Symbol('MIGRATIONS_DIR');
@@ -46,7 +48,8 @@ export interface SchemaCheck {
   /** Newest finished, not rolled-back migration of the database; null when none (or not read). */
   applied: string | null;
   /** Driver message when the migrations table could not be read. */
-  error?: string;
+  /** A fixed code, never the driver's message (KI-084). */
+  error?: SchemaErrorCode;
 }
 
 /** The greatest name (Prisma applies migrations in folder-name order); null for none. */
@@ -88,7 +91,7 @@ export function schemaCheck(
   if (expected === null || applied === null)
     return { status: 'unchecked', expected, applied: null };
   if (!applied.ok)
-    return { status: 'error', expected, applied: null, error: applied.error };
+    return { status: 'error', expected, applied: null, error: schemaErrorCode(applied) };
   return {
     status: schemaStatus(expected, applied.names),
     expected,

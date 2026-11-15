@@ -86,7 +86,7 @@ describe('HealthService', () => {
     });
   });
 
-  it('readiness() is not ready when the database is down, keeping the driver error, and does not read the migrations table', async () => {
+  it('readiness() is not ready when the database is down, with a fixed code instead of the driver error (KI-084), and does not read the migrations table', async () => {
     const { service, appliedMigrations } = await buildService({
       ok: false,
       configured: true,
@@ -98,8 +98,9 @@ describe('HealthService', () => {
     expect(report.reason).toBe('database_unavailable');
     expect(report.checks.database).toEqual({
       status: 'down',
-      error: 'connect ECONNREFUSED 127.0.0.1:5432',
+      error: 'database_unreachable',
     });
+    expect(JSON.stringify(report)).not.toContain('127.0.0.1');
     expect(report.checks.schema).toEqual({
       status: 'unchecked',
       expected: NEW,
@@ -161,7 +162,7 @@ describe('HealthService', () => {
   it('readiness() is not ready (schema_unverified) when the migrations table cannot be read', async () => {
     const { service } = await buildService(
       { ok: true, latencyMs: 2 },
-      { ok: false, error: 'timed out after 5000 ms' },
+      { ok: false, error: 'timed out after 5000 ms', timedOut: true },
     );
     const report = await service.readiness();
     expect(report.status).toBe('not_ready');
@@ -170,7 +171,7 @@ describe('HealthService', () => {
       status: 'error',
       expected: NEW,
       applied: null,
-      error: 'timed out after 5000 ms',
+      error: 'migrations_timeout',
     });
   });
 

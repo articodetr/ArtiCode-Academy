@@ -99,7 +99,7 @@ describe('schemaCheck', () => {
     });
   });
 
-  it('is an error with the driver message when the table could not be read', () => {
+  it('is an error with a fixed code, never the driver message, when the table could not be read (KI-084)', () => {
     expect(
       schemaCheck(NEW, {
         ok: false,
@@ -109,8 +109,11 @@ describe('schemaCheck', () => {
       status: 'error',
       expected: NEW,
       applied: null,
-      error: 'permission denied for table _prisma_migrations',
+      error: 'migrations_unreadable',
     });
+    expect(
+      schemaCheck(NEW, { ok: false, error: 'timed out after 5000 ms', timedOut: true }).error,
+    ).toBe('migrations_timeout');
   });
 });
 

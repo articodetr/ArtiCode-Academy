@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PACKAGE_VERSION, SERVICE_NAME } from '../common/package-info.js';
 import type { Env } from '../config/env.schema.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ReadinessFailureLog, databaseErrorCode } from './readiness-errors.js';
 import {
   DatabaseCheckDto,
   HealthResponseDto,
@@ -20,6 +21,8 @@ export class HealthService {
   private readonly logger = new Logger(HealthService.name);
   /** The build's newest migration, read once: the shipped folder never changes. */
   private shippedMigration?: Promise<string | null>;
+  /** The driver's message of a failing check goes here, never into the answer (KI-084). */
+  private readonly failures = new ReadinessFailureLog(this.logger);
 
   constructor(
     private readonly config: ConfigService<Env, true>,
@@ -45,10 +48,11 @@ export class HealthService {
    */
   async readiness(): Promise<ReadinessResponseDto> {
     const ping = await this.prisma.ping();
+    this.failures.record('database', !ping.ok && ping.configured ? (ping.error ?? 'unknown error') : null);
     const database: DatabaseCheckDto = ping.ok
       ? { status: 'up', latencyMs: ping.latencyMs }
       : ping.configured
-        ? { status: 'down', error: ping.error }
+        ? { status: 'down', error: databaseErrorCode(ping) }
         : { status: 'not_configured' };
 
     const expected = await this.expectedMigration();
@@ -58,6 +62,7 @@ export class HealthService {
       expected !== null && databaseUp
         ? await this.prisma.appliedMigrations()
         : null;
+    if (applied !== null) this.failures.record('schema', applied.ok ? null : applied.error);
     const schema = schemaCheck(expected, applied);
     const reason = readinessReason(databaseUp, schema.status);
 

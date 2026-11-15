@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NODE_ENVS } from '../config/env.schema.js';
+import { DATABASE_ERROR_CODES, SCHEMA_ERROR_CODES } from './readiness-errors.js';
+import type { DatabaseErrorCode, SchemaErrorCode } from './readiness-errors.js';
 import { READINESS_REASONS, SCHEMA_STATUSES } from './schema-version.js';
 import type { ReadinessReason, SchemaStatus } from './schema-version.js';
 
@@ -46,10 +48,12 @@ export class DatabaseCheckDto {
   latencyMs?: number;
 
   @ApiPropertyOptional({
-    example: 'connect ECONNREFUSED 127.0.0.1:5432',
-    description: 'Driver error message (when down)',
+    enum: DATABASE_ERROR_CODES,
+    example: 'database_unreachable',
+    description:
+      'Why the database is down (when down): database_timeout = no answer within 5 s; database_unreachable = the connection or `SELECT 1` failed. A fixed code — the driver message goes to the server log only (KI-084)',
   })
-  error?: string;
+  error?: DatabaseErrorCode;
 }
 
 export class SchemaCheckDto {
@@ -80,10 +84,12 @@ export class SchemaCheckDto {
   applied: string | null;
 
   @ApiPropertyOptional({
-    example: 'permission denied for table _prisma_migrations',
-    description: 'Driver error message (when error)',
+    enum: SCHEMA_ERROR_CODES,
+    example: 'migrations_unreadable',
+    description:
+      'Why `_prisma_migrations` could not be read (when error): migrations_timeout = no answer within 5 s; migrations_unreadable = the query failed. A fixed code — the driver message goes to the server log only (KI-084)',
   })
-  error?: string;
+  error?: SchemaErrorCode;
 }
 
 export class ReadinessChecksDto {
