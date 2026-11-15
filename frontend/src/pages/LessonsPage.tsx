@@ -21,7 +21,6 @@ import { LESSON_STATUSES } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import { useAuth } from '../auth/auth-context'
 import { TeacherPicker } from '../classes/ClassPickers'
-import { useDockedPanel } from '../common/useDockedPanel'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -69,10 +68,8 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
   const list = useLessonsList(defaults, dayZone)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  // Redesign (2026-11-14): on a wide screen a lesson opens in a side panel beside the table, not over it.
-  const { docked, dockedIn, panelRef, wide, onUnsavedChange, open: openLesson, layoutClassName } = useDockedPanel(selectedId, setSelectedId)
 
-  const allColumns: TableProps<Lesson>['columns'] = [
+  const columns: TableProps<Lesson>['columns'] = [
     {
       title: t('lessons.columns.when'),
       key: 'when',
@@ -135,7 +132,7 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
           size="small"
           onClick={(event) => {
             event.stopPropagation()
-            openLesson(row.id)
+            setSelectedId(row.id)
           }}
           aria-label={`${t('common.view')}: ${lessonTitle(row, language)}`}
         >
@@ -144,8 +141,6 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
       ),
     },
   ]
-  // While docked the table keeps the columns that identify a lesson; the panel shows the rest.
-  const columns = docked ? allColumns.filter((column) => ['when', 'lesson', 'class', 'status'].includes(String(column.key))) : allColumns
 
   const failure = list.error ? describeLessonsFailure(list.error) : null
   const filtered = hasActiveLessonFilters(list.filters, defaults)
@@ -180,8 +175,7 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
         />
       ) : null}
 
-      <div className={layoutClassName}>
-      <Card className="list-with-panel__main">
+      <Card>
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>
           {canPickClass ? (
             <ClassPicker
@@ -251,8 +245,7 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
           pagination={false}
           scroll={{ x: 'max-content' }}
           locale={{ emptyText }}
-          rowClassName={(row) => (row.id === selectedId ? 'list-row--open' : '')}
-          onRow={(row) => ({ onClick: () => openLesson(row.id), style: { cursor: 'pointer' } })}
+          onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
         />
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
@@ -276,18 +269,8 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
           </Space>
         </Flex>
       </Card>
-      {wide ? <aside ref={panelRef} className="list-panel" aria-hidden={!docked} /> : null}
-      </div>
 
-      <LessonDrawer
-        key={docked ? selectedId : 'overlay'}
-        lessonId={selectedId}
-        onClose={() => setSelectedId(null)}
-        onUpdated={list.replaceItem}
-        onDeleted={list.removeItem}
-        dockedIn={dockedIn}
-        onUnsavedChange={onUnsavedChange}
-      />
+      <LessonDrawer lessonId={selectedId} onClose={() => setSelectedId(null)} onUpdated={list.replaceItem} onDeleted={list.removeItem} />
 
       <CreateLessonModal
         open={creating}

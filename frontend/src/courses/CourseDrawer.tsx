@@ -22,7 +22,6 @@ import type { Course } from '../api/courses'
 import type { Level } from '../api/levels'
 import { useAuth } from '../auth/auth-context'
 import { NavigationBlocker } from '../common/NavigationBlocker'
-import { dockedDrawerProps } from '../common/useDockedPanel'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -58,16 +57,9 @@ interface CourseDrawerProps {
   onUpdated: (course: Course) => void
   /** A draft was deleted. */
   onDeleted: (courseId: string) => void
-  /**
-   * Redesign (2026-11-14): the element of a side panel beside the list to open in, instead of over the page —
-   * no mask, the full width and height of the panel. Absent (phones, tests) = the usual overlay drawer.
-   */
-  dockedIn?: HTMLElement | null
-  /** Told whenever the drawer starts or stops holding unsaved work, so the list can ask before switching course. */
-  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted, dockedIn, onUnsavedChange }: CourseDrawerProps) {
+export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }: CourseDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -90,11 +82,6 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted, 
   }, [])
   // KI-054: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
   const unsaved = (editing && unsavedParts.details) || unsavedParts.syllabus
-
-  // The list asks before it switches to another course while this one holds unsaved work (docked panel).
-  useEffect(() => {
-    onUnsavedChange?.(unsaved)
-  }, [unsaved, onUnsavedChange])
 
   useEffect(() => {
     if (!courseId) return
@@ -221,8 +208,9 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted, 
       // KI-054: unsaved work turns off the Escape key and the mask click; an open
       // Select or Dropdown still closes on Escape (it sits on top of the drawer).
       keyboard={!unsaved}
-      {...dockedDrawerProps(dockedIn, unsaved, 'large')}
+      mask={{ closable: !unsaved }}
       title={name}
+      size="large"
       destroyOnHidden
       extra={
         canManage && course && !editing ? (

@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
-import { InvitationPage } from '../account/InvitationPage'
-import { ResetPasswordPage } from '../account/ResetPasswordPage'
 import { VerifyEmailPage } from '../account/VerifyEmailPage'
 import { ForgotPasswordPage } from '../account/ForgotPasswordPage'
+import { InvitationPage } from '../account/InvitationPage'
+import { ResetPasswordPage } from '../account/ResetPasswordPage'
 import { RequireAccess, RequireAuth } from '../auth/RequireAuth'
 import { AppLayout } from '../layout/AppLayout'
 import { AssignmentsPage } from '../pages/AssignmentsPage'
@@ -43,11 +43,11 @@ const router = createBrowserRouter([
   // Public token pages (MOD-03-T12): the one-time link is the only credential.
   { path: '/invite/:token', element: <InvitationPage /> },
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
-  // Redesign (2026-11-14): e-mail confirmation (API-166 — the link the server e-mails is <APP_PUBLIC_URL>/verify-email/<token>)
-  // and the self-service reset request (API-021 — answers reset_disabled until a mail provider is set up).
+  // Public certificate verification (J-F51 — API-134, D-R56): no sign-in; the printed code is the only input.
+  // E-mail confirmation (API-166 — the link the server e-mails is <APP_PUBLIC_URL>/verify-email/<token>) and the
+  // self-service reset request (API-021).
   { path: '/verify-email/:token', element: <VerifyEmailPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
-  // Public certificate verification (J-F51 — API-134, D-R56): no sign-in; the printed code is the only input.
   { path: '/verify', element: <VerifyCertificatePage /> },
   { path: '/verify/:code', element: <VerifyCertificatePage /> },
   // Certificate print pages (J-F51 — D-R50): signed in, outside the layout so neither the screen nor the paper has the
@@ -78,9 +78,9 @@ const router = createBrowserRouter([
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },
+      { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },
       // MOD-12 finance notifications link to /my-invoices (notifications.events.ts); «my invoices» lives on /payments.
       { path: 'my-invoices', element: <Navigate to="/payments" replace /> },
-      { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },
       { path: 'reports', element: guarded('reports', <ReportsPage />) },
       { path: 'audit-logs', element: guarded('audit', <AuditLogPage />) }, // `audit.read` (MOD-03-T15)
       { path: 'settings', element: guarded('settings', <SettingsPage />) },

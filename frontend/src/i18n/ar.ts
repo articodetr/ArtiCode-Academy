@@ -1,5 +1,7 @@
 export const ar = {
   common: {
+    demoMode: "بيانات تجريبية",
+    demoBanner: "شاشات الوحدات تعرض بيانات تجريبية محلية حتى تُربط كل وحدة بالخادم. تسجيل الدخول وصفحة الحساب وصفحة المستخدمين وبطاقة \"الاتصال بالخادم\" هي الأجزاء المرتبطة بالخادم فعلياً.",
     pageSize: 'عدد العناصر في الصفحة',
     sortOrder: 'الترتيب',
     appName: 'ArtiCode Academy',
@@ -306,6 +308,12 @@ export const ar = {
     },
   },
   dashboard: {
+    students: "الطلاب",
+    teachersCount: "المعلمون",
+    courses: "الدورات المنشورة",
+    pendingPayments: "مدفوعات معلّقة",
+    upcomingLessons: "الدروس القادمة",
+    recentNotifications: "آخر الإشعارات",
     welcome: 'مرحباً، {{name}}',
     subtitle: 'نظرة عامة على نشاط الأكاديمية',
     // Redesign (2026-11-14): the day timeline and its views.

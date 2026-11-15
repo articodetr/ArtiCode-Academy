@@ -17,7 +17,7 @@ import type { ReportTab } from '../reports/reports.tabs'
 import { visibleReportTabs } from '../reports/reports.tabs'
 import { MAX_PERIOD_DAYS, defaultPeriod, periodProblem } from '../reports/reports.period'
 import { calendarDateIn } from '../timetable/timetable.dates'
-import '../dashboard/dashboard.css'
+import '../dashboard/learner.css'
 import '../reports/reports.css'
 
 export function ReportsPage() {
