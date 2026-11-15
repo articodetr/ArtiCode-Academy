@@ -25,6 +25,8 @@ const STUDENT: Partial<AuthUser> = {
 function renderProfile(user: Partial<AuthUser>, handler: FetchHandler) {
   const calls: string[] = []
   mockFetch((url, init) => {
+    // The devices card (CH-0265) reads its own list; these tests look at the e-mail requests only.
+    if (url === '/api/auth/sessions') return jsonResponse(200, { items: [] })
     calls.push(`${init?.method ?? 'GET'} ${url}`)
     return handler(url, init)
   })
