@@ -3,6 +3,7 @@ import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Row, Space, T
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
+import { ProfileSessions } from '../profile/ProfileSessions'
 import { changePassword } from '../api/auth'
 import { useAuth } from '../auth/auth-context'
 import { EmailVerificationAction } from '../account/EmailVerificationAction'
@@ -166,6 +167,11 @@ export function ProfilePage() {
             <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
               {t('profile.passwordHint')}
             </Typography.Paragraph>
+          </Card>
+
+          {/* The devices where this account is signed in (API-201/202, CH-0272). */}
+          <Card title={t('profile.sessions.title')} style={{ marginTop: 16 }}>
+            <ProfileSessions />
           </Card>
         </Col>
       </Row>
