@@ -3862,6 +3862,7 @@ export const ar = {
     backHome: 'العودة إلى لوحة التحكم',
   },
   server: {
+    dbErrors: { database_timeout: 'قاعدة البيانات لا تستجيب في الوقت المحدد', database_unreachable: 'تعذّر الوصول إلى قاعدة البيانات' },
     title: 'الاتصال بالخادم',
     checking: 'جارٍ الفحص...',
     online: 'متصل',
