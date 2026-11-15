@@ -22,6 +22,8 @@ export const AUTH_ERROR_CODES = [
   'password_weak',
   'rate_limited',
   'origin_forbidden',
+  // MOD-01-H06: DELETE /api/auth/sessions/:id (API-202) on a session that is not the caller's or has no live token.
+  'session_not_found',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
@@ -113,4 +115,6 @@ export const authError = {
       'origin_forbidden',
       'The request origin is not allowed to perform state-changing requests',
     ),
+  sessionNotFound: () =>
+    new AuthHttpException(HttpStatus.NOT_FOUND, 'session_not_found', 'No active session with this id'),
 };
