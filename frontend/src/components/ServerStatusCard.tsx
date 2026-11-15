@@ -77,8 +77,9 @@ export function ServerStatusCard() {
                     <Typography.Text type="secondary">({database.latencyMs} ms)</Typography.Text>
                   ) : null}
                   {database?.error ? (
-                    <Typography.Text type="secondary" code>
-                      {database.error}
+                    // The server answers a fixed code since CH-0225 (KI-084): database_timeout | database_unreachable.
+                    <Typography.Text type="secondary">
+                      {t(`server.dbErrors.${database.error}`, { defaultValue: database.error })}
                     </Typography.Text>
                   ) : null}
                 </Space>
