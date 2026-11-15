@@ -7,20 +7,24 @@ import { AuthService } from './auth.service.js';
 import { OriginGuard } from './origin.guard.js';
 import { PasswordService } from './password.service.js';
 import { PermissionsGuard } from './permissions.guard.js';
+import { SessionsController } from './sessions.controller.js';
+import { SessionsService } from './sessions.service.js';
 import { TokenService } from './token.service.js';
 
 /**
  * MOD-01 — authentication and session management. Registers the global guards
  * in order: OriginGuard (state-changing requests need an acceptable Origin /
  * Fetch Metadata — MOD-01-H02), then AuthGuard, then PermissionsGuard, so every
- * route is protected unless decorated with @Public().
+ * route is protected unless decorated with @Public(). MOD-01-H06 adds the
+ * caller's session list and per-session revocation (SessionsController).
  */
 @Module({
-  controllers: [AuthController],
+  controllers: [AuthController, SessionsController],
   providers: [
     PasswordService,
     TokenService,
     AuthService,
+    SessionsService,
     AuthThrottlerGuard,
     { provide: APP_GUARD, useClass: OriginGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
