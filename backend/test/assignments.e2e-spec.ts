@@ -25,6 +25,9 @@ loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 const DATABASE_URL = process.env['DATABASE_URL'] || postgresUrlFromEnv(process.env, 'app');
 const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
 const PREFIX = `W${RUN}`;
+/** TEST-214: the run's token in Latin and in Arabic letters, so no other row of the shared DB matches a title search. */
+const SEARCH_TOKEN = `Q${RUN}`;
+const ARABIC_TOKEN = [...RUN].map((char) => 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'[parseInt(char, 36) % 28]).join('');
 const PASSWORD = 'Correct-Horse-Battery-9';
 const USER_AGENT = 'TEST-123 supertest';
 const CLASSES = '/api/classes';
@@ -457,11 +460,65 @@ describe.skipIf(!available)('MOD-08 assignments (e2e, TEST-123)', () => {
     expect((await list({ cursor: 'garbage' })).body).toMatchObject({ code: 'cursor_invalid' });
     const firstPage = await list({ classId: classes['C']!, limit: '1' }).expect(200);
     expect((await list({ classId: classes['C']!, limit: '1', order: 'desc', cursor: firstPage.body.nextCursor as string })).body).toMatchObject({ code: 'cursor_invalid' });
-    const badQueries: Record<string, string>[] = [{ dueFrom: '2026-12-01' }, { status: 'done' }, { limit: '0' }, { limit: '101' }, { order: 'sideways' }, { classId: 'x' }, { q: 'x' }];
+    const badQueries: Record<string, string>[] = [{ dueFrom: '2026-12-01' }, { status: 'done' }, { limit: '0' }, { limit: '101' }, { order: 'sideways' }, { classId: 'x' }, { search: 'x' }];
     for (const query of badQueries) {
       expect((await list(query)).status, JSON.stringify(query)).toBe(400);
     }
   });
+
+  it('TEST-214 — q finds a substring of the Arabic or English title, case-insensitively, with % _ \\ literal, inside the other filters, the class visibility and the keyset', async () => {
+    const tok = SEARCH_TOKEN;
+    const a = classes['A']!;
+    const b = classes['B']!;
+    const titled = async (classId: string, title: Record<string, string>, day: number) =>
+      (await create(classId, minimal({ title, dueAt: `2027-06-${day}T10:00:00Z` })).expect(201)).body.id as string;
+    const review = await titled(a, { ar: `مراجعة ${ARABIC_TOKEN} الأولى`, en: `Review ${tok} Alpha` }, 10);
+    const percent = await titled(a, { ar: `واجب ${ARABIC_TOKEN}`, en: `Score 100% ${tok}` }, 11);
+    const snake = await titled(a, { ar: 'واجب', en: `snake_case ${tok}` }, 12);
+    const snakeX = await titled(a, { ar: 'واجب', en: `snakeXcase ${tok}` }, 13);
+    const slash = await titled(a, { ar: 'واجب', en: `back\\slash ${tok}` }, 14);
+    await titled(a, { ar: 'واجب', tr: `Ödev ${tok}` }, 15); // Turkish only: never searched
+    const inB = await titled(b, { ar: `مراجعة ${ARABIC_TOKEN} ب`, en: `Review ${tok} Beta` }, 16);
+    await act(snake, 'publish').expect(200);
+    const ids = async (query: Record<string, string>, as = 'manager') => ((await list({ limit: '100', ...query }, as).expect(200)).body.items as AssignmentBody[]).map((entry) => entry.id);
+    const m = await mark();
+
+    // (a) English in any case, Arabic substrings; `tr` is not searched.
+    expect(await ids({ q: tok.toLowerCase() })).toEqual([review, percent, snake, snakeX, slash, inB]);
+    expect(await ids({ q: `REVIEW ${tok.toLowerCase()} alpha` })).toEqual([review]);
+    expect(await ids({ q: ARABIC_TOKEN })).toEqual([review, percent, inB]);
+    expect(await ids({ q: `مراجعة ${ARABIC_TOKEN}` })).toEqual([review, inB]);
+    // (b) `%`, `_` and `\` match themselves only (inside class A, where every other title would match a wildcard).
+    expect(await ids({ q: `100% ${tok}` })).toEqual([percent]);
+    expect(await ids({ q: '%', classId: a })).toEqual([percent]);
+    expect(await ids({ q: 'e_c', classId: a })).toEqual([snake]);
+    expect(await ids({ q: 'k\\s', classId: a })).toEqual([slash]);
+    // (c) ANDed with the other filters, the class visibility (D-R16) and the keyset.
+    expect(await ids({ q: tok, classId: a })).toEqual([review, percent, snake, snakeX, slash]);
+    expect(await ids({ q: tok, status: 'open' })).toEqual([snake]);
+    expect(await ids({ q: tok, dueFrom: '2027-06-14T00:00:00Z' })).toEqual([slash, inB]);
+    expect(await ids({ q: `review ${tok}`, classId: b })).toEqual([inB]);
+    expect(await ids({ q: `review ${tok}`, order: 'desc' })).toEqual([inB, review]);
+    expect(await ids({ q: `review ${tok}` }, 'teacher')).toEqual([review]); // assigned to A, C, D and E, not B
+    expect(await ids({ q: `review ${tok}`, classId: b }, 'teacher')).toEqual([]);
+    expect(await ids({ q: `review ${tok}` }, 'teacher2')).toEqual([review, inB]);
+    const paged: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const res = await list({ q: tok, limit: '2', ...(cursor ? { cursor } : {}) }).expect(200);
+      paged.push(...(res.body.items as AssignmentBody[]).map((entry) => entry.id));
+      cursor = res.body.nextCursor as string | null;
+    } while (cursor);
+    expect(paged).toEqual([review, percent, snake, snakeX, slash, inB]);
+    // (d) 1–100 characters after trimming; blank is absent, as in the courses search; never an event.
+    expect(await ids({ q: `  ${tok}  ` })).toEqual([review, percent, snake, snakeX, slash, inB]);
+    expect(await ids({ q: '   ', classId: a })).toEqual(await ids({ classId: a }));
+    expect(await ids({ q: 'x'.repeat(100), classId: a })).toEqual([]);
+    expect((await list({ q: 'x'.repeat(101) })).status).toBe(400);
+    expect((await api().get(`${ASSIGNMENTS}?q=a&q=b`).set(bearer('manager'))).status).toBe(400);
+    expect((await list({ q: tok }, 'outsider')).status).toBe(403);
+    expect(await eventsSince(m)).toEqual([]);
+  }, 30_000);
 
   it(
     'documents the routes in OpenAPI',
@@ -475,6 +532,7 @@ describe.skipIf(!available)('MOD-08 assignments (e2e, TEST-123)', () => {
         expect(docs.body.components.schemas).toHaveProperty(schema);
       }
       expect(docs.body.components.schemas.AssignmentDto.properties.dueAt).toMatchObject({ type: 'string', nullable: true });
+      expect(docs.body.paths['/api/assignments'].get.parameters).toContainEqual(expect.objectContaining({ name: 'q', in: 'query', required: false, schema: expect.objectContaining({ maxLength: 100 }) }));
     },
     20_000, // the OpenAPI document is slow under a parallel e2e run (KI-040)
   );

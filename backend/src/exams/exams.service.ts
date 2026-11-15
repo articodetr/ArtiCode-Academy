@@ -10,6 +10,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { ClassStatus } from '../generated/prisma/client.js';
 import { gradesError } from '../grades/grades.errors.js';
 import { toInstant, toIso } from '../lessons/lessons.time.js';
+import { titleSearchWhere } from '../lessons/title-search.js';
 import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
 import type { NotificationBatch } from '../notifications/notifications.service.js';
 import { formatNumber } from '../notifications/notifications.templates.js';
@@ -165,6 +166,7 @@ export class ExamsService {
     if (query.type) filters.push({ type: query.type });
     if (query.from) filters.push({ scheduledAt: { gte: toInstant(query.from) } });
     if (query.to) filters.push({ scheduledAt: { lte: toInstant(query.to) } });
+    if (query.q) filters.push(titleSearchWhere(query.q));
     if (query.cursor) {
       const cursor = decodeKeysetCursor(query.cursor, EXAM_SORT_FIELD, order, true, () => gradesError.cursorInvalid());
       const after = afterExamCursor(cursor.key as string, cursor.id, order);

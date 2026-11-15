@@ -7,6 +7,7 @@ import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { ExamStatus, ExamType } from '../generated/prisma/client.js';
 import { IsInstant } from '../lessons/lessons.time.js';
+import { TITLE_QUERY_DESCRIPTION, TITLE_QUERY_MAX_LENGTH } from '../lessons/title-search.js';
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { textParam } from '../users/users.validation.js';
@@ -31,6 +32,13 @@ function rawValue({ obj, key }: { obj: Record<string, unknown>; key: string }): 
 }
 
 export class ListExamsQueryDto {
+  @ApiPropertyOptional({ maxLength: TITLE_QUERY_MAX_LENGTH, example: 'midterm', description: TITLE_QUERY_DESCRIPTION })
+  @IsOptional()
+  @Transform(textParam)
+  @IsString()
+  @Length(1, TITLE_QUERY_MAX_LENGTH)
+  q?: string;
+
   @ApiPropertyOptional({ format: 'uuid', description: 'Exams of this class' })
   @IsOptional()
   @IsUUID('all')

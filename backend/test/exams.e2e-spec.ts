@@ -24,6 +24,9 @@ loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 const DATABASE_URL = process.env['DATABASE_URL'] || postgresUrlFromEnv(process.env, 'app');
 const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
 const PREFIX = `X${RUN}`;
+/** TEST-214: the run's token in Latin and in Arabic letters, so no other row of the shared DB matches a title search. */
+const SEARCH_TOKEN = `Q${RUN}`;
+const ARABIC_TOKEN = [...RUN].map((char) => 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'[parseInt(char, 36) % 28]).join('');
 const PASSWORD = 'Correct-Horse-Battery-9';
 const USER_AGENT = 'TEST-129 supertest';
 const CLASSES = '/api/classes';
@@ -371,6 +374,63 @@ describe.skipIf(!available)('MOD-09 exams (e2e, TEST-129)', () => {
     ]);
   });
 
+  it('TEST-214 — q finds a substring of the Arabic or English title, case-insensitively, with % _ \\ literal, inside the other filters, the class visibility and the keyset', async () => {
+    const tok = SEARCH_TOKEN;
+    const titled = async (suffix: string, title: Record<string, string>, day: number, over: object = {}) =>
+      (await createExam(suffix, base({ title, scheduledAt: `2031-06-${day}T10:00:00Z`, ...over }), suffix === 'B' ? 'teacher2' : 'teacher').expect(201)).body.id as string;
+    const review = await titled('A', { ar: `مراجعة ${ARABIC_TOKEN} الأولى`, en: `Review ${tok} Alpha` }, 10);
+    const percent = await titled('A', { ar: `اختبار ${ARABIC_TOKEN}`, en: `Score 100% ${tok}` }, 11, { type: 'oral' });
+    const snake = await titled('A', { ar: 'اختبار', en: `snake_case ${tok}` }, 12);
+    const snakeX = await titled('A', { ar: 'اختبار', en: `snakeXcase ${tok}` }, 13);
+    const slash = await titled('A', { ar: 'اختبار', en: `back\\slash ${tok}` }, 14);
+    await titled('A', { ar: 'اختبار', tr: `Sınav ${tok}` }, 15); // Turkish only: never searched
+    const inB = await titled('B', { ar: `مراجعة ${ARABIC_TOKEN} ب`, en: `Review ${tok} Beta` }, 16);
+    await act(snake, 'schedule').expect(200);
+    const ids = async (query: Record<string, string>, as = 'manager') => ((await listExams(as, { limit: '100', ...query }).expect(200)).body.items as ExamBody[]).map((entry) => entry.id);
+    const a = classes['A']!;
+    const b = classes['B']!;
+    const m = await mark();
+
+    // (a) English in any case, Arabic substrings; `tr` is not searched.
+    expect(await ids({ q: tok.toLowerCase() })).toEqual([review, percent, snake, snakeX, slash, inB]);
+    expect(await ids({ q: `REVIEW ${tok.toLowerCase()} alpha` })).toEqual([review]);
+    expect(await ids({ q: ARABIC_TOKEN })).toEqual([review, percent, inB]);
+    expect(await ids({ q: `مراجعة ${ARABIC_TOKEN}` })).toEqual([review, inB]);
+    // (b) `%`, `_` and `\` match themselves only (inside class A, where every other title would match a wildcard).
+    expect(await ids({ q: `100% ${tok}` })).toEqual([percent]);
+    expect(await ids({ q: '%', classId: a })).toEqual([percent]);
+    expect(await ids({ q: 'e_c', classId: a })).toEqual([snake]);
+    expect(await ids({ q: 'k\\s', classId: a })).toEqual([slash]);
+    // (c) ANDed with the other filters, the class visibility (D-R16) and the keyset.
+    expect(await ids({ q: tok, classId: a })).toEqual([review, percent, snake, snakeX, slash]);
+    expect(await ids({ q: tok, type: 'oral' })).toEqual([percent]);
+    expect(await ids({ q: tok, status: 'scheduled' })).toEqual([snake]);
+    expect(await ids({ q: tok, from: '2031-06-14T00:00:00Z' })).toEqual([slash, inB]);
+    expect(await ids({ q: `review ${tok}`, classId: b })).toEqual([inB]);
+    expect(await ids({ q: `review ${tok}`, order: 'desc' })).toEqual([inB, review]);
+    expect(await ids({ q: `review ${tok}` }, 'teacher')).toEqual([review]); // not assigned to B
+    expect(await ids({ q: `review ${tok}`, classId: b }, 'teacher')).toEqual([]);
+    expect(await ids({ q: `review ${tok}` }, 'teacher2')).toEqual([inB]); // assigned to B only
+    expect(await ids({ q: `review ${tok}` }, 'reader')).toEqual([review, inB]); // classes.manage + exams.read
+    expect(await ids({ q: tok }, 'student')).toEqual([]); // exams.read, no assigned class
+    const paged: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const res = await listExams('manager', { q: tok, limit: '2', ...(cursor ? { cursor } : {}) }).expect(200);
+      paged.push(...(res.body.items as ExamBody[]).map((entry) => entry.id));
+      cursor = res.body.nextCursor as string | null;
+    } while (cursor);
+    expect(paged).toEqual([review, percent, snake, snakeX, slash, inB]);
+    // (d) 1–100 characters after trimming; blank is absent, as in the courses search; never an event.
+    expect(await ids({ q: `  ${tok}  ` })).toEqual([review, percent, snake, snakeX, slash, inB]);
+    expect(await ids({ q: '   ', classId: a })).toEqual(await ids({ classId: a }));
+    expect(await ids({ q: 'x'.repeat(100), classId: a })).toEqual([]);
+    expect((await listExams('manager', { q: 'x'.repeat(101) })).status).toBe(400);
+    expect((await api().get(`${EXAMS}?q=a&q=b`).set(bearer('manager'))).status).toBe(400);
+    expect((await listExams('outsider', { q: tok })).status).toBe(403);
+    expect(await eventsSince(m)).toEqual([]);
+  }, 30_000);
+
   it(
     'documents the routes in OpenAPI',
     async () => {
@@ -380,6 +440,7 @@ describe.skipIf(!available)('MOD-09 exams (e2e, TEST-129)', () => {
       expect(Object.keys(docs.body.paths['/api/exams/{id}/status'])).toEqual(['post']);
       expect(Object.keys(docs.body.paths['/api/classes/{id}/exams'])).toEqual(['post']);
       for (const schema of ['ExamDto', 'ExamListDto', 'ExamResultCountsDto', 'CreateExamDto', 'UpdateExamDto', 'ChangeExamStatusDto']) expect(docs.body.components.schemas).toHaveProperty(schema);
+      expect(docs.body.paths['/api/exams'].get.parameters).toContainEqual(expect.objectContaining({ name: 'q', in: 'query', required: false, schema: expect.objectContaining({ maxLength: 100 }) }));
     },
     20_000, // the OpenAPI document is slow under a parallel e2e run (KI-040)
   );

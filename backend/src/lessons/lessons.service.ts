@@ -23,6 +23,7 @@ import type { LessonConflictResource } from './lessons.errors.js';
 import { isClassOpenForLessons, seesEveryClass, visibleLessonsWhere } from './lessons.policy.js';
 import { allowedLessonActions, hasStarted, isLessonDeletable, lockedFields, nextLessonStatus } from './lessons.status.js';
 import { MAX_LESSON_HOURS, timeRangeProblem, toInstant, toIso } from './lessons.time.js';
+import { titleSearchWhere } from './title-search.js';
 
 export const LESSONS_AUDIT_ACTIONS = {
   created: 'lessons.created',
@@ -290,6 +291,7 @@ export class LessonsService {
     if (query.status) filters.push({ status: query.status });
     if (query.from) filters.push({ startsAt: { gte: toInstant(query.from) } });
     if (query.to) filters.push({ startsAt: { lte: toInstant(query.to) } });
+    if (query.q) filters.push(titleSearchWhere(query.q));
     if (query.cursor) {
       const cursor = decodeKeysetCursor(query.cursor, LESSON_SORT_FIELD, order, true, () => lessonsError.cursorInvalid());
       const key = cursor.key as string;

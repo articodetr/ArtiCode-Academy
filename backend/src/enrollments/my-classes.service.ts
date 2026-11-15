@@ -3,13 +3,27 @@ import type { AuthPrincipal } from '../auth/principal.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { ListMyClassesQueryDto, MyClassItemDto, MyClassListDto } from './my-classes.dto.js';
+import type { ListMyClassesQueryDto, MyClassItemDto, MyClassListDto, MyClassSummaryDto } from './my-classes.dto.js';
 import { myClassStatuses, relationOf, seesChildren } from './my-classes.policy.js';
 
 // Only what the caller may know about their own (or their child's) class:
 // identity of the student without contact fields, the class and course
 // summary, and the lead teacher by name. Never other students, the roster,
 // `withdrawal_reason`, `created_by` or any account field of the teacher.
+/** The class summary of «my classes», shared with API-200 (a student's enrollments). */
+export const CLASS_SUMMARY_SELECT = {
+  id: true,
+  code: true,
+  name: true,
+  status: true,
+  startsOn: true,
+  endsOn: true,
+  course: { select: { id: true, code: true, name: true } },
+  teachers: { where: { role: 'lead' }, take: 1, select: { teacher: { select: { fullName: true, displayName: true } } } },
+} satisfies Prisma.ClassSelect;
+
+type ClassSummaryRow = Prisma.ClassGetPayload<{ select: typeof CLASS_SUMMARY_SELECT }>;
+
 const MY_CLASS_SELECT = {
   id: true,
   status: true,
@@ -18,18 +32,7 @@ const MY_CLASS_SELECT = {
   withdrawnAt: true,
   studentUserId: true,
   student: { select: { id: true, fullName: true, displayName: true } },
-  class: {
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      status: true,
-      startsOn: true,
-      endsOn: true,
-      course: { select: { id: true, code: true, name: true } },
-      teachers: { where: { role: 'lead' }, take: 1, select: { teacher: { select: { fullName: true, displayName: true } } } },
-    },
-  },
+  class: { select: CLASS_SUMMARY_SELECT },
 } satisfies Prisma.EnrollmentSelect;
 
 type MyClassRow = Prisma.EnrollmentGetPayload<{ select: typeof MY_CLASS_SELECT }>;
@@ -38,8 +41,26 @@ function dateOnly(value: Date | null): string | null {
   return value ? value.toISOString().slice(0, 10) : null;
 }
 
+/** The class, its course and the lead teacher by name — no roster, no account field. */
+export function toClassSummary(klass: ClassSummaryRow): MyClassSummaryDto {
+  const lead = klass.teachers[0]?.teacher ?? null;
+  return {
+    id: klass.id,
+    code: klass.code,
+    name: readLocalizedText(klass.name) ?? { ar: klass.code },
+    status: klass.status,
+    startsOn: dateOnly(klass.startsOn),
+    endsOn: dateOnly(klass.endsOn),
+    course: {
+      id: klass.course.id,
+      code: klass.course.code,
+      name: readLocalizedText(klass.course.name) ?? { ar: klass.course.code },
+    },
+    leadTeacher: lead ? { fullName: lead.fullName, displayName: lead.displayName } : null,
+  };
+}
+
 function toItem(row: MyClassRow, callerId: string): MyClassItemDto {
-  const lead = row.class.teachers[0]?.teacher ?? null;
   return {
     enrollmentId: row.id,
     enrollmentStatus: row.status,
@@ -48,20 +69,7 @@ function toItem(row: MyClassRow, callerId: string): MyClassItemDto {
     withdrawnAt: row.withdrawnAt ? row.withdrawnAt.toISOString() : null,
     relation: relationOf(row.studentUserId, callerId),
     student: { id: row.student.id, fullName: row.student.fullName, displayName: row.student.displayName },
-    class: {
-      id: row.class.id,
-      code: row.class.code,
-      name: readLocalizedText(row.class.name) ?? { ar: row.class.code },
-      status: row.class.status,
-      startsOn: dateOnly(row.class.startsOn),
-      endsOn: dateOnly(row.class.endsOn),
-      course: {
-        id: row.class.course.id,
-        code: row.class.course.code,
-        name: readLocalizedText(row.class.course.name) ?? { ar: row.class.course.code },
-      },
-      leadTeacher: lead ? { fullName: lead.fullName, displayName: lead.displayName } : null,
-    },
+    class: toClassSummary(row.class),
   };
 }
 

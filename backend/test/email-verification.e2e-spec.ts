@@ -124,6 +124,9 @@ describe.skipIf(!available)('LR-01-T02 e-mail verification (e2e, TEST-173)', () 
   it('AC1: the request mails a link that only the e-mail carries; the link confirms the address once', async () => {
     const id = await createUser('holder', {});
     const access = await signIn(email('holder'));
+    // TEST-214 (CH-0226): the session user carries its own confirmation state.
+    const me = async () => (await api().get('/api/auth/me').set('Authorization', `Bearer ${access}`).expect(200)).body;
+    expect((await me()).emailVerifiedAt).toBeNull();
 
     const res = await api().post(REQUEST).set('Authorization', `Bearer ${access}`).expect(202);
     expect(Object.keys(res.body).sort()).toEqual(['delivery', 'expiresAt']);
@@ -148,6 +151,9 @@ describe.skipIf(!available)('LR-01-T02 e-mail verification (e2e, TEST-173)', () 
     const confirmed = await api().post(confirmPath(token)).expect(200);
     expect(Object.keys(confirmed.body)).toEqual(['emailVerifiedAt']);
     expect((await verifiedAt(id))?.toISOString()).toBe(confirmed.body.emailVerifiedAt);
+    expect((await me()).emailVerifiedAt).toBe(confirmed.body.emailVerifiedAt);
+    const session = await api().post('/api/auth/login').send({ identifier: email('holder'), password: PASSWORD }).expect(200);
+    expect(session.body.user.emailVerifiedAt).toBe(confirmed.body.emailVerifiedAt);
     const verified = await events(id, 'users.email.verified');
     expect(verified).toHaveLength(1);
     expect(verified[0]!.actorUserId).toBe(id);

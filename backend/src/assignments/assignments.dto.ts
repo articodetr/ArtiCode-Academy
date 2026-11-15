@@ -6,6 +6,7 @@ import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { AssignmentStatus } from '../generated/prisma/client.js';
 import { IsInstant } from '../lessons/lessons.time.js';
+import { TITLE_QUERY_DESCRIPTION, TITLE_QUERY_MAX_LENGTH } from '../lessons/title-search.js';
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { nullableTextParam, textParam } from '../users/users.validation.js';
@@ -68,6 +69,13 @@ export function toInstructionsText(dto: AssignmentInstructionsDto): LocalizedTex
 }
 
 export class ListAssignmentsQueryDto {
+  @ApiPropertyOptional({ maxLength: TITLE_QUERY_MAX_LENGTH, example: 'fractions', description: TITLE_QUERY_DESCRIPTION })
+  @IsOptional()
+  @Transform(textParam)
+  @IsString()
+  @Length(1, TITLE_QUERY_MAX_LENGTH)
+  q?: string;
+
   @ApiPropertyOptional({ format: 'uuid', description: 'Assignments of this class' })
   @IsOptional()
   @IsUUID('all')

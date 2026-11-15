@@ -7,6 +7,7 @@ import type { SortOrder } from '../common/keyset-cursor.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { ClassStatus, SubmissionStatus } from '../generated/prisma/client.js';
 import { toInstant, toIso } from '../lessons/lessons.time.js';
+import { titleSearchWhere } from '../lessons/title-search.js';
 import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
@@ -167,6 +168,7 @@ export class AssignmentsService {
     if (query.status) filters.push({ status: query.status });
     if (query.dueFrom) filters.push({ dueAt: { gte: toInstant(query.dueFrom) } });
     if (query.dueTo) filters.push({ dueAt: { lte: toInstant(query.dueTo) } });
+    if (query.q) filters.push(titleSearchWhere(query.q));
     if (query.cursor) {
       const cursor = decodeKeysetCursor(query.cursor, ASSIGNMENT_SORT_FIELD, order, true, () => assignmentsError.cursorInvalid());
       const after = afterDueCursor(cursor.key as string, cursor.id, order);

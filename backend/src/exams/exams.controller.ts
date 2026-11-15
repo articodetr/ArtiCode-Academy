@@ -79,7 +79,7 @@ export class ExamsController {
   @ApiOperation({
     summary: 'List exams',
     description:
-      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) by exam date — undated exams last — then id (`order` asc by default), with filters `classId`, `lessonId`, `status`, `type`, `from` and `to` (inclusive instants; an undated exam never matches them). ' +
+      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) by exam date — undated exams last — then id (`order` asc by default), with filters `classId`, `lessonId`, `status`, `type`, `from` and `to` (inclusive instants; an undated exam never matches them) and `q` (a substring of the Arabic or English title, case-insensitive, `%`/`_` literal). ' +
       'Holders of `exams.read` alone see only the exams of the classes they are assigned to; holders of `classes.manage` see every exam. ' +
       'Each item carries its class and course, the lesson, the recorded results by status and the active enrollments of the class.',
   })

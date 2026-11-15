@@ -11,6 +11,7 @@ import { nullableTextParam, textParam } from '../users/users.validation.js';
 import { LESSON_STATUS_ACTIONS } from './lessons.status.js';
 import type { LessonStatusAction } from './lessons.status.js';
 import { IsInstant, MAX_LESSON_HOURS } from './lessons.time.js';
+import { TITLE_QUERY_DESCRIPTION, TITLE_QUERY_MAX_LENGTH } from './title-search.js';
 
 export const LESSONS_PAGE_DEFAULT = 20;
 export const LESSONS_PAGE_MAX = 100;
@@ -27,6 +28,13 @@ export const LESSON_STATUS_REASON_MAX_LENGTH = 500;
 const MEETING_URL_MESSAGE = 'meetingUrl must be an https:// link without spaces';
 
 export class ListLessonsQueryDto {
+  @ApiPropertyOptional({ maxLength: TITLE_QUERY_MAX_LENGTH, example: 'review', description: TITLE_QUERY_DESCRIPTION })
+  @IsOptional()
+  @Transform(textParam)
+  @IsString()
+  @Length(1, TITLE_QUERY_MAX_LENGTH)
+  q?: string;
+
   @ApiPropertyOptional({ format: 'uuid', description: 'Lessons of this class' })
   @IsOptional()
   @IsUUID('all')
