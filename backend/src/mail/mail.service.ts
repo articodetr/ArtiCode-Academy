@@ -77,7 +77,7 @@ function asLocalizedText(value: Prisma.JsonValue): LocalizedText | null {
 
 /**
  * Renders the account e-mails (invitation, password reset, address
- * confirmation) and the notification e-mails of MOD-12 from the ar/en
+ * confirmation) and the notification e-mails of MOD-12 from the ar/en/tr
  * templates and hands them to the configured transport. It never throws
  * because of the transport: a delivery failure is reported in the result and
  * the manual link stays available to the admin (D-R01/D-R08). The academy

@@ -14,6 +14,17 @@ describe('renderMailHtml (TEST-172)', () => {
     expect(textDirection('tr')).toBe('ltr');
   });
 
+  // TEST-215 — S6-C: a Turkish e-mail is Turkish and left to right, its letters escaped nowhere.
+  it('writes Turkish left to right with lang="tr" and keeps its letters as they are', () => {
+    const turkish = renderMailHtml('Merhaba Ayşe,\n\nŞu bağlantıyı açın:\nhttps://academy.example/invite/abc', 'tr', 'Arti Akademi davetiniz');
+    expect(turkish).toMatch(/^<!doctype html><html lang="tr" dir="ltr">/);
+    expect(turkish).toContain('<title>Arti Akademi davetiniz</title>');
+    expect(turkish).toContain('<div dir="ltr" style="max-width:560px;text-align:left">');
+    expect(turkish).toContain('<p style="margin:0 0 16px">Merhaba Ayşe,</p>');
+    expect(turkish).toContain('Şu bağlantıyı açın:<br><a href="https://academy.example/invite/abc" dir="ltr"');
+    expect(turkish).not.toContain('rtl');
+  });
+
   it('makes paragraphs from blank lines, line breaks from newlines, and every URL a left-to-right link', () => {
     const html = renderMailHtml('First line\nopen:\nhttps://academy.example/invite/abc_-1\n\nLast.', 'en', 's');
     expect(html).toContain(

@@ -1,15 +1,26 @@
 // TEST-017 — MailService, the two built-in transports and the templates (and,
-// since TEST-175, the notification e-mail of MOD-12), with
+// since TEST-175, the notification e-mail of MOD-12; since TEST-215, the
+// Turkish templates of S6-C), with
 // no network and no database (stubs for the transport, Prisma and ConfigService).
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { MockInstance } from 'vitest';
 import type { AuditEntry, AuditService } from '../audit/audit.service.js';
+import { LOCALES } from '../authorization/localized-text.js';
 import type { Env } from '../config/env.schema.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { LogMailTransport } from './log.transport.js';
 import { MailService } from './mail.service.js';
-import { formatExpiry, renderEmailVerification, renderInvitation, renderPasswordReset, templateLocale } from './mail.templates.js';
+import {
+  TEMPLATE_LOCALES,
+  formatExpiry,
+  renderEmailVerification,
+  renderInvitation,
+  renderNotificationMail,
+  renderPasswordReset,
+  subjectTitle,
+  templateLocale,
+} from './mail.templates.js';
 import type { MailDeliveryResult, MailMessage, MailTransport } from './mail.transport.js';
 import { NoopMailTransport } from './noop.transport.js';
 
@@ -87,14 +98,13 @@ describe('MailService (TEST-017)', () => {
     expect(service.transportName).toBe('fake');
   });
 
-  it('falls back to the academy default locale, then Arabic, and builds root-relative links without APP_PUBLIC_URL', async () => {
+  it('falls back to the academy default locale and builds root-relative links without APP_PUBLIC_URL', async () => {
     const transport = new CapturingTransport();
     const service = new MailService(transport, prismaWith(ACADEMY), configWith(undefined), recordingAudit());
 
-    await service.sendInvitation(mailTo('x@example.test', 'tr', 'سارة'));
     await service.sendInvitation(mailTo('x@example.test', null, 'سارة'));
 
-    expect(transport.sent.map((message) => message.locale)).toEqual(['ar', 'ar']);
+    expect(transport.sent.map((message) => message.locale)).toEqual(['ar']);
     expect(transport.sent[0]!.subject).toBe('دعوة للانضمام إلى أكاديمية آرتي');
     expect(transport.sent[0]!.text).toContain('مرحباً سارة،');
     expect(transport.sent[0]!.text).toContain(`/invite/${TOKEN}`);
@@ -104,10 +114,58 @@ describe('MailService (TEST-017)', () => {
 
     const english = new CapturingTransport();
     await new MailService(english, prismaWith({ ...ACADEMY, defaultLocale: 'en' as never }), configWith(), recordingAudit()).sendPasswordReset(
-      mailTo('x@example.test', 'tr'),
+      mailTo('x@example.test', null),
     );
     expect(english.sent[0]).toMatchObject({ kind: 'password_reset', locale: 'en', subject: 'Reset your Arti Academy password' });
     expect(english.sent[0]!.text).toContain(`/reset-password/${TOKEN}`);
+  });
+
+  // TEST-215 — S6-C: Turkish templates.
+  it('writes to a Turkish recipient, and to a recipient without a locale in a Turkish academy, in Turkish; ar/en recipients are unchanged', async () => {
+    const turkishAcademy = { name: { ar: 'أكاديمية آرتي', en: 'Arti Academy', tr: 'Arti Akademi' }, defaultLocale: 'tr' as const, timezone: 'Europe/Istanbul' };
+    const transport = new CapturingTransport();
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'), recordingAudit());
+    await service.sendInvitation(mailTo('x@example.test', 'tr'));
+    await service.sendInvitation(mailTo('x@example.test', 'ar', 'سارة'));
+    await service.sendInvitation(mailTo('x@example.test', 'en'));
+    expect(transport.sent.map((message) => message.locale)).toEqual(['tr', 'ar', 'en']);
+    // The academy has no Turkish name: the academy default (Arabic) stands in, per D1.
+    expect(transport.sent[0]!.subject).toBe('أكاديمية آرتي davetiniz');
+    expect(transport.sent[0]!.text).toContain('Merhaba Sara,');
+    expect(transport.sent[0]!.text).toContain(`https://academy.example/invite/${TOKEN}`);
+    expect(transport.sent[0]!.text).toContain(`Bu bağlantı ${formatExpiry(EXPIRES, 'tr', 'Europe/Istanbul')} tarihine kadar geçerlidir.`);
+    expect(transport.sent[1]!.subject).toBe('دعوة للانضمام إلى أكاديمية آرتي');
+    expect(transport.sent[2]!.subject).toBe('Your invitation to Arti Academy');
+
+    const turkish = new CapturingTransport();
+    const inTurkey = new MailService(turkish, prismaWith(turkishAcademy as never), configWith('https://academy.example'), recordingAudit());
+    await inTurkey.sendPasswordReset(mailTo('x@example.test', null));
+    await inTurkey.sendEmailVerification(mailTo('x@example.test', null));
+    await inTurkey.sendNotification({ to: 'x@example.test', recipientName: 'Ayşe', locale: null, title: 'Ödev notlandırıldı: Deneme', path: '/my-assignments' });
+    await inTurkey.sendInvitation(mailTo('x@example.test', 'en'));
+    expect(turkish.sent.map((message) => [message.kind, message.locale])).toEqual([
+      ['password_reset', 'tr'],
+      ['email_verification', 'tr'],
+      ['notification', 'tr'],
+      ['invitation', 'en'],
+    ]);
+    expect(turkish.sent[0]!.subject).toBe('Arti Akademi şifrenizi sıfırlayın');
+    expect(turkish.sent[0]!.text).toContain(`https://academy.example/reset-password/${TOKEN}`);
+    expect(turkish.sent[1]!.subject).toBe('Arti Akademi için e-posta adresinizi doğrulayın');
+    expect(turkish.sent[1]!.text).toContain(`https://academy.example/verify-email/${TOKEN}`);
+    expect(turkish.sent[2]!.subject).toBe('Yeni bildirim: Ödev notlandırıldı: Deneme');
+    expect(turkish.sent[2]!.text).toContain('Merhaba Ayşe,');
+    expect(turkish.sent[2]!.text).toContain('Arti Akademi size yeni bir bildirim gönderdi:\nÖdev notlandırıldı: Deneme');
+    expect(turkish.sent[2]!.text).toContain('https://academy.example/my-assignments');
+    expect(turkish.sent[3]!.subject).toBe('Your invitation to Arti Academy');
+    for (const message of turkish.sent.slice(0, 3)) {
+      // The HTML twin of a Turkish e-mail reads left to right and says it is Turkish.
+      expect(message.html).toMatch(/^<!doctype html><html lang="tr" dir="ltr">/);
+      expect(message.html).toContain('text-align:left');
+      expect(message.html).not.toContain('dir="rtl"');
+      for (const part of [message.subject, message.text, message.html]) expect(part).not.toMatch(/undefined|null|\[object |NaN|\$\{/);
+      expect(`${message.subject} ${message.text}`).not.toMatch(/[؀-ۿ]/);
+    }
   });
 
   it('skips accounts without an e-mail address and survives a failing transport or a missing academy row', async () => {
@@ -149,28 +207,70 @@ describe('MailService (TEST-017)', () => {
     expect(String(logSpy.mock.calls[0]![0])).toContain('sara@example.test');
   });
 
-  it('templates exist in both locales with every placeholder, locale fallback follows D1, expiry formatting tolerates a bad zone', () => {
+  it('templates exist in every locale with every placeholder, locale fallback follows D1, expiry formatting tolerates a bad zone', () => {
     expect(templateLocale('en', 'ar')).toBe('en');
     expect(templateLocale('ar', 'en')).toBe('ar');
-    expect(templateLocale('tr', 'en')).toBe('en');
-    expect(templateLocale('tr', 'tr')).toBe('ar');
     expect(templateLocale(null, 'ar')).toBe('ar');
     expect(templateLocale(undefined, 'en')).toBe('en');
+    // TEST-215 — S6-C: Turkish has its own templates — for a Turkish reader and as an academy default.
+    expect(templateLocale('tr', 'en')).toBe('tr');
+    expect(templateLocale('tr', 'ar')).toBe('tr');
+    expect(templateLocale(null, 'tr')).toBe('tr');
+    expect(templateLocale(undefined, 'tr')).toBe('tr');
+    expect(templateLocale('ar', 'tr')).toBe('ar');
+    expect(templateLocale('en', 'tr')).toBe('en');
+    // Every locale of the enum has templates: a new locale without them fails here.
+    expect([...TEMPLATE_LOCALES].sort()).toEqual([...LOCALES].sort());
 
     const input = { academyName: 'ACADEMY', recipientName: 'RECIPIENT', link: 'https://l.example/x', expiresAt: 'EXPIRY' };
-    for (const render of [renderInvitation, renderPasswordReset, renderEmailVerification]) {
-      for (const locale of ['ar', 'en'] as const) {
+    const renderers = { invitation: renderInvitation, password_reset: renderPasswordReset, email_verification: renderEmailVerification };
+    for (const [kind, render] of Object.entries(renderers)) {
+      const subjects = new Set<string>();
+      for (const locale of TEMPLATE_LOCALES) {
         const { subject, text } = render(locale, input);
-        expect(subject).toContain('ACADEMY');
-        expect(text).toContain('RECIPIENT');
-        expect(text).toContain('https://l.example/x');
-        expect(text).toContain('EXPIRY');
+        expect(subject, `${kind} (${locale})`).toContain('ACADEMY');
+        expect(text, `${kind} (${locale})`).toContain('RECIPIENT');
+        expect(text, `${kind} (${locale})`).toContain('https://l.example/x');
+        expect(text, `${kind} (${locale})`).toContain('EXPIRY');
+        expect(`${subject}\n${text}`, `${kind} (${locale})`).not.toMatch(/undefined|null|\[object |NaN|\$\{/);
+        subjects.add(subject);
       }
+      // Each locale has its own wording, not a copy of another.
+      expect(subjects.size, kind).toBe(TEMPLATE_LOCALES.length);
     }
+    const notification = { academyName: 'ACADEMY', recipientName: 'RECIPIENT', title: 'TITLE', link: 'https://l.example/n' };
+    for (const locale of TEMPLATE_LOCALES) {
+      const { subject, text } = renderNotificationMail(locale, notification);
+      expect(subject, locale).toContain('TITLE');
+      for (const value of ['ACADEMY', 'RECIPIENT', 'TITLE', 'https://l.example/n']) expect(text, locale).toContain(value);
+      expect(`${subject}\n${text}`, locale).not.toMatch(/undefined|null|\[object |NaN|\$\{/);
+    }
+
+    // Turkish, word for word: the invitation and the notification e-mail.
+    expect(renderInvitation('tr', input)).toEqual({
+      subject: 'ACADEMY davetiniz',
+      text:
+        'Merhaba RECIPIENT,\n\n' +
+        'ACADEMY bünyesinde sizin için bir hesap oluşturuldu. ' +
+        'Hesabınızı etkinleştirmek ve şifrenizi belirlemek için şu bağlantıyı açın:\nhttps://l.example/x\n\n' +
+        'Bu bağlantı EXPIRY tarihine kadar geçerlidir. ' +
+        'Bu daveti beklemiyorsanız bu e-postayı dikkate almayabilirsiniz.',
+    });
+    expect(renderNotificationMail('tr', notification).subject).toBe('Yeni bildirim: TITLE');
+    // The subject title is still one line and capped at 160 characters in Turkish.
+    const long = renderNotificationMail('tr', { ...notification, title: `İlk satır\n${'ş'.repeat(400)}` }).subject;
+    expect(long).toBe(`Yeni bildirim: ${subjectTitle(`İlk satır ${'ş'.repeat(400)}`)}`);
+    expect([...long].length).toBe('Yeni bildirim: '.length + 160);
+    expect(long.endsWith('…')).toBe(true);
 
     expect(formatExpiry(EXPIRES, 'en', 'Europe/Istanbul')).toContain('2026');
     expect(formatExpiry(EXPIRES, 'ar', 'Europe/Istanbul')).not.toBe('');
     expect(formatExpiry(EXPIRES, 'en', 'Not/AZone')).toBe(formatExpiry(EXPIRES, 'en', 'UTC'));
+    // Turkish (tr-TR) in the academy zone: 10:00 UTC is 13:00 in Istanbul.
+    expect(formatExpiry(EXPIRES, 'tr', 'Europe/Istanbul')).toContain('1 Kasım 2026');
+    expect(formatExpiry(EXPIRES, 'tr', 'Europe/Istanbul')).toContain('13:00');
+    expect(formatExpiry(EXPIRES, 'tr', 'Not/AZone')).toBe(formatExpiry(EXPIRES, 'tr', 'UTC'));
+    expect(formatExpiry(EXPIRES, 'tr', 'UTC')).toContain('10:00');
   });
 
   // TEST-172 — LR-01-T01: the HTML twin and the delivery events (D-R76/D-R77).
