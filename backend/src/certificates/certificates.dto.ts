@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsDefined, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { trimParam } from '../users/users.validation.js';
 import { EnrollmentStudentDto } from '../enrollments/enrollments.dto.js';
 import { CertificateStatus, ClassStatus, EnrollmentStatus } from '../generated/prisma/client.js';
@@ -89,7 +90,7 @@ export class CertificateRefDto {
   @ApiProperty({ example: 'ENG-A1-2026-1' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name' })
   name: LocalizedText;
 }
 
@@ -116,11 +117,35 @@ export class CertificateGradeDto {
   @ApiProperty({ example: 86.4 })
   percent: number;
 
-  @ApiProperty({ description: 'The grade scheme band at issuance' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'The grade scheme band at issuance' })
   label: LocalizedText;
 
   @ApiProperty({ type: String, nullable: true, example: 'B' })
   letter: string | null;
+}
+
+/** `{ code, name }` of the course or the class in a snapshot (OpenAPI only — KI-051). */
+export class CertificateSnapshotRefDto {
+  @ApiProperty()
+  code: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name' })
+  name: LocalizedText;
+}
+
+/** `{ name }` of the academy in a snapshot (OpenAPI only — KI-051). */
+export class CertificateAcademySnapshotDto {
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'The academy name at issuance' })
+  name: LocalizedText;
+}
+
+/** The student a public verification names (OpenAPI only — KI-051). */
+export class CertificateVerificationStudentDto {
+  @ApiProperty()
+  fullName: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  fullNameLatin: string | null;
 }
 
 /** What is printed (D-R50): fixed at issuance, never changed by later edits. */
@@ -128,13 +153,13 @@ export class CertificateSnapshotDto {
   @ApiProperty({ type: CertificateStudentDto, description: 'Without the id' })
   student: Omit<CertificateStudentDto, 'id'>;
 
-  @ApiProperty({ description: '{ code, name }' })
+  @ApiProperty({ type: () => CertificateSnapshotRefDto, description: '{ code, name }' })
   course: { code: string; name: LocalizedText };
 
-  @ApiProperty({ description: '{ code, name }' })
+  @ApiProperty({ type: () => CertificateSnapshotRefDto, description: '{ code, name }' })
   class: { code: string; name: LocalizedText };
 
-  @ApiProperty({ description: '{ name } — the academy name at issuance' })
+  @ApiProperty({ type: () => CertificateAcademySnapshotDto, description: '{ name } — the academy name at issuance' })
   academy: { name: LocalizedText };
 
   @ApiProperty({ type: CertificateGradeDto })
@@ -217,7 +242,7 @@ export class CertificatePreviewFinalDto {
   @ApiProperty({ example: 86.4 })
   percent: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   label: LocalizedText;
 
   @ApiProperty({ type: String, nullable: true })
@@ -268,7 +293,7 @@ export class CertificatePreviewClassDto {
   @ApiProperty()
   code: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   name: LocalizedText;
 
   @ApiProperty({ enum: ClassStatus })
@@ -308,15 +333,15 @@ export class CertificateVerificationDto {
   @ApiProperty({ type: String, nullable: true, description: 'ISO 8601' })
   revokedAt: string | null;
 
-  @ApiProperty({ description: '{ fullName, fullNameLatin }' })
+  @ApiProperty({ type: () => CertificateVerificationStudentDto, description: '{ fullName, fullNameLatin }' })
   student: { fullName: string; fullNameLatin: string | null };
 
-  @ApiProperty({ description: '{ code, name }' })
+  @ApiProperty({ type: () => CertificateSnapshotRefDto, description: '{ code, name }' })
   course: { code: string; name: LocalizedText };
 
   @ApiProperty({ type: CertificateGradeDto })
   grade: CertificateGradeDto;
 
-  @ApiProperty({ description: '{ name }' })
+  @ApiProperty({ type: () => CertificateAcademySnapshotDto, description: '{ name }' })
   academy: { name: LocalizedText };
 }

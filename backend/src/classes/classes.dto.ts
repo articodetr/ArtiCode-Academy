@@ -154,17 +154,17 @@ export class UpdateClassDto {
   @Max(CLASS_CAPACITY_MAX)
   capacity?: number;
 
-  @ApiPropertyOptional({ nullable: true, example: '2026-11-10', description: 'YYYY-MM-DD or null' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '2026-11-10', description: 'YYYY-MM-DD or null' })
   @IsOptional()
   @IsCalendarDate()
   startsOn?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, example: '2026-12-20', description: 'YYYY-MM-DD or null' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '2026-12-20', description: 'YYYY-MM-DD or null' })
   @IsOptional()
   @IsCalendarDate()
   endsOn?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: CLASS_NOTES_MAX_LENGTH, description: 'null or a blank string clears' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: CLASS_NOTES_MAX_LENGTH, description: 'null or a blank string clears' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
@@ -204,7 +204,7 @@ export class ClassCourseDto {
   @ApiProperty({ example: 'PY-101' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 
   @ApiProperty({ enum: COURSE_STATUSES, description: 'Unpublishing or archiving a course leaves its classes as they are' })
@@ -232,7 +232,7 @@ export class ClassDto {
   @ApiProperty({ example: 'PY-101-A' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'بايثون — الفصل أ', en: 'Python — class A' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'بايثون — الفصل أ', en: 'Python — class A' } })
   name: LocalizedText;
 
   @ApiProperty({ example: 20 })
@@ -241,13 +241,13 @@ export class ClassDto {
   @ApiProperty({ enum: CLASS_STATUSES })
   status: ClassStatus;
 
-  @ApiProperty({ nullable: true, example: '2026-11-10', description: 'YYYY-MM-DD' })
+  @ApiProperty({ type: String, nullable: true, example: '2026-11-10', description: 'YYYY-MM-DD' })
   startsOn: string | null;
 
-  @ApiProperty({ nullable: true, example: '2026-12-20', description: 'YYYY-MM-DD' })
+  @ApiProperty({ type: String, nullable: true, example: '2026-12-20', description: 'YYYY-MM-DD' })
   endsOn: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   notes: string | null;
 
   @ApiProperty({ type: ClassCourseDto })
@@ -270,6 +270,6 @@ export class ClassListDto {
   @ApiProperty({ type: [ClassDto] })
   items: ClassDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }

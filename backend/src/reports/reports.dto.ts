@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { ClassStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { IsCalendarDate } from '../users/users.validation.js';
 
 const CLASS_STATUSES = Object.values(ClassStatus) as ClassStatus[];
@@ -34,7 +35,7 @@ export class ReportCourseRefDto {
   @ApiProperty({ example: 'ENG-A1' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الإنجليزية المستوى الأول' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الإنجليزية المستوى الأول' } })
   name: LocalizedText;
 }
 
@@ -45,7 +46,7 @@ export class ReportClassRefDto {
   @ApiProperty({ example: 'ENG-A1-2026-1' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'فصل الصباح' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'فصل الصباح' } })
   name: LocalizedText;
 
   @ApiProperty({ enum: CLASS_STATUSES })

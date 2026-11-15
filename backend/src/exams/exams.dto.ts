@@ -279,10 +279,10 @@ export class ExamDto {
   @ApiProperty({ type: AssignmentLessonDto, nullable: true, description: 'The lesson the exam is held in, if any' })
   lesson: AssignmentLessonDto | null;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
-  @ApiProperty({ type: Object, nullable: true, description: 'Localized description or null' })
+  @ApiProperty({ type: () => AssignmentInstructionsDto, nullable: true, description: 'Localized description or null' })
   description: LocalizedText | null;
 
   @ApiProperty({ enum: EXAM_TYPES })
@@ -329,6 +329,6 @@ export class ExamListDto {
   @ApiProperty({ type: [ExamDto], description: 'By exam date (undated last), then id' })
   items: ExamDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }

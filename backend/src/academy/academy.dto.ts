@@ -16,7 +16,7 @@ function rawValue({ obj, key }: { obj: Record<string, unknown>; key: string }): 
 
 /** `settings.scheduling` of a PATCH (MOD-02-T03, D-R20): per key, absent = unchanged, `null` = clear. */
 export class SchedulingSettingsPatchDto {
-  @ApiPropertyOptional({ nullable: true, minimum: 0, maximum: 6, example: 6, description: 'First day of the week: 0 = Sunday … 6 = Saturday; null clears it' })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 0, maximum: 6, example: 6, description: 'First day of the week: 0 = Sunday … 6 = Saturday; null clears it' })
   @ValidateIf((dto: SchedulingSettingsPatchDto) => dto.weekStartsOn !== undefined && dto.weekStartsOn !== null)
   @Transform(rawValue)
   @MatchesSchema(weekStartsOnSchema, 'settings.scheduling.weekStartsOn must be an integer 0–6 (0 = Sunday) or null')
@@ -36,7 +36,7 @@ export class SchedulingSettingsPatchDto {
 
 /** `settings.certificates` of a PATCH (MOD-10-T02, D-R51): absent = unchanged, `null` = clear (the default `CERT`). */
 export class CertificatesSettingsPatchDto {
-  @ApiPropertyOptional({ nullable: true, example: 'ACA', description: 'Prefix of the certificate serials PREFIX-YYYY-NNNNN: 2–10 upper-case letters or digits; null clears it (CERT)' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'ACA', description: 'Prefix of the certificate serials PREFIX-YYYY-NNNNN: 2–10 upper-case letters or digits; null clears it (CERT)' })
   @ValidateIf((dto: CertificatesSettingsPatchDto) => dto.serialPrefix !== undefined && dto.serialPrefix !== null)
   @Transform(rawValue)
   @MatchesSchema(serialPrefixSchema, 'settings.certificates.serialPrefix must be 2–10 upper-case letters or digits, or null')
@@ -83,7 +83,7 @@ export class UpdateAcademyDto {
   @Type(() => LocalizedTextDto)
   name?: LocalizedTextDto;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: LOGO_URL_MAX_LENGTH, example: 'https://cdn.example.com/academy/logo.png', description: 'Absolute http(s) URL; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: LOGO_URL_MAX_LENGTH, example: 'https://cdn.example.com/academy/logo.png', description: 'Absolute http(s) URL; null clears it' })
   @ValidateIf((dto: UpdateAcademyDto) => dto.logoUrl !== undefined && dto.logoUrl !== null)
   @Transform(nullableTextParam)
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true, require_tld: false }, { message: 'logoUrl must be an absolute http(s) URL' })
@@ -110,14 +110,14 @@ export class UpdateAcademyDto {
   @Matches(CURRENCY_PATTERN, { message: 'currency must be an ISO 4217 code of three letters, e.g. SAR' })
   currency?: string;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: EMAIL_MAX_LENGTH, example: 'info@academy.example', description: 'Trimmed and lower-cased; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: EMAIL_MAX_LENGTH, example: 'info@academy.example', description: 'Trimmed and lower-cased; null clears it' })
   @ValidateIf((dto: UpdateAcademyDto) => dto.contactEmail !== undefined && dto.contactEmail !== null)
   @Transform(nullableIdentifierParam)
   @IsEmail({}, { message: 'contactEmail must be a valid e-mail address' })
   @MaxLength(EMAIL_MAX_LENGTH)
   contactEmail?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, example: '+966500000000', description: 'E.164; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '+966500000000', description: 'E.164; null clears it' })
   @ValidateIf((dto: UpdateAcademyDto) => dto.contactPhone !== undefined && dto.contactPhone !== null)
   @Transform(nullableTextParam)
   @IsString()
@@ -148,10 +148,10 @@ export class AcademyDto {
   @ApiProperty({ example: 'articode', description: 'Deployment identifier; read-only here' })
   slug: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
   name: LocalizedText;
 
-  @ApiProperty({ nullable: true, description: 'Absolute URL of the logo' })
+  @ApiProperty({ type: String, nullable: true, description: 'Absolute URL of the logo' })
   logoUrl: string | null;
 
   @ApiProperty({ enum: LOCALES, example: 'ar' })
@@ -163,10 +163,10 @@ export class AcademyDto {
   @ApiProperty({ example: 'SAR', description: 'ISO 4217 code' })
   currency: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   contactEmail: string | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164' })
+  @ApiProperty({ type: String, nullable: true, description: 'E.164' })
   contactPhone: string | null;
 
   @ApiProperty({ type: () => AcademySettingsDto, description: 'Every known settings key; null = not set (MOD-02-T03)' })
@@ -180,7 +180,7 @@ export class AcademyDto {
 }
 
 export class SchedulingSettingsDto {
-  @ApiProperty({ nullable: true, minimum: 0, maximum: 6, example: 6, description: 'First day of the week: 0 = Sunday … 6 = Saturday' })
+  @ApiProperty({ type: 'integer', nullable: true, minimum: 0, maximum: 6, example: 6, description: 'First day of the week: 0 = Sunday … 6 = Saturday' })
   weekStartsOn: number | null;
 
   @ApiProperty({ nullable: true, type: [Number], example: [0, 1, 2, 3, 4], description: 'Working days in ascending order (0 = Sunday … 6 = Saturday)' })

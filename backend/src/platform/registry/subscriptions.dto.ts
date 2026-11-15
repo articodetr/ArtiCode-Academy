@@ -9,6 +9,7 @@ import { SubscriptionStatus } from '../../generated/platform/client.js';
 import { IsInstant } from '../../lessons/lessons.time.js';
 import { CURRENT_SUBSCRIPTION_STATUSES } from './registry.changes.js';
 import type { CurrentSubscriptionStatus } from './registry.changes.js';
+import { PlatformLocalizedTextDto } from './registry.dto.js';
 import { HasCharacters, NOTES_MAX_LENGTH, rawNullableText, rawValue } from './registry.validation.js';
 
 export const SUBSCRIPTION_STATUSES = Object.values(SubscriptionStatus) as SubscriptionStatus[];
@@ -29,21 +30,21 @@ export class CreateSubscriptionDto {
   @IsInstant()
   startsAt: string;
 
-  @ApiPropertyOptional({ nullable: true, description: `${INSTANT}; after startsAt` })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true, description: `${INSTANT}; after startsAt` })
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
   @IsInstant()
   endsAt?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, description: `${INSTANT}; after startsAt; only with status \`trial\`` })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true, description: `${INSTANT}; after startsAt; only with status \`trial\`` })
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
   @IsInstant()
   trialEndsAt?: string | null;
 
-  @ApiPropertyOptional({ maxLength: NOTES_MAX_LENGTH, description: 'Plain text, trimmed' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: NOTES_MAX_LENGTH, description: 'Plain text, trimmed' })
   @IsOptional()
   @Transform(rawNullableText)
   @ValidateIf((_dto, value) => value !== null)
@@ -65,21 +66,21 @@ export class UpdateSubscriptionDto {
   @IsIn(SUBSCRIPTION_STATUSES)
   status?: SubscriptionStatus;
 
-  @ApiPropertyOptional({ nullable: true, description: INSTANT })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true, description: INSTANT })
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
   @IsInstant()
   endsAt?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, description: `${INSTANT}; a new non-null value only while the subscription is (or becomes) a trial` })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true, description: `${INSTANT}; a new non-null value only while the subscription is (or becomes) a trial` })
   @IsOptional()
   @Transform(rawValue)
   @ValidateIf((_dto, value) => value !== null)
   @IsInstant()
   trialEndsAt?: string | null;
 
-  @ApiPropertyOptional({ maxLength: NOTES_MAX_LENGTH, nullable: true })
+  @ApiPropertyOptional({ type: String, maxLength: NOTES_MAX_LENGTH, nullable: true })
   @IsOptional()
   @Transform(rawNullableText)
   @ValidateIf((_dto, value) => value !== null)
@@ -95,7 +96,7 @@ export class SubscriptionPlanRefDto {
   @ApiProperty({ example: 'standard' })
   key: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => PlatformLocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 
   @ApiProperty()
@@ -118,13 +119,13 @@ export class SubscriptionDto {
   @ApiProperty({ description: 'ISO 8601' })
   startsAt: string;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   endsAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   trialEndsAt: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   notes: string | null;
 
   @ApiProperty({ description: 'ISO 8601' })

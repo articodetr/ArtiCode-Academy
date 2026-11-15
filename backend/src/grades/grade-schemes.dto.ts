@@ -27,7 +27,7 @@ export class GradeSchemeBandInputDto {
   @Type(() => LocalizedTextDto)
   label: LocalizedTextDto;
 
-  @ApiPropertyOptional({ maxLength: BAND_LETTER_MAX_LENGTH, nullable: true, example: 'A', description: 'Optional short code; trimmed, blank = none' })
+  @ApiPropertyOptional({ type: String, maxLength: BAND_LETTER_MAX_LENGTH, nullable: true, example: 'A', description: 'Optional short code; trimmed, blank = none' })
   @IsOptional()
   @Transform(nullableTextParam)
   @ValidateIf((_dto, value) => value !== null)
@@ -104,7 +104,7 @@ export class GradeSchemeBandDto {
   @ApiProperty({ example: 60 })
   minPercent: number;
 
-  @ApiProperty({ description: 'Localized label `{ ar, en?, tr? }`', example: { ar: 'مقبول', en: 'Pass' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized label `{ ar, en?, tr? }`', example: { ar: 'مقبول', en: 'Pass' } })
   label: LocalizedText;
 
   @ApiProperty({ type: String, nullable: true, example: 'D' })
@@ -118,7 +118,7 @@ export class GradeSchemeDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'السلّم الافتراضي', en: 'Default scale' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'السلّم الافتراضي', en: 'Default scale' } })
   name: LocalizedText;
 
   @ApiProperty({ description: 'Exactly one scheme is the default once a scheme exists' })

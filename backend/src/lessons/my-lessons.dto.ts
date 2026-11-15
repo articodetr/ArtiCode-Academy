@@ -5,6 +5,7 @@ import type { SortOrder } from '../common/keyset-cursor.js';
 import { MyClassStudentDto, MyClassTeacherDto } from '../enrollments/my-classes.dto.js';
 import type { MyClassRelation } from '../enrollments/my-classes.policy.js';
 import type { AttendanceStatus, DeliveryMode, LessonStatus } from '../generated/prisma/client.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { ScheduleRoomDto } from '../schedule/class-schedule.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { ATTENDANCE_STATUSES } from './attendance.dto.js';
@@ -80,10 +81,10 @@ export class MyLessonItemDto {
   @ApiProperty({ format: 'uuid', description: 'The lesson (repeated when the caller owns it through several students)' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
-  @ApiProperty({ type: Object, nullable: true, description: 'Localized description or null' })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized description or null' })
   description: LocalizedText | null;
 
   @ApiProperty({ enum: DELIVERY_MODES })
@@ -130,6 +131,6 @@ export class MyLessonListDto {
   @ApiProperty({ type: [MyLessonItemDto], description: 'By start time then lesson id, inside a lesson `self` → `child` by student id; empty for a user with no owned enrollment' })
   items: MyLessonItemDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page of lessons; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page of lessons; null on the last page' })
   nextCursor: string | null;
 }

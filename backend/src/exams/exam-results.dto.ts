@@ -45,7 +45,7 @@ export class ExamResultInputDto {
   @Validate(ScoreMatchesStatus)
   status: ExamResultStatus;
 
-  @ApiPropertyOptional({ minimum: 0, maximum: EXAM_SCORE_LIMIT, example: 41.5, description: 'Required with `scored`, refused otherwise; a JSON number with at most two decimals, at most the exam’s maxScore (`score_out_of_range`)' })
+  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: EXAM_SCORE_LIMIT, example: 41.5, description: 'Required with `scored`, refused otherwise; a JSON number with at most two decimals, at most the exam’s maxScore (`score_out_of_range`)' })
   @IsOptional()
   @Transform(rawValue)
   @IsDecimalNumber(2)

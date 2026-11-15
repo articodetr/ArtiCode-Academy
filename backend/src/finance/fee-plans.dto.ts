@@ -91,12 +91,12 @@ export class UpdateFeePlanDto {
   @Type(() => LocalizedTextDto)
   name?: LocalizedTextDto;
 
-  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
   @ValidateIf((dto: UpdateFeePlanDto) => dto.courseId !== undefined && dto.courseId !== null)
   @IsUUID('all')
   courseId?: string | null;
 
-  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
   @ValidateIf((dto: UpdateFeePlanDto) => dto.classId !== undefined && dto.classId !== null)
   @IsUUID('all')
   classId?: string | null;
@@ -145,12 +145,12 @@ export class FeePlanRefDto {
   @ApiProperty()
   code: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   name: LocalizedText;
 }
 
 export class FeePlanLineOutDto {
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   description: LocalizedText;
 
   @ApiProperty({ example: 1500 })
@@ -169,7 +169,7 @@ export class FeePlanDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: () => LocalizedTextDto })
   name: LocalizedText;
 
   @ApiProperty({ type: FeePlanRefDto, nullable: true })

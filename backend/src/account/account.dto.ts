@@ -43,16 +43,16 @@ export class InvitationPreviewDto {
   @ApiProperty({ example: 'سارة أحمد' })
   fullName: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   displayName: string | null;
 
   @ApiProperty({ nullable: true, enum: ['ar', 'en', 'tr'], description: 'Preferred locale of the invitee; null = academy default' })
   locale: string | null;
 
-  @ApiProperty({ nullable: true, example: 's***@example.test', description: 'Masked e-mail address, or null for a username-only account' })
+  @ApiProperty({ type: String, nullable: true, example: 's***@example.test', description: 'Masked e-mail address, or null for a username-only account' })
   email: string | null;
 
-  @ApiProperty({ nullable: true, example: 'sa***', description: 'Masked username, or null' })
+  @ApiProperty({ type: String, nullable: true, example: 'sa***', description: 'Masked username, or null' })
   username: string | null;
 
   @ApiProperty({ type: [String], example: ['teacher'], description: 'Role keys the account holds, sorted' })

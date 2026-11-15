@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsDefined, IsInt, IsObject, IsOptional, IsString, IsUUID, Matches, Max, Min, NotContains, ValidateNested, registerDecorator } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { ANNOUNCEMENT_AUDIENCE_KINDS, ANNOUNCEMENT_ROLE_KEYS } from './announcements.audience.js';
 import { ANNOUNCEMENT_MAX_RECIPIENTS } from './notifications.errors.js';
 
@@ -197,7 +198,7 @@ export class AnnouncementClassDto {
   @ApiProperty({ example: 'ENG-A1-2026-1' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 }
 

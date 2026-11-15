@@ -2,6 +2,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import type { LocalizedText } from '../../authorization/localized-text.js';
+import { PlatformLocalizedTextDto } from '../registry/registry.dto.js';
 import { PROBE_OUTCOMES, PROBE_REASONS } from './probe.rules.js';
 import type { ProbeOutcomeValue } from './probe.rules.js';
 
@@ -108,7 +109,7 @@ export class FleetAcademyDto {
   @ApiProperty({ example: 'demo' })
   slug: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => PlatformLocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 
   @ApiProperty({ enum: ['provisioning', 'active', 'suspended'], description: 'Never `archived` here' })

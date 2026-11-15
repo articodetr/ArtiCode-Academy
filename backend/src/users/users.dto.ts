@@ -312,24 +312,24 @@ const EMPLOYEE_NUMBER_MESSAGE = 'employeeNumber must be 1–32 letters, digits, 
  * clears an optional field and is rejected for `fullName`.
  */
 export class UpdateStudentProfileDto {
-  @ApiPropertyOptional({ nullable: true, maxLength: 32, example: 'S-2026-001', description: 'Unique within the academy; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 32, example: 'S-2026-001', description: 'Unique within the academy; null clears it' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
   @Matches(REFERENCE_NUMBER_PATTERN, { message: STUDENT_NUMBER_MESSAGE })
   studentNumber?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, example: '2012-05-01', description: 'YYYY-MM-DD; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '2012-05-01', description: 'YYYY-MM-DD; null clears it' })
   @IsOptional()
   @IsCalendarDate()
   dateOfBirth?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, example: '2026-09-01', description: 'YYYY-MM-DD; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '2026-09-01', description: 'YYYY-MM-DD; null clears it' })
   @IsOptional()
   @IsCalendarDate()
   enrolledOn?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 2000, description: 'Administrative notes (never returned); null clears them' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000, description: 'Administrative notes (never returned); null clears them' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
@@ -339,49 +339,49 @@ export class UpdateStudentProfileDto {
 
 /** Employee profile fields; `kind` (T07) and `isActive` (employment status — not part of the account state machine, no API yet) are not updatable here. */
 export class UpdateEmployeeProfileDto {
-  @ApiPropertyOptional({ nullable: true, maxLength: 32, example: 'EMP-017', description: 'Unique within the academy; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 32, example: 'EMP-017', description: 'Unique within the academy; null clears it' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
   @Matches(REFERENCE_NUMBER_PATTERN, { message: EMPLOYEE_NUMBER_MESSAGE })
   employeeNumber?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 120, example: 'Mathematics teacher' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 120, example: 'Mathematics teacher' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
   @Length(1, 120)
   jobTitle?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 120, example: 'Mathematics' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 120, example: 'Mathematics' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
   @Length(1, 120)
   specialization?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, example: '2025-02-10', description: 'YYYY-MM-DD; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '2025-02-10', description: 'YYYY-MM-DD; null clears it' })
   @IsOptional()
   @IsCalendarDate()
   hiredOn?: string | null;
 }
 
 export class UpdateUserDto {
-  @ApiPropertyOptional({ nullable: true, maxLength: EMAIL_MAX_LENGTH, example: 'sara@example.com', description: 'Trimmed and lower-cased; null removes it (a username must remain). Changing it resets the e-mail verification.' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: EMAIL_MAX_LENGTH, example: 'sara@example.com', description: 'Trimmed and lower-cased; null removes it (a username must remain). Changing it resets the e-mail verification.' })
   @IsOptional()
   @Transform(nullableIdentifierParam)
   @IsEmail({}, { message: 'email must be a valid e-mail address' })
   @MaxLength(EMAIL_MAX_LENGTH)
   email?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, minLength: 3, maxLength: 64, example: 'sara.ahmed', description: 'Trimmed and lower-cased; null removes it (an e-mail must remain)' })
+  @ApiPropertyOptional({ type: String, nullable: true, minLength: 3, maxLength: 64, example: 'sara.ahmed', description: 'Trimmed and lower-cased; null removes it (an e-mail must remain)' })
   @IsOptional()
   @Transform(nullableIdentifierParam)
   @IsString()
   @Matches(USERNAME_PATTERN, { message: 'username must be 3–64 lower-case letters, digits, ".", "_" or "-" starting with a letter or digit' })
   username?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, example: '+905551234567', description: 'E.164; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '+905551234567', description: 'E.164; null clears it' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
@@ -395,21 +395,21 @@ export class UpdateUserDto {
   @Length(2, 200)
   fullName?: string;
 
-  @ApiPropertyOptional({ nullable: true, minLength: 2, maxLength: 200, example: 'Sara Ahmed' })
+  @ApiPropertyOptional({ type: String, nullable: true, minLength: 2, maxLength: 200, example: 'Sara Ahmed' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
   @Length(2, 200)
   fullNameLatin?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 120 })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 120 })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsString()
   @Length(1, 120)
   displayName?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: AVATAR_URL_MAX_LENGTH, example: 'https://cdn.example.com/avatars/sara.png', description: 'Absolute http(s) URL; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: AVATAR_URL_MAX_LENGTH, example: 'https://cdn.example.com/avatars/sara.png', description: 'Absolute http(s) URL; null clears it' })
   @IsOptional()
   @Transform(nullableTextParam)
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true, require_tld: false }, { message: 'avatarUrl must be an absolute http(s) URL' })
@@ -524,25 +524,25 @@ export class UserSummaryDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ nullable: true, example: 'sara@example.com', description: 'null without `users.read_contact`' })
+  @ApiProperty({ type: String, nullable: true, example: 'sara@example.com', description: 'null without `users.read_contact`' })
   email: string | null;
 
-  @ApiProperty({ nullable: true, example: 'sara.ahmed', description: 'null without `users.read_contact`' })
+  @ApiProperty({ type: String, nullable: true, example: 'sara.ahmed', description: 'null without `users.read_contact`' })
   username: string | null;
 
-  @ApiProperty({ nullable: true, example: '+905551234567', description: 'E.164; null without `users.read_contact`' })
+  @ApiProperty({ type: String, nullable: true, example: '+905551234567', description: 'E.164; null without `users.read_contact`' })
   phone: string | null;
 
   @ApiProperty({ example: 'سارة أحمد' })
   fullName: string;
 
-  @ApiProperty({ nullable: true, example: 'Sara Ahmed' })
+  @ApiProperty({ type: String, nullable: true, example: 'Sara Ahmed' })
   fullNameLatin: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   displayName: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl: string | null;
 
   @ApiProperty({ nullable: true, enum: ['ar', 'en', 'tr'] })
@@ -551,13 +551,13 @@ export class UserSummaryDto {
   @ApiProperty({ enum: Object.values(UserStatus), example: 'active' })
   status: UserStatus;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601; null without `users.read_contact`' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601; null without `users.read_contact`' })
   emailVerifiedAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601; null without `users.read_contact`' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601; null without `users.read_contact`' })
   lastLoginAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601; set while the account is temporarily locked after failed logins; null without `users.read_contact`' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601; set while the account is temporarily locked after failed logins; null without `users.read_contact`' })
   lockedUntil: string | null;
 
   @ApiProperty({ description: 'ISO 8601' })
@@ -566,7 +566,7 @@ export class UserSummaryDto {
   @ApiProperty({ description: 'ISO 8601' })
   updatedAt: string;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601; non-null only for soft-deleted users (visible with includeDeleted)' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601; non-null only for soft-deleted users (visible with includeDeleted)' })
   deletedAt: string | null;
 }
 
@@ -579,7 +579,7 @@ export class UserListDto {
   @ApiProperty({ type: [UserListItemDto] })
   items: UserListItemDto[];
 
-  @ApiProperty({ nullable: true, description: 'Pass as `cursor` to fetch the next page; null when exhausted' })
+  @ApiProperty({ type: String, nullable: true, description: 'Pass as `cursor` to fetch the next page; null when exhausted' })
   nextCursor: string | null;
 }
 
@@ -587,35 +587,44 @@ export class UserRoleSummaryDto {
   @ApiProperty({ example: 'teacher' })
   key: string;
 
-  @ApiProperty({ description: 'Localized label `{ ar, en?, tr? }`', example: { ar: 'معلم', en: 'Teacher' } })
+  // KI-051: the shape of LocalizedTextDto, written inline — importing it from
+  // roles.dto.ts would close an import cycle (roles.dto.ts imports this file).
+  @ApiProperty({
+    type: 'object',
+    properties: { ar: { type: 'string' }, en: { type: 'string' }, tr: { type: 'string' } },
+    required: ['ar'],
+    selfRequired: true,
+    description: 'Localized label `{ ar, en?, tr? }`',
+    example: { ar: 'معلم', en: 'Teacher' },
+  })
   label: LocalizedText;
 }
 
 export class StudentProfileSummaryDto {
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   studentNumber: string | null;
 
-  @ApiProperty({ nullable: true, description: 'YYYY-MM-DD' })
+  @ApiProperty({ type: String, nullable: true, description: 'YYYY-MM-DD' })
   dateOfBirth: string | null;
 
-  @ApiProperty({ nullable: true, description: 'YYYY-MM-DD' })
+  @ApiProperty({ type: String, nullable: true, description: 'YYYY-MM-DD' })
   enrolledOn: string | null;
 }
 
 export class EmployeeProfileSummaryDto {
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   employeeNumber: string | null;
 
   @ApiProperty({ enum: Object.values(EmployeeKind) })
   kind: EmployeeKind;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   jobTitle: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   specialization: string | null;
 
-  @ApiProperty({ nullable: true, description: 'YYYY-MM-DD' })
+  @ApiProperty({ type: String, nullable: true, description: 'YYYY-MM-DD' })
   hiredOn: string | null;
 
   @ApiProperty()
@@ -630,7 +639,7 @@ export class GuardianLinkDto {
   @ApiProperty()
   fullName: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   displayName: string | null;
 
   @ApiProperty({ enum: Object.values(GuardianRelationship) })

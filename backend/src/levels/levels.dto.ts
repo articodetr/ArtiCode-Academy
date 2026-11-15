@@ -108,10 +108,10 @@ export class LevelDto {
   @ApiProperty({ example: 'BEG' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'مبتدئ', en: 'Beginner' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'مبتدئ', en: 'Beginner' } })
   name: LocalizedText;
 
-  @ApiProperty({ nullable: true, description: 'Localized description `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized description `{ ar, en?, tr? }`' })
   description: LocalizedText | null;
 
   @ApiProperty({ description: 'Position in the list (0 first); gaps are possible after a deletion' })
@@ -121,6 +121,7 @@ export class LevelDto {
   isActive: boolean;
 
   @ApiProperty({
+    type: 'integer',
     nullable: true,
     description: 'Courses of any state using the level — for holders of `courses.manage` only (null otherwise); a level in use cannot be deleted',
   })

@@ -80,28 +80,28 @@ export class EnrollmentStudentDto {
   @ApiProperty()
   fullName: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   fullNameLatin: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   displayName: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl: string | null;
 
   @ApiProperty({ enum: USER_STATUSES })
   status: UserStatus;
 
-  @ApiProperty({ nullable: true, description: 'null without `users.read_contact`' })
+  @ApiProperty({ type: String, nullable: true, description: 'null without `users.read_contact`' })
   email: string | null;
 
-  @ApiProperty({ nullable: true, description: 'null without `users.read_contact`' })
+  @ApiProperty({ type: String, nullable: true, description: 'null without `users.read_contact`' })
   username: string | null;
 
-  @ApiProperty({ nullable: true, description: 'null without `users.read_contact`' })
+  @ApiProperty({ type: String, nullable: true, description: 'null without `users.read_contact`' })
   phone: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601; set when the account was soft-deleted after enrolling (its enrollment stays)' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601; set when the account was soft-deleted after enrolling (its enrollment stays)' })
   deletedAt: string | null;
 }
 
@@ -121,16 +121,17 @@ export class EnrollmentDto {
   @ApiProperty({ description: 'ISO 8601 — first enrollment; kept on reactivation' })
   enrolledAt: string;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601 — last time the enrollment became active' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601 — last time the enrollment became active' })
   activatedAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   completedAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   withdrawnAt: string | null;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     description: 'Set on withdraw; null for callers without `enrollments.manage` (an assigned teacher reading the roster sees `student.deletedAt` but not the reason)',
   })
@@ -150,6 +151,6 @@ export class EnrollmentListDto {
   @ApiProperty({ type: [EnrollmentDto], description: 'In enrollment order (time-ordered primary key)' })
   items: EnrollmentDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }

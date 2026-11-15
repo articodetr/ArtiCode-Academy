@@ -97,14 +97,14 @@ export class UpdateBranchDto {
   @Type(() => LocalizedTextDto)
   address?: LocalizedTextDto | null;
 
-  @ApiPropertyOptional({ nullable: true, example: '+966500000000', description: 'E.164; null clears it' })
+  @ApiPropertyOptional({ type: String, nullable: true, example: '+966500000000', description: 'E.164; null clears it' })
   @ValidateIf((dto: UpdateBranchDto) => dto.phone !== undefined && dto.phone !== null)
   @Transform(nullableTextParam)
   @IsString()
   @Matches(E164_PATTERN, { message: PHONE_MESSAGE })
   phone?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: TIME_ZONE_MAX_LENGTH, example: 'Europe/Istanbul', description: 'Canonical IANA name or `UTC`; null = the academy’s again' })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: TIME_ZONE_MAX_LENGTH, example: 'Europe/Istanbul', description: 'Canonical IANA name or `UTC`; null = the academy’s again' })
   @ValidateIf((dto: UpdateBranchDto) => dto.timezone !== undefined && dto.timezone !== null)
   @Transform(nullableTrimParam)
   @IsString()
@@ -132,16 +132,16 @@ export class BranchDto {
   @ApiProperty({ example: 'MAIN' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الفرع الرئيسي', en: 'Main branch' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'الفرع الرئيسي', en: 'Main branch' } })
   name: LocalizedText;
 
-  @ApiProperty({ nullable: true, description: 'Localized address `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true, description: 'Localized address `{ ar, en?, tr? }`' })
   address: LocalizedText | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164' })
+  @ApiProperty({ type: String, nullable: true, description: 'E.164' })
   phone: string | null;
 
-  @ApiProperty({ nullable: true, description: 'IANA time zone; null = the academy’s' })
+  @ApiProperty({ type: String, nullable: true, description: 'IANA time zone; null = the academy’s' })
   timezone: string | null;
 
   @ApiProperty({ description: 'At most one branch is main' })

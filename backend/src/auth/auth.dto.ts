@@ -34,16 +34,16 @@ export class AuthUserDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
-  @ApiProperty({ nullable: true, example: 'admin@example.com' })
+  @ApiProperty({ type: String, nullable: true, example: 'admin@example.com' })
   email: string | null;
 
-  @ApiProperty({ nullable: true, example: 'student1' })
+  @ApiProperty({ type: String, nullable: true, example: 'student1' })
   username: string | null;
 
   @ApiProperty({ example: 'سارة أحمد' })
   fullName: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   displayName: string | null;
 
   @ApiProperty({ nullable: true, enum: ['ar', 'en', 'tr'] })

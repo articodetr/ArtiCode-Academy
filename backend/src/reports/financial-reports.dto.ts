@@ -192,7 +192,7 @@ export class ReceivableTotalsDto {
 }
 
 export class ReceivablesReportDto {
-  @ApiProperty({ type: Object, nullable: true, description: 'Always null — receivables are read as of today' })
+  @ApiProperty({ type: () => ReportPeriodDto, nullable: true, description: 'Always null — receivables are read as of today' })
   period: null;
 
   @ApiProperty({ example: '2026-11-11', description: 'Today in the academy’s zone' })

@@ -27,16 +27,17 @@ export class StudentEnrollmentItemDto {
   @ApiProperty({ description: 'ISO 8601 — first enrollment; kept on reactivation' })
   enrolledAt: string;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601 — last time the enrollment became active' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601 — last time the enrollment became active' })
   activatedAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   completedAt: string | null;
 
-  @ApiProperty({ nullable: true, description: 'ISO 8601' })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'ISO 8601' })
   withdrawnAt: string | null;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     description: 'Set on withdraw; null for callers without `enrollments.manage` (a holder of `invoices.manage` alone never reads it)',
   })

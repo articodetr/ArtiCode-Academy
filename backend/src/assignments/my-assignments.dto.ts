@@ -7,8 +7,9 @@ import { MyClassStudentDto } from '../enrollments/my-classes.dto.js';
 import type { MyClassRelation } from '../enrollments/my-classes.policy.js';
 import { EnrollmentStatus, SubmissionStatus } from '../generated/prisma/client.js';
 import { IsInstant } from '../lessons/lessons.time.js';
+import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
-import { ASSIGNMENTS_PAGE_DEFAULT, ASSIGNMENTS_PAGE_MAX, AssignmentLessonDto } from './assignments.dto.js';
+import { ASSIGNMENTS_PAGE_DEFAULT, ASSIGNMENTS_PAGE_MAX, AssignmentInstructionsDto, AssignmentLessonDto } from './assignments.dto.js';
 import { MY_ASSIGNMENT_STATUSES } from './my-assignments.policy.js';
 import type { MyAssignmentStatus } from './my-assignments.policy.js';
 import { SUBMIT_BLOCKERS } from './submissions.policy.js';
@@ -114,10 +115,10 @@ export class MyAssignmentItemDto {
   @ApiProperty({ format: 'uuid', description: 'The assignment (repeated when the caller owns it through several students)' })
   id: string;
 
-  @ApiProperty({ description: 'Localized title `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
 
-  @ApiProperty({ type: Object, nullable: true, description: 'Localized instructions or null' })
+  @ApiProperty({ type: () => AssignmentInstructionsDto, nullable: true, description: 'Localized instructions or null' })
   instructions: LocalizedText | null;
 
   @ApiProperty({ enum: MY_ASSIGNMENT_STATUSES })
@@ -186,6 +187,6 @@ export class MyAssignmentListDto {
   @ApiProperty({ type: [MyAssignmentItemDto], description: 'By due date (undated last), then id; inside one assignment `self` before `child`, then the student’s id' })
   items: MyAssignmentItemDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }

@@ -183,13 +183,13 @@ export class UpdateCourseDto {
   @Type(() => LocalizedTextDto)
   description?: LocalizedTextDto | null;
 
-  @ApiPropertyOptional({ format: 'uuid', nullable: true })
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
   @IsOptional()
   @ValidateIf((_dto, value) => value !== null)
   @IsUUID('all')
   levelId?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 0.1, maximum: DURATION_HOURS_MAX })
+  @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0.1, maximum: DURATION_HOURS_MAX })
   @IsOptional()
   @Transform(rawNumber)
   @ValidateIf((_dto, value) => value !== null)
@@ -198,7 +198,7 @@ export class UpdateCourseDto {
   @Max(DURATION_HOURS_MAX)
   durationHours?: number | null;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 1, maximum: SESSIONS_MAX })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 1, maximum: SESSIONS_MAX })
   @IsOptional()
   @Transform(rawNumber)
   @ValidateIf((_dto, value) => value !== null)
@@ -207,7 +207,7 @@ export class UpdateCourseDto {
   @Max(SESSIONS_MAX)
   sessionsCount?: number | null;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 0, maximum: AGE_MAX })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 0, maximum: AGE_MAX })
   @IsOptional()
   @Transform(rawNumber)
   @ValidateIf((_dto, value) => value !== null)
@@ -216,7 +216,7 @@ export class UpdateCourseDto {
   @Max(AGE_MAX)
   minAge?: number | null;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 0, maximum: AGE_MAX })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 0, maximum: AGE_MAX })
   @IsOptional()
   @Transform(rawNumber)
   @ValidateIf((_dto, value) => value !== null)
@@ -243,7 +243,7 @@ export class CourseLevelDto {
   @ApiProperty({ example: 'BEG' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`' })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
   name: LocalizedText;
 
   @ApiProperty()
@@ -257,13 +257,13 @@ export class CourseDto {
   @ApiProperty({ example: 'PY-101' })
   code: string;
 
-  @ApiProperty({ description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'أساسيات بايثون', en: 'Python Basics' } })
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`', example: { ar: 'أساسيات بايثون', en: 'Python Basics' } })
   name: LocalizedText;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true })
   summary: LocalizedText | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: () => LocalizedTextDto, nullable: true })
   description: LocalizedText | null;
 
   @ApiProperty({ type: CourseLevelDto, nullable: true })
@@ -272,16 +272,16 @@ export class CourseDto {
   @ApiProperty({ enum: COURSE_STATUSES })
   status: CourseStatus;
 
-  @ApiProperty({ nullable: true, example: 24.5 })
+  @ApiProperty({ type: Number, nullable: true, example: 24.5 })
   durationHours: number | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: 'integer', nullable: true })
   sessionsCount: number | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: 'integer', nullable: true })
   minAge: number | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: 'integer', nullable: true })
   maxAge: number | null;
 
   @ApiProperty({ description: 'Number of syllabus items (MOD-04-T04)' })
@@ -298,6 +298,6 @@ export class CourseListDto {
   @ApiProperty({ type: [CourseDto] })
   items: CourseDto[];
 
-  @ApiProperty({ nullable: true, description: 'Cursor of the next page; null on the last page' })
+  @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
 }
