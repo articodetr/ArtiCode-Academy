@@ -12,7 +12,7 @@
 // shared API-035 reading, usually already loaded by the header), so its first
 // request already carries the academy's «today».
 import { LinkOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Flex, Select, Space, Table, Tooltip, Typography } from 'antd'
+import { Alert, App, Button, Card, Flex, Input, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -36,6 +36,7 @@ import { LESSON_PAGE_SIZES, defaultLessonFilters, hasActiveLessonFilters, useLes
 import type { LessonsListFilters } from '../lessons/useLessonsList'
 import { ClassPicker } from '../timetable/TimetablePickers'
 import { localizedLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function LessonsPage() {
   const { t } = useTranslation()
@@ -67,6 +68,8 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
   const [defaults] = useState(() => defaultLessonFilters(dayZone))
   const list = useLessonsList(defaults, dayZone)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
 
   const columns: TableProps<Lesson>['columns'] = [
@@ -177,6 +180,16 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
 
       <Card>
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>
+          {/* Part of the title, Arabic or English (`q`, CH-0226). */}
+          <Input.Search
+            allowClear
+            placeholder={t('common.searchByTitle')}
+            aria-label={t('common.searchByTitle')}
+            maxLength={100}
+            defaultValue={list.filters.q}
+            onSearch={(value) => list.setFilters({ q: value.trim() || undefined })}
+            style={{ maxWidth: 280 }}
+          />
           {canPickClass ? (
             <ClassPicker
               allowClear

@@ -11,7 +11,7 @@
 // is not this device's; the due-date filter reads its days in the academy's
 // zone (assignments.zone.ts).
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Flex, Select, Space, Table, Tooltip, Typography } from 'antd'
+import { Alert, App, Button, Card, Flex, Input, Select, Space, Table, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +32,7 @@ import { ClassPicker } from '../timetable/TimetablePickers'
 import { isCalendarDate } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { localizedLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 function DateFilter({ value, onChange, label }: { value: string | undefined; onChange: (value: string | undefined) => void; label: string }) {
   return <input type="date" aria-label={label} className="ant-input" value={value ?? ''} onChange={(event) => onChange(isCalendarDate(event.target.value) ? event.target.value : undefined)} style={{ width: 170 }} />
@@ -53,6 +54,8 @@ export function AssignmentsPage() {
   const [defaults] = useState(() => defaultAssignmentFilters(filterZone))
   const list = useAssignmentsList(defaults)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
 
   const columns: TableProps<Assignment>['columns'] = [
@@ -170,6 +173,16 @@ export function AssignmentsPage() {
 
       <Card>
         <Flex gap={12} wrap align="center" style={{ marginBottom: 16 }}>
+          {/* Part of the title, Arabic or English (`q`, CH-0226). */}
+          <Input.Search
+            allowClear
+            placeholder={t('common.searchByTitle')}
+            aria-label={t('common.searchByTitle')}
+            maxLength={100}
+            defaultValue={list.filters.q}
+            onSearch={(value) => list.setFilters({ q: value.trim() || undefined })}
+            style={{ maxWidth: 280 }}
+          />
           {canPickClass ? (
             <ClassPicker
               allowClear

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { makeLesson } from '../test/lessons'
 import { makeListItem } from '../test/users'
 import { GlobalSearch } from './GlobalSearch'
 
@@ -50,5 +51,19 @@ describe('GlobalSearch (redesign)', () => {
 
     fireEvent.change(input, { target: { value: 'فاتوره' } })
     expect(await screen.findByText(ar.nav.payments)).toBeInTheDocument()
+  })
+  it('finds lessons by title (q, CH-0226) through the lessons list and opens them on their page', async () => {
+    const urls: string[] = []
+    mockFetch((url) => {
+      urls.push(url)
+      const path = new URL(url, 'http://localhost').pathname
+      if (path === '/api/lessons') return jsonResponse(200, { items: [makeLesson({ id: 'l-9', title: { ar: 'الحلقات التكرارية' } })], nextCursor: null })
+      return jsonResponse(200, { items: [], nextCursor: null })
+    })
+    renderWithProviders(<GlobalSearch />, { auth: makeAuth({ user: makeUser({ permissions: ['lessons.read'] }) }), route: '/' })
+    fireEvent.click(screen.getByLabelText(ar.search.open))
+    fireEvent.change(await screen.findByLabelText(ar.search.placeholder), { target: { value: 'الحلقات' } })
+    expect(await screen.findByText('الحلقات التكرارية')).toBeInTheDocument()
+    expect(urls.some((url) => url.startsWith('/api/lessons?') && url.includes(`q=${encodeURIComponent('الحلقات')}`))).toBe(true)
   })
 })

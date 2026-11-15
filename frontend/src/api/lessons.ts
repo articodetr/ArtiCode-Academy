@@ -91,6 +91,8 @@ export interface LessonList {
 }
 
 export interface ListLessonsParams {
+  /** Part of the Arabic or English title, 1–100 characters (CH-0226). */
+  q?: string
   classId?: string
   /** Lessons assigned to this teacher (a lesson without a teacher never matches). */
   teacherId?: string
@@ -142,6 +144,7 @@ export const LESSONS_PATH = '/api/lessons'
 /** `/api/lessons?…` with the given parameters only, in a fixed order. */
 export function lessonsListPath(params: ListLessonsParams = {}): string {
   const query = new URLSearchParams()
+  if (params.q?.trim()) query.set('q', params.q.trim().slice(0, 100))
   if (params.classId) query.set('classId', params.classId)
   if (params.teacherId) query.set('teacherId', params.teacherId)
   if (params.status) query.set('status', params.status)

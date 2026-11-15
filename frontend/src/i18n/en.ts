@@ -4,6 +4,7 @@ export const en: Translation = {
   common: {
     demoMode: "Demo data",
     demoBanner: "Module screens show local demo data until each module is wired to the server. Sign-in, the account page, the users page and the \"Server connection\" card are the parts that really talk to the server.",
+    searchByTitle: 'Search titles',
     pageSize: 'Items per page',
     sortOrder: 'Sort order',
     appName: 'ArtiCode Academy',
@@ -282,6 +283,9 @@ export const en: Translation = {
       users: 'People',
       classes: 'Classes',
       courses: 'Courses',
+      lessons: 'Lessons',
+      assignments: 'Assignments',
+      exams: 'Exams',
       invoices: 'Invoices',
       receipts: 'Receipts',
       certificates: 'Certificates',
