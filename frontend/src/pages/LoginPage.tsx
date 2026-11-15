@@ -2,7 +2,7 @@ import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Form, Input, Spin, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
@@ -109,6 +109,10 @@ export function LoginPage() {
             <Input.Password prefix={<LockOutlined />} autoComplete="current-password" />
           </Form.Item>
 
+          {/* The self-service reset request (API-021); the page says when the academy has not enabled it yet. */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8, marginBottom: 16 }}>
+            <Link to="/forgot-password">{t('forgotPassword.link')}</Link>
+          </div>
           <Button type="primary" htmlType="submit" block loading={submitting}>
             {submitting ? t('login.signingIn') : t('login.submit')}
           </Button>

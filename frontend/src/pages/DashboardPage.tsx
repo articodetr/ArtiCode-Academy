@@ -6,7 +6,14 @@ import {
 } from '@ant-design/icons'
 import { Alert, Badge, Card, Col, List, Row, Statistic, Table, Typography } from 'antd'
 import type { TableProps } from 'antd'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAcademy } from '../academy/useAcademy'
+import { academyTimeZoneOf } from '../common/timeZone'
+import { LearnerHome } from '../dashboard/LearnerHome'
+import { isLearnerOnly } from '../dashboard/learner.data'
+import { calendarDateIn, minutesNowIn } from '../timetable/timetable.dates'
+import { deviceTimeZone } from '../timetable/timetable.settings'
 import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
 import { ServerStatusCard } from '../components/ServerStatusCard'
@@ -22,7 +29,37 @@ import {
 } from '../mock/data'
 import type { MockLesson } from '../mock/data'
 
+/** Ticks once a minute so the learner home follows the clock. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return now
+}
+
+/** A student or guardian with no other role gets their own home from the «my …» reads (ported from the redesign). */
+function LearnerDashboard() {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const { user } = useAuth()
+  const { academy, loading } = useAcademy()
+  const now = useNow()
+  if (loading) return null
+  const zone = academyTimeZoneOf(academy) ?? deviceTimeZone()
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: zone }).format(now))
+  const greeting = t(hour < 12 ? 'dashboard.greeting.morning' : 'dashboard.greeting.evening', { name: user?.name ?? '' })
+  const dateLine = new Intl.DateTimeFormat(language === 'ar' ? 'ar-u-nu-latn' : language, { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone }).format(now)
+  return <LearnerHome day={{ zone, today: calendarDateIn(zone, now), now, nowMinutes: minutesNowIn(zone, now) }} greeting={greeting} dateLine={dateLine} />
+}
+
 export function DashboardPage() {
+  const { user } = useAuth()
+  return isLearnerOnly(user?.roles ?? []) ? <LearnerDashboard /> : <StaffDashboard />
+}
+
+function StaffDashboard() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const { localized } = useLocalized()
@@ -62,7 +99,7 @@ export function DashboardPage() {
         </Col>
         <Col xs={24} sm={12} xl={6}>
           <Card>
-            <Statistic title={t('dashboard.teachers')} value={teachers} prefix={<TeamOutlined />} />
+            <Statistic title={t('dashboard.teachersCount')} value={teachers} prefix={<TeamOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>

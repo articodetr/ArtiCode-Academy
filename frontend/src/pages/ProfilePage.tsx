@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { changePassword } from '../api/auth'
 import { useAuth } from '../auth/auth-context'
+import { EmailVerificationAction } from '../account/EmailVerificationAction'
 import { uiRoleFor } from '../auth/roles'
 import { PageHeader } from '../components/PageHeader'
 import { ProfilePermissions } from '../profile/ProfilePermissions'
@@ -105,6 +106,7 @@ export function ProfilePage() {
                 )}
               </Descriptions.Item>
             </Descriptions>
+            <EmailVerificationAction user={user} />
           </Card>
 
           <Card title={t('profile.permissions', { count: user.permissions.length })} style={{ marginTop: 16 }}>

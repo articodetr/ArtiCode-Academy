@@ -22,6 +22,7 @@ import type { CoursesListFilters } from '../courses/useCoursesList'
 import { useLevels } from '../courses/useLevels'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function CoursesPage() {
   const { t } = useTranslation()
@@ -34,6 +35,8 @@ export function CoursesPage() {
   const { levels } = levelsState
   const [tab, setTab] = useState<'courses' | 'levels'>('courses')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
 
   const columns: TableProps<Course>['columns'] = [

@@ -30,3 +30,12 @@ export const PASSWORD_MAX_LENGTH = 128
 export function isAcceptablePassword(password: string): boolean {
   return password.length >= PASSWORD_MIN_LENGTH && password.length <= PASSWORD_MAX_LENGTH && password.trim().length > 0
 }
+
+/**
+ * True when the session can read its own `emailVerifiedAt` through API-013 —
+ * the session user (/api/auth/me) does not carry it, and the detail fills it
+ * only for a reader holding `users.read` + `users.read_contact` (D-R07).
+ */
+export function canReadOwnVerification(user: { permissions: readonly string[] }): boolean {
+  return user.permissions.includes('users.read') && user.permissions.includes('users.read_contact')
+}

@@ -103,7 +103,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'users', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], module: 'MOD-03' },
   { key: 'roles', path: '/settings/roles', labelKey: 'nav.roles', icon: createElement(SafetyOutlined), permissions: ['roles.manage'], module: 'MOD-03' },
   // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too.
-  { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], module: 'MOD-04' },
+  { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-04' },
   // MOD-05 (J-F01): the classes API is real — gated by the one key every read of `/api/classes` requires
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
   // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16).
@@ -117,7 +117,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // MOD-06 (J-F09): the lessons API is real — gated by the one key every read of `/api/lessons` requires (`lessons.read` at
   // controller level; `lessons.manage` only adds writes). Staff gain the entry (the seed grants them lessons.read); a student
   // holds it too but is assigned to no class, so the server answers an empty list there — their own lessons are in «my lessons».
-  { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], module: 'MOD-06' },
+  { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-06' },
   // MOD-06 (J-F11): «my lessons» (API-101) needs no permission key — ownership, the API-060 rule; shown to whoever holds the
   // `student` or `guardian` server role, like «my classes» (a teacher who is also a guardian keeps it; a teacher or an admin
   // alone gets no entry — the server would answer an empty list, and the lessons they teach are on /lessons).
@@ -169,9 +169,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // `certificates.read_all` OR `certificates.issue` (D-R57: staff issue without read_all), so either key shows the entry.
   // No learner holds either by seed (they read theirs in «my certificates»), so nobody is excepted; teachers hold none.
   { key: 'certificates', path: '/certificates', labelKey: 'nav.certificates', icon: createElement(SafetyCertificateOutlined), permissions: ['certificates.read_all', 'certificates.issue'], module: 'MOD-10' },
-  { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), roles: ['admin', 'staff', 'student', 'guardian'], module: 'MOD-11' },
+  { key: 'payments', path: '/payments', labelKey: 'nav.payments', icon: createElement(CreditCardOutlined), permissions: ['invoices.read_all', 'invoices.manage', 'payments.record', 'invoices.read_own', 'invoices.read_linked'], module: 'MOD-11' },
   { key: 'notifications', path: '/notifications', labelKey: 'nav.notifications', icon: createElement(BellOutlined), roles: KNOWN_ROLES, module: 'MOD-12' },
-  { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), roles: ['admin'], module: 'MOD-13' },
+  { key: 'reports', path: '/reports', labelKey: 'nav.reports', icon: createElement(BarChartOutlined), permissions: ['reports.attendance.view', 'reports.academic.view', 'reports.financial.view'], module: 'MOD-13' },
   { key: 'audit', path: '/audit-logs', labelKey: 'nav.audit', icon: createElement(AuditOutlined), permissions: ['audit.read'], module: 'MOD-03' },
   // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the
   // catalog keys (either one shows it; saving needs `manage`). By default only academy_admin holds them — no visible change.

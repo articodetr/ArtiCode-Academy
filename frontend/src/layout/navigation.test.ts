@@ -30,13 +30,22 @@ const SEEDED: Readonly<Record<Role, string[]>> = {
     'certificates.read_all',
     'certificates.issue',
     'certificates.revoke',
+    // MOD-11 / MOD-13: the payments and reports entries gate by these keys.
+    'fee_plans.manage',
+    'invoices.read_all',
+    'invoices.manage',
+    'payments.record',
+    'payments.refund',
+    'reports.attendance.view',
+    'reports.academic.view',
+    'reports.financial.view',
   ],
   // Staff hold no assignments.* and no exams.* key (matrix 7.2); they issue certificates (MOD-10).
-  staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read', 'classes.read', 'classes.manage', 'schedule.read', 'lessons.read', 'certificates.issue'],
+  staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read', 'classes.read', 'classes.manage', 'schedule.read', 'lessons.read', 'certificates.issue', 'invoices.manage', 'payments.record', 'fee_plans.manage', 'reports.attendance.view', 'reports.financial.view'],
   // Teachers hold no certificates.* key (roadmap §4h.10.3).
   teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.read', 'lessons.manage', 'schedule.read', 'assignments.read', 'assignments.manage', 'assignments.grade', 'exams.read', 'exams.manage', 'exams.grade'],
-  student: ['courses.read', 'assignments.read', 'assignments.submit', 'schedule.read', 'lessons.read', 'exams.read', 'exams.take', 'certificates.read_own'],
-  guardian: ['courses.read', 'assignments.read', 'grades.read_linked', 'schedule.read', 'attendance.read', 'exams.read', 'certificates.read_linked'],
+  student: ['courses.read', 'assignments.read', 'assignments.submit', 'schedule.read', 'lessons.read', 'exams.read', 'exams.take', 'certificates.read_own', 'invoices.read_own'],
+  guardian: ['courses.read', 'assignments.read', 'grades.read_linked', 'schedule.read', 'attendance.read', 'exams.read', 'certificates.read_linked', 'invoices.read_linked'],
 }
 
 /** Server role keys of the UI roles (backend/src/authorization/system-roles.ts). */
@@ -175,7 +184,8 @@ describe('NAV_ITEMS', () => {
     expect(keysFor(viewer(null, ['lessons.read']))).toEqual(['dashboard', 'lessons'])
     // A custom role holding lessons.manage without lessons.read would get 403 on the list — the entry stays hidden.
     expect(keysFor(viewer(null, ['lessons.manage']))).toEqual(['dashboard'])
-    expect(canAccess(viewer('student'), 'lessons')).toBe(true)
+    // A learner-only viewer has «my lessons» instead (the staff list showed them nothing).
+    expect(canAccess(viewer('student'), 'lessons')).toBe(false)
     expect(canAccess(viewer('guardian'), 'lessons')).toBe(false)
     expect(canAccess(viewer('admin', []), 'lessons')).toBe(false)
   })
@@ -337,7 +347,7 @@ describe('navFor', () => {
     // Since J-F05 the schedule entry is permission-gated too (schedule.read / schedule.manage / classes.manage), since J-F09 the
     // lessons entry (lessons.read), since J-F38 the assignments entry (assignments.read), since J-F45 the exams entry (exams.read)
     // and since J-F51 the certificates entry (certificates.read_all / certificates.issue).
-    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'payments', 'notifications', 'reports'])
+    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'notifications'])
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
@@ -345,7 +355,7 @@ describe('navFor', () => {
     expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'rooms', 'gradeSchemes'])
     // Staff gain the courses entry (MOD-04-T05) and the lessons entry (J-F09): the seed grants them courses.read and lessons.read;
     // and the certificates entry (J-F51): the seed grants them certificates.issue, which opens the list too (D-R57).
-    expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications', 'reports'])
     // Students and guardians gain «my classes» (J-F04) and «my lessons» (J-F11): ownership, by their server role keys.
     // Students keep the lessons entry through lessons.read (an empty list there — their own lessons are in «my lessons», API-101).
     // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted — and gain
@@ -353,8 +363,8 @@ describe('navFor', () => {
     // is theirs by seed, but the learners are excepted — and gain «my exams» (API-121) and «my grades» (API-129) right after
     // «my assignments» (J-F50), by their server role keys. Since J-F51 the certificates entry follows
     // certificates.read_all/issue, which no learner holds: both see «my certificates» (API-135) instead, right after «my grades».
-    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'lessons', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
-    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'courses', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
   })
 
   it('shows the users page to a teacher because the seed grants teachers users.read (reduced projection) (MOD-03-T15)', () => {

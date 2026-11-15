@@ -1,5 +1,5 @@
-import { LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons'
-import { Avatar, Dropdown, Layout, Menu, Tag, Typography, theme } from 'antd'
+import { BellOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons'
+import { Avatar, Badge, Button, Dropdown, Layout, Menu, Tag, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,8 @@ import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { HeaderBrand, SiderAcademyName } from './AcademyBrand'
 import { navFor } from './navigation'
+import { useUnreadCount } from '../notifications/useUnreadCount'
+import { GlobalSearch } from '../search/GlobalSearch'
 import './AppLayout.css'
 
 const { Header, Sider, Content } = Layout
@@ -101,6 +103,9 @@ export function AppLayout() {
           <HeaderBrand />
 
           <div className="app-header__actions">
+            {/* The global search (Ctrl/Cmd+K or «/») and the unread bell — ported from the redesign branch. */}
+            <GlobalSearch />
+            <NotificationBell />
             <Tag color="gold" style={{ margin: 0 }}>
               {t('common.demoMode')}
             </Tag>
@@ -119,5 +124,24 @@ export function AppLayout() {
         </Content>
       </Layout>
     </Layout>
+  )
+}
+
+/** The unread notifications (API-168, every 60 s while visible) — a click opens the notifications page. */
+function NotificationBell() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { unread } = useUnreadCount()
+  const count = unread ?? 0
+  return (
+    <Badge count={count} size="small" overflowCount={99}>
+      <Button
+        type="text"
+        shape="circle"
+        icon={<BellOutlined />}
+        aria-label={count > 0 ? t('nav.unreadNotifications', { count }) : t('nav.notifications')}
+        onClick={() => navigate('/notifications')}
+      />
+    </Badge>
   )
 }

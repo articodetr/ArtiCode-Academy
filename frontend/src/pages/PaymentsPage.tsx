@@ -1,63 +1,58 @@
-import { PlusOutlined } from '@ant-design/icons'
-import { App, Button, Card, Col, Row, Statistic, Table } from 'antd'
-import type { TableProps } from 'antd'
+// Payments (MOD-11 — API-140..API-155): the office view for holders of
+// `invoices.read_all`, `invoices.manage` or `payments.record` — up to three
+// tabs, each shown only to a holder of a key the server checks for it:
+// invoices (the list, the invoice drawer, drafts, the class batch, payments),
+// fee plans (`fee_plans.manage` or `invoices.manage`) and recorded payments
+// (the three invoice read keys). The chosen tab lives in the address
+// (`?tab=`), as the dashboard keeps `?view=`. «My invoices» (API-155) for
+// students and guardians who hold `invoices.read_own` / `invoices.read_linked`
+// and none of the office keys. The server stays the boundary.
+import { Alert, Tabs } from 'antd'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router'
+import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
-import { StatusTag } from '../components/StatusTag'
-import { useLocalized } from '../i18n/useLocalized'
-import { mockAcademySettings, mockPayments } from '../mock/data'
-import type { MockPayment } from '../mock/data'
+import { FeePlansTab } from '../payments/FeePlansTab'
+import { MyInvoices } from '../payments/MyInvoices'
+import { OfficeInvoices } from '../payments/OfficeInvoices'
+import { RecordedPayments } from '../payments/RecordedPayments'
+import { officeTabsOf, paymentsViewOf } from '../payments/payments.format'
+import type { OfficeTab } from '../payments/payments.format'
 
 export function PaymentsPage() {
   const { t } = useTranslation()
-  const { localized } = useLocalized()
-  const { message } = App.useApp()
-  const currency = mockAcademySettings.currency
+  const { hasPermission } = useAuth()
+  const view = paymentsViewOf(hasPermission)
+  const [params, setParams] = useSearchParams()
+  const tabs = officeTabsOf(hasPermission)
+  const asked = params.get('tab') as OfficeTab | null
+  const tab: OfficeTab | undefined = asked && tabs.includes(asked) ? asked : tabs[0]
 
-  const collected = mockPayments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0)
-  const outstanding = mockPayments.filter((p) => p.status !== 'paid').reduce((s, p) => s + p.amount, 0)
-
-  const columns: TableProps<MockPayment>['columns'] = [
-    { title: t('payments.invoice'), dataIndex: 'invoice' },
-    { title: t('common.student'), dataIndex: 'student', render: (_, row) => localized(row.student) },
-    { title: t('payments.amount'), key: 'amount', render: (_, row) => `${row.amount.toLocaleString()} ${row.currency}` },
-    { title: t('payments.dueDate'), dataIndex: 'dueDate' },
-    { title: t('payments.method'), dataIndex: 'method', render: (_, row) => (row.method ? localized(row.method) : '-') },
-    { title: t('common.status'), dataIndex: 'status', render: (status: MockPayment['status']) => <StatusTag value={status} /> },
-  ]
+  const content: Record<OfficeTab, ReactNode> = {
+    invoices: <OfficeInvoices />,
+    feePlans: <FeePlansTab />,
+    payments: <RecordedPayments />,
+  }
 
   return (
     <>
-      <PageHeader
-        title={t('payments.title')}
-        subtitle={t('payments.subtitle')}
-        extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => message.info(t('common.notImplemented'))}
-          >
-            {t('payments.addPayment')}
-          </Button>
-        }
-      />
-
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12}>
-          <Card>
-            <Statistic title={t('payments.collected')} value={collected} suffix={currency} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12}>
-          <Card>
-            <Statistic title={t('payments.outstanding')} value={outstanding} suffix={currency} />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card>
-        <Table<MockPayment> rowKey="id" columns={columns} dataSource={mockPayments} pagination={false} />
-      </Card>
+      <PageHeader title={t(view === 'learner' ? 'payments.mine.title' : 'payments.title')} subtitle={t(view === 'learner' ? 'payments.mine.subtitle' : 'payments.subtitle')} />
+      {view === 'office' && tabs.length > 1 ? (
+        <Tabs
+          activeKey={tab}
+          onChange={(key) => {
+            const next = new URLSearchParams(params)
+            if (key === tabs[0]) next.delete('tab')
+            else next.set('tab', key)
+            setParams(next, { replace: true })
+          }}
+          items={tabs.map((key) => ({ key, label: t(`payments.tabs.${key}`) }))}
+        />
+      ) : null}
+      {view === 'office' && tab ? content[tab] : null}
+      {view === 'learner' ? <MyInvoices /> : null}
+      {view === 'none' ? <Alert type="info" showIcon title={t('payments.noAccess')} /> : null}
     </>
   )
 }

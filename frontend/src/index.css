@@ -11,3 +11,51 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/*
+ * Colour names used by the screens ported from the redesign branch (payments, notifications, reports, the learner
+ * home, the search), set to Ant Design's default palette so they match the original look of this app.
+ */
+:root {
+  --c-ink: #1677ff;
+  --c-ink-soft: #e6f4ff;
+  --c-line: #f0f0f0;
+  --c-surface: #ffffff;
+  --c-paper: #f5f5f5;
+  --c-text: rgba(0, 0, 0, 0.88);
+  --c-muted: rgba(0, 0, 0, 0.55);
+  --c-mark: #faad14;
+  --c-mark-soft: #fffbe6;
+  --c-mark-text: #874d00;
+  --c-ok: #389e0d;
+  --c-ok-soft: #f6ffed;
+  --c-bad: #cf1322;
+  --c-bad-soft: #fff1f0;
+  --c-now: #ff4d4f;
+  --radius: 6px;
+  --radius-lg: 8px;
+}
+
+/* A list cell with a main line and a muted second line (the ported payments, notifications and reports lists). */
+.list-primary {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.list-primary b {
+  font-weight: 600;
+}
+
+.list-primary bdi,
+.list-primary small {
+  color: var(--c-muted);
+  font-size: 12.5px;
+}
+
+/* A section heading inside a drawer or a modal of the ported screens: an h2 for the outline, at a small size. */
+body h2.ant-typography.section-title {
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}

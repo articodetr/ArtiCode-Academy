@@ -22,6 +22,7 @@ import { PAGE_SIZES, useUsersList } from '../users/useUsersList'
 import type { UsersListFilters } from '../users/useUsersList'
 import { describeUsersFailure, failureMessage } from '../users/users.errors'
 import { displayNameOf, formatDateTime, roleFilterKeys, roleLabel } from '../users/users.format'
+import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function UsersPage() {
   const { t } = useTranslation()
@@ -34,6 +35,8 @@ export function UsersPage() {
   const list = useUsersList()
   const roles = useRoleLabels()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // The global search opens a record here through `?open=<id>`.
+  useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
 
   const selected = list.items.find((item) => item.id === selectedId)
