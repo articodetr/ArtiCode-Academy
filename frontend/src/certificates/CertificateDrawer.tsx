@@ -18,7 +18,6 @@ import { useTranslation } from 'react-i18next'
 import { getCertificate } from '../api/certificates'
 import type { Certificate } from '../api/certificates'
 import { useAuth } from '../auth/auth-context'
-import { dockedDrawerProps } from '../common/useDockedPanel'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CertificateStatusTag } from './CertificateStatusTag'
@@ -33,13 +32,6 @@ interface CertificateDrawerProps {
   onClose: () => void
   /** The certificate the server returned after a re-read or a revocation. */
   onUpdated: (certificate: Certificate) => void
-  /**
-   * Redesign (2026-11-14): the element of a side panel beside the list to open in, instead of over the page —
-   * no mask, the full width and height of the panel. Absent (phones, tests) = the usual overlay drawer.
-   */
-  dockedIn?: HTMLElement | null
-  /** Told while the revocation dialog is open, so the list asks before switching certificate. */
-  onUnsavedChange?: (unsaved: boolean) => void
 }
 
 /** A printed name, with the current one beneath it when it changed since the issuance. */
@@ -66,7 +58,7 @@ function NamedValue({ printed, current, code }: { printed: string; current: stri
   )
 }
 
-export function CertificateDrawer({ certificateId, onClose, onUpdated, dockedIn, onUnsavedChange }: CertificateDrawerProps) {
+export function CertificateDrawer({ certificateId, onClose, onUpdated }: CertificateDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
@@ -75,11 +67,6 @@ export function CertificateDrawer({ certificateId, onClose, onUpdated, dockedIn,
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
   const [revoking, setRevoking] = useState(false)
-
-  // The list asks before it switches to another certificate while the revocation dialog is open (docked panel).
-  useEffect(() => {
-    onUnsavedChange?.(revoking)
-  }, [revoking, onUnsavedChange])
 
   // The read below hands every re-read to the list; a ref, so a new `onUpdated` never restarts the read.
   const onUpdatedRef = useRef(onUpdated)
@@ -238,8 +225,9 @@ export function CertificateDrawer({ certificateId, onClose, onUpdated, dockedIn,
       onClose={close}
       // The revocation dialog sits on top: Escape and a click outside belong to it while it is open.
       keyboard={!revoking}
-      {...dockedDrawerProps(dockedIn, revoking, 'large')}
+      mask={{ closable: !revoking }}
       title={shown ? <bdi dir="ltr">{shown.serial}</bdi> : t('certificates.drawer.title')}
+      size="large"
       destroyOnHidden
       extra={
         shown ? (

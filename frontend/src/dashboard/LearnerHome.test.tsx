@@ -9,7 +9,7 @@ import { CHILD_ONE, CHILD_TWO, makeMyLesson } from '../test/myLessons'
 import { GUARDIAN_GRADES_PERMISSIONS } from '../test/myGrades'
 import { makeMyInvoice } from '../test/payments'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { DashboardPage } from './DashboardPage'
+import { DashboardPage } from '../pages/DashboardPage'
 
 // Redesign (2026-11-14): a guardian (no other role) lands on the learner home, built from the «my …» reads only.
 function mockLearnerApi() {
@@ -49,7 +49,8 @@ describe('DashboardPage — the learner home (redesign)', () => {
   it('keeps the staff dashboard for a teacher who is also a guardian', async () => {
     mockLearnerApi()
     renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher', 'guardian'], permissions: [] }) }), route: '/' })
-    expect(await screen.findByText(ar.dashboard.todayLessons)).toBeInTheDocument()
-    expect(screen.queryByText(ar.dashboard.learner.week)).not.toBeInTheDocument()
+    // The original staff dashboard (its student count card).
+    expect(await screen.findByText(ar.dashboard.students)).toBeInTheDocument()
+    expect(document.querySelector('.lh')).toBeNull()
   })
 })

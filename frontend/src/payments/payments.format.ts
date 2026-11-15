@@ -3,7 +3,8 @@
 // the page. Pure — every number shown is the server's (ADR-068); nothing here
 // computes a balance.
 import { formatMoney } from '../dashboard/dashboard.data'
-import type { StatusTone } from '../components/StatusTag'
+/** The kind of a finance status, shown with antd's preset colours (FinanceTag). */
+export type StatusTone = 'ok' | 'live' | 'attention' | 'bad' | 'neutral'
 import type { PaymentMethod } from '../api/invoices'
 import type { RecordPaymentInput } from '../api/payments'
 

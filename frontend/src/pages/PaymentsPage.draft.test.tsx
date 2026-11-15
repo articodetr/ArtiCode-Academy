@@ -52,17 +52,14 @@ describe('PaymentsPage — a draft in the invoice drawer', () => {
     renderWithProviders(<PaymentsPage />, { auth: makeAuth({ user: makeUser({ permissions: FINANCE_MANAGER_PERMISSIONS, roles: ['staff'] }) }), route: '/payments' })
   }
 
-  it('asks before switching rows while the edit form holds a change, and sends only that change', async () => {
+  it('edits a draft in the drawer and sends only the change', async () => {
     renderPage()
     fireEvent.click(await screen.findByText('مسودة سارة'))
-    const drawer = () => document.querySelector('.record-drawer--docked') as HTMLElement
+    // The original layout: the invoice opens in antd's drawer over the page (no docked panel).
+    const drawer = () => document.querySelector('.ant-drawer-open') as HTMLElement
     fireEvent.click((await within(document.body).findByText(ar.common.edit)).closest('button')!)
     const notes = await within(drawer()).findByLabelText(ar.payments.record.notes)
     fireEvent.change(notes, { target: { value: 'ملاحظة جديدة' } })
-
-    fireEvent.click(within(screen.getAllByRole('table')[0]!).getByText('INV-2026-00002'))
-    expect((await screen.findAllByText(ar.common.unsaved.title)).length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByText(ar.common.unsaved.cancel).closest('button')!)
 
     fireEvent.click(within(drawer()).getByText(ar.common.save).closest('button')!)
     await waitFor(() => expect(writes).toHaveLength(1))

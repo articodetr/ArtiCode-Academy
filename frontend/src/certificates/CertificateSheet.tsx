@@ -80,7 +80,7 @@ export function CertificateSheet({ serial, verificationCode, status, snapshot, l
           size={96}
           level="M"
           marginSize={0}
-          fgColor="#16305c"
+          fgColor="#000000"
           title={t('certificates.sheet.qrLabel')}
           className="certificate-sheet__qr"
           data-testid="certificate-qr"

@@ -41,7 +41,6 @@ import { AttendanceSheetTab } from '../attendance/AttendanceSheetTab'
 import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { useAuth } from '../auth/auth-context'
 import { NavigationBlocker } from '../common/NavigationBlocker'
-import { dockedDrawerProps } from '../common/useDockedPanel'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
@@ -84,16 +83,9 @@ interface LessonDrawerProps {
   onUpdated: (lesson: Lesson) => void
   /** A scheduled lesson was deleted. */
   onDeleted: (lessonId: string) => void
-  /**
-   * Redesign (2026-11-14): the element of a side panel beside the list to open in, instead of over the page —
-   * no mask, the full width and height of the panel. Absent (phones, tests) = the usual overlay drawer.
-   */
-  dockedIn?: HTMLElement | null
-  /** Told whenever the drawer starts or stops holding unsaved work, so the list can ask before switching lesson. */
-  onUnsavedChange?: (unsaved: boolean) => void
 }
 
-export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted, dockedIn, onUnsavedChange }: LessonDrawerProps) {
+export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: LessonDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
@@ -114,11 +106,6 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted, dockedIn
   }, [])
   // KI-058: while the edit form or the attendance sheet holds unsaved work, Escape and a mask click must not drop it with the drawer.
   const unsaved = (editing && unsavedParts.details) || unsavedParts.attendance
-
-  // The list asks before it switches to another lesson while this one holds unsaved work (docked panel).
-  useEffect(() => {
-    onUnsavedChange?.(unsaved)
-  }, [unsaved, onUnsavedChange])
 
   useEffect(() => {
     if (!lessonId) return
@@ -210,8 +197,7 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted, dockedIn
       // KI-058: unsaved work turns off the Escape key and the mask click; a modal, Select or
       // Dropdown open on top still closes on Escape (it sits above the drawer).
       keyboard={!unsaved}
-      // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport.
-      {...dockedDrawerProps(dockedIn, unsaved, 'min(760px, 100vw)')}
+      mask={{ closable: !unsaved }}
       title={
         lesson ? (
           <Space wrap>
@@ -222,6 +208,8 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted, dockedIn
           title
         )
       }
+      // antd 6: `size` takes a CSS length; the panel never exceeds a phone viewport.
+      size="min(760px, 100vw)"
       destroyOnHidden
       extra={
         lesson && !editing && (editability.editable || menu.length > 0) ? (

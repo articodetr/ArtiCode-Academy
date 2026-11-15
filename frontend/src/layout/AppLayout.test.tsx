@@ -25,33 +25,22 @@ describe('AppLayout navigation', () => {
     expect(menuLabels()).toEqual([ar.nav.dashboard, ar.nav.users])
   })
 
-  it('groups the entries under section headings in the order of NAV_GROUPS, leaving out empty sections (redesign)', () => {
-    const user = makeUser({ role: null, roles: ['coordinator'], permissions: ['users.read', 'courses.read', 'roles.manage'] })
-    renderWithProviders(<AppLayout />, { auth: makeAuth({ user }), route: '/' })
-    const menu = screen.getByRole('menu')
-    const headings = [...menu.querySelectorAll('.ant-menu-item-group-title')].map((node) => node.textContent?.trim())
-    expect(headings).toEqual([ar.nav.groups.home, ar.nav.groups.teaching, ar.nav.groups.people, ar.nav.groups.academy])
-    expect(headings).not.toContain(ar.nav.groups.finance)
-  })
-
   it('adds the roles and audit entries for their permission holders and hides them from a student', () => {
     const { unmount } = renderWithProviders(<AppLayout />, {
       auth: makeAuth({ user: makeUser({ permissions: ['users.read', 'roles.manage', 'audit.read', 'academy.settings.read'] }) }),
       route: '/',
     })
     const admin = menuLabels()
-    // Redesign (2026-11-14): the roles tab is one of the settings tabs, so the menu shows the one settings entry;
-    // the audit log follows it, last.
-    expect(admin).not.toContain(ar.nav.roles)
-    expect(admin).toContain(ar.nav.settings)
-    expect(admin.indexOf(ar.nav.audit)).toBe(admin.length - 1)
-    expect(admin.indexOf(ar.nav.audit)).toBe(admin.indexOf(ar.nav.settings) + 1)
+    expect(admin).toContain(ar.nav.roles)
+    expect(admin).toContain(ar.nav.audit)
+    expect(admin.indexOf(ar.nav.roles)).toBe(admin.indexOf(ar.nav.users) + 1)
+    expect(admin.indexOf(ar.nav.audit)).toBe(admin.indexOf(ar.nav.settings) - 1)
     unmount()
 
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read'] })
     renderWithProviders(<AppLayout />, { auth: makeAuth({ user: student }), route: '/' })
     const labels = menuLabels()
-    // Redesign (2026-11-14): the staff courses page is not a learner's — «my classes» is.
+    // The staff courses page is not a learner's — «my classes» is.
     expect(labels).not.toContain(ar.nav.courses)
     expect(labels).toContain(ar.nav.myClasses)
     expect(labels).not.toContain(ar.nav.users)
@@ -69,27 +58,25 @@ describe('AppLayout navigation', () => {
     expect(selected[0]).toHaveTextContent(ar.nav.roles)
   })
 
-  it('folds the settings tabs into one settings entry, selected on /settings/grade-schemes (J-F44; redesign)', () => {
+  it('shows the grade schemes entry right after the settings entry to a holder of academy.settings.manage, and selects it on /settings/grade-schemes (J-F44)', () => {
     renderWithProviders(<AppLayout />, {
       auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read', 'academy.settings.manage'] }) }),
       route: '/settings/grade-schemes',
     })
     const labels = menuLabels()
-    expect(labels).not.toContain(ar.nav.gradeSchemes)
+    expect(labels.indexOf(ar.nav.gradeSchemes)).toBe(labels.indexOf(ar.nav.settings) + 1)
     const selected = document.querySelectorAll('.ant-menu-item-selected')
     expect(selected).toHaveLength(1)
-    expect(selected[0]).toHaveTextContent(ar.nav.settings)
+    expect(selected[0]).toHaveTextContent(ar.nav.gradeSchemes)
   })
 
-  it('shows a student «my lessons» in place of «lessons» and selects it on /my-lessons (J-F11; redesign)', () => {
+  it('shows a student «my lessons» in place of «lessons» and selects it on /my-lessons (J-F11)', () => {
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'schedule.read', 'lessons.read'] })
     renderWithProviders(<AppLayout />, { auth: makeAuth({ user: student }), route: '/my-lessons' })
     const labels = menuLabels()
     expect(labels).not.toContain(ar.nav.lessons)
     expect(labels.indexOf(ar.nav.myLessons)).toBe(labels.indexOf(ar.nav.schedule) + 1)
     expect(labels.indexOf(ar.nav.myClasses)).toBeGreaterThan(-1)
-    // The section is headed «my studies» for a learner, not «teaching».
-    expect(screen.getByText(ar.nav.groups.study)).toBeInTheDocument()
     const selected = document.querySelectorAll('.ant-menu-item-selected')
     expect(selected).toHaveLength(1)
     expect(selected[0]).toHaveTextContent(ar.nav.myLessons)
