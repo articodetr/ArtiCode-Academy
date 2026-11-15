@@ -26,12 +26,20 @@ import { useLocalized } from '../i18n/useLocalized'
 import { formatClock, formatLessonTimes } from '../lessons/lessons.format'
 import { useUnreadCount } from '../notifications/useUnreadCount'
 import { addDays } from '../timetable/timetable.dates'
-import type { DayContext } from './DashboardViews'
 import { formatMoney, labelIn, wallDate } from './dashboard.data'
 import { agendaOf, daysUntil, formatScore, learnersOf, nextLessonOf, resultsOf, todoOf } from './learner.data'
 import type { ResultRow, TodoItem } from './learner.data'
 import type { Loaded } from './useLoad'
 import { useLoad } from './useLoad'
+import './learner.css'
+
+/** The academy's zone, its today and the clock, as the learner home reads them. */
+export interface DayContext {
+  zone: string
+  today: string
+  now: number
+  nowMinutes: number
+}
 
 const DAYS_AHEAD = 7
 /** The agenda shows the first days with lessons; the rest are one click away on «my lessons». */

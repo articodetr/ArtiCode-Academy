@@ -30,7 +30,7 @@ const SEEDED: Readonly<Record<Role, string[]>> = {
     'certificates.read_all',
     'certificates.issue',
     'certificates.revoke',
-    // MOD-11 (the payments screen gates by these since the redesign).
+    // MOD-11 / MOD-13: the payments and reports entries gate by these keys.
     'fee_plans.manage',
     'invoices.read_all',
     'invoices.manage',
@@ -184,7 +184,7 @@ describe('NAV_ITEMS', () => {
     expect(keysFor(viewer(null, ['lessons.read']))).toEqual(['dashboard', 'lessons'])
     // A custom role holding lessons.manage without lessons.read would get 403 on the list — the entry stays hidden.
     expect(keysFor(viewer(null, ['lessons.manage']))).toEqual(['dashboard'])
-    // Since the redesign (2026-11-14) a learner-only viewer has «my lessons» instead (the staff list showed them nothing).
+    // A learner-only viewer has «my lessons» instead (the staff list showed them nothing).
     expect(canAccess(viewer('student'), 'lessons')).toBe(false)
     expect(canAccess(viewer('guardian'), 'lessons')).toBe(false)
     expect(canAccess(viewer('admin', []), 'lessons')).toBe(false)
@@ -347,19 +347,17 @@ describe('navFor', () => {
     // Since J-F05 the schedule entry is permission-gated too (schedule.read / schedule.manage / classes.manage), since J-F09 the
     // lessons entry (lessons.read), since J-F38 the assignments entry (assignments.read), since J-F45 the exams entry (exams.read)
     // and since J-F51 the certificates entry (certificates.read_all / certificates.issue).
-    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'notifications', 'roles'])
+    expect(keysFor(viewer('admin', ['roles.manage']))).toEqual(['dashboard', 'roles', 'notifications'])
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
-    // academy.settings.manage also opens the grade schemes tab (J-F44), right after the rooms tab. Since the redesign
-    // (2026-11-14) roles and the audit log close the list — they end the academy section of the side menu.
-    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'settings', 'rooms', 'gradeSchemes', 'roles', 'audit'])
+    // academy.settings.manage also opens the grade schemes tab (J-F44), right after the rooms tab.
+    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'rooms', 'gradeSchemes'])
     // Staff gain the courses entry (MOD-04-T05) and the lessons entry (J-F09): the seed grants them courses.read and lessons.read;
     // and the certificates entry (J-F51): the seed grants them certificates.issue, which opens the list too (D-R57).
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications', 'reports'])
     // Students and guardians gain «my classes» (J-F04) and «my lessons» (J-F11): ownership, by their server role keys.
-    // Since the redesign (2026-11-14) learner-only viewers lose the staff courses and lessons entries (`exceptRoleKeysOnly`):
-    // the lessons list showed them nothing — their own lessons are in «my lessons» (API-101), their classes in «my classes».
+    // Students keep the lessons entry through lessons.read (an empty list there — their own lessons are in «my lessons», API-101).
     // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted — and gain
     // «my assignments» (J-F42, API-112) in its place, by their server role keys. Both lose the exams entry too (J-F45): exams.read
     // is theirs by seed, but the learners are excepted — and gain «my exams» (API-121) and «my grades» (API-129) right after

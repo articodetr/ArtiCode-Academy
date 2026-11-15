@@ -2,6 +2,8 @@ import type { Translation } from './ar'
 
 export const en: Translation = {
   common: {
+    demoMode: "Demo data",
+    demoBanner: "Module screens show local demo data until each module is wired to the server. Sign-in, the account page, the users page and the \"Server connection\" card are the parts that really talk to the server.",
     pageSize: 'Items per page',
     sortOrder: 'Sort order',
     appName: 'ArtiCode Academy',
@@ -306,6 +308,12 @@ export const en: Translation = {
     },
   },
   dashboard: {
+    students: "Students",
+    teachersCount: "Teachers",
+    courses: "Published courses",
+    pendingPayments: "Pending payments",
+    upcomingLessons: "Upcoming lessons",
+    recentNotifications: "Recent notifications",
     welcome: 'Welcome, {{name}}',
     subtitle: 'Overview of academy activity',
     greeting: { morning: 'Good morning, {{name}}', evening: 'Good evening, {{name}}' },
