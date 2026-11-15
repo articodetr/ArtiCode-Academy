@@ -84,6 +84,9 @@ function bandRows(bands: readonly SchemeBand[]): Prisma.GradeSchemeBandCreateWit
  * same default and leave two (the partial unique index
  * `uq_grade_schemes_default` would only fail with a 500), and the first scheme
  * of two simultaneous creations is the only one that becomes the default.
+ * A finalization (API-127, `gradebook.service.ts`) takes the same key in its
+ * shared form before it reads its scheme (KI-076), so a scheme write and a
+ * finalization never overlap — keep the two keys identical.
  */
 async function lockSchemes(tx: Tx): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('articode.grade_schemes.default'))`;
@@ -213,7 +216,8 @@ export class GradeSchemesService {
         await this.audit.record({ action: GRADE_SCHEMES_AUDIT_ACTIONS.deleted, actorUserId: caller.id, entityType: GRADE_SCHEMES_ENTITY_TYPE, entityId: id, metadata: {}, ...ctx }, tx);
       });
     } catch (error) {
-      // A final grade fixed after the count still blocks the delete (`final_grades.scheme_id` is Restrict).
+      // A final grade fixed after the count still blocks the delete (`final_grades.scheme_id` is Restrict). The
+      // finalization holds the shared form of `lockSchemes()` since KI-076, so this is a backstop for any other writer.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') throw gradesError.gradeSchemeInUse(1);
       throw error;
     }

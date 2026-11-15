@@ -82,6 +82,23 @@ function numberOrNull(value: string | null): number | null {
   return value === null ? null : Number(value);
 }
 
+/**
+ * KI-076 — the advisory lock of the grade-scheme writers (`lockSchemes()` in
+ * `grade-schemes.service.ts`: the same key), taken in its SHARED form by a
+ * finalization. Every scheme write (create, promotion, deactivation, band
+ * change, delete — API-123..125) holds it exclusively for its whole
+ * transaction, so a finalization waits for a scheme write in progress and a
+ * scheme write waits for a finalization in progress, while two finalizations
+ * (of any classes) still run side by side. Without it the scheme was read
+ * unlocked: a delete could commit between that read and the insert into
+ * `final_grades` (`scheme_id` is Restrict) and the finalization failed with an
+ * untranslated P2003 — a 500 — and a promotion could commit in between, so
+ * the grades were fixed with a scheme that was no longer the default.
+ */
+async function lockSchemesShared(tx: Tx): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext('articode.grade_schemes.default'))`;
+}
+
 /** The weighted components with the student's outcome — the snapshot a final grade keeps (D-R44). */
 function breakdownOf(components: readonly ComponentRow[], outcomes: readonly CellOutcome[]): Record<string, unknown>[] {
   const rows: Record<string, unknown>[] = [];
@@ -163,6 +180,12 @@ export class GradebookService {
       const klass = await this.lockClass(tx, classId, caller);
       await this.assertNotCertified(tx, classId);
       if (!GRADABLE_CLASS_STATUSES.includes(klass.status)) throw gradesError.classNotGradable(classId, klass.status);
+      // KI-076: the scheme is read and used under the writers' lock (shared) until the commit, so it still exists, is
+      // still active (or still the default) and keeps its bands when the grades are inserted. Lock order: the class row,
+      // then this lock — the scheme writers take this lock and never a class row, so the two orders cannot deadlock.
+      // After a wait, READ COMMITTED gives `schemeFor()` a fresh snapshot: a scheme deleted or deactivated meanwhile is
+      // the documented 404 `grade_scheme_not_found` (or 409 `grade_scheme_missing` without any default), never a 500.
+      await lockSchemesShared(tx);
       const scheme = await this.schemeFor(tx, input.schemeId);
       const finalizedAt = new Date(); // before the sources are read: a later change marks the result stale
       const loaded = await this.load(tx, classId);
@@ -313,7 +336,7 @@ export class GradebookService {
     return klass;
   }
 
-  /** The chosen active scheme, or the default one. */
+  /** The chosen active scheme, or the default one — read after `lockSchemesShared()` (KI-076). */
   private async schemeFor(tx: Tx, schemeId: string | undefined) {
     const select = { id: true, bands: { select: { minPercent: true, label: true, letter: true, isPass: true } } } as const;
     const scheme = schemeId
