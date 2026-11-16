@@ -102,6 +102,24 @@
 		@https protocol https
 		header @https Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
+		# Content-Security-Policy of the UI (KI-080). Only the UI's: /api/* keeps
+		# helmet's own policy from the API, untouched. The Vite build loads its
+		# scripts from /assets/ and has no inline script; the UI calls /api/* on
+		# this origin only. Ant Design 6 writes its CSS-in-JS as <style> elements
+		# at run time and React sets style attributes, hence 'unsafe-inline' for
+		# styles only. img-src: data: for inline icons, https: for the academy
+		# logo (logoUrl, any host) — and http: too, but only for a request over
+		# plain http (the local trial, SITE_ADDRESS=http://...), where the header
+		# shows an http logo; over https the UI never offers one (mixed content).
+		# Checked in a real browser (headless Edge) on the built UI with no
+		# violation: sign-in, the public token pages, the logo (https and http),
+		# every main screen, drawers, modals and the Ctrl+K search. A new inline
+		# script, external script/stylesheet/font or API host needs this policy
+		# changed — TEST-201 asserts the exact value.
+		@http protocol http
+		header @https Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		header @http Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+
 		# Vite's hashed bundles: a name never changes content. A missing file is
 		# a plain 404 — never index.html, never cached.
 		handle /assets/* {
