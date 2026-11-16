@@ -1,5 +1,5 @@
 import { BellOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons'
-import { Avatar, Badge, Button, Dropdown, Layout, Menu, Tag, Typography, theme } from 'antd'
+import { Avatar, Badge, Button, Dropdown, Layout, Menu, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -106,9 +106,6 @@ export function AppLayout() {
             {/* The global search (Ctrl/Cmd+K or «/») and the unread bell — ported from the redesign branch. */}
             <GlobalSearch />
             <NotificationBell />
-            <Tag color="gold" style={{ margin: 0 }}>
-              {t('common.demoMode')}
-            </Tag>
             <LanguageSwitcher />
             <Dropdown menu={{ items: userMenu }} trigger={['click']}>
               <span className="app-user">
