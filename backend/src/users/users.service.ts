@@ -5,6 +5,7 @@ import { ACADEMY_ADMIN_ROLE_KEY } from '../authorization/system-roles.js';
 import type { KindRoleKey } from '../authorization/system-roles.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { authError } from '../auth/auth.errors.js';
+import { MfaCore } from '../auth/mfa/mfa-core.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { EmployeeKind } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -18,7 +19,9 @@ import type {
   DeleteUserDto,
   GuardianLinkDto,
   ListUsersQueryDto,
+  MfaResetResultDto,
   ReplaceUserRolesDto,
+  ResetUserMfaDto,
   UpdateUserDto,
   UserDetailDto,
   UserListDto,
@@ -65,7 +68,12 @@ export const USERS_AUDIT_ACTIONS = {
   deleted: 'users.deleted',
   /** T07: role replacement, metadata `{ added, removed, roles, profilesCreated? }` (keys only). */
   rolesChanged: 'users.roles.changed',
+  /** MFA-T04 (API-212): administrative reset of two-step verification, metadata `{ revokedSessions, reason? }` — never a secret or a code. */
+  mfaReset: 'users.mfa.reset',
 } as const;
+
+/** `self_forbidden { action }` of API-212: one's own two-step verification is turned off with the password and a code (API-209), never through the reset. */
+export const SELF_FORBIDDEN_MFA_RESET_ACTION = 'mfa_reset';
 
 // Explicit projections: the password hash and the login counters are never
 // even read from the database for these endpoints.
@@ -95,6 +103,8 @@ const LIST_SELECT = {
 
 const DETAIL_SELECT = {
   ...SUMMARY_SELECT,
+  // The MFA timestamp only — never `mfaSecret`, `mfaPendingSecret`, `mfaLastStep` or the recovery codes.
+  mfaEnabledAt: true,
   roles: { select: { role: { select: { key: true, label: true } } } },
   studentProfile: { select: { studentNumber: true, dateOfBirth: true, enrolledOn: true } },
   employeeProfile: {
@@ -151,6 +161,14 @@ const ROLES_TARGET_SELECT = {
   roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
   studentProfile: { select: { userId: true } },
   employeeProfile: { select: { kind: true } },
+} satisfies Prisma.UserSelect;
+
+// What the administrative MFA reset (API-212) decides on before the MFA state:
+// existence and the roles for SEC-R-15. The MFA columns come from MfaCore.lockUser().
+const MFA_RESET_TARGET_SELECT = {
+  id: true,
+  deletedAt: true,
+  roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
 } satisfies Prisma.UserSelect;
 
 type SummaryRow = Prisma.UserGetPayload<{ select: typeof SUMMARY_SELECT }>;
@@ -222,6 +240,7 @@ function toDetail(row: DetailRow, view: UsersProjection): UserDetailDto {
   }));
   return {
     ...toSummary(row, view),
+    mfaEnabledAt: view === 'full' ? isoOrNull(row.mfaEnabledAt) : null,
     roles,
     studentProfile: row.studentProfile
       ? {
@@ -300,6 +319,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly mfa: MfaCore,
   ) {}
 
   async list(query: ListUsersQueryDto, view: UsersProjection): Promise<UserListDto> {
@@ -801,6 +821,69 @@ export class UsersService {
     if (!user) throw usersError.userNotFound();
     assertWithinReach(user.roles.map((grant) => grant.role), caller);
     return user;
+  }
+
+  // ------------------------------------------------- MFA reset (MFA-T04)
+
+  /**
+   * MFA-T04 (API-212): `POST /api/users/:id/mfa/reset` — clears the two-step
+   * verification of a user who lost their device, and ends every session of
+   * that user (D-R111). Any account status may be reset.
+   *
+   * Order of the checks: 404 (unknown or soft-deleted) → 403
+   * `permission_denied` when the target's roles confer a permission the caller
+   * lacks (SEC-R-15 — before anything about MFA, so a caller who may not act on
+   * this account learns nothing about it) → 403 `self_forbidden { action:
+   * 'mfa_reset' }` on oneself → inside one transaction, on the row locked by
+   * `MfaCore.lockUser()` (`FOR NO KEY UPDATE`, KI-079): 404 and SEC-R-15 again
+   * (a soft delete or a role granted meanwhile — the T07 pattern), then the
+   * state. No MFA and no setup awaiting confirmation → 200 `{ reset: false }`
+   * with no write and no event (the `unlock` no-op precedent); else the MFA
+   * columns, recovery codes and open challenges are cleared, every refresh
+   * token is revoked and exactly one `users.mfa.reset` is recorded.
+   *
+   * The reset needs no `AUTH_MFA_ENCRYPTION_KEY`: it never seals or opens a
+   * secret, and it is the way out for an account whose secret no longer opens.
+   * Only the target's row is locked, once, so it cannot deadlock with the
+   * admin scan of T06/T07.
+   */
+  async resetMfa(id: string, input: ResetUserMfaDto, caller: AuthPrincipal, ctx: RequestContext): Promise<MfaResetResultDto> {
+    await this.loadMfaResetTarget(this.prisma.db, id, caller);
+    if (id === caller.id) throw usersError.selfForbidden(SELF_FORBIDDEN_MFA_RESET_ACTION);
+    const reason = input.reason ?? null;
+
+    return this.prisma.db.$transaction(async (tx) => {
+      const state = await this.mfa.lockUser(tx, id);
+      if (!state) throw usersError.userNotFound();
+      await this.loadMfaResetTarget(tx, id, caller);
+      if (state.mfaSecret === null && state.mfaPendingSecret === null) {
+        return { userId: id, reset: false, revokedSessions: 0 };
+      }
+
+      const now = new Date();
+      await this.mfa.clear(tx, id, now);
+      const revokedSessions = await this.mfa.revokeSessions(tx, id, null, now);
+      // The number of ended sessions and the administrator's reason — never a secret, a code or a hash.
+      await this.audit.record(
+        {
+          action: USERS_AUDIT_ACTIONS.mfaReset,
+          actorUserId: caller.id,
+          entityType: 'users',
+          entityId: id,
+          metadata: { revokedSessions, ...(reason !== null ? { reason } : {}) },
+          ...ctx,
+        },
+        tx,
+      );
+      return { userId: id, reset: true, revokedSessions };
+    });
+  }
+
+  /** The account of an MFA reset: unknown or soft-deleted → 404; its roles within the caller's reach (SEC-R-15). */
+  private async loadMfaResetTarget(db: Prisma.TransactionClient | PrismaService['db'], id: string, caller: AuthPrincipal): Promise<void> {
+    const user = await db.user.findUnique({ where: { id }, select: MFA_RESET_TARGET_SELECT });
+    if (!user || user.deletedAt !== null) throw usersError.userNotFound();
+    assertWithinReach(user.roles.map((grant) => grant.role), caller);
   }
 }
 
