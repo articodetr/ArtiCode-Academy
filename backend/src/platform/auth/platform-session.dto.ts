@@ -1,8 +1,10 @@
 // MOD-18-T03 — request and response bodies of the platform session routes
-// (API-178..182). Same shapes as the academy MOD-01 (src/auth/auth.dto.ts)
-// where they overlap; the user is a platform account (`platform_users`).
+// (API-178..182; since PMFA-T03 the challenge answer of API-178 and the body of
+// API-218, the second sign-in step). Same shapes as the academy MOD-01
+// (src/auth/auth.dto.ts) where they overlap; the user is a platform account
+// (`platform_users`).
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, Length } from 'class-validator';
+import { IsOptional, IsString, Length, MaxLength } from 'class-validator';
 import { PASSWORD_MAX_LENGTH } from '../../auth/password.service.js';
 import { PlatformRole, PlatformUserStatus } from '../../generated/platform/enums.js';
 import { PLATFORM_PASSWORD_MIN_LENGTH } from './platform-session.rules.js';
@@ -68,6 +70,51 @@ export class PlatformSessionResponseDto {
 
   @ApiProperty({ type: PlatformUserDto })
   user: PlatformUserDto;
+}
+
+/**
+ * PMFA-T03 — what API-178 answers for a platform account with two-step
+ * verification: no session and no cookie yet, only the challenge of the second
+ * step (API-218). The academy MfaChallengeResponseDto.
+ */
+export class PlatformMfaChallengeResponseDto {
+  @ApiProperty({ type: Boolean, example: true, description: 'Always true: no session yet — send the challenge with a code to POST /api/auth/login/mfa' })
+  mfaRequired: true;
+
+  @ApiProperty({
+    type: String,
+    example: 'Qm9vay1vZi1yYW5kb20tYnl0ZXMtMzItbG9uZy0tLQ',
+    description: 'One-time sign-in challenge (43 base64url characters) — only its SHA-256 is stored; valid 5 minutes and for 5 wrong codes',
+  })
+  challenge: string;
+
+  @ApiProperty({ type: String, format: 'date-time', example: '2026-11-16T09:35:00.000Z', description: 'When the challenge expires (5 minutes after issue)' })
+  expiresAt: string;
+}
+
+/** PMFA-T03 — body of `POST /api/auth/login/mfa` (API-218): the challenge plus EXACTLY one factor. */
+export class PlatformMfaLoginDto {
+  @ApiProperty({ type: String, maxLength: 128, description: 'The `challenge` from POST /api/auth/login' })
+  @IsString()
+  @MaxLength(128)
+  challenge: string;
+
+  @ApiPropertyOptional({ type: String, maxLength: 32, example: '123456', description: 'The current 6-digit code of the authenticator app (spaces ignored). Send this OR `recoveryCode`' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  code?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    maxLength: 64,
+    example: 'ABCDE-FGHJK',
+    description: 'One unused recovery code (dashes, spaces and case ignored); it is used up. Send this OR `code`',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  recoveryCode?: string;
 }
 
 export class PlatformAuthErrorDto {
