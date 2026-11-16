@@ -4,22 +4,26 @@ import {
   ApiAcceptedResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
+  ApiExtraModels,
   ApiForbiddenResponse,
   ApiGoneResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiTooManyRequestsResponse,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthThrottlerGuard } from '../auth/auth-throttler.guard.js';
-import { AuthErrorDto, SessionResponseDto } from '../auth/auth.dto.js';
+import { AuthErrorDto, MfaChallengeResponseDto, SessionResponseDto } from '../auth/auth.dto.js';
 import { requestContext } from '../auth/cookies.js';
 import type { RefreshCookieOptions } from '../auth/cookies.js';
 import { Public } from '../auth/decorators.js';
+import { isPendingMfa, toMfaChallengeResponse } from '../auth/mfa-login.rules.js';
 import { presentSession, sessionCookieOptions } from '../auth/session.presenter.js';
 import { TokenService } from '../auth/token.service.js';
 import type { Env } from '../config/env.schema.js';
@@ -137,19 +141,30 @@ export class AccountController {
       'and opens a fresh session exactly like login (access token + httpOnly refresh cookie).',
   })
   @ApiParam({ name: 'token', description: 'The raw reset token from the link' })
-  @ApiOkResponse({ type: SessionResponseDto })
+  @ApiExtraModels(SessionResponseDto, MfaChallengeResponseDto)
+  @ApiOkResponse({
+    description:
+      'A session (`SessionResponseDto`, with the cookie), or — for an account with two-step verification (MFA-T03, D-R109) — the reset is done and the answer is the sign-in challenge ' +
+      '(`MfaChallengeResponseDto`, no cookie): finish with POST /api/auth/login/mfa',
+    schema: { oneOf: [{ $ref: getSchemaPath(SessionResponseDto) }, { $ref: getSchemaPath(MfaChallengeResponseDto) }] },
+  })
   @ApiBadRequestResponse({ type: AuthErrorDto, description: 'Validation failed, or password_weak (policy, or same as the current password)' })
   @ApiForbiddenResponse({ type: AuthErrorDto, description: 'origin_forbidden' })
   @ApiNotFoundResponse({ type: AuthErrorDto, description: 'reset_invalid (malformed, unknown, already used or replaced, or the account can no longer sign in)' })
   @ApiGoneResponse({ type: AuthErrorDto, description: 'reset_expired' })
+  @ApiServiceUnavailableResponse({
+    type: AuthErrorDto,
+    description: 'mfa_unavailable — the account has MFA and the server has no usable key: the reset IS done (new password stored, sessions revoked), no session opens',
+  })
   async confirmReset(
     @Param('token') token: string,
     @Body() body: ConfirmPasswordResetDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<SessionResponseDto> {
-    const session = await this.account.confirmPasswordReset(token, body.newPassword, requestContext(req));
-    return presentSession(res, session, this.cookie);
+  ): Promise<SessionResponseDto | MfaChallengeResponseDto> {
+    const outcome = await this.account.confirmPasswordReset(token, body.newPassword, requestContext(req));
+    if (isPendingMfa(outcome)) return toMfaChallengeResponse(outcome);
+    return presentSession(res, outcome, this.cookie);
   }
 
   // ------------------------------------------- e-mail verification (LR-01-T02)
