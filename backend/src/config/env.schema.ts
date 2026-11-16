@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import { z } from 'zod';
+import { parseMfaKey } from '../auth/mfa/secret-box.js';
 import { POSTGRES_DEFAULTS, buildPostgresUrl } from './database-url.js';
 
 // Single source of truth for environment variables. Every variable read by the
@@ -38,6 +39,20 @@ export function stringWithDefault(defaultValue: string) {
 }
 
 export const portSchema = z.coerce.number().int().min(1).max(65535);
+
+/** Length of AUTH_MFA_ENCRYPTION_KEY once decoded: an AES-256 key (D-R107). */
+export const MFA_ENCRYPTION_KEY_BYTES = 32;
+/**
+ * AUTH_MFA_ENCRYPTION_KEY (MOD-01-H06, D-R107): base64 or base64url text that
+ * decodes to exactly 32 bytes, one alphabet only, padding only at the end and
+ * the canonical encoding of its bytes (no stray trailing bits), so two
+ * different strings never name the same key. The boot check uses the very
+ * parser MfaCore uses (`parseMfaKey()` of `src/auth/mfa/secret-box.ts`), so a
+ * key the server accepts at boot is a key that seals and opens.
+ */
+export function isMfaEncryptionKey(value: string): boolean {
+  return parseMfaKey(value) !== null;
+}
 
 /** Address keywords Express accepts in `trust proxy` besides IPs and CIDR ranges. */
 export const TRUST_PROXY_KEYWORDS = ['loopback', 'linklocal', 'uniquelocal'] as const;
@@ -239,6 +254,26 @@ export const envSchema = z
       z
         .url({ protocol: /^https?$/ })
         .transform((value) => value.replace(/\/+$/, ''))
+        .optional(),
+    ),
+
+    // --- Two-step verification (MOD-01-H06, MFA / TOTP — roadmap §4n) ------
+    /**
+     * The AES-256-GCM key that seals every TOTP secret in `users.mfa_secret`
+     * (D-R107): 32 random bytes as base64 or base64url. Optional — without it
+     * the MFA routes answer `503 mfa_unavailable` and a user who has MFA on
+     * cannot finish signing in (the second factor is never skipped). A secret:
+     * never committed, logged or documented by value, and the error below never
+     * repeats it. Rotating it needs a new sealing version (`v2`), not a swap.
+     */
+    AUTH_MFA_ENCRYPTION_KEY: z.preprocess(
+      emptyToUndefined,
+      z
+        .string()
+        .refine(
+          isMfaEncryptionKey,
+          `must be ${MFA_ENCRYPTION_KEY_BYTES} random bytes encoded as base64 or base64url (e.g. node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")`,
+        )
         .optional(),
     ),
 

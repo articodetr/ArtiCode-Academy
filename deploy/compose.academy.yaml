@@ -119,6 +119,8 @@ services:
       TRUST_PROXY: "1"
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-}
       AUTH_REFRESH_FAMILY_MAX_DAYS: ${AUTH_REFRESH_FAMILY_MAX_DAYS:-}
+      # Two-step verification (MOD-01-H06, D-R107): the key that seals the TOTP secrets. Empty = MFA off.
+      AUTH_MFA_ENCRYPTION_KEY: ${AUTH_MFA_ENCRYPTION_KEY:-}
       MAIL_TRANSPORT: ${MAIL_TRANSPORT:-none}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}

@@ -110,6 +110,8 @@ const values = {
   DB_MIGRATOR_PASSWORD: secret(24),
   DB_APP_PASSWORD: secret(24),
   JWT_SECRET: randomBytes(48).toString('base64url'),
+  // MOD-01-H06 (D-R107): the AES-256 key that seals the TOTP secrets — 32 bytes, base64.
+  AUTH_MFA_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
   SEED_ACADEMY_SLUG: slug,
   SEED_ACADEMY_NAME_AR: nameAr,
   SEED_ACADEMY_NAME_EN: nameEn,
@@ -117,7 +119,7 @@ const values = {
   SEED_ACADEMY_CURRENCY: currency,
   SEED_ACADEMY_LOCALE: locale,
 };
-const SECRET_NAMES = ['POSTGRES_PASSWORD', 'DB_MIGRATOR_PASSWORD', 'DB_APP_PASSWORD', 'JWT_SECRET'];
+const SECRET_NAMES = ['POSTGRES_PASSWORD', 'DB_MIGRATOR_PASSWORD', 'DB_APP_PASSWORD', 'JWT_SECRET', 'AUTH_MFA_ENCRYPTION_KEY'];
 
 const seen = new Set();
 const lines = readFileSync(TEMPLATE, 'utf8')

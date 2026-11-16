@@ -1,4 +1,6 @@
-import { isMailbox, validateEnv } from './env.schema.js';
+import { Buffer } from 'node:buffer';
+import { parseMfaKey } from '../auth/mfa/secret-box.js';
+import { isMailbox, isMfaEncryptionKey, validateEnv } from './env.schema.js';
 
 /** 48 characters: long enough for the production rule, obviously not a real secret. */
 const PRODUCTION_SECRET = 'test-secret-'.repeat(4);
@@ -276,6 +278,96 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ TRUST_PROXY: '11' })).toThrow(/TRUST_PROXY: must be at most 10 proxies/);
     for (const bad of ['nginx', '10.0.0.0/33', '10.0.0.0/8/1', 'fd00::/129', '300.1.1.1', 'loopback, example.com', ',']) {
       expect(() => validateEnv({ TRUST_PROXY: bad }), bad).toThrow(/TRUST_PROXY: must be a number of proxies/);
+    }
+  });
+});
+
+// TEST-225 — MFA-T01: the key that seals TOTP secrets (MOD-01-H06, D-R107).
+describe('validateEnv — AUTH_MFA_ENCRYPTION_KEY (TEST-225)', () => {
+  // Fixed, obviously fake bytes: 0xfb encodes to `+/v7` in base64 and `-_v7` in base64url, so both alphabets are exercised.
+  const KEY_BYTES = Buffer.alloc(32, 0xfb);
+  const BASE64 = KEY_BYTES.toString('base64');
+  const BASE64URL = KEY_BYTES.toString('base64url');
+
+  /** The boot error for a value, which must name the variable and never repeat the value. */
+  function bootError(value: string): string {
+    try {
+      validateEnv({ AUTH_MFA_ENCRYPTION_KEY: value });
+    } catch (error) {
+      return (error as Error).message;
+    }
+    throw new Error(`expected AUTH_MFA_ENCRYPTION_KEY=${JSON.stringify(value)} to be refused`);
+  }
+
+  it('is optional: absent or empty means no key', () => {
+    expect(validateEnv({}).AUTH_MFA_ENCRYPTION_KEY).toBeUndefined();
+    expect(validateEnv({ AUTH_MFA_ENCRYPTION_KEY: '' }).AUTH_MFA_ENCRYPTION_KEY).toBeUndefined();
+  });
+
+  it('accepts 32 bytes as padded base64, unpadded base64 and base64url, and keeps the text as given', () => {
+    expect(BASE64).toMatch(/^[A-Za-z0-9+/]{43}=$/);
+    expect(BASE64).toMatch(/[+/]/);
+    expect(BASE64URL).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(BASE64URL).toMatch(/[-_]/);
+    for (const key of [BASE64, BASE64.replace(/=$/, ''), BASE64URL, Buffer.alloc(32).toString('base64')]) {
+      expect(validateEnv({ AUTH_MFA_ENCRYPTION_KEY: key }).AUTH_MFA_ENCRYPTION_KEY, key).toBe(key);
+      expect(isMfaEncryptionKey(key), key).toBe(true);
+    }
+    const production = { NODE_ENV: 'production', DATABASE_URL: 'postgresql://u:p@db:5432/app', JWT_SECRET: PRODUCTION_SECRET };
+    expect(validateEnv({ ...production, AUTH_MFA_ENCRYPTION_KEY: BASE64URL }).AUTH_MFA_ENCRYPTION_KEY).toBe(BASE64URL);
+    // Not required in production either: the MFA routes answer 503 without it.
+    expect(validateEnv(production).AUTH_MFA_ENCRYPTION_KEY).toBeUndefined();
+  });
+
+  it('refuses a key of another length (31 or 33 bytes, or 64 hex characters = 48 bytes)', () => {
+    for (const key of [
+      Buffer.alloc(31, 0xfb).toString('base64'),
+      Buffer.alloc(31, 0xfb).toString('base64url'),
+      Buffer.alloc(33, 0xfb).toString('base64'),
+      Buffer.alloc(16, 0xfb).toString('base64'),
+      KEY_BYTES.toString('hex'),
+    ]) {
+      expect(isMfaEncryptionKey(key), key).toBe(false);
+      expect(bootError(key), key).toMatch(/AUTH_MFA_ENCRYPTION_KEY: must be 32 random bytes encoded as base64 or base64url/);
+    }
+  });
+
+  it('refuses text outside the two alphabets, misplaced or excess padding and a non-canonical encoding', () => {
+    const zeros = 'A'.repeat(43);
+    for (const key of [
+      'not a key at all, just words!',
+      `${BASE64.slice(0, 20)} ${BASE64.slice(20)}`,
+      `${BASE64URL.slice(0, 42)}*`,
+      `${BASE64URL}==`,
+      `=${BASE64URL}`,
+      `${BASE64.slice(0, 20)}=${BASE64.slice(20)}`,
+      // Same 32 bytes as `zeros`, but the last character carries stray low bits.
+      `${zeros.slice(0, 42)}B`,
+    ]) {
+      expect(isMfaEncryptionKey(key), key).toBe(false);
+      expect(bootError(key), key).toMatch(/AUTH_MFA_ENCRYPTION_KEY/);
+    }
+    expect(isMfaEncryptionKey(zeros)).toBe(true);
+  });
+
+  it('refuses a key that mixes the two alphabets — the boot check is the parser MfaCore uses', () => {
+    // 32 bytes either way to Buffer.from(…, 'base64'), but `parseMfaKey()` takes one alphabet only:
+    // the boot check must never accept a key that MfaCore would then silently drop (MFA off).
+    const mixed = `+_${'A'.repeat(41)}`;
+    expect(Buffer.from(mixed, 'base64')).toHaveLength(32);
+    expect(isMfaEncryptionKey(mixed)).toBe(false);
+    expect(parseMfaKey(mixed)).toBeNull();
+    expect(bootError(mixed)).toMatch(/AUTH_MFA_ENCRYPTION_KEY/);
+  });
+
+  it('never repeats the refused value in the boot error', () => {
+    const almost = Buffer.alloc(31, 0xa5).toString('base64');
+    for (const key of [almost, 'Zm9vYmFyLWdhcmJhZ2Uta2V5LXZhbHVl!!', KEY_BYTES.toString('hex')]) {
+      const message = bootError(key);
+      expect(message, key).toMatch(/AUTH_MFA_ENCRYPTION_KEY/);
+      expect(message.includes(key), key).toBe(false);
+      // Not even a long piece of it.
+      expect(message.includes(key.slice(0, 12)), key).toBe(false);
     }
   });
 });
