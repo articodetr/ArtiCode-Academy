@@ -2,7 +2,8 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
 import { useLayoutEffect } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
+import { isMfaChallenge } from '../api/auth'
+import { jsonResponse, mfaChallengeResponse, mockFetch, sessionResponse } from '../test/http'
 import { AuthProvider } from './AuthProvider'
 import { useAuth } from './auth-context'
 import type { AuthContextValue } from './auth-context'
@@ -98,6 +99,84 @@ describe('AuthProvider', () => {
     // The token is never persisted: a reload starts from the httpOnly cookie.
     expect(window.localStorage.length).toBe(0)
     expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it('stays signed out when the password step answers the challenge of two-step verification', async () => {
+    const challenge = mfaChallengeResponse()
+    const fetchMock = mockFetch((url) =>
+      url === '/api/auth/login' ? jsonResponse(200, challenge) : jsonResponse(401, UNAUTHENTICATED),
+    )
+    const { auth, status } = renderProvider()
+    await waitFor(() => expect(status()).toBe('anonymous'))
+
+    let result: unknown
+    await act(async () => {
+      result = await auth().login('noura', 'Secret123!')
+    })
+
+    // The caller gets the challenge to finish the sign-in with; the provider knows no user yet.
+    expect(result).toEqual(challenge)
+    expect(isMfaChallenge(result)).toBe(true)
+    expect(status()).toBe('anonymous')
+    expect(auth().user).toBeNull()
+    expect(getAccessToken()).toBeNull()
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/login'])
+    expect(window.localStorage.length).toBe(0)
+    expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it('completeMfaLogin finishes the sign-in through POST /api/auth/login/mfa and authenticates', async () => {
+    const challenge = mfaChallengeResponse()
+    const fetchMock = mockFetch((url) => {
+      if (url === '/api/auth/login') return jsonResponse(200, challenge)
+      if (url === '/api/auth/login/mfa') {
+        return jsonResponse(200, sessionResponse('access-mfa', { displayName: 'أ. نورة', roles: ['teacher'], permissions: [] }))
+      }
+      return jsonResponse(401, UNAUTHENTICATED)
+    })
+    const { auth, status } = renderProvider()
+    await waitFor(() => expect(status()).toBe('anonymous'))
+    await act(async () => {
+      await auth().login('noura', 'Secret123!')
+    })
+    expect(status()).toBe('anonymous')
+
+    let user: unknown
+    await act(async () => {
+      user = await auth().completeMfaLogin(challenge.challenge, { code: '123456' })
+    })
+
+    expect(status()).toBe('authenticated')
+    expect(screen.getByTestId('auth')).toHaveTextContent('teacher:أ. نورة')
+    expect(user).toMatchObject({ id: 'user-1', role: 'teacher', name: 'أ. نورة' })
+    const [url, init] = fetchMock.mock.calls[2]
+    expect(url).toBe('/api/auth/login/mfa')
+    expect(init?.body).toBe(JSON.stringify({ challenge: challenge.challenge, code: '123456' }))
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false)
+    expect(getAccessToken()).toBe('access-mfa')
+    expect(window.localStorage.length).toBe(0)
+    expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it('a refused second step leaves the visitor signed out', async () => {
+    mockFetch((url) =>
+      url === '/api/auth/login/mfa'
+        ? jsonResponse(401, { statusCode: 401, code: 'mfa_code_invalid' })
+        : jsonResponse(401, UNAUTHENTICATED),
+    )
+    const { auth, status } = renderProvider()
+    await waitFor(() => expect(status()).toBe('anonymous'))
+
+    let failure: unknown
+    await act(async () => {
+      failure = await auth()
+        .completeMfaLogin(mfaChallengeResponse().challenge, { code: '000000' })
+        .catch((error: unknown) => error)
+    })
+
+    expect(failure).toMatchObject({ status: 401, code: 'mfa_code_invalid' })
+    expect(status()).toBe('anonymous')
+    expect(getAccessToken()).toBeNull()
   })
 
   it('drops to anonymous when the API client reports a lost session', async () => {

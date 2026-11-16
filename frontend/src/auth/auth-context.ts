@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { MfaChallenge, MfaFactor } from '../api/auth'
 import type { SessionResponse } from '../api/client'
 import type { Role } from './roles'
 
@@ -24,8 +25,19 @@ export type AuthStatus = 'loading' | 'anonymous' | 'authenticated'
 export interface AuthContextValue {
   status: AuthStatus
   user: AuthUser | null
-  /** Signs in with e-mail or username; rejects with ApiError (code) on failure. */
-  login: (identifier: string, password: string) => Promise<AuthUser>
+  /**
+   * Signs in with e-mail or username; rejects with ApiError (code) on failure.
+   * Resolves to the user once signed in — or, for an account with two-step
+   * verification, to the challenge of the second step (`isMfaChallenge()`):
+   * then nobody is signed in yet and `completeMfaLogin` finishes the sign-in.
+   */
+  login: (identifier: string, password: string) => Promise<AuthUser | MfaChallenge>
+  /**
+   * The second step of a sign-in (API-211): the challenge string from `login`
+   * (or from a confirmed password reset) with the authenticator's code or a
+   * recovery code. Signs the user in; rejects with ApiError (code) on failure.
+   */
+  completeMfaLogin: (challenge: string, factor: MfaFactor) => Promise<AuthUser>
   /** Ends the session on this device. */
   logout: () => Promise<void>
   /** Ends the session on every device. */

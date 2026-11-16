@@ -51,6 +51,7 @@ export function makeAuth(overrides: Partial<AuthContextValue> = {}): AuthContext
     status: user ? 'authenticated' : 'anonymous',
     user,
     login: vi.fn(),
+    completeMfaLogin: vi.fn(),
     logout: vi.fn(),
     logoutAll: vi.fn(),
     reloadUser: vi.fn(),

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getAccessToken, setAccessToken } from '../auth/token-store'
-import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
+import { jsonResponse, mfaChallengeResponse, mockFetch, sessionResponse } from '../test/http'
 import {
   ACCOUNT_PATHS,
   acceptInvitation,
@@ -13,6 +13,7 @@ import {
   requestPasswordReset,
 } from './account'
 import type { InvitationPreview, IssuedLink } from './account'
+import { isMfaChallenge } from './auth'
 
 const TOKEN = 'tok_'.padEnd(43, 'x')
 const USER_ID = '0192f0a0-0000-7000-8000-000000000002'
@@ -107,6 +108,22 @@ describe('account API calls', () => {
     expect(JSON.parse(String(init?.body))).toEqual({ newPassword: 'Another123!' })
     expect(new Headers(init?.headers).has('Authorization')).toBe(false)
     expect(getAccessToken()).toBe('access-reset')
+  })
+
+  it('confirmPasswordReset hands back the challenge of an account with two-step verification and stores no token', async () => {
+    const challenge = mfaChallengeResponse()
+    const fetchMock = mockFetch(() => jsonResponse(200, challenge))
+
+    const result = await confirmPasswordReset(TOKEN, 'Another123!')
+
+    expect(result).toEqual(challenge)
+    expect(isMfaChallenge(result)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`/api/account/password-reset/${TOKEN}/confirm`)
+    expect(JSON.parse(String(init?.body))).toEqual({ newPassword: 'Another123!' })
+    // The password is changed, but nobody is signed in until the second step (API-211) succeeds.
+    expect(getAccessToken()).toBeNull()
   })
 
   it('a rejected accept never triggers a session refresh and leaves no access token behind', async () => {

@@ -23,3 +23,20 @@
   justify-content: center;
   margin-top: 16px;
 }
+
+/* The code fields of the second sign-in step (auth/MfaChallengeStep.tsx): always
+   left to right, centred and spaced so a code is easy to compare with the app's.
+   `input.` outranks Ant Design's RTL input class, which would set the direction. */
+input.mfa-code-input {
+  direction: ltr;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 20px;
+  letter-spacing: 0.3em;
+}
+
+/* Recovery codes are upper case; the value is normalised before it is sent. */
+input.mfa-code-input--recovery {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
