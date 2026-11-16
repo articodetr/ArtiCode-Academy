@@ -15,7 +15,12 @@
 // notifications module) also its one recording writer — a manual announcement —
 // and the proof that nothing else of MOD-12 records an event: an automatic
 // notification, reading announcements, «my notifications», the unread
-// counter, the read marks and the e-mail preferences (D-R86).
+// counter, the read marks and the e-mail preferences (D-R86); since MFA-T05
+// (MOD-01-H06, roadmap §4n) also every writer of two-step verification —
+// enabling, disabling, new recovery codes, the second sign-in step and the
+// administrative reset — and the proof that its reads, its setup, its refusals
+// and a no-op reset record nothing (a fixed TEST key is set before AppModule is
+// imported, so the MFA routes run in this suite's application).
 // Skipped when no database is reachable. Fixtures carry a unique suffix and are deleted at the
 // end (their audit rows stay with a NULL actor — the log is append-only by
 // design, KI-032).
@@ -29,11 +34,13 @@ import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadDotenv } from 'dotenv';
 import request from 'supertest';
+import type { Response as SupertestResponse } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readSettings } from '../src/academy/academy.settings.js';
-import { AppModule } from '../src/app.module.js';
 import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { assertNoSecrets } from '../src/audit/audit.service.js';
+import { REFRESH_COOKIE_NAME } from '../src/auth/cookies.js';
+import { base32Decode, totpCode, totpStep } from '../src/auth/mfa/totp.js';
 import { PasswordService } from '../src/auth/password.service.js';
 import { PERMISSION_KEYS } from '../src/authorization/permission-catalog.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
@@ -42,6 +49,11 @@ import { PrismaClient } from '../src/generated/prisma/client.js';
 import { AnnouncementsService } from '../src/notifications/announcements.service.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
+// The MFA block (MFA-T05) needs the routes on: a fixed TEST key (32 bytes, never a real one), set before AppModule is
+// imported — the validated configuration is fixed when app.module.ts is evaluated, and process variables beat the env files.
+process.env['AUTH_MFA_ENCRYPTION_KEY'] = Buffer.alloc(32, 7).toString('base64');
+
+const { AppModule } = await import('../src/app.module.js');
 
 const DATABASE_URL = process.env['DATABASE_URL'] || postgresUrlFromEnv(process.env, 'app');
 const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -1371,4 +1383,240 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
     },
     20_000,
   );
+
+  // MFA-T05 (MOD-01-H06, roadmap §4n): each writer of two-step verification records exactly its one event — API-208
+  // `auth.mfa.enabled`, API-211 `auth.login.succeeded { via }`, API-210 `auth.mfa.recovery_codes.regenerated`, API-209
+  // `auth.mfa.disabled`, API-212 `users.mfa.reset` — while the status read (API-206), the setup (API-207, even when it
+  // succeeds), the password step of an MFA account, wrong codes and factors, and a refused or no-op reset record
+  // nothing; a wrong code on the second sign-in step records only its `auth.login.failed { stage: mfa }`. MFA is turned
+  // on only through the routes and every recovery code comes from an API-208/API-210 answer. A code works once in its
+  // step and the server accepts the current step ± 1, so no fixture here uses more than two codes.
+  describe('MFA (MOD-01-H06)', () => {
+    const MFA = '/api/auth/mfa';
+    const MFA_STEP = '/api/auth/login/mfa';
+    const MFA_RESET_REASON = 'TEST-030 lost authenticator';
+    const WRONG_PASSWORD = 'Not-The-Password-42';
+    const UNKNOWN_USER_ID = '00000000-0000-7000-8000-000000000000';
+    const STEP_MS = 30_000;
+    /** A code one step back is used only while this much of the current step is left: a request may cross the boundary. */
+    const BOUNDARY_MARGIN_MS = 5_000;
+    /** Secrets, recovery codes and challenges the MFA routes handed out: no event may carry one. */
+    const handedOut: string[] = [];
+    /** Every TOTP code sent, accepted or not: no event may carry one. */
+    const sentCodes: string[] = [];
+    const cookies: Record<string, string> = {};
+    let mfaMark = NIL_ID;
+
+    function refreshCookieOf(res: SupertestResponse): string {
+      const header = res.headers['set-cookie'];
+      const lines: string[] = Array.isArray(header) ? header : header ? [header] : [];
+      const line = lines.find((cookie) => cookie.startsWith(`${REFRESH_COOKIE_NAME}=`)) ?? '';
+      const value = line.split(';')[0]!.slice(REFRESH_COOKIE_NAME.length + 1);
+      expect(value.length, 'a refresh cookie').toBeGreaterThan(0);
+      return value;
+    }
+
+    /** Every leaf value of a JSON value, at any depth. */
+    function leavesOf(value: unknown): unknown[] {
+      if (Array.isArray(value)) return value.flatMap(leavesOf);
+      if (value && typeof value === 'object') return Object.values(value).flatMap(leavesOf);
+      return [value];
+    }
+
+    function expectCode(res: SupertestResponse, status: number, code: string): void {
+      expect(res.status, JSON.stringify(res.body)).toBe(status);
+      expect(res.body).toMatchObject({ code });
+    }
+
+    /** The code of `secret` for the earliest step the server accepts after `lastStep`, waiting for the next step when needed. */
+    async function nextCode(secret: string, lastStep: number | null): Promise<{ code: string; step: number }> {
+      for (;;) {
+        const now = Date.now();
+        const current = totpStep(now);
+        const left = STEP_MS - (now % STEP_MS);
+        const earliest = left > BOUNDARY_MARGIN_MS ? current - 1 : current;
+        const step = lastStep === null ? earliest : Math.max(earliest, lastStep + 1);
+        if (step <= current + 1) return { code: totpCode(base32Decode(secret)!, step), step };
+        await new Promise((resolve) => setTimeout(resolve, left + 100));
+      }
+    }
+
+    /** Six digits that match no step from two before to two after the current one. */
+    function wrongCode(secret: string): string {
+      const step = totpStep(Date.now());
+      const near = new Set([-2, -1, 0, 1, 2].map((offset) => totpCode(base32Decode(secret)!, step + offset)));
+      for (let digit = 0; ; digit += 1) {
+        const candidate = String(digit % 10).repeat(6);
+        if (!near.has(candidate)) return candidate;
+      }
+    }
+
+    async function mfaSignIn(name: string): Promise<void> {
+      const res = await api().post('/api/auth/login').set(anonymous()).send({ identifier: email(name), password: PASSWORD }).expect(200);
+      tokens[name] = res.body.accessToken as string;
+      cookies[name] = refreshCookieOf(res);
+    }
+
+    /** A POST to an MFA route as `name`, with that session's refresh cookie (it marks "this device"). */
+    function mfaPost(name: string, path: string, body: Record<string, unknown>) {
+      if (typeof body['code'] === 'string') sentCodes.push(body['code']);
+      return api().post(`${MFA}${path}`).set(bearer(name)).set('Cookie', `${REFRESH_COOKIE_NAME}=${cookies[name]}`).send(body);
+    }
+
+    const mfaStatus = async (name: string) => (await api().get(MFA).set(bearer(name)).expect(200)).body as Record<string, unknown>;
+
+    /** API-207 + API-208 from the session of `name`; the session of the cookie stays. */
+    async function turnOn(name: string): Promise<{ secret: string; recoveryCodes: string[]; step: number }> {
+      const setup = await mfaPost(name, '/setup', { password: PASSWORD }).expect(200);
+      const secret = setup.body.secret as string;
+      handedOut.push(secret);
+      const { code, step } = await nextCode(secret, null);
+      const enabled = await mfaPost(name, '/enable', { code }).expect(200);
+      const recoveryCodes = enabled.body.recoveryCodes as string[];
+      expect(recoveryCodes).toHaveLength(10);
+      handedOut.push(...recoveryCodes);
+      return { secret, recoveryCodes, step };
+    }
+
+    /** The password step of an MFA account: the challenge of the second step. */
+    async function challengeOf(name: string): Promise<string> {
+      const res = await api().post('/api/auth/login').set(anonymous()).send({ identifier: email(name), password: PASSWORD }).expect(200);
+      expect(Object.keys(res.body).sort()).toEqual(['challenge', 'expiresAt', 'mfaRequired']);
+      handedOut.push(res.body.challenge as string);
+      return res.body.challenge as string;
+    }
+
+    function secondStep(body: Record<string, unknown>) {
+      if (typeof body['code'] === 'string') sentCodes.push(body['code']);
+      return api().post(MFA_STEP).set(anonymous()).send(body);
+    }
+
+    beforeAll(async () => {
+      mfaMark = await mark();
+      for (const name of ['mfaSignIn', 'mfaCodes', 'mfaOff', 'mfaRefused']) {
+        await createUser(name);
+        await mfaSignIn(name);
+      }
+    });
+
+    it('MFA — enabling (API-208), the second sign-in step with a code or a recovery code (API-211), new recovery codes (API-210), disabling (API-209) and the administrative reset (API-212) record one event each', async () => {
+      const signIn = fx['mfaSignIn']!;
+      let m = await mark();
+      const signInMfa = await turnOn('mfaSignIn');
+      await expectEvents(m, [{ action: 'auth.mfa.enabled', actorUserId: signIn, entityId: signIn, metadata: { revokedSessions: 0 } }]);
+
+      // The password step answers the challenge without an event; the second step with a code records the sign-in.
+      m = await mark();
+      const loginCode = await nextCode(signInMfa.secret, signInMfa.step);
+      await secondStep({ challenge: await challengeOf('mfaSignIn'), code: loginCode.code }).expect(200);
+      await expectEvents(m, [{ action: 'auth.login.succeeded', actorUserId: signIn, entityId: signIn, metadata: { via: 'mfa' } }]);
+
+      m = await mark();
+      await secondStep({ challenge: await challengeOf('mfaSignIn'), recoveryCode: signInMfa.recoveryCodes[0] }).expect(200);
+      await expectEvents(m, [
+        { action: 'auth.login.succeeded', actorUserId: signIn, entityId: signIn, metadata: { via: 'recovery_code', recoveryCodesLeft: 9 } },
+      ]);
+
+      // Disabling with a recovery code signs out the two sessions of the second step and keeps this one.
+      m = await mark();
+      const off = await mfaPost('mfaSignIn', '/disable', { password: PASSWORD, recoveryCode: signInMfa.recoveryCodes[1] }).expect(200);
+      expect(off.body).toEqual({ revokedSessions: 2 });
+      await expectEvents(m, [
+        { action: 'auth.mfa.disabled', actorUserId: signIn, entityId: signIn, metadata: { via: 'recovery_code', revokedSessions: 2 } },
+      ]);
+
+      const codes = fx['mfaCodes']!;
+      const codesMfa = await turnOn('mfaCodes');
+      m = await mark();
+      const regenerateCode = await nextCode(codesMfa.secret, codesMfa.step);
+      const regenerated = await mfaPost('mfaCodes', '/recovery-codes', { password: PASSWORD, code: regenerateCode.code }).expect(200);
+      expect(regenerated.body.recoveryCodes).toHaveLength(10);
+      handedOut.push(...(regenerated.body.recoveryCodes as string[]));
+      await expectEvents(m, [{ action: 'auth.mfa.recovery_codes.regenerated', actorUserId: codes, entityId: codes, metadata: { count: 10 } }]);
+
+      // The administrator's reset: one event on the user, with the administrator as actor; the user's one session ends.
+      m = await mark();
+      const reset = await api().post(`${USERS}/${codes}/mfa/reset`).set(bearer('admin')).send({ reason: MFA_RESET_REASON }).expect(200);
+      expect(reset.body).toEqual({ userId: codes, reset: true, revokedSessions: 1 });
+      await expectEvents(m, [
+        { action: 'users.mfa.reset', actorUserId: fx['admin']!, entityId: codes, metadata: { revokedSessions: 1, reason: MFA_RESET_REASON } },
+      ]);
+
+      const offUser = fx['mfaOff']!;
+      const offMfa = await turnOn('mfaOff');
+      m = await mark();
+      const disableCode = await nextCode(offMfa.secret, offMfa.step);
+      const disabled = await mfaPost('mfaOff', '/disable', { password: PASSWORD, code: disableCode.code }).expect(200);
+      expect(disabled.body).toEqual({ revokedSessions: 0 });
+      await expectEvents(m, [{ action: 'auth.mfa.disabled', actorUserId: offUser, entityId: offUser, metadata: { via: 'code', revokedSessions: 0 } }]);
+    });
+
+    it('MFA — the status read, the setup, wrong codes and factors, the password step of an MFA account and a refused or no-op reset record nothing; a wrong second step records only its auth.login.failed { stage: mfa }', async () => {
+      const name = 'mfaRefused';
+      const id = fx[name]!;
+      let m = await mark();
+      // While MFA is off: the read, a wrong password, routes that need MFA on, a confirmation without a setup, a successful setup, a wrong code.
+      expect(await mfaStatus(name)).toMatchObject({ available: true, enabled: false, pendingSetup: false });
+      expectCode(await mfaPost(name, '/setup', { password: WRONG_PASSWORD }), 400, 'password_invalid');
+      expectCode(await mfaPost(name, '/disable', { password: PASSWORD, code: '123456' }), 409, 'mfa_not_enabled');
+      expectCode(await mfaPost(name, '/recovery-codes', { password: PASSWORD, code: '123456' }), 409, 'mfa_not_enabled');
+      expectCode(await mfaPost(name, '/enable', { code: '123456' }), 409, 'mfa_setup_required');
+      const setup = await mfaPost(name, '/setup', { password: PASSWORD }).expect(200);
+      const secret = setup.body.secret as string;
+      handedOut.push(secret);
+      expect(await mfaStatus(name)).toMatchObject({ enabled: false, pendingSetup: true });
+      expectCode(await mfaPost(name, '/enable', { code: wrongCode(secret) }), 400, 'mfa_code_invalid');
+      await expectEvents(m, []);
+
+      const { code: enablingCode } = await nextCode(secret, null);
+      const enabled = await mfaPost(name, '/enable', { code: enablingCode }).expect(200);
+      const recoveryCodes = enabled.body.recoveryCodes as string[];
+      handedOut.push(...recoveryCodes);
+
+      m = await mark();
+      // While MFA is on: the read, a second setup or confirmation, wrong, replayed and missing factors, a wrong password.
+      expect(await mfaStatus(name)).toMatchObject({ enabled: true, recoveryCodesLeft: 10 });
+      expectCode(await mfaPost(name, '/setup', { password: PASSWORD }), 409, 'mfa_already_enabled');
+      expectCode(await mfaPost(name, '/enable', { code: wrongCode(secret) }), 409, 'mfa_already_enabled');
+      expectCode(await mfaPost(name, '/disable', { password: PASSWORD, code: wrongCode(secret) }), 400, 'mfa_code_invalid');
+      expectCode(await mfaPost(name, '/disable', { password: PASSWORD, code: enablingCode }), 400, 'mfa_code_invalid');
+      expectCode(await mfaPost(name, '/disable', { password: PASSWORD, recoveryCode: 'ZZZZZ-ZZZZZ' }), 400, 'mfa_code_invalid');
+      expectCode(await mfaPost(name, '/disable', { password: PASSWORD, code: wrongCode(secret), recoveryCode: recoveryCodes[0] }), 400, 'mfa_factor_required');
+      expectCode(await mfaPost(name, '/disable', { password: WRONG_PASSWORD, code: wrongCode(secret) }), 400, 'password_invalid');
+      expectCode(await mfaPost(name, '/recovery-codes', { password: PASSWORD, code: wrongCode(secret) }), 400, 'mfa_code_invalid');
+      expectCode(await mfaPost(name, '/recovery-codes', { password: WRONG_PASSWORD, code: wrongCode(secret) }), 400, 'password_invalid');
+      // The password step of an MFA account answers a challenge; a second step without exactly one factor or with an unknown challenge is refused first.
+      const challenge = await challengeOf(name);
+      expectCode(await secondStep({ challenge }), 400, 'mfa_factor_required');
+      expectCode(await secondStep({ challenge: 'x'.repeat(43), code: wrongCode(secret) }), 401, 'mfa_challenge_invalid');
+      // API-212: no users.update, one's own account, an unknown id — and an account without MFA (`reset: false`, a no-op).
+      expectCode(await api().post(`${USERS}/${id}/mfa/reset`).set(bearer('plain')).send({}), 403, 'permission_denied');
+      expectCode(await api().post(`${USERS}/${fx['admin']}/mfa/reset`).set(bearer('admin')).send({}), 403, 'self_forbidden');
+      expectCode(await api().post(`${USERS}/${UNKNOWN_USER_ID}/mfa/reset`).set(bearer('admin')).send({}), 404, 'user_not_found');
+      const noop = await api().post(`${USERS}/${fx['plain']}/mfa/reset`).set(bearer('admin')).send({ reason: MFA_RESET_REASON }).expect(200);
+      expect(noop.body).toEqual({ userId: fx['plain'], reset: false, revokedSessions: 0 });
+      await expectEvents(m, []);
+      // Nothing was spent or counted: still on, ten codes, no failed sign-in.
+      expect(await mfaStatus(name)).toMatchObject({ enabled: true, recoveryCodesLeft: 10 });
+      expect(await prisma.user.findUniqueOrThrow({ where: { id }, select: { failedLoginCount: true, lockedUntil: true } })).toEqual({ failedLoginCount: 0, lockedUntil: null });
+
+      // The one allowed event: a wrong code on the second step counts towards the lockout.
+      m = await mark();
+      expectCode(await secondStep({ challenge, code: wrongCode(secret) }), 401, 'mfa_code_invalid');
+      await expectEvents(m, [{ action: 'auth.login.failed', actorUserId: id, entityId: id, metadata: { stage: 'mfa', failedAttempts: 1, locked: false } }]);
+    });
+
+    it('MFA — no event of this block carries a secret, a TOTP code, a recovery code or a challenge', async () => {
+      const rows = await prisma.auditLog.findMany({ where: { id: { gt: mfaMark }, actorUserId: { in: actors() } }, orderBy: { id: 'asc' } });
+      // The four sign-ins of the fixtures, the nine events of the writers' test, and the enabling and the failed second step of the refusals' test.
+      expect(rows).toHaveLength(15);
+      for (const row of rows) {
+        expect(() => assertNoSecrets(row.metadata as Record<string, unknown> | null)).not.toThrow();
+        const serialized = JSON.stringify(row.metadata);
+        for (const value of handedOut) expect(serialized, row.action).not.toContain(value);
+        const leaves = leavesOf(row.metadata);
+        for (const code of sentCodes) expect(leaves, row.action).not.toContain(code);
+      }
+    });
+  });
 });
