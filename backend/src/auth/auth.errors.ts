@@ -24,6 +24,14 @@ export const AUTH_ERROR_CODES = [
   'origin_forbidden',
   // MOD-01-H06: DELETE /api/auth/sessions/:id (API-202) on a session that is not the caller's or has no live token.
   'session_not_found',
+  // MOD-01-H06 — MFA / TOTP (roadmap §4n, D-R107..D-R110).
+  'mfa_unavailable',
+  'mfa_already_enabled',
+  'mfa_not_enabled',
+  'mfa_setup_required',
+  'mfa_code_invalid',
+  'mfa_factor_required',
+  'mfa_challenge_invalid',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
@@ -117,4 +125,39 @@ export const authError = {
     ),
   sessionNotFound: () =>
     new AuthHttpException(HttpStatus.NOT_FOUND, 'session_not_found', 'No active session with this id'),
+  /** D-R107: no usable `AUTH_MFA_ENCRYPTION_KEY` — the MFA routes are off and an MFA account cannot sign in (never a bypass). */
+  mfaUnavailable: () =>
+    new AuthHttpException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'mfa_unavailable',
+      'Two-step verification is not available on this server',
+    ),
+  mfaAlreadyEnabled: () =>
+    new AuthHttpException(HttpStatus.CONFLICT, 'mfa_already_enabled', 'Two-step verification is already on'),
+  mfaNotEnabled: () =>
+    new AuthHttpException(HttpStatus.CONFLICT, 'mfa_not_enabled', 'Two-step verification is not on'),
+  /** API-208 without a setup (API-207) younger than its lifetime. */
+  mfaSetupRequired: () =>
+    new AuthHttpException(
+      HttpStatus.CONFLICT,
+      'mfa_setup_required',
+      'Start the setup again: no pending setup, or it expired',
+    ),
+  /** A wrong or already used TOTP code or recovery code: 400 on the account routes, 401 on the sign-in step. */
+  mfaCodeInvalid: (status: HttpStatus.BAD_REQUEST | HttpStatus.UNAUTHORIZED = HttpStatus.BAD_REQUEST) =>
+    new AuthHttpException(status, 'mfa_code_invalid', 'The verification code is not valid'),
+  /** Exactly one of `code` and `recoveryCode` must be sent. */
+  mfaFactorRequired: () =>
+    new AuthHttpException(
+      HttpStatus.BAD_REQUEST,
+      'mfa_factor_required',
+      'Send exactly one of code and recoveryCode',
+    ),
+  /** API-211: unknown, used, expired or exhausted challenge — sign in with the password again. */
+  mfaChallengeInvalid: () =>
+    new AuthHttpException(
+      HttpStatus.UNAUTHORIZED,
+      'mfa_challenge_invalid',
+      'The sign-in step expired or is not valid; sign in again',
+    ),
 };

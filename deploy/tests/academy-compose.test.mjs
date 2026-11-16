@@ -127,7 +127,7 @@ async function main() {
   console.log(`TEST-202 — academy compose project ${PROJECT} on ${ORIGIN} (images :${TAG})`);
 
   const gen = run(process.execPath, ['deploy/scripts/new-academy-env.mjs', `t202-${RUN}`, '--local', '--port', String(PORT), '--name-ar', 'أكاديمية الاختبار', '--name-en', 'T202 Academy', '--timezone', 'UTC', '--currency', 'USD', '--tag', TAG, '--out', envFile]);
-  const secretNames = ['POSTGRES_PASSWORD', 'DB_MIGRATOR_PASSWORD', 'DB_APP_PASSWORD', 'JWT_SECRET'];
+  const secretNames = ['POSTGRES_PASSWORD', 'DB_MIGRATOR_PASSWORD', 'DB_APP_PASSWORD', 'JWT_SECRET', 'AUTH_MFA_ENCRYPTION_KEY'];
   const secrets = secretNames.map(envValue);
   if (gen.code === 0 && secrets.every((v) => v.length >= 32) && !secrets.some((v) => gen.out.includes(v))) pass('the env generator writes random secrets without printing them', secretNames.join(', '));
   else return fail('the env generator writes random secrets without printing them', tail(gen.out, 5));

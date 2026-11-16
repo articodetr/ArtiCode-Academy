@@ -63,10 +63,13 @@ enum GuardianRelationship {
   @@map("guardian_relationship")
 }
 
+/// `mfa_challenge` (MOD-01-H06, D-R108): the short-lived login challenge
+/// between the password and the second factor — stored as a hash only.
 enum TokenPurpose {
   invitation
   email_verification
   password_reset
+  mfa_challenge
 
   @@map("token_purpose")
 }
@@ -144,6 +147,16 @@ model User {
   updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   /// Soft delete (D7): the row stays because history refers to it.
   deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(6)
+  /// MOD-01-H06 (D-R107/D-R108): the TOTP secret sealed by the app with
+  /// AES-256-GCM (`v1.<iv>.<ciphertext>.<tag>`); NULL = MFA off. Set together
+  /// with `mfaEnabledAt` (CHECKs in SQL).
+  mfaSecret          String?    @map("mfa_secret")
+  mfaEnabledAt       DateTime?  @map("mfa_enabled_at") @db.Timestamptz(6)
+  /// The last accepted TOTP step (replay guard: a code is never accepted twice in its window); only with `mfaSecret`.
+  mfaLastStep        BigInt?    @map("mfa_last_step")
+  /// A setup not confirmed yet (sealed like `mfaSecret`; valid for 10 minutes from `mfaPendingAt`).
+  mfaPendingSecret   String?    @map("mfa_pending_secret")
+  mfaPendingAt       DateTime?  @map("mfa_pending_at") @db.Timestamptz(6)
 
   roles                   UserRole[]
   assignedRoles           UserRole[]               @relation("UserRoleAssignedBy")
@@ -203,6 +216,8 @@ model User {
   notificationsAbout      Notification[]           @relation("NotificationStudent")
   notificationPreferences NotificationPreference[]
   announcementsSent       Announcement[]           @relation("AnnouncementSender")
+  /// MOD-01-H06: their one-time MFA recovery codes (hashes only; deleted with them).
+  mfaRecoveryCodes        MfaRecoveryCode[]
 
   @@index([phone])
   @@index([status])
@@ -1494,4 +1509,26 @@ model Announcement {
   @@index([senderUserId, id(sort: Desc)])
   @@index([classId])
   @@map("announcements")
+}
+
+// MOD-01-H06 — MFA (TOTP) (roadmap §4n; decisions D-R105..D-R112, CH-0279).
+// The secret and the pending setup live in `users` (D-R108); the login
+// challenge is a `verification_tokens` row with purpose `mfa_challenge`. Here:
+// the one-time recovery codes, stored as their SHA-256 only (lower-case hex —
+// CHECK in SQL). A used code keeps its row with `usedAt`; regenerating the
+// codes replaces the whole set.
+
+model MfaRecoveryCode {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// SHA-256 of the code, 64 lower-case hex characters (CHECK in SQL); never the code itself.
+  codeHash  String    @unique @map("code_hash") @db.Char(64)
+  /// Set once when the code is spent; never before `createdAt` (CHECK in SQL).
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mfa_recovery_codes")
 }
