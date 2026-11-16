@@ -1,6 +1,6 @@
 // The caller's sent announcements (MOD-12-T07, API-174) — all of them for a
 // holder of `classes.manage` — each opening its detail (API-175) in a drawer
-// that docks beside the table on a wide screen; «new announcement» opens the
+// over the page; «new announcement» opens the
 // API-173 form. Shown only to holders of `notifications.send` (the page hides
 // the tab otherwise; the server stays the boundary).
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'

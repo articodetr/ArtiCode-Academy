@@ -174,6 +174,7 @@ export const en: Translation = {
       loadFailed: 'Could not read your signed-in devices.',
       empty: 'No signed-in devices.',
       hint: 'A device you sign out may keep working for up to 15 minutes, then it has to sign in again.',
+      thisDeviceUnknown: 'The server could not tell which of these is this device — it may be one of them — so sign devices out one by one.',
     },
     title: 'My account',
     subtitle: 'Your details, roles, permissions and sessions',

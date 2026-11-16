@@ -55,4 +55,19 @@ describe('ProfileSessions (CH-0265 — API-201/202)', () => {
     await waitFor(() => expect(row('s-a')).toBeNull())
     expect(row('s-here')).not.toBeNull()
   })
+
+  it('keeps «sign out all other devices» off when no row is this device (no refresh cookie sent)', async () => {
+    const calls = mockSessions([session('s-a', CHROME_WIN, false), session('s-b', SAFARI_IOS, false)])
+    renderWithProviders(<ProfileSessions />)
+    const others = (await screen.findByText(ar.profile.sessions.signOutOthers)).closest('button')!
+    expect(others).toBeDisabled()
+    expect(screen.getByTestId('sessions-unknown-device')).toHaveTextContent(ar.profile.sessions.thisDeviceUnknown)
+    expect(screen.queryByText(ar.profile.sessions.thisDevice)).toBeNull()
+
+    fireEvent.click(others)
+    expect(screen.queryByText(ar.profile.sessions.confirmOthers.replace('{{count}}', '2'))).toBeNull()
+    // Each device can still be signed out on its own.
+    expect(within(row('s-a')).getByText(ar.profile.sessions.signOut).closest('button')).toBeEnabled()
+    expect(calls.filter((call) => call.method === 'DELETE')).toEqual([])
+  })
 })

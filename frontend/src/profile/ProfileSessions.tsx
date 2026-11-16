@@ -64,6 +64,8 @@ export function ProfileSessions() {
   }
 
   const signOutOthers = async () => {
+    // Without a row marked as this device, "the others" would be every device — this one too.
+    if (!(items ?? []).some((item) => item.current)) return
     const others = (items ?? []).filter((item) => !item.current)
     setBusy('others')
     try {
@@ -101,6 +103,9 @@ export function ProfileSessions() {
   if (items.length === 0) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('profile.sessions.empty')} />
 
   const others = items.filter((item) => !item.current).length
+  // No row is this device when the browser sent no refresh cookie (API-201 marks `current` from it): then "every
+  // other device" would sign this one out too, so that action stays off and the hint says why.
+  const knowsThisDevice = items.some((item) => item.current)
   return (
     <>
       <ul className="profile-sessions">
@@ -141,11 +146,22 @@ export function ProfileSessions() {
       </ul>
       {others > 0 ? (
         <Space orientation="vertical" size={8} style={{ marginTop: 12, width: '100%' }}>
-          <Popconfirm title={t('profile.sessions.confirmOthers', { count: others })} okText={t('profile.sessions.signOutOthers')} cancelText={t('common.cancel')} onConfirm={() => void signOutOthers()}>
-            <Button danger icon={<LogoutOutlined />} loading={busy === 'others'} disabled={busy !== null && busy !== 'others'}>
-              {t('profile.sessions.signOutOthers')}
-            </Button>
-          </Popconfirm>
+          {knowsThisDevice ? (
+            <Popconfirm title={t('profile.sessions.confirmOthers', { count: others })} okText={t('profile.sessions.signOutOthers')} cancelText={t('common.cancel')} onConfirm={() => void signOutOthers()}>
+              <Button danger icon={<LogoutOutlined />} loading={busy === 'others'} disabled={busy !== null && busy !== 'others'}>
+                {t('profile.sessions.signOutOthers')}
+              </Button>
+            </Popconfirm>
+          ) : (
+            <>
+              <Button danger icon={<LogoutOutlined />} disabled>
+                {t('profile.sessions.signOutOthers')}
+              </Button>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="sessions-unknown-device">
+                {t('profile.sessions.thisDeviceUnknown')}
+              </Typography.Text>
+            </>
+          )}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t('profile.sessions.hint')}
           </Typography.Text>
