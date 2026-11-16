@@ -1,7 +1,7 @@
 // The office view of /payments (MOD-11 — API-144/145): the invoices list with
 // filters (number search, student, status, payment state, overdue only) and
-// keyset pages; a row opens the invoice drawer, docked beside the list on a
-// wide screen. For holders of `invoices.read_all`, `invoices.manage` or
+// keyset pages; a row opens the invoice drawer over the page. For holders of
+// `invoices.read_all`, `invoices.manage` or
 // `payments.record`. Every amount is the server's. With `invoices.manage`:
 // «new invoice» (a draft — CreateInvoiceModal, API-146) and «bill a whole
 // class» (ClassBatchModal, API-150); both re-read the list.

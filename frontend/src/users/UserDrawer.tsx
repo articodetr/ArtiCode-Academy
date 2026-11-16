@@ -98,7 +98,7 @@ export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null,
       keyboard={!unsaved}
       mask={{ closable: !unsaved }}
       title={t('users.detail.title')}
-      width={600}
+      size={600}
       destroyOnHidden
     >
       <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />

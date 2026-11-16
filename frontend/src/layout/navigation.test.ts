@@ -357,7 +357,8 @@ describe('navFor', () => {
     // and the certificates entry (J-F51): the seed grants them certificates.issue, which opens the list too (D-R57).
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications', 'reports'])
     // Students and guardians gain «my classes» (J-F04) and «my lessons» (J-F11): ownership, by their server role keys.
-    // Students keep the lessons entry through lessons.read (an empty list there — their own lessons are in «my lessons», API-101).
+    // Learner-only viewers lose the staff lessons entry (`exceptRoleKeysOnly`) although students hold lessons.read: the
+    // lessons list showed them nothing — their own lessons are in «my lessons» (API-101), their classes in «my classes».
     // Both lose the assignments entry (J-F38): assignments.read is theirs by seed, but the learners are excepted — and gain
     // «my assignments» (J-F42, API-112) in its place, by their server role keys. Both lose the exams entry too (J-F45): exams.read
     // is theirs by seed, but the learners are excepted — and gain «my exams» (API-121) and «my grades» (API-129) right after

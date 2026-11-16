@@ -1,5 +1,5 @@
-/* The reports page (redesign, 2026-11-14). Panels, KPI strip, month bars and the aging bar come from
-   dashboard.css; colours only from the --c-* tokens of index.css. */
+/* The reports page. Panels, KPI strip, month bars and the aging bar come from dashboard/learner.css (imported
+   by ReportsPage — the redesign's dashboard.css is gone); colours only from the --c-* tokens of index.css. */
 .rp {
   width: 100%;
   min-width: 0;
