@@ -478,6 +478,35 @@ export class DeleteUserDto {
 }
 
 // ---------------------------------------------------------------------------
+// MOD-01-H06 / MFA-T04 — administrative reset of two-step verification (API-212)
+// ---------------------------------------------------------------------------
+
+/** Optional body of `POST /api/users/:id/mfa/reset` (a client may send none). */
+export class ResetUserMfaDto {
+  @ApiPropertyOptional({ ...REASON_API, example: 'Lost phone; identity confirmed at the front desk' })
+  @IsOptional()
+  @Transform(textParam)
+  @IsString()
+  @Length(1, STATUS_REASON_MAX_LENGTH)
+  reason?: string;
+}
+
+/** Answer of `POST /api/users/:id/mfa/reset` — never a secret, a code or a recovery code. */
+export class MfaResetResultDto {
+  @ApiProperty({ format: 'uuid' })
+  userId: string;
+
+  @ApiProperty({
+    description:
+      'true when two-step verification (or a setup awaiting confirmation) was cleared; false when the account had none — nothing was written and no event was recorded',
+  })
+  reset: boolean;
+
+  @ApiProperty({ type: 'integer', minimum: 0, example: 2, description: 'Sessions of the user that were ended (every one of them on a reset; 0 when nothing was reset)' })
+  revokedSessions: number;
+}
+
+// ---------------------------------------------------------------------------
 // MOD-03-T07 — role assignment
 // ---------------------------------------------------------------------------
 
@@ -649,7 +678,21 @@ export class GuardianLinkDto {
   isPrimary: boolean;
 }
 
+/**
+ * The detail adds `mfaEnabledAt` to the summary (not in the list items): it is
+ * an account-security timestamp, so it follows D-R07 like `lockedUntil` — null
+ * without `users.read_contact`. The MFA secrets, the replay step and the
+ * recovery codes are never read for a users response.
+ */
 export class UserDetailDto extends UserSummaryDto {
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'ISO 8601; when two-step verification was turned on, null while it is off; null without `users.read_contact`',
+  })
+  mfaEnabledAt: string | null;
+
   @ApiProperty({ type: [UserRoleSummaryDto] })
   roles: UserRoleSummaryDto[];
 

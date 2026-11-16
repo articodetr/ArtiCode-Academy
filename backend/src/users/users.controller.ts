@@ -24,7 +24,9 @@ import {
   CreateUserDto,
   DeleteUserDto,
   ListUsersQueryDto,
+  MfaResetResultDto,
   ReplaceUserRolesDto,
+  ResetUserMfaDto,
   UpdateUserDto,
   UserDetailDto,
   UserDetailQueryDto,
@@ -74,7 +76,8 @@ function projectionFor(caller: AuthPrincipal): UsersProjection {
     '`users.update` for PATCH, plus exceeding permissions when changing the login identifiers of a more privileged user; ' +
     '`users.deactivate` for status changes and DELETE (`unlock`: `users.update` suffices), plus exceeding permissions when the target holds permissions the caller lacks; ' +
     '`users.roles.assign` for PUT roles, plus exceeding permissions when the target holds, or an added role would confer, permissions the caller lacks; ' +
-    'self_forbidden — suspend/archive/delete on one’s own account, or taking academy_admin from oneself',
+    '`users.update` for the MFA reset, plus exceeding permissions when the target holds permissions the caller lacks; ' +
+    'self_forbidden — suspend/archive/delete on one’s own account, taking academy_admin from oneself, or resetting one’s own two-step verification (`action: mfa_reset`)',
 })
 export class UsersController {
   constructor(private readonly users: UsersService) {}
@@ -190,6 +193,32 @@ export class UsersController {
     @Req() req: Request,
   ): Promise<UserDetailDto> {
     return this.users.replaceRoles(id, body, caller, requestContext(req), projectionFor(caller));
+  }
+
+  @Post(':id/mfa/reset')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(UPDATE_USERS_PERMISSION)
+  @ApiOperation({
+    summary: 'Reset the two-step verification of a user (API-212)',
+    description:
+      'For a user who lost their authenticator: clears the TOTP secret, a setup awaiting confirmation, the recovery codes and any open sign-in challenge, ' +
+      'and ends every session of the user. The user signs in with the password alone afterwards and may turn two-step verification on again. ' +
+      'Any account status may be reset (a suspended account too). One audit event `users.mfa.reset` `{ revokedSessions, reason? }`; ' +
+      'an account without two-step verification and without a pending setup answers `reset: false` and nothing is written or recorded. ' +
+      'Optional JSON body `{ reason }`. Requires `users.update`; the target’s roles may not confer a permission the caller lacks (checked before anything about MFA — SEC-R-15); ' +
+      'one’s own two-step verification is turned off with the password and a code instead (`self_forbidden`).',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: MfaResetResultDto })
+  @ApiBadRequestResponse({ description: 'Validation failed (undeclared field, `reason` not 1–500 characters) or `id` is not a UUID' })
+  @ApiNotFoundResponse({ description: 'user_not_found (unknown or soft-deleted)' })
+  resetMfa(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: ResetUserMfaDto,
+    @CurrentUser() caller: AuthPrincipal,
+    @Req() req: Request,
+  ): Promise<MfaResetResultDto> {
+    return this.users.resetMfa(id, body, caller, requestContext(req));
   }
 
   @Post(':id/status')
