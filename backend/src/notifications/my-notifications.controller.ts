@@ -34,7 +34,7 @@ export class MyNotificationsController {
     description:
       'The caller’s own notifications, newest first, keyset-paginated (`limit` 1–100, `cursor` = `nextCursor` of the previous page), with the filters `unread` and `category`. ' +
       'Each item carries the event key, the category, the title and body worded in the recipient’s language when it was created, `data` (the frontend path `link` and ids), ' +
-      'the student it is about (the caller or their child), the announcement id and `readAt` — never the state of its e-mail copy or an address. No permission key is needed (ownership).',
+      'the student it is about (the caller or their child), the announcement id, the `sender` of an announcement by name only (null for an automatic event) and `readAt` — never the state of its e-mail copy or an address. No permission key is needed (ownership).',
   })
   @ApiOkResponse({ type: MyNotificationListDto })
   @ApiBadRequestResponse({ description: 'Validation failed (unknown parameter, `limit` out of range, malformed `cursor`, unknown `category`, `unread` not a boolean)' })

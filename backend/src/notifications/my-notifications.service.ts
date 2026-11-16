@@ -28,9 +28,24 @@ const NOTIFICATION_SELECT = {
   readAt: true,
   createdAt: true,
   student: { select: { id: true, fullName: true, displayName: true } },
+  // The sender of an announcement, by name only. Prisma reads this relation for
+  // the whole page at once (one `IN (…)` read of the announcements and one of
+  // their senders, whatever the page size) — never one query per item.
+  announcement: { select: { sender: { select: { fullName: true, displayName: true } } } },
 } as const satisfies Prisma.NotificationSelect;
 
 type NotificationRow = Prisma.NotificationGetPayload<{ select: typeof NOTIFICATION_SELECT }>;
+
+/**
+ * Only an announcement has a sender; an automatic event (no `announcementId`)
+ * is always null, and so is an announcement whose sender account is gone
+ * (`sender_user_id` SET NULL). A soft-deleted sender stays named, like the
+ * teacher of «my classes»/«my lessons» and the reviewer of a submission.
+ */
+function senderOf(row: NotificationRow): MyNotificationDto['sender'] {
+  const sender = row.announcementId ? row.announcement?.sender : null;
+  return sender ? { fullName: sender.fullName, displayName: sender.displayName } : null;
+}
 
 function toDto(row: NotificationRow): MyNotificationDto {
   const data = row.data && typeof row.data === 'object' && !Array.isArray(row.data) ? (row.data as Record<string, unknown>) : {};
@@ -43,6 +58,7 @@ function toDto(row: NotificationRow): MyNotificationDto {
     data,
     student: row.student,
     announcementId: row.announcementId,
+    sender: senderOf(row),
     readAt: row.readAt ? row.readAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };

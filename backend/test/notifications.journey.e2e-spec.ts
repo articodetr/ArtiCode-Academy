@@ -99,7 +99,7 @@ const FEEDBACK = `FEEDBACK-${RUN} well argued`;
 const OFFICE_NOTE = `NOTE-${RUN}`;
 const PAYER = `PAYER-${RUN}`;
 
-/** A notification as «my notifications» answers it (API-167): exactly these ten fields — no e-mail state, no address. */
+/** A notification as «my notifications» answers it (API-167): exactly these eleven fields — no e-mail state, no address (`sender` since CH-0277). */
 interface InboxItem {
   id: string;
   eventKey: string;
@@ -109,6 +109,7 @@ interface InboxItem {
   data: Record<string, unknown>;
   student: { id: string; fullName: string; displayName: string | null } | null;
   announcementId: string | null;
+  sender: { fullName: string; displayName: string | null } | null;
   readAt: string | null;
   createdAt: string;
 }
@@ -189,6 +190,7 @@ describe.skipIf(!available)('WF-15 notification journey — the MOD-12 and Stage
       data,
       student: { id: fx.student, fullName: 'Fixture student', displayName: STUDENT_NAME },
       announcementId: null,
+      sender: null,
       readAt: null,
       createdAt: expect.any(String),
     };
@@ -450,6 +452,7 @@ describe.skipIf(!available)('WF-15 notification journey — the MOD-12 and Stage
             data: { link: '/notifications', announcementId, classId },
             student: null,
             announcementId,
+            sender: { fullName: 'Fixture teacher', displayName: null },
             readAt: null,
             createdAt: expect.any(String),
           },
