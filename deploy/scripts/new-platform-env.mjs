@@ -9,9 +9,10 @@
 // Options: --out <file> (default deploy/env/platform.env), --tag <image tag> (default local),
 // --probe-interval <seconds> (default 300).
 //
-// The database passwords and PLATFORM_JWT_SECRET are random (crypto.randomBytes), written to
-// the file only (mode 600 on Linux/macOS — on Windows the mode is not applied: keep the file
-// in your user profile) and NEVER printed. An existing file is never overwritten.
+// The database passwords, PLATFORM_JWT_SECRET and PLATFORM_MFA_ENCRYPTION_KEY are random
+// (crypto.randomBytes), written to the file only (mode 600 on Linux/macOS — on Windows the mode
+// is not applied: keep the file in your user profile) and NEVER printed. An existing file is
+// never overwritten.
 // The pattern of deploy/scripts/new-academy-env.mjs. Node >= 22, no npm install.
 
 import { randomBytes } from 'node:crypto';
@@ -93,7 +94,7 @@ if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(tag)) fail('--tag is a docker im
 
 // --- write ----------------------------------------------------------------------
 const out = resolve(options.out ?? join(ROOT, 'deploy', 'env', 'platform.env'));
-if (existsSync(out)) fail(`${relative(process.cwd(), out) || out} exists — the platform env file is never overwritten (rotate a secret by editing it and following the runbook)`);
+if (existsSync(out)) fail(`${relative(process.cwd(), out) || out} exists — the platform env file is never overwritten (rotate a secret by editing it and following the runbook — never PLATFORM_MFA_ENCRYPTION_KEY once MFA is in use)`);
 
 const secret = (bytes) => randomBytes(bytes).toString('hex');
 const values = {
@@ -106,9 +107,11 @@ const values = {
   PLATFORM_DB_MIGRATOR_PASSWORD: secret(24),
   PLATFORM_DB_APP_PASSWORD: secret(24),
   PLATFORM_JWT_SECRET: randomBytes(48).toString('base64url'),
+  // PMFA (ENV-91): the AES-256 key that seals the TOTP secrets of platform accounts — 32 bytes, base64.
+  PLATFORM_MFA_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
   PLATFORM_PROBE_INTERVAL_SECONDS: String(interval),
 };
-const SECRET_NAMES = ['POSTGRES_PASSWORD', 'PLATFORM_DB_MIGRATOR_PASSWORD', 'PLATFORM_DB_APP_PASSWORD', 'PLATFORM_JWT_SECRET'];
+const SECRET_NAMES = ['POSTGRES_PASSWORD', 'PLATFORM_DB_MIGRATOR_PASSWORD', 'PLATFORM_DB_APP_PASSWORD', 'PLATFORM_JWT_SECRET', 'PLATFORM_MFA_ENCRYPTION_KEY'];
 
 const seen = new Set();
 const lines = readFileSync(TEMPLATE, 'utf8')

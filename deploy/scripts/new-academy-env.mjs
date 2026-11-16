@@ -97,7 +97,7 @@ for (const [name, value] of [['--name-ar', nameAr], ['--name-en', nameEn]]) {
 
 // --- write ----------------------------------------------------------------------
 const out = resolve(options.out ?? join(ROOT, 'deploy', 'env', `${slug}.env`));
-if (existsSync(out)) fail(`${relative(process.cwd(), out) || out} exists — an academy env file is never overwritten (rotate a secret by editing it and following the runbook)`);
+if (existsSync(out)) fail(`${relative(process.cwd(), out) || out} exists — an academy env file is never overwritten (rotate a secret by editing it and following the runbook — never AUTH_MFA_ENCRYPTION_KEY once MFA is in use)`);
 
 const secret = (bytes) => randomBytes(bytes).toString('hex');
 const values = {

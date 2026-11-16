@@ -66,7 +66,7 @@ const ORIGIN = `http://localhost:${PORT}`;
 // The site answers its own host only (Caddy serves an empty 200 to any other Host),
 // so requests go to the origin itself — localhost, published on 127.0.0.1.
 const BASE = ORIGIN;
-const SECRET_NAMES = ['POSTGRES_PASSWORD', 'PLATFORM_DB_MIGRATOR_PASSWORD', 'PLATFORM_DB_APP_PASSWORD', 'PLATFORM_JWT_SECRET'];
+const SECRET_NAMES = ['POSTGRES_PASSWORD', 'PLATFORM_DB_MIGRATOR_PASSWORD', 'PLATFORM_DB_APP_PASSWORD', 'PLATFORM_JWT_SECRET', 'PLATFORM_MFA_ENCRYPTION_KEY'];
 
 const results = [];
 const report = (status, name, detail = '') => {
@@ -276,8 +276,10 @@ async function main() {
   const values = SECRET_NAMES.map(envValue);
   secrets.push(...values);
   const printed = values.some((v) => v && gen.out.includes(v));
-  if (gen.code === 0 && values.every((v) => v.length >= 32) && new Set(values).size === values.length && !printed) pass('the env generator writes random secrets without printing them', SECRET_NAMES.join(', '));
-  else return fail('the env generator writes random secrets without printing them', `exit ${gen.code}${printed ? ', a secret was printed' : ''}`);
+  // PMFA (ENV-91): the MFA key is an AES-256 key, exactly 32 bytes once decoded.
+  const mfaKeyBytes = Buffer.from(envValue('PLATFORM_MFA_ENCRYPTION_KEY'), 'base64').length;
+  if (gen.code === 0 && values.every((v) => v.length >= 32) && new Set(values).size === values.length && mfaKeyBytes === 32 && !printed) pass('the env generator writes random secrets without printing them', SECRET_NAMES.join(', '));
+  else return fail('the env generator writes random secrets without printing them', `exit ${gen.code}${printed ? ', a secret was printed' : ''}${mfaKeyBytes === 32 ? '' : `, PLATFORM_MFA_ENCRYPTION_KEY is ${mfaKeyBytes} bytes`}`);
   const before = readFileSync(envFile, 'utf8');
   const again = run(process.execPath, genArgs);
   if (again.code !== 0 && /never overwritten/.test(again.out) && readFileSync(envFile, 'utf8') === before) pass('the env generator never overwrites an env file');

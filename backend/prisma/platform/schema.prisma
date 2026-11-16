@@ -108,11 +108,22 @@ model PlatformUser {
   passwordChangedAt DateTime?          @map("password_changed_at") @db.Timestamptz(6)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// PMFA: the TOTP secret, sealed (`v<n>.<iv>.<ciphertext>.<tag>`, AES-256-GCM with
+  /// PLATFORM_MFA_ENCRYPTION_KEY); set exactly while MFA is on, with mfa_enabled_at (CHECKs).
+  mfaSecret         String?            @map("mfa_secret")
+  mfaEnabledAt      DateTime?          @map("mfa_enabled_at") @db.Timestamptz(6)
+  /// PMFA replay guard: the last accepted 30-second TOTP step; only while MFA is on (CHECK).
+  mfaLastStep       BigInt?            @map("mfa_last_step")
+  /// PMFA: a setup not confirmed yet — its sealed secret and its start, together (CHECK).
+  mfaPendingSecret  String?            @map("mfa_pending_secret")
+  mfaPendingAt      DateTime?          @map("mfa_pending_at") @db.Timestamptz(6)
 
   refreshTokens         PlatformRefreshToken[]
   auditLogs             PlatformAuditLog[]
-  academiesCreated      Academy[]              @relation("AcademyCreatedBy")
-  healthChecksTriggered AcademyHealthCheck[]   @relation("AcademyHealthCheckTriggeredBy")
+  academiesCreated      Academy[]                 @relation("AcademyCreatedBy")
+  healthChecksTriggered AcademyHealthCheck[]      @relation("AcademyHealthCheckTriggeredBy")
+  mfaRecoveryCodes      PlatformMfaRecoveryCode[]
+  mfaChallenges         PlatformMfaChallenge[]
 
   @@map("platform_users")
 }
@@ -283,4 +294,43 @@ model AcademyHealthCheck {
   @@index([academyId, checkedAt(sort: Desc)])
   @@index([triggeredById])
   @@map("academy_health_checks")
+}
+
+// ---------------------------------------------------------------------------
+// PMFA — MFA for platform users (roadmap §4o)
+// ---------------------------------------------------------------------------
+
+/// One-time recovery codes of a platform user with MFA on; only a keyed SHA-256 of each code is stored.
+model PlatformMfaRecoveryCode {
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// 64 lower-case hex characters (CHECK) — never the code itself; unique across every user.
+  codeHash  String    @unique @map("code_hash") @db.Char(64)
+  /// Set once when the code is spent (a conditional update on `used_at IS NULL`).
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user PlatformUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("platform_mfa_recovery_codes")
+}
+
+/// The second step of a platform sign-in: a short-lived challenge handed out after the password.
+model PlatformMfaChallenge {
+  id         String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// SHA-256 of the challenge (hex, CHECK); the challenge itself is never stored.
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  /// Set when the challenge is used, retired or worn out by its wrong attempts.
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  /// Wrong factors tried on this challenge, 0..5 (CHECK; the fifth one consumes it).
+  attempts   Int       @default(0) @db.SmallInt
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user PlatformUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("platform_mfa_challenges")
 }
