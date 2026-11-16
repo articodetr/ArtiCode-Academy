@@ -30,6 +30,11 @@
 //        TLS on 443, while the local one creates no certificate and no local CA;
 //   AC5  frontend/ is built as committed — no change, no untracked file under it,
 //        nothing written into it by the build;
+//   CSP  the UI (index.html, deep paths, /assets/*) carries the exact
+//        Content-Security-Policy of the Caddyfile (KI-080) — `img-src` adds `http:` only for
+//        a request over plain http (a local trial may show an http logo; an https page
+//        would block it as mixed content anyway) — while /api/* gets none from Caddy: the
+//        API's own helmet policy reaches the browser alone;
 //   plus the TEST-200 checks that apply: no .env file and no secret value of the local
 //   env files in any layer, the non-root user (no capability, no-new-privileges),
 //   cache and security headers, compression, the 2 MB /api body limit, the JSON access
@@ -60,6 +65,12 @@ const NODE_IMAGE = 'node:22.20.0-bookworm-slim';
 const RUN_ID = randomBytes(4).toString('hex');
 const HTTPS_HOST = 'academy.example.com';
 const HSTS = 'max-age=31536000; includeSubDomains';
+// The UI's Content-Security-Policy (KI-080), exactly as deploy/Caddyfile sends it: one
+// policy, whose img-src also allows http: images on a page served over plain http.
+const CSP_HEADER = 'content-security-policy';
+const uiCsp = (img) => `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src ${img}; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`;
+const CSP_HTTPS = uiCsp("'self' data: https:");
+const CSP_HTTP = uiCsp("'self' data: https: http:");
 
 const results = [];
 const report = (status, name, detail = '') => {
@@ -105,7 +116,7 @@ function send(port, { method = 'GET', path = '/', headers = {}, body } = {}) {
     const req = http.request({ host: '127.0.0.1', port, method, path, agent: false, headers: { host: `localhost:${port}`, ...headers } }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
-      res.on('end', () => settle(resolvePromise, { status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+      res.on('end', () => settle(resolvePromise, { status: res.statusCode, headers: res.headers, rawHeaders: res.rawHeaders, body: Buffer.concat(chunks) }));
       res.on('error', (e) => settle(reject, e));
     });
     req.setTimeout(15_000, () => req.destroy(new Error('timeout')));
@@ -113,6 +124,9 @@ function send(port, { method = 'GET', path = '/', headers = {}, body } = {}) {
     req.end(body);
   });
 }
+
+/** How many times a response names a header (Node joins repeated ones in res.headers). */
+const headerCount = (res, name) => (res.rawHeaders ?? []).filter((value, i) => i % 2 === 0 && value.toLowerCase() === name).length;
 
 const json = (res) => {
   try {
@@ -390,6 +404,22 @@ const findDeep = (node, predicate) => {
   if (predicate(node)) return true;
   return Object.values(node).some((child) => findDeep(child, predicate));
 };
+const collect = (node, predicate, out = []) => {
+  if (node !== null && typeof node === 'object') {
+    if (predicate(node)) out.push(node);
+    for (const child of Object.values(node)) collect(child, predicate, out);
+  }
+  return out;
+};
+/** The headers handler setting `value` as the UI's CSP, inside a route matched on `protocol`. */
+const cspBehind = (node, protocol, value) => findDeep(node, (n) => Array.isArray(n.routes) && n.routes.some((r) => (r.match ?? []).some((m) => m.protocol === protocol) && findDeep(r, (h) => h.handler === 'headers' && h.response?.set?.['Content-Security-Policy']?.[0] === value)));
+const setsAnyCsp = (node) => findDeep(node, (h) => h.handler === 'headers' && Object.keys(h.response?.set ?? {}).some((name) => /^content-security-policy/i.test(name)));
+const setsReportOnly = (node) => findDeep(node, (h) => h.handler === 'headers' && Object.keys(h.response?.set ?? {}).some((name) => /^content-security-policy-report-only$/i.test(name)));
+/** The UI's CSP by request scheme, none in the /api/* route, nothing report-only. */
+function cspConfigured(site) {
+  const api = collect(site, (n) => Array.isArray(n.match) && n.match.some((m) => (m.path ?? []).includes('/api/*')));
+  return cspBehind(site, 'https', CSP_HTTPS) && cspBehind(site, 'http', CSP_HTTP) && api.length === 1 && !setsAnyCsp(api[0]) && !setsReportOnly(site);
+}
 
 function checkAdapt() {
   const fmt = docker(['run', '--rm', '--entrypoint', 'caddy', WEB, 'fmt', '/etc/caddy/Caddyfile']);
@@ -405,6 +435,12 @@ function checkAdapt() {
     );
     const hsts = findDeep(site, (n) => Array.isArray(n.routes) && n.routes.some((r) => (r.match ?? []).some((m) => m.protocol === 'https') && findDeep(r, (h) => h.handler === 'headers' && h.response?.set?.['Strict-Transport-Security']?.[0] === HSTS)));
     check(hsts, 'HSTS on the UI only for https requests', `"${HSTS}" behind a \`protocol https\` matcher (helmet's value)`, 'no HSTS route behind a protocol https matcher');
+    check(
+      cspConfigured(site),
+      'caddy adapt: the UI\'s Content-Security-Policy follows the request scheme',
+      'enforcing (not report-only); img-src without http: behind `protocol https`, with http: behind `protocol http`; nothing set in the /api/* route',
+      'the CSP routes of the UI are not as expected (or one sits in /api/*, or one is report-only)',
+    );
 
     const plain = adapt(null);
     const local = serversOf(plain).find((s) => hostsOf(s).includes('localhost'));
@@ -478,9 +514,11 @@ async function checkWithStub() {
     );
 
     const deep = [];
+    const deepResponses = [];
     let deepOk = true;
     for (const path of ['/classes', '/users/abc', `/invite/${token()}`, '/settings/roles?tab=1']) {
       const res = await send(port, { path });
+      deepResponses.push([path.replace(/\/invite\/.*/, '/invite/<token>'), res]);
       deep.push(`${path.replace(/\/invite\/.*/, '/invite/<token>')} ${res.status}`);
       if (!(res.status === 200 && /^text\/html/.test(res.headers['content-type'] ?? '') && res.body.equals(root.body) && res.headers['cache-control'] === 'no-cache')) {
         deepOk = false;
@@ -516,6 +554,17 @@ async function checkWithStub() {
       `zstd: ${zstd.headers['content-encoding']}, gzip: ${gzip.headers['content-encoding']}`,
     );
 
+    // KI-080: the UI's Content-Security-Policy — exactly once, enforcing, and over plain
+    // http with http: in img-src (this local site is http://localhost).
+    const uiResponses = [['/', root], ['/index.html', index], ...deepResponses, [assetPath, asset], [cssPath, gzip]];
+    const wrongCsp = uiResponses.filter(([, res]) => res.headers[CSP_HEADER] !== CSP_HTTP || headerCount(res, CSP_HEADER) !== 1 || 'content-security-policy-report-only' in res.headers).map(([path]) => path);
+    check(
+      wrongCsp.length === 0,
+      'the UI carries its Content-Security-Policy (KI-080)',
+      `index.html, ${deepResponses.length} deep paths and the script and stylesheet of /assets/: one enforcing header, "${CSP_HTTP}"`,
+      `wrong on ${wrongCsp.join(', ')} — / sent ${JSON.stringify(root.headers[CSP_HEADER] ?? null)} (${headerCount(root, CSP_HEADER)} header(s)), report-only ${JSON.stringify(root.headers['content-security-policy-report-only'] ?? null)}`,
+    );
+
     // AC1: one origin — the bundle calls root-relative /api/... paths, and the same
     // http://localhost:<port> answers the page, its assets and the API.
     const bundle = asset.body.toString('utf8');
@@ -547,9 +596,9 @@ async function checkWithStub() {
       JSON.stringify({ xff, proto: seen?.headers?.['x-forwarded-proto'], host: seen?.headers?.['x-forwarded-host'] }),
     );
     check(
-      spoof.headers['x-frame-options'] === 'SAMEORIGIN' && spoof.headers['cache-control'] === 'no-store' && !('x-content-type-options' in spoof.headers) && !('referrer-policy' in spoof.headers) && !('server' in spoof.headers),
+      spoof.headers['x-frame-options'] === 'SAMEORIGIN' && spoof.headers['cache-control'] === 'no-store' && !('x-content-type-options' in spoof.headers) && !('referrer-policy' in spoof.headers) && !('server' in spoof.headers) && headerCount(spoof, CSP_HEADER) === 0 && !('content-security-policy-report-only' in spoof.headers),
       'the API\'s own headers pass through untouched',
-      'X-Frame-Options and Cache-Control of the upstream kept, none of the UI headers added, no Server',
+      'X-Frame-Options and Cache-Control of the upstream kept, none of the UI headers added (no Content-Security-Policy either — the stub sends none), no Server',
       JSON.stringify(spoof.headers),
     );
 
@@ -685,9 +734,16 @@ async function checkWithApi() {
       health ? `${health.status} ${health.body.toString('utf8').slice(0, 200)}` : 'no answer',
     );
     check(
-      health && health.headers['x-frame-options'] === 'SAMEORIGIN' && /default-src 'self'/.test(health.headers['content-security-policy'] ?? '') && health.headers['strict-transport-security'] === HSTS && !('server' in health.headers),
+      health &&
+        health.headers['x-frame-options'] === 'SAMEORIGIN' &&
+        /default-src 'self'/.test(health.headers[CSP_HEADER] ?? '') &&
+        /frame-ancestors 'self'/.test(health.headers[CSP_HEADER] ?? '') &&
+        headerCount(health, CSP_HEADER) === 1 &&
+        health.headers[CSP_HEADER] !== CSP_HTTP &&
+        health.headers['strict-transport-security'] === HSTS &&
+        !('server' in health.headers),
       'the API\'s helmet headers reach the browser unchanged',
-      `X-Frame-Options SAMEORIGIN, its CSP, HSTS "${HSTS}" (the value the Caddyfile repeats for the UI over https), no Server`,
+      `X-Frame-Options SAMEORIGIN, its own CSP alone (helmet's, one header — not the UI's), HSTS "${HSTS}" (the value the Caddyfile repeats for the UI over https), no Server`,
       health ? JSON.stringify(health.headers) : 'no answer',
     );
     const ready = await send(port, { path: '/api/health/ready' });
