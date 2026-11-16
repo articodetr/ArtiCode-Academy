@@ -116,7 +116,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), permissions: ['schedule.read', 'schedule.manage', 'classes.manage'], module: 'MOD-07' },
   // MOD-06 (J-F09): the lessons API is real — gated by the one key every read of `/api/lessons` requires (`lessons.read` at
   // controller level; `lessons.manage` only adds writes). Staff gain the entry (the seed grants them lessons.read); a student
-  // holds it too but is assigned to no class, so the server answers an empty list there — their own lessons are in «my lessons».
+  // holds it too but is assigned to no class, so the server would answer an empty list there — learner-only viewers are
+  // excepted (`exceptRoleKeysOnly`); their own lessons are in «my lessons».
   { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-06' },
   // MOD-06 (J-F11): «my lessons» (API-101) needs no permission key — ownership, the API-060 rule; shown to whoever holds the
   // `student` or `guardian` server role, like «my classes» (a teacher who is also a guardian keeps it; a teacher or an admin

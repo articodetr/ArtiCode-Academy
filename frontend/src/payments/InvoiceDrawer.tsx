@@ -5,8 +5,8 @@
 // with a reason (`invoices.manage`), reverse a receipt with a reason
 // (`payments.refund`). After every write the drawer shows the server's answer:
 // API-149 answers the invoice itself; after API-151/API-154 (which answer the
-// receipt) the invoice is read again. On a wide screen it docks beside the list
-// (useDockedPanel). A draft (`invoices.manage`) also gets «edit» — the inline
+// receipt) the invoice is read again. It opens in antd's drawer over the page
+// (useDockedPanel no longer docks). A draft (`invoices.manage`) also gets «edit» — the inline
 // InvoiceEditForm with the smallest PATCH (API-147) — and «delete» behind a
 // confirmation (API-148). The edit form's unsaved work is reported through
 // `onUnsavedChange` (so switching rows asks first), turns off Escape and the

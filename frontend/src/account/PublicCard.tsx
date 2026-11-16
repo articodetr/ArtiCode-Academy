@@ -33,7 +33,7 @@ export function DeadLinkNotice({ message }: { message: string }) {
   const { t } = useTranslation()
   return (
     <>
-      <Alert type="warning" showIcon message={message} />
+      <Alert type="warning" showIcon title={message} />
       <Flex justify="center" style={{ marginTop: 16 }}>
         <Link to="/login">
           <Button>{t('account.goToLogin')}</Button>

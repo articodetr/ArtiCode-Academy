@@ -1,7 +1,7 @@
 // One announcement (API-175): its audience, the sender's words as typed, and
 // what became of it — how many recipients read it and the state of its e-mail
-// copies (counts only, never a list of recipients). Docks beside the list on a
-// wide screen (useDockedPanel); it holds no editor.
+// copies (counts only, never a list of recipients). It opens in antd's drawer
+// over the page (useDockedPanel no longer docks); it holds no editor.
 import { Alert, Descriptions, Drawer, Skeleton, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
