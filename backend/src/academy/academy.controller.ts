@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -7,32 +7,59 @@ import {
   ApiOperation,
   ApiServiceUnavailableResponse,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
+import { AuthThrottlerGuard } from '../auth/auth-throttler.guard.js';
 import { AuthErrorDto } from '../auth/auth.dto.js';
 import { requestContext } from '../auth/cookies.js';
-import { CurrentUser, RequirePermissions } from '../auth/decorators.js';
+import { CurrentUser, Public, RequirePermissions } from '../auth/decorators.js';
 import type { AuthPrincipal } from '../auth/principal.js';
-import { AcademyDto, UpdateAcademyDto } from './academy.dto.js';
+import { AcademyDto, AcademyPublicDto, UpdateAcademyDto } from './academy.dto.js';
 import { MANAGE_ACADEMY_SETTINGS_PERMISSION } from './academy.policy.js';
 import { AcademyService } from './academy.service.js';
+
+/** 60 reads per minute per IP (API-205): one per load of the sign-in page, like the certificate verification (API-134). */
+const PUBLIC_READ_LIMIT = { login: { limit: 60, ttl: 60 * 1000 } };
+
+const UNAUTHORIZED = { type: AuthErrorDto, description: 'unauthenticated | token_expired | token_invalid | session_invalid' } as const;
 
 /**
  * MOD-02/MOD-14 minimum (ADR-044): `GET /api/academy` for every signed-in user
  * (D-R09 — no permission key) and `PATCH /api/academy` for holders of
  * `academy.settings.manage` (D-R10). The global guards (Origin → Auth →
- * Permissions) run before both.
+ * Permissions) run before both. MOD-02-T04 (public part): `GET
+ * /api/academy/public` (API-205) is `@Public()` and rate limited per IP — the
+ * branding of the sign-in page, nothing else; the bearer scheme and the 401
+ * are therefore documented per method, not on the class.
  */
 @ApiTags('academy')
-@ApiBearerAuth()
 @Controller('academy')
-@ApiUnauthorizedResponse({ type: AuthErrorDto, description: 'unauthenticated | token_expired | token_invalid | session_invalid' })
 @ApiServiceUnavailableResponse({ description: 'academy_not_configured — the database holds no academy row (seed not run)' })
 export class AcademyController {
   constructor(private readonly academy: AcademyService) {}
 
+  @Get('public')
+  @Public()
+  @UseGuards(AuthThrottlerGuard)
+  @Throttle(PUBLIC_READ_LIMIT)
+  @ApiOperation({
+    summary: 'Read the academy branding (public)',
+    description:
+      'No sign-in: the localized `name`, the `logoUrl` and the `defaultLocale` the sign-in page shows before anybody is authenticated — nothing else ' +
+      '(no id, slug, contact details, time zone, currency or settings). 60 requests per minute per IP; no audit event.',
+  })
+  @ApiOkResponse({ type: AcademyPublicDto })
+  @ApiTooManyRequestsResponse({ type: AuthErrorDto, description: 'rate_limited' })
+  getPublic(): Promise<AcademyPublicDto> {
+    return this.academy.getPublic();
+  }
+
   @Get()
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
   @ApiOperation({
     summary: 'Read the academy',
     description:
@@ -46,6 +73,8 @@ export class AcademyController {
   }
 
   @Patch()
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse(UNAUTHORIZED)
   @RequirePermissions(MANAGE_ACADEMY_SETTINGS_PERMISSION)
   @ApiOperation({
     summary: 'Update the academy',

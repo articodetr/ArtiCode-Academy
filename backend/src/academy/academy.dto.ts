@@ -179,6 +179,22 @@ export class AcademyDto {
   updatedAt: string;
 }
 
+/**
+ * The public branding of the academy (API-205, MOD-02-T04): what the sign-in
+ * page shows before anybody is authenticated. Exactly these three keys — never
+ * the id, slug, contact details, time zone, currency or settings.
+ */
+export class AcademyPublicDto {
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }` (only the locales stored)', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
+  name: LocalizedText;
+
+  @ApiProperty({ type: String, nullable: true, description: 'Absolute URL of the logo; null when none is set' })
+  logoUrl: string | null;
+
+  @ApiProperty({ enum: LOCALES, example: 'ar', description: 'Language of the academy — the sign-in page’s language before the user picks one' })
+  defaultLocale: LocaleCode;
+}
+
 export class SchedulingSettingsDto {
   @ApiProperty({ type: 'integer', nullable: true, minimum: 0, maximum: 6, example: 6, description: 'First day of the week: 0 = Sunday … 6 = Saturday' })
   weekStartsOn: number | null;
