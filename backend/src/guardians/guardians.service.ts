@@ -378,9 +378,19 @@ export class GuardiansService {
    * Serialises the link writes of one student: two requests promoting
    * different guardians at once would otherwise both pass the demotion step on
    * the same snapshot and the second would die on `uq_guardian_students_primary`.
+   *
+   * `FOR NO KEY UPDATE` (KI-079): it conflicts with another link write of the
+   * student, with `lockUserRow()`/`lockActiveAdmins()` of users.service.ts and
+   * with every plain UPDATE of the row (status, soft delete), but not with the
+   * `FOR KEY SHARE` a foreign-key insert takes on the row it references. So a
+   * transaction that only inserts rows pointing at the student — a long
+   * announcement writing the student's notification (API-173), an enrollment,
+   * a login — no longer makes the link wait for its commit. Nothing here needs
+   * such inserts to wait: the transaction reads and writes `guardian_students`
+   * only, and every write to that table takes this lock first.
    */
   private async lockStudent(tx: Prisma.TransactionClient, studentId: string): Promise<void> {
-    await tx.$queryRaw`SELECT id FROM users WHERE id = ${studentId}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM users WHERE id = ${studentId}::uuid FOR NO KEY UPDATE`;
   }
 
   /** Clears the current primary guardian of the student (if any, other than `guardianId`); returns who was demoted. */

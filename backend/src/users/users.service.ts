@@ -819,12 +819,26 @@ async function lockUserRow(tx: Prisma.TransactionClient, id: string): Promise<vo
 
 /**
  * Ids of the active, non-deleted holders of `academy_admin`, locked
- * (`FOR UPDATE`) until the transaction ends. Two statements on purpose: under
- * READ COMMITTED a statement that waited for a lock re-evaluates only the
- * locked row itself (an admin suspended meanwhile is dropped), but keeps its
- * snapshot for every other table — so `academy_admin` grants a concurrent
- * role replacement (T07) removed meanwhile would still be seen. The second
- * statement starts a fresh snapshot and counts the rows the first one locked.
+ * (`FOR NO KEY UPDATE`) until the transaction ends. Two statements on purpose
+ * (KI-041): under READ COMMITTED a statement that waited for a lock
+ * re-evaluates only the locked row itself (an admin suspended meanwhile is
+ * dropped), but keeps its snapshot for every other table — so `academy_admin`
+ * grants a concurrent role replacement (T07) removed meanwhile would still be
+ * seen. The second statement starts a fresh snapshot and counts the rows the
+ * first one locked.
+ *
+ * `FOR NO KEY UPDATE`, not `FOR UPDATE` (KI-079): the mode still conflicts with
+ * a second admin scan, with `lockUserRow()`, with the guardians' student lock
+ * and with every plain UPDATE of these rows (status, soft delete), so the
+ * quorum writers stay serialised. It does not conflict with the
+ * `FOR KEY SHARE` that a foreign-key insert takes on the row it references
+ * (`audit_logs.actor_user_id`, `refresh_tokens`, `user_roles.assigned_by`, the
+ * notifications and the sender of an announcement — API-173), so a long
+ * announcement to the admins no longer makes this scan wait for its commit.
+ * The quorum needs no such insert to wait: no insert removes an active admin —
+ * every way out of the quorum (suspend/archive/delete, taking `academy_admin`
+ * from an active admin) runs this scan first — and a concurrent grant of
+ * `academy_admin` only adds one; at worst the count misses it and refuses.
  */
 async function lockActiveAdmins(tx: Prisma.TransactionClient): Promise<{ id: string }[]> {
   await tx.$queryRaw`
@@ -836,7 +850,7 @@ async function lockActiveAdmins(tx: Prisma.TransactionClient): Promise<{ id: str
         SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
         WHERE ur.user_id = u.id AND r.key = ${ACADEMY_ADMIN_ROLE_KEY}
       )
-    FOR UPDATE`;
+    FOR NO KEY UPDATE`;
   return tx.$queryRaw<{ id: string }[]>`
     SELECT u.id
     FROM users u
