@@ -14,9 +14,12 @@
 // The platform database is reached only through PLATFORM_DATABASE_URL or the
 // PLATFORM_DB_* role variables — never through DATABASE_URL (the academy one).
 import { z } from 'zod';
+import { parseMfaKey } from '../auth/mfa/secret-box.js';
 import {
+  MFA_ENCRYPTION_KEY_BYTES,
   NODE_ENVS,
   emptyToUndefined,
+  isMfaEncryptionKey,
   parseList,
   parseTrustProxy,
   portSchema,
@@ -115,13 +118,38 @@ export const platformEnvSchema = z
     /** Duration of the temporary lock, in minutes. */
     PLATFORM_LOCKOUT_MINUTES: intWithDefault(1, 1440, 15),
 
+    // --- Two-step verification of platform accounts (PMFA, roadmap §4o) ----
+    /**
+     * ENV-91 (D-R114): the AES-256-GCM key that seals every TOTP secret in
+     * `platform_users.mfa_secret` — 32 random bytes as base64 or base64url,
+     * checked by the very parser PlatformMfaCore uses (`parseMfaKey()` of the
+     * pure src/auth/mfa/secret-box.ts, D-R120), so a key accepted at boot is a
+     * key that seals and opens. Optional: without it the platform MFA routes
+     * answer `503 mfa_unavailable` and an account that has MFA on cannot finish
+     * signing in (the second factor is never skipped). A secret: the error
+     * below never repeats it. Must differ from the academy's
+     * AUTH_MFA_ENCRYPTION_KEY (checked below).
+     */
+    PLATFORM_MFA_ENCRYPTION_KEY: z.preprocess(
+      emptyToUndefined,
+      z
+        .string()
+        .refine(
+          isMfaEncryptionKey,
+          `must be ${MFA_ENCRYPTION_KEY_BYTES} random bytes encoded as base64 or base64url (e.g. node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")`,
+        )
+        .optional(),
+    ),
+    /** Read only to refuse a PLATFORM_MFA_ENCRYPTION_KEY that names the same key; never kept in the config. */
+    AUTH_MFA_ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+
     // --- Fleet probe (D-R103, T05) -----------------------------------------
     /** Upper bound of one probe request to an academy's public endpoint. */
     PLATFORM_PROBE_TIMEOUT_MS: intWithDefault(500, 30_000, 5000),
     /** Pause between two rounds of the periodic probe service. */
     PLATFORM_PROBE_INTERVAL_SECONDS: intWithDefault(30, 86_400, 300),
   })
-  // Checked on the raw input: the academy secret is never kept in the config.
+  // Checked on the raw input: the academy secrets are never kept in the config.
   .superRefine((env, ctx) => {
     if (env.PLATFORM_JWT_SECRET !== undefined && env.PLATFORM_JWT_SECRET === env.JWT_SECRET) {
       ctx.addIssue({
@@ -130,8 +158,23 @@ export const platformEnvSchema = z
         message: 'must differ from JWT_SECRET: a platform token and an academy token must never share a key',
       });
     }
+    // Compared as decoded bytes: the same 32 bytes written in the other alphabet,
+    // or with or without padding, are still the same key. An academy value that
+    // is no key at all is the academy API's problem (its own boot refuses it).
+    const platformMfaKey =
+      env.PLATFORM_MFA_ENCRYPTION_KEY === undefined ? null : parseMfaKey(env.PLATFORM_MFA_ENCRYPTION_KEY);
+    const academyMfaKey =
+      env.AUTH_MFA_ENCRYPTION_KEY === undefined ? null : parseMfaKey(env.AUTH_MFA_ENCRYPTION_KEY);
+    if (platformMfaKey !== null && academyMfaKey !== null && platformMfaKey.equals(academyMfaKey)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PLATFORM_MFA_ENCRYPTION_KEY'],
+        message:
+          'must differ from AUTH_MFA_ENCRYPTION_KEY: platform and academy two-step secrets must never be sealed with the same key',
+      });
+    }
   })
-  // The derivation inputs and the academy secret stay out of the config; the
+  // The derivation inputs and the academy secrets stay out of the config; the
   // generic keys of the shared setup are added.
   .transform(
     ({
@@ -141,6 +184,7 @@ export const platformEnvSchema = z
       PLATFORM_DB_APP_USER,
       PLATFORM_DB_APP_PASSWORD,
       JWT_SECRET: _academySecret,
+      AUTH_MFA_ENCRYPTION_KEY: _academyMfaKey,
       SWAGGER_ENABLED,
       PLATFORM_COOKIE_SECURE,
       ...env

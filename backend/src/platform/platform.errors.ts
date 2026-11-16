@@ -1,6 +1,7 @@
 // Error vocabulary of the platform's authentication (MOD-18-T02; the login and
 // refresh codes are used by T03; session_not_found by the sessions routes of
-// MOD-01-H06, API-203/204). Same body shape as the academy API
+// MOD-01-H06, API-203/204; the mfa_* codes by PMFA, roadmap §4o — the same
+// names, statuses and messages as the academy's). Same body shape as the academy API
 // (src/auth/auth.errors.ts): `{ statusCode, error, code, message, ...details }`
 // with a stable `code` the Super Admin frontend maps to a message.
 //
@@ -37,6 +38,14 @@ export const PLATFORM_AUTH_ERROR_CODES = [
   'rate_limited',
   // MOD-01-H06 — the sessions routes (API-203/204)
   'session_not_found',
+  // PMFA — two-step verification (roadmap §4o)
+  'mfa_unavailable',
+  'mfa_already_enabled',
+  'mfa_not_enabled',
+  'mfa_setup_required',
+  'mfa_code_invalid',
+  'mfa_factor_required',
+  'mfa_challenge_invalid',
 ] as const;
 
 export type PlatformAuthErrorCode = (typeof PLATFORM_AUTH_ERROR_CODES)[number];
@@ -109,4 +118,22 @@ export const platformAuthError = {
     }),
   rateLimited: () => authException(HttpStatus.TOO_MANY_REQUESTS, 'rate_limited', 'Too many requests; try again later'),
   sessionNotFound: () => authException(HttpStatus.NOT_FOUND, 'session_not_found', 'No active session with this id'),
+  // PMFA — the same codes, statuses and messages as the academy's (src/auth/auth.errors.ts).
+  /** No usable PLATFORM_MFA_ENCRYPTION_KEY — the MFA routes are off and an MFA account cannot sign in (never a bypass). */
+  mfaUnavailable: () =>
+    authException(HttpStatus.SERVICE_UNAVAILABLE, 'mfa_unavailable', 'Two-step verification is not available on this server'),
+  mfaAlreadyEnabled: () => authException(HttpStatus.CONFLICT, 'mfa_already_enabled', 'Two-step verification is already on'),
+  mfaNotEnabled: () => authException(HttpStatus.CONFLICT, 'mfa_not_enabled', 'Two-step verification is not on'),
+  /** The confirmation without a setup younger than its lifetime. */
+  mfaSetupRequired: () =>
+    authException(HttpStatus.CONFLICT, 'mfa_setup_required', 'Start the setup again: no pending setup, or it expired'),
+  /** A wrong or already used TOTP code or recovery code: 400 on the account routes, 401 on the sign-in step. */
+  mfaCodeInvalid: (status: HttpStatus.BAD_REQUEST | HttpStatus.UNAUTHORIZED = HttpStatus.BAD_REQUEST) =>
+    authException(status, 'mfa_code_invalid', 'The verification code is not valid'),
+  /** Exactly one of `code` and `recoveryCode` must be sent. */
+  mfaFactorRequired: () =>
+    authException(HttpStatus.BAD_REQUEST, 'mfa_factor_required', 'Send exactly one of code and recoveryCode'),
+  /** The sign-in step: unknown, used, expired or exhausted challenge — sign in with the password again. */
+  mfaChallengeInvalid: () =>
+    authException(HttpStatus.UNAUTHORIZED, 'mfa_challenge_invalid', 'The sign-in step expired or is not valid; sign in again'),
 };

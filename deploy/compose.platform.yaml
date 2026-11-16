@@ -140,6 +140,9 @@ services:
       PLATFORM_REFRESH_FAMILY_MAX_DAYS: ${PLATFORM_REFRESH_FAMILY_MAX_DAYS:-}
       PLATFORM_LOCKOUT_THRESHOLD: ${PLATFORM_LOCKOUT_THRESHOLD:-}
       PLATFORM_LOCKOUT_MINUTES: ${PLATFORM_LOCKOUT_MINUTES:-}
+      # Two-step verification of platform accounts (PMFA, ENV-91): the key that seals the
+      # TOTP secrets. Empty = MFA off. The api service only (the probe never reads it).
+      PLATFORM_MFA_ENCRYPTION_KEY: ${PLATFORM_MFA_ENCRYPTION_KEY:-}
       # The on-demand probe (API-196) and `stale` of the fleet view (API-198).
       PLATFORM_PROBE_TIMEOUT_MS: ${PLATFORM_PROBE_TIMEOUT_MS:-}
       PLATFORM_PROBE_INTERVAL_SECONDS: ${PLATFORM_PROBE_INTERVAL_SECONDS:-}

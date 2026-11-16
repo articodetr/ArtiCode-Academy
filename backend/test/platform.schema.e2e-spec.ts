@@ -1,10 +1,11 @@
 // TEST-206 — MOD-18-T01 the platform database `articode_platform` (master doc
 // 6.6.2/6.6.3; migration prisma/platform/migrations/20261113182048_platform_init):
-// the eight tables and six enums, the generated platform client
-// (src/generated/platform) over @prisma/adapter-pg, the role boundaries (DML
-// only for `platform_app`, no DDL; the academy roles cannot connect to the
-// platform database and the platform roles cannot connect to the academy one),
-// the hand-written CHECKs, the two partial unique indexes, the referential
+// the eight tables and six enums (ten tables since the second migration
+// 20261116140605_platform_mfa — PMFA-T01, whose CHECKs are TEST-231), the
+// generated platform client (src/generated/platform) over @prisma/adapter-pg,
+// the role boundaries (DML only for `platform_app`, no DDL; the academy roles
+// cannot connect to the platform database and the platform roles cannot connect
+// to the academy one), the hand-written CHECKs, the two partial unique indexes, the referential
 // actions and the append-only triggers of platform_audit_logs.
 //
 // Runs as the platform APPLICATION role and is skipped when the platform
@@ -27,12 +28,16 @@ loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 const PLATFORM_URL = process.env['PLATFORM_DATABASE_URL'] || platformPostgresUrlFromEnv(process.env, 'app');
 const ACADEMY_URL = process.env['DATABASE_URL'] || postgresUrlFromEnv(process.env, 'app');
 const MIGRATION = '20261113182048_platform_init';
+/** The second platform migration (PMFA-T01): MFA columns + two tables, pinned by TEST-231. */
+const MFA_MIGRATION = '20261116140605_platform_mfa';
 const TABLES = [
   'academies',
   'academy_health_checks',
   'domains',
   'plans',
   'platform_audit_logs',
+  'platform_mfa_challenges',
+  'platform_mfa_recovery_codes',
   'platform_refresh_tokens',
   'platform_users',
   'subscriptions',
@@ -168,11 +173,11 @@ describe.skipIf(!available)('platform database schema — MOD-18-T01 (e2e, TEST-
   }
   const count = async (client: PoolClient, sql: string, params: unknown[]) => (await client.query<{ n: number }>(sql, params)).rows[0]!.n;
 
-  it('holds the eight tables and six enums of the applied platform_init migration', async () => {
+  it('holds the tables and six enums of the applied platform_init and platform_mfa migrations', async () => {
     const migrations = await pool.query<{ migration_name: string; ok: boolean }>(
       `SELECT migration_name, finished_at IS NOT NULL AND rolled_back_at IS NULL AS ok FROM _prisma_migrations ORDER BY started_at`,
     );
-    expect(migrations.rows.map((row) => row.migration_name)).toContain(MIGRATION);
+    expect(migrations.rows.map((row) => row.migration_name)).toEqual(expect.arrayContaining([MIGRATION, MFA_MIGRATION]));
     expect(migrations.rows.every((row) => row.ok)).toBe(true);
 
     const tables = await pool.query<{ table_name: string }>(
