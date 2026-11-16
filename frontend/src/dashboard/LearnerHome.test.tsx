@@ -49,8 +49,8 @@ describe('DashboardPage — the learner home (redesign)', () => {
   it('keeps the staff dashboard for a teacher who is also a guardian', async () => {
     mockLearnerApi()
     renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher', 'guardian'], permissions: [] }) }), route: '/' })
-    // The original staff dashboard (its student count card).
-    expect(await screen.findByText(ar.dashboard.students)).toBeInTheDocument()
+    // The original staff dashboard (its notifications card — the one a caller without any key still gets).
+    expect(await screen.findByText(ar.dashboard.recentNotifications)).toBeInTheDocument()
     expect(document.querySelector('.lh')).toBeNull()
   })
 })
