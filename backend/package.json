@@ -25,6 +25,7 @@
     "platform:bootstrap-admin": "tsx scripts/platform-bootstrap-admin.ts",
     "platform:create-user": "tsx scripts/platform-create-user.ts",
     "platform:reset-mfa": "tsx scripts/platform-reset-mfa.ts",
+    "platform:enable-mfa": "tsx scripts/platform-enable-mfa.ts",
     "dev:demo-users": "tsx scripts/dev-demo-users.ts",
     "prisma:studio": "prisma studio",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.ts\"",
