@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
+import { readLocalizedText } from '../authorization/localized-text.js';
 import type { LocaleCode, LocalizedText } from '../authorization/localized-text.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -7,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { isEmptyAcademyPatch, planAcademyUpdate } from './academy.changes.js';
 import type { AcademyPatch, AcademyUpdateData, CurrentAcademyRow } from './academy.changes.js';
-import type { AcademyDto, UpdateAcademyDto } from './academy.dto.js';
+import type { AcademyDto, AcademyPublicDto, UpdateAcademyDto } from './academy.dto.js';
 import { academyError } from './academy.errors.js';
 import { readSettings } from './academy.settings.js';
 
@@ -36,6 +37,15 @@ const ACADEMY_SELECT = {
 } satisfies Prisma.AcademySelect;
 
 type AcademyRow = Prisma.AcademyGetPayload<{ select: typeof ACADEMY_SELECT }>;
+
+// The public branding (API-205): the three answered fields and the slug, only as
+// the last-resort name — nothing else is read for an anonymous caller.
+const ACADEMY_PUBLIC_SELECT = {
+  slug: true,
+  name: true,
+  logoUrl: true,
+  defaultLocale: true,
+} satisfies Prisma.AcademySelect;
 
 /** The jsonb name as `{ ar, en?, tr? }`; the CHECK guarantees `ar`, the slug is a last resort. */
 function asLocalizedText(value: Prisma.JsonValue, fallback: string): LocalizedText {
@@ -111,6 +121,21 @@ export class AcademyService {
 
   async get(): Promise<AcademyDto> {
     return toAcademyDto(await this.load());
+  }
+
+  /**
+   * API-205: the branding of the sign-in page for an anonymous caller — the
+   * name (only its string locales), the logo and the default locale. Read-only,
+   * no audit event; 503 `academy_not_configured` without the row.
+   */
+  async getPublic(): Promise<AcademyPublicDto> {
+    const row = await this.prisma.db.academy.findFirst({ select: ACADEMY_PUBLIC_SELECT });
+    if (!row) throw academyError.notConfigured();
+    return {
+      name: readLocalizedText(row.name) ?? { ar: row.slug },
+      logoUrl: row.logoUrl,
+      defaultLocale: row.defaultLocale as LocaleCode,
+    };
   }
 
   async update(input: UpdateAcademyDto, caller: AuthPrincipal, ctx: RequestContext): Promise<AcademyDto> {
