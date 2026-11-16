@@ -47,6 +47,10 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'auth.password.changed',
   'auth.password.reset',
   'auth.bootstrap.admin_created',
+  // MFA-T02 (CH-0282): the user's own two-step verification — first offered with the MFA screens
+  'auth.mfa.enabled',
+  'auth.mfa.disabled',
+  'auth.mfa.recovery_codes.regenerated',
   'users.',
   'users.created',
   'users.updated',
@@ -57,6 +61,8 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'users.password_reset.issued',
   'users.status.changed',
   'users.roles.changed',
+  // MFA-T04 (CH-0284): the administrative reset of API-212
+  'users.mfa.reset',
   'roles.',
   'roles.created',
   'roles.updated',

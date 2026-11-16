@@ -145,6 +145,21 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     }
   })
 
+  it('offers the four two-step verification events once each, each with its family: auth.mfa.* among auth.*, users.mfa.reset among users.*', () => {
+    const position = (event: string) => AUDIT_ACTION_SUGGESTIONS.indexOf(event)
+    for (const event of ['auth.mfa.enabled', 'auth.mfa.disabled', 'auth.mfa.recovery_codes.regenerated', 'users.mfa.reset']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+    }
+    // The user's own events sit after the older auth.* entries and before the users family starts.
+    for (const event of ['auth.mfa.enabled', 'auth.mfa.disabled', 'auth.mfa.recovery_codes.regenerated']) {
+      expect(position(event)).toBeGreaterThan(position('auth.bootstrap.admin_created'))
+      expect(position(event)).toBeLessThan(position('users.'))
+    }
+    // The administrative reset closes the users family, before roles.* begins.
+    expect(position('users.mfa.reset')).toBe(position('users.roles.changed') + 1)
+    expect(position('users.mfa.reset')).toBeLessThan(position('roles.'))
+  })
+
   it('offers the two certificate events of MOD-10-T02/T03 once each, after their family prefix (J-F51)', () => {
     expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === 'certificates.')).toEqual(['certificates.'])
     for (const event of ['certificates.issued', 'certificates.revoked']) {

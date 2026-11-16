@@ -12,7 +12,11 @@
 // A soft-deleted account is the terminal pseudo-state `deleted`: nothing
 // applies to it (ADR-035). An `invited` account is activated by accepting its
 // invitation, never by `activate`.
-import type { UserStatus, UserStatusAction, UserSummary } from '../api/users'
+//
+// Beside the machine, at the end of this file and NOT part of the mirror: the
+// administrative reset of two-step verification (API-212), which the same menu
+// offers. It changes no status, so it stays out of AccountAction/TRANSITIONS.
+import type { UserDetail, UserStatus, UserStatusAction, UserSummary } from '../api/users'
 
 /** Every state-changing operation of the menu, the soft delete of API-028 included. */
 export type AccountAction = UserStatusAction | 'delete'
@@ -98,4 +102,35 @@ export function availableAccountActions(
     if (action === 'unlock' && context.contact && user.lockedUntil === null) return false
     return true
   })
+}
+
+// ---------------------------------------------------------------------------
+// Not a status action — the administrative reset of two-step verification
+// (API-212, MFA-T04): the account keeps its status; its second step is cleared
+// and every session of the user ends.
+// ---------------------------------------------------------------------------
+
+/** API-212 needs `users.update` alone (`users.deactivate` does not replace it). */
+export const RESET_MFA_PERMISSION = 'users.update'
+
+/**
+ * Whether the menu offers «reset two-step verification» for this account:
+ *
+ * - the caller holds `users.update`;
+ * - it is not the caller's own account — the server answers `403 self_forbidden
+ *   { action: 'mfa_reset' }`; one's own is turned off from «my account» with
+ *   the password and a code;
+ * - the account is not soft-deleted (the server answers 404 for it);
+ * - two-step verification is visibly on (`mfaEnabledAt`). The server sends null
+ *   to a caller without `users.read_contact`, so such a caller is never offered
+ *   the action — unlike `unlock`, a reset is not offered on a guess.
+ */
+export function canResetMfa(
+  user: Pick<UserDetail, 'id' | 'deletedAt' | 'mfaEnabledAt'>,
+  context: Pick<AccountActionContext, 'permissions' | 'selfId'>,
+): boolean {
+  if (!context.permissions.includes(RESET_MFA_PERMISSION)) return false
+  if (context.selfId !== null && context.selfId === user.id) return false
+  if (user.deletedAt) return false
+  return user.mfaEnabledAt !== null
 }
