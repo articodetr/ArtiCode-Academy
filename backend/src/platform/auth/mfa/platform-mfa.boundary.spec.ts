@@ -37,13 +37,14 @@ const SHARED_PURE_FILES = [
 const SHARED_SERVICES = ['auth/password.service.ts'];
 /** The one file of src/prisma/ the platform reaches — the database helpers moved out of the academy PrismaService (ADR-073). */
 const SHARED_PRISMA_FILES = ['prisma/database-checks.ts'];
-/** The production files of the platform MFA folder today (PMFA-T01, T02, T04) — a rename must not empty the scan. */
+/** The production files of the platform MFA folder today (PMFA-T01, T02, T04 and the enrolment command) — a rename must not empty the scan. */
 const KNOWN_MFA_FILES = [
   'platform/auth/mfa/platform-mfa-core.service.ts',
   'platform/auth/mfa/platform-mfa.controller.ts',
   'platform/auth/mfa/platform-mfa.dto.ts',
   'platform/auth/mfa/platform-mfa.service.ts',
   'platform/auth/mfa/platform-mfa-reset.ts',
+  'platform/auth/mfa/platform-mfa-enroll.ts',
 ];
 
 /**
