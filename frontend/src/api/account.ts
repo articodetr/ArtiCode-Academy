@@ -9,6 +9,8 @@
 // backend/src/account/account.dto.ts. The raw token is sent only to its own
 // public route and is never stored anywhere (T12 AC1).
 import { setAccessToken } from '../auth/token-store'
+import { isMfaChallenge } from './auth'
+import type { MfaChallenge } from './auth'
 import { apiRequest } from './client'
 import type { SessionResponse } from './client'
 
@@ -97,16 +99,22 @@ export async function acceptInvitation(token: string, password: string): Promise
   return session
 }
 
-/** Public: consumes the token, stores the new password, signs the account out everywhere and returns a fresh session. */
-export async function confirmPasswordReset(token: string, newPassword: string): Promise<SessionResponse> {
-  const session = await apiRequest<SessionResponse>(ACCOUNT_PATHS.confirmPasswordReset(token), {
+/**
+ * Public: consumes the token, stores the new password, signs the account out everywhere and returns a fresh
+ * session. For an account with two-step verification the answer is the challenge of the second step instead
+ * (MFA-T03): the password IS changed and the token used up, but nobody is signed in and nothing is stored
+ * until `completeMfaLogin()` (API-211) succeeds.
+ */
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<SessionResponse | MfaChallenge> {
+  const result = await apiRequest<SessionResponse | MfaChallenge>(ACCOUNT_PATHS.confirmPasswordReset(token), {
     method: 'POST',
     body: { newPassword },
     auth: false,
     retry: false,
   })
-  setAccessToken(session.accessToken, session.user.id)
-  return session
+  if (isMfaChallenge(result)) return result
+  setAccessToken(result.accessToken, result.user.id)
+  return result
 }
 
 /**

@@ -3,13 +3,17 @@
 // the soft delete through DELETE /api/users/:id (API-028). The menu offers only
 // what the state machine, the caller's permissions and the self rule allow
 // (users.status.ts); every action is confirmed in a modal with an optional
-// reason that goes to the audit log only.
+// reason that goes to the audit log only. Since MFA-T04 the same menu also
+// offers «reset two-step verification» (API-212) below a divider — not a status
+// action, so it lives beside the state machine (canResetMfa()) and has its own
+// confirmation, UserMfaReset.
 import {
   CheckCircleOutlined,
   DeleteOutlined,
   DownOutlined,
   InboxOutlined,
   PauseCircleOutlined,
+  SafetyOutlined,
   UndoOutlined,
   UnlockOutlined,
 } from '@ant-design/icons'
@@ -21,10 +25,14 @@ import { useTranslation } from 'react-i18next'
 import { changeUserStatus, deleteUser, STATUS_REASON_MAX_LENGTH } from '../api/users'
 import type { UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
+import { UserMfaReset } from './UserMfaReset'
 import { describeUsersFailure, failureMessage } from './users.errors'
 import { displayNameOf } from './users.format'
-import { availableAccountActions, signsOut } from './users.status'
+import { availableAccountActions, canResetMfa, signsOut } from './users.status'
 import type { AccountAction } from './users.status'
+
+/** Menu key of the two-step verification reset; never an AccountAction. */
+const MFA_RESET_KEY = 'mfa_reset'
 
 const ICONS: Readonly<Record<AccountAction, ReactNode>> = {
   activate: <CheckCircleOutlined />,
@@ -39,7 +47,11 @@ interface UserStatusActionsProps {
   user: UserDetail
   /** Called with the detail the server returned after the action. */
   onChanged: (user: UserDetail) => void
-  /** Called when the server reports `invalid_transition`: the account changed elsewhere, reload it. */
+  /**
+   * Called when the shown detail no longer matches the server and must be re-read: the server
+   * reported `invalid_transition` (the account changed elsewhere), or the two-step verification
+   * reset answered — API-212 returns no detail.
+   */
   onStale: () => void
 }
 
@@ -55,13 +67,13 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form] = Form.useForm<ReasonFormValues>()
+  const [resettingMfa, setResettingMfa] = useState(false)
 
-  const actions = availableAccountActions(user, {
-    permissions: me?.permissions ?? [],
-    selfId: me?.id ?? null,
-    contact: hasPermission('users.read_contact'),
-  })
-  if (actions.length === 0) return null
+  const viewer = { permissions: me?.permissions ?? [], selfId: me?.id ?? null }
+  const actions = availableAccountActions(user, { ...viewer, contact: hasPermission('users.read_contact') })
+  const offersMfaReset = canResetMfa(user, viewer)
+  // An open reset confirmation outlives its menu item: a re-read can take the item away while a message still shows.
+  if (actions.length === 0 && !offersMfaReset && !resettingMfa) return null
 
   const items: MenuProps['items'] = actions.map((action) => ({
     key: action,
@@ -69,6 +81,11 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
     icon: ICONS[action],
     danger: signsOut(action),
   }))
+  if (offersMfaReset) {
+    if (items.length > 0) items.push({ type: 'divider' })
+    // Red like the actions that sign out: every device of the user is signed out.
+    items.push({ key: MFA_RESET_KEY, label: t('users.mfa.reset.action'), icon: <SafetyOutlined />, danger: true })
+  }
 
   const close = () => {
     if (busy) return
@@ -103,21 +120,27 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
 
   return (
     <>
-      <Dropdown
-        trigger={['click']}
-        destroyOnHidden
-        menu={{
-          items,
-          onClick: ({ key }) => {
-            setError(null)
-            setPending(key as AccountAction)
-          },
-        }}
-      >
-        <Button icon={<DownOutlined />} iconPlacement="end">
-          {t('users.status.menu')}
-        </Button>
-      </Dropdown>
+      {items.length > 0 ? (
+        <Dropdown
+          trigger={['click']}
+          destroyOnHidden
+          menu={{
+            items,
+            onClick: ({ key }) => {
+              if (key === MFA_RESET_KEY) {
+                setResettingMfa(true)
+                return
+              }
+              setError(null)
+              setPending(key as AccountAction)
+            },
+          }}
+        >
+          <Button icon={<DownOutlined />} iconPlacement="end">
+            {t('users.status.menu')}
+          </Button>
+        </Dropdown>
+      ) : null}
 
       <Modal
         open={pending !== null}
@@ -143,6 +166,19 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Mounted per session: its reason field never carries an earlier session's text (KI-049). */}
+      {resettingMfa ? (
+        <UserMfaReset
+          user={user}
+          onClose={() => setResettingMfa(false)}
+          onDone={() => {
+            setResettingMfa(false)
+            onStale()
+          }}
+          onStale={onStale}
+        />
+      ) : null}
     </>
   )
 }

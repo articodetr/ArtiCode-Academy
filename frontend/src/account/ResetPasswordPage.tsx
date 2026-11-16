@@ -3,12 +3,25 @@
 // request (API-020) is the first time the server sees the token. Success
 // signs the person in with the fresh session (every older session is gone —
 // ADR-033); a dead link shows the reason instead of the form (AC2).
-import { Typography } from 'antd'
+//
+// An account with two-step verification gets no session from API-020 but the
+// challenge of the second step: the password IS changed and the link used up,
+// so the page says so and finishes the sign-in with the same step as the
+// sign-in page (API-211). When that step ends without a session the only way
+// on is the sign-in page — with the new password.
+import { Alert, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 import { confirmPasswordReset } from '../api/account'
+import { isMfaChallenge } from '../api/auth'
+import type { MfaChallenge } from '../api/auth'
+import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
+import type { AuthUser } from '../auth/auth-context'
+import { MfaChallengeStep } from '../auth/MfaChallengeStep'
+import { signInNoticeState } from '../auth/mfa.signIn'
+import type { MfaRestartLock, MfaRestartReason } from '../auth/mfa.signIn'
 import { describeAccountFailure, malformedLinkFailure } from './account.errors'
 import type { AccountFailure } from './account.errors'
 import { isTokenShaped } from './account.links'
@@ -23,24 +36,58 @@ export function ResetPasswordPage() {
   const [failure, setFailure] = useState<AccountFailure | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // The password is changed and the second step is still to come (two-step verification).
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null)
 
   const dead = failure ?? (isTokenShaped(token) ? null : malformedLinkFailure('reset'))
+
+  // `replace`: the history entry that carries the token is dropped.
+  const enter = (user: AuthUser) => {
+    navigate(user.mustChangePassword ? '/profile' : '/', { replace: true })
+  }
 
   const onSubmit = async (password: string) => {
     if (!token) return
     setSubmitting(true)
     setFormError(null)
     try {
-      const user = adoptSession(await confirmPasswordReset(token, password))
-      // `replace`: the history entry that carries the token is dropped.
-      navigate(user.mustChangePassword ? '/profile' : '/', { replace: true })
+      const result = await confirmPasswordReset(token, password)
+      if (isMfaChallenge(result)) setChallenge(result)
+      else enter(adoptSession(result))
     } catch (error) {
-      const described = describeAccountFailure(error, 'reset')
+      // 503 mfa_unavailable is thrown AFTER the reset committed (the account has two-step verification and
+      // the server cannot check it right now): the new password stands and the link is used up, so the
+      // form must not be offered again — say what happened and point to the sign-in page.
+      const described: AccountFailure =
+        error instanceof ApiError && error.code === 'mfa_unavailable'
+          ? { key: 'login.mfa.passwordChangedUnavailable', terminal: true }
+          : describeAccountFailure(error, 'reset')
       if (described.terminal) setFailure(described)
       else setFormError(t(described.key, { ...described.params }))
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // The reset link is used up, so the step cannot start again from this page:
+  // the sign-in page takes over and says that the new password is the one to use —
+  // at once, after the step ran out, or once the lock the step ended in is over.
+  // Only a notice id (and a lock's whole minutes) travels: the sign-in page words it itself.
+  const toSignIn = (reason: MfaRestartReason, lock?: MfaRestartLock) => {
+    const state =
+      reason === 'locked'
+        ? signInNoticeState('password_changed_account_locked', lock?.minutes)
+        : signInNoticeState(reason === 'ended' ? 'password_changed_step_ended' : 'password_changed')
+    navigate('/login', { replace: true, state })
+  }
+
+  if (challenge) {
+    return (
+      <PublicCard subtitle={t('login.mfa.subtitle')}>
+        <Alert type="success" showIcon title={t('login.mfa.passwordChanged')} style={{ marginBottom: 16 }} />
+        <MfaChallengeStep challenge={challenge} onSuccess={enter} onRestart={toSignIn} />
+      </PublicCard>
+    )
   }
 
   return (

@@ -27,6 +27,8 @@ function renderProfile(user: Partial<AuthUser>, handler: FetchHandler) {
   mockFetch((url, init) => {
     // The devices card (CH-0265) reads its own list; these tests look at the e-mail requests only.
     if (url === '/api/auth/sessions') return jsonResponse(200, { items: [] })
+    // So does the two-step verification card (API-206) — its own tests are in profile/ProfileMfa.test.tsx.
+    if (url === '/api/auth/mfa') return jsonResponse(200, { available: true, enabled: false, enabledAt: null, recoveryCodesLeft: null, pendingSetup: false })
     calls.push(`${init?.method ?? 'GET'} ${url}`)
     return handler(url, init)
   })

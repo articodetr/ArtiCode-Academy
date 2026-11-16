@@ -17,6 +17,11 @@
 // Since J-F27 the same unsaved work also holds a browser back/forward, which
 // asks the same question (NavigationBlocker), and a reload or a tab close gets
 // the browser's own prompt (useUnsavedChangesGuard — KI-055).
+// Since MFA-T04 the activity rows of the full projection say whether two-step
+// verification is on (`mfaEnabledAt` — like `lockedUntil` the server sends null
+// without `users.read_contact`, so the row is absent there, never «off»), and
+// the account-actions menu resets it (API-212); that answer carries no detail,
+// so the drawer re-reads it (reloadDetail).
 import { EditOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, Popconfirm, Space, Spin, Tabs, Tag, Typography } from 'antd'
 import type { TabsProps } from 'antd'
@@ -435,6 +440,14 @@ function UserDetails({ user, contact }: { user: UserDetail; contact: boolean }) 
             key: 'emailVerifiedAt',
             label: t('users.detail.emailVerifiedAt'),
             children: user.emailVerifiedAt ? formatDateTime(user.emailVerifiedAt, language) : t('users.detail.notVerified'),
+          },
+          {
+            // Only in the full projection: without `users.read_contact` null means «unknown», not «off».
+            key: 'mfaEnabledAt',
+            label: t('users.mfa.label'),
+            children: user.mfaEnabledAt
+              ? t('users.mfa.enabledSince', { date: formatDateTime(user.mfaEnabledAt, language) })
+              : t('users.mfa.disabled'),
           },
           ...(user.lockedUntil
             ? [{ key: 'lockedUntil', label: t('users.detail.lockedUntil'), children: formatDateTime(user.lockedUntil, language) }]

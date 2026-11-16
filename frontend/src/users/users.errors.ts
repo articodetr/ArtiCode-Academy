@@ -42,13 +42,16 @@ const KNOWN_CODES = new Set([
 
 /** `self_forbidden` of API-034 carries this `action`; the status actions carry `suspend`/`archive`/`delete`. */
 const SELF_FORBIDDEN_ROLES_ACTION = 'remove_academy_admin'
+/** `self_forbidden` of API-212: one's own two-step verification is turned off from «my account», never reset here. */
+const SELF_FORBIDDEN_MFA_RESET_ACTION = 'mfa_reset'
 
 /**
- * One backend code can carry two situations told apart by the details; the
+ * One backend code can carry several situations told apart by the details; the
  * message key follows the situation (users.errors.<key>).
  */
 function messageKeyOf(code: string, body: Record<string, unknown>): string {
   if (code === 'self_forbidden' && body.action === SELF_FORBIDDEN_ROLES_ACTION) return 'self_forbidden_roles'
+  if (code === 'self_forbidden' && body.action === SELF_FORBIDDEN_MFA_RESET_ACTION) return 'self_forbidden_mfa'
   if (code === 'user_not_found') {
     if (body.reason === 'not_linked') return 'not_linked'
     if (body.party === 'guardian') return 'guardian_not_found'

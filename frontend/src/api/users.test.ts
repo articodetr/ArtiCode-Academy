@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { setAccessToken } from '../auth/token-store'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeUserDetail, makeUserList } from '../test/users'
-import { changeUserStatus, createUser, deleteUser, getUser, listUsers, replaceUserRoles, updateUser, usersListPath } from './users'
+import { changeUserStatus, createUser, deleteUser, getUser, listUsers, replaceUserRoles, resetUserMfa, updateUser, usersListPath } from './users'
 
 describe('usersListPath', () => {
   it('returns the bare path when every parameter is absent or empty', () => {
@@ -134,5 +134,27 @@ describe('users API calls', () => {
     expect(init?.method).toBe('PUT')
     expect(init?.body).toBe('{"roleKeys":["student","teacher"]}')
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ roleKeys: ['staff', 'teacher'], employeeKind: 'staff' })
+  })
+
+  it('resetUserMfa posts to /api/users/:id/mfa/reset without a body unless a reason is given, and resolves with the answer of API-212', async () => {
+    const user = makeUserDetail({ mfaEnabledAt: '2026-11-01T08:00:00.000Z' })
+    const result = { userId: user.id, reset: true, revokedSessions: 2 }
+    const fetchMock = mockFetch(() => jsonResponse(200, result))
+
+    await expect(resetUserMfa(user.id)).resolves.toEqual(result)
+    await resetUserMfa(user.id, '  فقد هاتفه  ')
+    await resetUserMfa(user.id, '   ')
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`/api/users/${user.id}/mfa/reset`)
+    expect(init?.method).toBe('POST')
+    expect(init?.body).toBeUndefined()
+    expect(new Headers(init?.headers).has('Content-Type')).toBe(false)
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer access-1')
+    // The reason travels trimmed; a blank one is no reason.
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/users/${user.id}/mfa/reset`)
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('POST')
+    expect(fetchMock.mock.calls[1][1]?.body).toBe('{"reason":"فقد هاتفه"}')
+    expect(fetchMock.mock.calls[2][1]?.body).toBeUndefined()
   })
 })

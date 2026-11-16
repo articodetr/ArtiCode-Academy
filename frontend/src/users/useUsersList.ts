@@ -31,7 +31,16 @@ export const DEFAULT_FILTERS: UsersListFilters = {
 
 /** The list item that corresponds to a detail returned by a write (roles collapse to keys). */
 export function listItemOf(user: UserDetail): UserListItem {
-  const { roles, studentProfile: _student, employeeProfile: _employee, guardians: _guardians, students: _students, ...summary } = user
+  // `mfaEnabledAt` belongs to the detail alone (API-013): a list row never carries it.
+  const {
+    roles,
+    studentProfile: _student,
+    employeeProfile: _employee,
+    guardians: _guardians,
+    students: _students,
+    mfaEnabledAt: _mfaEnabledAt,
+    ...summary
+  } = user
   return { ...summary, roles: roles.map((role) => role.key).sort() }
 }
 

@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import type { MfaChallenge } from '../api/auth'
 import type { SessionResponse } from '../api/client'
 
 /** A JSON response as the backend sends it (`null` body for 204). */
@@ -43,5 +44,19 @@ export function sessionResponse(
       permissions: ['users.read', 'users.read_contact'],
       ...user,
     },
+  }
+}
+
+/**
+ * The body API-005 and API-020 answer for an account with two-step verification
+ * instead of a session: the challenge of the second step (43 base64url
+ * characters, like the server's), alive for five minutes from now unless overridden.
+ */
+export function mfaChallengeResponse(overrides: Partial<MfaChallenge> = {}): MfaChallenge {
+  return {
+    mfaRequired: true,
+    challenge: 'chl_'.padEnd(43, 'c'),
+    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    ...overrides,
   }
 }
