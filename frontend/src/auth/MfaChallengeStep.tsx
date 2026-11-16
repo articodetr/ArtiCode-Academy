@@ -5,43 +5,49 @@
 // through `completeMfaLogin` of the auth context). Used by the sign-in page and
 // the password-reset page inside their own card.
 //
-// One mount per challenge: a page renders the step only while it holds a
-// challenge and never swaps one challenge for another under it (the step's
-// clock starts when it mounts). The challenge, the typed code and the recovery
-// code live in memory only — never in storage, the URL, a React key or the
-// console — and are gone when the step unmounts.
+// One mount per challenge: a page renders the step the moment it gets a
+// challenge, only while it holds it, and never swaps one challenge for another
+// under it — the step's clock and its count of wrong codes start when it
+// mounts. The challenge, the typed code and the recovery code live in memory
+// only — never in storage, the URL, a React key or the console — and are gone
+// when the step unmounts.
 import { Alert, Button, Flex, Form, Input, Typography } from 'antd'
 import type { InputRef } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { MfaChallenge } from '../api/auth'
 import { useAuth } from './auth-context'
 import type { AuthUser } from './auth-context'
 import {
+  MFA_CHALLENGE_TTL_MS,
   RECOVERY_CODE_PLACEHOLDER,
   RECOVERY_INPUT_MAX_LENGTH,
   TOTP_INPUT_MAX_LENGTH,
-  challengeLifetimeMs,
+  challengeExhausted,
   describeMfaSignInFailure,
   expiryLine,
   minutesLeftOf,
   normalizeRecoveryCode,
   normalizeTotpCode,
+  stepTimeLeftMs,
 } from './mfa.signIn'
-import type { MfaFactorKind, MfaRestartReason, MfaSignInFailure } from './mfa.signIn'
+import type { MfaFactorKind, MfaRestartLock, MfaRestartReason, MfaSignInFailure } from './mfa.signIn'
 import '../pages/LoginPage.css'
 
 interface MfaChallengeStepProps {
-  /** What API-005 or API-020 answered instead of a session. */
+  /** What API-005 or API-020 answered instead of a session. Mount the step the moment it arrives. */
   challenge: MfaChallenge
   /** The second factor was accepted: the visitor is signed in (the auth context already says so). */
   onSuccess: (user: AuthUser) => void
   /**
    * The step is over without a session and the password is needed again:
    * `back` — the visitor asked for it (the link, or the button of the expired step);
-   * `ended` — the server refused the challenge as expired or used, and the password form should say so.
+   * `ended` — the challenge is over (the server refused it as expired or used, or its five wrong
+   *   codes are spent) and the password form should say so;
+   * `locked` — the account is locked, so no code can be accepted before the lock ends; `lock`
+   *   carries its minutes when the server named them.
    */
-  onRestart: (reason: MfaRestartReason) => void
+  onRestart: (reason: MfaRestartReason, lock?: MfaRestartLock) => void
 }
 
 interface StepValues {
@@ -65,27 +71,42 @@ export function MfaChallengeStep({ challenge, onSuccess, onRestart }: MfaChallen
   // A second Enter before the form is disabled must not send the code twice:
   // every wrong answer counts against the challenge and the account.
   const busy = useRef(false)
+  // Wrong codes the server has counted against this challenge (one mount = one challenge).
+  const wrongCodes = useRef(0)
 
-  // The step's own clock: a courtesy to the visitor, the server stays the judge.
-  const [deadline] = useState(() => {
-    const now = Date.now()
-    return now + challengeLifetimeMs(challenge.expiresAt, now)
-  })
-  const [minutesLeft, setMinutesLeft] = useState(() => minutesLeftOf(deadline - Date.now()))
+  // The step's own clock: the server's five minutes counted from the moment the step appeared, with
+  // this device's clock as a stopwatch only. `challenge.expiresAt` is not read — a device a few
+  // minutes fast would call a fresh challenge expired within seconds (see `stepTimeLeftMs`).
+  // A courtesy to the visitor; the server stays the judge.
+  const [startedAt] = useState(() => Date.now())
+  const [minutesLeft, setMinutesLeft] = useState(() => minutesLeftOf(MFA_CHALLENGE_TTL_MS))
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const left = minutesLeftOf(deadline - Date.now())
+      const left = minutesLeftOf(stepTimeLeftMs(startedAt, Date.now()))
       setMinutesLeft(left)
       if (left === 0) window.clearInterval(timer)
     }, CLOCK_TICK_MS)
     return () => window.clearInterval(timer)
-  }, [deadline])
+  }, [startedAt])
 
   // The field of the chosen factor has the focus: at first, after switching the
   // factor, and again after a refused code — in the commit that re-enables the form.
   useEffect(() => {
     inputRef.current?.focus()
   }, [factor, focusRequest])
+
+  // A request already on its way is allowed to finish: its answer decides.
+  const expired = minutesLeft === 0 && !submitting
+  const signInAgainRef = useRef<HTMLButtonElement>(null)
+  const expiredMessageId = useId()
+  // The expired view replaces the form the focus was in, which would leave it on <body>: a keyboard
+  // or screen-reader user would be nowhere. The one way on takes it — the button is described by
+  // the message, so both are read. A focus that is somewhere else on the page is left alone.
+  useEffect(() => {
+    if (!expired) return
+    const active = document.activeElement
+    if (active === null || active === document.body || !active.isConnected) signInAgainRef.current?.focus()
+  }, [expired])
 
   const submit = async (values: StepValues) => {
     if (busy.current) return
@@ -111,6 +132,21 @@ export function MfaChallengeStep({ challenge, onSuccess, onRestart }: MfaChallen
         onRestart('ended')
         return
       }
+      if (described.kind === 'locked') {
+        // Until the lock ends the server answers every code with it, and a lock usually outlives the
+        // challenge: a live form beside "locked for 15 minutes" would only invite codes that cannot work.
+        onRestart('locked', { minutes: described.minutes })
+        return
+      }
+      if (described.spendsAttempt) {
+        wrongCodes.current += 1
+        if (challengeExhausted(wrongCodes.current)) {
+          // The server consumed the challenge with this wrong code: asking for another one
+          // could only end in `mfa_challenge_invalid`.
+          onRestart('ended')
+          return
+        }
+      }
       if (described.kind === 'field') {
         form.setFields([{ name: factor, value: '', errors: [t(described.key)] }])
       } else {
@@ -131,13 +167,12 @@ export function MfaChallengeStep({ challenge, onSuccess, onRestart }: MfaChallen
     setFactor((current) => (current === 'code' ? 'recoveryCode' : 'code'))
   }
 
-  // A request already on its way is allowed to finish: its answer decides.
-  if (minutesLeft === 0 && !submitting) {
+  if (expired) {
     return (
       <>
-        <Alert type="warning" showIcon title={t('login.mfa.expired')} />
+        <Alert type="warning" showIcon title={<span id={expiredMessageId}>{t('login.mfa.expired')}</span>} />
         <Flex justify="center" style={{ marginTop: 16 }}>
-          <Button type="primary" onClick={() => onRestart('back')}>
+          <Button ref={signInAgainRef} type="primary" aria-describedby={expiredMessageId} onClick={() => onRestart('back')}>
             {t('login.mfa.signInAgain')}
           </Button>
         </Flex>

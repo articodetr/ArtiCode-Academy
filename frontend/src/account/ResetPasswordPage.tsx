@@ -20,7 +20,8 @@ import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
 import type { AuthUser } from '../auth/auth-context'
 import { MfaChallengeStep } from '../auth/MfaChallengeStep'
-import type { MfaRestartReason, SignInNotice } from '../auth/mfa.signIn'
+import { signInNoticeState } from '../auth/mfa.signIn'
+import type { MfaRestartLock, MfaRestartReason } from '../auth/mfa.signIn'
 import { describeAccountFailure, malformedLinkFailure } from './account.errors'
 import type { AccountFailure } from './account.errors'
 import { isTokenShaped } from './account.links'
@@ -69,10 +70,15 @@ export function ResetPasswordPage() {
   }
 
   // The reset link is used up, so the step cannot start again from this page:
-  // the sign-in page takes over and says that the new password is the one to use.
-  const toSignIn = (reason: MfaRestartReason) => {
-    const notice: SignInNotice = reason === 'ended' ? 'password_changed_step_ended' : 'password_changed'
-    navigate('/login', { replace: true, state: { notice } })
+  // the sign-in page takes over and says that the new password is the one to use —
+  // at once, after the step ran out, or once the lock the step ended in is over.
+  // Only a notice id (and a lock's whole minutes) travels: the sign-in page words it itself.
+  const toSignIn = (reason: MfaRestartReason, lock?: MfaRestartLock) => {
+    const state =
+      reason === 'locked'
+        ? signInNoticeState('password_changed_account_locked', lock?.minutes)
+        : signInNoticeState(reason === 'ended' ? 'password_changed_step_ended' : 'password_changed')
+    navigate('/login', { replace: true, state })
   }
 
   if (challenge) {

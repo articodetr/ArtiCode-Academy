@@ -175,15 +175,71 @@ describe('MfaChallengeStep', () => {
     expect(onSuccess).not.toHaveBeenCalled()
   })
 
-  it('tells a locked account how many minutes to wait and empties the field', async () => {
-    const { complete, onRestart } = renderStep()
+  it('counts the wrong codes of its challenge, of either factor, and ends the step at the fifth like the server', async () => {
+    const { complete, container, onRestart, onSuccess } = renderStep()
+    // The answer of a server whose lockout threshold is above five: the fifth wrong code is still `mfa_code_invalid`.
+    complete.mockRejectedValue(refused(401, 'mfa_code_invalid'))
+    const form = container.querySelector('form') as HTMLFormElement
+
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      fireEvent.change(codeField(), { target: { value: '111111' } })
+      fireEvent.submit(form)
+      await waitFor(() => expect(complete).toHaveBeenCalledTimes(attempt))
+      // The emptied field says the answer was handled and the next code may be sent.
+      await waitFor(() => expect(codeField()).toHaveValue(''))
+    }
+    // Four wrong codes: the challenge still takes one more, so the step is still there.
+    expect(screen.getByText(mfa.errors.code_invalid)).toBeInTheDocument()
+    expect(onRestart).not.toHaveBeenCalled()
+
+    // The fifth, as a recovery code: the server consumed the challenge with it — the step ends
+    // instead of asking for a code that could only be refused as `mfa_challenge_invalid`.
+    await waitFor(() => expect(screen.getByText(mfa.useRecoveryCode).closest('button')).toBeEnabled())
+    fireEvent.click(screen.getByText(mfa.useRecoveryCode))
+    fireEvent.change(recoveryField(), { target: { value: 'ZZZZZ-ZZZZZ' } })
+    fireEvent.submit(form)
+
+    await waitFor(() => expect(onRestart).toHaveBeenCalledTimes(1))
+    expect(onRestart).toHaveBeenCalledWith('ended')
+    expect(complete).toHaveBeenCalledTimes(5)
+    expect(screen.queryByText(mfa.errors.recovery_code_invalid)).not.toBeInTheDocument()
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
+
+  it('does not count an answer that was not a wrong code against the challenge', async () => {
+    const { complete, container, onRestart } = renderStep()
+    const form = container.querySelector('form') as HTMLFormElement
+    const send = async (attempt: number) => {
+      fireEvent.change(codeField(), { target: { value: '111111' } })
+      fireEvent.submit(form)
+      await waitFor(() => expect(complete).toHaveBeenCalledTimes(attempt))
+      await waitFor(() => expect(codeField()).toHaveValue(''))
+    }
+
+    // Four wrong codes, then a busy server twice: six answers, four of them counted.
+    complete.mockRejectedValue(refused(401, 'mfa_code_invalid'))
+    for (let attempt = 1; attempt <= 4; attempt += 1) await send(attempt)
+    complete.mockRejectedValue(refused(429, 'rate_limited'))
+    await send(5)
+    await send(6)
+
+    expect(screen.getByText(ar.login.errors.rate_limited)).toBeInTheDocument()
+    expect(screen.getByLabelText(mfa.code)).toBeInTheDocument()
+    expect(onRestart).not.toHaveBeenCalled()
+  })
+
+  it('leaves the step when the account is locked, handing over the minutes to wait', async () => {
+    const { complete, onRestart, onSuccess } = renderStep()
     complete.mockRejectedValue(refused(423, 'account_locked', { retryAfterSeconds: 841 }))
 
     await userEvent.type(codeField(), '123456{Enter}')
 
-    expect(await screen.findByText(i18n.t('login.errors.account_locked', { minutes: 15 }))).toBeInTheDocument()
-    expect(codeField()).toHaveValue('')
-    expect(onRestart).not.toHaveBeenCalled()
+    await waitFor(() => expect(onRestart).toHaveBeenCalledTimes(1))
+    expect(onRestart).toHaveBeenCalledWith('locked', { minutes: 15 })
+    // No "locked for 15 minutes" beside a live form and its "expires in 5 minutes": the password form says it.
+    expect(screen.queryByText(i18n.t('login.errors.account_locked', { minutes: 15 }))).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(onSuccess).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -255,6 +311,8 @@ describe('MfaChallengeStep', () => {
       }
     }
 
+    const signInAgainButton = () => screen.getByText(mfa.signInAgain).closest('button') as HTMLButtonElement
+
     it('counts the minutes down, then says the step expired and offers to sign in again', () => {
       const clock = watchClock()
       vi.setSystemTime(new Date('2026-11-16T09:30:00.000Z'))
@@ -262,6 +320,7 @@ describe('MfaChallengeStep', () => {
         challenge: mfaChallengeResponse({ expiresAt: '2026-11-16T09:35:00.000Z' }),
       })
       expect(screen.getByText(i18n.t('login.mfa.expiresInMinutes', { minutes: 5 }))).toBeInTheDocument()
+      expect(codeField()).toHaveFocus()
 
       advance(2 * 60_000 + 30_000)
       expect(screen.getByText(i18n.t('login.mfa.expiresInMinutes', { minutes: 3 }))).toBeInTheDocument()
@@ -280,10 +339,34 @@ describe('MfaChallengeStep', () => {
       expect(clock.started()).toHaveLength(1)
       expect(clock.cleared()).toContain(clock.started()[0])
 
-      fireEvent.click(screen.getByText(mfa.signInAgain))
+      // The focus was in the form that is gone: it is on the one way on, not lost on <body>,
+      // and the button is described by the message, so a screen reader reads why it is there.
+      expect(signInAgainButton()).toHaveFocus()
+      expect(signInAgainButton()).toHaveAccessibleDescription(mfa.expired)
+      expect(screen.getByRole('alert')).toHaveTextContent(mfa.expired)
+
+      fireEvent.click(signInAgainButton())
       expect(onRestart).toHaveBeenCalledTimes(1)
       expect(onRestart).toHaveBeenCalledWith('back')
       expect(complete).not.toHaveBeenCalled()
+    })
+
+    it('leaves the focus where it is when the step expires while the visitor is elsewhere on the page', () => {
+      vi.useFakeTimers()
+      renderWithProviders(
+        <>
+          <button type="button">خارج الخطوة</button>
+          <MfaChallengeStep challenge={mfaChallengeResponse()} onSuccess={vi.fn()} onRestart={vi.fn()} />
+        </>,
+      )
+      const outside = screen.getByText('خارج الخطوة')
+      act(() => outside.focus())
+
+      advance(5 * 60_000)
+
+      expect(screen.getByText(mfa.expired)).toBeInTheDocument()
+      expect(outside).toHaveFocus()
+      expect(signInAgainButton()).not.toHaveFocus()
     })
 
     it('stops its timer when the step unmounts', () => {
@@ -297,18 +380,52 @@ describe('MfaChallengeStep', () => {
       expect(clock.cleared()).toContain(clock.started()[0])
     })
 
-    it('does not call a fresh challenge expired because this device’s clock is ahead', () => {
+    // The server issued the challenge at its 09:30:00, so `expiresAt` says 09:35:00. Whatever this
+    // device's clock says at that moment, the step lives five minutes from the moment it appears.
+    it.each([
+      // Was the bug: 20 seconds to `expiresAt` looked plausible, so the form was replaced after 20 seconds.
+      ['4 min 40 s fast', '2026-11-16T09:34:40.000Z', '2026-11-16T09:35:00.000Z'],
+      ['one second short of five minutes fast', '2026-11-16T09:34:59.000Z', '2026-11-16T09:35:00.000Z'],
+      ['20 minutes fast', '2026-11-16T09:50:00.000Z', '2026-11-16T09:35:00.000Z'],
+      ['3 minutes slow', '2026-11-16T09:27:00.000Z', '2026-11-16T09:35:00.000Z'],
+      ['an hour slow', '2026-11-16T08:30:00.000Z', '2026-11-16T09:35:00.000Z'],
+      ['right, with an unreadable expiresAt', '2026-11-16T09:30:00.000Z', 'not a date'],
+    ])('gives the step its five minutes on a device whose clock is %s', (_label, deviceTime, expiresAt) => {
       vi.useFakeTimers()
-      vi.setSystemTime(new Date('2026-11-16T09:50:00.000Z'))
-      // Issued a moment ago by a server whose clock says 09:30 — this device says 09:50.
-      renderStep({ challenge: mfaChallengeResponse({ expiresAt: '2026-11-16T09:35:00.000Z' }) })
+      vi.setSystemTime(new Date(deviceTime))
+      renderStep({ challenge: mfaChallengeResponse({ expiresAt }) })
 
+      expect(screen.getByLabelText(mfa.code)).toBeInTheDocument()
+      expect(screen.getByText(i18n.t('login.mfa.expiresInMinutes', { minutes: 5 }))).toBeInTheDocument()
+
+      // 20 seconds later the form is still there, with nearly five minutes to go.
+      advance(20_000)
       expect(screen.getByLabelText(mfa.code)).toBeInTheDocument()
       expect(screen.queryByText(mfa.expired)).not.toBeInTheDocument()
       expect(screen.getByText(i18n.t('login.mfa.expiresInMinutes', { minutes: 5 }))).toBeInTheDocument()
 
-      advance(5 * 60_000)
+      // One second before the five minutes are over it still is; then the step expires — not before, not later.
+      advance(4 * 60_000 + 39_000)
+      expect(screen.getByLabelText(mfa.code)).toBeInTheDocument()
+      expect(screen.getByText(mfa.expiresSoon)).toBeInTheDocument()
+      advance(1_000)
       expect(screen.getByText(mfa.expired)).toBeInTheDocument()
+      expect(screen.queryByLabelText(mfa.code)).not.toBeInTheDocument()
+    })
+
+    it('never shows more than the five minutes when the device’s clock is set back while the step is open', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-11-16T09:30:00.000Z'))
+      renderStep()
+      advance(2 * 60_000)
+      expect(screen.getByText(i18n.t('login.mfa.expiresInMinutes', { minutes: 3 }))).toBeInTheDocument()
+
+      // The clock is corrected by half an hour (a time sync): not "expires in 33 minutes".
+      vi.setSystemTime(new Date('2026-11-16T09:02:00.000Z'))
+      advance(1_000)
+
+      expect(screen.getByText(i18n.t('login.mfa.expiresInMinutes', { minutes: 5 }))).toBeInTheDocument()
+      expect(screen.getByLabelText(mfa.code)).toBeInTheDocument()
     })
   })
 })

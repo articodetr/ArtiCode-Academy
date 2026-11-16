@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
@@ -101,6 +101,8 @@ describe('ResetPasswordPage', () => {
       // The password is changed, but there is no session yet: nothing to adopt, nowhere to go.
       expect(screen.getByText(mfa.passwordChanged)).toBeInTheDocument()
       expect(screen.getByText(mfa.subtitle)).toBeInTheDocument()
+      // The code field took the focus of the password form it replaced.
+      expect(code).toHaveFocus()
       expect(auth.adoptSession).not.toHaveBeenCalled()
       expect(screen.queryByTestId('location')).not.toBeInTheDocument()
       expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
@@ -178,6 +180,60 @@ describe('ResetPasswordPage', () => {
       const location = await screen.findByTestId('location')
       expect(location).toHaveAttribute('data-pathname', '/login')
       expect(JSON.parse(location.getAttribute('data-state') ?? 'null')).toEqual({ notice: 'password_changed_step_ended' })
+    })
+
+    it('goes to the sign-in page with the same reason after the fifth wrong code of the challenge', async () => {
+      const auth = makeAuth()
+      vi.mocked(auth.completeMfaLogin).mockRejectedValue(
+        new ApiError(401, 'refused', { statusCode: 401, code: 'mfa_code_invalid' }),
+      )
+      await reachSecondStep(auth)
+      const form = screen.getByLabelText(mfa.code).closest('form') as HTMLFormElement
+
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        fireEvent.change(screen.getByLabelText(mfa.code), { target: { value: '111111' } })
+        fireEvent.submit(form)
+        await waitFor(() => expect(auth.completeMfaLogin).toHaveBeenCalledTimes(attempt))
+        if (attempt < 5) await waitFor(() => expect(screen.getByLabelText(mfa.code)).toHaveValue(''))
+      }
+
+      const location = await screen.findByTestId('location')
+      expect(location).toHaveAttribute('data-pathname', '/login')
+      expect(JSON.parse(location.getAttribute('data-state') ?? 'null')).toEqual({ notice: 'password_changed_step_ended' })
+    })
+
+    it('goes to the sign-in page with the lock and its minutes when the second step finds the account locked', async () => {
+      const auth = makeAuth()
+      vi.mocked(auth.completeMfaLogin).mockRejectedValue(
+        new ApiError(423, 'Locked', { statusCode: 423, code: 'account_locked', retryAfterSeconds: 841 }),
+      )
+      const { code, fetchMock } = await reachSecondStep(auth)
+
+      await userEvent.type(code, '111111{Enter}')
+
+      // Only a notice id and a whole number of minutes travel — the sign-in page words the notice itself.
+      const location = await screen.findByTestId('location')
+      expect(location).toHaveAttribute('data-pathname', '/login')
+      expect(JSON.parse(location.getAttribute('data-state') ?? 'null')).toEqual({
+        notice: 'password_changed_account_locked',
+        minutes: 15,
+      })
+      // The used reset link is never asked again.
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('sends the lock notice without minutes when the server named none', async () => {
+      const auth = makeAuth()
+      vi.mocked(auth.completeMfaLogin).mockRejectedValue(
+        new ApiError(423, 'Locked', { statusCode: 423, code: 'account_locked' }),
+      )
+      const { code } = await reachSecondStep(auth)
+
+      await userEvent.type(code, '111111{Enter}')
+
+      const location = await screen.findByTestId('location')
+      expect(location).toHaveAttribute('data-pathname', '/login')
+      expect(JSON.parse(location.getAttribute('data-state') ?? 'null')).toEqual({ notice: 'password_changed_account_locked' })
     })
   })
 

@@ -9,8 +9,8 @@ import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
 import type { AuthUser } from '../auth/auth-context'
 import { MfaChallengeStep } from '../auth/MfaChallengeStep'
-import { SIGN_IN_NOTICES, signInNoticeOf } from '../auth/mfa.signIn'
-import type { MfaRestartReason, SignInNotice } from '../auth/mfa.signIn'
+import { signInNotice, signInNoticeOf } from '../auth/mfa.signIn'
+import type { MfaRestartLock, MfaRestartReason, ShownSignInNotice } from '../auth/mfa.signIn'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import './LoginPage.css'
 
@@ -62,7 +62,8 @@ export function LoginPage() {
   // challenge is kept — the password form unmounts with its values the moment the challenge arrives.
   const [challenge, setChallenge] = useState<MfaChallenge | null>(null)
   // Why the visitor is (back) at the password form: the second step ended, or a password reset sent them here.
-  const [notice, setNotice] = useState<SignInNotice | null>(() => signInNoticeOf(location.state))
+  // From the router state only a known notice id (and the whole minutes of a lock) is ever read — never text.
+  const [notice, setNotice] = useState<ShownSignInNotice | null>(() => signInNoticeOf(location.state))
 
   if (status === 'loading') {
     return (
@@ -97,12 +98,13 @@ export function LoginPage() {
     }
   }
 
-  const restart = (reason: MfaRestartReason) => {
+  const restart = (reason: MfaRestartReason, lock?: MfaRestartLock) => {
     setChallenge(null)
-    setNotice(reason === 'ended' ? 'mfa_step_ended' : null)
+    setNotice(reason === 'ended' ? signInNotice('mfa_step_ended') : null)
+    // The second step found the account locked: the password form says so exactly as when the
+    // password step itself is refused for it, with the minutes the server named.
+    setFailure(reason === 'locked' ? { key: 'login.errors.account_locked', retryAfterMinutes: lock?.minutes } : null)
   }
-
-  const shownNotice = notice ? SIGN_IN_NOTICES[notice] : null
 
   return (
     <div className="login-page">
@@ -125,8 +127,8 @@ export function LoginPage() {
                 title={t(failure.key, { minutes: failure.retryAfterMinutes ?? '' })}
                 style={{ marginBottom: 16 }}
               />
-            ) : shownNotice ? (
-              <Alert type={shownNotice.type} showIcon title={t(shownNotice.key)} style={{ marginBottom: 16 }} />
+            ) : notice ? (
+              <Alert type={notice.type} showIcon title={t(notice.key, { minutes: notice.minutes })} style={{ marginBottom: 16 }} />
             ) : null}
 
             <Form<LoginFormValues> layout="vertical" requiredMark={false} onFinish={onFinish} disabled={submitting}>

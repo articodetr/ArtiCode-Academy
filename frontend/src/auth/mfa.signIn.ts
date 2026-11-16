@@ -1,7 +1,8 @@
 // Pure rules of the second step of a sign-in (MFA-UI part A — API-005, API-211,
 // API-020): how a typed code is normalised before it is sent, what a refused
-// API-211 request tells the visitor, how long the step is shown as alive, and
-// the notices the password form shows after the step ended. No React, no I/O.
+// API-211 request tells the visitor, how long the step is shown as alive, when
+// its wrong codes are spent, and the notices the password form shows after the
+// step ended. No React, no I/O.
 //
 // The two normalisers mirror backend/src/auth/mfa/totp.ts (`matchTotp`) and
 // backend/src/auth/mfa/recovery-codes.ts (`normalizeRecoveryCode`) — keep them
@@ -75,14 +76,21 @@ export type MfaFactorKind = 'code' | 'recoveryCode'
  * What a refused API-211 request means for the screen:
  * - `field`   — the typed code was wrong: the message goes under the field, which is emptied and focused;
  * - `restart` — the challenge is over (expired, used, exhausted): back to the password form with the notice;
+ * - `locked`  — the account is locked: the server answers every code with the lock until it ends, and a
+ *               lock usually outlives the challenge — back to the password form, which says for how long;
  * - `alert`   — anything else: a worded message above the field, the step stays.
  */
 export interface MfaSignInFailure {
-  kind: 'field' | 'restart' | 'alert'
+  kind: 'field' | 'restart' | 'locked' | 'alert'
   /** Translation key — never a raw backend code. */
   key: string
   /** Minutes until the account's lock ends (`account_locked`), rounded up. */
   minutes?: number
+  /**
+   * Set when the server counted the answer against the challenge's five wrong
+   * codes (`mfa_code_invalid`): the step counts them too — `challengeExhausted`.
+   */
+  spendsAttempt?: true
   /**
    * Set only when the server was not reached: the typed code was not judged and
    * may be sent again as it is. After every answer of the server the field is
@@ -107,7 +115,11 @@ export function describeMfaSignInFailure(error: unknown, factor: MfaFactorKind):
   const { code } = error
 
   if (code === 'mfa_code_invalid') {
-    return { kind: 'field', key: factor === 'code' ? 'login.mfa.errors.code_invalid' : 'login.mfa.errors.recovery_code_invalid' }
+    return {
+      kind: 'field',
+      key: factor === 'code' ? 'login.mfa.errors.code_invalid' : 'login.mfa.errors.recovery_code_invalid',
+      spendsAttempt: true,
+    }
   }
   // Unreachable through the form (an empty field is refused before any request); worded all the same.
   if (code === 'mfa_factor_required') {
@@ -115,7 +127,7 @@ export function describeMfaSignInFailure(error: unknown, factor: MfaFactorKind):
   }
   if (code === 'mfa_challenge_invalid') return { kind: 'restart', key: 'login.mfa.errors.challenge_invalid' }
   if (code === 'account_locked') {
-    return { kind: 'alert', key: 'login.errors.account_locked', minutes: retryAfterMinutes(error.body) }
+    return { kind: 'locked', key: 'login.errors.account_locked', minutes: retryAfterMinutes(error.body) }
   }
   if (code === 'mfa_unavailable') return { kind: 'alert', key: 'login.errors.mfa_unavailable' }
   if (code === 'rate_limited' || error.status === 429) return { kind: 'alert', key: 'login.errors.rate_limited' }
@@ -131,17 +143,23 @@ export function describeMfaSignInFailure(error: unknown, factor: MfaFactorKind):
 export const MFA_CHALLENGE_TTL_MS = 5 * 60_000
 
 /**
- * How long the step is shown as alive, counted from the moment the challenge
- * arrived (`nowMs` on this device's clock): the time to `expiresAt`, but never
- * more than the server's five minutes. A value that cannot be true for a
- * challenge that has just arrived — already past, more than five minutes away,
- * unreadable — means this device's clock is wrong, not that the step is over:
- * then the full lifetime is shown and the server stays the judge
- * (`mfa_challenge_invalid` ends the step with its notice).
+ * How long the step is still shown as alive: the server's five minutes counted
+ * from the moment the step appeared (`startedAtMs`) to `nowMs`, both read from
+ * this device's clock — used as a stopwatch only. The challenge's `expiresAt`
+ * is deliberately not part of it: an instant of the server's clock compared
+ * with this device's made a device a few minutes fast call a fresh challenge
+ * expired within seconds (4 min 40 s fast = 20 s to type the code, at every
+ * sign-in). The step appears the moment the challenge arrives, so its age is
+ * the challenge's age whatever either clock says.
+ *
+ * Never more than the five minutes (a clock set back while the step is open),
+ * never less than 0. A courtesy to the visitor — the server stays the judge:
+ * a challenge it refuses ends the step through `mfa_challenge_invalid`.
  */
-export function challengeLifetimeMs(expiresAt: string, nowMs: number): number {
-  const left = Date.parse(expiresAt) - nowMs
-  return Number.isFinite(left) && left > 0 && left <= MFA_CHALLENGE_TTL_MS ? left : MFA_CHALLENGE_TTL_MS
+export function stepTimeLeftMs(startedAtMs: number, nowMs: number): number {
+  const elapsed = nowMs - startedAtMs
+  if (!Number.isFinite(elapsed) || elapsed <= 0) return MFA_CHALLENGE_TTL_MS
+  return Math.max(0, MFA_CHALLENGE_TTL_MS - elapsed)
 }
 
 /** Whole minutes left, rounded up; 0 once the time is up. */
@@ -157,30 +175,114 @@ export function expiryLine(minutesLeft: number): { key: string; minutes?: number
   return { key: 'login.mfa.expiresInMinutes', minutes: minutesLeft }
 }
 
+// ------------------------------------------------------------- attempts
+
+/** Wrong codes a challenge takes before the server consumes it (MFA_CHALLENGE_MAX_ATTEMPTS): five. */
+export const MFA_CHALLENGE_MAX_ATTEMPTS = 5
+
+/**
+ * True once the server has answered `mfa_code_invalid` that many times for one
+ * challenge: its fifth wrong code consumed it, whatever the account's lockout
+ * threshold, so the next code could only be refused as `mfa_challenge_invalid`
+ * — the step ends now instead of asking for it.
+ */
+export function challengeExhausted(wrongCodes: number): boolean {
+  return wrongCodes >= MFA_CHALLENGE_MAX_ATTEMPTS
+}
+
 // -------------------------------------------------------------- notices
 
 /**
- * Why the step hands the visitor back to the password form: they asked for it
- * (`back` — the link, or the button of the expired step), or the server said
- * the challenge is over (`ended` — the password form then says why).
+ * Why the step hands the visitor back to the password form:
+ * - `back`   — they asked for it (the link, or the button of the expired step);
+ * - `ended`  — the challenge is over: the server refused it as expired or used, or its five wrong
+ *              codes are spent — the password form then says why;
+ * - `locked` — the account is locked (`MfaRestartLock` says for how long, when the server did).
  */
-export type MfaRestartReason = 'back' | 'ended'
+export type MfaRestartReason = 'back' | 'ended' | 'locked'
 
-/** A notice the sign-in page shows above the password form; travels as `location.state.notice`. */
-export type SignInNotice = 'mfa_step_ended' | 'password_changed' | 'password_changed_step_ended'
+/** What comes with the `locked` reason. */
+export interface MfaRestartLock {
+  /** Minutes until the lock ends, rounded up; absent when the server named none. */
+  minutes?: number
+}
 
-export const SIGN_IN_NOTICES: Readonly<Record<SignInNotice, { key: string; type: 'success' | 'warning' }>> = {
+/** A notice the sign-in page shows above the password form; its id travels as `location.state.notice`. */
+export type SignInNotice =
+  | 'mfa_step_ended'
+  | 'password_changed'
+  | 'password_changed_step_ended'
+  | 'password_changed_account_locked'
+
+type SignInNoticeType = 'success' | 'warning'
+
+interface SignInNoticeSpec {
+  key: string
+  type: SignInNoticeType
+  /**
+   * The wording that names the minutes of a lock (`{{minutes}}`), used instead of `key` when the
+   * notice came with usable minutes. A notice without it never reads `location.state.minutes`.
+   */
+  timedKey?: string
+}
+
+export const SIGN_IN_NOTICES: Readonly<Record<SignInNotice, SignInNoticeSpec>> = {
   /** The second step was refused as expired or used: the password is asked again. */
   mfa_step_ended: { key: 'login.mfa.errors.challenge_invalid', type: 'warning' },
   /** After a password reset whose second step the visitor left: the new password works. */
   password_changed: { key: 'login.mfa.notices.passwordChanged', type: 'success' },
   /** After a password reset whose second step ran out. */
   password_changed_step_ended: { key: 'login.mfa.notices.passwordChangedStepEnded', type: 'warning' },
+  /** After a password reset whose second step locked the account: the new password works once the lock ends. */
+  password_changed_account_locked: {
+    key: 'login.mfa.notices.passwordChangedLocked',
+    timedKey: 'login.mfa.notices.passwordChangedLockedFor',
+    type: 'warning',
+  },
 }
 
-/** The notice carried by a router location state, or null — only a known id is ever shown. */
-export function signInNoticeOf(state: unknown): SignInNotice | null {
+/** The longest lock the server can name: AUTH_LOCKOUT_MINUTES goes up to 1440 (backend env.schema.ts). */
+export const LOCK_MINUTES_MAX = 24 * 60
+
+function isLockMinutes(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= LOCK_MINUTES_MAX
+}
+
+/** What a page puts into the router state of `/login` to have a notice shown there. */
+export interface SignInNoticeState {
+  notice: SignInNotice
+  /** Whole minutes of a lock, for a notice that names them. */
+  minutes?: number
+}
+
+/** The router state for a notice; `minutes` travels only when it is a usable number of minutes. */
+export function signInNoticeState(notice: SignInNotice, minutes?: number): SignInNoticeState {
+  return isLockMinutes(minutes) ? { notice, minutes } : { notice }
+}
+
+/** A notice ready for the screen: a translation key of this module's own list, never text from outside. */
+export interface ShownSignInNotice {
+  id: SignInNotice
+  key: string
+  type: SignInNoticeType
+  /** The `{{minutes}}` of `key`, present exactly when the key is a `timedKey`. */
+  minutes?: number
+}
+
+/** The notice with that id; the timed wording only for a notice that has one and whole minutes in 1..1440. */
+export function signInNotice(id: SignInNotice, minutes?: unknown): ShownSignInNotice {
+  const { key, type, timedKey } = SIGN_IN_NOTICES[id]
+  return timedKey !== undefined && isLockMinutes(minutes) ? { id, key: timedKey, type, minutes } : { id, key, type }
+}
+
+/**
+ * The notice carried by a router location state, or null. Only a known id is
+ * ever shown, worded by this module; the one other value read from the state is
+ * a whole number of minutes — anything else there is ignored, never rendered.
+ */
+export function signInNoticeOf(state: unknown): ShownSignInNotice | null {
   if (typeof state !== 'object' || state === null) return null
-  const { notice } = state as { notice?: unknown }
-  return typeof notice === 'string' && Object.hasOwn(SIGN_IN_NOTICES, notice) ? (notice as SignInNotice) : null
+  const { notice, minutes } = state as { notice?: unknown; minutes?: unknown }
+  if (typeof notice !== 'string' || !Object.hasOwn(SIGN_IN_NOTICES, notice)) return null
+  return signInNotice(notice as SignInNotice, minutes)
 }

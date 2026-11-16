@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { AuthProvider } from '../auth/AuthProvider'
 import { getAccessToken, setAccessToken } from '../auth/token-store'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mfaChallengeResponse, mockFetch, sessionResponse } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
@@ -16,13 +17,18 @@ import { LoginPage } from './LoginPage'
 const UNAUTHENTICATED = { statusCode: 401, code: 'unauthenticated', message: 'Authentication required' }
 const challenge = mfaChallengeResponse()
 
-/** Mounts /login under the real provider; `from` is where the visitor was going. */
-function renderSignIn(options: { mfa: boolean; user?: Partial<SessionUser> }) {
+/**
+ * Mounts /login under the real provider; `from` is where the visitor was going.
+ * `secondStep` replaces the session API-211 answers by default.
+ */
+function renderSignIn(options: { mfa: boolean; user?: Partial<SessionUser>; secondStep?: () => Response }) {
   const fetchMock = mockFetch((url) => {
     if (url === '/api/auth/login') {
       return jsonResponse(200, options.mfa ? challenge : sessionResponse('access-password', options.user))
     }
-    if (url === '/api/auth/login/mfa') return jsonResponse(200, sessionResponse('access-mfa', options.user))
+    if (url === '/api/auth/login/mfa') {
+      return options.secondStep ? options.secondStep() : jsonResponse(200, sessionResponse('access-mfa', options.user))
+    }
     return jsonResponse(401, UNAUTHENTICATED)
   })
   renderWithProviders(
@@ -77,6 +83,23 @@ describe('LoginPage with the real AuthProvider', () => {
 
     await waitFor(() => expect(getAccessToken()).toBe('access-mfa'))
     expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/profile')
+  })
+
+  it('returns to the password form with the lock message when the second step finds the account locked — nobody signed in', async () => {
+    const fetchMock = renderSignIn({
+      mfa: true,
+      secondStep: () => jsonResponse(423, { statusCode: 423, code: 'account_locked', message: 'Locked', retryAfterSeconds: 900 }),
+    })
+    await submitPassword()
+
+    await userEvent.type(await screen.findByLabelText(ar.login.mfa.code), '123456{Enter}')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('login.errors.account_locked', { minutes: 15 }))
+    expect(screen.queryByLabelText(ar.login.mfa.code)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(ar.login.password)).toHaveValue('')
+    expect(getAccessToken()).toBeNull()
+    expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/login', '/api/auth/login/mfa'])
   })
 
   it('still sends a user who must change the password to the profile page without two-step verification', async () => {

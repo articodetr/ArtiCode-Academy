@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
@@ -10,9 +10,9 @@ import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import type { AuthContextValue } from '../auth/auth-context'
 import { LoginPage } from './LoginPage'
 
-/** Mounts the page at /login; every other path renders the location probe. */
-function renderLogin(auth: AuthContextValue = makeAuth(), from?: string, notice?: string) {
-  const state = from || notice ? { ...(from ? { from } : {}), ...(notice ? { notice } : {}) } : null
+/** Mounts the page at /login; every other path renders the location probe. `extra` joins the router state as it is. */
+function renderLogin(auth: AuthContextValue = makeAuth(), from?: string, notice?: string, extra: Record<string, unknown> = {}) {
+  const state = from || notice ? { ...(from ? { from } : {}), ...(notice ? { notice } : {}), ...extra } : null
   return renderWithProviders(<LoginPage />, {
     auth,
     route: { pathname: '/login', state },
@@ -209,6 +209,8 @@ describe('LoginPage', () => {
       expect(screen.getByText(ar.login.subtitle)).toBeInTheDocument()
       expect(fields().identifier).toHaveValue('')
       expect(fields().password).toHaveValue('')
+      // The focus is in the form that came back, not lost with the step.
+      expect(fields().identifier).toHaveFocus()
       expect(screen.queryByTestId('location')).not.toBeInTheDocument()
 
       // Signing in again starts a new second step and drops the notice.
@@ -216,6 +218,54 @@ describe('LoginPage', () => {
       expect(await screen.findByLabelText(mfa.code)).toBeInTheDocument()
       expect(screen.queryByText(mfa.errors.challenge_invalid)).not.toBeInTheDocument()
       expect(auth.login).toHaveBeenCalledTimes(2)
+    })
+
+    it('leaves the second step for the password form, with the lock message and its minutes, when the account is locked', async () => {
+      const auth = makeAuth()
+      vi.mocked(auth.completeMfaLogin).mockRejectedValue(
+        new ApiError(423, 'Locked', { statusCode: 423, code: 'account_locked', retryAfterSeconds: 841 }),
+      )
+      const { code } = await reachSecondStep(auth)
+
+      await userEvent.type(code, '111111{Enter}')
+
+      // The same message as when the password step itself is refused for a locked account —
+      // and no live code form (or "this step expires in…") beside it.
+      expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('login.errors.account_locked', { minutes: 15 }))
+      expect(screen.getAllByRole('alert')).toHaveLength(1)
+      expect(screen.queryByLabelText(mfa.code)).not.toBeInTheDocument()
+      expect(screen.queryByText(mfa.subtitle)).not.toBeInTheDocument()
+      expect(screen.getByText(ar.login.subtitle)).toBeInTheDocument()
+      expect(fields().identifier).toHaveValue('')
+      expect(fields().password).toHaveValue('')
+      expect(fields().submit).toBeEnabled()
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+      expect(auth.completeMfaLogin).toHaveBeenCalledTimes(1)
+
+      // The next sign-in drops the lock message like any other failure.
+      await submitCredentials('admin', 'Secret123!')
+      expect(await screen.findByLabelText(mfa.code)).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('returns to the password form with the reason after the fifth wrong code of one challenge', async () => {
+      const auth = makeAuth()
+      // A lockout threshold above five: the server answers the fifth wrong code with `mfa_code_invalid` too.
+      vi.mocked(auth.completeMfaLogin).mockRejectedValue(refused(401, 'mfa_code_invalid'))
+      const { container } = await reachSecondStep(auth)
+      const form = container.querySelector('form') as HTMLFormElement
+
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        fireEvent.change(screen.getByLabelText(mfa.code), { target: { value: '111111' } })
+        fireEvent.submit(form)
+        await waitFor(() => expect(auth.completeMfaLogin).toHaveBeenCalledTimes(attempt))
+        if (attempt < 5) await waitFor(() => expect(screen.getByLabelText(mfa.code)).toHaveValue(''))
+      }
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(mfa.errors.challenge_invalid)
+      expect(screen.queryByLabelText(mfa.code)).not.toBeInTheDocument()
+      expect(fields().password).toHaveValue('')
+      expect(auth.completeMfaLogin).toHaveBeenCalledTimes(5)
     })
 
     it('goes back to the password form without a notice when the visitor asks for it', async () => {
@@ -254,6 +304,32 @@ describe('LoginPage', () => {
     it('shows nothing for a notice it does not know', () => {
       renderLogin(makeAuth(), '/users', '<b>anything</b>')
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('says after a password reset that ended in a locked account when the new password will work', () => {
+      renderLogin(makeAuth(), undefined, 'password_changed_account_locked', { minutes: 15 })
+      expect(screen.getByRole('alert')).toHaveTextContent(i18n.t('login.mfa.notices.passwordChangedLockedFor', { minutes: 15 }))
+      expect(screen.getByRole('alert')).toHaveTextContent('15')
+      expect(fields().submit).toBeEnabled()
+    })
+
+    it.each([
+      ['no minutes', {}],
+      ['text instead of minutes', { minutes: '<b>999</b>' }],
+      ['a fraction', { minutes: 2.5 }],
+      ['more than a day', { minutes: 100_000 }],
+      ['zero', { minutes: 0 }],
+    ])('words the locked-account notice without a number when the router state carries %s', (_label, extra) => {
+      renderLogin(makeAuth(), undefined, 'password_changed_account_locked', extra)
+      // Only the notice id and a whole number of minutes are ever read from the router state.
+      expect(screen.getByRole('alert')).toHaveTextContent(mfa.notices.passwordChangedLocked)
+      expect(screen.getByRole('alert')).not.toHaveTextContent(/[0-9<]/)
+    })
+
+    it('never puts minutes from the router state into a notice that names none', () => {
+      renderLogin(makeAuth(), undefined, 'password_changed', { minutes: 15 })
+      expect(screen.getByRole('alert')).toHaveTextContent(mfa.notices.passwordChanged)
+      expect(screen.getByRole('alert')).not.toHaveTextContent('15')
     })
   })
 
