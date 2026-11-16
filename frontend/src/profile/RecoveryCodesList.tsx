@@ -1,13 +1,15 @@
 // A new set of recovery codes, shown ONCE (API-208 after enabling, API-210 after regenerating): the server keeps
 // only their hashes and never returns them again. The codes can be copied or saved as a text file built in the
-// browser (a Blob — nothing goes to the network), and «close» stays off until the user ticks that they are saved.
-// Until then a reload or a tab close gets the browser's own prompt. The codes live in the props of this view only:
-// never in storage, never in a log; they go when the dialog closes.
+// browser (a Blob — nothing goes to the network), and «close» stays off until the user ticks that they are saved —
+// a line under the tick says so, tied to both (`aria-describedby`), since «close» is the only way out here.
+// Whether they are saved belongs to the dialog (`saved` / `onSavedChange`): until then it also holds a browser
+// back, a reload and a tab close (useMfaLeaveGuard). The view takes the cursor on its heading when it replaces
+// the form. The codes live in the props of this view only: never in storage, never in a log, never in a React
+// key; they go when the dialog closes — and with it the link of a downloaded file.
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Checkbox, Space } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { Alert, App, Button, Checkbox, Space, Typography } from 'antd'
+import { useEffect, useId, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { preventUnload } from '../common/unsavedChanges'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime } from '../users/users.format'
 import { RECOVERY_CODES_FILE_NAME, recoveryCodesClipboardText, recoveryCodesFileText } from './mfa.format'
@@ -18,12 +20,22 @@ interface RecoveryCodesListProps {
   codes: readonly string[]
   /** When they were made (ISO 8601) — a line of the downloaded file. */
   generatedAt: string
+  /** Whether the user ticked that the codes are saved. */
+  saved: boolean
+  onSavedChange: (saved: boolean) => void
   /** «Close», possible only after the tick. */
   onDone: () => void
 }
 
-/** Saves `content` through a temporary Blob link; nothing goes to the server. */
-function downloadTextFile(fileName: string, content: string): void {
+/**
+ * How long the link of a downloaded file lives. Firefox and Safari start a Blob download after the click has
+ * returned, so a link revoked at once can cancel it; a minute is ample, and the view revokes what is left when
+ * it goes.
+ */
+export const DOWNLOAD_LINK_LIFETIME_MS = 60_000
+
+/** Hands `content` to the browser as a file through a temporary Blob link — nothing goes to the server. Returns the link, to revoke later. */
+function downloadTextFile(fileName: string, content: string): string {
   const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
@@ -32,23 +44,37 @@ function downloadTextFile(fileName: string, content: string): void {
   document.body.appendChild(link)
   link.click()
   link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 0)
+  return url
 }
 
-export function RecoveryCodesList({ codes, generatedAt, onDone }: RecoveryCodesListProps) {
+export function RecoveryCodesList({ codes, generatedAt, saved, onSavedChange, onDone }: RecoveryCodesListProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
-  const [saved, setSaved] = useState(false)
   const list = useRef<HTMLOListElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+  const headingId = useId()
+  const closeHintId = useId()
+  // The Blob links handed to the browser and not revoked yet, each with the timer that will revoke it.
+  const links = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
-  // A reload or a tab close would take the codes away for good: the browser asks first until they are saved.
+  // The form that asked for the codes is gone, and the cursor with it: it lands on the heading, from where a
+  // screen reader goes on to the warning and the codes.
   useEffect(() => {
-    if (saved) return
-    const listener = (event: BeforeUnloadEvent) => preventUnload(event)
-    window.addEventListener('beforeunload', listener)
-    return () => window.removeEventListener('beforeunload', listener)
-  }, [saved])
+    heading.current?.focus()
+  }, [])
+
+  // The view goes (and the codes with it): no link to a file of them stays behind, and no timer.
+  useEffect(() => {
+    const pending = links.current
+    return () => {
+      for (const [url, timer] of pending) {
+        clearTimeout(timer)
+        URL.revokeObjectURL(url)
+      }
+      pending.clear()
+    }
+  }, [])
 
   const copy = async () => {
     try {
@@ -63,7 +89,7 @@ export function RecoveryCodesList({ codes, generatedAt, onDone }: RecoveryCodesL
   }
 
   const download = () => {
-    downloadTextFile(
+    const url = downloadTextFile(
       RECOVERY_CODES_FILE_NAME,
       recoveryCodesFileText(codes, {
         title: t('profile.mfa.codes.fileTitle'),
@@ -71,14 +97,26 @@ export function RecoveryCodesList({ codes, generatedAt, onDone }: RecoveryCodesL
         hint: t('profile.mfa.codes.fileHint'),
       }),
     )
+    const pending = links.current
+    pending.set(
+      url,
+      setTimeout(() => {
+        pending.delete(url)
+        URL.revokeObjectURL(url)
+      }, DOWNLOAD_LINK_LIFETIME_MS),
+    )
   }
 
   return (
     <>
+      <h2 ref={heading} id={headingId} tabIndex={-1} className="profile-mfa__codes-title">
+        {t('profile.mfa.codes.listLabel')}
+      </h2>
       <Alert type="warning" showIcon title={t('profile.mfa.codes.warning')} description={t('profile.mfa.codes.hint')} />
-      <ol ref={list} className="profile-mfa__codes" dir="ltr" aria-label={t('profile.mfa.codes.listLabel')} data-testid="mfa-recovery-codes">
-        {codes.map((code) => (
-          <li key={code}>
+      <ol ref={list} className="profile-mfa__codes" dir="ltr" aria-labelledby={headingId} data-testid="mfa-recovery-codes">
+        {codes.map((code, index) => (
+          // By position: the list never changes while it is shown, and a key must not carry a code.
+          <li key={index}>
             <code>{code}</code>
           </li>
         ))}
@@ -92,12 +130,17 @@ export function RecoveryCodesList({ codes, generatedAt, onDone }: RecoveryCodesL
         </Button>
       </Space>
       <div style={{ marginTop: 16 }}>
-        <Checkbox checked={saved} onChange={(event) => setSaved(event.target.checked)}>
+        <Checkbox checked={saved} aria-describedby={closeHintId} onChange={(event) => onSavedChange(event.target.checked)}>
           {t('profile.mfa.codes.saved')}
         </Checkbox>
+        {/* «Close» is off and it is the only way out: say what turns it on — to the eye, and to a screen reader on
+            the tick and on the button. */}
+        <div id={closeHintId} className="profile-mfa__close-hint" data-testid="mfa-close-hint">
+          <Typography.Text type="secondary">{t('profile.mfa.codes.closeHint')}</Typography.Text>
+        </div>
       </div>
       <div className="profile-mfa__footer">
-        <Button type="primary" disabled={!saved} onClick={onDone}>
+        <Button type="primary" disabled={!saved} aria-describedby={closeHintId} onClick={onDone}>
           {t('profile.mfa.codes.close')}
         </Button>
       </div>

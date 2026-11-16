@@ -9,7 +9,13 @@
 // never outlive it. Turning it on or off signs the caller's other sessions out: the card then re-reads its status
 // and tells the page through `onSessionsChanged`, which makes the devices card re-read its list. A refusal that
 // means «the card is out of date» (already on, already off, no server key) closes the dialog with the message and
-// re-reads the status.
+// re-reads the status. One refusal means more: «already on» answered to the code that turns it on — the answer
+// of an earlier try was lost with its recovery codes. The card then says plainly that it is on and that the
+// codes were not shown, and keeps saying it beside a «new recovery codes» button until new ones are made. The
+// same is said when that code got no answer at all and the dialog was closed instead of retried: the card then
+// re-reads the status, and «on» can only be the work of the answer that never came.
+// When a dialog goes, the cursor returns to the button that opened it — or, when that button is gone (the state
+// changed), to the status line, as soon as it is shown.
 import { CheckCircleFilled, KeyOutlined, ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Skeleton, Space, Tag, Typography } from 'antd'
 import type { ReactNode } from 'react'
@@ -22,6 +28,7 @@ import { formatDateTime } from '../users/users.format'
 import { MfaDisableModal } from './MfaDisableModal'
 import { MfaRecoveryCodesModal } from './MfaRecoveryCodesModal'
 import { MfaSetupModal } from './MfaSetupModal'
+import { CODES_UNSEEN_KEY } from './mfa.errors'
 import { isLowOnRecoveryCodes } from './mfa.format'
 
 interface ProfileMfaProps {
@@ -41,6 +48,17 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
   const [dialog, setDialog] = useState<Dialog | null>(null)
   // After «turn off»: how many other sessions ended (0 or more); null = nothing was turned off in this visit.
   const [endedSessions, setEndedSessions] = useState<number | null>(null)
+  // It was turned on by an answer that never arrived: nobody saw its recovery codes. The message (an i18n key)
+  // stays on the card until new codes are made; null = nothing of the kind.
+  const [unseenCodes, setUnseenCodes] = useState<string | null>(null)
+  // A code that turns it on got no answer in this visit (the connection dropped): it may be on all the same.
+  // The next status read settles it.
+  const enableUnanswered = useRef(false)
+  // The page's callback as of the latest render, for the status reader below (react(immutability): in an effect).
+  const sessionsChanged = useRef(onSessionsChanged)
+  useEffect(() => {
+    sessionsChanged.current = onSessionsChanged
+  })
 
   useEffect(() => {
     const controller = new AbortController()
@@ -48,6 +66,14 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
       (next) => {
         setStatus(next)
         setFailed(false)
+        if (!enableUnanswered.current) return
+        enableUnanswered.current = false
+        if (next.enabled) {
+          // It went through after all: it is on — the other sessions were signed out then — and the recovery
+          // codes of the answer that never came were shown to nobody.
+          setUnseenCodes(CODES_UNSEEN_KEY)
+          sessionsChanged.current?.()
+        }
       },
       () => {
         if (!controller.signal.aborted) setFailed(true)
@@ -64,22 +90,38 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
   }
 
   // The button that opened the dialog gets the cursor back when the dialog goes — the dialogs are unmounted on
-  // close, so the modal's own focus return never runs. A button that is gone by then (the state changed) is skipped.
+  // close, so the modal's own focus return never runs. When that button is gone by then (it was «turn on» and it
+  // is on now, or the reverse), the cursor would be left on nothing: the status line takes it instead — at once,
+  // or when the re-read status is shown — unless the user has put it somewhere in the meantime.
   const trigger = useRef<HTMLElement | null>(null)
+  const statusLine = useRef<HTMLSpanElement>(null)
+  const statusAwaitsFocus = useRef(false)
   useEffect(() => {
     if (dialog !== null) return
     const element = trigger.current
     trigger.current = null
     if (element?.isConnected) element.focus({ preventScroll: true })
+    else if (element) statusAwaitsFocus.current = true
   }, [dialog])
+  useEffect(() => {
+    if (!statusAwaitsFocus.current || dialog !== null || !statusLine.current) return
+    statusAwaitsFocus.current = false
+    const active = document.activeElement
+    if (active === null || active === document.body) statusLine.current.focus({ preventScroll: true })
+  })
 
   const open = (next: Dialog) => {
     trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    statusAwaitsFocus.current = false
     setEndedSessions(null)
     setDialog(next)
   }
 
-  const close = () => setDialog(null)
+  const close = () => {
+    setDialog(null)
+    // The setup dialog goes after a code that got no answer: «off» may no longer be true — read it again.
+    if (enableUnanswered.current) reload(true)
+  }
 
   /** A dialog found the account in another state than the card shows: say it, and show the truth. */
   const stale = (messageKey: string) => {
@@ -90,12 +132,33 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
 
   /** It is on now (the setup dialog stays open on the recovery codes). */
   const enabled = () => {
+    enableUnanswered.current = false
+    setUnseenCodes(null)
     reload(true)
     onSessionsChanged?.()
   }
 
+  /**
+   * The code that turns it on was answered «already on»: an earlier answer was lost, and its recovery codes with
+   * it. It is on (the other sessions were signed out then), so the card shows that — and says what is missing.
+   */
+  const enabledUnseen = (messageKey: string) => {
+    enableUnanswered.current = false
+    setDialog(null)
+    setUnseenCodes(messageKey)
+    reload(true)
+    onSessionsChanged?.()
+  }
+
+  /** New recovery codes were made and shown: whatever was missing is there now. */
+  const regenerated = () => {
+    setUnseenCodes(null)
+    reload(false)
+  }
+
   const disabled = (revokedSessions: number) => {
     setDialog(null)
+    setUnseenCodes(null)
     setEndedSessions(revokedSessions)
     reload(true)
     onSessionsChanged?.()
@@ -123,12 +186,14 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
     body = (
       <>
         <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-          <Typography.Text strong data-testid="mfa-status">
-            <CheckCircleFilled style={{ color: 'var(--c-ok, #389e0d)', marginInlineEnd: 8 }} aria-hidden="true" />
-            {status.enabledAt
-              ? t('profile.mfa.enabledSince', { when: formatDateTime(status.enabledAt, language) })
-              : t('profile.mfa.statusOn')}
-          </Typography.Text>
+          <span ref={statusLine} tabIndex={-1}>
+            <Typography.Text strong data-testid="mfa-status">
+              <CheckCircleFilled style={{ color: 'var(--c-ok, #389e0d)', marginInlineEnd: 8 }} aria-hidden="true" />
+              {status.enabledAt
+                ? t('profile.mfa.enabledSince', { when: formatDateTime(status.enabledAt, language) })
+                : t('profile.mfa.statusOn')}
+            </Typography.Text>
+          </span>
           {left !== null ? (
             <Typography.Text type={low ? 'warning' : 'secondary'} data-testid="mfa-codes-left">
               {t('profile.mfa.recoveryCodesLeft', { count: left })}
@@ -137,6 +202,22 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
         </Space>
         {status.available ? (
           <>
+            {unseenCodes ? (
+              // Nobody has the codes the card counts above: say it, with the way out in one click.
+              <Alert
+                type="warning"
+                showIcon
+                title={t(unseenCodes)}
+                description={t('profile.mfa.unseenCodesHint')}
+                action={
+                  <Button size="small" type="primary" icon={<KeyOutlined />} onClick={() => open('regenerate')}>
+                    {t('profile.mfa.actions.regenerateNow')}
+                  </Button>
+                }
+                style={{ marginTop: 12 }}
+                data-testid="mfa-unseen-codes"
+              />
+            ) : null}
             {low ? (
               <Alert
                 type="warning"
@@ -163,7 +244,9 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
   } else {
     body = (
       <>
-        <Tag data-testid="mfa-status">{t('profile.mfa.statusOff')}</Tag>
+        <span ref={statusLine} tabIndex={-1}>
+          <Tag data-testid="mfa-status">{t('profile.mfa.statusOff')}</Tag>
+        </span>
         <Typography.Paragraph style={{ marginTop: 12 }}>{t('profile.mfa.intro')}</Typography.Paragraph>
         {status.available ? (
           <Button type="primary" icon={<SafetyCertificateOutlined />} onClick={() => open('setup')}>
@@ -189,8 +272,18 @@ export function ProfileMfa({ onSessionsChanged }: ProfileMfaProps) {
       ) : null}
       {body}
       {/* One dialog at a time, mounted for its session only: closing it drops every secret it held. */}
-      {dialog === 'setup' ? <MfaSetupModal onClose={close} onEnabled={enabled} onStale={stale} /> : null}
-      {dialog === 'regenerate' ? <MfaRecoveryCodesModal onClose={close} onRegenerated={() => reload(false)} onStale={stale} /> : null}
+      {dialog === 'setup' ? (
+        <MfaSetupModal
+          onClose={close}
+          onEnabled={enabled}
+          onStale={stale}
+          onCodesUnseen={enabledUnseen}
+          onEnableUnanswered={() => {
+            enableUnanswered.current = true
+          }}
+        />
+      ) : null}
+      {dialog === 'regenerate' ? <MfaRecoveryCodesModal onClose={close} onRegenerated={regenerated} onStale={stale} /> : null}
       {dialog === 'disable' ? <MfaDisableModal onClose={close} onDisabled={disabled} onStale={stale} /> : null}
     </>
   )

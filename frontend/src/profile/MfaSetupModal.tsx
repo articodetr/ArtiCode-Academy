@@ -3,10 +3,18 @@
 // (a) the current password → API-207 answers the new secret, once;
 // (b) the secret as a QR code (and as a Base32 key to type by hand) and a 6-digit code of the authenticator app
 //     → API-208; an expired setup (`409 mfa_setup_required`) drops the secret and returns to (a) with a notice;
+//     «already on» (`409 mfa_already_enabled`) answered to that code means an earlier answer was lost with its
+//     recovery codes: the dialog closes and the card says so, with new codes one click away (`onCodesUnseen`) —
+//     and a code that got no answer at all is reported (`onEnableUnanswered`), so the card checks the truth if
+//     the dialog is closed instead of retried;
 // (c) the ten recovery codes, once (RecoveryCodesList): Escape, the mask and × are off there, and «close» waits
 //     for the tick — the codes must not vanish by accident.
 // Closing before (c) simply discards the setup (the server forgets an unconfirmed secret after 10 minutes). The
 // secret and the codes live in this component's state only and go with it; nothing is stored or logged.
+// Leaving the page is held like closing (useMfaLeaveGuard): a browser back is refused while a request runs —
+// its answer comes once — and asks «leave before saving the recovery codes?» on step (c) until the tick; a
+// reload or a tab close gets the browser's prompt in both states. Each step takes the cursor when it appears:
+// the password, the code field, the heading of the codes.
 import { CopyOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Form, Modal, Steps, Typography } from 'antd'
 import type { InputRef } from 'antd'
@@ -15,11 +23,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { enableMfa, setupMfa } from '../api/mfa'
 import type { MfaEnabled, MfaSetup } from '../api/mfa'
+import { NavigationBlocker } from '../common/NavigationBlocker'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime } from '../users/users.format'
 import { MfaCodeField, MfaPasswordField } from './MfaFields'
 import { RecoveryCodesList } from './RecoveryCodesList'
 import { compactCode, groupSecret, isTotpCode } from './mfa.format'
+import { useMfaLeaveGuard } from './useMfaLeaveGuard'
 import { useMfaSubmit } from './useMfaSubmit'
 import './mfa.css'
 
@@ -30,20 +40,35 @@ interface MfaSetupModalProps {
   onEnabled: () => void
   /** The account's state is not what the card shows: close with this message (an i18n key) and re-read. */
   onStale: (messageKey: string) => void
+  /**
+   * The code of step (b) was answered «already on»: it is on, and the recovery codes of the answer that was lost
+   * were shown to nobody. Close, and keep this message (an i18n key) on the card beside «new recovery codes».
+   */
+  onCodesUnseen: (messageKey: string) => void
+  /**
+   * The code of step (b) got no answer at all (the connection dropped): it may be on all the same, with recovery
+   * codes nobody saw. The dialog stays — a retry settles it — but if it is closed instead, the card must not go
+   * on showing «off» unchecked.
+   */
+  onEnableUnanswered: () => void
 }
 
 const STEPS = ['password', 'verify', 'codes'] as const
 
-export function MfaSetupModal({ onClose, onEnabled, onStale }: MfaSetupModalProps) {
+export function MfaSetupModal({ onClose, onEnabled, onStale, onCodesUnseen, onEnableUnanswered }: MfaSetupModalProps) {
   const { t } = useTranslation()
   const [setup, setSetup] = useState<MfaSetup | null>(null)
   const [enabled, setEnabled] = useState<MfaEnabled | null>(null)
   const [busy, setBusy] = useState(false)
+  // The tick of step (c): the recovery codes are saved, so the dialog may go.
+  const [saved, setSaved] = useState(false)
   // Why the dialog is back on step (a): the setup expired before its code was confirmed.
   const [notice, setNotice] = useState<string | null>(null)
   const step = enabled ? 'codes' : setup ? 'verify' : 'password'
   // The codes are shown once: from step (c) only its own «close» ends the dialog; a running request is never left.
   const closable = !busy && step !== 'codes'
+  // The same two states hold a browser back, a reload and a tab close.
+  const leave = useMfaLeaveGuard({ busy, codesUnsaved: step === 'codes' && !saved, onLeave: onClose })
 
   return (
     <Modal
@@ -56,6 +81,7 @@ export function MfaSetupModal({ onClose, onEnabled, onStale }: MfaSetupModalProp
       mask={{ closable }}
       destroyOnHidden
     >
+      <NavigationBlocker when={leave.guarded} onBlocked={leave.holdNavigation} />
       <Steps
         size="small"
         current={STEPS.indexOf(step)}
@@ -80,6 +106,8 @@ export function MfaSetupModal({ onClose, onEnabled, onStale }: MfaSetupModalProp
           onBusyChange={setBusy}
           onCancel={onClose}
           onStale={onStale}
+          onCodesUnseen={onCodesUnseen}
+          onUnanswered={onEnableUnanswered}
           onExpired={(messageKey) => {
             setSetup(null)
             setNotice(t(messageKey))
@@ -100,7 +128,13 @@ export function MfaSetupModal({ onClose, onEnabled, onStale }: MfaSetupModalProp
             description={enabled.revokedSessions > 0 ? t('profile.mfa.setup.othersSignedOut', { count: enabled.revokedSessions }) : undefined}
             style={{ marginBottom: 16 }}
           />
-          <RecoveryCodesList codes={enabled.recoveryCodes} generatedAt={enabled.enabledAt} onDone={onClose} />
+          <RecoveryCodesList
+            codes={enabled.recoveryCodes}
+            generatedAt={enabled.enabledAt}
+            saved={saved}
+            onSavedChange={setSaved}
+            onDone={onClose}
+          />
         </>
       ) : null}
     </Modal>
@@ -145,11 +179,13 @@ function PasswordStep({ notice, onBusyChange, onCancel, onStale, onSetup }: Step
 interface VerifyStepProps extends StepProps {
   setup: MfaSetup
   onExpired: (messageKey: string) => void
+  onCodesUnseen: (messageKey: string) => void
+  onUnanswered: () => void
   onEnabled: (result: MfaEnabled) => void
 }
 
 /** Step (b): the secret for the authenticator app, then a code of it turns two-step verification on (API-208). */
-function VerifyStep({ setup, onBusyChange, onCancel, onStale, onExpired, onEnabled }: VerifyStepProps) {
+function VerifyStep({ setup, onBusyChange, onCancel, onStale, onExpired, onCodesUnseen, onUnanswered, onEnabled }: VerifyStepProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -161,8 +197,16 @@ function VerifyStep({ setup, onBusyChange, onCancel, onStale, onExpired, onEnabl
     focus: () => code.current?.focus(),
     onStale,
     onSetupExpired: onExpired,
+    onCodesUnseen,
+    onUnanswered,
     onBusyChange,
   })
+
+  // The password field went with step (a), and the cursor with it: it goes to the code, the one field of this
+  // step. Without scrolling — the QR code above it is read first.
+  useEffect(() => {
+    code.current?.focus({ preventScroll: true })
+  }, [])
 
   const copyKey = async () => {
     try {

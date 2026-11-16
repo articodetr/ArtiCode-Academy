@@ -2,15 +2,20 @@
 // the current password and a code of the authenticator app, then the ten new codes shown ONCE (RecoveryCodesList)
 // with the reminder that every earlier code has stopped working. Sessions are not touched. From the codes on,
 // Escape, the mask and × are off and «close» waits for the tick. The codes live in this component's state only.
+// Leaving the page is held like closing (useMfaLeaveGuard): a browser back is refused while the request runs —
+// its answer comes once — and asks «leave before saving the recovery codes?» until the tick; a reload or a tab
+// close gets the browser's prompt in both states.
 import { Alert, Button, Form, Modal, Typography } from 'antd'
 import type { InputRef } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { regenerateRecoveryCodes } from '../api/mfa'
+import { NavigationBlocker } from '../common/NavigationBlocker'
 import { MfaCodeField, MfaPasswordField } from './MfaFields'
 import { RecoveryCodesList } from './RecoveryCodesList'
 import { compactCode, isTotpCode } from './mfa.format'
 import type { MfaField } from './mfa.errors'
+import { useMfaLeaveGuard } from './useMfaLeaveGuard'
 import { useMfaSubmit } from './useMfaSubmit'
 import './mfa.css'
 
@@ -37,8 +42,12 @@ export function MfaRecoveryCodesModal({ onClose, onRegenerated, onStale }: MfaRe
   const { t } = useTranslation()
   const [issued, setIssued] = useState<NewCodes | null>(null)
   const [busy, setBusy] = useState(false)
+  // The tick under the new codes: they are saved, so the dialog may go.
+  const [saved, setSaved] = useState(false)
   // The codes are shown once: from then on only their own «close» ends the dialog; a running request is never left.
   const closable = !busy && issued === null
+  // The same two states hold a browser back, a reload and a tab close.
+  const leave = useMfaLeaveGuard({ busy, codesUnsaved: issued !== null && !saved, onLeave: onClose })
 
   return (
     <Modal
@@ -51,10 +60,11 @@ export function MfaRecoveryCodesModal({ onClose, onRegenerated, onStale }: MfaRe
       mask={{ closable }}
       destroyOnHidden
     >
+      <NavigationBlocker when={leave.guarded} onBlocked={leave.holdNavigation} />
       {issued ? (
         <>
           <Alert type="success" showIcon title={t('profile.mfa.regenerate.done')} style={{ marginBottom: 16 }} />
-          <RecoveryCodesList codes={issued.codes} generatedAt={issued.generatedAt} onDone={onClose} />
+          <RecoveryCodesList codes={issued.codes} generatedAt={issued.generatedAt} saved={saved} onSavedChange={setSaved} onDone={onClose} />
         </>
       ) : (
         <RegenerateForm

@@ -26,7 +26,7 @@
 
 .profile-mfa__key,
 .profile-mfa__codes,
-.profile-mfa__code-input.ant-input {
+input.profile-mfa__code-input.ant-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
@@ -37,7 +37,14 @@
   user-select: all;
 }
 
-.profile-mfa__code-input.ant-input {
+/* A verification code and a recovery code (MfaFields.tsx) are typed and read left to right in every language.
+   The `dir="ltr"` attribute alone does not do it: in the Arabic UI Ant Design puts `.ant-input-rtl
+   { direction: rtl }` on the input, and any author rule beats the attribute — `123 456` would show as `456 123`
+   and the dash of a recovery code would jump. `input.` + two classes outrank that one class (and its hashed
+   form), so the direction is set here; the text starts at the left edge, where a left-to-right value begins. */
+input.profile-mfa__code-input.ant-input {
+  direction: ltr;
+  text-align: left;
   max-width: 220px;
   font-size: 18px;
   letter-spacing: 0.2em;
@@ -61,6 +68,21 @@
   user-select: all;
 }
 
+/* The heading of the once-only codes, above their warning: it takes the cursor when the codes replace the form
+   (RecoveryCodesList.tsx), so a screen reader goes on from it to the warning and the list. */
+.profile-mfa__codes-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* The line under the tick that says what turns «close» on. */
+.profile-mfa__close-hint {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
 .profile-mfa__footer {
   display: flex;
   flex-wrap: wrap;
@@ -69,7 +91,7 @@
   margin-top: 24px;
 }
 
-.profile-mfa__code-input--recovery.ant-input {
+input.profile-mfa__code-input--recovery.ant-input {
   max-width: 260px;
   font-size: 16px;
   letter-spacing: 0.08em;

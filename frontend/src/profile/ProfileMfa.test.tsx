@@ -40,6 +40,8 @@ const CODES_POST = 'POST /api/auth/mfa/recovery-codes'
 
 type Reply = [status: number, body?: unknown]
 const refusal = (status: number, code: string): Reply => [status, { statusCode: status, code, message: `refused: ${code}` }]
+/** No answer at all: the request went out and the connection dropped (whatever the server did with it). */
+const LOST: Reply = [0]
 
 interface Call {
   request: string
@@ -56,6 +58,7 @@ function serve(routes: Record<string, Reply[]>): Call[] {
     const queue = queues[request]
     if (!queue || queue.length === 0) return jsonResponse(404, { statusCode: 404, message: 'Not found' })
     const [status, body] = queue.length > 1 ? queue.shift()! : queue[0]!
+    if (status === 0) return Promise.reject(new TypeError('Failed to fetch'))
     return jsonResponse(status, body)
   })
   return calls
@@ -106,6 +109,13 @@ async function submit(scope: HTMLElement, text: string) {
 
 const noDialog = () => waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
 
+/** The line of the card that takes the cursor when a dialog went and its button is gone. */
+function statusLine(card: HTMLElement): HTMLElement {
+  const line = within(card).getByTestId('mfa-status').closest<HTMLElement>('[tabindex="-1"]')
+  if (!line) throw new Error('No focusable status line')
+  return line
+}
+
 /** A click on the mask around the dialog: the press and the click both land on the wrapper (rc-dialog checks both). */
 function clickMask(dialog: HTMLElement) {
   const wrapper = dialog.closest<HTMLElement>('.ant-modal-wrap')
@@ -114,9 +124,11 @@ function clickMask(dialog: HTMLElement) {
   fireEvent.click(wrapper)
 }
 
-/** Opens «turn on», gives the password and waits for the QR code of step (b). */
+/** Opens «turn on» (the button holds the cursor, as after a real click or key press), gives the password and waits for the QR code of step (b). */
 async function reachVerifyStep(card: HTMLElement): Promise<HTMLElement> {
-  fireEvent.click(await findButtonIn(card, ar.profile.mfa.actions.enable))
+  const enable = await findButtonIn(card, ar.profile.mfa.actions.enable)
+  enable.focus()
+  fireEvent.click(enable)
   const dialog = await dialogWith(ar.profile.mfa.setup.passwordIntro)
   type(dialog, ar.profile.mfa.fields.password, 'right-pass-1')
   await submit(dialog, ar.profile.mfa.setup.continue)
@@ -236,6 +248,8 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       await submit(dialog, ar.profile.mfa.setup.continue)
 
       const qr = await within(dialog).findByTestId('mfa-qr')
+      // The password field went with step (a): the cursor is on the one field of step (b).
+      expect(document.activeElement).toBe(field(dialog, ar.profile.mfa.fields.code))
       expect(qr).toHaveAttribute('data-value', SETUP.otpauthUri)
       expect(qr).toHaveAttribute('data-bg', '#ffffff')
       expect(within(dialog).getByText(ar.profile.mfa.setup.manualKey)).toBeInTheDocument()
@@ -252,6 +266,12 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       expect(code).toHaveAttribute('inputmode', 'numeric')
       expect(code).toHaveAttribute('autocomplete', 'one-time-code')
       expect(code).toHaveAttribute('dir', 'ltr')
+      // Typed left to right in the Arabic UI too. Ant Design's RTL class sets `direction: rtl` and beats the
+      // attribute; mfa.css answers with `input.profile-mfa__code-input.ant-input { direction: ltr }`. jsdom
+      // loads no stylesheet and lays nothing out, so what can be held down here is that the input is the element
+      // that rule selects — the visual order of «123 456» is a browser check.
+      expect(code.tagName).toBe('INPUT')
+      expect(code).toHaveClass('ant-input', 'ant-input-rtl', 'profile-mfa__code-input')
 
       expect(writes(calls)).toEqual([
         { request: SETUP_POST, body: { password: 'wrong-pass-1' } },
@@ -299,6 +319,10 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       const list = await within(dialog).findByTestId('mfa-recovery-codes')
       expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual(CODES)
       expect(list).toHaveAttribute('dir', 'ltr')
+      // The form went with step (b): the cursor is on the heading of the codes, which also names the list.
+      const heading = within(dialog).getByText(ar.profile.mfa.codes.listLabel, { selector: 'h2' })
+      expect(document.activeElement).toBe(heading)
+      expect(list).toHaveAttribute('aria-labelledby', heading.id)
       expect(within(dialog).getByText(ar.profile.mfa.codes.warning)).toBeInTheDocument()
       expect(within(dialog).getByText(ar.profile.mfa.setup.done)).toBeInTheDocument()
       expect(within(dialog).getByText(i18n.t('profile.mfa.setup.othersSignedOut', { count: 2 }))).toBeInTheDocument()
@@ -316,6 +340,10 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       clickMask(dialog)
       fireEvent.click(close)
       expect(within(dialog).getByTestId('mfa-recovery-codes')).toBeInTheDocument()
+      // «Close» is the only way out, and it is off: a line says what turns it on, tied to the button and the tick.
+      expect(within(dialog).getByTestId('mfa-close-hint')).toHaveTextContent(ar.profile.mfa.codes.closeHint)
+      expect(close).toHaveAccessibleDescription(ar.profile.mfa.codes.closeHint)
+      expect(within(dialog).getByLabelText(ar.profile.mfa.codes.saved)).toHaveAccessibleDescription(ar.profile.mfa.codes.closeHint)
       // A reload or a tab close would lose them too: the browser asks first.
       expect(unloadWouldPrompt()).toBe(true)
 
@@ -345,6 +373,11 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       expect(await within(card).findByText(i18n.t('profile.mfa.enabledSince', { when: formatDateTime(ON.enabledAt, 'ar') }))).toBeInTheDocument()
       expect(reads(calls)).toBe(2)
       expect(document.body.textContent).not.toContain(CODES[0])
+      // «Turn on», which opened the dialog, is gone: the cursor is on the status line, not on nothing.
+      expect(within(card).queryByText(ar.profile.mfa.actions.enable)).toBeNull()
+      await waitFor(() => expect(document.activeElement).toBe(statusLine(card)))
+      // Nothing was missed: no notice about unseen codes.
+      expect(within(card).queryByTestId('mfa-unseen-codes')).toBeNull()
 
       // Neither the password, the secret, a code nor a recovery code went into the browser's storage.
       const stored = [
@@ -424,6 +457,108 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       expect(reads(calls)).toBe(2)
     })
 
+    it('says that it is on but the recovery codes were not shown when the first answer was lost, and offers new codes in one click', async () => {
+      // The code was right and the server turned it on — but its answer, with the ten codes, never arrived. The
+      // retry is refused: it is already on.
+      const calls = serve({
+        [STATUS]: [[200, OFF], [200, ON], [200, ON]],
+        [SETUP_POST]: [[200, SETUP]],
+        [ENABLE_POST]: [LOST, refusal(409, 'mfa_already_enabled')],
+        [CODES_POST]: [[200, { recoveryCodes: CODES }]],
+      })
+      const { card, onSessionsChanged } = renderCard()
+      const dialog = await reachVerifyStep(card)
+
+      type(dialog, ar.profile.mfa.fields.code, '492039')
+      await submit(dialog, ar.profile.mfa.setup.submit)
+      expect(await within(dialog).findByText(ar.login.errors.network)).toBeInTheDocument()
+      // Nothing is known yet: the dialog stays, with the code still typed.
+      expect(field(dialog, ar.profile.mfa.fields.code)).toHaveValue('492039')
+      expect(onSessionsChanged).not.toHaveBeenCalled()
+
+      await submit(dialog, ar.profile.mfa.setup.submit)
+      await noDialog()
+
+      // The card shows the truth — on — and says plainly what is missing, for as long as it is missing.
+      expect(await within(card).findByText(i18n.t('profile.mfa.enabledSince', { when: formatDateTime(ON.enabledAt, 'ar') }))).toBeInTheDocument()
+      const notice = within(card).getByTestId('mfa-unseen-codes')
+      expect(notice).toHaveTextContent(ar.profile.mfa.errors.codes_unseen)
+      expect(notice).toHaveTextContent(ar.profile.mfa.unseenCodesHint)
+      expect(notice.textContent).not.toContain('mfa_already_enabled')
+      // Not the passing «already on» of an out-of-date card.
+      expect(screen.queryByText(ar.profile.mfa.errors.mfa_already_enabled)).toBeNull()
+      // The other sessions ended when it was turned on: the devices card is told.
+      expect(onSessionsChanged).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(document.activeElement).toBe(statusLine(card)))
+      expect(writes(calls).map((call) => call.request)).toEqual([SETUP_POST, ENABLE_POST, ENABLE_POST])
+
+      // One click opens «new recovery codes»; the codes made there are shown, and the notice has done its work.
+      fireEvent.click(buttonIn(notice, ar.profile.mfa.actions.regenerateNow))
+      const regenerate = await dialogWith(ar.profile.mfa.regenerate.intro)
+      type(regenerate, ar.profile.mfa.fields.password, 'right-pass-1')
+      type(regenerate, ar.profile.mfa.fields.code, '204 817')
+      await submit(regenerate, ar.profile.mfa.regenerate.submit)
+      const list = await within(regenerate).findByTestId('mfa-recovery-codes')
+      expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual(CODES)
+      expect(within(card).queryByTestId('mfa-unseen-codes')).toBeNull()
+      fireEvent.click(within(regenerate).getByLabelText(ar.profile.mfa.codes.saved))
+      fireEvent.click(buttonIn(regenerate, ar.profile.mfa.codes.close))
+      await noDialog()
+      expect(within(card).queryByTestId('mfa-unseen-codes')).toBeNull()
+      expect(writes(calls).at(-1)).toEqual({ request: CODES_POST, body: { password: 'right-pass-1', code: '204817' } })
+    })
+
+    it('checks the truth when the dialog is closed after a code that got no answer: on means codes nobody saw', async () => {
+      const calls = serve({ [STATUS]: [[200, OFF], [200, ON]], [SETUP_POST]: [[200, SETUP]], [ENABLE_POST]: [LOST] })
+      const { card, onSessionsChanged } = renderCard()
+      const dialog = await reachVerifyStep(card)
+
+      type(dialog, ar.profile.mfa.fields.code, '492039')
+      await submit(dialog, ar.profile.mfa.setup.submit)
+      expect(await within(dialog).findByText(ar.login.errors.network)).toBeInTheDocument()
+      expect(reads(calls)).toBe(1)
+
+      // No retry: the dialog is closed. «Off» is no longer known to be true, so the card reads again —
+      fireEvent.click(buttonIn(dialog, ar.common.cancel))
+      await noDialog()
+
+      // — and it is on: only the answer that never came can have done that, and it carried the codes.
+      expect(await within(card).findByText(i18n.t('profile.mfa.enabledSince', { when: formatDateTime(ON.enabledAt, 'ar') }))).toBeInTheDocument()
+      expect(reads(calls)).toBe(2)
+      const notice = within(card).getByTestId('mfa-unseen-codes')
+      expect(notice).toHaveTextContent(ar.profile.mfa.errors.codes_unseen)
+      expect(buttonIn(notice, ar.profile.mfa.actions.regenerateNow)).toBeEnabled()
+      expect(onSessionsChanged).toHaveBeenCalledTimes(1)
+      expect(writes(calls).map((call) => call.request)).toEqual([SETUP_POST, ENABLE_POST])
+    })
+
+    it('says nothing of unseen codes when the unanswered code never reached the server: still off', async () => {
+      const calls = serve({ [STATUS]: [[200, OFF]], [SETUP_POST]: [[200, SETUP]], [ENABLE_POST]: [LOST] })
+      const { card, onSessionsChanged } = renderCard()
+      const dialog = await reachVerifyStep(card)
+
+      type(dialog, ar.profile.mfa.fields.code, '492039')
+      await submit(dialog, ar.profile.mfa.setup.submit)
+      expect(await within(dialog).findByText(ar.login.errors.network)).toBeInTheDocument()
+
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      await noDialog()
+
+      // Read again all the same — and it is off, as shown.
+      await waitFor(() => expect(reads(calls)).toBe(2))
+      expect(await within(card).findByText(ar.profile.mfa.intro)).toBeInTheDocument()
+      expect(within(card).getByTestId('mfa-status')).toHaveTextContent(ar.profile.mfa.statusOff)
+      expect(within(card).queryByTestId('mfa-unseen-codes')).toBeNull()
+      expect(onSessionsChanged).not.toHaveBeenCalled()
+
+      // A dialog closed without such a doubt asks nothing more of the server.
+      fireEvent.click(buttonIn(card, ar.profile.mfa.actions.enable))
+      await dialogWith(ar.profile.mfa.setup.passwordIntro)
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      await noDialog()
+      expect(reads(calls)).toBe(2)
+    })
+
     it('words the shared limit above the form and keeps the dialog', async () => {
       serve({ [STATUS]: [[200, OFF]], [SETUP_POST]: [refusal(429, 'rate_limited')] })
       const { card } = renderCard()
@@ -492,7 +627,9 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
     it('turns it off with the password and a code, then shows «off» and how many other sessions ended', async () => {
       const calls = serve({ [STATUS]: [[200, ON], [200, OFF]], [DISABLE_POST]: [[200, { revokedSessions: 2 }]] })
       const { card, onSessionsChanged } = renderCard()
-      fireEvent.click(await findButtonIn(card, ar.profile.mfa.actions.disable))
+      const disable = await findButtonIn(card, ar.profile.mfa.actions.disable)
+      disable.focus()
+      fireEvent.click(disable)
       const dialog = await dialogWith(ar.profile.mfa.disable.warning)
 
       // The password alone is not enough: a factor is asked for before anything is sent.
@@ -513,6 +650,8 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       expect(buttonIn(card, ar.profile.mfa.actions.enable)).toBeEnabled()
       expect(reads(calls)).toBe(2)
       expect(onSessionsChanged).toHaveBeenCalledTimes(1)
+      // «Turn off» is gone with the old status: the cursor waits for the new status line, then sits on it.
+      await waitFor(() => expect(document.activeElement).toBe(statusLine(card)))
     })
 
     it('takes a recovery code instead of a code, sent as XXXXX-XXXXX', async () => {
@@ -527,6 +666,9 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       const recovery = field(dialog, ar.profile.mfa.fields.recoveryCode)
       expect(within(dialog).queryByLabelText(ar.profile.mfa.fields.code)).toBeNull()
       expect(recovery).toHaveAttribute('dir', 'ltr')
+      // The same left-to-right rule of mfa.css selects it (see the code field of the setup dialog).
+      expect(recovery.tagName).toBe('INPUT')
+      expect(recovery).toHaveClass('ant-input', 'ant-input-rtl', 'profile-mfa__code-input', 'profile-mfa__code-input--recovery')
       expect(document.activeElement).toBe(recovery)
       // The link now leads back to the code of the app.
       expect(within(dialog).getByText(ar.profile.mfa.disable.useCode)).toBeInTheDocument()
@@ -555,7 +697,7 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       ])
       expect(await within(card).findByText(ar.profile.mfa.disabledNotice)).toBeInTheDocument()
       // No other session ended, so none is mentioned.
-      expect(within(card).queryByText(/سُجّل الخروج من الجلسات الأخرى/)).toBeNull()
+      expect(within(card).queryByText(/سُجّل الخروج من الأجهزة الأخرى/)).toBeNull()
     })
 
     it('closes with a notice and re-reads when the server lost its key meanwhile', async () => {

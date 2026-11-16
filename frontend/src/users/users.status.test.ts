@@ -77,6 +77,15 @@ describe('canResetMfa (API-212 — beside the state machine, not part of it)', (
     expect(canResetMfa({ ...user, mfaEnabledAt: null }, { permissions: SUPPORT, selfId: 'me' })).toBe(false)
   })
 
+  it('offers nothing when the detail carries no mfaEnabledAt at all (the drawer row reads the same truthiness)', () => {
+    const { mfaEnabledAt: _absent, ...withoutField } = makeUserDetail({ status: 'active', mfaEnabledAt: ON })
+    // What an answer without the field looks like at run time; the type says it is always there.
+    const older = withoutField as unknown as Parameters<typeof canResetMfa>[0]
+    expect(older.mfaEnabledAt).toBeUndefined()
+    expect(canResetMfa(older, { permissions: SUPPORT, selfId: 'me' })).toBe(false)
+    expect(canResetMfa({ ...withoutField, mfaEnabledAt: '' }, { permissions: SUPPORT, selfId: 'me' })).toBe(false)
+  })
+
   it('follows the second step, not the status: any live account, never a soft-deleted one', () => {
     for (const status of ['invited', 'pending', 'active', 'suspended', 'archived'] as const) {
       expect(canResetMfa(makeUserDetail({ status, mfaEnabledAt: ON }), { permissions: SUPPORT, selfId: 'me' })).toBe(true)

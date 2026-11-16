@@ -3,6 +3,10 @@
 // `recoveryCode`). Only «required» is a rule: the shape of a code is checked on submit (mfa.format.ts), so nothing
 // nags while the digits are still being typed, and a message the server put on a field goes with the next key.
 // Nothing typed here is stored anywhere: the values live in the dialog's form and go with it.
+// Both code inputs are typed left to right in every language. `dir="ltr"` says so, but in the Arabic UI Ant
+// Design's `.ant-input-rtl { direction: rtl }` beats the attribute — so the class `profile-mfa__code-input` is
+// what does it (mfa.css: `input.profile-mfa__code-input.ant-input { direction: ltr }`). Keep the class on the
+// <input> itself: no prefix, suffix or `allowClear`, which would move it to a wrapper.
 import { Form, Input } from 'antd'
 import type { InputRef } from 'antd'
 import type { Ref } from 'react'

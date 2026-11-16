@@ -169,7 +169,7 @@ export const en: Translation = {
       submit: 'Verify and sign in',
       submitting: 'Verifying...',
       useRecoveryCode: 'Use a recovery code',
-      useAuthenticatorCode: 'Use the authenticator app code',
+      useAuthenticatorCode: 'Use a code from the authenticator app',
       backToSignIn: 'Back to sign in',
       expiresInMinutes: 'This step expires in {{minutes}} minutes.',
       expiresInTwoMinutes: 'This step expires in 2 minutes.',
@@ -189,6 +189,10 @@ export const en: Translation = {
         passwordChanged: 'Your password was changed. Sign in with the new password.',
         passwordChangedStepEnded:
           'Your password was changed, but the verification step is no longer valid (it expired or ran out of attempts). Sign in with the new password.',
+        passwordChangedLocked:
+          'Your password was changed, but the account is temporarily locked after repeated failed attempts. Sign in with the new password later.',
+        passwordChangedLockedFor:
+          'Your password was changed, but the account is temporarily locked after repeated failed attempts. Sign in with the new password in {{minutes}} minute(s).',
       },
     },
   },
@@ -232,10 +236,13 @@ export const en: Translation = {
       loadFailed: 'Could not read the two-step verification status.',
       retry: 'Try again',
       disabledNotice: 'Two-step verification is off. Your account is now protected by the password alone.',
-      sessionsEnded: 'Other sessions signed out: {{count}}.',
+      sessionsEnded: 'Other devices signed out: {{count}}.',
+      unseenCodesHint:
+        'Unless you saved them elsewhere, create new codes now and keep them in a safe place; without them you cannot sign in if the authenticator app is unavailable.',
       actions: {
         enable: 'Turn on two-step verification',
         regenerate: 'New recovery codes',
+        regenerateNow: 'Create new codes now',
         disable: 'Turn off',
       },
       fields: {
@@ -248,7 +255,7 @@ export const en: Translation = {
         codeRequired: 'Enter the verification code',
         codeShape: 'The verification code has 6 digits',
         recoveryCodeRequired: 'Enter the recovery code',
-        recoveryCodeShape: 'A recovery code has ten characters in the form XXXXX-XXXXX',
+        recoveryCodeShape: 'A recovery code has 10 letters and digits in the form XXXXX-XXXXX and never contains 0, 1, I or O',
       },
       setup: {
         title: 'Turn on two-step verification',
@@ -280,10 +287,19 @@ export const en: Translation = {
         copyFailed: 'Could not copy automatically; select the codes and copy them by hand.',
         download: 'Download a text file',
         saved: 'I have saved these codes in a safe place',
+        closeHint: 'Tick the confirmation to turn on the Close button.',
         close: 'Close',
         fileTitle: 'Recovery codes — two-step verification',
         fileGeneratedAt: 'Created on {{when}}',
         fileHint: 'Each code works once. Keep this file in a safe place and share it with no one.',
+      },
+      // Leaving the page while the once-only codes are unsaved, or while a request runs (profile/useMfaLeaveGuard.ts).
+      leave: {
+        title: 'Leave before saving the recovery codes?',
+        content: 'The recovery codes will not be shown again. If you leave now without saving them you cannot see them later and will have to create new ones.',
+        ok: 'Leave without saving',
+        cancel: 'Stay and save the codes',
+        busy: 'The request is still running. Wait for it to finish before leaving the page.',
       },
       regenerate: {
         title: 'New recovery codes',
@@ -304,6 +320,7 @@ export const en: Translation = {
         recovery_code_invalid: 'The recovery code is incorrect or was used before.',
         mfa_factor_required: 'Enter a verification code or a recovery code — exactly one of them.',
         mfa_already_enabled: 'Two-step verification is already on for your account.',
+        codes_unseen: 'Two-step verification is on for your account, but the recovery codes were not shown on this screen.',
         mfa_not_enabled: 'Two-step verification is not on for your account.',
         mfa_setup_required: 'The setup expired before it was confirmed. Enter your password to start a new one.',
         mfa_unavailable: 'Two-step verification is not available on the academy’s server right now. Contact the academy administration.',

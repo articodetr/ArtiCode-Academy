@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
-import { describeMfaFailure } from './mfa.errors'
+import { CODES_UNSEEN_KEY, describeMfaFailure, isUnanswered } from './mfa.errors'
 
 const refusal = (status: number, code?: string) => new ApiError(status, 'refused', code ? { statusCode: status, code, message: 'refused' } : { statusCode: status })
 
@@ -29,6 +29,17 @@ describe('describeMfaFailure', () => {
     expect(describeMfaFailure(refusal(503, 'mfa_unavailable'))).toEqual({ key: 'profile.mfa.errors.mfa_unavailable', effect: 'status_changed' })
   })
 
+  it('reads «already on» differently when it answers the code that turns it on: an answer was lost with its recovery codes', () => {
+    expect(describeMfaFailure(refusal(409, 'mfa_already_enabled'), 'code', true)).toEqual({ key: 'profile.mfa.errors.codes_unseen', effect: 'codes_unseen' })
+    // Any other request (the password of the setup, API-207) keeps the plain «already on» of an out-of-date card.
+    expect(describeMfaFailure(refusal(409, 'mfa_already_enabled'), 'code', false)).toEqual({ key: 'profile.mfa.errors.mfa_already_enabled', effect: 'status_changed' })
+    // The flag changes nothing else that request can be answered.
+    expect(describeMfaFailure(refusal(400, 'mfa_code_invalid'), 'code', true)).toEqual({ key: 'profile.mfa.errors.mfa_code_invalid', field: 'code' })
+    expect(describeMfaFailure(refusal(409, 'mfa_setup_required'), 'code', true)).toEqual({ key: 'profile.mfa.errors.mfa_setup_required', effect: 'setup_expired' })
+    expect(describeMfaFailure(refusal(503, 'mfa_unavailable'), 'code', true)).toEqual({ key: 'profile.mfa.errors.mfa_unavailable', effect: 'status_changed' })
+    expect(describeMfaFailure(new TypeError('Failed to fetch'), 'code', true)).toEqual({ key: 'login.errors.network' })
+  })
+
   it('marks an expired setup', () => {
     expect(describeMfaFailure(refusal(409, 'mfa_setup_required'))).toEqual({ key: 'profile.mfa.errors.mfa_setup_required', effect: 'setup_expired' })
   })
@@ -47,6 +58,19 @@ describe('describeMfaFailure', () => {
     expect(describeMfaFailure(refusal(418, 'something_new'))).toEqual({ key: 'login.errors.generic' })
   })
 
+  it('tells a request that got no answer — the server may have done it — from one the server refused', () => {
+    // The connection dropped, or a gateway gave up: nothing is known.
+    expect(isUnanswered(new TypeError('Failed to fetch'))).toBe(true)
+    expect(isUnanswered(refusal(502))).toBe(true)
+    expect(isUnanswered(refusal(504))).toBe(true)
+    expect(isUnanswered(refusal(500))).toBe(true)
+    // A worded refusal is an answer: nothing was done.
+    expect(isUnanswered(refusal(400, 'mfa_code_invalid'))).toBe(false)
+    expect(isUnanswered(refusal(409, 'mfa_already_enabled'))).toBe(false)
+    expect(isUnanswered(refusal(429, 'rate_limited'))).toBe(false)
+    expect(isUnanswered(refusal(503, 'mfa_unavailable'))).toBe(false)
+  })
+
   it('never answers a key without a text in both languages, and no text shows a raw code', () => {
     const failures = [
       refusal(400, 'password_invalid'),
@@ -61,7 +85,14 @@ describe('describeMfaFailure', () => {
       refusal(400),
       new Error('offline'),
     ]
-    const keys = new Set(failures.flatMap((failure) => [describeMfaFailure(failure).key, describeMfaFailure(failure, 'recoveryCode').key]))
+    const keys = new Set(
+      failures.flatMap((failure) => [
+        describeMfaFailure(failure).key,
+        describeMfaFailure(failure, 'recoveryCode').key,
+        describeMfaFailure(failure, 'code', true).key,
+      ]),
+    )
+    expect(keys).toContain(CODES_UNSEEN_KEY)
     for (const key of keys) {
       for (const translation of [ar, en]) {
         const text = textOf(translation, key)

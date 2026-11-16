@@ -132,5 +132,6 @@ export function canResetMfa(
   if (!context.permissions.includes(RESET_MFA_PERMISSION)) return false
   if (context.selfId !== null && context.selfId === user.id) return false
   if (user.deletedAt) return false
-  return user.mfaEnabledAt !== null
+  // Truthiness, as the drawer's row reads it: a detail without the field (an older server) is «off or unknown» too.
+  return Boolean(user.mfaEnabledAt)
 }

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { ar } from '../i18n/ar'
+import { en } from '../i18n/en'
 import {
   LOW_RECOVERY_CODES,
   RECOVERY_CODES_FILE_NAME,
@@ -92,5 +94,27 @@ describe('recovery codes as text', () => {
 
   it('names the file recovery-codes.txt', () => {
     expect(RECOVERY_CODES_FILE_NAME).toBe('recovery-codes.txt')
+  })
+})
+
+describe('the message for a text that cannot be a recovery code', () => {
+  it('states the whole rule normalizeRecoveryCode applies — ten symbols, XXXXX-XXXXX, never 0, 1, I or O — as the sign-in page does', () => {
+    const messages = [
+      ar.profile.mfa.validation.recoveryCodeShape,
+      en.profile.mfa.validation.recoveryCodeShape,
+      // The same refusal on the sign-in page: both pages must go on saying the same thing.
+      ar.login.mfa.recoveryCodeFormat,
+      en.login.mfa.recoveryCodeFormat,
+    ]
+    for (const message of messages) {
+      expect(message).toContain('XXXXX-XXXXX')
+      expect(message).toMatch(/(^|[^0-9])10([^0-9]|$)/)
+      expect(message).toMatch(/0.+1.+I.+O/)
+    }
+    // …and the rule itself: what the message names is what the function refuses.
+    for (const symbol of ['0', '1', 'I', 'O']) {
+      expect(normalizeRecoveryCode(`K7QX${symbol}-M9TRB`)).toBeNull()
+    }
+    expect(normalizeRecoveryCode('K7QX4-M9TR')).toBeNull()
   })
 })
