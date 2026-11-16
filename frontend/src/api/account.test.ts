@@ -4,10 +4,13 @@ import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
 import {
   ACCOUNT_PATHS,
   acceptInvitation,
+  confirmEmailVerification,
   confirmPasswordReset,
   issueInvitation,
   issuePasswordReset,
   previewInvitation,
+  requestEmailVerification,
+  requestPasswordReset,
 } from './account'
 import type { InvitationPreview, IssuedLink } from './account'
 
@@ -113,5 +116,64 @@ describe('account API calls', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(getAccessToken()).toBeNull()
+  })
+})
+
+describe('self-service account requests (API-021, API-165, API-166)', () => {
+  beforeEach(() => setAccessToken(null))
+
+  it('requestPasswordReset POSTs { identifier } without a bearer token and resolves on 202', async () => {
+    setAccessToken('access-old', 'user-1')
+    const fetchMock = mockFetch(() => jsonResponse(202))
+
+    await expect(requestPasswordReset('st@example.test')).resolves.toBeUndefined()
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/account/password-reset/request')
+    expect(url).toBe(ACCOUNT_PATHS.requestPasswordReset)
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({ identifier: 'st@example.test' })
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false)
+  })
+
+  it('requestPasswordReset rejects with reset_disabled and never refreshes', async () => {
+    const fetchMock = mockFetch(() => jsonResponse(403, { statusCode: 403, code: 'reset_disabled' }))
+
+    await expect(requestPasswordReset('st')).rejects.toMatchObject({ status: 403, code: 'reset_disabled' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('requestEmailVerification POSTs with the bearer token and returns the expiry and delivery', async () => {
+    setAccessToken('access-1', 'user-1')
+    const answer = { expiresAt: '2026-11-16T10:00:00.000Z', delivery: { transport: 'resend', status: 'sent' } }
+    const fetchMock = mockFetch(() => jsonResponse(202, answer))
+
+    await expect(requestEmailVerification()).resolves.toEqual(answer)
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/account/email-verification/request')
+    expect(init?.method).toBe('POST')
+    expect(init?.body).toBeUndefined()
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer access-1')
+  })
+
+  it('confirmEmailVerification POSTs to the token route without a bearer token or a body', async () => {
+    setAccessToken('access-1', 'user-1')
+    const fetchMock = mockFetch(() => jsonResponse(200, { emailVerifiedAt: '2026-11-14T09:00:00.000Z' }))
+
+    await expect(confirmEmailVerification(TOKEN)).resolves.toEqual({ emailVerifiedAt: '2026-11-14T09:00:00.000Z' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`/api/account/email-verification/${TOKEN}/confirm`)
+    expect(init?.method).toBe('POST')
+    expect(init?.body).toBeUndefined()
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false)
+  })
+
+  it('a refused confirmation never triggers a session refresh', async () => {
+    const fetchMock = mockFetch(() => jsonResponse(410, { statusCode: 410, code: 'verification_expired' }))
+
+    await expect(confirmEmailVerification(TOKEN)).rejects.toMatchObject({ status: 410, code: 'verification_expired' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
