@@ -52,11 +52,14 @@ export const ANNOUNCEMENTS_ENTITY_TYPE = 'announcements';
  * announcement — tens of rows — takes milliseconds.
  *
  * KI-079: for that long the transaction holds a key-share lock on the `users`
- * row of every recipient (the foreign key of each inserted notification). A
- * writer that locks one of those rows `FOR UPDATE` — a guardian link of that
- * student, `lockActiveAdmins()` — waits for the commit, and past Prisma's own
- * 5 seconds it fails. Only an announcement to thousands is long enough to
- * matter; nothing reads or writes wrongly.
+ * row of every recipient and of the sender (the foreign keys of the inserted
+ * rows). The writers that lock a `users` row — a guardian link
+ * (`lockStudent()`), the admin scan of a status or role change
+ * (`lockActiveAdmins()`) and `lockUserRow()` — take `FOR NO KEY UPDATE`, which
+ * does not conflict with a key share, so they no longer wait for this commit
+ * (TEST-222). Plain UPDATEs of non-key columns do not wait either. Only a
+ * change of a key column of a recipient (its `email` or `username`, which
+ * carry unique indexes) takes `FOR UPDATE` implicitly and still waits.
  */
 export const ANNOUNCEMENT_TRANSACTION_TIMEOUT_MS = 30_000;
 
