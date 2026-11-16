@@ -61,7 +61,7 @@ const NIL_ID = '00000000-0000-0000-0000-000000000000';
 const TEST_TIMEOUT = 30_000;
 const ANNOUNCEMENT_KEYS = ['audience', 'body', 'class', 'createdAt', 'id', 'recipientCount', 'sendEmail', 'sender', 'title'];
 const DETAIL_KEYS = [...ANNOUNCEMENT_KEYS, 'email', 'readCount'].sort();
-const INBOX_ITEM_KEYS = ['announcementId', 'body', 'category', 'createdAt', 'data', 'eventKey', 'id', 'readAt', 'student', 'title'];
+const INBOX_ITEM_KEYS = ['announcementId', 'body', 'category', 'createdAt', 'data', 'eventKey', 'id', 'readAt', 'sender', 'student', 'title'];
 const NO_EMAIL = { none: 0, queued: 0, sent: 0, failed: 0, skipped: 0 };
 /** Recognisable words of the sender: they must reach every recipient verbatim and appear in no audit event and no e-mail body. */
 const TITLE_MARK = `TITLE-${RUN}`;

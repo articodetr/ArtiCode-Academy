@@ -45,7 +45,7 @@ const USER_AGENT = 'TEST-175 supertest';
 const INBOX = '/api/me/notifications';
 const PREFERENCES = '/api/me/notification-preferences';
 const ZERO_ID = '00000000-0000-0000-0000-000000000000';
-const ITEM_KEYS = ['announcementId', 'body', 'category', 'createdAt', 'data', 'eventKey', 'id', 'readAt', 'student', 'title'];
+const ITEM_KEYS = ['announcementId', 'body', 'category', 'createdAt', 'data', 'eventKey', 'id', 'readAt', 'sender', 'student', 'title'];
 const CATEGORIES = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements'];
 
 async function canConnect(url: string): Promise<boolean> {

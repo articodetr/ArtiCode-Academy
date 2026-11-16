@@ -72,6 +72,15 @@ export class NotificationStudentDto {
   displayName: string | null;
 }
 
+/** Who sent an announcement, by name only — no id, no contact field. */
+export class NotificationSenderDto {
+  @ApiProperty()
+  fullName: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  displayName: string | null;
+}
+
 export class MyNotificationDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
@@ -105,6 +114,15 @@ export class MyNotificationDto {
 
   @ApiProperty({ type: String, format: 'uuid', nullable: true, description: 'Set for a manual announcement' })
   announcementId: string | null;
+
+  @ApiProperty({
+    type: NotificationSenderDto,
+    nullable: true,
+    description:
+      'Who sent the announcement, by name only (a soft-deleted account is still named, as a teacher or a reviewer is elsewhere); ' +
+      'null for every automatic event and for an announcement whose sender account no longer exists',
+  })
+  sender: NotificationSenderDto | null;
 
   @ApiProperty({ type: String, nullable: true, description: 'ISO 8601 — when the caller marked it as read; null while unread' })
   readAt: string | null;
