@@ -109,6 +109,9 @@ services:
       <<: *app-db
       PLATFORM_DB_MIGRATOR_USER: ${PLATFORM_DB_MIGRATOR_USER:?set PLATFORM_DB_MIGRATOR_USER in the platform env file}
       PLATFORM_DB_MIGRATOR_PASSWORD: ${PLATFORM_DB_MIGRATOR_PASSWORD:?set PLATFORM_DB_MIGRATOR_PASSWORD in the platform env file}
+      # The account commands run in this container (`run --rm migrate npm run platform:…`):
+      # platform:enable-mfa seals the TOTP secret with the same key as the API (empty = it refuses).
+      PLATFORM_MFA_ENCRYPTION_KEY: ${PLATFORM_MFA_ENCRYPTION_KEY:-}
     # The platform migrations only — never the academy schema, never a seed.
     command: ["npx", "prisma", "migrate", "deploy", "--config", "prisma.platform.config.ts"]
     logging: *logging
