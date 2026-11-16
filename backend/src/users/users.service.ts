@@ -388,11 +388,17 @@ export class UsersService {
 
     // Friendly 409 before the transaction; the unique indexes (which also cover
     // soft-deleted rows) remain the source of truth for concurrent requests.
-    const clash = await this.prisma.db.user.findFirst({
+    // Up to two rows (one per identifier): when the e-mail and the username clash
+    // with two different users the e-mail is reported, whatever order the rows
+    // come back in (KI-085).
+    const clashes = await this.prisma.db.user.findMany({
       where: { OR: [...(email ? [{ email }] : []), ...(username ? [{ username }] : [])] },
       select: { email: true, username: true },
+      take: 2,
     });
-    if (clash) throw clash.email === email && email ? usersError.emailInUse() : usersError.usernameInUse();
+    if (clashes.length > 0) {
+      throw email && clashes.some((row) => row.email === email) ? usersError.emailInUse() : usersError.usernameInUse();
+    }
 
     const sortedRoleKeys = [...roleKeys].sort();
     let userId: string;
@@ -503,12 +509,18 @@ export class UsersService {
     if (typeof plan.user.email === 'string') identifiers.push({ email: plan.user.email });
     if (typeof plan.user.username === 'string') identifiers.push({ username: plan.user.username });
     if (identifiers.length > 0) {
-      const clash = await this.prisma.db.user.findFirst({
+      // Up to two rows: the e-mail wins when both identifiers clash with two
+      // different users, whatever order the rows come back in (KI-085).
+      const clashes = await this.prisma.db.user.findMany({
         where: { OR: identifiers, NOT: { id } },
         select: { email: true, username: true },
+        take: 2,
       });
-      if (clash) {
-        throw clash.email !== null && clash.email === plan.user.email ? usersError.emailInUse() : usersError.usernameInUse();
+      if (clashes.length > 0) {
+        const email = plan.user.email;
+        throw typeof email === 'string' && clashes.some((row) => row.email === email)
+          ? usersError.emailInUse()
+          : usersError.usernameInUse();
       }
     }
 
