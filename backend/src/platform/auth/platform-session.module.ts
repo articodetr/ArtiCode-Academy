@@ -2,12 +2,16 @@ import { Module } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PlatformSessionController } from './platform-session.controller.js';
 import { PlatformSessionService } from './platform-session.service.js';
+import { PlatformSessionsController } from './platform-sessions.controller.js';
+import { PlatformSessionsService } from './platform-sessions.service.js';
 import { PLATFORM_AUTH_THROTTLER, PlatformThrottlerGuard } from './platform-throttler.guard.js';
 
 /**
  * MOD-18-T03 — the session routes of the platform API (API-178..182 and
- * logout-all). The token, principal and password services come from the
- * global PlatformAuthModule (T02), the audit service from PlatformAuditModule.
+ * logout-all) and, since MOD-01-H06, the sessions list and revoking one
+ * session (API-203/204 — PlatformSessionsController). The token, principal
+ * and password services come from the global PlatformAuthModule (T02), the
+ * audit service from PlatformAuditModule.
  *
  * The named limiter of the platform (in memory, per process): only the routes
  * that use PlatformThrottlerGuard are limited, each with its own @Throttle.
@@ -16,8 +20,8 @@ import { PLATFORM_AUTH_THROTTLER, PlatformThrottlerGuard } from './platform-thro
  */
 @Module({
   imports: [ThrottlerModule.forRoot({ throttlers: [{ name: PLATFORM_AUTH_THROTTLER, ttl: 15 * 60 * 1000, limit: 10 }] })],
-  controllers: [PlatformSessionController],
-  providers: [PlatformSessionService, PlatformThrottlerGuard],
+  controllers: [PlatformSessionController, PlatformSessionsController],
+  providers: [PlatformSessionService, PlatformSessionsService, PlatformThrottlerGuard],
   exports: [PlatformSessionService],
 })
 export class PlatformSessionModule {}

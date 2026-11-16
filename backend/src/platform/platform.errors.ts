@@ -1,5 +1,6 @@
 // Error vocabulary of the platform's authentication (MOD-18-T02; the login and
-// refresh codes are used by T03). Same body shape as the academy API
+// refresh codes are used by T03; session_not_found by the sessions routes of
+// MOD-01-H06, API-203/204). Same body shape as the academy API
 // (src/auth/auth.errors.ts): `{ statusCode, error, code, message, ...details }`
 // with a stable `code` the Super Admin frontend maps to a message.
 //
@@ -34,6 +35,8 @@ export const PLATFORM_AUTH_ERROR_CODES = [
   'password_invalid',
   'password_weak',
   'rate_limited',
+  // MOD-01-H06 — the sessions routes (API-203/204)
+  'session_not_found',
 ] as const;
 
 export type PlatformAuthErrorCode = (typeof PLATFORM_AUTH_ERROR_CODES)[number];
@@ -105,4 +108,5 @@ export const platformAuthError = {
       problems: [...problems],
     }),
   rateLimited: () => authException(HttpStatus.TOO_MANY_REQUESTS, 'rate_limited', 'Too many requests; try again later'),
+  sessionNotFound: () => authException(HttpStatus.NOT_FOUND, 'session_not_found', 'No active session with this id'),
 };
