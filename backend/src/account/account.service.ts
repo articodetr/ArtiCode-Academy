@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service.js';
 import { authError } from '../auth/auth.errors.js';
 import { AuthService } from '../auth/auth.service.js';
-import type { IssuedSession } from '../auth/auth.service.js';
+import type { IssuedSession, LoginOutcome } from '../auth/auth.service.js';
 import { PasswordService, passwordProblems } from '../auth/password.service.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import type { Env } from '../config/env.schema.js';
@@ -402,8 +402,14 @@ export class AccountService {
    * Consumes the reset token, stores the new password, unlocks the account,
    * revokes every session and opens a new one as `login` would. Access tokens
    * issued before the change die through `password_changed_at` (AuthService).
+   * For an account with MFA (MFA-T03, D-R109) the reset is done all the same,
+   * but the answer is the sign-in challenge instead of a session — the client
+   * finishes with API-211. Without the server key that answer is
+   * `503 mfa_unavailable`, thrown AFTER the reset committed: the new password
+   * stands (it is what the person asked for), and they sign in with it once
+   * MFA is available again — never without the second factor.
    */
-  async confirmPasswordReset(token: string, newPassword: string, ctx: RequestContext): Promise<IssuedSession> {
+  async confirmPasswordReset(token: string, newPassword: string, ctx: RequestContext): Promise<LoginOutcome> {
     const problems = passwordProblems(newPassword);
     if (problems.length > 0) throw authError.passwordWeak(problems);
 
@@ -449,7 +455,7 @@ export class AccountService {
       );
     });
 
-    return this.auth.openSession(reset.user.id, 'password_reset', ctx);
+    return this.auth.beginSession(reset.user.id, 'password_reset', ctx);
   }
 
   /**
