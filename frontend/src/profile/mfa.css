@@ -1,0 +1,76 @@
+/* The two-step verification card of the profile and its dialogs (API-206..API-210). */
+
+/* The QR code sits on white whatever surrounds it, with a quiet zone, so a phone camera reads it. */
+.profile-mfa__qr {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.profile-mfa__qr-box {
+  padding: 16px;
+  line-height: 0;
+  background: #ffffff;
+  border: 1px solid var(--c-line, #f0f0f0);
+  border-radius: 8px;
+}
+
+/* The Base32 key and the recovery codes are Latin text, read left to right in a fixed-width face. */
+.profile-mfa__key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 4px 0 12px;
+}
+
+.profile-mfa__key,
+.profile-mfa__codes,
+.profile-mfa__code-input.ant-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.profile-mfa__key {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.profile-mfa__code-input.ant-input {
+  max-width: 220px;
+  font-size: 18px;
+  letter-spacing: 0.2em;
+}
+
+.profile-mfa__codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  list-style: none;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  background: var(--c-paper, #f5f5f5);
+  border: 1px solid var(--c-line, #f0f0f0);
+  border-radius: 8px;
+}
+
+.profile-mfa__codes code {
+  user-select: all;
+}
+
+.profile-mfa__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.profile-mfa__code-input--recovery.ant-input {
+  max-width: 260px;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}

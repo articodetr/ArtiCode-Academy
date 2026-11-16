@@ -9,6 +9,7 @@ import { useAuth } from '../auth/auth-context'
 import { EmailVerificationAction } from '../account/EmailVerificationAction'
 import { uiRoleFor } from '../auth/roles'
 import { PageHeader } from '../components/PageHeader'
+import { ProfileMfa } from '../profile/ProfileMfa'
 import { ProfilePermissions } from '../profile/ProfilePermissions'
 import { PASSWORD_MIN_LENGTH, passwordChangeFailure, requestFailure } from '../profile/profile.errors'
 import { useRoleLabels } from '../users/useRoleLabels'
@@ -20,7 +21,7 @@ interface PasswordFormValues {
   confirmPassword: string
 }
 
-/** The signed-in user's own page: identity, roles, permissions, sessions and password. */
+/** The signed-in user's own page: identity, roles, permissions, password, two-step verification and sessions. */
 export function ProfilePage() {
   const { t } = useTranslation()
   const { message } = App.useApp()
@@ -30,6 +31,8 @@ export function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
+  // Turning two-step verification on or off signs the other devices out: the devices card then reads its list anew.
+  const [sessionsVersion, setSessionsVersion] = useState(0)
   // System roles are translated; a custom role needs its server label (API-022,
   // `users.read`), so the roles are read only for a user who holds one (J-F36).
   const holdsCustomRole = user?.roles.some((key) => uiRoleFor(key) === null) ?? false
@@ -169,9 +172,14 @@ export function ProfilePage() {
             </Typography.Paragraph>
           </Card>
 
+          {/* The caller's own two-step verification (API-206..API-210). */}
+          <Card title={t('profile.mfa.title')} style={{ marginTop: 16 }}>
+            <ProfileMfa onSessionsChanged={() => setSessionsVersion((version) => version + 1)} />
+          </Card>
+
           {/* The devices where this account is signed in (API-201/202, CH-0272). */}
           <Card title={t('profile.sessions.title')} style={{ marginTop: 16 }}>
-            <ProfileSessions />
+            <ProfileSessions key={sessionsVersion} />
           </Card>
         </Col>
       </Row>
