@@ -2,8 +2,9 @@
 // API-012 GET /api/users, API-013 GET /api/users/:id, API-014 POST /api/users,
 // API-018 PATCH /api/users/:id. Since MOD-03-T14 also the account actions
 // API-027 POST /api/users/:id/status, API-028 DELETE /api/users/:id and the
-// role assignment API-034 PUT /api/users/:id/roles. Types mirror
-// backend/src/users/users.dto.ts.
+// role assignment API-034 PUT /api/users/:id/roles. Since MFA-T04 the detail
+// carries `mfaEnabledAt` and API-212 POST /api/users/:id/mfa/reset clears a
+// user's two-step verification. Types mirror backend/src/users/users.dto.ts.
 import { apiRequest } from './client'
 
 export const USER_STATUSES = ['invited', 'pending', 'active', 'suspended', 'archived'] as const
@@ -101,6 +102,13 @@ export interface GuardianLink {
 }
 
 export interface UserDetail extends UserSummary {
+  /**
+   * When two-step verification was turned on; null while it is off — and null
+   * for every account when the caller lacks `users.read_contact` (an
+   * account-security timestamp like `lockedUntil`, D-R07), so null alone
+   * never proves that it is off.
+   */
+  mfaEnabledAt: string | null
   roles: UserRoleSummary[]
   studentProfile: StudentProfileSummary | null
   employeeProfile: EmployeeProfileSummary | null
@@ -130,6 +138,7 @@ export const USERS_PATHS = {
   byId: (id: string) => `/api/users/${encodeURIComponent(id)}`,
   status: (id: string) => `/api/users/${encodeURIComponent(id)}/status`,
   roles: (id: string) => `/api/users/${encodeURIComponent(id)}/roles`,
+  mfaReset: (id: string) => `/api/users/${encodeURIComponent(id)}/mfa/reset`,
 } as const
 
 /** Query string of API-012: empty and default-false values are left out. */
@@ -267,4 +276,28 @@ export interface ReplaceUserRolesInput {
 /** API-034 full replacement; answers 200 with the detail (the caller's projection). */
 export function replaceUserRoles(id: string, input: ReplaceUserRolesInput): Promise<UserDetail> {
   return apiRequest<UserDetail>(USERS_PATHS.roles(id), { method: 'PUT', body: input })
+}
+
+// ---------------------------------------------------------------------------
+// MFA-T04 — administrative reset of two-step verification (API-212)
+// ---------------------------------------------------------------------------
+
+/** Answer of API-212 (`MfaResetResultDto`) — never a secret, a code or a recovery code. */
+export interface MfaResetResult {
+  userId: string
+  /** true when two-step verification (or a setup awaiting confirmation) was cleared; false when the account had none — nothing was written. */
+  reset: boolean
+  /** Sessions of the user that were ended: every one of them on a reset, 0 when nothing was reset. */
+  revokedSessions: number
+}
+
+/**
+ * API-212 (`users.update`): clears the user's two-step verification and ends
+ * every session of theirs; they sign in with the password alone afterwards.
+ * The optional body travels only when a reason is given (1–500 characters
+ * after trim — STATUS_REASON_MAX_LENGTH — recorded in the audit event only).
+ */
+export function resetUserMfa(userId: string, reason?: string): Promise<MfaResetResult> {
+  const trimmed = reason?.trim()
+  return apiRequest<MfaResetResult>(USERS_PATHS.mfaReset(userId), { method: 'POST', body: trimmed ? { reason: trimmed } : undefined })
 }

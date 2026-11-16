@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeUserDetail } from '../test/users'
-import { accountStateOf, allowedActions, availableAccountActions, isActionPermitted, nextStatus, signsOut } from './users.status'
+import { ACCOUNT_ACTIONS, accountStateOf, allowedActions, availableAccountActions, canResetMfa, isActionPermitted, nextStatus, signsOut } from './users.status'
 import type { AccountAction } from './users.status'
 
 const ADMIN = ['users.read', 'users.deactivate']
@@ -58,5 +58,45 @@ describe('availableAccountActions', () => {
     const gone = makeUserDetail({ status: 'archived', deletedAt: '2026-10-30T10:00:00.000Z' })
     expect(availableAccountActions(gone, { permissions: ADMIN, selfId: 'me', contact: true })).toEqual([])
     expect(availableAccountActions(makeUserDetail({ status: 'invited' }), { permissions: ADMIN, selfId: 'me', contact: true })).toEqual(['delete'])
+  })
+})
+
+describe('canResetMfa (API-212 — beside the state machine, not part of it)', () => {
+  const ON = '2026-11-01T08:00:00.000Z'
+
+  it('offers the reset only with users.update, on somebody else, while two-step verification is visibly on', () => {
+    const user = makeUserDetail({ status: 'active', mfaEnabledAt: ON })
+    expect(canResetMfa(user, { permissions: SUPPORT, selfId: 'me' })).toBe(true)
+    expect(canResetMfa(user, { permissions: SUPPORT, selfId: null })).toBe(true)
+    // users.deactivate does not replace users.update here (unlike the status actions).
+    expect(canResetMfa(user, { permissions: ADMIN, selfId: 'me' })).toBe(false)
+    expect(canResetMfa(user, { permissions: ['users.read'], selfId: 'me' })).toBe(false)
+    // One's own second step is turned off from «my account»: the server answers self_forbidden.
+    expect(canResetMfa(user, { permissions: SUPPORT, selfId: user.id })).toBe(false)
+    // Off — or unknown: the server sends null to a caller without users.read_contact.
+    expect(canResetMfa({ ...user, mfaEnabledAt: null }, { permissions: SUPPORT, selfId: 'me' })).toBe(false)
+  })
+
+  it('offers nothing when the detail carries no mfaEnabledAt at all (the drawer row reads the same truthiness)', () => {
+    const { mfaEnabledAt: _absent, ...withoutField } = makeUserDetail({ status: 'active', mfaEnabledAt: ON })
+    // What an answer without the field looks like at run time; the type says it is always there.
+    const older = withoutField as unknown as Parameters<typeof canResetMfa>[0]
+    expect(older.mfaEnabledAt).toBeUndefined()
+    expect(canResetMfa(older, { permissions: SUPPORT, selfId: 'me' })).toBe(false)
+    expect(canResetMfa({ ...withoutField, mfaEnabledAt: '' }, { permissions: SUPPORT, selfId: 'me' })).toBe(false)
+  })
+
+  it('follows the second step, not the status: any live account, never a soft-deleted one', () => {
+    for (const status of ['invited', 'pending', 'active', 'suspended', 'archived'] as const) {
+      expect(canResetMfa(makeUserDetail({ status, mfaEnabledAt: ON }), { permissions: SUPPORT, selfId: 'me' })).toBe(true)
+    }
+    const gone = makeUserDetail({ status: 'archived', deletedAt: '2026-10-30T10:00:00.000Z', mfaEnabledAt: ON })
+    expect(canResetMfa(gone, { permissions: SUPPORT, selfId: 'me' })).toBe(false)
+  })
+
+  it('stays out of the mirrored state machine', () => {
+    expect(ACCOUNT_ACTIONS).toEqual(['activate', 'suspend', 'archive', 'restore', 'unlock', 'delete'])
+    const withMfa = makeUserDetail({ status: 'active', mfaEnabledAt: ON })
+    expect(availableAccountActions(withMfa, { permissions: [...ADMIN, 'users.update'], selfId: 'me', contact: true })).toEqual(['suspend', 'archive', 'delete'])
   })
 })

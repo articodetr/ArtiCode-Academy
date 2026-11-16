@@ -1,0 +1,98 @@
+/* The two-step verification card of the profile and its dialogs (API-206..API-210). */
+
+/* The QR code sits on white whatever surrounds it, with a quiet zone, so a phone camera reads it. */
+.profile-mfa__qr {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.profile-mfa__qr-box {
+  padding: 16px;
+  line-height: 0;
+  background: #ffffff;
+  border: 1px solid var(--c-line, #f0f0f0);
+  border-radius: 8px;
+}
+
+/* The Base32 key and the recovery codes are Latin text, read left to right in a fixed-width face. */
+.profile-mfa__key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 4px 0 12px;
+}
+
+.profile-mfa__key,
+.profile-mfa__codes,
+input.profile-mfa__code-input.ant-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.profile-mfa__key {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* A verification code and a recovery code (MfaFields.tsx) are typed and read left to right in every language.
+   The `dir="ltr"` attribute alone does not do it: in the Arabic UI Ant Design puts `.ant-input-rtl
+   { direction: rtl }` on the input, and any author rule beats the attribute — `123 456` would show as `456 123`
+   and the dash of a recovery code would jump. `input.` + two classes outrank that one class (and its hashed
+   form), so the direction is set here; the text starts at the left edge, where a left-to-right value begins. */
+input.profile-mfa__code-input.ant-input {
+  direction: ltr;
+  text-align: left;
+  max-width: 220px;
+  font-size: 18px;
+  letter-spacing: 0.2em;
+}
+
+.profile-mfa__codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  list-style: none;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  background: var(--c-paper, #f5f5f5);
+  border: 1px solid var(--c-line, #f0f0f0);
+  border-radius: 8px;
+}
+
+.profile-mfa__codes code {
+  user-select: all;
+}
+
+/* The heading of the once-only codes, above their warning: it takes the cursor when the codes replace the form
+   (RecoveryCodesList.tsx), so a screen reader goes on from it to the warning and the list. */
+.profile-mfa__codes-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* The line under the tick that says what turns «close» on. */
+.profile-mfa__close-hint {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.profile-mfa__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+input.profile-mfa__code-input--recovery.ant-input {
+  max-width: 260px;
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}

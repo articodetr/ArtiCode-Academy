@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import * as authApi from '../api/auth'
-import type { SessionResponse, SessionUser } from '../api/auth'
+import type { MfaFactor, SessionResponse, SessionUser } from '../api/auth'
 import { AuthContext } from './auth-context'
 import type { AuthContextValue, AuthStatus, AuthUser } from './auth-context'
 import { primaryRole } from './roles'
@@ -70,7 +70,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const login = useCallback(async (identifier: string, password: string) => {
-    const session = await authApi.login(identifier, password)
+    const result = await authApi.login(identifier, password)
+    // Two-step verification: a correct password opens no session. The visitor stays
+    // signed out until the second step (completeMfaLogin) succeeds.
+    if (authApi.isMfaChallenge(result)) return result
+    const user = toAuthUser(result.user)
+    setState({ status: 'authenticated', user })
+    return user
+  }, [])
+
+  const completeMfaLogin = useCallback(async (challenge: string, factor: MfaFactor) => {
+    const session = await authApi.completeMfaLogin(challenge, factor)
     const user = toAuthUser(session.user)
     setState({ status: 'authenticated', user })
     return user
@@ -108,13 +118,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status: state.status,
       user: state.user,
       login,
+      completeMfaLogin,
       logout,
       logoutAll,
       reloadUser,
       adoptSession,
       hasPermission: (key) => state.user?.permissions.includes(key) ?? false,
     }),
-    [state, login, logout, logoutAll, reloadUser, adoptSession],
+    [state, login, completeMfaLogin, logout, logoutAll, reloadUser, adoptSession],
   )
 
   return <AuthContext value={value}>{children}</AuthContext>

@@ -73,6 +73,7 @@ export function makeUserDetail(overrides: Partial<UserDetail> = {}): UserDetail 
     createdAt: '2026-10-30T09:00:00.000Z',
     updatedAt: '2026-10-30T09:00:00.000Z',
     deletedAt: null,
+    mfaEnabledAt: null,
     roles: [{ key: 'student', label: { ar: 'طالب', en: 'Student' } }],
     studentProfile: { studentNumber: 'S-2026-001', dateOfBirth: '2012-05-01', enrolledOn: '2026-09-01' },
     employeeProfile: null,
@@ -84,9 +85,21 @@ export function makeUserDetail(overrides: Partial<UserDetail> = {}): UserDetail 
   }
 }
 
-/** The reduced projection of the same detail (caller without `users.read_contact`, D-R07). */
+/**
+ * The reduced projection of the same detail (caller without `users.read_contact`, D-R07);
+ * the detail's `mfaEnabledAt` is null there too (list items carry none).
+ */
 export function reduced<T extends UserListItem | UserDetail>(user: T): T {
-  return { ...user, email: null, username: null, phone: null, emailVerifiedAt: null, lastLoginAt: null, lockedUntil: null }
+  return {
+    ...user,
+    email: null,
+    username: null,
+    phone: null,
+    emailVerifiedAt: null,
+    lastLoginAt: null,
+    lockedUntil: null,
+    ...('mfaEnabledAt' in user ? { mfaEnabledAt: null } : {}),
+  }
 }
 
 // ---------------------------------------------------------------------------
