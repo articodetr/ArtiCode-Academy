@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { resetUserMfa, STATUS_REASON_MAX_LENGTH } from '../api/users'
 import type { UserDetail } from '../api/users'
+import { ReasonHint } from './ReasonHint'
 import { describeUsersFailure, failureMessage } from './users.errors'
 import { displayNameOf } from './users.format'
 
@@ -86,7 +87,7 @@ export function UserMfaReset({ user, onClose, onDone, onStale }: UserMfaResetPro
         <Form.Item
           name="reason"
           label={t('users.status.reason')}
-          extra={t('users.status.reasonHint')}
+          extra={<ReasonHint />}
           rules={[{ max: STATUS_REASON_MAX_LENGTH, message: t('users.validation.maxLength', { max: STATUS_REASON_MAX_LENGTH }) }]}
         >
           <Input.TextArea rows={3} maxLength={STATUS_REASON_MAX_LENGTH} showCount />

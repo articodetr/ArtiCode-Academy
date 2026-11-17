@@ -26,9 +26,12 @@
 
 /* The code fields of the second sign-in step (auth/MfaChallengeStep.tsx): always
    left to right, centred and spaced so a code is easy to compare with the app's.
-   `input.` outranks Ant Design's RTL input class, which would set the direction. */
+   `input.` outranks Ant Design's RTL input class, which would set the direction.
+   `unicode-bidi: bidi-override`: Arabic-Indic digits with a space (`١٢٣ ٤٥٦`) would otherwise show their two
+   halves swapped even in a left-to-right field (KI-090); a code is digits, Latin letters and a dash only. */
 input.mfa-code-input {
   direction: ltr;
+  unicode-bidi: bidi-override;
   text-align: center;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   font-size: 20px;
