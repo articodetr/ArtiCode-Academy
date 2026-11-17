@@ -22,9 +22,11 @@
 // not as a refusal — instead of a second attempt; a second click while a
 // confirmation is open or the request runs does nothing; and while the answer
 // holds typed text or a link, Escape and a mask click do nothing, × and
-// «cancel» ask first (common.unsaved.*), a browser back/forward asks the same
-// question (NavigationBlocker) and a reload or a tab close gets the browser's
-// own prompt (useUnsavedChangesGuard).
+// «cancel» ask first, a browser back/forward asks the same question
+// (NavigationBlocker) and a reload or a tab close gets the browser's own
+// prompt — the drawers' guard in the dialog's own words
+// (myAssignments.submit.unsaved.* through useUnsavedChangesGuard: an unsent answer in
+// a dialog, not a drawer's editor).
 import { Alert, App, Descriptions, Form, Input, Modal, Typography } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -40,6 +42,7 @@ import { describeMyAssignmentsFailure, failureMessage, isMyAssignmentsFailure } 
 import { buildSubmitInput, hasAnswer, isTextAnswerWithinLimit, linkProblemOf, nextAttemptNo } from './myAssignments.submit'
 import type { SubmitFormValues } from './myAssignments.submit'
 import { attemptsLeftAfterNext, myAssignmentKey } from './myAssignments.view'
+import './myAssignments.css'
 
 interface SubmitAttemptModalProps {
   /** The row of this session; null = closed. */
@@ -67,9 +70,10 @@ export function SubmitAttemptModal({ item, onClose, onSubmitted, onStale }: Subm
   }
 
   // × and «cancel» (Escape and the mask too while nothing is typed) ask first while the answer holds something, and so
-  // does a browser back/forward (NavigationBlocker below) — one question (common.unsaved.*); a reload or a tab close
-  // gets the browser's own prompt.
-  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
+  // does a browser back/forward (NavigationBlocker below) — one question in the dialog's words
+  // (myAssignments.submit.unsaved.*, never the drawers' common.unsaved.*); a reload or a tab close gets the browser's
+  // own prompt.
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close, 'myAssignments.submit.unsaved')
 
   return (
     <Modal
@@ -314,7 +318,8 @@ function SubmitAttemptBody({ item, onSaving, onReady, onUnsavedChange, onSubmitt
             },
           ]}
         >
-          <Input dir="ltr" maxLength={SUBMIT_LINK_MAX_LENGTH} placeholder="https://" inputMode="url" autoComplete="off" />
+          {/* A URL reads left to right: the class carries the direction (myAssignments.css) — antd's `-rtl` class beats `dir`. */}
+          <Input dir="ltr" className="my-assignments__link" maxLength={SUBMIT_LINK_MAX_LENGTH} placeholder="https://" inputMode="url" autoComplete="off" />
         </Form.Item>
       </Form>
     </>

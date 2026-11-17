@@ -1,5 +1,10 @@
+/* The sign-in page and the public pages (account/PublicCard.tsx — /verify, the token pages) cover the whole viewport:
+   `100%` never resolved, because Ant Design's App wrapper between #root and this page has no height, so the gradient
+   stopped under the card and left white below it at 1366 × 900 (QA V3/V5). `100vh` for a browser without `dvh`;
+   `100dvh` follows a phone's collapsing address bar. */
 .login-page {
-  min-height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;

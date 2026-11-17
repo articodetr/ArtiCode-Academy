@@ -75,6 +75,25 @@ describe('MyCertificatesPage', () => {
     expect(screen.queryByText('CERT-2026-00001')).not.toBeInTheDocument()
   })
 
+  it('keeps a guardian’s table at its card’s width so the actions are in view at 1366 px, and isolates a mixed Arabic–Latin student name (V3)', async () => {
+    const mixed = toMyCertificate(makeRevokedCertificate({ id: CERTIFICATE_ID_2, serial: 'CERT-2026-00002', student: { ...CHILD_STUDENT, displayName: 'أحمد V3 الأول' } }), 'child')
+    mockMyCertificatesApi([makeMyCertificateList([mixed, own])])
+    renderPage(['guardian', 'student'], ['certificates.read_own', 'certificates.read_linked'])
+    await screen.findByText('CERT-2026-00002')
+
+    // jsdom has no layout: assert the configuration. With 'max-content' the student column made the table wider than
+    // its card at 1366 px and pushed the actions out of view; `x: true` keeps the table at the box's width wherever the
+    // columns can wrap, and scrolls it in that box only when they cannot (a phone).
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+    // An isolate in the name's own direction: «أحمد V3 الأول» keeps its order in the English UI.
+    const name = within(bodyRows()[0]!).getByText('أحمد V3 الأول')
+    expect(name.tagName).toBe('BDI')
+    expect(name).toHaveAttribute('dir', 'auto')
+  })
+
   it('says there is no certificate yet, and shows the server’s 403 to a learner holding neither key, with a retry', async () => {
     const api = mockMyCertificatesApi([
       jsonResponse(403, { statusCode: 403, code: 'permission_denied', missing: ['certificates.read_own', 'certificates.read_linked'], message: 'no' }),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { describePaymentsFailure, isStaleInvoice } from './payments.errors'
-import { buildRecordPaymentInput, exceeds, isFutureInstant, isTwoDecimalAmount, paymentsViewOf } from './payments.format'
+import { buildRecordPaymentInput, exceeds, formatMoney, instantOfLocal, isFutureInstant, isTwoDecimalAmount, paymentsViewOf } from './payments.format'
 
 describe('payments helpers', () => {
   it('picks the office view for any office key, else «my invoices»', () => {
@@ -13,10 +13,22 @@ describe('payments helpers', () => {
   })
 
   it('builds the API-151 body without blank texts or a blank moment', () => {
-    expect(buildRecordPaymentInput({ amount: 10.5, method: 'card', paidAt: '', reference: '  ', notes: ' n ' })).toEqual({ amount: 10.5, method: 'card', notes: 'n' })
-    const withMoment = buildRecordPaymentInput({ amount: 1, paidAt: '2026-11-14T09:30' })
+    expect(buildRecordPaymentInput({ amount: 10.5, method: 'card', paidAt: '', reference: '  ', notes: ' n ' }, 'Asia/Riyadh')).toEqual({ amount: 10.5, method: 'card', notes: 'n' })
+    const withMoment = buildRecordPaymentInput({ amount: 1, paidAt: '2026-11-14T09:30' }, 'Asia/Riyadh')
     expect(withMoment.method).toBe('cash')
-    expect(withMoment.paidAt).toMatch(/^2026-11-1\dT\d{2}:30:00\.000Z$/)
+    expect(withMoment.paidAt).toBe('2026-11-14T06:30:00.000Z')
+  })
+
+  it('reads the typed moment as the wall clock of the given zone, never this device’s (QA V4 P6: London typed 10:00 for a Riyadh academy)', () => {
+    // Two zones, two instants: a conversion that ignores the zone can match one of them at most.
+    expect(instantOfLocal('2026-11-14T10:00', 'Asia/Riyadh')).toBe('2026-11-14T07:00:00.000Z')
+    expect(instantOfLocal('2026-11-14T10:00', 'Asia/Tokyo')).toBe('2026-11-14T01:00:00.000Z')
+    expect(instantOfLocal('2026-11-14T10:00', 'Europe/London')).toBe('2026-11-14T10:00:00.000Z')
+    expect(instantOfLocal('2026-11-14T10:00:30', 'Asia/Riyadh')).toBe('2026-11-14T07:00:00.000Z')
+    expect(instantOfLocal('', 'Asia/Riyadh')).toBeUndefined()
+    expect(instantOfLocal(undefined, 'Asia/Riyadh')).toBeUndefined()
+    expect(instantOfLocal('2026-13-40T10:00', 'Asia/Riyadh')).toBeUndefined()
+    expect(instantOfLocal('not a time', 'Asia/Riyadh')).toBeUndefined()
   })
 
   it('mirrors the amount and moment rules', () => {
@@ -33,6 +45,9 @@ describe('payments helpers', () => {
   it('maps the finance codes with their details', () => {
     const exceeded = new ApiError(409, 'above', { code: 'payment_exceeds_balance', amount: 600, balance: 400 })
     expect(describePaymentsFailure(exceeded)).toEqual({ key: 'payments.errors.payment_exceeds_balance', field: ['amount'], params: { amount: '600', balance: '400' } })
+    // With the invoice's currency the details are money, as every amount on the screen (QA V4 P3: «550.25 / 500.25»).
+    expect(describePaymentsFailure(exceeded, (amount) => formatMoney(amount, 'SAR', 'en')).params).toEqual({ amount: formatMoney(600, 'SAR', 'en'), balance: formatMoney(400, 'SAR', 'en') })
+    expect(describePaymentsFailure(new ApiError(409, 'paid', { code: 'invoice_has_payments', paymentCount: 2 }), (amount) => `M${amount}`).params).toEqual({ paymentCount: '2' })
     expect(isStaleInvoice(exceeded)).toBe(true)
     expect(describePaymentsFailure(new ApiError(403, 'no', { code: 'permission_denied', missing: ['payments.refund'] }))).toEqual({
       key: 'payments.errors.permission_denied',

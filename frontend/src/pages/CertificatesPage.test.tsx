@@ -72,6 +72,26 @@ describe('CertificatesPage', () => {
     expect(screen.getByText(ar.certificates.issueHint)).toBeInTheDocument()
   })
 
+  it('keeps the table at its card’s width so the actions are in view at 1366 px, and isolates a mixed Arabic–Latin student name (V3)', async () => {
+    const mixed = makeCertificate({ student: { id: 'student-3', fullName: 'أحمد V3 الأول', fullNameLatin: 'QA v3-st1', displayName: null } })
+    mockCertificatesApi([makeCertificateList([mixed])])
+    renderPage(CERTIFICATE_ADMIN_PERMISSIONS)
+    await screen.findByText('CERT-2026-00001')
+
+    // jsdom has no layout: assert the configuration. 'max-content' sized the table to its content and pushed the
+    // actions column out of a 1366 px card; `x: true` keeps the table at the box's width wherever the columns can
+    // wrap, and scrolls it in that box only when they cannot (a phone).
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+    // An isolate in the name's own direction: «أحمد V3 الأول» keeps its order in the English UI.
+    const [row] = bodyRows()
+    const name = within(row!).getByText('أحمد V3 الأول')
+    expect(name.tagName).toBe('BDI')
+    expect(name).toHaveAttribute('dir', 'auto')
+  })
+
   it('re-queries from the first page on the serial search (trimmed) and the status filter', async () => {
     const api = mockCertificatesApi([makeCertificateList([issued])])
     renderPage(CERTIFICATE_ADMIN_PERMISSIONS)

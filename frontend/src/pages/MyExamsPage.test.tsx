@@ -140,6 +140,29 @@ describe('MyExamsPage', () => {
     expect(within(details).getByText('أحسنت في السؤال الثالث، وراجع الرابع')).toBeInTheDocument()
   })
 
+  it('keeps an opened row inside the table: the table fits its own scroll box and the details never size it (QA 2026-11-17)', async () => {
+    mockMyExamsApi(makeMyExamList([makePublishedMyExam()]))
+    renderPage()
+    const [row] = await rowsOf(1)
+
+    // jsdom has no layout: assert the configuration. `x: true` (not 'max-content') keeps the table at its box's width
+    // wherever it fits (as the users and courses tables — KI-094/KI-095), and scrolls it in that box otherwise.
+    const table = document.querySelector<HTMLTableElement>('.ant-table-content > table')!
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+
+    // The details are a Descriptions — a table of width 100%, which Chromium counted as 1,000,000 px wide in the
+    // table's sizing. They sit in a box of no width of its own that grows to the cell, so they never size the table.
+    fireEvent.click(row!.querySelector('button.ant-table-row-expand-icon')!)
+    const box = await screen.findByTestId('my-exam-details')
+    expect(box.closest('tr')).toHaveClass('ant-table-expanded-row')
+    expect(box.style.width).toBe('0px')
+    expect(box.style.minWidth).toBe('100%')
+    expect(box.querySelector('.ant-descriptions')).not.toBeNull()
+    expect(table.style.width).toBe('auto')
+  })
+
   it('shows the absent and excused results with their tags, and a published exam without a result as such', async () => {
     const absent = makePublishedMyExam({ result: makeMyExamResult({ status: 'absent', score: null, feedback: null }) })
     const excused = makePublishedMyExam({ id: EXAM_ID_2, result: makeMyExamResult({ status: 'excused', score: null, feedback: null }) })
@@ -179,6 +202,22 @@ describe('MyExamsPage', () => {
     await pick(ar.myExams.filters.status, ar.labels.published)
     await waitFor(() => expect(api.queries.at(-1)?.get('status')).toBe('published'))
     expect(api.queries.at(-1)?.get('cursor')).toBeNull()
+  })
+
+  it('keeps a guardian’s table — the student column included — at its box’s width, so the result column is in view on a desktop (QA 2026-11-17)', async () => {
+    mockMyExamsApi(makeMyExamList([makePublishedMyExam({ relation: 'child', student: CHILD_ONE })]), makeMyClassList([childOneClass, childTwoClass]))
+    renderPage(['guardian'], GUARDIAN_EXAM_PERMISSIONS)
+    const [row] = await rowsOf(1)
+    expect(screen.getByRole('columnheader', { name: ar.myExams.columns.student })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: ar.myExams.columns.result })).toBeInTheDocument()
+    expect(within(row!).getByText('41.5 / 50')).toBeInTheDocument()
+
+    // jsdom has no layout: assert the configuration. With 'max-content' the extra student column made the table wider
+    // than its box at 1366 px and pushed «النتيجة» out of view; `x: true` keeps the table at the box's width wherever
+    // the columns can wrap to fit, and scrolls it in that box only when they cannot.
+    const table = document.querySelector<HTMLTableElement>('.ant-table-content > table')!
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
   })
 
   it('reads the date range in the academy zone and says so, warns that undated exams fall out, and flips the order — each from the first page', async () => {

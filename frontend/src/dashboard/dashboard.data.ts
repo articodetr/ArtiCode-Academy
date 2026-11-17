@@ -9,10 +9,13 @@ export function wallDate(iso: string, zone: string): string {
   return wallClockIn(iso, zone).date
 }
 
-/** Money as the academy writes it, with the currency symbol and no more than two decimals. */
+/**
+ * Money as the academy writes it, with the currency symbol and always two decimals (the API's amounts are two-decimal
+ * values), so 325 never stands beside 162.50 on one screen.
+ */
 export function formatMoney(amount: number, currency: string, language: string): string {
   try {
-    return new Intl.NumberFormat(language === 'ar' ? 'ar-u-nu-latn' : language, { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 }).format(amount)
+    return new Intl.NumberFormat(language === 'ar' ? 'ar-u-nu-latn' : language, { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
   } catch {
     return `${amount.toFixed(2)} ${currency}`
   }

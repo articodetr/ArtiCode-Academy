@@ -34,12 +34,12 @@ export function AnnouncementsTab() {
     {
       title: t('notifications.announcements.columns.title'),
       key: 'title',
+      // The title is the main line: `dir="auto"` isolates it like a <bdi>, which .list-primary (index.css) would mute
+      // as a second line; the audience is that muted second line.
       render: (_, row) => (
         <span className="list-primary">
-          <b>
-            <bdi dir="auto">{row.title}</bdi>
-          </b>
-          <span>{audienceLabel(row, t, language)}</span>
+          <b dir="auto">{row.title}</b>
+          <small>{audienceLabel(row, t, language)}</small>
         </span>
       ),
     },

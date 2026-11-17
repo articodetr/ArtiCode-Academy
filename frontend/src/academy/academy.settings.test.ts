@@ -89,7 +89,7 @@ describe('certificate prefix (J-F51 — mirror of serialPrefixSchema, D-R51)', (
     expect(planCertificatesPatch('ACA', undefined)).toBeNull()
   })
 
-  it('shows the first serial of a year with the typed prefix, the default one until it is valid', () => {
+  it('shows an example of the serial format with the typed prefix, the default one until it is valid', () => {
     expect(exampleSerial('aca', 2026)).toBe('ACA-2026-00001')
     expect(exampleSerial('', 2026)).toBe('CERT-2026-00001')
     expect(exampleSerial('A', 2027)).toBe('CERT-2027-00001')

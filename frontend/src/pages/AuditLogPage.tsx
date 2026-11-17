@@ -19,6 +19,7 @@ import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime } from '../users/users.format'
+import './AuditLogPage.css'
 
 const FILTER_FIELDS = Object.keys(EMPTY_FILTER_VALUES) as (keyof AuditFilterValues)[]
 const ACTION_OPTIONS = AUDIT_ACTION_SUGGESTIONS.map((value) => ({ value }))
@@ -176,10 +177,11 @@ export function AuditLogPage() {
       <PageHeader title={t('audit.title')} subtitle={t('audit.subtitle')} />
 
       <Card>
-        <Form<AuditFilterValues> form={form} layout="vertical" initialValues={EMPTY_FILTER_VALUES} onFinish={apply} style={{ marginBottom: 16 }}>
+        <Form<AuditFilterValues> form={form} layout="vertical" initialValues={EMPTY_FILTER_VALUES} onFinish={apply} className="audit-filters" style={{ marginBottom: 16 }}>
           <Flex gap={12} wrap align="flex-start">
             <Form.Item name="action" label={t('audit.filters.action')} tooltip={t('audit.filters.actionHint')} style={{ marginBottom: 0, minWidth: 220 }}>
               <AutoComplete
+                className="audit-ltr-field"
                 options={ACTION_OPTIONS}
                 filterOption={(input, option) => Boolean(option?.value.startsWith(input.trim()))}
                 onSearch={() => {
@@ -194,16 +196,16 @@ export function AuditLogPage() {
               />
             </Form.Item>
             <Form.Item name="actorUserId" label={t('audit.filters.actor')} style={{ marginBottom: 0, minWidth: 220 }}>
-              <Input dir="ltr" allowClear placeholder="uuid" />
+              <Input dir="ltr" className="audit-ltr-field" allowClear placeholder="uuid" />
             </Form.Item>
             <Form.Item name="entityType" label={t('audit.filters.entityType')} style={{ marginBottom: 0, minWidth: 140 }}>
-              <Input dir="ltr" allowClear placeholder="users" />
+              <Input dir="ltr" className="audit-ltr-field" allowClear placeholder="users" />
             </Form.Item>
             <Form.Item name="entityId" label={t('audit.filters.entityId')} style={{ marginBottom: 0, minWidth: 220 }}>
-              <Input dir="ltr" allowClear />
+              <Input dir="ltr" className="audit-ltr-field" allowClear />
             </Form.Item>
             <Form.Item name="before" label={t('audit.filters.before')} style={{ marginBottom: 0 }}>
-              <Input type="datetime-local" dir="ltr" />
+              <Input type="datetime-local" dir="ltr" className="audit-ltr-field" />
             </Form.Item>
             <Form.Item label=" " colon={false} style={{ marginBottom: 0 }}>
               <Space>

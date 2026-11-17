@@ -115,6 +115,13 @@ function ResultCell({ item }: { item: MyExamItem }) {
   )
 }
 
+/**
+ * The expanded row never widens the table: a box of no width of its own that grows to the cell's (`min-width: 100%`)
+ * gives the table nothing to size its columns by. Without it the Descriptions inside — a table of width 100% — counts
+ * as 1,000,000 px wide in Chromium, and the table took that width when a row opened («my assignments», QA 2026-11-17).
+ */
+const EXPANDED_ROW_STYLE = { width: 0, minWidth: '100%' }
+
 /** The expanded row: what a learner may know about the exam beyond the table (learners never read API-114). */
 function ExamDetails({ item }: { item: MyExamItem }) {
   const { t } = useTranslation()
@@ -153,7 +160,11 @@ function ExamDetails({ item }: { item: MyExamItem }) {
         ]
       : []),
   ]
-  return <Descriptions size="small" column={1} items={items} />
+  return (
+    <div style={EXPANDED_ROW_STYLE} data-testid="my-exam-details">
+      <Descriptions size="small" column={1} items={items} />
+    </div>
+  )
 }
 
 export function MyExamsPage() {
@@ -326,7 +337,9 @@ export function MyExamsPage() {
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
-          scroll={{ x: 'max-content' }}
+          // `true`, not 'max-content' (the users and courses tables — KI-094/KI-095): the table keeps its box's width
+          // wherever it fits and scrolls in its own box on a phone.
+          scroll={{ x: true }}
           locale={{ emptyText }}
           expandable={{ expandedRowRender: (row) => <ExamDetails item={row} /> }}
         />

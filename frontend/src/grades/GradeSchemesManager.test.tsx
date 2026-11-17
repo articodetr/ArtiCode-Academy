@@ -107,6 +107,22 @@ describe('GradeSchemesManager (J-F44 — MOD-09-T08 part a, API-122..API-125)', 
     expect(screen.getByLabelText(`${ar.gradeSchemes.actions.delete}: ${OLD}`)).toBeDisabled()
   })
 
+  it('keeps the table at its card’s width, so every row action is in view at 1366 px, and scrolls in its own box only when it cannot fit (V2 D2)', async () => {
+    mockSchemesApi(THREE_GRADE_SCHEMES(), () => jsonResponse(500, {}))
+    renderManager()
+    await screen.findByText(PASS_FAIL)
+
+    // jsdom has no layout: assert the configuration. 'max-content' sized the table to its content (1128 px in a 1028 px
+    // card) and pushed make-default, deactivate and delete out of view; `x: true` keeps the table at the box's width
+    // wherever the bands can wrap, and scrolls it in that box only when they cannot (a phone).
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+    // The row actions stay one row of icon buttons — the bands give way instead.
+    for (const actions of screen.getAllByTestId('grade-scheme-actions')) expect(actions.style.flexWrap).not.toBe('wrap')
+  })
+
   it('shows the empty state, and a load failure with a retry that re-reads the list', async () => {
     let failures = 1
     const calls: string[] = []

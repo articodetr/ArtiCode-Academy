@@ -13,6 +13,7 @@ import { directionOf } from '../i18n/language'
 import type { Language } from '../i18n/language'
 import type { Translate } from '../users/users.format'
 import { localizedLabel } from '../users/users.format'
+import { BracketedCode } from './BracketedCode'
 import { bandOf, formatCertificateDay, formatPercent, printedStudentName } from './certificates.format'
 import { groupVerificationCode, verificationUrl } from './certificates.links'
 import './certificates.css'
@@ -45,13 +46,16 @@ export function CertificateSheet({ serial, verificationCode, status, snapshot, l
       {academy ? <div className="certificate-sheet__academy">{academy}</div> : null}
       <h1 className="certificate-sheet__title">{t('certificates.sheet.title')}</h1>
       <p className="certificate-sheet__lead">{t('certificates.sheet.awards', { academy: academy || t('common.appName') })}</p>
-      <p className="certificate-sheet__student">{printedStudentName(snapshot.student, language)}</p>
+      <p className="certificate-sheet__student">
+        {/* An isolate in the name's own direction (V3 D4): an Arabic name with a Latin word keeps its order on an English sheet. */}
+        <bdi dir="auto">{printedStudentName(snapshot.student, language)}</bdi>
+      </p>
       <p className="certificate-sheet__lead">{t('certificates.sheet.completed')}</p>
       <p className="certificate-sheet__course">
-        {localizedLabel(snapshot.course.name, language)} (<bdi dir="ltr">{snapshot.course.code}</bdi>)
+        {localizedLabel(snapshot.course.name, language)} <BracketedCode code={snapshot.course.code} />
       </p>
       <p className="certificate-sheet__lead">
-        {t('certificates.sheet.inClass', { name: localizedLabel(snapshot.class.name, language) })} (<bdi dir="ltr">{snapshot.class.code}</bdi>)
+        {t('certificates.sheet.inClass', { name: localizedLabel(snapshot.class.name, language) })} <BracketedCode code={snapshot.class.code} />
       </p>
       <p className="certificate-sheet__grade">
         {t('certificates.sheet.grade', { band })} — <bdi dir="ltr">{formatPercent(snapshot.grade.percent)}</bdi>

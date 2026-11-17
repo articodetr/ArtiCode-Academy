@@ -279,6 +279,24 @@ describe('GeneralSettingsForm — certificate prefix (J-F51)', () => {
     expect(within(fieldOf(ar.certificates.settings.serialPrefix)).getByText(new RegExp(`CERT-${year}-00001`))).toBeInTheDocument()
   })
 
+  it('offers the example as the format only — the sequence continues the year’s shared counter — isolated left-to-right on one line (V3 D2)', async () => {
+    mockAcademyApi({ academy: withPrefix('V3QA') })
+    renderForm()
+    await screen.findByLabelText(ar.settings.academyNameAr)
+
+    const field = fieldOf(ar.certificates.settings.serialPrefix)
+    // No promise of a first number: the year's counter is shared by every prefix (V3QA's first was V3QA-2026-00003).
+    expect(field).not.toHaveTextContent('أول رقم هذه السنة')
+    expect(within(field).getByText(new RegExp(ar.certificates.settings.sequenceNote))).toBeInTheDocument()
+    expect(within(field).getByText(new RegExp(ar.certificates.settings.example))).toBeInTheDocument()
+    // The example in an LTR isolate that never wraps — it showed as «-CERT / 2026-00001».
+    const example = within(field).getByTestId('serial-example')
+    expect(example.tagName).toBe('BDI')
+    expect(example).toHaveAttribute('dir', 'ltr')
+    expect(example.style.whiteSpace).toBe('nowrap')
+    expect(example).toHaveTextContent(`V3QA-${year}-00001`)
+  })
+
   it('saves the prefix upper-cased under settings.certificates in the same single PATCH as the other fields, and shows the answer', async () => {
     const api = mockAcademyApi()
     renderForm()

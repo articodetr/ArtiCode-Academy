@@ -338,4 +338,31 @@ describe('ExamDrawer', () => {
     expect(writes(calls, 'PUT')).toHaveLength(1)
     expect(examReads(calls)).toHaveLength(1)
   })
+
+  it('shows the results tab’s «published» note right after «publish results» and drops it after «unpublish», without reading the sheet again (V2 D1)', async () => {
+    const scheduled = makeExam({ status: 'scheduled', results: withResults(3) })
+    const published = makeExam({ status: 'published', results: withResults(3), publishedAt: '2026-11-21T09:00:00.000Z', updatedAt: '2026-11-21T09:00:00.000Z' })
+    const calls = mockExamApi({
+      detail: () => scheduled,
+      sheet: () => makeResultsSheet({ examStatus: 'scheduled' }),
+      respond: (method, _url, body) => (method === 'POST' ? jsonResponse(200, (body as { action: string }).action === 'publish' ? published : { ...scheduled, updatedAt: '2026-11-21T10:00:00.000Z' }) : undefined),
+    })
+    renderDrawer()
+    await screen.findByText('PY-101-A')
+    fireEvent.click(screen.getByRole('tab', { name: ar.exams.drawer.tabs.results }))
+    await screen.findByText('عمر الخريج')
+    expect(screen.queryByText(ar.exams.results.publishedNote)).not.toBeInTheDocument()
+
+    await chooseAction(ar.exams.actions.publish)
+    let dialog = screen.getByText(ar.exams.confirm.publish).closest('[role="dialog"]') as HTMLElement
+    fireEvent.click(within(dialog).getByText(ar.exams.actions.publish, { selector: 'button span' }).closest('button')!)
+    expect(await screen.findByText(ar.exams.results.publishedNote)).toBeInTheDocument()
+
+    await chooseAction(ar.exams.actions.unpublish)
+    dialog = screen.getByText(ar.exams.confirm.unpublish).closest('[role="dialog"]') as HTMLElement
+    fireEvent.click(within(dialog).getByText(ar.exams.actions.unpublish, { selector: 'button span' }).closest('button')!)
+    await waitFor(() => expect(screen.queryByText(ar.exams.results.publishedNote)).not.toBeInTheDocument())
+    expect(writes(calls, 'POST').map((call) => call.body)).toEqual([{ action: 'publish' }, { action: 'unpublish' }])
+    expect(calls.filter((call) => call.method === 'GET' && call.url.endsWith('/results'))).toHaveLength(1)
+  })
 })

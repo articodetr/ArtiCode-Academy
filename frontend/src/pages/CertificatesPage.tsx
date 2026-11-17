@@ -59,7 +59,8 @@ export function CertificatesPage() {
       key: 'student',
       render: (_, row) => (
         <span>
-          <span>{displayNameOf(row.student)}</span>
+          {/* An isolate in the name's own direction (V3 D4): an Arabic name with a Latin word keeps its order in English. */}
+          <bdi dir="auto">{displayNameOf(row.student)}</bdi>
           {row.student.fullNameLatin ? (
             <>
               <br />
@@ -232,7 +233,9 @@ export function CertificatesPage() {
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
-          scroll={{ x: 'max-content' }}
+          // `true`, not 'max-content' (V3): the table keeps its card's width wherever its columns can wrap to fit, so
+          // the actions column is in view at 1366 px, and scrolls inside its own box only when they cannot (a phone).
+          scroll={{ x: true }}
           locale={{ emptyText }}
           onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
         />

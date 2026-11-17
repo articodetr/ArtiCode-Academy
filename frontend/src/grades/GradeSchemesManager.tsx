@@ -121,7 +121,8 @@ export function GradeSchemesManager() {
         const deactivateLabel = `${t('gradeSchemes.actions.deactivate')}: ${name}`
         const deleteBlocker = deleteBlockerOf(row)
         return (
-          <Space size={4} wrap>
+          // One row of small icon buttons: the bands give way first when the table must fit its box (V2 D2).
+          <Space size={4} data-testid="grade-scheme-actions">
             <Button size="small" icon={<EditOutlined />} aria-label={`${t('common.edit')}: ${name}`} disabled={busy} onClick={() => setEditing(row)} />
             {row.isDefault ? null : (
               <Popconfirm
@@ -221,7 +222,10 @@ export function GradeSchemesManager() {
         dataSource={schemes}
         loading={loading || busy}
         pagination={false}
-        scroll={{ x: 'max-content' }}
+        // `true`, not 'max-content' (V2 D2): the table keeps its card's width whenever its columns can wrap to fit (the
+        // bands wrap, every row action stays in view at 1366 px), and scrolls inside its own box only when they cannot
+        // (a phone) — 'max-content' sized it to its content and pushed the row actions out of a desktop card.
+        scroll={{ x: true }}
         locale={{ emptyText: t('gradeSchemes.empty') }}
       />
 

@@ -2,16 +2,24 @@
 // the server sent with the invoice — the server checks it again under the
 // invoice-row lock), the method, when it was received (blank = now on the
 // server), a reference, the payer and an internal note. The body is mounted per
-// session (KI-049). The answer is the receipt; the drawer then re-reads the
+// session (KI-049) — one session per opening for one invoice: a re-read of the
+// same invoice while the dialog is open (after `payment_exceeds_balance` or
+// `invoice_not_issued`) keeps the typed values and the refusal on screen and only
+// moves the balance the dialog shows and checks. The moment is typed in the
+// academy's zone (the zone the screens show receipts in), named when it is not
+// this device's. The answer is the receipt; the drawer then re-reads the
 // invoice, so every total on screen is the server's.
 import { Alert, Form, Input, InputNumber, Modal, Select } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAcademy } from '../academy/useAcademy'
 import { PAYMENT_METHODS } from '../api/invoices'
 import type { Invoice } from '../api/invoices'
 import { PAYMENT_NOTES_MAX, PAYMENT_TEXT_MAX, recordPayment } from '../api/payments'
 import type { Payment } from '../api/payments'
+import { academyTimeZoneOf, differsFromDevice } from '../common/timeZone'
 import { useLocalized } from '../i18n/useLocalized'
+import { deviceTimeZone } from '../timetable/timetable.settings'
 import { describePaymentsFailure, failureMessage } from './payments.errors'
 import { buildRecordPaymentInput, exceeds, formatMoney, instantOfLocal, isFutureInstant, isTwoDecimalAmount } from './payments.format'
 import type { RecordPaymentFormValues as FormValues } from './payments.format'
@@ -25,16 +33,22 @@ interface RecordPaymentModalProps {
 }
 
 export function RecordPaymentModal({ invoice, onClose, onRecorded, onStale }: RecordPaymentModalProps) {
-  return invoice ? <RecordPaymentBody key={`${invoice.id}:${invoice.updatedAt}`} invoice={invoice} onClose={onClose} onRecorded={onRecorded} onStale={onStale} /> : null
+  // Keyed by the invoice alone, never by its `updatedAt`: the drawer re-reads the invoice after a stale refusal, and a
+  // new key would remount the dialog empty and wipe the refusal with the typed values (QA V4 P3).
+  return invoice ? <RecordPaymentBody key={invoice.id} invoice={invoice} onClose={onClose} onRecorded={onRecorded} onStale={onStale} /> : null
 }
 
 function RecordPaymentBody({ invoice, onClose, onRecorded, onStale }: RecordPaymentModalProps & { invoice: Invoice }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
+  const { academy } = useAcademy()
+  const academyZone = academyTimeZoneOf(academy)
+  const zone = academyZone ?? deviceTimeZone()
   const [form] = Form.useForm()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const suggested = invoice.nextDue && invoice.nextDue.remaining <= invoice.balance ? invoice.nextDue.remaining : invoice.balance
+  const money = (amount: number) => formatMoney(amount, invoice.currency, language)
 
   const submit = async () => {
     let values: FormValues
@@ -46,10 +60,10 @@ function RecordPaymentBody({ invoice, onClose, onRecorded, onStale }: RecordPaym
     setBusy(true)
     setError(null)
     try {
-      const payment = await recordPayment(invoice.id, buildRecordPaymentInput(values))
+      const payment = await recordPayment(invoice.id, buildRecordPaymentInput(values, zone))
       onRecorded(payment)
     } catch (caught) {
-      const failure = describePaymentsFailure(caught)
+      const failure = describePaymentsFailure(caught, money)
       const message = failureMessage(t, failure)
       if (failure.field) form.setFields([{ name: failure.field, errors: [message] }])
       else setError(message)
@@ -70,7 +84,7 @@ function RecordPaymentBody({ invoice, onClose, onRecorded, onStale }: RecordPaym
       confirmLoading={busy}
       destroyOnHidden
     >
-      <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('payments.record.balance', { balance: formatMoney(invoice.balance, invoice.currency, language) })} />
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('payments.record.balance', { balance: money(invoice.balance) })} />
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
       <Form form={form} layout="vertical" initialValues={{ amount: suggested, method: 'cash' }} requiredMark>
         <Form.Item
@@ -82,7 +96,7 @@ function RecordPaymentBody({ invoice, onClose, onRecorded, onStale }: RecordPaym
               validator: (_, value: unknown) => {
                 if (value === null || value === undefined) return Promise.resolve()
                 if (!isTwoDecimalAmount(value) || value <= 0) return Promise.reject(new Error(t('payments.record.amountInvalid')))
-                if (exceeds(value, invoice.balance)) return Promise.reject(new Error(t('payments.record.amountAboveBalance', { balance: formatMoney(invoice.balance, invoice.currency, language) })))
+                if (exceeds(value, invoice.balance)) return Promise.reject(new Error(t('payments.record.amountAboveBalance', { balance: money(invoice.balance) })))
                 return Promise.resolve()
               },
             },
@@ -96,12 +110,21 @@ function RecordPaymentBody({ invoice, onClose, onRecorded, onStale }: RecordPaym
         <Form.Item
           name="paidAt"
           label={t('payments.record.paidAt')}
-          extra={t('payments.record.paidAtHint')}
+          extra={
+            <>
+              {t('payments.record.paidAtHint')}
+              {!academyZone || differsFromDevice(zone) ? (
+                <span data-testid="paid-at-zone" style={{ display: 'block' }}>
+                  {t(academyZone ? 'payments.record.paidAtZone' : 'payments.record.paidAtDeviceZone')} (<bdi dir="ltr">{zone}</bdi>)
+                </span>
+              ) : null}
+            </>
+          }
           rules={[
             {
               validator: (_, value: string | undefined) => {
                 if (!value) return Promise.resolve()
-                const instant = instantOfLocal(value)
+                const instant = instantOfLocal(value, zone)
                 if (!instant) return Promise.reject(new Error(t('payments.record.paidAtInvalid')))
                 if (isFutureInstant(instant)) return Promise.reject(new Error(t('payments.record.paidAtFuture')))
                 return Promise.resolve()

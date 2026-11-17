@@ -280,6 +280,22 @@ describe('AuditLogPage — identifiers read left to right in the Arabic UI (KI-0
     // No antd Typography or Tag carries `dir` any more: its `-rtl` class would beat the attribute.
     expect(document.querySelectorAll('.ant-typography[dir], .ant-tag[dir]')).toHaveLength(0)
   })
+
+  it('marks every filter field that holds a left-to-right value for the LTR rule of AuditLogPage.css (KI-096)', async () => {
+    mockAuditApi({ first: makeAuditList([suspended]) })
+    renderPage()
+    await screen.findByText(suspended.action)
+
+    // jsdom applies no stylesheet: assert what the rule targets. antd's `-rtl` classes set `direction: rtl` on the
+    // select root and on the inputs; `.audit-filters .audit-ltr-field` (two classes) outranks them in a browser.
+    const form = document.querySelector('form.audit-filters') as HTMLFormElement
+    expect(form).not.toBeNull()
+    const fields = form.querySelectorAll('.audit-ltr-field')
+    // The event AutoComplete, the actor id, the entity type, the entity id and the «before» date-time.
+    expect(fields).toHaveLength(5)
+    expect(form.querySelector('.ant-select.audit-ltr-field input')).not.toBeNull()
+    expect(form.querySelector('input[type="datetime-local"].audit-ltr-field')).not.toBeNull()
+  })
 })
 
 describe('AuditLogPage — names instead of ids (redesign)', () => {

@@ -2,14 +2,19 @@
 // with its total, what is paid, the balance and the next installment due, the
 // `self`/`child` relation for a guardian, and the installments and valid
 // receipts on demand. Issued and cancelled invoices only, newest first, no
-// pagination; every amount is the server's.
+// pagination; every amount is the server's. A receipt's time is shown in the
+// academy's zone, as the office view shows it (this device's only when the
+// academy could not be read).
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Collapse, Empty, Flex, Space, Spin, Tag, Typography } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAcademy } from '../academy/useAcademy'
 import { listMyInvoices } from '../api/invoices'
 import type { MyInvoice } from '../api/invoices'
+import { academyTimeZoneOf } from '../common/timeZone'
 import { useLocalized } from '../i18n/useLocalized'
+import { formatLessonDateTime } from '../lessons/lessons.format'
 import { formatDateTime, formatDay, localizedLabel } from '../users/users.format'
 import { FinanceTag } from './FinanceTag'
 import { describePaymentsFailure, failureMessage } from './payments.errors'
@@ -19,6 +24,9 @@ import './payments.css'
 export function MyInvoices() {
   const { t } = useTranslation()
   const { language } = useLocalized()
+  const { academy } = useAcademy()
+  const zone = academyTimeZoneOf(academy)
+  const instant = (iso: string) => (zone ? formatLessonDateTime(iso, language, zone) : formatDateTime(iso, language))
   const [items, setItems] = useState<MyInvoice[] | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [tick, setTick] = useState(0)
@@ -132,7 +140,7 @@ export function MyInvoices() {
                         <ul>
                           {item.installments.map((part) => (
                             <li key={part.seq}>
-                              <span>{formatDay(part.dueOn, language)}</span>
+                              <span className="my-invoice__due">{formatDay(part.dueOn, language)}</span>
                               <span className="tabular-nums">{money(part.amount)}</span>
                               <FinanceTag value={part.overdue ? 'overdue' : part.status} />
                             </li>
@@ -147,7 +155,7 @@ export function MyInvoices() {
                               <li key={payment.id}>
                                 <span>
                                   <bdi dir="ltr">{payment.number}</bdi>
-                                  <small>{`${formatDateTime(payment.paidAt, language)} · ${t(`payments.methods.${payment.method}`)}`}</small>
+                                  <small>{`${instant(payment.paidAt)} · ${t(`payments.methods.${payment.method}`)}`}</small>
                                 </span>
                                 <span className="tabular-nums">{money(payment.amount)}</span>
                               </li>

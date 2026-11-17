@@ -61,6 +61,7 @@ import { classOptionsOf, showsStudents, studentOptionsOf } from '../lessons/myLe
 import { isCalendarDate } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { displayNameOf, localizedLabel } from '../users/users.format'
+import '../assignments/myAssignments.css'
 
 type Translate = (key: string, options?: Record<string, unknown>) => string
 
@@ -140,6 +141,13 @@ function TeacherCell({ item, enrollments }: { item: MyAssignmentItem; enrollment
   return <Typography.Text type="secondary">{teacher.kind === 'none' ? t('myAssignments.noLeadTeacher') : '—'}</Typography.Text>
 }
 
+/**
+ * The expanded row never widens the table: a box of no width of its own that grows to the cell's (`min-width: 100%`)
+ * gives the table nothing to size its columns by. Without it the Descriptions inside — a table of width 100% — counts
+ * as 1,000,000 px wide in Chromium, and the table took that width when a row opened (QA 2026-11-17).
+ */
+const EXPANDED_ROW_STYLE = { width: 0, minWidth: '100%' }
+
 /** The expanded row: what a learner needs before answering (learners never read API-103 — D-R40). */
 function AssignmentDetails({ item }: { item: MyAssignmentItem }) {
   const { t } = useTranslation()
@@ -164,7 +172,11 @@ function AssignmentDetails({ item }: { item: MyAssignmentItem }) {
       ? [{ key: 'lesson', label: t('myAssignments.details.lesson'), children: `${localizedLabel(item.lesson.title, language)} · ${formatZonedDay(item.lesson.startsAt, item.timeZone, language)}` }]
       : []),
   ]
-  return <Descriptions size="small" column={1} items={items} />
+  return (
+    <div style={EXPANDED_ROW_STYLE} data-testid="my-assignment-details">
+      <Descriptions size="small" column={1} items={items} />
+    </div>
+  )
 }
 
 export function MyAssignmentsPage() {
@@ -346,12 +358,15 @@ export function MyAssignmentsPage() {
 
       <Card>
         <Flex gap={12} wrap align="center" style={{ marginBottom: 16 }}>
-          <Segmented<MyAssignmentView>
-            aria-label={t('myAssignments.views.label')}
-            value={filters.view}
-            onChange={(view) => list.setFilters({ view })}
-            options={MY_ASSIGNMENT_VIEWS.map((view) => ({ value: view, label: t(`myAssignments.views.${view}`) }))}
-          />
+          {/* The four views scroll sideways in their own box on a phone, never the page (myAssignments.css). */}
+          <div className="my-assignments__views">
+            <Segmented<MyAssignmentView>
+              aria-label={t('myAssignments.views.label')}
+              value={filters.view}
+              onChange={(view) => list.setFilters({ view })}
+              options={MY_ASSIGNMENT_VIEWS.map((view) => ({ value: view, label: t(`myAssignments.views.${view}`) }))}
+            />
+          </div>
           {canPickStudent ? (
             <Select<string | undefined>
               allowClear
@@ -434,7 +449,10 @@ export function MyAssignmentsPage() {
           dataSource={rows}
           loading={list.loading}
           pagination={false}
-          scroll={{ x: 'max-content' }}
+          // `true`, not 'max-content' (the users and courses tables — KI-094/KI-095): the table keeps its box's width
+          // wherever it fits, so a desktop shows every column — «max-content» left the actions out of view at 1366 px —
+          // and a phone scrolls the table in its own box.
+          scroll={{ x: true }}
           locale={{ emptyText }}
           expandable={{ expandedRowRender: (row) => <AssignmentDetails item={row} /> }}
         />

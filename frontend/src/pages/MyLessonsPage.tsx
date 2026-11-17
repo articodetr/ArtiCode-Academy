@@ -284,7 +284,14 @@ function MyLessonsScreen({ dayZone }: { dayZone: string }) {
           locale={{ emptyText }}
           expandable={{
             rowExpandable: (row) => row.description !== null,
-            expandedRowRender: (row) => (row.description ? <Typography.Paragraph style={{ margin: 0 }}>{localizedLabel(row.description, language)}</Typography.Paragraph> : null),
+            expandedRowRender: (row) =>
+              row.description ? (
+                // A box of no width of its own that grows to the cell's: a long description wraps at the table's width
+                // instead of widening the max-content table to its one-line length (the «my assignments» fix, QA 2026-11-17).
+                <div style={{ width: 0, minWidth: '100%' }} data-testid="my-lesson-description">
+                  <Typography.Paragraph style={{ margin: 0 }}>{localizedLabel(row.description, language)}</Typography.Paragraph>
+                </div>
+              ) : null,
           }}
         />
 

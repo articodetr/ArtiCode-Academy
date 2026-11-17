@@ -1,0 +1,21 @@
+/* «My assignments» (pages/MyAssignmentsPage.tsx) and its attempt dialog (SubmitAttemptModal.tsx). */
+
+/* The four views do not fit a phone (the page was 412 px wide in Arabic and 427 px in English at 390 px — QA
+   2026-11-17): the switcher scrolls sideways in a box of its own instead of the page. A wide screen shows it whole,
+   as before. The padding, taken back by the negative margin, keeps the keyboard focus ring of an option inside the
+   box (a scrolling box clips what sticks out of it) without moving anything. */
+.my-assignments__views {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+  margin: -4px;
+}
+
+/* The link of an attempt is a URL, read left to right in every language. `dir="ltr"` alone does not do it: in the
+   Arabic UI antd puts `.ant-input-rtl { direction: rtl }` on the input, which beats the attribute, so the
+   placeholder `https://` showed as `//:https` (QA 2026-11-17). `input.` + two classes outrank that one class (the
+   rule of profile/mfa.css and pages/AuditLogPage.css). No `unicode-bidi: bidi-override`: a link may hold Arabic
+   words, which must keep their own order. */
+input.my-assignments__link.ant-input {
+  direction: ltr;
+}

@@ -43,6 +43,23 @@ describe('VerifyCertificatePage (public — API-134)', () => {
     setAccessToken(null)
   })
 
+  it('keeps the course code and its brackets in one left-to-right unit, and the student name in its own direction (V3 D3, D4)', async () => {
+    mockVerifyApi([makeVerification({ student: { fullName: 'أحمد V3 الأول', fullNameLatin: 'QA v3-st1' }, course: { code: 'V3-CRS-MIMP2', name: { ar: 'دورة الشهادات V3 MIMP2' } } })])
+    renderAt(VERIFICATION_CODE)
+    await screen.findByText(ar.certificates.verify.valid)
+
+    // The brackets inside the LTR isolate (outside it they mirrored around «(V3-CRS-» / «MIMP2)»), as an inline block
+    // that moves to the next line whole instead of breaking at a hyphen.
+    const code = screen.getByTestId('bracketed-code')
+    expect(code.tagName).toBe('BDI')
+    expect(code).toHaveAttribute('dir', 'ltr')
+    expect(code).toHaveTextContent(/^\(V3-CRS-MIMP2\)$/)
+    expect(code.style.display).toBe('inline-block')
+    const name = screen.getByText('أحمد V3 الأول')
+    expect(name.tagName).toBe('BDI')
+    expect(name).toHaveAttribute('dir', 'auto')
+  })
+
   it('shows a revoked certificate as no longer valid, with the day of the revocation', async () => {
     mockVerifyApi([makeVerification({ status: 'revoked', revokedAt: '2026-12-28T10:00:00.000Z' })])
     renderAt(VERIFICATION_CODE)

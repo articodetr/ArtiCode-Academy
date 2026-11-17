@@ -177,6 +177,41 @@ describe('MyAssignmentsPage', () => {
     expect(screen.getByText(ar.myAssignments.details.maxAttemptsValue.replace('{{count}}', '2'))).toBeInTheDocument()
   })
 
+  it('keeps an opened row inside the table: the table fits its own scroll box and the details never size it (QA 2026-11-17)', async () => {
+    mockMyAssignmentsApi(makeMyAssignmentList([todo, graded]))
+    renderPage()
+    const [row] = await rowsOf(2)
+
+    // jsdom has no layout: assert the configuration. `x: true` (not 'max-content') keeps the table at its box's width
+    // wherever it fits — a desktop shows the actions column — and scrolls it in that box on a phone (KI-094/KI-095).
+    const table = document.querySelector<HTMLTableElement>('.ant-table-content > table')!
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+
+    // The details are a Descriptions — a table of width 100%, which Chromium counted as 1,000,000 px wide: the table
+    // took that width when a row opened. They sit in a box of no width of its own that grows to the cell.
+    fireEvent.click(row!.querySelector('button.ant-table-row-expand-icon')!)
+    const box = await screen.findByTestId('my-assignment-details')
+    expect(box.closest('tr')).toHaveClass('ant-table-expanded-row')
+    expect(box.style.width).toBe('0px')
+    expect(box.style.minWidth).toBe('100%')
+    expect(within(box).getByText(ar.myAssignments.details.instructions)).toBeInTheDocument()
+    expect(table.style.width).toBe('auto')
+  })
+
+  it('puts the four views in a box of their own, which scrolls sideways on a phone instead of the page (QA 2026-11-17)', async () => {
+    mockMyAssignmentsApi(makeMyAssignmentList([todo]))
+    renderPage()
+    await rowsOf(1)
+
+    // jsdom applies no stylesheet: assert what the rule of myAssignments.css targets (max-width 100%, overflow-x auto).
+    const views = screen.getByText(ar.myAssignments.views.pending).closest('.ant-segmented') as HTMLElement
+    expect(views.parentElement).toHaveClass('my-assignments__views')
+    expect(views.parentElement!.children).toHaveLength(1)
+    for (const view of ['open', 'pending', 'closed', 'all'] as const) expect(within(views).getByText(ar.myAssignments.views[view])).toBeInTheDocument()
+  })
+
   it('tells a past-due row that still takes a late attempt from one that missed the due date — as the server says', async () => {
     const late = makeMyAssignment({ dueAt: PAST_DUE, allowLate: true, submitsLate: true })
     const missed = makeMyAssignment({ id: ASSIGNMENT_ID_2, title: { ar: 'واجب الدوال' }, dueAt: PAST_DUE, submitBlocker: 'past_due' })
