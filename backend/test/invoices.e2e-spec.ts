@@ -454,6 +454,7 @@ describe.skipIf(!available)('MOD-11 invoices (e2e, TEST-162)', () => {
     const batch = (body: object, as = 'clerk', classId = classes['A']!) => api().post(`/api/classes/${classId}/invoices`).set(bearer(as)).send(body);
     // s2 already holds a draft from the course plan for e2; s1's invoice B (same plan, e1) is cancelled — it does not block.
     const held = (await create({ studentId: fx['s2'], enrollmentId: enrollments['e2'], feePlanId: planIds['course'] }).expect(201)).body as InvoiceBody;
+    await prisma.user.update({ where: { id: fx['s2']! }, data: { displayName: 'سارة' } });
     const m = await mark();
     const result = await batch({ feePlanId: planIds['course'], issue: true }).expect(200);
     const created = result.body.created as InvoiceBody[];
@@ -463,10 +464,13 @@ describe.skipIf(!available)('MOD-11 invoices (e2e, TEST-162)', () => {
     ]);
     const numbers = created.map((invoice) => Number(NUMBER.exec(invoice.number!)![2]));
     expect(numbers[1]).toBe(numbers[0]! + 1);
+    // Each skipped item names its student (KI-109): the clerk holds `invoices.manage` alone — no `enrollments.*` key, so
+    // the class roster (API-057) is closed to him and this answer is the only place he can learn who was skipped.
     expect(result.body.skipped).toEqual([
-      { enrollmentId: enrollments['e2'], studentId: fx['s2'], reason: 'already_invoiced' },
-      { enrollmentId: enrollments['e3'], studentId: fx['s3'], reason: 'student_deleted' },
+      { enrollmentId: enrollments['e2'], studentId: fx['s2'], student: { fullName: 'Test s2', displayName: 'سارة' }, reason: 'already_invoiced' },
+      { enrollmentId: enrollments['e3'], studentId: fx['s3'], student: { fullName: 'Test s3', displayName: null }, reason: 'student_deleted' },
     ]);
+    expect((await api().get(`/api/classes/${classes['A']}/enrollments`).set(bearer('clerk'))).status).toBe(403);
     const events = await eventsSince(m);
     expect(events.map((event) => [event.action, event.entityType, event.entityId])).toEqual([['invoices.batch_created', 'classes', classes['A']]]);
     expect(events[0]!.metadata).toEqual({
@@ -483,7 +487,12 @@ describe.skipIf(!available)('MOD-11 invoices (e2e, TEST-162)', () => {
     const m2 = await mark();
     const again = await batch({ feePlanId: planIds['course'] }).expect(200);
     expect(again.body.created).toEqual([]);
-    expect((again.body.skipped as { reason: string }[]).map((skip) => skip.reason)).toEqual(['already_invoiced', 'already_invoiced', 'student_deleted', 'already_invoiced']);
+    expect((again.body.skipped as { reason: string; student: { fullName: string } }[]).map((skip) => [skip.reason, skip.student.fullName])).toEqual([
+      ['already_invoiced', 'Test s1'],
+      ['already_invoiced', 'Test s2'],
+      ['student_deleted', 'Test s3'],
+      ['already_invoiced', 'Test s5'],
+    ]);
     expect((await batch({ feePlanId: planIds['classB'] })).body).toMatchObject({ code: 'fee_plan_mismatch', feePlanId: planIds['classB'], classId: classes['A'] });
     expect((await batch({ feePlanId: planIds['inactive'] })).body).toMatchObject({ code: 'fee_plan_inactive' });
     expect((await batch({ feePlanId: NIL_ID })).body).toMatchObject({ code: 'fee_plan_not_found' });
@@ -507,6 +516,11 @@ describe.skipIf(!available)('MOD-11 invoices (e2e, TEST-162)', () => {
       for (const schema of ['CreateInvoiceDto', 'UpdateInvoiceDto', 'ChangeInvoiceStatusDto', 'IssueClassInvoicesDto', 'InvoiceDto', 'InvoiceListDto', 'ClassInvoicesResultDto']) {
         expect(docs.body.components.schemas).toHaveProperty(schema);
       }
+      // KI-109: a skipped item names its student by identity only.
+      const skipped = docs.body.components.schemas['SkippedInvoiceDto'];
+      expect(skipped.required).toContain('student');
+      expect(skipped.properties.student).toMatchObject({ allOf: [{ $ref: '#/components/schemas/SkippedInvoiceStudentDto' }] });
+      expect(Object.keys(docs.body.components.schemas['SkippedInvoiceStudentDto'].properties).sort()).toEqual(['displayName', 'fullName']);
     },
     20_000, // the OpenAPI document is slow under a parallel e2e run (KI-040)
   );

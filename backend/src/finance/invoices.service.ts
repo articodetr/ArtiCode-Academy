@@ -507,7 +507,7 @@ export class InvoicesService {
       const enrollments = await tx.enrollment.findMany({
         where: { classId, status: 'active' },
         orderBy: { id: 'asc' },
-        select: { id: true, studentUserId: true, student: { select: { deletedAt: true } } },
+        select: { id: true, studentUserId: true, student: { select: { deletedAt: true, fullName: true, displayName: true } } },
       });
       const invoiced = new Set(
         (
@@ -521,7 +521,9 @@ export class InvoicesService {
       const targets: typeof enrollments = [];
       for (const enrollment of enrollments) {
         const reason = enrollment.student.deletedAt ? 'student_deleted' : invoiced.has(enrollment.id) ? 'already_invoiced' : null;
-        if (reason) skipped.push({ enrollmentId: enrollment.id, studentId: enrollment.studentUserId, reason });
+        // The student by name only (KI-109): a finance role may hold no enrollments key to read the roster with.
+        const student = { fullName: enrollment.student.fullName, displayName: enrollment.student.displayName };
+        if (reason) skipped.push({ enrollmentId: enrollment.id, studentId: enrollment.studentUserId, student, reason });
         else targets.push(enrollment);
       }
       if (targets.length === 0) return { result: { created: [], skipped }, batch: EMPTY_BATCH };

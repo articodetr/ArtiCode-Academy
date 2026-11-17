@@ -2783,7 +2783,6 @@ export const ar = {
       result: 'أُنشئت {{created}} فاتورة، وتُخطّي {{skipped}} تسجيل.',
       created: 'الفواتير المنشأة',
       skipped: 'التسجيلات المتخطّاة',
-      studentId: 'معرّف الطالب',
       reason: 'السبب',
       reasons: {
         already_invoiced: 'له فاتورة من هذه الخطة',
