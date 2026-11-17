@@ -5,6 +5,8 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, AutoComplete, Button, Card, Flex, Form, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
+import { useRef } from 'react'
+import type { KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuditLogItem } from '../api/audit'
 import { describeAuditFailure, failureMessage } from '../audit/audit.errors'
@@ -50,6 +52,19 @@ export function AuditLogPage() {
     apply(values)
   }
 
+  // The event field takes a literal prefix (KI-092). While its suggestions are open, rc-select
+  // highlights the first one that starts with the typed text and takes it on Enter (it then prevents
+  // the default, so the form is not submitted). Unless an arrow key chose that suggestion, put the
+  // typed text back — the input still shows it, React has not re-rendered within this event — and
+  // apply it, as the apply button does. A click or arrow keys + Enter still pick a suggestion.
+  const pickedByArrow = useRef(false)
+  const keepTypedPrefixOnEnter = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') pickedByArrow.current = true
+    else if (event.key === 'Enter' && event.defaultPrevented && !pickedByArrow.current && event.target instanceof HTMLInputElement) {
+      filterBy({ action: event.target.value })
+    }
+  }
+
   // Names instead of ids where the caller may read users (redesign): the id stays in the title and the filter.
   const names = useUserNames(
     log.items.flatMap((row) => [row.actorUserId, row.entityType === 'users' ? row.entityId : null].filter((id): id is string => Boolean(id))),
@@ -57,7 +72,13 @@ export function AuditLogPage() {
   )
   const idLabel = (id: string) => {
     const name = names.get(id)
-    return name ? <Typography.Text>{name}</Typography.Text> : <Typography.Text code dir="ltr">{shortId(id)}</Typography.Text>
+    return name ? (
+      <Typography.Text>{name}</Typography.Text>
+    ) : (
+      <Typography.Text code>
+        <bdi dir="ltr">{shortId(id)}</bdi>
+      </Typography.Text>
+    )
   }
 
   const actorCell = (row: AuditLogItem) => {
@@ -83,7 +104,9 @@ export function AuditLogPage() {
     const { entityType, entityId } = row
     return (
       <Space size={4}>
-        <Typography.Text dir="ltr">{entityType}</Typography.Text>
+        <Typography.Text>
+          <bdi dir="ltr">{entityType}</bdi>
+        </Typography.Text>
         {entityId ? (
           <Button
             type="link"
@@ -94,8 +117,8 @@ export function AuditLogPage() {
             style={{ paddingInline: 0 }}
           >
             {entityType === 'users' ? idLabel(entityId) : (
-              <Typography.Text code dir="ltr">
-                {shortId(entityId)}
+              <Typography.Text code>
+                <bdi dir="ltr">{shortId(entityId)}</bdi>
               </Typography.Text>
             )}
           </Button>
@@ -117,12 +140,12 @@ export function AuditLogPage() {
         const summary = metadataSummary(row.metadata)
         return (
           <Space orientation="vertical" size={0}>
-            <Tag color={familyColor(row.action)} dir="ltr" style={{ fontFamily: 'monospace', marginInlineEnd: 0 }}>
-              {row.action}
+            <Tag color={familyColor(row.action)} style={{ fontFamily: 'monospace', marginInlineEnd: 0 }}>
+              <bdi dir="ltr">{row.action}</bdi>
             </Tag>
             {summary ? (
-              <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-                {summary}
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <bdi dir="ltr">{summary}</bdi>
               </Typography.Text>
             ) : null}
           </Space>
@@ -135,7 +158,14 @@ export function AuditLogPage() {
       title: t('audit.columns.ip'),
       key: 'ip',
       // An IPv4 address the server saw through an IPv6 socket reads `::ffff:127.0.0.1`; show the IPv4 part.
-      render: (_, row) => (row.ipAddress ? <Typography.Text dir="ltr" style={{ whiteSpace: 'nowrap' }}>{row.ipAddress.replace(/^::ffff:/i, '')}</Typography.Text> : EMPTY),
+      render: (_, row) =>
+        row.ipAddress ? (
+          <Typography.Text style={{ whiteSpace: 'nowrap' }}>
+            <bdi dir="ltr">{row.ipAddress.replace(/^::ffff:/i, '')}</bdi>
+          </Typography.Text>
+        ) : (
+          EMPTY
+        ),
     },
   ]
 
@@ -152,6 +182,13 @@ export function AuditLogPage() {
               <AutoComplete
                 options={ACTION_OPTIONS}
                 filterOption={(input, option) => Boolean(option?.value.startsWith(input.trim()))}
+                onSearch={() => {
+                  pickedByArrow.current = false
+                }}
+                onOpenChange={(open) => {
+                  if (open) pickedByArrow.current = false
+                }}
+                onKeyDown={keepTypedPrefixOnEnter}
                 allowClear
                 placeholder="users."
               />
@@ -238,29 +275,31 @@ function EventDetails({ row }: { row: AuditLogItem }) {
     <Space orientation="vertical" size={4} style={{ width: '100%' }}>
       <Typography.Text type="secondary">
         {t('audit.details.id')}:{' '}
-        <Typography.Text code dir="ltr">
-          {row.id}
+        <Typography.Text code>
+          <bdi dir="ltr">{row.id}</bdi>
         </Typography.Text>
       </Typography.Text>
       {row.actorUserId ? (
         <Typography.Text type="secondary">
           {t('audit.columns.actor')}:{' '}
-          <Typography.Text code dir="ltr">
-            {row.actorUserId}
+          <Typography.Text code>
+            <bdi dir="ltr">{row.actorUserId}</bdi>
           </Typography.Text>
         </Typography.Text>
       ) : null}
       {row.entityId ? (
         <Typography.Text type="secondary">
           {t('audit.columns.entity')}:{' '}
-          <Typography.Text code dir="ltr">
-            {row.entityType} / {row.entityId}
+          <Typography.Text code>
+            <bdi dir="ltr">
+              {row.entityType} / {row.entityId}
+            </bdi>
           </Typography.Text>
         </Typography.Text>
       ) : null}
       {row.userAgent ? (
         <Typography.Text type="secondary">
-          {t('audit.details.userAgent')}: <span dir="ltr">{row.userAgent}</span>
+          {t('audit.details.userAgent')}: <bdi dir="ltr">{row.userAgent}</bdi>
         </Typography.Text>
       ) : null}
       {text ? (

@@ -95,6 +95,20 @@ describe('UsersPage', () => {
     expect(screen.getByRole('checkbox', { name: ar.users.includeDeleted })).toBeInTheDocument()
   })
 
+  it('keeps the table in its own horizontal scroll box, so a phone never scrolls the page sideways (KI-094)', async () => {
+    mockUsersApi({ first: makeUserList([sara, omar]) })
+    renderPage()
+    await screen.findByText(sara.fullName)
+
+    // jsdom has no layout: assert the configuration. `scroll.x` makes antd wrap the table in a box of its own that
+    // scrolls sideways; `x: true` keeps the table at the box's width whenever it fits (an unchanged desktop) —
+    // 'max-content' would size it to its content and scroll a desktop table that is a few pixels too wide.
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+  })
+
   it('shows the reduced projection without users.read_contact: no contact column, no add button, no deleted toggle', async () => {
     mockUsersApi({ first: makeUserList([reduced(sara)]) })
     renderPage(READ_ONLY_PERMISSIONS)

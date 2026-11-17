@@ -200,6 +200,10 @@ export function UsersPage() {
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
+          // On a phone the table scrolls inside its own box instead of widening the page (KI-094). `true`, not
+          // 'max-content': the table still fills its box and wraps like before whenever it fits (a desktop),
+          // so the box scrolls only when the columns cannot shrink any further.
+          scroll={{ x: true }}
           locale={{ emptyText: t('users.empty') }}
           onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
         />
