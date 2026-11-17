@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
 import { makeClass } from '../test/classes'
-import { makeEnrollment, makeEnrollmentList, makeEnrollmentStudent } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { FEE_PLAN_ID, FINANCE_MANAGER_PERMISSIONS, makeFeePlan, makeInvoice, makeInvoiceSummary, makePayment } from '../test/payments'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -188,7 +187,7 @@ describe('PaymentsPage — bill a whole class', () => {
       [`POST /api/classes/${makeClass().id}/invoices`]: () =>
         jsonResponse(200, {
           created: [makeInvoiceSummary({ id: 'b-1', number: 'INV-2026-00100' })],
-          skipped: [{ enrollmentId: 'e-2', studentId: 's-2', reason: 'already_invoiced' }],
+          skipped: [{ enrollmentId: 'e-2', studentId: 's-2', student: { fullName: 'هند سالم', displayName: null }, reason: 'already_invoiced' }],
         }),
     })
     renderPage(FINANCE_MANAGER_PERMISSIONS)
@@ -208,13 +207,20 @@ describe('PaymentsPage — bill a whole class', () => {
     await waitFor(() => expect(calls.filter((call) => call.path === '/api/invoices' && call.method === 'GET').length).toBeGreaterThan(before))
   })
 
-  it('names the skipped students from the class roster instead of their ids (QA V4 P2)', async () => {
-    const skippedEnrollment = makeEnrollment({ id: 'e-2', student: makeEnrollmentStudent({ id: 's-2', fullName: 'هند سالم', displayName: null }) })
+  it('names the skipped students from the answer, also for a finance role without enrollments.read, and reads no roster (KI-109)', async () => {
     const calls = mockApi({
-      [`POST /api/classes/${makeClass().id}/invoices`]: () => jsonResponse(200, { created: [], skipped: [{ enrollmentId: 'e-2', studentId: 's-2', reason: 'already_invoiced' }] }),
-      [`GET /api/classes/${makeClass().id}/enrollments`]: () => jsonResponse(200, makeEnrollmentList([makeEnrollment(), skippedEnrollment])),
+      [`POST /api/classes/${makeClass().id}/invoices`]: () =>
+        jsonResponse(200, {
+          created: [],
+          skipped: [
+            { enrollmentId: 'e-2', studentId: 's-2', student: { fullName: 'هند سالم', displayName: null }, reason: 'already_invoiced' },
+            { enrollmentId: 'e-3', studentId: 's-3', student: { fullName: 'عمر خالد', displayName: 'أبو خالد' }, reason: 'student_deleted' },
+          ],
+        }),
     })
-    renderPage(FINANCE_MANAGER_PERMISSIONS)
+    const permissions = FINANCE_MANAGER_PERMISSIONS.filter((key) => !key.startsWith('enrollments.'))
+    expect(permissions).toContain('invoices.manage')
+    renderPage(permissions)
     await screen.findByText('INV-2026-00057')
     fireEvent.click(button(document.body, ar.payments.batch.action))
     const dialog = await dialogTitled(ar.payments.batch.title)
@@ -223,25 +229,12 @@ describe('PaymentsPage — bill a whole class', () => {
     fireEvent.click(button(dialog, ar.payments.batch.submit))
 
     expect(await within(dialog).findByText('هند سالم')).toBeInTheDocument()
+    // The display name wins, as everywhere a finance screen names a student.
+    expect(within(dialog).getByText('أبو خالد')).toBeInTheDocument()
+    expect(within(dialog).getByText(ar.payments.batch.reasons.student_deleted)).toBeInTheDocument()
+    expect(within(dialog.querySelector('.ant-table-thead') as HTMLElement).getByText(ar.common.student)).toBeInTheDocument()
     expect(within(dialog).queryByText('s-2')).toBeNull()
-    expect(calls.find((call) => call.path === `/api/classes/${makeClass().id}/enrollments`)!.query.get('limit')).toBe('100')
-  })
-
-  it('keeps the student id of a skipped enrollment when the roster cannot be read', async () => {
-    const calls = mockApi({
-      [`POST /api/classes/${makeClass().id}/invoices`]: () => jsonResponse(200, { created: [], skipped: [{ enrollmentId: 'e-2', studentId: 's-2', reason: 'student_deleted' }] }),
-    })
-    // Without `enrollments.read` the roster is never asked for.
-    renderPage(FINANCE_MANAGER_PERMISSIONS.filter((key) => key !== 'enrollments.read'))
-    await screen.findByText('INV-2026-00057')
-    fireEvent.click(button(document.body, ar.payments.batch.action))
-    const dialog = await dialogTitled(ar.payments.batch.title)
-    await pick(dialog, ar.payments.draft.class, 'PY-101-A — بايثون — الفصل أ')
-    await pick(dialog, ar.payments.drawer.feePlan, 'رسوم الفصل الدراسي')
-    fireEvent.click(button(dialog, ar.payments.batch.submit))
-
-    expect(await within(dialog).findByText('s-2')).toBeInTheDocument()
-    expect(within(dialog).getByText(ar.payments.batch.studentId)).toBeInTheDocument()
+    expect(within(dialog).queryByText('s-3')).toBeNull()
     expect(calls.some((call) => call.path.endsWith('/enrollments'))).toBe(false)
   })
 })

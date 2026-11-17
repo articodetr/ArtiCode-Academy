@@ -2777,7 +2777,6 @@ export const en: Translation = {
       result: '{{created}} invoice(s) created, {{skipped}} enrollment(s) skipped.',
       created: 'Invoices created',
       skipped: 'Enrollments skipped',
-      studentId: 'Student id',
       reason: 'Reason',
       reasons: {
         already_invoiced: 'Already has an invoice from this plan',

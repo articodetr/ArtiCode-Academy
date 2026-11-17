@@ -227,9 +227,11 @@ export interface IssueClassInvoicesInput {
 
 export type SkippedInvoiceReason = 'already_invoiced' | 'student_deleted'
 
+/** `SkippedInvoiceDto`: an enrollment the batch did not invoice, with its student by name (KI-109) and the reason. */
 export interface SkippedInvoice {
   enrollmentId: string
   studentId: string
+  student: { fullName: string; displayName: string | null }
   reason: SkippedInvoiceReason
 }
 
@@ -256,7 +258,7 @@ export function deleteInvoice(id: string): Promise<void> {
 
 export const classInvoicesPath = (classId: string) => `/api/classes/${encodeURIComponent(classId)}/invoices`
 
-/** API-150: one invoice from the plan per active enrollment of the class; the others are `skipped` with their reason. */
+/** API-150: one invoice from the plan per active enrollment of the class; the others are `skipped` with their student and reason. */
 export function issueClassInvoices(classId: string, input: IssueClassInvoicesInput): Promise<ClassInvoicesResult> {
   return apiRequest<ClassInvoicesResult>(classInvoicesPath(classId), { method: 'POST', body: input })
 }

@@ -4,10 +4,10 @@
 // course or nothing in particular (`fee_plan_mismatch` otherwise); only the
 // fitting active plans are offered. The answer is shown as the server gave it:
 // the invoices created and the enrollments skipped with their reason
-// (`already_invoiced`, `student_deleted`). The server names a skipped
-// enrollment by ids only; a holder of `enrollments.read` gets the students'
-// names from the class roster (skippedStudentNames), anyone else — or after a
-// failed read — the student's id. The body is mounted per session.
+// (`already_invoiced`, `student_deleted`). The server names the student of a
+// skipped enrollment itself (KI-109), so a finance role without any
+// `enrollments.*` key reads the names too — no roster is read. The body is
+// mounted per session.
 import { Alert, Checkbox, Form, Modal, Select, Space, Table, Typography } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,7 +15,6 @@ import { listFeePlans } from '../api/feePlans'
 import type { FeePlan } from '../api/feePlans'
 import { issueClassInvoices } from '../api/invoices'
 import type { ClassInvoicesResult, InvoiceSummary, SkippedInvoice } from '../api/invoices'
-import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { FinanceClassPicker } from './FinancePickers'
@@ -23,7 +22,6 @@ import type { FinanceRef } from './FinancePickers'
 import { planFits } from './feePlans.rules'
 import { describePaymentsFailure, failureMessage } from './payments.errors'
 import { formatMoney, personName } from './payments.format'
-import { skippedStudentNames } from './skippedNames'
 
 interface ClassBatchModalProps {
   open: boolean
@@ -45,33 +43,12 @@ interface BatchValues {
 function ClassBatchBody({ onClose, onDone }: Omit<ClassBatchModalProps, 'open'>) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { hasPermission } = useAuth()
-  const canReadRoster = hasPermission('enrollments.read')
   const [form] = Form.useForm()
   const [cls, setCls] = useState<FinanceRef | null>(null)
   const [plans, setPlans] = useState<FeePlan[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ClassInvoicesResult | null>(null)
-  /** The class the answer is about (the form is gone once the result shows). */
-  const [billedClassId, setBilledClassId] = useState<string | null>(null)
-  const [skippedNames, setSkippedNames] = useState<Map<string, string>>(() => new Map())
-
-  useEffect(() => {
-    if (!result || !billedClassId || result.skipped.length === 0 || !canReadRoster) return
-    const controller = new AbortController()
-    skippedStudentNames(
-      billedClassId,
-      result.skipped.map((skip) => skip.enrollmentId),
-      controller.signal,
-    )
-      .then((names) => {
-        if (!controller.signal.aborted) setSkippedNames(names)
-      })
-      // Without the roster the rows keep the student's id.
-      .catch(() => undefined)
-    return () => controller.abort()
-  }, [result, billedClassId, canReadRoster])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -102,7 +79,6 @@ function ClassBatchBody({ onClose, onDone }: Omit<ClassBatchModalProps, 'open'>)
     setError(null)
     try {
       const answer = await issueClassInvoices(values.classId!, values.issue ? { feePlanId: values.feePlanId!, issue: true } : { feePlanId: values.feePlanId! })
-      setBilledClassId(values.classId!)
       setResult(answer)
       onDone(answer)
     } catch (caught) {
@@ -161,11 +137,7 @@ function ClassBatchBody({ onClose, onDone }: Omit<ClassBatchModalProps, 'open'>)
                 pagination={false}
                 dataSource={result.skipped}
                 columns={[
-                  {
-                    title: skippedNames.size > 0 ? t('common.student') : t('payments.batch.studentId'),
-                    key: 'student',
-                    render: (_, skip) => skippedNames.get(skip.enrollmentId) ?? <bdi dir="ltr">{skip.studentId}</bdi>,
-                  },
+                  { title: t('common.student'), key: 'student', render: (_, skip) => personName(skip.student) },
                   { title: t('payments.batch.reason'), key: 'reason', render: (_, skip) => t(`payments.batch.reasons.${skip.reason}`) },
                 ]}
               />

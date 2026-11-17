@@ -449,12 +449,24 @@ export class InvoiceListDto {
 
 export type SkippedInvoiceReason = 'already_invoiced' | 'student_deleted';
 
+/** The skipped enrollment's student by identity only — what an invoice already tells its reader (KI-109). */
+export class SkippedInvoiceStudentDto {
+  @ApiProperty()
+  fullName: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  displayName: string | null;
+}
+
 export class SkippedInvoiceDto {
   @ApiProperty({ format: 'uuid' })
   enrollmentId: string;
 
   @ApiProperty({ format: 'uuid' })
   studentId: string;
+
+  @ApiProperty({ type: () => SkippedInvoiceStudentDto, description: 'The student by name, so a finance role without an enrollments key can tell who was skipped' })
+  student: SkippedInvoiceStudentDto;
 
   @ApiProperty({ enum: ['already_invoiced', 'student_deleted'], description: 'already_invoiced: a non-cancelled invoice from this plan exists for the enrollment · student_deleted: the student was soft-deleted' })
   reason: SkippedInvoiceReason;

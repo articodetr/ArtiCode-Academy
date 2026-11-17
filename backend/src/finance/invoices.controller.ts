@@ -172,7 +172,7 @@ export class ClassInvoicesController {
   @ApiOperation({
     summary: "Invoice a class's enrollments from a fee plan",
     description:
-      'For every `active` enrollment of the class without a non-cancelled invoice from the same plan (others are `skipped` with their reason): drafts, or issued at once with consecutive numbers when `issue` is true. The plan must be active and price this class, its course, or no course or class. Under the class-row lock. One `invoices.batch_created` event on the class; nothing to create = 200 without write or event.',
+      'For every `active` enrollment of the class without a non-cancelled invoice from the same plan (others are `skipped` with their reason and their student by name): drafts, or issued at once with consecutive numbers when `issue` is true. The plan must be active and price this class, its course, or no course or class. Under the class-row lock. One `invoices.batch_created` event on the class; nothing to create = 200 without write or event.',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'The class' })
   @ApiOkResponse({ type: ClassInvoicesResultDto })
