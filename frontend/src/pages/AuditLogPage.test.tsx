@@ -207,6 +207,81 @@ describe('AuditLogPage', () => {
   })
 })
 
+describe('AuditLogPage — the event prefix field (KI-092)', () => {
+  const actionField = () => screen.getByLabelText(ar.audit.filters.action) as HTMLInputElement
+  const activeOption = () => document.querySelector('.ant-select-item-option-active .ant-select-item-option-content')?.textContent ?? null
+  /** rc-select reads `which`/`keyCode`, which user-event leaves at 0 — so its list would ignore `userEvent.keyboard()`. */
+  const press = (key: 'Enter' | 'ArrowDown', keyCode: number) => {
+    fireEvent.keyDown(actionField(), { key, code: key, keyCode, which: keyCode })
+    fireEvent.keyUp(actionField(), { key, code: key, keyCode, which: keyCode })
+  }
+
+  it('Enter keeps the typed prefix and applies it, as the apply button does', async () => {
+    const api = mockAuditApi({ first: makeAuditList([suspended]) })
+    renderPage()
+    await screen.findByText('users.status.changed')
+
+    await userEvent.type(actionField(), 'auth.mfa.')
+    // rc-select highlights the first suggestion that starts with the typed text — Enter must not take it.
+    await waitFor(() => expect(activeOption()).toBe('auth.mfa.enabled'))
+    press('Enter', 13)
+
+    await waitFor(() => expect(api.queries).toHaveLength(2))
+    expect(Object.fromEntries(api.lastQuery())).toEqual({ limit: '50', action: 'auth.mfa.' })
+    expect(actionField()).toHaveValue('auth.mfa.')
+  })
+
+  it('arrow-down then Enter still takes the highlighted suggestion (and sends nothing until applied)', async () => {
+    const api = mockAuditApi({ first: makeAuditList([suspended]) })
+    renderPage()
+    await screen.findByText('users.status.changed')
+
+    await userEvent.type(actionField(), 'auth.mfa.')
+    await waitFor(() => expect(activeOption()).toBe('auth.mfa.enabled'))
+    press('ArrowDown', 40)
+    await waitFor(() => expect(activeOption()).toBe('auth.mfa.disabled'))
+    press('Enter', 13)
+
+    await waitFor(() => expect(actionField()).toHaveValue('auth.mfa.disabled'))
+    expect(api.queries).toHaveLength(1)
+    await applyFilters()
+    await waitFor(() => expect(api.queries).toHaveLength(2))
+    expect(Object.fromEntries(api.lastQuery())).toEqual({ limit: '50', action: 'auth.mfa.disabled' })
+  })
+})
+
+describe('AuditLogPage — identifiers read left to right in the Arabic UI (KI-093)', () => {
+  /** The value sits in a plain `<bdi dir="ltr">` — an antd Typography/Tag would override `dir` with its RTL class. */
+  const expectLtrIsolate = (text: string) => {
+    const element = screen.getByText(text)
+    expect(element.tagName).toBe('BDI')
+    expect(element).toHaveAttribute('dir', 'ltr')
+    expect(element.className).not.toMatch(/ant-(typography|tag)/)
+  }
+
+  it('wraps the IP, the ids, the entity type, the event name, the summary and the expanded details in a plain LTR isolate', async () => {
+    const event = makeAuditItem({ action: 'auth.login.succeeded', ipAddress: '::1', entityType: 'courses', entityId: '0193a000-0000-7000-8000-00000000c001', metadata: { familyId: 'f-1' } })
+    mockAuditApi({ first: makeAuditList([event]) })
+    renderPage()
+    await screen.findByText('auth.login.succeeded')
+
+    expectLtrIsolate('::1')
+    expectLtrIsolate('auth.login.succeeded')
+    expectLtrIsolate('familyId: f-1')
+    expectLtrIsolate('courses')
+    expectLtrIsolate('0193a000…')
+    expectLtrIsolate(ADMIN_ID)
+
+    await userEvent.click(document.querySelector<HTMLButtonElement>('.ant-table-row-expand-icon') as HTMLButtonElement)
+    expect(await screen.findByText(event.id)).toBeInTheDocument()
+    expectLtrIsolate(event.id)
+    expectLtrIsolate('courses / 0193a000-0000-7000-8000-00000000c001')
+    expectLtrIsolate('Mozilla/5.0 (test)')
+    // No antd Typography or Tag carries `dir` any more: its `-rtl` class would beat the attribute.
+    expect(document.querySelectorAll('.ant-typography[dir], .ant-tag[dir]')).toHaveLength(0)
+  })
+})
+
 describe('AuditLogPage — names instead of ids (redesign)', () => {
   it('reads each actor once for a holder of users.read and shows the name; without the key it keeps the short id', async () => {
     forgetUserNames()
