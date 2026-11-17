@@ -131,9 +131,6 @@ export function CoursesPage() {
         dataSource={list.items}
         loading={list.loading}
         pagination={false}
-        // On a phone the table scrolls inside its own box instead of widening the page (KI-095, as the users
-        // table — KI-094). `true`, not 'max-content': the table keeps its box's width wherever it fits.
-        scroll={{ x: true }}
         locale={{ emptyText: t('courses.empty') }}
         onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
       />

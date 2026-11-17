@@ -59,19 +59,6 @@ describe('CoursesPage', () => {
     expect(Object.fromEntries(api.queries[0]!)).toEqual({ sort: 'code', limit: '20' })
   })
 
-  it('keeps the table in its own horizontal scroll box, so a phone never scrolls the page sideways (KI-095)', async () => {
-    mockCoursesApi(makeCourseList([python, web]))
-    renderPage(COURSE_READER_PERMISSIONS)
-    await screen.findByText('PY-101')
-
-    // jsdom has no layout: assert the configuration (as the users page — KI-094). `scroll.x` wraps the table in a box
-    // of its own that scrolls sideways; `x: true` keeps the table at the box's width wherever it fits.
-    const table = screen.getByRole('table')
-    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
-    expect(table.style.width).toBe('auto')
-    expect(table.style.minWidth).toBe('100%')
-  })
-
   it('gives a manager the add button and the status filter; filters and search re-query from the first page', async () => {
     const api = mockCoursesApi(makeCourseList([python, web]))
     renderPage(COURSE_MANAGER_PERMISSIONS)
