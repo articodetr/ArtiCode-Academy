@@ -112,7 +112,8 @@ function RecordedPaymentsList({ timeZone }: { timeZone: string }) {
           options={PAYMENT_STATUSES.map((status) => ({ value: status, label: t(`payments.status.${status}`) }))}
           style={{ minWidth: 140 }}
         />
-        <Space size={4} align="center">
+        {/* `wrap`: the two 170 px day inputs (DateFilter) go on two lines on a phone instead of widening the tab. */}
+        <Space size={4} align="center" wrap>
           <DateFilter label={t('payments.recorded.from')} value={f.fromDay} onChange={(value) => list.setFilters({ fromDay: value })} />
           <Typography.Text type="secondary">–</Typography.Text>
           <DateFilter label={t('payments.recorded.to')} value={f.toDay} onChange={(value) => list.setFilters({ toDay: value })} />

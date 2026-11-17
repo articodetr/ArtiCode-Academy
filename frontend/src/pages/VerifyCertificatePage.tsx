@@ -18,6 +18,7 @@ import { useNavigate, useParams } from 'react-router'
 import { PublicCard } from '../account/PublicCard'
 import { verifyCertificate } from '../api/certificates'
 import type { CertificateVerification } from '../api/certificates'
+import { BracketedCode } from '../certificates/BracketedCode'
 import { describeVerificationFailure } from '../certificates/certificates.errors'
 import { bandOf, formatCertificateDay, formatPercent } from '../certificates/certificates.format'
 import { normalizeVerificationCode, verificationPath } from '../certificates/certificates.links'
@@ -126,7 +127,8 @@ function VerificationResult({ result }: { result: CertificateVerification }) {
             label: t('certificates.verify.fields.student'),
             children: (
               <span>
-                <span>{result.student.fullName}</span>
+                {/* An isolate in the name's own direction (V3 D4): an Arabic name with a Latin word keeps its order in English. */}
+                <bdi dir="auto">{result.student.fullName}</bdi>
                 {result.student.fullNameLatin ? (
                   <>
                     <br />
@@ -143,7 +145,8 @@ function VerificationResult({ result }: { result: CertificateVerification }) {
             label: t('certificates.verify.fields.course'),
             children: (
               <span>
-                {localizedLabel(result.course.name, language)} (<bdi dir="ltr">{result.course.code}</bdi>)
+                {/* The brackets inside the code's LTR isolate, one unit on one line (V3 D3). */}
+                {localizedLabel(result.course.name, language)} <BracketedCode code={result.course.code} />
               </span>
             ),
           },

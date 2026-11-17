@@ -107,7 +107,11 @@ export function planCertificatesPatch(current: string | null, value: string | nu
   return next === current ? null : { serialPrefix: next }
 }
 
-/** The first serial of a year with this prefix — the default one while the field is blank or not valid yet (`ACA-2026-00001`). */
+/**
+ * An example of a serial's format with this prefix — the default one while the field is blank or not valid yet
+ * (`ACA-2026-00001`). Only the format: the sequence continues the year's counter, shared by every prefix (D-R53), so
+ * a year that has certificates goes on from its last number.
+ */
 export function exampleSerial(value: string | null | undefined, year: number): string {
   const typed = normaliseSerialPrefix(value)
   const prefix = SERIAL_PREFIX_PATTERN.test(typed) ? typed : DEFAULT_CERTIFICATE_SERIAL_PREFIX

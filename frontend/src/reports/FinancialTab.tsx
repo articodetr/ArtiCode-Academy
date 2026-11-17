@@ -4,6 +4,7 @@
 // across currencies.
 import { Empty, Switch } from 'antd'
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CollectionRow, ReceivableRow, ReportPeriod, RevenueRow } from '../api/reports'
 import { getCollections, getReceivables, getRevenue } from '../api/reports'
@@ -69,7 +70,8 @@ function CollectionsView({ period }: { period: ReportPeriod }) {
                     {months.map((month, index) => (
                       <div key={month} className="db-chart__col">
                         <small>{formatMoney(sums[index], total.currency, language)}</small>
-                        <i style={{ height: `${Math.max(2, (sums[index] / top) * 100)}%` }} />
+                        {/* Its share of the tallest month; reports.css turns it into a height that leaves room for the amount above it. */}
+                        <i style={{ '--rp-bar': sums[index] / top } as CSSProperties} />
                         <span>{formatMonth(month, language)}</span>
                       </div>
                     ))}

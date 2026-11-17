@@ -6,7 +6,7 @@ import { ASSIGNMENT_ID, ASSIGNMENT_ID_2 } from '../test/assignments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { PAST_DUE, STUDENT_LEARNER_PERMISSIONS, makeLatest, makeMyAssignment, makeMySubmission } from '../test/myAssignments'
 import { SELF_STUDENT } from '../test/myLessons'
-import { answerDiscardQuestion, blockerStates, discardQuestionCount, goBack, latestDiscardQuestion, renderInDataRouter, unloadWouldPrompt } from '../test/navigation'
+import { blockerStates, discardQuestionCount, goBack, renderInDataRouter, unloadWouldPrompt } from '../test/navigation'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { SubmitAttemptModal } from './SubmitAttemptModal'
 import { formatZonedDateTime } from './assignments.format'
@@ -81,6 +81,25 @@ async function confirmSend(number = 1) {
 
 /** The number of D-R38 confirmations opened so far (antd renders a confirmation's title twice — counted by dialog). */
 const confirmCount = (number = 1) => new Set(screen.queryAllByText(confirmTitle(number)).map((title) => title.closest('[role="dialog"]'))).size
+
+/**
+ * The dialog's own «discard?» question (myAssignments.submit.unsaved.* — useUnsavedChangesGuard with that prefix), the helpers of
+ * test/navigation.tsx for the drawers' common.unsaved.* question: counted by dialog (antd shows a confirm's title
+ * twice), the latest one is the open one (jsdom never ends the closing animation of an answered one).
+ */
+const ANSWER_QUESTION = ar.myAssignments.submit.unsaved
+const answerQuestionCount = () => new Set(screen.queryAllByText(ANSWER_QUESTION.title).map((title) => title.closest('[role="dialog"]'))).size
+async function latestAnswerQuestion(): Promise<HTMLElement> {
+  const titles = await screen.findAllByText(ANSWER_QUESTION.title)
+  return titles[titles.length - 1]!.closest('[role="dialog"]') as HTMLElement
+}
+/** Answers the question; a navigation it lets go on completes inside `act`. */
+async function answerQuestion(question: HTMLElement, answer: 'discard' | 'keep') {
+  const label = answer === 'discard' ? ANSWER_QUESTION.ok : ANSWER_QUESTION.cancel
+  await act(async () => {
+    fireEvent.click(within(question).getByText(label).closest('button')!)
+  })
+}
 
 describe('SubmitAttemptModal (API-109)', () => {
   it('shows what the student needs before answering: class, due date in the assignment zone, maximum score, the attempt number, the instructions and that an attempt cannot be edited', async () => {
@@ -289,6 +308,24 @@ describe('SubmitAttemptModal (API-109)', () => {
     expect(posts).toHaveLength(1)
   })
 
+  it('lays the link field out left to right in the Arabic UI: the class of the LTR rule beats antd’s -rtl class (QA 2026-11-17)', async () => {
+    mockSubmitApi()
+    renderModal()
+    await screen.findByText(ar.myAssignments.submit.ok)
+
+    // jsdom applies no stylesheet: assert what `input.my-assignments__link.ant-input { direction: ltr }`
+    // (myAssignments.css) targets. antd's `.ant-input-rtl` is why `dir="ltr"` alone showed `https://` as `//:https`.
+    const link = linkField()
+    expect(link.tagName).toBe('INPUT')
+    expect(link).toHaveClass('ant-input', 'ant-input-rtl', 'my-assignments__link')
+    expect(link).toHaveAttribute('dir', 'ltr')
+    expect(link).toHaveAttribute('placeholder', 'https://')
+    // The answer text keeps its own direction (dir="auto"): it is not LTR-forced.
+    expect(textField()).not.toHaveClass('my-assignments__link')
+    // The hint under the field names `https://` inside Arabic text: LRI … PDI keep it from reading «//:https» (re-verification).
+    expect(screen.getByText(ar.myAssignments.submit.linkHint).textContent).toContain('\u2066https://\u2069')
+  })
+
   it('mounts its form per session (KI-049): another assignment opens with an empty answer', async () => {
     mockSubmitApi()
     const { rerender } = renderModal()
@@ -319,7 +356,27 @@ describe('SubmitAttemptModal — the typed answer is never lost without asking (
     fireEvent.click(closeIcon())
     fireEvent.click(cancelButton())
     expect(onClose).toHaveBeenCalledTimes(4)
+    expect(answerQuestionCount()).toBe(0)
+  })
+
+  it('asks in the dialog’s own words — an unsent answer in a dialog — never the drawers’ question about an editor in a drawer (QA 2026-11-17)', async () => {
+    mockSubmitApi()
+    const { onClose } = renderModal()
+    await screen.findByText(ar.myAssignments.submit.ok)
+    type(textField(), 'جواب لم يُرسل')
+
+    fireEvent.click(closeIcon())
+    const question = await latestAnswerQuestion()
+    expect(within(question).getAllByText(ANSWER_QUESTION.title).length).toBeGreaterThan(0)
+    expect(within(question).getByText(ANSWER_QUESTION.content)).toBeInTheDocument()
+    expect(within(question).getByText(ANSWER_QUESTION.ok)).toBeInTheDocument()
+    expect(within(question).getByText(ANSWER_QUESTION.cancel)).toBeInTheDocument()
+    // Nothing of common.unsaved («في هذا الدرج محرّر مفتوح… إغلاق الدرج يتجاهلها»).
     expect(discardQuestionCount()).toBe(0)
+    expect(screen.queryByText(ar.common.unsaved.content)).not.toBeInTheDocument()
+    expect(ANSWER_QUESTION.content).not.toMatch(/الدرج/)
+    await answerQuestion(question, 'keep')
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('keeps a typed answer on Escape and on a mask click; × asks — keep editing stays with the text, discard closes', async () => {
@@ -332,19 +389,19 @@ describe('SubmitAttemptModal — the typed answer is never lost without asking (
     pressEscape()
     clickMask()
     expect(onClose).not.toHaveBeenCalled()
-    expect(discardQuestionCount()).toBe(0)
+    expect(answerQuestionCount()).toBe(0)
     expect(textField()).toHaveValue('جواب طويل كتبته للتو')
 
     fireEvent.click(closeIcon())
-    const first = await latestDiscardQuestion()
-    expect(within(first).getByText(ar.common.unsaved.content)).toBeInTheDocument()
-    await answerDiscardQuestion(first, 'keep')
+    const first = await latestAnswerQuestion()
+    expect(within(first).getByText(ANSWER_QUESTION.content)).toBeInTheDocument()
+    await answerQuestion(first, 'keep')
     expect(onClose).not.toHaveBeenCalled()
     expect(textField()).toHaveValue('جواب طويل كتبته للتو')
 
     fireEvent.click(closeIcon())
-    await waitFor(() => expect(discardQuestionCount()).toBe(2))
-    await answerDiscardQuestion(await latestDiscardQuestion(), 'discard')
+    await waitFor(() => expect(answerQuestionCount()).toBe(2))
+    await answerQuestion(await latestAnswerQuestion(), 'discard')
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(posts).toEqual([])
   })
@@ -356,8 +413,8 @@ describe('SubmitAttemptModal — the typed answer is never lost without asking (
     type(linkField(), 'https://docs.example.com/answer')
 
     fireEvent.click(cancelButton())
-    const question = await latestDiscardQuestion()
-    await answerDiscardQuestion(question, 'discard')
+    const question = await latestAnswerQuestion()
+    await answerQuestion(question, 'discard')
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
   })
 
@@ -382,7 +439,7 @@ describe('SubmitAttemptModal — the typed answer is never lost without asking (
     expect(await within(dialog()).findByText(ar.myAssignments.submit.stopped)).toBeInTheDocument()
     expect(unloadWouldPrompt()).toBe(true)
     fireEvent.click(closeIcon())
-    expect(await latestDiscardQuestion()).toBeInTheDocument()
+    expect(await latestAnswerQuestion()).toBeInTheDocument()
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -397,16 +454,16 @@ describe('SubmitAttemptModal — the typed answer is never lost without asking (
     type(textField(), 'جواب لم يُرسل')
 
     await goBack(router)
-    const first = await latestDiscardQuestion()
+    const first = await latestAnswerQuestion()
     expect(router.state.location.pathname).toBe('/my-assignments')
-    await answerDiscardQuestion(first, 'keep')
+    await answerQuestion(first, 'keep')
     expect(blockerStates(router)).toEqual(['unblocked'])
     expect(router.state.location.pathname).toBe('/my-assignments')
     expect(textField()).toHaveValue('جواب لم يُرسل')
     expect(onClose).not.toHaveBeenCalled()
 
     await goBack(router)
-    await answerDiscardQuestion(await latestDiscardQuestion(), 'discard')
+    await answerQuestion(await latestAnswerQuestion(), 'discard')
     await waitFor(() => expect(router.state.location.pathname).toBe('/'))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -421,6 +478,6 @@ describe('SubmitAttemptModal — the typed answer is never lost without asking (
     await screen.findByText(ar.myAssignments.submit.ok)
     await goBack(router)
     await waitFor(() => expect(router.state.location.pathname).toBe('/'))
-    expect(discardQuestionCount()).toBe(0)
+    expect(answerQuestionCount()).toBe(0)
   })
 })

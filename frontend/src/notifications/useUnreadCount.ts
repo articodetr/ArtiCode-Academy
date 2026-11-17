@@ -6,7 +6,8 @@
 // mounted bell follows at once instead of at the next poll. A failed read
 // keeps the last count. A 401 (the session ended — signed out in another tab, or expired) stops the polling
 // until the page is shown again (redesign: a tab left open asked every minute and got 401 forever).
-import { useCallback, useEffect, useRef, useState } from 'react'
+// Every answer is also published to useLatestUnread(), so the open inbox follows the bell without a poll of its own.
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ApiError } from '../api/client'
 import { getUnreadCount } from '../api/notifications'
 
@@ -18,6 +19,36 @@ const REFRESH_EVENT = 'articode:notifications-unread'
 /** Asks every mounted useUnreadCount() to read the count now (after a mark-read). */
 export function refreshUnreadCount(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(REFRESH_EVENT))
+}
+
+/** The last count a useUnreadCount() received; `serial` grows with every answer, an unchanged count included. */
+export interface UnreadSnapshot {
+  unread: number
+  serial: number
+}
+
+let latestUnread: UnreadSnapshot | null = null
+const unreadListeners = new Set<() => void>()
+
+function publishUnread(unread: number): void {
+  latestUnread = { unread, serial: (latestUnread?.serial ?? 0) + 1 }
+  for (const listener of unreadListeners) listener()
+}
+
+function subscribeUnread(listener: () => void): () => void {
+  unreadListeners.add(listener)
+  return () => {
+    unreadListeners.delete(listener)
+  }
+}
+
+function readLatestUnread(): UnreadSnapshot | null {
+  return latestUnread
+}
+
+/** The bell's last answer of API-168 (null before the first) — read without asking the server again. */
+export function useLatestUnread(): UnreadSnapshot | null {
+  return useSyncExternalStore(subscribeUnread, readLatestUnread, readLatestUnread)
 }
 
 export interface UnreadCount {
@@ -49,6 +80,7 @@ export function useUnreadCount(): UnreadCount {
         if (controller.signal.aborted) return
         setUnread(answer.unread)
         setError(null)
+        publishUnread(answer.unread)
       },
       (caught: unknown) => {
         if (controller.signal.aborted) return

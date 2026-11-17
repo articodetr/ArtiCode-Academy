@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
@@ -8,8 +8,29 @@ import { LocationProbe } from '../test/LocationProbe'
 import { ANNOUNCEMENT_CLASS_ID, makeAnnouncement, makeAnnouncementDetail, makeNotification, makeNotificationList, makePreferences } from '../test/notifications'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { NotificationsPage } from './NotificationsPage'
+import { refreshUnreadCount, useUnreadCount } from './useUnreadCount'
 
 const n = ar.notifications
+
+/** The header bell as AppLayout mounts it beside the page: it polls API-168 (a test makes it read with refreshUnreadCount()). */
+function Bell() {
+  const { unread } = useUnreadCount()
+  return <output data-testid="bell">{unread ?? '—'}</output>
+}
+
+/** A file of src/, read from disk: vitest empties every `.css` import, `?raw` included. */
+async function readSource(path: string): Promise<string> {
+  const fsModule = 'node:fs'
+  const fs = (await import(/* @vite-ignore */ fsModule)) as { readFileSync: (path: URL, encoding: 'utf8') => string }
+  return fs.readFileSync(new URL(path, import.meta.url), 'utf8')
+}
+
+/** The selectors of index.css that mute a `.list-primary` line (its second line). */
+async function mutedListSelectors(): Promise<string> {
+  const css = (await readSource('../index.css')).replace(/\/\*[\s\S]*?\*\//g, '')
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((rule) => rule[1]!.includes('.list-primary') && rule[2]!.includes('var(--c-muted)'))
+  return rules.flatMap((rule) => rule[1]!.split(',').map((selector) => selector.trim())).join(', ')
+}
 
 interface Calls {
   method: string
@@ -90,6 +111,90 @@ describe('NotificationsPage — inbox', () => {
     renderPage()
     expect(await screen.findByText(n.inbox.empty)).toBeInTheDocument()
   })
+
+  it('names who sent an announcement — the display name, else the full name — and no sender for an automatic event', async () => {
+    const items = [
+      makeNotification({ id: 'n-a', category: 'announcements', eventKey: 'announcement', title: 'إعلان أول', data: { link: '/notifications' }, sender: { fullName: 'سعاد علي', displayName: 'أ. سعاد' } }),
+      makeNotification({ id: 'n-b', category: 'announcements', eventKey: 'announcement', title: 'إعلان ثانٍ', data: { link: '/notifications' }, sender: { fullName: 'خالد عمر', displayName: '  ' } }),
+      makeNotification({ id: 'n-c', title: 'واجب جديد', sender: null }),
+    ]
+    mockApi({ 'GET /api/me/notifications': () => jsonResponse(200, makeNotificationList(items)) })
+    renderPage()
+    const senderOf = async (title: string) => (await screen.findByText(title)).closest('button')!.querySelector('.notif-item__sender')
+    expect((await senderOf('إعلان أول'))?.textContent).toBe(`${n.inbox.from} أ. سعاد`)
+    expect((await senderOf('إعلان أول'))?.querySelector('bdi')).toHaveAttribute('dir', 'auto')
+    expect((await senderOf('إعلان ثانٍ'))?.textContent).toBe(`${n.inbox.from} خالد عمر`)
+    expect(await senderOf('واجب جديد')).toBeNull()
+  })
+
+  it('follows the bell: a notification that arrives while it is open is offered in a bar and enables «mark all»', async () => {
+    const seen = makeNotification({ id: 'n-old', title: 'إشعار مقروء', readAt: '2026-11-13T10:00:00.000Z' })
+    const arrived = makeNotification({ id: 'n-new', title: 'إشعار وصل للتو', createdAt: '2026-11-13T11:00:00.000Z' })
+    let unread = 0
+    let items = [seen]
+    const calls = mockApi({
+      'GET /api/me/notifications/unread-count': () => jsonResponse(200, { unread }),
+      'GET /api/me/notifications': () => jsonResponse(200, makeNotificationList(items)),
+    })
+    renderWithProviders(
+      <>
+        <Bell />
+        <NotificationsPage />
+      </>,
+      { auth: makeAuth({ user: makeUser() }), route: '/notifications' },
+    )
+    await screen.findByText('إشعار مقروء')
+    const markAll = screen.getByText(n.inbox.markAllRead).closest('button')!
+    await waitFor(() => expect(screen.getByTestId('bell')).toHaveTextContent('0'))
+    expect(markAll).toBeDisabled()
+    expect(screen.queryByText(n.inbox.newer)).not.toBeInTheDocument()
+
+    // The 60 s poll of the bell finds one more unread notification.
+    unread = 1
+    items = [arrived, seen]
+    act(() => refreshUnreadCount())
+    expect(await screen.findByText(n.inbox.newer)).toBeInTheDocument()
+    expect(screen.getByTestId('bell')).toHaveTextContent('1')
+    expect(markAll).toBeEnabled()
+    // The list does not move by itself.
+    expect(screen.queryByText('إشعار وصل للتو')).not.toBeInTheDocument()
+
+    const listReads = calls.filter((call) => call.path === '/api/me/notifications').length
+    fireEvent.click(screen.getByText(n.inbox.showNewer).closest('button')!)
+    expect(await screen.findByText('إشعار وصل للتو')).toBeInTheDocument()
+    expect(calls.filter((call) => call.path === '/api/me/notifications').length).toBe(listReads + 1)
+    await waitFor(() => expect(screen.queryByText(n.inbox.newer)).not.toBeInTheDocument())
+  })
+
+  it('does not offer what the list already shows: the count read with the first page is the baseline', async () => {
+    const calls = mockApi({ 'GET /api/me/notifications/unread-count': () => jsonResponse(200, { unread: 1 }) })
+    renderWithProviders(
+      <>
+        <Bell />
+        <NotificationsPage />
+      </>,
+      { auth: makeAuth({ user: makeUser() }), route: '/notifications' },
+    )
+    await screen.findByText(makeNotification().title)
+    await waitFor(() => expect(screen.getByTestId('bell')).toHaveTextContent('1'))
+    act(() => refreshUnreadCount())
+    await waitFor(() => expect(calls.filter((call) => call.path.endsWith('/unread-count')).length).toBeGreaterThanOrEqual(3))
+    expect(screen.queryByText(n.inbox.newer)).not.toBeInTheDocument()
+  })
+
+  it('marks only the chosen category read when a category filter is on (API-170 takes the category)', async () => {
+    const calls = mockApi({ 'POST /api/me/notifications/read-all': () => jsonResponse(200, { updated: 1 }) })
+    renderPage()
+    await screen.findByText(makeNotification().title)
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: n.inbox.category }))
+    fireEvent.click(
+      await screen.findByText((_, element) => element?.classList.contains('ant-select-item-option-content') === true && element.textContent === n.categories.assignments),
+    )
+    await waitFor(() => expect(calls.some((call) => call.path === '/api/me/notifications' && call.search.get('category') === 'assignments')).toBe(true))
+    fireEvent.click(screen.getByText(n.inbox.markAllRead).closest('button')!)
+    await waitFor(() => expect(calls.some((call) => call.path === '/api/me/notifications/read-all')).toBe(true))
+    expect(calls.find((call) => call.path === '/api/me/notifications/read-all')?.body).toEqual({ category: 'assignments' })
+  })
 })
 
 describe('NotificationsPage — e-mail preferences', () => {
@@ -138,6 +243,23 @@ describe('NotificationsPage — announcements', () => {
     fireEvent.click(await screen.findByText('تأجيل درس الغد'))
     expect(await screen.findByText('قرأه 5 من 12')).toBeInTheDocument()
     expect(screen.getByText(`${n.announcements.emailStates.sent}: 9`)).toBeInTheDocument()
+  })
+
+  it('shows an announcement’s title as the main line of its cell and the audience as the muted second line (index.css .list-primary)', async () => {
+    mockApi()
+    renderPage(['notifications.send', 'classes.read'])
+    fireEvent.click(screen.getByRole('tab', { name: n.tabs.announcements }))
+    const title = await screen.findByText('تأجيل درس الغد')
+    const cell = title.closest('.list-primary')!
+    const muted = await mutedListSelectors()
+    expect(muted).toContain('.list-primary')
+    // Neither the title nor anything around it inside the cell is one of the muted second-line elements.
+    expect(title.closest(muted)).toBeNull()
+    expect(title).toHaveAttribute('dir', 'auto')
+    const audience = cell.lastElementChild!
+    expect(audience).not.toBe(title)
+    expect(audience).toHaveTextContent('ENG-A1')
+    expect(audience.matches(muted)).toBe(true)
   })
 
   async function composeClassAnnouncement() {

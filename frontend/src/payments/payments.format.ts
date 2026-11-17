@@ -2,6 +2,7 @@
 // its own currency, the tone of each finance status and the permission split of
 // the page. Pure — every number shown is the server's (ADR-068); nothing here
 // computes a balance.
+import { instantIn } from '../common/timeZone'
 import { formatMoney } from '../dashboard/dashboard.data'
 /** The kind of a finance status, shown with antd's preset colours (FinanceTag). */
 export type StatusTone = 'ok' | 'live' | 'attention' | 'bad' | 'neutral'
@@ -60,11 +61,16 @@ export function personName(person: { fullName: string; displayName: string | nul
   return person.displayName?.trim() || person.fullName
 }
 
-/** `datetime-local` value (this device's clock) → ISO instant, or undefined when blank or malformed. */
-export function instantOfLocal(value: string | undefined): string | undefined {
-  if (!value) return undefined
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+const LOCAL_DATE_TIME = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/
+
+/**
+ * `datetime-local` value read as the wall clock of `zone` (the academy's, as the screens show the receipt — never
+ * this device's clock) → ISO instant, or undefined when blank or malformed. Seconds, which the input only sends
+ * with a smaller `step`, are dropped.
+ */
+export function instantOfLocal(value: string | undefined, zone: string): string | undefined {
+  const match = value ? LOCAL_DATE_TIME.exec(value) : null
+  return match ? instantIn(match[1], match[2], zone) : undefined
 }
 
 /** `isFutureInstant()` of backend/src/finance/payments.rules.ts — the server tolerates 5 minutes of clock skew. */
@@ -94,10 +100,10 @@ export interface RecordPaymentFormValues {
 
 const trimmed = (value: string | undefined) => (value ?? '').trim()
 
-/** Body of API-151: blank texts and a blank moment stay absent (the server refuses an empty string). */
-export function buildRecordPaymentInput(values: RecordPaymentFormValues): RecordPaymentInput {
+/** Body of API-151: blank texts and a blank moment stay absent (the server refuses an empty string); the moment is typed in `zone`. */
+export function buildRecordPaymentInput(values: RecordPaymentFormValues, zone: string): RecordPaymentInput {
   const input: RecordPaymentInput = { amount: values.amount as number, method: values.method ?? 'cash' }
-  const paidAt = instantOfLocal(values.paidAt)
+  const paidAt = instantOfLocal(values.paidAt, zone)
   if (paidAt) input.paidAt = paidAt
   if (trimmed(values.reference)) input.reference = trimmed(values.reference)
   if (trimmed(values.payerName)) input.payerName = trimmed(values.payerName)

@@ -23,7 +23,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EXAM_RESULT_STATUSES, RESULTS_BATCH_MAX, RESULT_FEEDBACK_MAX_LENGTH, recordExamResults } from '../api/examResults'
 import type { ExamResultItem, ExamResultStatus, ExamResultsSheet } from '../api/examResults'
-import type { Exam } from '../api/exams'
+import type { Exam, ExamStatus } from '../api/exams'
 import { formatZonedDateTime } from '../assignments/assignments.format'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
@@ -34,8 +34,8 @@ import { RESULT_STATUS_COLORS } from './exams.format'
 import { useExamResults } from './useExamResults'
 
 interface ExamResultsTabProps {
-  /** The exam's id, and its zone for the times the sheet shows. */
-  exam: Pick<Exam, 'id' | 'timeZone'>
+  /** The exam's id, its zone for the times the sheet shows, and its status as the drawer shows it. */
+  exam: Pick<Exam, 'id' | 'timeZone' | 'status'>
   /** The sheet the server answered after a save: its counts update the exam in the drawer and in the list. */
   onSaved: (sheet: ExamResultsSheet) => void
   /** The exam changed elsewhere (back to draft, its class cancelled, gone): the drawer re-reads it. */
@@ -49,6 +49,13 @@ export function ExamResultsTab({ exam, onSaved, onExamStale, onUnsavedChange }: 
   const canGrade = useAuth().hasPermission('exams.grade')
   const { sheet, error, loading, version, reload, replace } = useExamResults(exam.id)
   const failure = error ? describeResultsFailure(error) : null
+
+  // The exam's status from the newest fact (V2 D1): publish and unpublish in the drawer keep this tab, its sheet and
+  // its unsaved rows, so after one the sheet's `examStatus` is older than the drawer's status; a sheet read or saved
+  // later is the newer one again. Kept per sheet version — React's "adjust state when an input changes".
+  const [statusAtRead, setStatusAtRead] = useState({ version, status: exam.status })
+  if (statusAtRead.version !== version) setStatusAtRead({ version, status: exam.status })
+  const examStatus: ExamStatus = sheet && statusAtRead.status === exam.status ? sheet.examStatus : exam.status
 
   return (
     <div data-testid="exam-results-sheet">
@@ -71,6 +78,7 @@ export function ExamResultsTab({ exam, onSaved, onExamStale, onUnsavedChange }: 
           // One edit session per server version of the sheet (KI-049): a save or a reload starts from the server's state.
           key={`${sheet.examId}:${version}`}
           sheet={sheet}
+          examStatus={examStatus}
           timeZone={exam.timeZone}
           canGrade={canGrade}
           loading={loading}
@@ -93,6 +101,8 @@ export function ExamResultsTab({ exam, onSaved, onExamStale, onUnsavedChange }: 
 
 interface ResultsEditorProps {
   sheet: ExamResultsSheet
+  /** The exam's status from the newest fact (the drawer's after a status action, else the sheet's). */
+  examStatus: ExamStatus
   /** The exam's zone (D-R41). */
   timeZone: string
   canGrade: boolean
@@ -104,7 +114,7 @@ interface ResultsEditorProps {
   onUnsavedChange?: (unsaved: boolean) => void
 }
 
-function ResultsEditor({ sheet, timeZone, canGrade, loading, onSaved, onStale, onGone, onReload, onUnsavedChange }: ResultsEditorProps) {
+function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved, onStale, onGone, onReload, onUnsavedChange }: ResultsEditorProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -326,7 +336,7 @@ function ResultsEditor({ sheet, timeZone, canGrade, loading, onSaved, onStale, o
 
       {!sheet.recordable && sheet.closedReason ? <Alert type="warning" showIcon title={t(`exams.results.closed.${sheet.closedReason}`)} style={{ marginBottom: 12 }} /> : null}
       {sheet.recordable && !canGrade ? <Alert type="info" showIcon title={t('exams.results.readOnly')} style={{ marginBottom: 12 }} /> : null}
-      {editable && sheet.examStatus === 'published' ? <Alert type="info" showIcon title={t('exams.results.publishedNote')} style={{ marginBottom: 12 }} /> : null}
+      {editable && examStatus === 'published' ? <Alert type="info" showIcon title={t('exams.results.publishedNote')} style={{ marginBottom: 12 }} /> : null}
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} /> : null}
 
       <Table<ExamResultItem>

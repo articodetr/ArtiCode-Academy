@@ -272,7 +272,20 @@ export function InvoiceDrawer({ invoiceId, onClose, onUpdated, onDeleted, docked
       onClose={requestClose}
       keyboard={!unsaved}
       {...dockedDrawerProps(dockedIn, unsaved, 'large')}
-      title={shown ? (shown.number ? <bdi dir="ltr">{shown.number}</bdi> : t('payments.drawer.draftTitle')) : t('payments.drawer.title')}
+      classNames={{ header: 'finance-drawer__header' }}
+      title={
+        shown ? (
+          shown.number ? (
+            <bdi dir="ltr" className="finance-number">
+              {shown.number}
+            </bdi>
+          ) : (
+            t('payments.drawer.draftTitle')
+          )
+        ) : (
+          t('payments.drawer.title')
+        )
+      }
       destroyOnHidden
       extra={actions}
     >

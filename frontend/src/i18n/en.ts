@@ -142,6 +142,16 @@ export const en: Translation = {
     passwordRequired: 'Enter your password',
     sessionSwitched:
       'Another account signed in from another tab of this browser, so this tab now runs as {{name}}. The last request was not sent. To use two accounts at once, open the second one in a private window or another browser.',
+    // The start-up session check could not tell after its retries (AuthProvider, CH-0296): never the sign-in form.
+    sessionCheck: {
+      title: "We couldn't check your session",
+      rate_limited:
+        'The server is getting many requests from your network right now. Your session is most likely still valid: wait a minute, then try again.',
+      network: "The server can't be reached. Check your connection and try again; your session was not ended.",
+      server: 'The server had an error while checking your session. Try again in a moment; your session was not ended.',
+      retry: 'Try again',
+      continue: 'Continue to sign in',
+    },
     errors: {
       invalid_credentials: 'Incorrect sign-in details. Check the identifier and the password.',
       account_locked:
@@ -2452,7 +2462,9 @@ export const en: Translation = {
       title: 'Certificates',
       intro: 'Each certificate is numbered PREFIX-YEAR-SEQUENCE; the sequence starts again at 1 every year.',
       serialPrefix: 'Certificate number prefix',
-      hint: '2 to 10 upper-case letters or digits; leave it empty to use the default prefix CERT. First number this year: {{example}}',
+      hint: '2 to 10 upper-case letters or digits; leave it empty to use the default prefix CERT.',
+      sequenceNote: 'The sequence continues the counter of the year, shared by every prefix, so a new prefix does not start again at 00001.',
+      example: 'Example of the format:',
       invalid: 'The prefix is 2 to 10 characters from A–Z or 0–9 only',
     },
     errors: {
@@ -2551,6 +2563,8 @@ export const en: Translation = {
       methodRequired: 'Choose the method.',
       paidAt: 'Received at',
       paidAtHint: 'Leave it empty when the money was received now.',
+      paidAtZone: 'The time is typed in the academy time zone',
+      paidAtDeviceZone: 'The academy time zone could not be read; the time is typed in this device’s zone',
       paidAtInvalid: 'Not a valid time.',
       paidAtFuture: 'The time cannot be in the future.',
       reference: 'Reference (transfer or cheque number)',
@@ -2558,7 +2572,7 @@ export const en: Translation = {
       notes: 'Internal note',
       notesHint: 'Never shown to the student or the guardian.',
       tooLong: 'At most {{max}} characters.',
-      done: 'Receipt {{number}} recorded. The balance is now {{balance}}.',
+      done: 'Receipt {{number}} recorded — balance now: {{balance}}',
     },
     issue: {
       action: 'Issue',
@@ -2614,7 +2628,7 @@ export const en: Translation = {
       invoice_not_issued: 'Payments are recorded on an issued invoice only. The invoice was reloaded.',
       invoice_has_payments: 'The invoice has {{paymentCount}} received payment(s); reverse them before cancelling.',
       invalid_transition: 'The invoice changed status; it was reloaded.',
-      payment_exceeds_balance: 'The amount {{amount}} is above the balance {{balance}}.',
+      payment_exceeds_balance: 'The amount ({{amount}}) is above the balance now ({{balance}}); the invoice changed and was reloaded.',
       payment_not_found: 'The receipt does not exist.',
       payment_reversed: 'This receipt was already reversed.',
       nothing_to_update: 'Nothing to save.',
@@ -2815,6 +2829,9 @@ export const en: Translation = {
       loadMore: 'Load more',
       empty: 'No notifications yet. They appear here when a lesson is cancelled, an assignment is published, an invoice is issued and more.',
       emptyFiltered: 'No notification matches the filters.',
+      from: 'From:',
+      newer: 'New notifications have arrived.',
+      showNewer: 'Show them',
     },
     preferences: {
       intro: 'Notifications inside the app always reach you. These switches decide whether an e-mail copy is sent too.',
@@ -3746,6 +3763,13 @@ export const en: Translation = {
         remaining: 'An attempt cannot be edited once it is sent. Attempts left after it: {{count}}.',
         ok: 'Send',
         cancel: 'Back',
+      },
+      // The dialog's own «discard?» question (useUnsavedChangesGuard with this prefix) — common.unsaved talks about a drawer.
+      unsaved: {
+        title: 'Discard the unsent answer?',
+        content: 'This dialog holds an answer you typed and have not sent yet. Closing the dialog or leaving the page discards it.',
+        ok: 'Discard and close',
+        cancel: 'Keep writing',
       },
       done: 'Attempt {{number}} of «{{title}}» was sent',
     },

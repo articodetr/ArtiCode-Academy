@@ -26,18 +26,48 @@ export class ApiError extends Error {
   readonly body: unknown
   /** Stable machine-readable code from the backend (auth errors), if any. */
   readonly code: string | null
+  /** Seconds the server asked to wait before trying again (a 429's Retry-After), or null when it named none. */
+  readonly retryAfterSeconds: number | null
 
-  constructor(status: number, message: string, body?: unknown) {
+  constructor(status: number, message: string, body?: unknown, retryAfterSeconds: number | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.body = body
     this.code = codeFrom(body)
+    this.retryAfterSeconds = retryAfterSeconds
   }
+}
+
+/**
+ * True for the server's own "there is no session" answer to a refresh: a 401
+ * (refresh_missing | refresh_invalid | refresh_expired | refresh_reused |
+ * session_invalid). Anything else — a 429 (the refresh limit is counted per IP,
+ * and a school network shares one), a network error, a 5xx — says nothing
+ * about the cookie, which may well still be valid.
+ */
+export function isSessionRejected(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
 }
 
 export function apiUrl(path: string): string {
   return `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+/**
+ * The wait a response asks for, in whole seconds: the standard `Retry-After`
+ * (seconds or an HTTP date), else the header @nestjs/throttler names after the
+ * blocking throttler — the academy's is `login`, so a 429 carries `Retry-After-login`.
+ */
+function retryAfterFrom(headers: Headers): number | null {
+  for (const name of ['Retry-After', 'Retry-After-login']) {
+    const value = headers.get(name)?.trim()
+    if (!value) continue
+    if (/^\d+$/.test(value)) return Number(value)
+    const at = Date.parse(value)
+    if (!Number.isNaN(at)) return Math.max(0, Math.ceil((at - Date.now()) / 1000))
+  }
+  return null
 }
 
 function codeFrom(body: unknown): string | null {
@@ -91,10 +121,20 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   if (response.ok) return payload as T
 
-  const error = new ApiError(response.status, messageFrom(payload, `${response.status} ${response.statusText}`), payload)
+  const error = new ApiError(
+    response.status,
+    messageFrom(payload, `${response.status} ${response.statusText}`),
+    payload,
+    retryAfterFrom(response.headers),
+  )
   if (auth && retry && response.status === 401 && error.code && RETRY_CODES.has(error.code)) {
     const requestedBy = getSessionUserId()
-    const refreshed = await refreshSession().catch(() => null)
+    const refreshed = await refreshSession().catch((refreshError: unknown) => {
+      // The session is gone: the request's own 401 stands (and refreshSession() announced the loss).
+      if (isSessionRejected(refreshError)) return null
+      // Rate-limited, unreachable or a server error: the session is kept, so say what actually happened.
+      throw refreshError
+    })
     if (refreshed) {
       if (requestedBy !== null && refreshed.user.id !== requestedBy) {
         throw new ApiError(401, 'The session now belongs to another user', {
@@ -159,6 +199,8 @@ let refreshInFlight: Promise<SessionResponse> | null = null
  * callers in this tab share one request; requests from other tabs wait for it
  * (REFRESH_LOCK_NAME). Throws (and announces a lost session) when the
  * cookie is missing, expired, reused or the account is no longer usable.
+ * Any other failure (429, network, 5xx) is thrown WITHOUT announcing a lost
+ * session: the cookie may still be valid (isSessionRejected()).
  * Announces a switched session when the cookie now belongs to another user
  * than the stored token did (another tab signed in as someone else — KI-046).
  */
@@ -174,7 +216,7 @@ export function refreshSession(): Promise<SessionResponse> {
         return session
       })
       .catch((error: unknown) => {
-        emitSessionLost()
+        if (isSessionRejected(error)) emitSessionLost()
         throw error
       })
       .finally(() => {

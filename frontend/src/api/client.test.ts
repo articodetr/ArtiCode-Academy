@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAccessToken, getSessionUserId, onSessionLost, onSessionSwitched, setAccessToken } from '../auth/token-store'
 import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
-import { ApiError, SESSION_SWITCHED, apiRequest, apiUrl, refreshSession } from './client'
+import { ApiError, SESSION_SWITCHED, apiRequest, apiUrl, isSessionRejected, refreshSession } from './client'
 
 const EXPIRED = { statusCode: 401, code: 'token_expired', message: 'Access token expired' }
 
@@ -150,6 +150,73 @@ describe('apiRequest', () => {
     }
   })
 
+  // CH-0296: the refresh limit counts per IP, so a valid session can get a 429 on a busy network.
+  it('keeps the session when the refresh answers 429 and hands the caller that 429, not a 401', async () => {
+    setAccessToken('stale', 'user-1')
+    const lost = vi.fn()
+    const unsubscribe = onSessionLost(lost)
+    const fetchMock = mockFetch((url) =>
+      url === '/api/auth/refresh'
+        ? new Response(JSON.stringify({ statusCode: 429, code: 'rate_limited', message: 'Too many requests' }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json', 'Retry-After-login': '12' },
+          })
+        : jsonResponse(401, EXPIRED),
+    )
+
+    try {
+      await expect(apiRequest('/api/users')).rejects.toMatchObject({
+        status: 429,
+        code: 'rate_limited',
+        retryAfterSeconds: 12,
+      })
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/users', '/api/auth/refresh'])
+      expect(lost).not.toHaveBeenCalled()
+      expect(getAccessToken()).toBe('stale')
+      expect(getSessionUserId()).toBe('user-1')
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('keeps the session when the refresh cannot reach the server', async () => {
+    setAccessToken('stale', 'user-1')
+    const lost = vi.fn()
+    const unsubscribe = onSessionLost(lost)
+    mockFetch((url) => {
+      if (url === '/api/auth/refresh') throw new TypeError('Failed to fetch')
+      return jsonResponse(401, EXPIRED)
+    })
+
+    try {
+      await expect(apiRequest('/api/users')).rejects.toBeInstanceOf(TypeError)
+      expect(lost).not.toHaveBeenCalled()
+      expect(getAccessToken()).toBe('stale')
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('reads the wait a 429 names: Retry-After in seconds or as a date, else Retry-After-login, else none', async () => {
+    const answers = [
+      new Response(null, { status: 429, headers: { 'Retry-After': '5' } }),
+      new Response(null, { status: 429, headers: { 'Retry-After': new Date(Date.now() + 90_000).toUTCString() } }),
+      new Response(null, { status: 429, headers: { 'Retry-After-login': '42' } }),
+      new Response(null, { status: 429 }),
+    ]
+    mockFetch(() => answers.shift()!)
+    const waits: Array<number | null> = []
+    for (let i = 0; i < 4; i += 1) {
+      const error = await apiRequest('/api/health', { auth: false }).catch((reason: unknown) => reason)
+      waits.push((error as ApiError).retryAfterSeconds)
+    }
+
+    expect(waits[0]).toBe(5)
+    expect(waits[1]).toBeGreaterThanOrEqual(88)
+    expect(waits[1]).toBeLessThanOrEqual(90)
+    expect(waits.slice(2)).toEqual([42, null])
+  })
+
   it('does not refresh for a 401 that is not about the access token', async () => {
     const fetchMock = mockFetch(() =>
       jsonResponse(401, { statusCode: 401, code: 'invalid_credentials', message: 'Invalid credentials' }),
@@ -202,5 +269,41 @@ describe('refreshSession', () => {
     await refreshSession()
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('announces a lost session for a 401 only, never for a 429, a 5xx or a network error (CH-0296)', async () => {
+    const lost = vi.fn()
+    const unsubscribe = onSessionLost(lost)
+    const answers: Array<() => Response> = [
+      () => jsonResponse(429, { statusCode: 429, code: 'rate_limited', message: 'Too many requests' }),
+      () => jsonResponse(503, { statusCode: 503, message: 'Service Unavailable' }),
+      () => {
+        throw new TypeError('Failed to fetch')
+      },
+      () => jsonResponse(401, { statusCode: 401, code: 'refresh_expired', message: 'Refresh token expired' }),
+    ]
+    mockFetch(() => answers.shift()!())
+
+    try {
+      await expect(refreshSession()).rejects.toMatchObject({ status: 429 })
+      await expect(refreshSession()).rejects.toMatchObject({ status: 503 })
+      await expect(refreshSession()).rejects.toBeInstanceOf(TypeError)
+      expect(lost).not.toHaveBeenCalled()
+
+      await expect(refreshSession()).rejects.toMatchObject({ status: 401, code: 'refresh_expired' })
+      expect(lost).toHaveBeenCalledTimes(1)
+    } finally {
+      unsubscribe()
+    }
+  })
+})
+
+describe('isSessionRejected', () => {
+  it('is true for a 401 only', () => {
+    expect(isSessionRejected(new ApiError(401, 'x', { code: 'refresh_invalid' }))).toBe(true)
+    expect(isSessionRejected(new ApiError(401, 'x', { code: 'session_invalid' }))).toBe(true)
+    expect(isSessionRejected(new ApiError(429, 'x', { code: 'rate_limited' }))).toBe(false)
+    expect(isSessionRejected(new ApiError(503, 'x'))).toBe(false)
+    expect(isSessionRejected(new TypeError('Failed to fetch'))).toBe(false)
   })
 })

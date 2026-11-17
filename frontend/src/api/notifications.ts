@@ -19,6 +19,12 @@ export interface NotificationStudent {
   displayName: string | null
 }
 
+/** `NotificationSenderDto` (CH-0277): who sent an announcement — by name only, no id and no contact. */
+export interface NotificationSender {
+  fullName: string
+  displayName: string | null
+}
+
 /** `MyNotificationDto`. */
 export interface MyNotification {
   id: string
@@ -31,6 +37,11 @@ export interface MyNotification {
   data: Record<string, unknown>
   student: NotificationStudent | null
   announcementId: string | null
+  /**
+   * The announcement's sender (CH-0277); null for an automatic event and for an announcement whose sender's account
+   * is gone. Absent only in an answer of a server older than CH-0277.
+   */
+  sender?: NotificationSender | null
   /** ISO 8601; null while unread. */
   readAt: string | null
   createdAt: string

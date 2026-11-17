@@ -146,13 +146,33 @@ describe('ClassCertificatesTab', () => {
   })
 
   it('explains that a class issues once completed: the eligible wait, and nothing can be issued', async () => {
-    const running = makeClassCertificates({ class: { ...preview.class, status: 'running' }, issuable: 0, items: [makePreviewItem({ enrollmentStatus: 'active', reason: 'not_completed' }), makePreviewItem({ enrollmentId: SECOND, student: makeEnrollmentStudent({ id: STUDENT_IDS[1], fullName: 'سارة علي' }) })] })
+    const running = makeClassCertificates({
+      class: { ...preview.class, status: 'running' },
+      issuable: 0,
+      items: [
+        makePreviewItem({ enrollmentStatus: 'active', reason: 'not_completed' }),
+        makePreviewItem({ enrollmentId: SECOND, student: makeEnrollmentStudent({ id: STUDENT_IDS[1], fullName: 'سارة علي' }) }),
+        makePreviewItem({
+          enrollmentId: THIRD,
+          enrollmentStatus: 'active',
+          student: makeEnrollmentStudent({ id: STUDENT_IDS[2], fullName: 'هدى سالم', fullNameLatin: null }),
+          final: { percent: 42, label: { ar: 'راسب' }, letter: 'F', isPass: false, stale: false },
+          reason: 'not_completed',
+        }),
+      ],
+    })
     mockCertificatesApi({ previews: [running] })
     renderTab(CERTIFICATE_STAFF_PERMISSIONS, 'running')
 
     expect(await screen.findByText('تُصدر الشهادات لفصل مكتمل فقط، وهذا الفصل «جارٍ» الآن؛ تعرض المعاينة الأهلية دون إصدار.')).toBeInTheDocument()
+    // What the server sends for an active enrollment of a running class (V3): `not_completed` — and since its final
+    // grade passes, completing the class is all it waits for.
     expect(within(rowOf('عمر خالد')).getByText(ar.certificates.classTab.reasons.not_completed)).toBeInTheDocument()
+    expect(within(rowOf('عمر خالد')).getByText(ar.certificates.classTab.eligibleLater)).toBeInTheDocument()
     expect(within(rowOf('سارة علي')).getByText(ar.certificates.classTab.eligibleLater)).toBeInTheDocument()
+    // A failing grade waits for more than the class: the server's reason alone.
+    expect(within(rowOf('هدى سالم')).getByText(ar.certificates.classTab.reasons.not_completed)).toBeInTheDocument()
+    expect(within(rowOf('هدى سالم')).queryByText(ar.certificates.classTab.eligibleLater)).not.toBeInTheDocument()
     expect(screen.getByText(issueAllLabel(0)).closest('button')).toBeDisabled()
     expect(screen.queryByLabelText('اختيار عمر خالد')).not.toBeInTheDocument()
   })

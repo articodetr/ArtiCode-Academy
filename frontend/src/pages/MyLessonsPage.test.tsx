@@ -139,6 +139,26 @@ describe('MyLessonsPage', () => {
     expect(await screen.findByText('مراجعة الواجب ثم تمارين')).toBeInTheDocument()
   })
 
+  it('never lets an opened description widen the table: it sits in a box of no width of its own that grows to the cell (QA 2026-11-17)', async () => {
+    mockMyLessonsApi(makeMyLessonList([attended]))
+    renderPage(['student'])
+    const [row] = await waitFor(() => {
+      const rows = bodyRows()
+      expect(rows).toHaveLength(1)
+      return rows
+    })
+    fireEvent.click(row!.querySelector('button.ant-table-row-expand-icon')!)
+    await screen.findByText('مراجعة الواجب ثم تمارين')
+
+    // jsdom has no layout: assert the configuration. In a max-content table a long description would count by its
+    // one-line length; a 0-width box that is at least as wide as the cell gives the table nothing to size by.
+    const box = screen.getByTestId('my-lesson-description')
+    expect(box.closest('tr')).toHaveClass('ant-table-expanded-row')
+    expect(box.style.width).toBe('0px')
+    expect(box.style.minWidth).toBe('100%')
+    expect(box).toHaveTextContent('مراجعة الواجب ثم تمارين')
+  })
+
   it('gives a guardian with two children in one class one row per child, and the student filter narrows to one of them', async () => {
     const one = makeMyLesson({ ...FUTURE, relation: 'child', student: CHILD_ONE, attendance: { status: 'present', minutesLate: null, recordedAt: '2030-01-15T09:05:00.000Z' } })
     const two = makeMyLesson({ ...FUTURE, relation: 'child', student: CHILD_TWO })

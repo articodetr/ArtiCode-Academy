@@ -9,6 +9,9 @@
 // - while unsaved, a `beforeunload` listener, so a reload, a tab close or a navigation to
 //   another document gets the browser's own prompt. It goes once the work is saved or
 //   discarded, and with the drawer.
+// The question reads `common.unsaved.*`; a holder whose work is not a drawer's editor passes its own
+// i18n prefix with the same four keys (title, content, ok, cancel) — e.g. the attempt dialog of «my
+// assignments» (`myAssignments.submit.unsaved`, CH-0296).
 import { App } from 'antd'
 import { useCallback, useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
@@ -28,19 +31,21 @@ interface LatestRender {
   t: ReturnType<typeof useTranslation>['t']
   modal: ReturnType<typeof App.useApp>['modal']
   discard: () => void
+  /** The i18n prefix of the question's four strings. */
+  keys: string
 }
 
-/** The «discard?» question on antd's `modal.confirm` (common.unsaved.*); reads `latest` only when used, never while rendering. */
+/** The «discard?» question on antd's `modal.confirm` (`<keys>.*`, common.unsaved by default); reads `latest` only when used, never while rendering. */
 function createUnsavedQuestion(latest: RefObject<LatestRender>): DiscardQuestion {
   return createDiscardQuestion({
     open: (answers) => {
-      const { t, modal } = latest.current
+      const { t, modal, keys } = latest.current
       const confirm = modal.confirm({
-        title: t('common.unsaved.title'),
-        content: t('common.unsaved.content'),
-        okText: t('common.unsaved.ok'),
+        title: t(`${keys}.title`),
+        content: t(`${keys}.content`),
+        okText: t(`${keys}.ok`),
         okButtonProps: { danger: true },
-        cancelText: t('common.unsaved.cancel'),
+        cancelText: t(`${keys}.cancel`),
         // Without parameters: antd closes the dialog itself after the answer.
         onOk: () => answers.discard(),
         onCancel: () => answers.keep(),
@@ -51,14 +56,14 @@ function createUnsavedQuestion(latest: RefObject<LatestRender>): DiscardQuestion
   })
 }
 
-export function useUnsavedChangesGuard(unsaved: boolean, discard: () => void): UnsavedChangesGuard {
+export function useUnsavedChangesGuard(unsaved: boolean, discard: () => void, keys = 'common.unsaved'): UnsavedChangesGuard {
   const { t } = useTranslation()
   const { modal } = App.useApp()
 
   // The latest render, assigned in an effect (react(immutability)).
-  const latest = useRef<LatestRender>({ t, modal, discard })
+  const latest = useRef<LatestRender>({ t, modal, discard, keys })
   useEffect(() => {
-    latest.current = { t, modal, discard }
+    latest.current = { t, modal, discard, keys }
   })
 
   // One question for the drawer's lifetime, made on first use — in a handler or an effect, never while

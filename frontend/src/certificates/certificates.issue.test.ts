@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeCertificate, makeClassCertificates, makePreviewItem } from '../test/certificates'
 import { ENROLLMENT_IDS, STUDENT_IDS } from '../test/enrollments'
-import { chosenEnrollmentIds, eligibleEnrollmentIds, issueBodyOf, issueOutcomeOf } from './certificates.issue'
+import { awaitsClassCompletion, chosenEnrollmentIds, eligibleEnrollmentIds, issueBodyOf, issueOutcomeOf } from './certificates.issue'
 
 const [FIRST, SECOND, THIRD] = ENROLLMENT_IDS
 
@@ -18,6 +18,18 @@ describe('certificates.issue', () => {
   it('offers the enrollments the server gave no reason, once the class is completed — none before', () => {
     expect(eligibleEnrollmentIds(preview)).toEqual([FIRST, THIRD])
     expect(eligibleEnrollmentIds({ ...preview, class: { ...preview.class, status: 'running' }, issuable: 0 })).toEqual([])
+  })
+
+  it('says an active enrollment of a class not completed yet waits for the class alone when its final grade passes and is not stale (V3)', () => {
+    const waiting = makePreviewItem({ enrollmentStatus: 'active', reason: 'not_completed' })
+    expect(awaitsClassCompletion(waiting, false)).toBe(true)
+    expect(awaitsClassCompletion(waiting, true)).toBe(false)
+    expect(awaitsClassCompletion({ ...waiting, final: null }, false)).toBe(false)
+    expect(awaitsClassCompletion({ ...waiting, final: { ...waiting.final!, isPass: false } }, false)).toBe(false)
+    expect(awaitsClassCompletion({ ...waiting, final: { ...waiting.final!, stale: true } }, false)).toBe(false)
+    expect(awaitsClassCompletion({ ...waiting, reason: 'already_issued' }, false)).toBe(false)
+    // An eligible row has no reason: the tab says so on its own.
+    expect(awaitsClassCompletion(makePreviewItem(), false)).toBe(false)
   })
 
   it('keeps only the chosen enrollments that are still eligible, in enrollment order', () => {

@@ -1,15 +1,77 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { App as AntdApp } from 'antd'
 import { useLayoutEffect } from 'react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { MemoryRouter, Route, Routes } from 'react-router'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isMfaChallenge } from '../api/auth'
 import { jsonResponse, mfaChallengeResponse, mockFetch, sessionResponse } from '../test/http'
 import { AuthProvider } from './AuthProvider'
 import { useAuth } from './auth-context'
 import type { AuthContextValue } from './auth-context'
+import { RequireAuth } from './RequireAuth'
 import { emitSessionLost, emitSessionSwitched, getAccessToken, setAccessToken } from './token-store'
 
 const UNAUTHENTICATED = { statusCode: 401, code: 'unauthenticated', message: 'Authentication required' }
+
+/** What the server answers when POST /api/auth/refresh hits its limit (30 per minute per IP). */
+function rateLimited(headers: Record<string, string> = {}): Response {
+  return new Response(
+    JSON.stringify({ statusCode: 429, error: 'Too Many Requests', code: 'rate_limited', message: 'Too many requests; try again later' }),
+    { status: 429, headers: { 'Content-Type': 'application/json', ...headers } },
+  )
+}
+
+/**
+ * The provider above a router like app/App.tsx: `/` behind the real RequireAuth, `/login` a marker. `events`
+ * records every status the provider showed and every time the sign-in page was mounted.
+ */
+function renderAppShell() {
+  const events: string[] = []
+  function StatusProbe() {
+    const { status } = useAuth()
+    useLayoutEffect(() => {
+      events.push(status)
+    })
+    return <output data-testid="auth" data-status={status} />
+  }
+  function SignInPage() {
+    useLayoutEffect(() => {
+      events.push('sign-in page')
+    }, [])
+    return <p>sign-in page</p>
+  }
+  render(
+    <AntdApp>
+      <AuthProvider>
+        <StatusProbe />
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="/login" element={<SignInPage />} />
+            <Route
+              path="/"
+              element={
+                <RequireAuth>
+                  <p>home</p>
+                </RequireAuth>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </AntdApp>,
+  )
+  return {
+    events,
+    status: () => screen.queryByTestId('auth')?.getAttribute('data-status') ?? null,
+  }
+}
+
+/** Moves the fake clock and lets the fetch answers and React updates settle (waitFor never resolves under fake timers). */
+async function advance(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms)
+  })
+}
 
 /** Mounts the real provider and exposes its context value to the test. */
 function renderProvider() {
@@ -224,5 +286,131 @@ describe('AuthProvider', () => {
     expect(status()).toBe('anonymous')
     expect(getAccessToken()).toBeNull()
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/logout'])
+  })
+})
+
+// CH-0296: a page load whose refresh was rate-limited (429 — the limit counts per IP), unreachable or a 5xx
+// signed the visitor out although the refresh cookie was still valid. Only a 401 means "no session".
+describe('AuthProvider start-up check when the server cannot tell', () => {
+  beforeEach(() => {
+    setAccessToken(null)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('a 429 then a success: the user is signed in and the sign-in page was never shown', async () => {
+    let refreshes = 0
+    const fetchMock = mockFetch(() => (++refreshes === 1 ? rateLimited() : jsonResponse(200, sessionResponse('access-after-429'))))
+    const shell = renderAppShell()
+
+    await advance(0)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(shell.status()).toBe('loading')
+    expect(screen.queryByText('home')).not.toBeInTheDocument()
+
+    // No Retry-After: a one-second back-off before the second request.
+    await advance(999)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await advance(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/refresh'])
+
+    expect(shell.status()).toBe('authenticated')
+    expect(screen.getByText('home')).toBeInTheDocument()
+    expect(getAccessToken()).toBe('access-after-429')
+    expect(shell.events).not.toContain('anonymous')
+    expect(shell.events).not.toContain('sign-in page')
+  })
+
+  it('honours the wait the server names (Retry-After-login of @nestjs/throttler)', async () => {
+    let refreshes = 0
+    const fetchMock = mockFetch(() =>
+      ++refreshes === 1 ? rateLimited({ 'Retry-After-login': '7' }) : jsonResponse(200, sessionResponse()),
+    )
+    const shell = renderAppShell()
+
+    await advance(0)
+    await advance(6_999)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(shell.status()).toBe('loading')
+
+    await advance(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(shell.status()).toBe('authenticated')
+    expect(shell.events).not.toContain('sign-in page')
+  })
+
+  it('a 401 refresh_invalid makes the visitor anonymous at once, without a retry', async () => {
+    const fetchMock = mockFetch(() =>
+      jsonResponse(401, { statusCode: 401, code: 'refresh_invalid', message: 'Refresh token is not valid' }),
+    )
+    const shell = renderAppShell()
+
+    await advance(0)
+    expect(shell.status()).toBe('anonymous')
+    expect(screen.getByText('sign-in page')).toBeInTheDocument()
+
+    await advance(60_000)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('repeated 429s end in the retry message, not the sign-in form; «إعادة المحاولة» asks again and signs in', async () => {
+    let limited = true
+    const fetchMock = mockFetch(() => (limited ? rateLimited() : jsonResponse(200, sessionResponse())))
+    const shell = renderAppShell()
+
+    // One request and three retries after 1 s, 2 s and 4 s — then the provider stops asking.
+    await advance(0)
+    await advance(1_000)
+    await advance(2_000)
+    await advance(4_000)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(screen.getByText('تعذّر التحقق من جلستك')).toBeInTheDocument()
+    expect(screen.getByText(/الخادم يتلقى طلبات كثيرة من شبكتك/)).toBeInTheDocument()
+    expect(screen.queryByText('sign-in page')).not.toBeInTheDocument()
+    expect(shell.events).not.toContain('anonymous')
+    expect(shell.events).not.toContain('sign-in page')
+
+    await advance(60_000)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+
+    limited = false
+    act(() => {
+      fireEvent.click(screen.getByText('إعادة المحاولة').closest('button')!)
+    })
+    await advance(0)
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(shell.status()).toBe('authenticated')
+    expect(screen.getByText('home')).toBeInTheDocument()
+    expect(screen.queryByText('تعذّر التحقق من جلستك')).not.toBeInTheDocument()
+    expect(shell.events).not.toContain('sign-in page')
+  })
+
+  it('a network error and a 5xx are retried too; when the server stays unreachable the sign-in stays one click away', async () => {
+    let refreshes = 0
+    const fetchMock = vi.fn(async () => {
+      refreshes += 1
+      if (refreshes === 2) return jsonResponse(503, { statusCode: 503, message: 'Service Unavailable' })
+      throw new TypeError('Failed to fetch')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const shell = renderAppShell()
+
+    await advance(0)
+    await advance(1_000)
+    await advance(2_000)
+    await advance(4_000)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(screen.getByText(/تعذّر الوصول إلى الخادم/)).toBeInTheDocument()
+    expect(shell.events).not.toContain('sign-in page')
+
+    act(() => {
+      fireEvent.click(screen.getByText('المتابعة إلى تسجيل الدخول').closest('button')!)
+    })
+    expect(shell.status()).toBe('anonymous')
+    expect(screen.getByText('sign-in page')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(4)
   })
 })

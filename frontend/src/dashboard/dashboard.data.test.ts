@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { formatMoney, labelIn, wallDate } from './dashboard.data'
 
 describe('dashboard formats', () => {
-  it('formats money without needless decimals', () => {
-    expect(formatMoney(38400, 'TRY', 'en')).toBe('₺38,400')
+  it('formats money with two decimals, whole amounts too (QA V4: «325 ر.س.» stood beside «162.50 ر.س.»)', () => {
+    expect(formatMoney(38400, 'TRY', 'en')).toBe('₺38,400.00')
     expect(formatMoney(12.5, 'USD', 'en')).toBe('$12.50')
+    expect(formatMoney(100, 'SAR', 'en')).toMatch(/^SAR\s100\.00$/)
+    expect(formatMoney(325, 'SAR', 'ar')).toContain('325.00')
+    expect(formatMoney(162.5, 'SAR', 'ar')).toContain('162.50')
   })
 
   it('writes money with Latin digits in Arabic and falls back to the code for an unknown currency', () => {
-    expect(formatMoney(1500, 'TRY', 'ar')).toMatch(/1,?500/)
+    expect(formatMoney(1500, 'TRY', 'ar')).toMatch(/1,?500\.00/)
     expect(formatMoney(7, 'NOT-A-CURRENCY', 'en')).toBe('7.00 NOT-A-CURRENCY')
   })
 

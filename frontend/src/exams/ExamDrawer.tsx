@@ -270,7 +270,7 @@ export function ExamDrawer({ examId, onClose, onUpdated, onDeleted }: ExamDrawer
                   key: 'results',
                   label: t('exams.drawer.tabs.results'),
                   // Re-read when the exam leaves or reaches draft here (that decides whether it takes results); publish
-                  // and unpublish keep the sheet and its unsaved rows.
+                  // and unpublish keep the sheet and its unsaved rows, and its «published» note follows `exam.status`.
                   children: (
                     <ExamResultsTab
                       key={`${exam.id}:${exam.status === 'draft'}`}

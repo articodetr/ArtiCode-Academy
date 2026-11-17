@@ -20,6 +20,16 @@ import type { Certificate } from '../api/certificates'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
+import { BracketedCode } from './BracketedCode'
+
+/**
+ * A person's name inside a translated sentence («by {{name}}»): FIRST STRONG ISOLATE … POP DIRECTIONAL ISOLATE, the
+ * plain-text twin of `<bdi dir="auto">` — a name mixing Arabic and Latin words keeps its own order in the English UI
+ * (re-verification of CH-0296, KI-106).
+ */
+function isolated(name: string): string {
+  return `\u2068${name}\u2069`
+}
 import { CertificateStatusTag } from './CertificateStatusTag'
 import { RevokeCertificateModal } from './RevokeCertificateModal'
 import { describeCertificatesFailure, failureMessage, isCertificatesFailure } from './certificates.errors'
@@ -34,16 +44,19 @@ interface CertificateDrawerProps {
   onUpdated: (certificate: Certificate) => void
 }
 
-/** A printed name, with the current one beneath it when it changed since the issuance. */
+/**
+ * A printed name, with the current one beneath it when it changed since the issuance. The name is an isolate in its
+ * own direction (V3 D4): an Arabic name with a Latin word keeps its order in the English UI.
+ */
 function NamedValue({ printed, current, code }: { printed: string; current: string | null; code?: string }) {
   const { t } = useTranslation()
   return (
     <span>
-      <span>{printed}</span>
+      <bdi dir="auto">{printed}</bdi>
       {code ? (
         <>
           {' '}
-          (<bdi dir="ltr">{code}</bdi>)
+          <BracketedCode code={code} />
         </>
       ) : null}
       {current ? (
@@ -166,7 +179,7 @@ export function CertificateDrawer({ certificateId, onClose, onUpdated }: Certifi
                 {shown.issuedBy ? (
                   <>
                     <br />
-                    <Typography.Text type="secondary">{t('certificates.drawer.by', { name: shown.issuedBy.fullName })}</Typography.Text>
+                    <Typography.Text type="secondary">{t('certificates.drawer.by', { name: isolated(shown.issuedBy.fullName) })}</Typography.Text>
                   </>
                 ) : null}
               </span>
@@ -203,7 +216,7 @@ export function CertificateDrawer({ certificateId, onClose, onUpdated }: Certifi
                       {shown.revokedBy ? (
                         <>
                           <br />
-                          <Typography.Text type="secondary">{t('certificates.drawer.by', { name: shown.revokedBy.fullName })}</Typography.Text>
+                          <Typography.Text type="secondary">{t('certificates.drawer.by', { name: isolated(shown.revokedBy.fullName) })}</Typography.Text>
                         </>
                       ) : null}
                     </span>

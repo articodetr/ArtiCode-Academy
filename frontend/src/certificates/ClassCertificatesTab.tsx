@@ -27,7 +27,7 @@ import { useLocalized } from '../i18n/useLocalized'
 import { displayNameOf, formatDateTime, localizedLabel } from '../users/users.format'
 import { describeCertificatesFailure, failureMessage, isStaleIssue } from './certificates.errors'
 import { bandOf, formatPercent } from './certificates.format'
-import { chosenEnrollmentIds, eligibleEnrollmentIds, issueBodyOf, issueOutcomeOf } from './certificates.issue'
+import { awaitsClassCompletion, chosenEnrollmentIds, eligibleEnrollmentIds, issueBodyOf, issueOutcomeOf } from './certificates.issue'
 import { certificatePrintPath } from './certificates.links'
 import { canIssueCertificates } from './certificates.policy'
 
@@ -97,7 +97,10 @@ export function ClassCertificatesTab({ cls }: { cls: AcademyClass }) {
       key: 'student',
       render: (_, row) => (
         <Space size={4} wrap>
-          <Typography.Text delete={row.student.deletedAt !== null}>{displayNameOf(row.student)}</Typography.Text>
+          <Typography.Text delete={row.student.deletedAt !== null}>
+            {/* An isolate in the text's own direction: an Arabic name with a Latin word keeps its order in the English UI. */}
+            <bdi dir="auto">{displayNameOf(row.student)}</bdi>
+          </Typography.Text>
           {row.student.deletedAt !== null ? <Tag>{t('classes.enrollments.deletedAccount')}</Tag> : null}
         </Space>
       ),
@@ -150,7 +153,11 @@ export function ClassCertificatesTab({ cls }: { cls: AcademyClass }) {
       key: 'eligibility',
       render: (_, row) =>
         row.reason ? (
-          <Tag color={REASON_COLORS[row.reason] ?? 'default'}>{t(`certificates.classTab.reasons.${row.reason}`)}</Tag>
+          // The server's reason, and — for an active enrollment whose final grade would pass — that completing the class is all it waits for.
+          <Space size={4} wrap>
+            <Tag color={REASON_COLORS[row.reason] ?? 'default'}>{t(`certificates.classTab.reasons.${row.reason}`)}</Tag>
+            {awaitsClassCompletion(row, completed) ? <Tag color="gold">{t('certificates.classTab.eligibleLater')}</Tag> : null}
+          </Space>
         ) : completed ? (
           <Tag color="green">{t('certificates.classTab.eligible')}</Tag>
         ) : (

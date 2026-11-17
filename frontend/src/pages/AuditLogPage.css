@@ -1,0 +1,8 @@
+/* The filter fields of the audit log hold left-to-right values — event names (`auth.mfa.`), ids, entity types, a
+   date-time. In the Arabic UI antd's RTL classes (`.ant-select-rtl`, `.ant-input-rtl`, `.ant-input-affix-wrapper-rtl`)
+   set `direction: rtl` and beat the `dir="ltr"` attribute, so `auth.mfa.` showed as `.auth.mfa` (KI-096). Two classes
+   outrank antd's one (its own are wrapped in `:where()`); the inner `input` of a field with a clear button is covered. */
+.audit-filters .audit-ltr-field,
+.audit-filters .audit-ltr-field input {
+  direction: ltr;
+}

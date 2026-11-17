@@ -4,6 +4,24 @@
   font-weight: 600;
 }
 
+/* An invoice or receipt number never breaks at its hyphens (INV-2026-00003 stood on three lines at 390 px). */
+.finance-number {
+  white-space: nowrap;
+}
+
+/* The invoice drawer's header: the title keeps its natural width and, when the title and the actions do not fit on
+   one line (a phone), the actions move under the title instead of squeezing it — antd gives the title `flex: 1` with a
+   zero basis, so without the `auto` basis the header would never wrap and the unbreakable number would run under the
+   buttons. */
+.ant-drawer-header.finance-drawer__header {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.ant-drawer-header.finance-drawer__header > .ant-drawer-header-title {
+  flex: 1 1 auto;
+}
+
 .finance-totals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -46,15 +64,18 @@
   padding: 8px 10px;
 }
 
+/* One column as wide as the page (an implicit `auto` column grew to its widest content and scrolled a phone sideways). */
 .my-invoices {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
 .my-invoice {
+  min-width: 0;
   padding: 16px 18px 6px;
   border: 1px solid var(--c-line);
   border-radius: var(--radius-lg);
@@ -100,9 +121,11 @@
   background: var(--c-mark);
 }
 
+/* The three amounts wrap onto a second line on a phone instead of widening the card. */
 .my-invoice__totals {
   display: flex;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 8px 24px;
   margin: 0;
 }
 
@@ -144,11 +167,15 @@
   padding: 0;
 }
 
+/* A row wraps instead of squeezing its first item: at 390 px an installment with a «مدفوعة جزئياً» tag shrank its due
+   date to 48 px and the date ran over the amount (re-verification of CH-0296). With `flex-wrap` a line breaks on the
+   items' natural widths, so the tag moves to the next line. */
 .my-invoice__lists li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
   padding: 7px 0;
   border-top: 1px solid var(--c-line);
 }
@@ -160,6 +187,14 @@
 .my-invoice__lists li > span:first-child {
   flex: 1;
   min-width: 0;
+}
+
+/* An installment's due date never shrinks below its text: `flex: 1` above has a zero basis, so the row's wrap saw a
+   zero-wide date and squeezed it to 48 px under the amount instead of moving the tag to the next line (re-verification
+   of CH-0296). With its natural basis the line breaks first. */
+.my-invoice__lists li > span.my-invoice__due {
+  flex: 1 0 auto;
+  white-space: nowrap;
 }
 
 .my-invoice__lists small {

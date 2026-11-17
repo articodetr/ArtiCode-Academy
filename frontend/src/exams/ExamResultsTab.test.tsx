@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExamResultsSheet } from '../api/examResults'
+import type { ExamStatus } from '../api/exams'
 import { formatZonedDateTime } from '../assignments/assignments.format'
 import { ar } from '../i18n/ar'
 import { EXAM_ID, EXAM_READER_PERMISSIONS, EXAM_TEACHER_PERMISSIONS, EXAM_TIME_ZONE, RESULT_STUDENT_IDS, fourResultStudents, makeExamResult, makeResultsSheet } from '../test/exams'
@@ -36,16 +37,22 @@ function mockSheetApi(get: () => ExamResultsSheet | Response, put?: (body: unkno
   return calls
 }
 
-/** `timeZone` = the exam's (D-R41): the sheet shows when each result was written in it. `onUnsavedChange` is what the drawer hears. */
-function renderTab(permissions: string[], timeZone: string = EXAM_TIME_ZONE) {
+/**
+ * `timeZone` = the exam's (D-R41): the sheet shows when each result was written in it. `onUnsavedChange` is what the
+ * drawer hears. `setExamStatus()` is a status action in the drawer: the same tab gets the exam's new status.
+ */
+function renderTab(permissions: string[], timeZone: string = EXAM_TIME_ZONE, status: ExamStatus = 'scheduled') {
   const onSaved = vi.fn()
   const onExamStale = vi.fn()
   const onUnsavedChange = vi.fn()
-  const view = renderWithProviders(<ExamResultsTab exam={{ id: EXAM_ID, timeZone }} onSaved={onSaved} onExamStale={onExamStale} onUnsavedChange={onUnsavedChange} />, {
+  const tab = (examStatus: ExamStatus) => (
+    <ExamResultsTab exam={{ id: EXAM_ID, timeZone, status: examStatus }} onSaved={onSaved} onExamStale={onExamStale} onUnsavedChange={onUnsavedChange} />
+  )
+  const view = renderWithProviders(tab(status), {
     auth: makeAuth({ user: makeUser({ permissions }) }),
     route: '/exams',
   })
-  return { ...view, onSaved, onExamStale, onUnsavedChange }
+  return { ...view, onSaved, onExamStale, onUnsavedChange, setExamStatus: (next: ExamStatus) => view.rerender(tab(next)) }
 }
 
 const lastReported = (onUnsavedChange: ReturnType<typeof vi.fn>) => onUnsavedChange.mock.calls.at(-1)?.[0] as boolean | undefined
@@ -223,6 +230,35 @@ describe('ExamResultsTab', () => {
     renderTab(EXAM_TEACHER_PERMISSIONS)
     expect(await screen.findByText(ar.exams.results.publishedNote)).toBeInTheDocument()
     expect(saveButton()).toBeInTheDocument()
+  })
+
+  it('follows a publish or unpublish in the drawer at once — the note comes and goes, the unsaved rows stay — and a sheet read later is the newer fact (V2 D1)', async () => {
+    let serverStatus: ExamStatus = 'scheduled'
+    const calls = mockSheetApi(() => makeResultsSheet({ examStatus: serverStatus }))
+    const { setExamStatus } = renderTab(EXAM_TEACHER_PERMISSIONS)
+    await findRow('سارة الطالبة')
+    expect(screen.queryByText(ar.exams.results.publishedNote)).not.toBeInTheDocument()
+    mark('سارة الطالبة', 'absent')
+
+    // «Publish results» in the drawer: the sheet read before it still says scheduled.
+    serverStatus = 'published'
+    setExamStatus('published')
+    expect(await screen.findByText(ar.exams.results.publishedNote)).toBeInTheDocument()
+    expect(within(row('سارة الطالبة')).getByLabelText(ar.exams.results.status.absent)).toBeChecked()
+    expect(gets(calls)).toHaveLength(1)
+
+    // «Unpublish»: the note goes with it.
+    serverStatus = 'scheduled'
+    setExamStatus('scheduled')
+    await waitFor(() => expect(screen.queryByText(ar.exams.results.publishedNote)).not.toBeInTheDocument())
+    expect(gets(calls)).toHaveLength(1)
+
+    // Published elsewhere while the drawer still says scheduled: the sheet read now is the newer fact.
+    serverStatus = 'published'
+    fireEvent.click(within(row('سارة الطالبة')).getByText(ar.exams.results.revert).closest('button')!)
+    fireEvent.click(screen.getByText(ar.exams.results.reload).closest('button')!)
+    expect(await screen.findByText(ar.exams.results.publishedNote)).toBeInTheDocument()
+    expect(gets(calls)).toHaveLength(2)
   })
 
   it('says when each result was written in the exam’s zone, not the browser’s (D-R41)', async () => {

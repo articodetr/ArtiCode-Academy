@@ -64,7 +64,14 @@ function formatted(value: unknown): string | undefined {
   return typeof value === 'number' ? String(value) : typeof value === 'string' ? value : undefined
 }
 
-export function describePaymentsFailure(error: unknown): PaymentsFailure {
+/** The money details of a refusal (`payment_exceeds_balance { amount, balance }`). */
+const MONEY_PARAMS = new Set(['amount', 'balance'])
+
+/**
+ * `money` writes the money details in the invoice's currency (formatMoney) when the caller knows the currency;
+ * without it they stay plain numbers.
+ */
+export function describePaymentsFailure(error: unknown, money?: (amount: number) => string): PaymentsFailure {
   if (!(error instanceof ApiError)) return { key: 'login.errors.network' }
   const body = (typeof error.body === 'object' && error.body !== null ? error.body : {}) as Record<string, unknown>
   if (error.code && KNOWN_CODES.has(error.code)) {
@@ -73,7 +80,8 @@ export function describePaymentsFailure(error: unknown): PaymentsFailure {
     if (Array.isArray(body.missing)) params.list = `(${body.missing.filter((item) => typeof item === 'string').join(', ')})`
     if (Array.isArray(body.problems)) params.list = `(${body.problems.filter((item) => typeof item === 'string').join(', ')})`
     for (const key of ['amount', 'balance', 'paymentCount', 'status', 'from', 'invoiceCount']) {
-      const value = formatted(body[key])
+      const raw = body[key]
+      const value = money && MONEY_PARAMS.has(key) && typeof raw === 'number' ? money(raw) : formatted(raw)
       if (value !== undefined) params[key] = value
     }
     if (error.code === 'payment_exceeds_balance') failure.field = ['amount']

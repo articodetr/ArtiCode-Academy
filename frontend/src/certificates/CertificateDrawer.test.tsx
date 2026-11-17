@@ -68,7 +68,8 @@ describe('CertificateDrawer', () => {
     expect(screen.getByText('الاسم الحالي: بايثون للمبتدئين')).toBeInTheDocument()
     expect(screen.getByText('86.4% — جيد جداً (B)')).toBeInTheDocument()
     expect(screen.getByText('أكاديمية آرتي كود')).toBeInTheDocument()
-    expect(screen.getByText('بواسطة هند الموظفة')).toBeInTheDocument()
+    // The name sits between FSI and PDI (isolated()): a mixed Arabic/Latin name keeps its order in the English UI.
+    expect(screen.getByText('بواسطة \u2068هند الموظفة\u2069')).toBeInTheDocument()
     expect(screen.getByText('K7Q2-M4XW-ZPLR-5TBC-3NHD')).toBeInTheDocument()
     expect(screen.getByText(`${window.location.origin}/verify/K7Q2M4XWZPLR5TBC3NHD`)).toBeInTheDocument()
     const print = screen.getByText(ar.certificates.drawer.print).closest('a') as HTMLElement
@@ -79,6 +80,21 @@ describe('CertificateDrawer', () => {
     expect(screen.queryByText(ar.certificates.drawer.revokeReason)).not.toBeInTheDocument()
   })
 
+  it('keeps each printed name in its own direction and each code with its brackets in one left-to-right unit (V3 D3, D4)', async () => {
+    const certificate = makeCertificate()
+    mockCertificateApi({ details: [{ ...certificate, snapshot: { ...certificate.snapshot, student: { ...certificate.snapshot.student, fullName: 'أحمد V3 الأول' } } }] })
+    renderDrawer(CERTIFICATE_STAFF_PERMISSIONS)
+
+    const name = await screen.findByText('أحمد V3 الأول')
+    expect(name.tagName).toBe('BDI')
+    expect(name).toHaveAttribute('dir', 'auto')
+    // The course's and the class's codes: brackets inside the LTR isolate, never mirrored around a wrapped code.
+    expect(screen.getAllByTestId('bracketed-code').map((code) => [code.tagName, code.getAttribute('dir'), code.textContent])).toEqual([
+      ['BDI', 'ltr', `(${certificate.snapshot.course.code})`],
+      ['BDI', 'ltr', `(${certificate.snapshot.class.code})`],
+    ])
+  })
+
   it('shows a revoked certificate with when, by whom and why it was revoked, and offers no revocation', async () => {
     const revoked = makeRevokedCertificate()
     mockCertificateApi({ details: [revoked] })
@@ -86,7 +102,7 @@ describe('CertificateDrawer', () => {
 
     expect(await screen.findByText(ar.certificates.status.revoked)).toBeInTheDocument()
     expect(screen.getByText(`أُبطلت هذه الشهادة في ${formatDateTime(revoked.revokedAt, 'ar')} ولم تعد صالحة.`)).toBeInTheDocument()
-    expect(screen.getByText('بواسطة مدير الأكاديمية')).toBeInTheDocument()
+    expect(screen.getByText('بواسطة \u2068مدير الأكاديمية\u2069')).toBeInTheDocument()
     expect(screen.getByText('خطأ في رصد الدرجة')).toBeInTheDocument()
     expect(screen.queryByText(ar.certificates.drawer.revoke)).not.toBeInTheDocument()
   })

@@ -191,7 +191,17 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
       <Form.Item
         name="serialPrefix"
         label={t('certificates.settings.serialPrefix')}
-        extra={t('certificates.settings.hint', { example: exampleSerial(serialPrefix, year) })}
+        extra={
+          // An example of the format only (V3 D2): the sequence continues the year's counter, shared by every prefix
+          // (D-R53), so the next number is not 00001 once the year has certificates. The example is one left-to-right
+          // unit on one line — it wrapped as «-CERT / 2026-00001» inside the Arabic sentence.
+          <>
+            {t('certificates.settings.hint')} {t('certificates.settings.sequenceNote')} {t('certificates.settings.example')}{' '}
+            <bdi dir="ltr" style={{ whiteSpace: 'nowrap' }} data-testid="serial-example">
+              {exampleSerial(serialPrefix, year)}
+            </bdi>
+          </>
+        }
         normalize={(value: string | undefined) => (value ?? '').toUpperCase()}
         rules={[
           { validator: (_, value: string | undefined) => (isSerialPrefixInput(value) ? Promise.resolve() : Promise.reject(new Error(t('certificates.settings.invalid')))) },

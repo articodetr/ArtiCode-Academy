@@ -64,7 +64,9 @@ export function AppLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
+      {/* `app-sider`: the print rules of the reports page hide the side menu by this class (reports.css). */}
       <Sider
+        className="app-sider"
         theme="light"
         collapsible
         collapsed={collapsed}

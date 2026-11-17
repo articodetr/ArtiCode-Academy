@@ -134,8 +134,22 @@
   background: var(--c-ink);
 }
 
+/* The month bars: a bar's height is its share (`--rp-bar`, 0..1, set by FinancialTab) of the column less the room the
+   amount above it and the month under it take (`--rp-chart-labels` ≈ 17 px + 24 px + two 6 px gaps), so the tallest
+   bar leaves its amount whole instead of squeezing it to a clipped sliver; the two labels never shrink. */
 .rp-chart {
   height: 160px;
+  --rp-chart-labels: 56px;
+}
+
+.rp-chart .db-chart__col small,
+.rp-chart .db-chart__col span {
+  flex-shrink: 0;
+}
+
+.rp-chart .db-chart__col i {
+  height: calc((100% - var(--rp-chart-labels)) * var(--rp-bar, 0));
+  min-height: 2px;
 }
 
 .rp-aging + .rp-aging {
@@ -190,9 +204,11 @@
   }
 }
 
+/* Printing: the layout's side menu (`app-sider` on the Sider of AppLayout) and header, the page's controls and the
+   tab bars are left out; the content takes the whole page and a table fits its width (its cells wrap) instead of
+   running off the page. reports.print.test.tsx checks that every selector here meets an element. */
 @media print {
   .app-sider,
-  .app-drawer,
   .app-header,
   .rp-noprint,
   .rp-tabs > .ant-tabs-nav,
@@ -215,5 +231,9 @@
   }
   .rp-table .ant-table-content {
     overflow: visible !important;
+  }
+  /* antd writes `width: max-content` on the table of a `scroll.x` table; on paper it takes the page's width. */
+  .rp-table .ant-table-content > table {
+    width: 100% !important;
   }
 }
