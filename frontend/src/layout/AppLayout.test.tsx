@@ -6,6 +6,7 @@ import { ar } from '../i18n/ar'
 import { SettingsPage } from '../pages/SettingsPage'
 import { SETTINGS_MANAGER_PERMISSIONS, makeAcademy } from '../test/academy'
 import { jsonResponse, mockFetch } from '../test/http'
+import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { AppLayout } from './AppLayout'
 
@@ -296,5 +297,70 @@ describe('AppLayout — the academy brand in the header (J-F13)', () => {
     // The remounted form shows the server's answer too; nothing was read again.
     expect(screen.getByLabelText(ar.settings.academyNameAr)).toHaveValue('أكاديمية الفجر')
     expect(api.gets()).toBe(1)
+  })
+})
+
+/** AppLayout.css read from disk: vitest empties every `.css` import, `?raw` included. */
+async function layoutCss(): Promise<string> {
+  const fsModule = 'node:fs'
+  const fs = (await import(/* @vite-ignore */ fsModule)) as { readFileSync: (path: URL, encoding: 'utf8') => string }
+  // A variable, not a literal: Vite rewrites `new URL('./AppLayout.css', import.meta.url)` into the asset's served URL.
+  const path = './AppLayout.css'
+  return fs.readFileSync(new URL(path, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
+/** The declarations of the rule written exactly with `selector` inside `@media (max-width: 768px)`, as `property → value`. */
+async function phoneDeclarations(selector: string): Promise<Map<string, string>> {
+  const css = await layoutCss()
+  const start = css.indexOf('@media (max-width: 768px)')
+  const block = css.slice(css.indexOf('{', start) + 1)
+  const declarations = new Map<string, string>()
+  for (const match of block.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (match[1]!.trim() !== selector) continue
+    for (const part of match[2]!.split(';')) {
+      const [property, value] = part.split(':').map((side) => side.trim())
+      if (property && value) declarations.set(property, value)
+    }
+  }
+  return declarations
+}
+
+describe('AppLayout — the header’s user, bell and menus (KI-108)', () => {
+  beforeEach(() => {
+    mockFetch(() => new Promise<Response>(() => {}))
+  })
+
+  it('isolates the signed-in user’s name in its own direction, so a name mixing Arabic and Latin words keeps its order', () => {
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user: makeUser({ name: 'الموظف v5 KM6I3V' }) }), route: '/' })
+    const name = within(header().querySelector('.app-user') as HTMLElement).getByText('الموظف v5 KM6I3V')
+    expect(name.tagName).toBe('BDI')
+    expect(name).toHaveAttribute('dir', 'auto')
+  })
+
+  it('lets the header grow with its wrapped rows on a phone, so the bell’s badge stays inside it (390 × 844)', async () => {
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user: makeUser() }), route: '/' })
+    // The badge belongs to the bell inside the header's actions.
+    const bell = within(header()).getByLabelText(ar.nav.notifications)
+    expect(bell.closest('.ant-badge')?.parentElement).toHaveClass('app-header__actions')
+    // jsdom has no layout: assert the configuration — the phone rule replaces the fixed 64 px height, and its padding
+    // keeps the badge (half above the bell) below the top of the page. The browser check measures it.
+    const phone = await phoneDeclarations('.app-header')
+    expect(phone.get('height')).toBe('auto')
+    expect(phone.get('min-height')).toBe('64px')
+    expect(phone.get('padding')).toBe('10px 12px')
+    expect((await phoneDeclarations('.app-header__actions')).get('row-gap')).toBe('8px')
+  })
+
+  it('picks an item of the user menu with Space, as Enter and a click do', async () => {
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user: makeUser() }), route: '/', routes: { '/profile': <LocationProbe /> } })
+    fireEvent.click(header().querySelector('.app-user') as HTMLElement)
+    const profile = (await screen.findByText(ar.common.profile)).closest('li') as HTMLElement
+    expect(profile).toHaveAttribute('role', 'menuitem')
+    profile.focus()
+    const space = { key: ' ', code: 'Space', keyCode: 32, which: 32 }
+    // The keydown is cancelled (no page scroll); the item is picked on the key's release.
+    expect(fireEvent.keyDown(profile, space)).toBe(false)
+    fireEvent.keyUp(profile, space)
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/profile')
   })
 })

@@ -1,7 +1,8 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Assignment } from '../api/assignments'
 import type { SubmissionRoster } from '../api/submissions'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { ASSIGNMENT_ID, ASSIGNMENT_READER_PERMISSIONS, ASSIGNMENT_TEACHER_PERMISSIONS, makeAssignment } from '../test/assignments'
 import { jsonResponse, mockFetch } from '../test/http'
@@ -83,6 +84,31 @@ describe('AssignmentSubmissionsTab', () => {
     // The zone is named once (neither the CI runner's nor this machine's), with the server's attempt rule.
     expect(screen.getByTestId('roster-zone')).toHaveTextContent(`${ar.assignments.roster.zone} (${ZONE})`)
     expect(screen.getByText('لكل طالب 2 محاولة، ومحاولة إضافية عن كل تسليم يُعاد للتعديل')).toBeInTheDocument()
+  })
+
+  it('words the attempt rule by its count: «1 attempt» / «3 attempts» in English, «محاولة واحدة» in Arabic (KI-108)', async () => {
+    const rule = (maxAttempts: number) => {
+      mockRosterApi(() => makeSubmissionRoster({ maxAttempts }))
+      return renderWithProviders(<AssignmentSubmissionsTab assignment={makeAssignment({ status: 'open', maxAttempts })} onReviewed={vi.fn()} onAssignmentStale={vi.fn()} />, {
+        auth: makeAuth({ user: makeUser({ permissions: ASSIGNMENT_TEACHER_PERMISSIONS }) }),
+        route: '/assignments',
+      })
+    }
+    const arabicOne = rule(1)
+    expect(await screen.findByText('لكل طالب محاولة واحدة، ومحاولة إضافية عن كل تسليم يُعاد للتعديل')).toBeInTheDocument()
+    arabicOne.unmount()
+
+    try {
+      await act(() => i18n.changeLanguage('en'))
+      const one = rule(1)
+      expect(await screen.findByText('1 attempt per student, plus one for every submission returned for rework')).toBeInTheDocument()
+      one.unmount()
+      rule(3)
+      expect(await screen.findByText('3 attempts per student, plus one for every submission returned for rework')).toBeInTheDocument()
+      expect(screen.queryByText(/attempt\(s\)/)).not.toBeInTheDocument()
+    } finally {
+      await act(() => i18n.changeLanguage('ar'))
+    }
   })
 
   it('takes lateness from the server only: an attempt after the due date that the server did not mark shows no late tag', async () => {

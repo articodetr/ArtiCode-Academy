@@ -9,7 +9,9 @@
 // reason. The server answers with the enrollment, not the class, so the tab
 // moves the class's `enrolledCount` itself (enrolledCountDelta) and hands the
 // class back to the drawer. The refresh button re-reads both the roster and
-// the class, so the seats shown beside the roster match the server too.
+// the class, so the seats shown beside the roster match the server too. Since
+// CH-0297 the retry of the roster's error re-reads the class as well when the
+// drawer's own read of it failed, so one retry clears both errors.
 import { DownOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Dropdown, Flex, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import type { MenuProps, TableProps } from 'antd'
@@ -58,6 +60,8 @@ interface ClassEnrollmentsTabProps {
   onClassChanged: (cls: AcademyClass) => void
   /** The class changed elsewhere (full, no longer enrollable) or the user asked for a refresh: re-read it. */
   onStale: () => void
+  /** Whether the drawer's own read of the class failed (its error shows): the roster's retry then re-reads the class too (CH-0297). */
+  classReadFailed?: boolean
   /** Whether the enroll form holds a student picked but not enrolled yet (KI-052): the class drawer then keeps Escape and a mask click from dropping it. */
   onUnsavedChange?: (unsaved: boolean) => void
 }
@@ -76,7 +80,7 @@ function sinceOf(row: Enrollment): string | null {
   }
 }
 
-export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onUnsavedChange }: ClassEnrollmentsTabProps) {
+export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFailed = false, onUnsavedChange }: ClassEnrollmentsTabProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -268,7 +272,15 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onUnsavedCha
           showIcon
           message={failureMessage(t, listFailure)}
           action={
-            <Button size="small" onClick={() => (listFailure.key.endsWith('cursor_invalid') ? list.setFilters({}) : list.reload())}>
+            <Button
+              size="small"
+              onClick={() => {
+                if (listFailure.key.endsWith('cursor_invalid')) list.setFilters({})
+                else list.reload()
+                // The refresh icon also re-read the class and that read failed too: recover it with the roster (CH-0297).
+                if (classReadFailed) onStale()
+              }}
+            >
               {t('classes.enrollments.refresh')}
             </Button>
           }
@@ -283,7 +295,9 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, onUnsavedCha
         dataSource={visible}
         loading={list.loading}
         pagination={false}
-        scroll={{ x: 'max-content' }}
+        // `x: true`, not 'max-content': the table keeps the drawer's width (cells wrap) and scrolls in its own box only
+        // when it cannot fit — 'max-content' pushed the actions column out of view at 1366 × 900 (CH-0297).
+        scroll={{ x: true }}
         locale={{ emptyText: filtered ? t('classes.enrollments.emptyFiltered') : t('classes.enrollments.empty') }}
       />
 

@@ -135,7 +135,8 @@ describe('LevelsManager (MOD-04-T06)', () => {
     const popup = (await screen.findByText('حذف المستوى «متوسط» نهائياً؟')).closest('.ant-popover') as HTMLElement
     fireEvent.click(within(popup).getByText(ar.courses.levels.delete).closest('button')!)
 
-    expect(await screen.findByText('لا يُحذف هذا المستوى: تستخدمه 2 دورة. عطّله بدلاً من ذلك.')).toBeInTheDocument()
+    // The count in its Arabic plural form (CH-0297): 2 → «دورتان», not «2 دورة».
+    expect(await screen.findByText('لا يُحذف هذا المستوى: تستخدمه دورتان. عطّله بدلاً من ذلك.')).toBeInTheDocument()
     await waitFor(() => expect(calls.filter((call) => call.method === 'GET')).toHaveLength(2))
     await waitFor(() => expect(screen.getByLabelText(`${ar.courses.levels.delete}: INT`)).toBeDisabled())
   })

@@ -47,6 +47,21 @@ describe('describeGradebookFailure (the gradebook part of grades.errors.ts, API-
     expect(messageOf(404, { code: 'class_not_found' })).toBe(ar.gradebook.errors.class_not_found)
   })
 
+  it('words each count of grades_not_ready in the singular or plural in English, and keeps the Arabic wording (KI-108)', () => {
+    const en = i18n.getFixedT('en')
+    const english = (body: Record<string, unknown>) => gradebookFailureMessage((key, options) => en(key, options), describeGradebookFailure(apiError(409, { code: 'grades_not_ready', ...body })))
+    expect(english({ openAssignments: 1, awaitingReview: 1, unpublishedExams: 1 })).toBe(
+      'The grades cannot be fixed yet: 1 weighted assignment open, 1 attempt waiting for review, 1 weighted exam not published.',
+    )
+    expect(english({ openAssignments: 2, awaitingReview: 3, unpublishedExams: 12 })).toBe(
+      'The grades cannot be fixed yet: 2 weighted assignments open, 3 attempts waiting for review, 12 weighted exams not published.',
+    )
+    // Arabic as before, whatever its plural category (one, two, few, many, other).
+    for (const count of [1, 2, 3, 11, 100]) {
+      expect(messageOf(409, { code: 'grades_not_ready', openAssignments: 0, awaitingReview: count, unpublishedExams: 0 })).toBe(`لا يُقبل التثبيت بعد: ${count} محاولة بانتظار المراجعة.`)
+    }
+  })
+
   it('lists the missing permission and maps the guards; nothing else retries differently', () => {
     const denied = describeGradebookFailure(apiError(403, { code: 'permission_denied', missing: ['grades.manage'] }))
     expect(denied).toEqual({ key: 'gradebook.errors.permission_denied', params: { list: '(grades.manage)' } })

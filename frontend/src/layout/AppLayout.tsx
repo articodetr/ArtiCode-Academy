@@ -1,10 +1,11 @@
 import { BellOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons'
 import { Avatar, Badge, Button, Dropdown, Layout, Menu, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/auth-context'
+import { installMenuSpaceActivation } from '../common/menuSpaceKey'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { HeaderBrand, SiderAcademyName } from './AcademyBrand'
 import { navFor } from './navigation'
@@ -28,6 +29,9 @@ export function AppLayout() {
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
   const { token } = theme.useToken()
+  // Space picks a focused item of every menu under the layout — the side menu and every dropdown's actions — as Enter
+  // does (KI-108; @rc-component/menu acts on Enter only).
+  useEffect(() => installMenuSpaceActivation(), [])
 
   if (!user) return <Navigate to="/login" replace />
 
@@ -112,7 +116,10 @@ export function AppLayout() {
             <Dropdown menu={{ items: userMenu }} trigger={['click']}>
               <span className="app-user">
                 <Avatar size="small" icon={<UserOutlined />} />
-                <Typography.Text>{user.name}</Typography.Text>
+                {/* An isolate in the name's own direction (KI-108): a name mixing Arabic and Latin words keeps its order in either UI. */}
+                <Typography.Text>
+                  <bdi dir="auto">{user.name}</bdi>
+                </Typography.Text>
               </span>
             </Dropdown>
           </div>

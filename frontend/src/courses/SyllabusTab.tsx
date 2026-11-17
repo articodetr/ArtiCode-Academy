@@ -140,7 +140,11 @@ export function SyllabusTab({ courseId, canManage, onUnsavedChange }: SyllabusTa
       <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 12 }}>
         <Typography.Text type="secondary">
           {syllabus.items.length > 0
-            ? t('courses.syllabus.summary', { count: syllabus.items.length, minutes: totalMinutes(syllabus.items) })
+            ? // Each count in its plural form — «3 بنود», «بند واحد», «5 دقائق» (CH-0297).
+              t('courses.syllabus.summary', {
+                items: t('courses.syllabus.items', { count: syllabus.items.length }),
+                minutes: t('courses.syllabus.minutes', { count: totalMinutes(syllabus.items) }),
+              })
             : canManage
               ? t('courses.syllabus.emptyManager')
               : t('courses.syllabus.empty')}

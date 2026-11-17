@@ -274,6 +274,8 @@ describe('CreateLessonModal', () => {
     fillTimes(dialog, '2026-11-12', '23:00', '00:30')
     // The next day of the academy's zone, whose midnight is 10:00 UTC.
     await waitFor(() => expect(within(dialog).getByTestId('lesson-end-mark')).toHaveTextContent('(+1)'))
+    // LTR on its own: the affix wrapper stays RTL in the Arabic UI, where the mark read «(1+)» (CH-0297, real browser).
+    expect(within(dialog).getByTestId('lesson-end-mark')).toHaveAttribute('dir', 'ltr')
     submit(dialog)
     await waitFor(() => expect(posts).toHaveLength(1))
     // 23:00 on the 12th in UTC+14 is 09:00 UTC on the 12th; 00:30 on the 13th is 10:30 UTC.

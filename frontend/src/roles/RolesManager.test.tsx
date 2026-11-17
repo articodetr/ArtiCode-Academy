@@ -76,6 +76,19 @@ describe('RolesManager', () => {
     expect(screen.getByText(ar.rolesAdmin.addRole).closest('button')).toBeEnabled()
   })
 
+  it('keeps the table in its own horizontal scroll box, so a phone never scrolls the page sideways (QA 2026-11-17: 649 px at 390 px)', async () => {
+    mockRolesApi()
+    renderManager()
+    await screen.findByText('أمين المكتبة')
+
+    // jsdom has no layout: assert the configuration. `scroll.x` makes antd put the table in a box of its own that
+    // scrolls sideways; `x: true` (not 'max-content') keeps the table at the box's width wherever it fits (KI-094).
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+  })
+
   it('deletes an unassigned custom role after confirmation and drops its row; a role in use keeps a disabled delete button', async () => {
     const api = mockRolesApi()
     renderManager()

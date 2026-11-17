@@ -228,6 +228,29 @@ describe('useTimetable', () => {
     expect(calls).toEqual([minePath(SUNDAY), minePath(SUNDAY), minePath(MONDAY)])
   })
 
+  // ---- CH-0297: the «upcoming» panel showed another date's failure ------------
+
+  it('names the dates that failed, so a view of some of the dates reports only its own failures', async () => {
+    record((url) =>
+      url.searchParams.get('on') === MONDAY
+        ? jsonResponse(500, { statusCode: 500, message: 'Internal server error' })
+        : jsonResponse(200, makeMySchedule([makeMyItem()], url.searchParams.get('on')!)),
+    )
+    const dates = [SUNDAY, MONDAY, TUESDAY]
+    const { result } = renderHook(() => useTimetable('mine', {}, dates, true))
+    await waitFor(() => expect(result.current.pending.size).toBe(0))
+    expect([...result.current.failedDates]).toEqual([MONDAY])
+    expect(result.current.failed).toBe(true)
+    expect((result.current.error as ApiError).status).toBe(500)
+    expect(result.current.byDate.get(SUNDAY)).toHaveLength(1)
+    expect(result.current.byDate.get(TUESDAY)).toEqual([])
+
+    // A reload forgets the failure with the rest; Monday, asked again, fails again.
+    act(() => result.current.reload())
+    expect(result.current.failedDates.size).toBe(0)
+    await waitFor(() => expect([...result.current.failedDates]).toEqual([MONDAY]))
+  })
+
   it('aborts a request still running on reload, asks again and ignores the late answer of the old one', async () => {
     const calls: string[] = []
     const answers: Array<ReturnType<typeof deferred>> = []

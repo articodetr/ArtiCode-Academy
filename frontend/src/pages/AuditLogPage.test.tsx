@@ -172,6 +172,31 @@ describe('AuditLogPage', () => {
     expect(screen.queryByText(ar.audit.details.noMetadata)).not.toBeInTheDocument()
   })
 
+  it('keeps the table in its own scroll box and an opened row inside it, so a phone never scrolls the page sideways (QA 2026-11-17: 889 px at 390 px)', async () => {
+    mockAuditApi({ first: makeAuditList([suspended, bootstrap]) })
+    renderPage()
+    await screen.findByText('users.status.changed')
+
+    // jsdom has no layout: assert the configuration. `x: true` (not 'max-content') keeps the table at its box's width
+    // wherever it fits and scrolls it in that box on a phone (KI-094).
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+    // The filter buttons wrap: one 321 px row widened the page to 438 px at 390 px (CH-0297, real browser).
+    expect(screen.getByTestId('audit-filter-actions')).toHaveStyle({ flexWrap: 'wrap' })
+
+    // The details sit in a box of no width of its own that grows to the cell (KI-099): the long ids, the user agent
+    // and the metadata never size the table.
+    await userEvent.click(document.querySelector<HTMLButtonElement>('.ant-table-row-expand-icon')!)
+    const box = await screen.findByTestId('audit-event-details')
+    expect(box.closest('tr')).toHaveClass('ant-table-expanded-row')
+    expect(box.style.width).toBe('0px')
+    expect(box.style.minWidth).toBe('100%')
+    expect(within(box).getByText(suspended.id)).toBeInTheDocument()
+    expect(table.style.width).toBe('auto')
+  })
+
   it('narrows the list to the clicked actor and fills the filter', async () => {
     const api = mockAuditApi({ first: makeAuditList([roleCreated]) })
     renderPage()

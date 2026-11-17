@@ -953,7 +953,16 @@ export const ar = {
     syllabus: {
       empty: 'لا بنود في المنهج بعد',
       emptyManager: 'لا بنود في المنهج بعد. اضغط «تعديل المنهج» لإضافة الدروس والمواضيع بالترتيب.',
-      summary: '{{count}} بند · {{minutes}} دقيقة تقديرياً',
+      // `items` and `minutes` are the plural keys below, already worded (CH-0297).
+      summary: '{{items}} · {{minutes}} تقديرياً',
+      // i18next plurals (CH-0297): Intl.PluralRules('ar') gives 1 `_one`, 2 `_two`, 3..10 `_few`, 11..99 `_many`,
+      // 100..102 `_other` (the hundreds repeat it: 103 few, 135 many); the plain key serves 0. `count` is a number.
+      items: '{{count}} بند',
+      items_one: 'بند واحد',
+      items_two: 'بندان',
+      items_few: '{{count}} بنود',
+      items_many: '{{count}} بنداً',
+      items_other: '{{count}} بند',
       edit: 'تعديل المنهج',
       add: 'إضافة بند',
       save: 'حفظ المنهج',
@@ -979,7 +988,13 @@ export const ar = {
       maxReached: 'بلغ المنهج الحد الأقصى ({{max}} بنداً)',
       saved: 'تم حفظ المنهج',
       nothingChanged: 'لا تغييرات للحفظ',
+      // Plural forms as `items` above (CH-0297).
       minutes: '{{count}} دقيقة',
+      minutes_one: 'دقيقة واحدة',
+      minutes_two: 'دقيقتان',
+      minutes_few: '{{count}} دقائق',
+      minutes_many: '{{count}} دقيقة',
+      minutes_other: '{{count}} دقيقة',
     },
     errors: {
       course_not_found: 'الدورة غير موجودة أو غير متاحة لك.',
@@ -990,7 +1005,13 @@ export const ar = {
       cursor_invalid: 'تغيّرت القائمة؛ ابدأ من الصفحة الأولى.',
       level_not_found: 'المستوى المختار لم يعد موجوداً.',
       level_code_taken: 'هذا الرمز مستخدم لمستوى آخر.',
-      level_in_use: 'لا يُحذف هذا المستوى: تستخدمه {{courseCount}} دورة. عطّله بدلاً من ذلك.',
+      // Plural forms as `syllabus.items` (CH-0297): `count` is the server's courseCount as a number.
+      level_in_use: 'لا يُحذف هذا المستوى: تستخدمه {{count}} دورة. عطّله بدلاً من ذلك.',
+      level_in_use_one: 'لا يُحذف هذا المستوى: تستخدمه دورة واحدة. عطّله بدلاً من ذلك.',
+      level_in_use_two: 'لا يُحذف هذا المستوى: تستخدمه دورتان. عطّله بدلاً من ذلك.',
+      level_in_use_few: 'لا يُحذف هذا المستوى: تستخدمه {{count}} دورات. عطّله بدلاً من ذلك.',
+      level_in_use_many: 'لا يُحذف هذا المستوى: تستخدمه {{count}} دورة. عطّله بدلاً من ذلك.',
+      level_in_use_other: 'لا يُحذف هذا المستوى: تستخدمه {{count}} دورة. عطّله بدلاً من ذلك.',
       level_order_invalid: 'تغيّرت قائمة المستويات في مكان آخر؛ أُعيد تحميلها.',
       syllabus_invalid: 'تغيّر المنهج في مكان آخر؛ أُعيد تحميله. أعد تعديلاتك.',
       nothing_to_update: 'لا تغييرات للحفظ.',
@@ -1896,7 +1917,11 @@ export const ar = {
       },
       shown: 'يُعرض {{shown}} من {{total}}',
       zone: 'الأوقات بتوقيت الواجب',
+      // i18next plurals (KI-108): Arabic takes `_one` for 1, `_other` for 100+ and the plain key for 0, 2 and 3..99 (no
+      // `_zero`/`_two`/`_few`/`_many` here); English takes `_one`/`_other`. Both files carry the three keys (one type).
       attemptsRule: 'لكل طالب {{count}} محاولة، ومحاولة إضافية عن كل تسليم يُعاد للتعديل',
+      attemptsRule_one: 'لكل طالب محاولة واحدة، ومحاولة إضافية عن كل تسليم يُعاد للتعديل',
+      attemptsRule_other: 'لكل طالب {{count}} محاولة، ومحاولة إضافية عن كل تسليم يُعاد للتعديل',
       draft: 'الواجب مسودة: لا يسلّم الطلاب قبل نشره.',
       empty: 'لا طلاب في هذا الفصل بعد',
       emptyFiltered: 'لا طلاب يطابقون التصفية',
@@ -3625,10 +3650,17 @@ export const ar = {
       origin_forbidden: 'رفض الخادم مصدر الطلب. أعد تحميل الصفحة ثم حاول مجدداً.',
       rate_limited: 'طلبات كثيرة في وقت قصير. انتظر قليلاً ثم حاول مجدداً.',
       validation: 'رفض الخادم الطلب: {{message}}',
+      // i18next plurals for the English twin (KI-108): the Arabic `_one`/`_other` keep the plain key's wording.
       parts: {
         openAssignments: '{{count}} واجب موزون مفتوح',
+        openAssignments_one: '{{count}} واجب موزون مفتوح',
+        openAssignments_other: '{{count}} واجب موزون مفتوح',
         awaitingReview: '{{count}} محاولة بانتظار المراجعة',
+        awaitingReview_one: '{{count}} محاولة بانتظار المراجعة',
+        awaitingReview_other: '{{count}} محاولة بانتظار المراجعة',
         unpublishedExams: '{{count}} اختبار موزون غير منشور',
+        unpublishedExams_one: '{{count}} اختبار موزون غير منشور',
+        unpublishedExams_other: '{{count}} اختبار موزون غير منشور',
       },
       listSeparator: '، ',
     },

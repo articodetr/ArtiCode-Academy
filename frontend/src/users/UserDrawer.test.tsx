@@ -60,6 +60,21 @@ describe('UserDrawer', () => {
     expect(within(dialog).queryByText('خالد محمود')).not.toBeInTheDocument()
   })
 
+  it('shows the e-mail, the user name, the phone and the Latin name each in a plain LTR isolate (QA 2026-11-17)', async () => {
+    const detail = makeUserDetail({ phone: '+966500000001' })
+    mockDetailApi(detail)
+    renderDrawer()
+
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByRole('heading', { level: 4, name: 'عمر خالد' })
+    // Unisolated in the Arabic drawer, `+966500000001` read `966500000001+`.
+    for (const value of [detail.email!, detail.username!, '+966500000001', detail.fullNameLatin!]) {
+      const element = within(dialog).getByText(value)
+      expect(element.tagName).toBe('BDI')
+      expect(element).toHaveAttribute('dir', 'ltr')
+    }
+  })
+
   it('shows a custom role by its server label in the header, from the detail itself — no GET /api/roles (J-F12)', async () => {
     const api = mockDetailApi(makeUserDetail({ roles: [{ key: 'librarian', label: ROLE_LABELS.librarian }, { key: 'student', label: ROLE_LABELS.student }] }))
     renderDrawer()

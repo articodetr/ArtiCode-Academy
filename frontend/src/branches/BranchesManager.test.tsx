@@ -58,6 +58,10 @@ describe('BranchesManager (MOD-02-T06 screen, API-080..API-083)', () => {
     expect(within(rows[0]!).getByText(ar.branches.main)).toBeInTheDocument()
     expect(within(rows[0]!).getByText(ar.branches.academyTimezone)).toBeInTheDocument()
     expect(within(rows[0]!).getByText('+966500000000')).toBeInTheDocument()
+    // The phone in a plain LTR isolate — a `dir` on the antd Typography loses to its `-rtl` class (CH-0297).
+    const phone = within(rows[0]!).getByText('+966500000000')
+    expect(phone.tagName).toBe('BDI')
+    expect(phone).toHaveAttribute('dir', 'ltr')
     expect(within(rows[1]!).getByText('Europe/Istanbul')).toBeInTheDocument()
     expect(within(rows[2]!).getByText(ar.labels.inactive)).toBeInTheDocument()
     expect(screen.getByText(ar.branches.hint)).toBeInTheDocument()

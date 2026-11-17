@@ -107,6 +107,20 @@ describe('ClassEnrollmentsTab', () => {
     expect(Object.fromEntries(api.rosterQueries[0]!)).toEqual({ limit: '50' })
   })
 
+  it('keeps the roster table at the drawer’s width, so the actions column is in view at 1366 × 900, and scrolls in its own box only when it cannot fit (CH-0297)', async () => {
+    mockRosterApi(() => [omar, sara])
+    renderTab(ROSTER_MANAGER_PERMISSIONS)
+    await screen.findByText('سارة أحمد')
+
+    // jsdom has no layout: assert the configuration. 'max-content' sized the table to its content (two date-time
+    // columns, the reason and the actions) and pushed the actions column out of the drawer; `x: true` keeps the table
+    // at the box's width wherever the cells can wrap.
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+  })
+
   it('says "not found or not assigned to you" when the server refuses the roster with 404', async () => {
     mockRosterApi(() => jsonResponse(404, { statusCode: 404, code: 'class_not_found', classId: CLASS_ID, message: 'No class' }))
     renderTab(ROSTER_TEACHER_PERMISSIONS)

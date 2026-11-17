@@ -6,7 +6,7 @@ import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, AutoComplete, Button, Card, Flex, Form, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useRef } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuditLogItem } from '../api/audit'
 import { describeAuditFailure, failureMessage } from '../audit/audit.errors'
@@ -208,7 +208,8 @@ export function AuditLogPage() {
               <Input type="datetime-local" dir="ltr" className="audit-ltr-field" />
             </Form.Item>
             <Form.Item label=" " colon={false} style={{ marginBottom: 0 }}>
-              <Space>
+              {/* The three buttons wrap at 390 px: one row of 321 px widened the page to 438 px (CH-0297, real browser). */}
+              <Space wrap data-testid="audit-filter-actions">
                 <Button type="primary" htmlType="submit" icon={<SearchOutlined />}>
                   {t('audit.apply')}
                 </Button>
@@ -240,6 +241,10 @@ export function AuditLogPage() {
           loading={log.loading}
           pagination={false}
           size="middle"
+          // On a phone the table scrolls inside its own box instead of widening the page (889 px at 390 px — QA
+          // 2026-11-17; KI-094). `true`, not 'max-content': the table still fills its box wherever it fits, and an
+          // opened row never sizes it (KI-099 — EventDetails sits in a box of no width of its own).
+          scroll={{ x: true }}
           locale={{ emptyText: t('audit.empty') }}
           expandable={{ expandedRowRender: (row) => <EventDetails row={row} /> }}
         />
@@ -269,48 +274,57 @@ export function AuditLogPage() {
   )
 }
 
+/**
+ * The expanded row never widens the table (KI-099): a box of no width of its own that grows to the cell's
+ * (`min-width: 100%`) gives the table nothing to size its columns by — the user agent and the full ids wrap inside it
+ * (`overflow-wrap: anywhere` breaks an id, which has no space), the metadata JSON scrolls in its own <pre>.
+ */
+const EXPANDED_ROW_STYLE: CSSProperties = { width: 0, minWidth: '100%', overflowWrap: 'anywhere' }
+
 /** Expanded row: the full identifiers, the user agent and the metadata as the server stored it. */
 function EventDetails({ row }: { row: AuditLogItem }) {
   const { t } = useTranslation()
   const text = metadataText(row.metadata)
   return (
-    <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-      <Typography.Text type="secondary">
-        {t('audit.details.id')}:{' '}
-        <Typography.Text code>
-          <bdi dir="ltr">{row.id}</bdi>
-        </Typography.Text>
-      </Typography.Text>
-      {row.actorUserId ? (
+    <div style={EXPANDED_ROW_STYLE} data-testid="audit-event-details">
+      <Space orientation="vertical" size={4} style={{ width: '100%' }}>
         <Typography.Text type="secondary">
-          {t('audit.columns.actor')}:{' '}
+          {t('audit.details.id')}:{' '}
           <Typography.Text code>
-            <bdi dir="ltr">{row.actorUserId}</bdi>
+            <bdi dir="ltr">{row.id}</bdi>
           </Typography.Text>
         </Typography.Text>
-      ) : null}
-      {row.entityId ? (
-        <Typography.Text type="secondary">
-          {t('audit.columns.entity')}:{' '}
-          <Typography.Text code>
-            <bdi dir="ltr">
-              {row.entityType} / {row.entityId}
-            </bdi>
+        {row.actorUserId ? (
+          <Typography.Text type="secondary">
+            {t('audit.columns.actor')}:{' '}
+            <Typography.Text code>
+              <bdi dir="ltr">{row.actorUserId}</bdi>
+            </Typography.Text>
           </Typography.Text>
-        </Typography.Text>
-      ) : null}
-      {row.userAgent ? (
-        <Typography.Text type="secondary">
-          {t('audit.details.userAgent')}: <bdi dir="ltr">{row.userAgent}</bdi>
-        </Typography.Text>
-      ) : null}
-      {text ? (
-        <pre dir="ltr" style={{ margin: 0, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
-          {text}
-        </pre>
-      ) : (
-        <Typography.Text type="secondary">{t('audit.details.noMetadata')}</Typography.Text>
-      )}
-    </Space>
+        ) : null}
+        {row.entityId ? (
+          <Typography.Text type="secondary">
+            {t('audit.columns.entity')}:{' '}
+            <Typography.Text code>
+              <bdi dir="ltr">
+                {row.entityType} / {row.entityId}
+              </bdi>
+            </Typography.Text>
+          </Typography.Text>
+        ) : null}
+        {row.userAgent ? (
+          <Typography.Text type="secondary">
+            {t('audit.details.userAgent')}: <bdi dir="ltr">{row.userAgent}</bdi>
+          </Typography.Text>
+        ) : null}
+        {text ? (
+          <pre dir="ltr" style={{ margin: 0, maxHeight: 320, overflow: 'auto', fontSize: 12 }}>
+            {text}
+          </pre>
+        ) : (
+          <Typography.Text type="secondary">{t('audit.details.noMetadata')}</Typography.Text>
+        )}
+      </Space>
+    </div>
   )
 }

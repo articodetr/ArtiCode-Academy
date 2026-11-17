@@ -59,17 +59,19 @@ export function UsersPage() {
           {
             title: t('users.columns.contact'),
             key: 'contact',
+            // Each value in a plain `<bdi dir="ltr">`: on an antd Typography the attribute loses to its `-rtl` class,
+            // so `+966500000001` showed as `966500000001+` (QA 2026-11-17 — the audit page's rule, KI-093).
             render: (_: unknown, row: UserListItem) => (
               <Space orientation="vertical" size={0}>
-                <Typography.Text dir="ltr">{row.email ?? row.username ?? '—'}</Typography.Text>
+                <Typography.Text>{row.email || row.username ? <bdi dir="ltr">{row.email || row.username}</bdi> : '—'}</Typography.Text>
                 {row.email && row.username ? (
-                  <Typography.Text type="secondary" dir="ltr">
-                    {row.username}
+                  <Typography.Text type="secondary">
+                    <bdi dir="ltr">{row.username}</bdi>
                   </Typography.Text>
                 ) : null}
                 {row.phone ? (
-                  <Typography.Text type="secondary" dir="ltr">
-                    {row.phone}
+                  <Typography.Text type="secondary">
+                    <bdi dir="ltr">{row.phone}</bdi>
                   </Typography.Text>
                 ) : null}
               </Space>

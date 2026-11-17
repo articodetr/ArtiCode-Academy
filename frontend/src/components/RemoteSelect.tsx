@@ -2,6 +2,9 @@
 // then a debounced search per typed text; stale answers are dropped and
 // in-flight requests aborted. The label of the chosen option stays even when a
 // later search no longer returns it. Works inside a Form.Item (value/onChange/id).
+// Since CH-0297: from the keystroke until the answer to the text typed, no
+// option shows (the loading state does) — the options of the previous answer
+// stayed, the first one active, and an Enter pressed at once picked it.
 import { Select, Spin, Typography } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
@@ -68,12 +71,16 @@ export function RemoteSelect<T>({ fetchOptions, toOption, value, onChange, empty
 
   const search = (text: string) => {
     if (timer.current) clearTimeout(timer.current)
+    // An answer to an older text must not land and show its options now (CH-0297).
+    controller.current?.abort()
     setSearching(true)
     timer.current = setTimeout(() => run(text.trim()), SEARCH_DELAY_MS)
   }
 
-  const options = items.map(toOption)
-  if (value !== undefined && chosen?.option.value === value && !options.some((option) => option.value === value)) options.unshift(chosen.option)
+  // While a search runs the options answer an older text: none shows, so an Enter picks nothing (CH-0297). The
+  // chosen value keeps its label meanwhile — the Select caches the label of its value.
+  const options: RemoteOption[] = searching ? [] : items.map(toOption)
+  if (!searching && value !== undefined && chosen?.option.value === value && !options.some((option) => option.value === value)) options.unshift(chosen.option)
 
   return (
     <Select<string, RemoteOption>

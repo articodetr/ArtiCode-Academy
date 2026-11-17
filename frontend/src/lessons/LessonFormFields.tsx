@@ -154,8 +154,18 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
             }
             rules={[{ required: true, message: t('lessons.validation.endRequired') }, { validator: validateEnd }]}
           >
-            {/* The suffix stays mounted (empty on the same day): adding or removing an antd suffix remounts the input and drops its focus. */}
-            <Input type="time" dir="ltr" disabled={timingLocked} suffix={<span data-testid="lesson-end-mark">{nextDay ? NEXT_DAY_MARK : ''}</span>} />
+            {/* The suffix stays mounted (empty on the same day): adding or removing an antd suffix remounts the input and drops its focus.
+                The mark is LTR on its own span: the affix wrapper stays RTL in the Arabic UI, where «(+1)» read «(1+)» (CH-0297). */}
+            <Input
+              type="time"
+              dir="ltr"
+              disabled={timingLocked}
+              suffix={
+                <span data-testid="lesson-end-mark" dir="ltr">
+                  {nextDay ? NEXT_DAY_MARK : ''}
+                </span>
+              }
+            />
           </Form.Item>
         </Col>
       </Row>
