@@ -305,3 +305,37 @@ describe('UserDrawer — resetting two-step verification (API-212)', () => {
     expect(menuButton(dialog)).not.toBeInTheDocument()
   })
 })
+
+describe('UserDrawer — the account actions by keyboard (KI-089)', () => {
+  // Enter on a focused menu item opens its confirmation from the menu's keydown; the confirmation takes the
+  // focus at once, so the same key's keypress would land on its close button and shut it. The keydown is
+  // cancelled (fireEvent returns false), which cancels that keypress in a browser. jsdom dispatches no
+  // keypress of its own, so the cancelled keydown is what this test can see.
+  const enterOn = (item: HTMLElement) => fireEvent.keyDown(item, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 })
+
+  it('opens the two-step verification reset with Enter and cancels the keydown', async () => {
+    const detail = makeUserDetail({ status: 'active', mfaEnabledAt: ON })
+    const server = mockMfaApi(detail)
+    renderDrawer(detail)
+    const dialog = await drawerLoaded(detail)
+
+    const { menu } = await openMenu(dialog)
+    const item = within(menu).getByText(ar.users.mfa.reset.action).closest('[role="menuitem"]') as HTMLElement
+    expect(enterOn(item)).toBe(false)
+    expect(await screen.findByText(ar.users.mfa.reset.hint)).toBeInTheDocument()
+    expect(server.resets).toEqual([])
+  })
+
+  it('opens a status action’s confirmation with Enter and cancels the keydown — nothing is sent', async () => {
+    const detail = makeUserDetail({ status: 'active', mfaEnabledAt: ON })
+    const server = mockMfaApi(detail)
+    renderDrawer(detail)
+    const dialog = await drawerLoaded(detail)
+
+    const { menu } = await openMenu(dialog)
+    const item = within(menu).getByText(ar.users.status.actions.suspend).closest('[role="menuitem"]') as HTMLElement
+    expect(enterOn(item)).toBe(false)
+    expect(await screen.findByText(ar.users.status.hints.suspend)).toBeInTheDocument()
+    expect(server.resets).toEqual([])
+  })
+})

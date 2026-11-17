@@ -41,9 +41,13 @@ input.profile-mfa__code-input.ant-input {
    The `dir="ltr"` attribute alone does not do it: in the Arabic UI Ant Design puts `.ant-input-rtl
    { direction: rtl }` on the input, and any author rule beats the attribute — `123 456` would show as `456 123`
    and the dash of a recovery code would jump. `input.` + two classes outrank that one class (and its hashed
-   form), so the direction is set here; the text starts at the left edge, where a left-to-right value begins. */
+   form), so the direction is set here; the text starts at the left edge, where a left-to-right value begins.
+   `unicode-bidi: bidi-override` as well: Arabic-Indic digits are «Arabic numbers» to the bidi algorithm, so
+   `١٢٣ ٤٥٦` showed as `٤٥٦ ١٢٣` even in a left-to-right field (seen in a real browser — KI-090). A code holds
+   digits, Latin letters and a dash only, so forcing every character left to right is always correct. */
 input.profile-mfa__code-input.ant-input {
   direction: ltr;
+  unicode-bidi: bidi-override;
   text-align: left;
   max-width: 220px;
   font-size: 18px;

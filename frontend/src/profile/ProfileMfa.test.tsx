@@ -559,7 +559,7 @@ describe('ProfileMfa — the two-step verification card (API-206..API-210)', () 
       expect(reads(calls)).toBe(2)
     })
 
-    it('words the shared limit above the form and keeps the dialog', async () => {
+    it('words the rate limit above the form and keeps the dialog', async () => {
       serve({ [STATUS]: [[200, OFF]], [SETUP_POST]: [refusal(429, 'rate_limited')] })
       const { card } = renderCard()
       fireEvent.click(await findButtonIn(card, ar.profile.mfa.actions.enable))

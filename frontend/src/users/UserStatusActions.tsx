@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next'
 import { changeUserStatus, deleteUser, STATUS_REASON_MAX_LENGTH } from '../api/users'
 import type { UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
+import { ReasonHint } from './ReasonHint'
 import { UserMfaReset } from './UserMfaReset'
 import { describeUsersFailure, failureMessage } from './users.errors'
 import { displayNameOf } from './users.format'
@@ -126,7 +127,11 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
           destroyOnHidden
           menu={{
             items,
-            onClick: ({ key }) => {
+            onClick: ({ key, domEvent }) => {
+              // Enter on a focused item reaches this handler from the menu's keydown, and the dialog opens and
+              // takes the focus right there; the same key's keypress then lands on the dialog's close button and
+              // shuts it at once (seen in a real browser — KI-089). Cancelling the keydown cancels that keypress.
+              if (domEvent.type === 'keydown') domEvent.preventDefault()
               if (key === MFA_RESET_KEY) {
                 setResettingMfa(true)
                 return
@@ -159,7 +164,7 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
           <Form.Item
             name="reason"
             label={t('users.status.reason')}
-            extra={t('users.status.reasonHint')}
+            extra={<ReasonHint />}
             rules={[{ max: STATUS_REASON_MAX_LENGTH, message: t('users.validation.maxLength', { max: STATUS_REASON_MAX_LENGTH }) }]}
           >
             <Input.TextArea rows={3} maxLength={STATUS_REASON_MAX_LENGTH} showCount />

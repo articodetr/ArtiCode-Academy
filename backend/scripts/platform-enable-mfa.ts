@@ -20,10 +20,22 @@
 // Nothing is written before the code is confirmed: Ctrl+C leaves no trace.
 //
 // THIS IS THE ONE COMMAND THAT PRINTS SECRETS (the key, the recovery codes) —
-// to the holder's own terminal and nowhere else: it refuses to run unless both
-// stdin and stdout are terminals, so they can never land in a pipe or a log
-// file, and it writes none of them to a log. The password and
+// to the holder's own terminal: it refuses to run unless both stdin and stdout
+// are terminals, so they never land in a pipe or a redirected file, and the
+// command itself writes none of them to a log. The password and
 // PLATFORM_MFA_ENCRYPTION_KEY are never printed.
+//
+// Two things are outside the command's control (seen on a real terminal and in
+// the `migrate` container — KI-087, KI-088):
+//   - IN A CONTAINER Docker's log driver records what the run container's
+//     terminal shows, the key and the recovery codes included. Always run it
+//     with `--rm` (the documented form: `run --rm migrate npm run
+//     platform:enable-mfa -- --email …`) — the log is deleted with the
+//     container when the command ends — and `docker rm` a run container that
+//     was started without it.
+//   - WAIT FOR THE PASSWORD PROMPT before typing: the command takes several
+//     seconds to start, and a terminal echoes whatever is typed before the
+//     prompt appears (echo is off only from the prompt on).
 //
 // Needs PLATFORM_MFA_ENCRYPTION_KEY — the very key the platform API runs with,
 // or the API cannot open the secret — and the platform database through
@@ -115,7 +127,8 @@ function setupLines(setup: PlatformMfaEnrollSetup): string[] {
     '',
     `Two-step verification for platform account ${setup.email}`,
     '',
-    'Add the account to your authenticator app BY KEY (this command shows no QR code):',
+    // Kept under 80 columns: on a default console a longer line wraps its colon onto a row of its own.
+    'Add the account to an authenticator app BY KEY (this command shows no QR code):',
     '',
     `  Account : ${setup.issuer} (${setup.account})`,
     `  Key     : ${groupTotpSecret(setup.secret)}`,

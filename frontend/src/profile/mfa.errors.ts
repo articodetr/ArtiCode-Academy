@@ -56,7 +56,8 @@ export function describeMfaFailure(error: unknown, factor: MfaFactor = 'code', e
       case 'mfa_setup_required':
         return { key: 'profile.mfa.errors.mfa_setup_required', effect: 'setup_expired' }
       default:
-        // The four POSTs share one limit: 10 per 15 minutes.
+        // Each of the four POSTs has its own limit: 10 per 15 minutes per (IP, user) — the throttler keys a
+        // route by its handler, so the four do not share one budget (measured in a real browser, CH-0294).
         if (error.code === 'rate_limited' || error.status === 429) return { key: 'profile.mfa.errors.rate_limited' }
     }
   }

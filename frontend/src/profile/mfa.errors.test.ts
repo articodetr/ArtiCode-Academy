@@ -44,7 +44,7 @@ describe('describeMfaFailure', () => {
     expect(describeMfaFailure(refusal(409, 'mfa_setup_required'))).toEqual({ key: 'profile.mfa.errors.mfa_setup_required', effect: 'setup_expired' })
   })
 
-  it('names the shared limit of the four writes, by code or by status alone', () => {
+  it('names the rate limit of the writes (10 per 15 minutes on each), by code or by status alone', () => {
     expect(describeMfaFailure(refusal(429, 'rate_limited'))).toEqual({ key: 'profile.mfa.errors.rate_limited' })
     expect(describeMfaFailure(refusal(429))).toEqual({ key: 'profile.mfa.errors.rate_limited' })
   })
