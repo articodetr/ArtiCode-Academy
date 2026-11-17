@@ -47,7 +47,12 @@ body {
   font-weight: 600;
 }
 
-.list-primary bdi,
+/*
+ * The muted second line: a <small>, or a <bdi> after the main line (a class's code under its name in the reports).
+ * A <bdi> that is the main line, or inside it — an invoice or receipt number around or inside its <b> — keeps the
+ * full colour and size (KI-108: `.list-primary bdi` muted the number of every payments row).
+ */
+.list-primary > bdi:not(:first-child),
 .list-primary small {
   color: var(--c-muted);
   font-size: 12.5px;
@@ -58,4 +63,21 @@ body h2.ant-typography.section-title {
   font-size: 15px;
   line-height: 1.5;
   margin-bottom: 8px;
+}
+
+/*
+ * A field marked `dir="ltr"` — a phone, an e-mail, a user name, a URL, a code, an English or Turkish name — is typed
+ * and read left to right in every language. The attribute alone does not do it in the Arabic UI: Ant Design sets
+ * `direction: rtl` on the field through its `-rtl` classes (`:where(.css-…).ant-input-rtl`, one class; two for the
+ * number input), and any author rule beats the attribute, so `+966500000000` showed as `966500000000+`, the
+ * placeholder `https://` as `//:https` and a long link its tail (QA 2026-11-17). These selectors outrank antd's (a class
+ * and the attribute, one class more for the number input) and reach the input wherever antd puts it — alone, inside
+ * the wrapper of a prefix, a suffix, a clear button or a counter (Input.Password too), or in a Space.Compact; a
+ * TextArea; a Select or an AutoComplete, whose `dir` sits on its root. The placeholder follows its input. The local
+ * rules of AuditLogPage.css, profile/mfa.css, assignments/myAssignments.css and LoginPage.css predate this one.
+ */
+.ant-input[dir='ltr'],
+.ant-input-number .ant-input-number-input[dir='ltr'],
+.ant-select[dir='ltr'] {
+  direction: ltr;
 }

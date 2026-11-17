@@ -47,7 +47,8 @@ describe('SyllabusTab (MOD-04-T06)', () => {
     mockSyllabusApi(makeSyllabus())
     renderTab(false)
 
-    expect(await screen.findByText('3 بند · 105 دقيقة تقديرياً')).toBeInTheDocument()
+    // Each count in its Arabic plural form (CH-0297): 3 → «بنود», 105 → «دقائق».
+    expect(await screen.findByText('3 بنود · 105 دقائق تقديرياً')).toBeInTheDocument()
     const [, ...rows] = within(screen.getByRole('table')).getAllByRole('row')
     expect(rows.map((row) => row.textContent)).toEqual(['1المتغيرات45 دقيقة', '2الشروطif و else60 دقيقة', '3الحلقات—'])
     expect(screen.queryByText(ar.courses.syllabus.edit)).not.toBeInTheDocument()
@@ -141,7 +142,7 @@ describe('SyllabusTab (MOD-04-T06)', () => {
 
     expect(await screen.findByText(ar.courses.errors.syllabus_invalid)).toBeInTheDocument()
     await waitFor(() => expect(calls.filter((call) => call.method === 'GET')).toHaveLength(2))
-    expect(await screen.findByText('2 بند · 60 دقيقة تقديرياً')).toBeInTheDocument()
+    expect(await screen.findByText('بندان · 60 دقيقة تقديرياً')).toBeInTheDocument()
     expect(screen.queryByTestId('syllabus-item-editor')).not.toBeInTheDocument()
   })
 

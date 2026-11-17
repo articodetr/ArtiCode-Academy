@@ -25,6 +25,9 @@
 // prompt (useUnsavedChangesGuard — KI-055). Since J-F51 a certificates tab
 // (ClassCertificatesTab — API-136 preview, API-132 issue) for holders of
 // `certificates.read_all` or `certificates.issue` (D-R57); it holds no editor.
+// Since CH-0297 the students tab knows when the drawer's read of the class
+// failed (`classReadFailed`): the retry of its roster error then re-reads the
+// class too, so the drawer's error does not outlive the recovery.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -273,7 +276,15 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
                   {
                     key: 'students',
                     label: t('classes.drawer.tabs.students', { count: cls.enrolledCount }),
-                    children: <ClassEnrollmentsTab cls={cls} onClassChanged={applyUpdate} onStale={reload} onUnsavedChange={reportUnsaved.students} />,
+                    children: (
+                      <ClassEnrollmentsTab
+                        cls={cls}
+                        onClassChanged={applyUpdate}
+                        onStale={reload}
+                        classReadFailed={loadError !== null}
+                        onUnsavedChange={reportUnsaved.students}
+                      />
+                    ),
                     disabled: editing,
                   },
                 ]

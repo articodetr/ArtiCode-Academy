@@ -7,6 +7,7 @@ import { CLASS_ID, CLASS_MANAGER_PERMISSIONS, CLASS_READER_PERMISSIONS, TEACHER_
 import { ROSTER_MANAGER_PERMISSIONS, ROSTER_TEACHER_PERMISSIONS, makeEnrollment, makeEnrollmentList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { makeUserList } from '../test/users'
 import { canReadRoster } from '../enrollments/enrollments.status'
 import { ClassDrawer } from './ClassDrawer'
 
@@ -216,6 +217,80 @@ describe('ClassDrawer', () => {
     expect(onDeleted).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.getByText('PY-101-A')).toBeInTheDocument()
+  })
+
+  describe('the roster’s retry and the drawer’s error (CH-0297)', () => {
+    /**
+     * Serves the class, its roster and the student search; `offline.class` / `offline.roster` make those reads fail
+     * as a lost connection does. Counts the reads of the class (GET /api/classes/:id).
+     */
+    function mockDrawerApi() {
+      const offline = { class: false, roster: false }
+      const cls = makeClass({ status: 'open', enrolledCount: 1 })
+      const calls: Call[] = []
+      mockFetch((url, init) => {
+        const method = init?.method ?? 'GET'
+        calls.push({ method, url, body: undefined })
+        const path = new URL(url, 'http://localhost').pathname
+        if (path === '/api/users') return jsonResponse(200, makeUserList([]))
+        if (path.endsWith('/enrollments')) {
+          if (offline.roster) throw new TypeError('Failed to fetch')
+          return jsonResponse(200, makeEnrollmentList([makeEnrollment()]))
+        }
+        if (offline.class) throw new TypeError('Failed to fetch')
+        return jsonResponse(200, cls)
+      })
+      const classReads = () => calls.filter((call) => new URL(call.url, 'http://localhost').pathname === `/api/classes/${CLASS_ID}`).length
+      return { offline, classReads }
+    }
+
+    async function openStudentsTab() {
+      await screen.findByText('PY-101-A')
+      fireEvent.click(screen.getByText('الطلاب (1)'))
+      expect(await screen.findByText('عمر خالد')).toBeInTheDocument()
+    }
+
+    /** The retry inside the roster's error (the refresh icon beside the filters carries the same name, as its label). */
+    const rosterRetry = () => screen.getByText(ar.classes.enrollments.refresh, { selector: 'button span' }).closest('button')!
+
+    it('clears the drawer’s error with the roster’s retry when the class read failed too: one retry re-reads both', async () => {
+      const api = mockDrawerApi()
+      const { onUpdated } = renderDrawer(ROSTER_MANAGER_PERMISSIONS)
+      await openStudentsTab()
+
+      // Offline, the refresh icon re-reads the roster and the class: both fail, two errors.
+      api.offline.class = true
+      api.offline.roster = true
+      fireEvent.click(screen.getByLabelText(ar.classes.enrollments.refresh))
+      await waitFor(() => expect(screen.getAllByText(ar.login.errors.network)).toHaveLength(2))
+
+      // Online again, the roster's own retry recovers the roster AND the class: no error stays.
+      api.offline.class = false
+      api.offline.roster = false
+      const before = api.classReads()
+      fireEvent.click(rosterRetry())
+      await waitFor(() => expect(screen.queryByText(ar.login.errors.network)).not.toBeInTheDocument())
+      expect(api.classReads()).toBe(before + 1)
+      expect(screen.getByText('عمر خالد')).toBeInTheDocument()
+      // The re-read class goes to the list row too (J-F21).
+      expect(onUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ id: CLASS_ID }))
+    })
+
+    it('does not read the class again when only the roster failed', async () => {
+      const api = mockDrawerApi()
+      renderDrawer(ROSTER_MANAGER_PERMISSIONS)
+      await screen.findByText('PY-101-A')
+      api.offline.roster = true
+      fireEvent.click(screen.getByText('الطلاب (1)'))
+      expect(await screen.findByText(ar.login.errors.network)).toBeInTheDocument()
+
+      api.offline.roster = false
+      const before = api.classReads()
+      fireEvent.click(rosterRetry())
+      expect(await screen.findByText('عمر خالد')).toBeInTheDocument()
+      expect(screen.queryByText(ar.login.errors.network)).not.toBeInTheDocument()
+      expect(api.classReads()).toBe(before)
+    })
   })
 
   it('keeps the dialog open on a network failure or a server error, so the same action can be retried', async () => {

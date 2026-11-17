@@ -148,7 +148,15 @@ export function MyCertificatesPage() {
               aria-label={t('common.student')}
               value={studentId}
               onChange={(value) => setStudentId(value)}
-              options={students.map((student) => ({ value: student.id, label: `${student.name} — ${t(`myClasses.relation.${student.relation}`)}` }))}
+              // Each name in its own direction, as in the table (KI-108): «أحمد V3 الأول» keeps its order in either UI.
+              options={students.map((student) => ({
+                value: student.id,
+                label: (
+                  <span>
+                    <bdi dir="auto">{student.name}</bdi> — {t(`myClasses.relation.${student.relation}`)}
+                  </span>
+                ),
+              }))}
               style={{ minWidth: 240 }}
             />
           ) : null}

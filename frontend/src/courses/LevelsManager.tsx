@@ -122,7 +122,8 @@ export function LevelsManager({ state, onChanged }: LevelsManagerProps) {
             />
             <Button size="small" icon={<EditOutlined />} aria-label={`${t('common.edit')}: ${row.code}`} disabled={busy} onClick={() => setEditing(row)} />
             {inUse ? (
-              <Tooltip title={t('courses.errors.level_in_use', { courseCount: String(row.courseCount) })}>
+              // A number, so i18next picks the plural form: «تستخدمه دورة واحدة» (CH-0297).
+              <Tooltip title={t('courses.errors.level_in_use', { count: row.courseCount ?? 0 })}>
                 <span>
                   <Button size="small" danger icon={<DeleteOutlined />} aria-label={deleteLabel} disabled />
                 </span>

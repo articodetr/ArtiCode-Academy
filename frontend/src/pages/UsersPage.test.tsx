@@ -109,6 +109,21 @@ describe('UsersPage', () => {
     expect(table.style.minWidth).toBe('100%')
   })
 
+  it('shows the e-mail, the user name and the phone each in a plain LTR isolate, so `+90…` never reads `…+` in Arabic (QA 2026-11-17)', async () => {
+    mockUsersApi({ first: makeUserList([sara]) })
+    renderPage()
+    await screen.findByText(sara.fullName)
+
+    const [row] = bodyRows()
+    for (const value of [sara.email!, sara.username!, sara.phone!]) {
+      const element = within(row!).getByText(value)
+      // An antd Typography would beat `dir` with its `-rtl` class: the attribute sits on a plain <bdi> inside it.
+      expect(element.tagName).toBe('BDI')
+      expect(element).toHaveAttribute('dir', 'ltr')
+    }
+    expect(row!.querySelectorAll('.ant-typography[dir]')).toHaveLength(0)
+  })
+
   it('shows the reduced projection without users.read_contact: no contact column, no add button, no deleted toggle', async () => {
     mockUsersApi({ first: makeUserList([reduced(sara)]) })
     renderPage(READ_ONLY_PERMISSIONS)

@@ -147,6 +147,10 @@ export function RolesManager() {
           loading={roles.loading}
           pagination={false}
           size="middle"
+          // On a phone the table scrolls inside its own box instead of widening the page (649 px at 390 px — QA
+          // 2026-11-17; the users list's rule, KI-094). `true`, not 'max-content': the table still fills its box and
+          // wraps as before wherever it fits.
+          scroll={{ x: true }}
           locale={{ emptyText: t('rolesAdmin.empty') }}
         />
       </Card>

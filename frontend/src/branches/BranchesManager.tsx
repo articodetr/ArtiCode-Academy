@@ -94,7 +94,16 @@ export function BranchesManager() {
     {
       title: t('branches.columns.phone'),
       key: 'phone',
-      render: (_, row) => (row.phone ? <Typography.Text dir="ltr">{row.phone}</Typography.Text> : EMPTY),
+      // A plain `<bdi dir="ltr">`: on an antd Typography the attribute loses to its `-rtl` class, so `+966500000000`
+      // showed as `966500000000+` (CH-0297, as on /users — KI-093's rule).
+      render: (_, row) =>
+        row.phone ? (
+          <Typography.Text>
+            <bdi dir="ltr">{row.phone}</bdi>
+          </Typography.Text>
+        ) : (
+          EMPTY
+        ),
     },
     {
       title: t('branches.columns.timezone'),

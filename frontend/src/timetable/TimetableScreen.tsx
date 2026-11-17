@@ -137,6 +137,8 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const empty = !loading && !data.failed && days.every((day) => day.entries.length === 0)
   const upcoming = upcomingOccurrences(data.byDate, upcomingDates, now, UPCOMING_LIMIT)
   const upcomingLoading = !settingsReady || upcomingDates.some((date) => data.pending.has(date))
+  // Only a failure among its own seven days empties the panel; another week date's failure is the grid's alert.
+  const upcomingFailed = upcomingDates.some((date) => data.failedDates.has(date))
   const failure = data.failed ? describeScheduleFailure(data.error) : null
 
   const pick = (date: CalendarDate) => {
@@ -301,7 +303,7 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
     />
   )
 
-  const upcomingPanel = <UpcomingPanel occurrences={upcoming} now={now} loading={upcomingLoading} failed={data.failed} language={language} onOpen={open} />
+  const upcomingPanel = <UpcomingPanel occurrences={upcoming} now={now} loading={upcomingLoading} failed={upcomingFailed} language={language} onOpen={open} />
 
   const errorAlert = failure ? (
     <Alert

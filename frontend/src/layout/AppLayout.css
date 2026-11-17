@@ -83,8 +83,16 @@
 }
 
 @media (max-width: 768px) {
+  /*
+   * On a phone the actions wrap onto a second row (the user's name under the search, the bell and the language). A
+   * 64 px header centred the two rows and pushed the first one above the page, cutting the bell's badge (KI-108, at
+   * 390 × 844): the header grows with its rows instead, and the padding leaves the badge — which sits half above the
+   * bell — inside it.
+   */
   .app-header {
-    padding: 0 12px;
+    height: auto;
+    min-height: 64px;
+    padding: 10px 12px;
   }
   /*
    * Only a logo is left of the brand on a phone; without one the actions start the header, as before J-F13.
@@ -110,6 +118,7 @@
   }
   .app-header__actions {
     flex-shrink: 1;
+    row-gap: 8px;
   }
   .app-content {
     padding: 12px;

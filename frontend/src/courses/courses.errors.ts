@@ -3,12 +3,24 @@
 // the message). Codes: backend/src/courses/courses.errors.ts plus the
 // auth/permission guards.
 import { ApiError } from '../api/client'
+import { failureMessage as usersFailureMessage } from '../users/users.errors'
 import type { UsersFailure } from '../users/users.errors'
-
-export { failureMessage } from '../users/users.errors'
 
 /** Same shape as a users failure, so `failureMessage()` renders both. */
 export type CoursesFailure = UsersFailure
+
+type Translate = (key: string, options?: Record<string, unknown>) => string
+
+/**
+ * The failure's text (users.errors' `failureMessage`), except that the course count of `level_in_use` reaches i18next
+ * as the number `count`, which picks the plural form — «تستخدمه دورة واحدة», «دورتان», «3 دورات»; a string count picks
+ * none (CH-0297).
+ */
+export function failureMessage(t: Translate, failure: CoursesFailure): string {
+  const count = Number(failure.params?.courseCount)
+  if (!Number.isInteger(count)) return usersFailureMessage(t, failure)
+  return usersFailureMessage((key, options) => t(key, { ...options, count }), failure)
+}
 
 const KNOWN_CODES = new Set([
   'course_not_found',

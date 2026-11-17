@@ -94,6 +94,31 @@ describe('MyCertificatesPage', () => {
     expect(name).toHaveAttribute('dir', 'auto')
   })
 
+  it('isolates each name of the student filter in its own direction, as in the table (KI-108)', async () => {
+    const mixed = toMyCertificate(makeRevokedCertificate({ id: CERTIFICATE_ID_2, serial: 'CERT-2026-00002', student: { ...CHILD_STUDENT, displayName: 'أحمد V3 الأول' } }), 'child')
+    mockMyCertificatesApi([makeMyCertificateList([mixed, own])])
+    renderPage(['guardian', 'student'], ['certificates.read_own', 'certificates.read_linked'])
+    await screen.findByText('CERT-2026-00002')
+
+    fireEvent.mouseDown(screen.getByLabelText(ar.common.student))
+    const option = await waitFor(() => {
+      const found = [...document.querySelectorAll('.ant-select-item-option-content')].find((node) => node.textContent?.startsWith('أحمد V3 الأول'))
+      expect(found).toBeDefined()
+      return found as HTMLElement
+    })
+    expect(option).toHaveTextContent(`أحمد V3 الأول — ${ar.myClasses.relation.child}`)
+    const name = within(option).getByText('أحمد V3 الأول')
+    expect(name.tagName).toBe('BDI')
+    expect(name).toHaveAttribute('dir', 'auto')
+
+    // The chosen student shows in the field with the same isolate, and filters the table.
+    fireEvent.click(option)
+    await waitFor(() => expect(bodyRows()).toHaveLength(1))
+    const chosen = document.querySelector('.ant-select-content bdi, .ant-select-selection-item bdi')
+    expect(chosen).toHaveTextContent('أحمد V3 الأول')
+    expect(chosen).toHaveAttribute('dir', 'auto')
+  })
+
   it('says there is no certificate yet, and shows the server’s 403 to a learner holding neither key, with a retry', async () => {
     const api = mockMyCertificatesApi([
       jsonResponse(403, { statusCode: 403, code: 'permission_denied', missing: ['certificates.read_own', 'certificates.read_linked'], message: 'no' }),

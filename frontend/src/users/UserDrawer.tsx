@@ -412,15 +412,18 @@ function UserDetails({ user, contact }: { user: UserDetail; contact: boolean }) 
   const { t } = useTranslation()
   const { language } = useLocalized()
 
+  // A left-to-right value (the fields the forms type with `dir="ltr"`) in a plain isolate: unisolated in the Arabic
+  // drawer, `+966500000001` showed as `966500000001+` (QA 2026-11-17 — the audit page's rule, KI-093).
+  const ltr = (value: string | null) => (value ? <bdi dir="ltr">{value}</bdi> : EMPTY)
   const identity = [
     { key: 'fullName', label: t('users.fields.fullName'), children: user.fullName },
-    { key: 'fullNameLatin', label: t('users.fields.fullNameLatin'), children: user.fullNameLatin ?? EMPTY },
+    { key: 'fullNameLatin', label: t('users.fields.fullNameLatin'), children: ltr(user.fullNameLatin) },
     { key: 'displayName', label: t('users.fields.displayName'), children: user.displayName ?? EMPTY },
     ...(contact
       ? [
-          { key: 'email', label: t('users.fields.email'), children: user.email ?? EMPTY },
-          { key: 'username', label: t('users.fields.username'), children: user.username ?? EMPTY },
-          { key: 'phone', label: t('users.fields.phone'), children: user.phone ?? EMPTY },
+          { key: 'email', label: t('users.fields.email'), children: ltr(user.email) },
+          { key: 'username', label: t('users.fields.username'), children: ltr(user.username) },
+          { key: 'phone', label: t('users.fields.phone'), children: ltr(user.phone) },
         ]
       : []),
     {
