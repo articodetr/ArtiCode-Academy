@@ -65,6 +65,64 @@ describe('WeekGrid', () => {
     expect(card('10:30', '11:30').querySelector('.tt-event__extras')).toBeNull()
   })
 
+  it('cascades three overlapping slots of a week column: three focusable cards in start order, each wider than a third of the column (KI-119)', () => {
+    const three = [at('third', '10:30', '11:30'), at('first', '09:30', '11:00'), at('second', '10:00', '12:00')]
+    renderGrid([gridDay('2026-11-08', three), gridDay('2026-11-09', [])])
+    const cards = [card('09:30', '11:00'), card('10:00', '12:00'), card('10:30', '11:30')]
+    // DOM order — the tab order and the paint order — is start order: the card that starts last lies on top.
+    const column = cards[0]!.closest('section')!
+    expect(Array.from(column.querySelectorAll('button.tt-event'))).toEqual(cards)
+    const slots = cards.map((button) => button.closest('li')!)
+    expect(slots.map((slot) => slot.style.width)).toEqual(['60%', '60%', '60%'])
+    for (const slot of slots) {
+      expect(parseFloat(slot.style.width)).toBeGreaterThan(100 / 3)
+      expect(slot).toHaveClass('is-cascade')
+    }
+    // Each lane a step further from the inline-start edge (logical: mirrored in Arabic, no left/right).
+    expect(slots.map((slot) => slot.style.insetInlineStart)).toEqual(['0%', '20%', '40%'])
+    for (const slot of slots) {
+      expect(slot.style.left).toBe('')
+      expect(slot.style.right).toBe('')
+    }
+    // Each card is a button that takes the focus; beside the others it shows the course and the start time.
+    for (const button of cards) {
+      button.focus()
+      expect(document.activeElement).toBe(button)
+      expect(button).toHaveClass('is-narrow')
+      expect(button).toHaveTextContent('أساسيات بايثون')
+    }
+    expect(cards[2]).toHaveTextContent('10:30')
+    // Arrow down walks the cascade in start order.
+    cards[0]!.focus()
+    fireEvent.keyDown(cards[0]!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(cards[1])
+    fireEvent.keyDown(cards[1]!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(cards[2])
+  })
+
+  it('lays the same cascade out in English, and three overlapping slots side by side in the day view (KI-119)', () => {
+    const three = () => [at('a', '09:00', '10:00'), at('b', '09:00', '10:00'), at('c', '09:00', '10:00')]
+    const first = renderWithProviders(
+      <WeekGrid days={[gridDay('2026-11-08', three()), gridDay('2026-11-09', [])]} language="en" academyTimeZone="Asia/Riyadh" nowMinutes={600} label="grid" loading={false} empty={null} onSelectDate={vi.fn()} onOpen={vi.fn()} />,
+    )
+    const englishSlots = Array.from(first.container.querySelectorAll<HTMLLIElement>('li.tt-slot'))
+    expect(englishSlots.map((slot) => [slot.style.insetInlineStart, slot.style.width])).toEqual([
+      ['0%', '60%'],
+      ['20%', '60%'],
+      ['40%', '60%'],
+    ])
+    first.unmount()
+
+    // The day view's column is wide: thirds, side by side, with the room for every line.
+    renderGrid([gridDay('2026-11-08', three())])
+    const daySlots = Array.from(document.querySelectorAll<HTMLLIElement>('li.tt-slot'))
+    expect(daySlots).toHaveLength(3)
+    for (const slot of daySlots) {
+      expect(slot).not.toHaveClass('is-cascade')
+      expect(parseFloat(slot.style.width)).toBeCloseTo(100 / 3)
+    }
+  })
+
   it('renders the secondary lines in the order they give way — class, room, teacher — each name and code in its own <bdi> (J-F17)', () => {
     const latin = entryOfSlot(makeSlot({ id: 'latin', startTime: '09:00', endTime: '10:30', teacher: { userId: '0193b000-0000-7000-8000-00000000f002', fullName: 'Mehmet Yılmaz' } }))
     renderGrid([gridDay('2026-11-08', [latin, at('short', '13:00', '13:30')]), gridDay('2026-11-09', [])])

@@ -1,8 +1,9 @@
 // Geometry of the weekly time grid (J-F08), pure and unit-tested in
 // timetable.layout.test.ts: the hours the grid shows, where a card sits and
-// how tall it is (its real start and duration), overlapping slots side by
-// side in columns (never on top of each other), and which days the week
-// shows (working days, without ever hiding a day that holds a slot).
+// how tall it is (its real start and duration), overlapping slots in lanes —
+// side by side, or as a cascade when three or more share a week column
+// (KI-119, `slotBox()`) — and which days the week shows (working days,
+// without ever hiding a day that holds a slot).
 
 export interface HourRange {
   /** First hour line (0–23). */
@@ -115,6 +116,51 @@ export function layoutDay<T extends { id: string; startMinutes: number; endMinut
   }
   closeCluster()
   return laidOut
+}
+
+/**
+ * Where a laid-out slot sits across its day column, in percent of the column and measured from the
+ * column's inline-start edge — the right edge in Arabic, the left in English: the grid places it with
+ * `inset-inline-start`, so nothing here depends on the direction and the whole cluster mirrors with it.
+ */
+export interface SlotBox {
+  /** Offset from the column's inline-start edge (% of the column). */
+  inlineStart: number
+  /** Width (% of the column). */
+  inlineSize: number
+  /** Part of a cascade: the card overlaps the cards of its cluster's later lanes. */
+  cascade: boolean
+}
+
+/** A cluster of this many lanes or more cascades in a week column. */
+export const CASCADE_MIN_LANES = 3
+/** The width of every card of a cascade (% of the column). */
+export const CASCADE_CARD_WIDTH = 60
+
+/**
+ * The box of a slot in lane `lane` of a cluster of `lanes` lanes (from `layoutDay()`).
+ *
+ * KI-119 (D-R142, a layout decision delegated to the session): side by side, three overlapping slots of
+ * a seven-day week left each card about 26 px at 1366 px (a week column is 102–130 px) — the course cut,
+ * no time. So in a week column (`weekColumn` — the grid shows more than one day, the same test as the
+ * card's `narrow` flag) a cluster of three lanes or more becomes a CASCADE, as calendar apps do: every
+ * card is 60 % of the column and lane i starts i × 40 % ÷ (lanes − 1) from the inline-start edge, so the
+ * first lane touches the start and the last one the end. The cards keep their DOM order — start time,
+ * the keyboard's order — so a card painted later lies on top, and the one that starts last shows its
+ * course and start time (about 54 px of a 102 px column, against 26). A covered card keeps its top (its
+ * course) unless another card starts at the same time. While a card of a later lane lies on it, it keeps
+ * a strip at its inline-start edge, where its text begins — 20 % of the column with three lanes (≥ 24 px
+ * from a 120 px column); a later card that takes a lower lane back (c over b in the partial cluster of
+ * timetable.layout.test.ts) covers that edge instead and leaves it a strip at its inline-end edge.
+ * Hovering a card or focusing it from the keyboard brings it to the front whole (timetable.css,
+ * `.tt-slot.is-cascade`); its accessible name already says everything. One lane, two lanes (today's
+ * halves read well enough) and the day view (a wide column: even five lanes keep more than 120 px each
+ * at 1366 px) stay side by side. A «+N» marker was ruled out: it would need a new string. Five lanes or
+ * more leave thin strips — the filters narrow the week, and the day view lays them side by side.
+ */
+export function slotBox(lane: number, lanes: number, weekColumn: boolean): SlotBox {
+  if (!weekColumn || lanes < CASCADE_MIN_LANES) return { inlineStart: (lane * 100) / lanes, inlineSize: 100 / lanes, cascade: false }
+  return { inlineStart: (lane * (100 - CASCADE_CARD_WIDTH)) / (lanes - 1), inlineSize: CASCADE_CARD_WIDTH, cascade: true }
 }
 
 export interface VisibleDaysOptions {

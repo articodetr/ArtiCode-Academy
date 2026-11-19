@@ -6,7 +6,7 @@ import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, AutoComplete, Button, Card, Flex, Form, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useRef } from 'react'
-import type { CSSProperties, KeyboardEvent } from 'react'
+import type { KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuditLogItem } from '../api/audit'
 import { describeAuditFailure, failureMessage } from '../audit/audit.errors'
@@ -243,7 +243,8 @@ export function AuditLogPage() {
           size="middle"
           // On a phone the table scrolls inside its own box instead of widening the page (889 px at 390 px — QA
           // 2026-11-17; KI-094). `true`, not 'max-content': the table still fills its box wherever it fits, and an
-          // opened row never sizes it (KI-099 — EventDetails sits in a box of no width of its own).
+          // opened row never sizes it (KI-099) and keeps to the visible box (KI-120 — `.audit-table` in AuditLogPage.css).
+          className="audit-table"
           scroll={{ x: true }}
           locale={{ emptyText: t('audit.empty') }}
           expandable={{ expandedRowRender: (row) => <EventDetails row={row} /> }}
@@ -275,18 +276,16 @@ export function AuditLogPage() {
 }
 
 /**
- * The expanded row never widens the table (KI-099): a box of no width of its own that grows to the cell's
- * (`min-width: 100%`) gives the table nothing to size its columns by — the user agent and the full ids wrap inside it
- * (`overflow-wrap: anywhere` breaks an id, which has no space), the metadata JSON scrolls in its own <pre>.
+ * Expanded row: the full identifiers, the user agent and the metadata as the server stored it. It never widens the
+ * table (KI-099) and, since KI-120, it is as wide as the table's visible box, not as the whole scrolled table: on a
+ * phone it wraps inside the screen and stays in view while the table scrolls sideways (`.audit-event-details` in
+ * AuditLogPage.css — the user agent and the full ids break anywhere, the metadata JSON scrolls in its own <pre>).
  */
-const EXPANDED_ROW_STYLE: CSSProperties = { width: 0, minWidth: '100%', overflowWrap: 'anywhere' }
-
-/** Expanded row: the full identifiers, the user agent and the metadata as the server stored it. */
 function EventDetails({ row }: { row: AuditLogItem }) {
   const { t } = useTranslation()
   const text = metadataText(row.metadata)
   return (
-    <div style={EXPANDED_ROW_STYLE} data-testid="audit-event-details">
+    <div className="audit-event-details" data-testid="audit-event-details">
       <Space orientation="vertical" size={4} style={{ width: '100%' }}>
         <Typography.Text type="secondary">
           {t('audit.details.id')}:{' '}

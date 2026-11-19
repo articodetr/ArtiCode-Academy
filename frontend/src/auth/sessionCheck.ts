@@ -11,9 +11,10 @@ export const SESSION_CHECK_RETRIES = 3
 const BACKOFF_MS = [1_000, 2_000, 4_000] as const
 
 /**
- * The longest single wait, whatever Retry-After says. The refresh limit counts
- * 30 requests per minute per IP, so a blocked visitor is told at most 60 s; a
- * retry after 30 s that is still blocked gets the rest of that minute named again.
+ * The longest single wait, whatever Retry-After says. The refresh limits count
+ * per minute (30 per IP and cookie, 1200 per IP — D-R140), so a blocked visitor
+ * is told at most 60 s; a retry after 30 s that is still blocked gets the rest
+ * of that minute named again.
  */
 export const MAX_RETRY_WAIT_MS = 30_000
 

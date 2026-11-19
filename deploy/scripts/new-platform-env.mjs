@@ -141,4 +141,4 @@ console.log(`wrote ${shown} (mode 600) for ${origin}`);
 console.log(`random values (not shown): ${SECRET_NAMES.join(', ')}`);
 console.log('next:');
 console.log(`  docker compose -p articode-platform -f deploy/compose.platform.yaml --env-file ${shown} up -d --build`);
-console.log(`  docker compose -p articode-platform -f deploy/compose.platform.yaml --env-file ${shown} run --rm -e PLATFORM_BOOTSTRAP_EMAIL=<e-mail> -e PLATFORM_BOOTSTRAP_FULL_NAME="<name>" migrate npm run platform:bootstrap-admin   # prompts for the password`);
+console.log(`  docker compose -p articode-platform -f deploy/compose.platform.yaml --env-file ${shown} run --rm -e PLATFORM_BOOTSTRAP_EMAIL=<e-mail> -e PLATFORM_BOOTSTRAP_FULL_NAME="<name>" account npm run platform:bootstrap-admin   # prompts for the password`);

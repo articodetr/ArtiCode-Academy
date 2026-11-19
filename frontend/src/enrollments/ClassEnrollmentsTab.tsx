@@ -11,7 +11,10 @@
 // class back to the drawer. The refresh button re-reads both the roster and
 // the class, so the seats shown beside the roster match the server too. Since
 // CH-0297 the retry of the roster's error re-reads the class as well when the
-// drawer's own read of it failed, so one retry clears both errors.
+// drawer's own read of it failed, so one retry clears both errors. Since KI-120
+// the other way round too: the drawer's own retry (its «تحديث» after a failed
+// read of the class) moves `rosterRefresh`, and an opened students tab reads
+// its roster again with the class.
 // MOD-19: a `pending` enrollment is a request — tagged as such with the
 // payment state the server computed; the office approves it (409
 // payment_required while an invoice has a balance) or rejects it with a
@@ -20,7 +23,7 @@
 import { DownOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Dropdown, Flex, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import type { MenuProps, TableProps } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { ENROLLMENT_STATUSES, changeEnrollmentStatus, enrollStudent } from '../api/enrollments'
@@ -71,6 +74,11 @@ interface ClassEnrollmentsTabProps {
   classReadFailed?: boolean
   /** Whether the enroll form holds a student picked but not enrolled yet (KI-052): the class drawer then keeps Escape and a mask click from dropping it. */
   onUnsavedChange?: (unsaved: boolean) => void
+  /**
+   * Moved by the drawer when its own retry re-reads the class (KI-120): the roster is read again too. The tab reads
+   * its roster when it mounts (the first time it is opened), so the value it mounts with asks nothing more.
+   */
+  rosterRefresh?: number
 }
 
 /** The timestamp that explains the current status. */
@@ -89,7 +97,7 @@ function sinceOf(row: Enrollment): string | null {
   }
 }
 
-export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFailed = false, onUnsavedChange }: ClassEnrollmentsTabProps) {
+export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFailed = false, onUnsavedChange, rosterRefresh = 0 }: ClassEnrollmentsTabProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -105,6 +113,15 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFai
   const [enrolling, setEnrolling] = useState(false)
   const [enrollError, setEnrollError] = useState<string | null>(null)
   const [pending, setPending] = useState<{ row: Enrollment; action: EnrollmentStatusAction } | null>(null)
+
+  // The drawer's retry re-read the class: read the roster again with it (KI-120). Never on mount — the list reads then.
+  const { reload: reloadRoster } = list
+  const refreshSeen = useRef(rosterRefresh)
+  useEffect(() => {
+    if (refreshSeen.current === rosterRefresh) return
+    refreshSeen.current = rosterRefresh
+    reloadRoster()
+  }, [rosterRefresh, reloadRoster])
 
   const moveCount = (from: EnrollmentStatus | null, to: EnrollmentStatus) => {
     const delta = enrolledCountDelta(from, to)
@@ -169,8 +186,8 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFai
             {row.student.deletedAt !== null ? <Tag>{t('classes.enrollments.deletedAccount')}</Tag> : null}
           </Space>
           {canReadContact && row.student.email ? (
-            <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-              {row.student.email}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <bdi dir="ltr">{row.student.email}</bdi>
             </Typography.Text>
           ) : null}
         </Space>

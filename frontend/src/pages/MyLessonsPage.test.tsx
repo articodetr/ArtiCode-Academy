@@ -159,6 +159,37 @@ describe('MyLessonsPage', () => {
     expect(box).toHaveTextContent('مراجعة الواجب ثم تمارين')
   })
 
+  it('keeps the table at its card’s width, so the attendance column is in view at 1366 px, and scrolls in its own box only when it cannot fit (KI-120)', async () => {
+    mockMyLessonsApi(makeMyLessonList([attended]))
+    renderPage(['student'])
+    await waitFor(() => expect(bodyRows()).toHaveLength(1))
+
+    // jsdom has no layout: assert the configuration (the users and roster tables — KI-094/KI-116). 'max-content' sized
+    // the table to its one-line content and started the attendance column off-screen at 1366 px; `x: true` keeps the
+    // table at its box's width wherever the cells can wrap, and still scrolls it in that box on a phone.
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+  })
+
+  it('shows the class code and the room each in a plain LTR isolate, never through a dir on the Typography (KI-120)', async () => {
+    mockMyLessonsApi(makeMyLessonList([attended]))
+    renderPage(['student'])
+    const [row] = await waitFor(() => {
+      const rows = bodyRows()
+      expect(rows).toHaveLength(1)
+      return rows
+    })
+    for (const value of ['PY-101-A', 'LAB-1 — مختبر 1']) {
+      const element = within(row!).getByText(value)
+      // An antd Typography would beat `dir` with its `-rtl` class: the attribute sits on a plain <bdi> inside it.
+      expect(element.tagName).toBe('BDI')
+      expect(element).toHaveAttribute('dir', 'ltr')
+    }
+    expect(row!.querySelectorAll('.ant-typography[dir]')).toHaveLength(0)
+  })
+
   it('gives a guardian with two children in one class one row per child, and the student filter narrows to one of them', async () => {
     const one = makeMyLesson({ ...FUTURE, relation: 'child', student: CHILD_ONE, attendance: { status: 'present', minutesLate: null, recordedAt: '2030-01-15T09:05:00.000Z' } })
     const two = makeMyLesson({ ...FUTURE, relation: 'child', student: CHILD_TWO })

@@ -16,9 +16,15 @@
 #            the maintenance database, so the platform database is the script's from birth.
 #   migrate  one shot before `api` and `probe`: `prisma migrate deploy --config
 #            prisma.platform.config.ts` as the platform migrator (the `tools` target of
-#            deploy/api.Dockerfile). No seed. A failure keeps `api` and `probe` stopped. Also the
-#            container of the account commands (`npm run platform:bootstrap-admin`,
-#            `npm run platform:create-user`), which connect as the application role.
+#            deploy/api.Dockerfile). No seed. A failure keeps `api` and `probe` stopped.
+#   account  the account commands, never started by `up` (profile `tools`) — only through
+#            `docker compose -p articode-platform … run --rm account npm run platform:<command> -- …`
+#            with <command> = bootstrap-admin, create-user, enable-mfa or reset-mfa (run it with
+#            no command for the list). The same image as `migrate`, connected as the application
+#            role, with NO Docker log (`logging: driver: none` — KI-087, D-R141): what its terminal
+#            shows (the TOTP key, the otpauth link and the recovery codes of platform:enable-mfa,
+#            and anything typed before a password prompt) is never written to a container log.
+#            The attached terminal still shows it; `docker compose logs account` shows nothing.
 #   api      the `runtime` target with `node dist/platform/main.js` (port 3100); healthy =
 #            platform readiness 200 (database up AND schema not behind the platform migrations
 #            this image carries — API-177).
@@ -109,12 +115,51 @@ services:
       <<: *app-db
       PLATFORM_DB_MIGRATOR_USER: ${PLATFORM_DB_MIGRATOR_USER:?set PLATFORM_DB_MIGRATOR_USER in the platform env file}
       PLATFORM_DB_MIGRATOR_PASSWORD: ${PLATFORM_DB_MIGRATOR_PASSWORD:?set PLATFORM_DB_MIGRATOR_PASSWORD in the platform env file}
-      # The account commands run in this container (`run --rm migrate npm run platform:…`):
-      # platform:enable-mfa seals the TOTP secret with the same key as the API (empty = it refuses).
-      PLATFORM_MFA_ENCRYPTION_KEY: ${PLATFORM_MFA_ENCRYPTION_KEY:-}
+      # No PLATFORM_MFA_ENCRYPTION_KEY: migrations never open a secret, and the account
+      # commands that need it run in `account` below (KI-087).
     # The platform migrations only — never the academy schema, never a seed.
     command: ["npx", "prisma", "migrate", "deploy", "--config", "prisma.platform.config.ts"]
     logging: *logging
+
+  account:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: tools
+    # The image `migrate` builds; `up` never builds or starts this service.
+    image: articode-api-tools:${PLATFORM_IMAGE_TAG:-local}
+    # Only `docker compose run account …` starts it (a service named on the command line).
+    profiles: ["tools"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Every account command connects as the application role (PLATFORM_DATABASE_URL is
+      # derived from these) — never as the migrator.
+      <<: *app-db
+      # platform:enable-mfa seals the TOTP secret with the very key the API runs with
+      # (empty = it refuses); the other account commands never read it.
+      PLATFORM_MFA_ENCRYPTION_KEY: ${PLATFORM_MFA_ENCRYPTION_KEY:-}
+    # Without a command: the list of account commands, exit 0 — nothing is read or written.
+    command:
+      - sh
+      - -c
+      - |
+        cat <<'EOF'
+        The account commands of the platform (run each one in an interactive terminal):
+          docker compose -p articode-platform -f deploy/compose.platform.yaml --env-file deploy/env/platform.env \
+            run --rm account npm run <command>
+        with <command> one of
+          platform:bootstrap-admin                      the first super admin (-e PLATFORM_BOOTSTRAP_EMAIL=... -e PLATFORM_BOOTSTRAP_FULL_NAME="...")
+          platform:create-user -- --role support|super_admin --email <address> --name "<full name>"
+          platform:enable-mfa -- --email <address>      two-step verification ON (prints the key and the recovery codes once)
+          platform:reset-mfa -- --email <address> [--reason "<text>"]
+        Always with --rm. Wait for the password prompt before typing.
+        EOF
+    # KI-087: no Docker log at all — the attached terminal still shows everything.
+    logging:
+      driver: none
 
   api:
     <<: *hardened
@@ -144,7 +189,8 @@ services:
       PLATFORM_LOCKOUT_THRESHOLD: ${PLATFORM_LOCKOUT_THRESHOLD:-}
       PLATFORM_LOCKOUT_MINUTES: ${PLATFORM_LOCKOUT_MINUTES:-}
       # Two-step verification of platform accounts (PMFA, ENV-91): the key that seals the
-      # TOTP secrets. Empty = MFA off. The api service only (the probe never reads it).
+      # TOTP secrets. Empty = MFA off. Here and in `account` only (for platform:enable-mfa);
+      # never migrate, probe, edge or backup.
       PLATFORM_MFA_ENCRYPTION_KEY: ${PLATFORM_MFA_ENCRYPTION_KEY:-}
       # The on-demand probe (API-196) and `stale` of the fleet view (API-198).
       PLATFORM_PROBE_TIMEOUT_MS: ${PLATFORM_PROBE_TIMEOUT_MS:-}

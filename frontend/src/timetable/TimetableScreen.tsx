@@ -134,12 +134,18 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   })
   const days = view === 'week' ? weekDates.filter((date) => visible.includes(weekdayOf(date))).map(toDay) : [toDay(selected)]
   const loading = !settingsReady || days.some((day) => data.pending.has(day.date))
-  const empty = !loading && !data.failed && days.every((day) => day.entries.length === 0)
+  // The alert above the grid (and the empty card it rules out) follows the dates the main view shows
+  // (KI-120): the whole week in the week view — a failed day off may hold a slot the grid would show —
+  // and on a phone, whose week strip marks the busy days; the selected day alone in the desktop day view.
+  // A date only the «upcoming» panel reads fails in the panel alone.
+  const mainDates = view === 'week' || phone ? weekDates : [selected]
+  const mainFailedDate = mainDates.find((date) => data.failedDates.has(date))
+  const failure = mainFailedDate === undefined ? null : describeScheduleFailure(data.failedDates.get(mainFailedDate))
+  const empty = !loading && failure === null && days.every((day) => day.entries.length === 0)
   const upcoming = upcomingOccurrences(data.byDate, upcomingDates, now, UPCOMING_LIMIT)
   const upcomingLoading = !settingsReady || upcomingDates.some((date) => data.pending.has(date))
   // Only a failure among its own seven days empties the panel; another week date's failure is the grid's alert.
   const upcomingFailed = upcomingDates.some((date) => data.failedDates.has(date))
-  const failure = data.failed ? describeScheduleFailure(data.error) : null
 
   const pick = (date: CalendarDate) => {
     setPicked(date)

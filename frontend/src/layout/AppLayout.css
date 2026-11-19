@@ -75,11 +75,28 @@
   min-height: calc(100vh - 64px);
 }
 
+/*
+ * The user menu's trigger is a <button> since KI-120 (Tab reaches it; Enter, Space and ArrowDown open the menu), drawn
+ * as the plain trigger it replaced: no border, background, padding or font of a native button. The keyboard focus shows
+ * a ring like antd's own buttons.
+ */
 .app-user {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.app-user:focus-visible {
+  outline: 3px solid var(--ant-color-primary-border, #91caff);
+  outline-offset: 1px;
 }
 
 @media (max-width: 768px) {

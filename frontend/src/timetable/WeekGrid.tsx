@@ -2,7 +2,10 @@
 // header of day buttons (the selected day as a purple pill), the hours along
 // the inline-start edge, and every slot as a card placed at its start time
 // with a height equal to its duration; overlapping slots share their column
-// side by side. Today's column carries a "now" line (academy time). Arrow
+// side by side — or, three or more in a week column, as a cascade where the
+// card that starts last lies on top and hover or focus brings a card to the
+// front (KI-119, `slotBox()`); cards stay in start order, the keyboard's
+// order. Today's column carries a "now" line (academy time). Arrow
 // keys move between cards: up/down inside a day, left/right to the
 // neighbouring day (mirrored in RTL). One column = the day view.
 import { Spin } from 'antd'
@@ -14,7 +17,7 @@ import { EventCard } from './EventCard'
 import { clockOfMinutes } from './timetable.dates'
 import type { CalendarDate } from './timetable.dates'
 import { dayNumber, formatLongDate, weekdayKey } from './timetable.format'
-import { densityOf, hourHeightOf, hourRangeOf, hoursOf, layoutDay, verticalBox } from './timetable.layout'
+import { densityOf, hourHeightOf, hourRangeOf, hoursOf, layoutDay, slotBox, verticalBox } from './timetable.layout'
 import type { TimetableEntry } from './timetable.model'
 
 export interface GridDay {
@@ -121,11 +124,12 @@ export function WeekGrid({ days, language, academyTimeZone, nowMinutes, label, l
               <ul className="tt-col__list">
                 {layoutDay(day.entries).map(({ item, column, columns }) => {
                   const box = verticalBox(item.startMinutes, item.endMinutes, range, hourHeight)
+                  const across = slotBox(column, columns, days.length > 1)
                   return (
                     <li
                       key={item.id}
-                      className="tt-slot"
-                      style={{ top: box.top, height: box.height, insetInlineStart: `${(column / columns) * 100}%`, width: `${100 / columns}%` }}
+                      className={across.cascade ? 'tt-slot is-cascade' : 'tt-slot'}
+                      style={{ top: box.top, height: box.height, insetInlineStart: `${across.inlineStart}%`, width: `${across.inlineSize}%` }}
                     >
                       <EventCard
                         entry={item}

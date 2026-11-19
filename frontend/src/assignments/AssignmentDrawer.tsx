@@ -317,8 +317,8 @@ function AssignmentDetails({ assignment }: { assignment: Assignment }) {
     <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
       <Descriptions.Item label={t('assignments.fields.class')}>
         <Space wrap>
-          <Typography.Text dir="ltr" strong>
-            {assignment.class.code}
+          <Typography.Text strong>
+            <bdi dir="ltr">{assignment.class.code}</bdi>
           </Typography.Text>
           <span>{localizedLabel(assignment.class.name, language)}</span>
           {!isClassOpenForAssignments(assignment.class.status) ? <StatusTag value={assignment.class.status} /> : null}
@@ -346,8 +346,8 @@ function AssignmentDetails({ assignment }: { assignment: Assignment }) {
       </Descriptions.Item>
       {assignment.instructions?.en ? (
         <Descriptions.Item label={t('assignments.fields.instructionsEn')}>
-          <Typography.Paragraph dir="ltr" style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-            {assignment.instructions.en}
+          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+            <div dir="ltr">{assignment.instructions.en}</div>
           </Typography.Paragraph>
         </Descriptions.Item>
       ) : null}

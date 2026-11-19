@@ -163,8 +163,8 @@ function GradeCard({ item, showStudent }: { item: MyGradeItem; showStudent: bool
       <Flex justify="space-between" align="flex-start" wrap gap={16}>
         <div style={{ flex: '1 1 220px', minWidth: 0 }}>
           <Space size={8} wrap>
-            <Typography.Text dir="ltr" strong>
-              {item.class.code}
+            <Typography.Text strong>
+              <bdi dir="ltr">{item.class.code}</bdi>
             </Typography.Text>
             <Typography.Text strong>{localizedLabel(item.class.name, language)}</Typography.Text>
           </Space>

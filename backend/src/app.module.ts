@@ -5,6 +5,7 @@ import { AcademyModule } from './academy/academy.module.js';
 import { AssignmentsModule } from './assignments/assignments.module.js';
 import { AccountModule } from './account/account.module.js';
 import { AuditModule } from './audit/audit.module.js';
+import { REFRESH_IP_THROTTLER_OPTIONS } from './auth/auth-throttler.guard.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BranchesModule } from './branches/branches.module.js';
 import { ClassesModule } from './classes/classes.module.js';
@@ -41,11 +42,12 @@ import { UsersModule } from './users/users.module.js';
       envFilePath: [...ENV_FILE_PATHS],
       validate: validateEnv,
     }),
-    // Named limiter used by the auth routes and the public account routes
-    // (AuthThrottlerGuard); routes override it with @Throttle, nothing else is
-    // throttled yet.
+    // Named limiters used by AuthThrottlerGuard: `login` by the auth routes and
+    // the public account routes (each overrides it with @Throttle; nothing else
+    // is throttled yet), and `refresh_ip`, the per-IP ceiling of the session
+    // refresh alone (D-R140 — its skipIf keeps it off every other route).
     ThrottlerModule.forRoot({
-      throttlers: [{ name: 'login', ttl: 15 * 60 * 1000, limit: 10 }],
+      throttlers: [{ name: 'login', ttl: 15 * 60 * 1000, limit: 10 }, REFRESH_IP_THROTTLER_OPTIONS],
     }),
     PrismaModule,
     AuditModule,

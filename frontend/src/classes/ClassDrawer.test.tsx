@@ -241,8 +241,12 @@ describe('ClassDrawer', () => {
         return jsonResponse(200, cls)
       })
       const classReads = () => calls.filter((call) => new URL(call.url, 'http://localhost').pathname === `/api/classes/${CLASS_ID}`).length
-      return { offline, classReads }
+      const rosterReads = () => calls.filter((call) => new URL(call.url, 'http://localhost').pathname.endsWith('/enrollments')).length
+      return { offline, classReads, rosterReads }
     }
+
+    /** The retry inside the drawer's own error (the class read failed). */
+    const drawerRetry = () => screen.getByText(ar.classes.refresh, { selector: 'button span' }).closest('button')!
 
     async function openStudentsTab() {
       await screen.findByText('PY-101-A')
@@ -274,6 +278,45 @@ describe('ClassDrawer', () => {
       expect(screen.getByText('عمر خالد')).toBeInTheDocument()
       // The re-read class goes to the list row too (J-F21).
       expect(onUpdated).toHaveBeenLastCalledWith(expect.objectContaining({ id: CLASS_ID }))
+    })
+
+    it('clears the roster’s error with the drawer’s own retry too: it re-reads an opened students tab’s roster with the class (KI-120)', async () => {
+      const api = mockDrawerApi()
+      renderDrawer(ROSTER_MANAGER_PERMISSIONS)
+      await openStudentsTab()
+
+      api.offline.class = true
+      api.offline.roster = true
+      fireEvent.click(screen.getByLabelText(ar.classes.enrollments.refresh))
+      await waitFor(() => expect(screen.getAllByText(ar.login.errors.network)).toHaveLength(2))
+
+      // Online again, the drawer's «تحديث» recovers the class AND the roster: no error stays.
+      api.offline.class = false
+      api.offline.roster = false
+      const before = { class: api.classReads(), roster: api.rosterReads() }
+      fireEvent.click(drawerRetry())
+      await waitFor(() => expect(screen.queryByText(ar.login.errors.network)).not.toBeInTheDocument())
+      expect(api.classReads()).toBe(before.class + 1)
+      expect(api.rosterReads()).toBe(before.roster + 1)
+      expect(screen.getByText('عمر خالد')).toBeInTheDocument()
+    })
+
+    it('asks no roster with the drawer’s retry while the students tab was never opened, and reads it once when it opens (KI-120)', async () => {
+      const api = mockDrawerApi()
+      api.offline.class = true
+      renderDrawer(ROSTER_MANAGER_PERMISSIONS)
+      expect(await screen.findByText(ar.login.errors.network)).toBeInTheDocument()
+
+      api.offline.class = false
+      fireEvent.click(drawerRetry())
+      await screen.findByText('PY-101-A')
+      expect(api.rosterReads()).toBe(0)
+
+      // Opened after the retry: one read, the tab's own on mount — the retry before it asks nothing more.
+      fireEvent.click(screen.getByText('الطلاب (1)'))
+      expect(await screen.findByText('عمر خالد')).toBeInTheDocument()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(api.rosterReads()).toBe(1)
     })
 
     it('does not read the class again when only the roster failed', async () => {

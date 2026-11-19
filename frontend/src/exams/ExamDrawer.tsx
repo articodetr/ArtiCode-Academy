@@ -335,8 +335,8 @@ function ExamDetails({ exam }: { exam: Exam }) {
     <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
       <Descriptions.Item label={t('exams.fields.class')}>
         <Space wrap>
-          <Typography.Text dir="ltr" strong>
-            {exam.class.code}
+          <Typography.Text strong>
+            <bdi dir="ltr">{exam.class.code}</bdi>
           </Typography.Text>
           <span>{localizedLabel(exam.class.name, language)}</span>
           {exam.class.status === 'completed' || exam.class.status === 'cancelled' ? <StatusTag value={exam.class.status} /> : null}
@@ -373,8 +373,8 @@ function ExamDetails({ exam }: { exam: Exam }) {
       </Descriptions.Item>
       {exam.description?.en ? (
         <Descriptions.Item label={t('exams.fields.descriptionEn')}>
-          <Typography.Paragraph dir="ltr" style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-            {exam.description.en}
+          <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+            <div dir="ltr">{exam.description.en}</div>
           </Typography.Paragraph>
         </Descriptions.Item>
       ) : null}

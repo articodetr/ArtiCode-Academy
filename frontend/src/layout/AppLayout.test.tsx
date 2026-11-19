@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { SettingsPage } from '../pages/SettingsPage'
@@ -349,6 +350,95 @@ describe('AppLayout — the header’s user, bell and menus (KI-108)', () => {
     expect(phone.get('min-height')).toBe('64px')
     expect(phone.get('padding')).toBe('10px 12px')
     expect((await phoneDeclarations('.app-header__actions')).get('row-gap')).toBe('8px')
+  })
+
+  it('reaches the user menu with the keyboard: Tab focuses its button, Enter opens it on its first item, the arrows move, Escape closes it back to the button and ArrowDown opens it again (KI-120)', async () => {
+    // The menu focuses its first item that is laid out (@rc-component/util isVisible reads `offsetParent`); jsdom lays
+    // nothing out, so every connected element is given a parent here, as a browser's page has one.
+    const laidOut = vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.isConnected ? document.body : null
+    })
+    onTestFinished(() => laidOut.mockRestore())
+    const keyboard = userEvent.setup()
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user: makeUser({ name: 'سارة أحمد' }) }), route: '/', routes: { '/profile': <LocationProbe /> } })
+    // A real button named by the user's name alone (the avatar is decorative).
+    const trigger = within(header()).getByRole('button', { name: 'سارة أحمد' })
+    expect(trigger).toHaveClass('app-user')
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+    // Tab reaches it (a span was never in the tab order — `tabIndex` -1).
+    for (let presses = 0; presses < 40 && document.activeElement !== trigger; presses += 1) await keyboard.tab()
+    expect(trigger).toHaveFocus()
+
+    // Enter opens the menu and the focus moves onto its first enabled item (the role line is disabled).
+    await keyboard.keyboard('{Enter}')
+    const profile = (await screen.findByText(ar.common.profile)).closest('li') as HTMLElement
+    await waitFor(() => expect(profile).toHaveFocus())
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    // The menu's own keys read `keyCode` (@rc-component/menu, @rc-component/dropdown), which user-event leaves out:
+    // they are sent with it. The menu moves the focus in the next frame.
+    fireEvent.keyDown(profile, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40 })
+    const logout = screen.getByText(ar.common.logout).closest('li') as HTMLElement
+    await waitFor(() => expect(logout).toHaveFocus())
+
+    fireEvent.keyDown(logout, { key: 'Escape', code: 'Escape', keyCode: 27, which: 27 })
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'))
+    expect(trigger).toHaveFocus()
+
+    // ArrowDown on the closed button opens it as well; Enter on «my account» then goes there.
+    await keyboard.keyboard('{ArrowDown}')
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'))
+    // The focus moves into the menu again (jsdom never ends the closing motion, so the same menu is shown again).
+    await waitFor(() => expect((document.activeElement as HTMLElement).closest('.app-user-menu [role="menuitem"]')).not.toBeNull())
+    fireEvent.keyDown(screen.getByText(ar.common.profile).closest('li')!, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 })
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/profile')
+  })
+
+  it('leaves the focus alone when a press outside closes the user menu, and hands it back to the button without a scroll on Escape (review of KI-120)', async () => {
+    // The menu focuses its first laid-out item (see the test above).
+    const laidOut = vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.isConnected ? document.body : null
+    })
+    onTestFinished(() => laidOut.mockRestore())
+    renderWithProviders(<AppLayout />, { auth: makeAuth({ user: makeUser({ name: 'سارة أحمد' }) }), route: '/' })
+    const trigger = within(header()).getByRole('button', { name: 'سارة أحمد' })
+    const focusesTheButton = vi.spyOn(trigger, 'focus')
+    const focusInMenu = () =>
+      waitFor(() => {
+        const focused = document.activeElement as HTMLElement
+        expect(focused.closest('.app-user-menu [role="menuitem"]')).not.toBeNull()
+        return focused
+      })
+
+    fireEvent.click(trigger)
+    await focusInMenu()
+    // A press outside: @rc-component/trigger closes the menu on that mousedown, the focus still on an item. Moving it to
+    // the button would scroll a scrolled page back to the header before the click lands.
+    fireEvent.mouseDown(document.body)
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'))
+    expect(focusesTheButton).not.toHaveBeenCalled()
+    expect(trigger).not.toHaveFocus()
+
+    // Escape from the open menu still hands the focus back, and scrolls nothing.
+    fireEvent.click(trigger)
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'))
+    const item = await focusInMenu()
+    fireEvent.keyDown(item, { key: 'Escape', code: 'Escape', keyCode: 27, which: 27 })
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'))
+    expect(trigger).toHaveFocus()
+    expect(focusesTheButton).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('draws the user menu’s button as the plain trigger it replaced, with a ring for the keyboard focus (KI-120)', async () => {
+    const css = await layoutCss()
+    const rule = (selector: string) => {
+      const match = css.match(new RegExp(`(?:^|})\\s*${selector.replace(/[.:-]/g, '\\$&')}\\s*\\{([^}]*)\\}`))
+      return match ? match[1]! : ''
+    }
+    const base = rule('.app-user')
+    for (const declaration of ['padding: 0', 'border: 0', 'background: none', 'color: inherit', 'font: inherit', 'cursor: pointer']) expect(base).toContain(declaration)
+    expect(rule('.app-user:focus-visible')).toContain('outline: 3px solid')
   })
 
   it('picks an item of the user menu with Space, as Enter and a click do', async () => {

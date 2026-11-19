@@ -89,6 +89,21 @@ describe('RolesManager', () => {
     expect(table.style.minWidth).toBe('100%')
   })
 
+  it('shows each role key in a plain LTR isolate inside its code mark, never through a dir on the Typography (KI-120)', async () => {
+    mockRolesApi()
+    renderManager()
+    await screen.findByText('أمين المكتبة')
+
+    for (const row of bodyRows()) {
+      const key = row.querySelector('code bdi')
+      // An antd Typography would beat `dir` with its `-rtl` class: the attribute sits on a plain <bdi> inside it.
+      expect(key).not.toBeNull()
+      expect(key).toHaveAttribute('dir', 'ltr')
+      expect(row.querySelectorAll('.ant-typography[dir]')).toHaveLength(0)
+    }
+    expect(within(bodyRows()[0]!).getByText('academy_admin').tagName).toBe('BDI')
+  })
+
   it('deletes an unassigned custom role after confirmation and drops its row; a role in use keeps a disabled delete button', async () => {
     const api = mockRolesApi()
     renderManager()

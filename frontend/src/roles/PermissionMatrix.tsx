@@ -66,8 +66,8 @@ export function PermissionMatrix({ groups, value = [], onChange, readOnly = fals
                   indeterminate={togglableTicked > 0 && togglableTicked < togglable.length}
                   onChange={(event) => toggleModule(group, event.target.checked)}
                 >
-                  <Typography.Text strong dir="ltr">
-                    {group.module}
+                  <Typography.Text strong>
+                    <bdi dir="ltr">{group.module}</bdi>
                   </Typography.Text>
                 </Checkbox>
                 <Typography.Text type="secondary">
@@ -87,8 +87,8 @@ export function PermissionMatrix({ groups, value = [], onChange, readOnly = fals
                     disabled={readOnly || locked.has(permission.key)}
                     onChange={(event) => toggleKey(permission.key, event.target.checked)}
                   >
-                    <Typography.Text code dir="ltr">
-                      {permission.key}
+                    <Typography.Text code>
+                      <bdi dir="ltr">{permission.key}</bdi>
                     </Typography.Text>
                     {description ? (
                       <Typography.Text type="secondary" style={{ marginInlineStart: 8 }}>

@@ -197,16 +197,18 @@ describe('apiRequest', () => {
     }
   })
 
-  it('reads the wait a 429 names: Retry-After in seconds or as a date, else Retry-After-login, else none', async () => {
+  it('reads the wait a 429 names: Retry-After in seconds or as a date, else Retry-After-login or Retry-After-refresh_ip, else none', async () => {
     const answers = [
       new Response(null, { status: 429, headers: { 'Retry-After': '5' } }),
       new Response(null, { status: 429, headers: { 'Retry-After': new Date(Date.now() + 90_000).toUTCString() } }),
       new Response(null, { status: 429, headers: { 'Retry-After-login': '42' } }),
+      // D-R140: the per-IP ceiling of the session refresh names its own header.
+      new Response(null, { status: 429, headers: { 'Retry-After-refresh_ip': '17' } }),
       new Response(null, { status: 429 }),
     ]
     mockFetch(() => answers.shift()!)
     const waits: Array<number | null> = []
-    for (let i = 0; i < 4; i += 1) {
+    for (let i = 0; i < 5; i += 1) {
       const error = await apiRequest('/api/health', { auth: false }).catch((reason: unknown) => reason)
       waits.push((error as ApiError).retryAfterSeconds)
     }
@@ -214,7 +216,7 @@ describe('apiRequest', () => {
     expect(waits[0]).toBe(5)
     expect(waits[1]).toBeGreaterThanOrEqual(88)
     expect(waits[1]).toBeLessThanOrEqual(90)
-    expect(waits.slice(2)).toEqual([42, null])
+    expect(waits.slice(2)).toEqual([42, 17, null])
   })
 
   it('does not refresh for a 401 that is not about the access token', async () => {

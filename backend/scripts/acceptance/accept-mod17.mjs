@@ -123,8 +123,8 @@ async function journey() {
   if (page.status === 200 && page.type.includes('text/html')) pass('6. the web app is served on the same origin', `${ORIGIN}/login`);
   else fail('6. the web app is served on the same origin', `${page.status} ${page.type}`);
 
-  const boot = compose(['run', '--rm', '-T', '-e', 'BOOTSTRAP_ADMIN_EMAIL', '-e', 'BOOTSTRAP_ADMIN_FULL_NAME', '-e', 'BOOTSTRAP_ADMIN_PASSWORD', 'migrate', 'npm', 'run', '--silent', 'auth:bootstrap-admin'], { env: { BOOTSTRAP_ADMIN_EMAIL: ADMIN.email, BOOTSTRAP_ADMIN_FULL_NAME: 'Demo Admin', BOOTSTRAP_ADMIN_PASSWORD: ADMIN.password } });
-  if (boot.code === 0 && /First academy admin created/.test(boot.out)) pass('7. first admin created with the documented command (compose run migrate npm run auth:bootstrap-admin)');
+  const boot = compose(['run', '--rm', '-T', '-e', 'BOOTSTRAP_ADMIN_EMAIL', '-e', 'BOOTSTRAP_ADMIN_FULL_NAME', '-e', 'BOOTSTRAP_ADMIN_PASSWORD', 'account', 'npm', 'run', '--silent', 'auth:bootstrap-admin'], { env: { BOOTSTRAP_ADMIN_EMAIL: ADMIN.email, BOOTSTRAP_ADMIN_FULL_NAME: 'Demo Admin', BOOTSTRAP_ADMIN_PASSWORD: ADMIN.password } });
+  if (boot.code === 0 && /First academy admin created/.test(boot.out)) pass('7. first admin created with the documented command (compose run account npm run auth:bootstrap-admin)');
   else return fail('7. first admin created with the documented command', mask(tail(boot.out, 6)));
 
   const login = await http('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: ORIGIN }, body: JSON.stringify({ identifier: ADMIN.email, password: ADMIN.password }) });

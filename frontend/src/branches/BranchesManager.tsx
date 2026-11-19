@@ -70,8 +70,8 @@ export function BranchesManager() {
       key: 'code',
       render: (_, row) => (
         <Space size={6} wrap>
-          <Typography.Text dir="ltr" strong>
-            {row.code}
+          <Typography.Text strong>
+            <bdi dir="ltr">{row.code}</bdi>
           </Typography.Text>
           {row.isMain ? (
             <Tag color="gold" icon={<StarFilled />}>
@@ -109,7 +109,7 @@ export function BranchesManager() {
       title: t('branches.columns.timezone'),
       key: 'timezone',
       render: (_, row) =>
-        row.timezone ? <Typography.Text dir="ltr">{row.timezone}</Typography.Text> : <Typography.Text type="secondary">{t('branches.academyTimezone')}</Typography.Text>,
+        row.timezone ? <Typography.Text><bdi dir="ltr">{row.timezone}</bdi></Typography.Text> : <Typography.Text type="secondary">{t('branches.academyTimezone')}</Typography.Text>,
     },
     { title: t('branches.columns.status'), key: 'status', render: (_, row) => <StatusTag value={row.isActive ? 'active' : 'inactive'} /> },
     {

@@ -315,8 +315,8 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
       <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
         <Descriptions.Item label={t('lessons.fields.class')}>
           <Space wrap>
-            <Typography.Text dir="ltr" strong>
-              {lesson.class.code}
+            <Typography.Text strong>
+              <bdi dir="ltr">{lesson.class.code}</bdi>
             </Typography.Text>
             <span>{localizedLabel(lesson.class.name, language)}</span>
             {!isClassOpenForLessons(lesson.class.status) ? <StatusTag value={lesson.class.status} /> : null}
@@ -342,7 +342,7 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
         <Descriptions.Item label={t('lessons.fields.room')}>
           {lesson.room ? (
             <Space wrap>
-              <Typography.Text dir="ltr">{lessonRoomLabel(lesson.room, language)}</Typography.Text>
+              <Typography.Text><bdi dir="ltr">{lessonRoomLabel(lesson.room, language)}</bdi></Typography.Text>
               <Typography.Text type="secondary">{lesson.room.branch ? lesson.room.branch.code : t('lessons.drawer.site')}</Typography.Text>
             </Space>
           ) : (
@@ -351,8 +351,8 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
         </Descriptions.Item>
         <Descriptions.Item label={t('lessons.fields.meetingUrl')}>
           {lesson.meetingUrl ? (
-            <Typography.Link href={lesson.meetingUrl} target="_blank" rel="noopener noreferrer" dir="ltr">
-              <LinkOutlined /> {lesson.meetingUrl}
+            <Typography.Link href={lesson.meetingUrl} target="_blank" rel="noopener noreferrer">
+              <LinkOutlined /> <bdi dir="ltr">{lesson.meetingUrl}</bdi>
             </Typography.Link>
           ) : (
             dash
@@ -367,8 +367,8 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
         </Descriptions.Item>
         {lesson.description?.en ? (
           <Descriptions.Item label={t('lessons.fields.descriptionEn')}>
-            <Typography.Paragraph dir="ltr" style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-              {lesson.description.en}
+            <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+              <div dir="ltr">{lesson.description.en}</div>
             </Typography.Paragraph>
           </Descriptions.Item>
         ) : null}

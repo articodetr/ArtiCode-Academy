@@ -26,16 +26,18 @@
 // PLATFORM_MFA_ENCRYPTION_KEY are never printed.
 //
 // Two things are outside the command's control (seen on a real terminal and in
-// the `migrate` container — KI-087, KI-088):
+// a container — KI-087, KI-088):
 //   - IN A CONTAINER Docker's log driver records what the run container's
-//     terminal shows, the key and the recovery codes included. Always run it
-//     with `--rm` (the documented form: `run --rm migrate npm run
-//     platform:enable-mfa -- --email …`) — the log is deleted with the
-//     container when the command ends — and `docker rm` a run container that
-//     was started without it.
+//     terminal shows, the key and the recovery codes included. Run it in the
+//     `account` service of deploy/compose.platform.yaml, which keeps no Docker
+//     log (`logging: driver: none`): `docker compose … run --rm account npm run
+//     platform:enable-mfa -- --email …` — never in `migrate` or another service
+//     with a log — and with `--rm`, so no stopped container is left behind.
 //   - WAIT FOR THE PASSWORD PROMPT before typing: the command takes several
-//     seconds to start, and a terminal echoes whatever is typed before the
-//     prompt appears (echo is off only from the prompt on).
+//     seconds to start, and until the prompt turns echo off the terminal shows
+//     whatever is typed (it stays on the screen). It is never taken as the
+//     password: the prompt drops what was typed before it and says so
+//     (hidden-prompt.ts).
 //
 // Needs PLATFORM_MFA_ENCRYPTION_KEY — the very key the platform API runs with,
 // or the API cannot open the secret — and the platform database through

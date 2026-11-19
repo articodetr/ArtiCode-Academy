@@ -37,8 +37,8 @@ export function MyClassesPage() {
       render: (_, row) => (
         <Space direction="vertical" size={0}>
           <Typography.Text strong>{localizedLabel(row.class.name, language)}</Typography.Text>
-          <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-            {row.class.code}
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <bdi dir="ltr">{row.class.code}</bdi>
           </Typography.Text>
         </Space>
       ),
