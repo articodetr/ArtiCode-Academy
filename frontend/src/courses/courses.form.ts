@@ -4,7 +4,8 @@
 // value differs from the loaded course (null clears an optional field); a
 // localized text travels as a whole object and keeps a Turkish text the form
 // does not edit; nothing changed → null (no request).
-import type { Course, CreateCourseInput, UpdateCourseInput } from '../api/courses'
+import type { Course, CoursePricing, CreateCourseInput, UpdateCourseInput } from '../api/courses'
+import type { FeePlan } from '../api/feePlans'
 import type { LocalizedLabel } from '../api/users'
 
 /** Course codes: trimmed and upper-cased, 1–32 of A–Z 0–9 . _ - (mirror of COURSE_CODE_PATTERN). */
@@ -13,6 +14,8 @@ export const COURSE_TEXT_MAX_LENGTH = 200
 export const DURATION_HOURS_MAX = 99999.9
 export const SESSIONS_MAX = 10000
 export const AGE_MAX = 120
+/** MOD-19 (D-R129): COVER_IMAGE_URL_MAX of courses.dto.ts and ck_courses_cover_image_url. */
+export const COVER_IMAGE_URL_MAX = 2048
 
 export interface CourseFormValues {
   code: string
@@ -27,6 +30,12 @@ export interface CourseFormValues {
   sessionsCount?: number | null
   minAge?: number | null
   maxAge?: number | null
+  /** MOD-19: an absolute http(s) URL; '' = no cover. */
+  coverImageUrl?: string
+  /** MOD-19 (D-R122): shown only to holders of `fee_plans.manage`; absent = the form does not edit the price. */
+  pricing?: CoursePricing
+  /** The plan of a paid course. */
+  enrollmentFeePlanId?: string | null
 }
 
 export function normaliseCourseCode(value: string | undefined): string {
@@ -51,7 +60,43 @@ export function courseFormValuesOf(course: Course): CourseFormValues {
     sessionsCount: course.sessionsCount,
     minAge: course.minAge,
     maxAge: course.maxAge,
+    coverImageUrl: course.coverImageUrl ?? '',
+    pricing: course.pricing,
+    enrollmentFeePlanId: course.enrollmentFeePlan?.id ?? null,
   }
+}
+
+/**
+ * Mirror of the cover rule (ck_courses_cover_image_url + `IsUrl` of
+ * courses.dto.ts): an absolute http(s) URL without white space, at most 2,048
+ * characters. Blank is valid (no cover).
+ */
+export function isCoverImageUrl(value: string | undefined): boolean {
+  const text = (value ?? '').trim()
+  if (!text) return true
+  if (text.length > COVER_IMAGE_URL_MAX || !/^https?:\/\/\S+$/i.test(text)) return false
+  try {
+    const url = new URL(text)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname !== ''
+  } catch {
+    return false
+  }
+}
+
+const coverOf = (value: string | undefined) => (value ?? '').trim() || null
+
+/**
+ * Mirror of `coursePlanFits()` (backend/src/catalog/course-pricing.ts): the
+ * ACTIVE plans that can price a request for this course — a plan of this
+ * course, or a general plan (no course and no class). The server decides.
+ */
+export function plansFittingCourse(plans: readonly FeePlan[], courseId: string): FeePlan[] {
+  return plans.filter((plan) => plan.isActive && plan.class === null && (plan.course === null || plan.course.id === courseId))
+}
+
+/** The plan the form asks for: none for a free course, the chosen one for a paid course (null while none is chosen). */
+function chosenPlanOf(values: CourseFormValues): string | null {
+  return values.pricing === 'paid' ? values.enrollmentFeePlanId || null : null
 }
 
 /**
@@ -94,6 +139,8 @@ export function buildCreateCourseInput(values: CourseFormValues): CreateCourseIn
   if (values.sessionsCount !== undefined && values.sessionsCount !== null) input.sessionsCount = values.sessionsCount
   if (values.minAge !== undefined && values.minAge !== null) input.minAge = values.minAge
   if (values.maxAge !== undefined && values.maxAge !== null) input.maxAge = values.maxAge
+  const cover = coverOf(values.coverImageUrl)
+  if (cover) input.coverImageUrl = cover
   return input
 }
 
@@ -116,6 +163,17 @@ export function planCoursePatch(course: Course, values: CourseFormValues): Updat
   for (const field of numbers) {
     const next = blankToNull(values[field])
     if (next !== course[field]) body[field] = next
+  }
+  // MOD-19: the cover (null clears it) and — only when the form edits the price — the plan (null = free again).
+  if (values.coverImageUrl !== undefined) {
+    const cover = coverOf(values.coverImageUrl)
+    if (cover !== course.coverImageUrl) body.coverImageUrl = cover
+  }
+  if (values.pricing !== undefined) {
+    const plan = chosenPlanOf(values)
+    const current = course.enrollmentFeePlan?.id ?? null
+    // A paid course without a chosen plan is refused by the form, never sent as "free".
+    if (!(values.pricing === 'paid' && plan === null) && plan !== current) body.enrollmentFeePlanId = plan
   }
   return Object.keys(body).length > 0 ? body : null
 }
@@ -142,6 +200,9 @@ export function courseFormHasChanges(course: Course, values: CourseFormValues): 
     blank(values.nameAr) ||
     englishWithoutArabic(values.summaryAr, values.summaryEn) ||
     englishWithoutArabic(values.descriptionAr, values.descriptionEn) ||
+    // MOD-19: a course switched to paid without a plan yet, or a cover the save would refuse, is typed work too.
+    (values.pricing !== undefined && values.pricing !== course.pricing) ||
+    !isCoverImageUrl(values.coverImageUrl) ||
     planCoursePatch(course, values) !== null
   )
 }

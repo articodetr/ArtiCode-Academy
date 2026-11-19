@@ -29,7 +29,7 @@
 // failed (`classReadFailed`): the retry of its roster error then re-reads the
 // class too, so the drawer's error does not outlive the recovery.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
+import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -203,6 +203,9 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
         </Descriptions.Item>
         <Descriptions.Item label={t('classes.fields.startsOn')}>{formatDay(cls.startsOn, language)}</Descriptions.Item>
         <Descriptions.Item label={t('classes.fields.endsOn')}>{formatDay(cls.endsOn, language)}</Descriptions.Item>
+        <Descriptions.Item label={t('classes.fields.selfEnrollment')}>
+          <Tag color={cls.selfEnrollment ? 'green' : 'default'}>{t(cls.selfEnrollment ? 'classes.selfEnrollment.on' : 'classes.selfEnrollment.off')}</Tag>
+        </Descriptions.Item>
         <Descriptions.Item label={t('classes.fields.notes')}>
           <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{optional(cls.notes)}</Typography.Paragraph>
         </Descriptions.Item>

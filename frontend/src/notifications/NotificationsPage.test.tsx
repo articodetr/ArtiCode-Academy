@@ -198,7 +198,7 @@ describe('NotificationsPage — inbox', () => {
 })
 
 describe('NotificationsPage — e-mail preferences', () => {
-  it('saves the six switches in ONE PUT only after a change, and explains an unconfirmed address', async () => {
+  it('saves the seven switches in ONE PUT only after a change, and explains an unconfirmed address', async () => {
     const calls = mockApi({
       'GET /api/me/notification-preferences': () => jsonResponse(200, makePreferences({ emailVerified: false })),
       'PUT /api/me/notification-preferences': (call) =>
@@ -223,8 +223,11 @@ describe('NotificationsPage — e-mail preferences', () => {
         { category: 'grades', emailEnabled: true },
         { category: 'finance', emailEnabled: false },
         { category: 'announcements', emailEnabled: true },
+        // MOD-19 (D-R128): the seventh category.
+        { category: 'enrollments', emailEnabled: true },
       ],
     })
+    expect(screen.getByLabelText(`بريد ${n.categories.enrollments}`)).toBeInTheDocument()
   })
 })
 

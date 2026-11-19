@@ -2,7 +2,7 @@
 // drawer (J-F01). Rendered inside the caller's <Form>; local rules mirror the
 // server (CreateClassDto/UpdateClassDto) — the server decides. The course is
 // chosen on creation only (a class belongs to one course).
-import { Col, Form, Input, InputNumber, Row } from 'antd'
+import { Col, Form, Input, InputNumber, Row, Switch } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { CoursePicker } from './ClassPickers'
@@ -108,6 +108,10 @@ export function ClassFormFields({ form, mode, enrolledCount = 0 }: ClassFormFiel
       </Row>
       <Form.Item name="notes" label={t('classes.fields.notes')} rules={[{ max: CLASS_NOTES_MAX_LENGTH }]}>
         <Input.TextArea rows={3} maxLength={CLASS_NOTES_MAX_LENGTH} />
+      </Form.Item>
+      {/* MOD-19 (D-R123): a JSON boolean — closed by default, as on the server. */}
+      <Form.Item name="selfEnrollment" label={t('classes.fields.selfEnrollment')} extra={t('classes.hints.selfEnrollment')} valuePropName="checked">
+        <Switch aria-label={t('classes.fields.selfEnrollment')} />
       </Form.Item>
     </>
   )

@@ -34,6 +34,10 @@ const KNOWN_CODES = new Set([
   'level_in_use',
   'level_order_invalid',
   'syllabus_invalid',
+  // MOD-19 (D-R122): the plan that prices a request
+  'fee_plan_not_found',
+  'fee_plan_inactive',
+  'fee_plan_mismatch',
   'nothing_to_update',
   'permission_denied',
   'origin_forbidden',
@@ -45,6 +49,9 @@ const FIELD_OF_CODE: Readonly<Record<string, string[]>> = {
   level_code_taken: ['code'],
   age_range_invalid: ['maxAge'],
   level_not_found: ['levelId'],
+  fee_plan_not_found: ['enrollmentFeePlanId'],
+  fee_plan_inactive: ['enrollmentFeePlanId'],
+  fee_plan_mismatch: ['enrollmentFeePlanId'],
 }
 
 function stringList(value: unknown): string | undefined {

@@ -10,6 +10,7 @@ import {
   isEnrollableClass,
   matchesRosterSearch,
   nextEnrollmentStatus,
+  requiresReason,
   studentRefusal,
   takesSeat,
 } from './enrollments.status'
@@ -24,12 +25,17 @@ describe('enrollments.status (mirror of backend/src/enrollments/enrollments.stat
     expect(nextEnrollmentStatus('reactivate', 'active')).toBeNull()
     expect(nextEnrollmentStatus('withdraw', 'completed')).toBeNull()
     expect(nextEnrollmentStatus('cancel', 'pending')).toBeNull()
+    // MOD-19: a pending enrollment is a request — approve or reject it.
+    expect(nextEnrollmentStatus('approve', 'pending')).toBe('active')
+    expect(nextEnrollmentStatus('reject', 'pending')).toBe('cancelled')
+    expect(nextEnrollmentStatus('approve', 'active')).toBeNull()
+    expect(nextEnrollmentStatus('reject', 'cancelled')).toBeNull()
   })
 
   it('offers the allowed actions per status for enrollments.manage, nothing without it', () => {
     const offered = Object.fromEntries(ENROLLMENT_STATUSES.map((status) => [status, availableEnrollmentActions(status, true)]))
     expect(offered).toEqual({
-      pending: [],
+      pending: ['approve', 'reject'],
       active: ['withdraw', 'complete', 'cancel'],
       completed: [],
       withdrawn: ['reactivate'],
@@ -42,6 +48,11 @@ describe('enrollments.status (mirror of backend/src/enrollments/enrollments.stat
     expect(isDangerousEnrollmentAction('reactivate')).toBe(false)
     expect(takesSeat('reactivate')).toBe(true)
     expect(takesSeat('withdraw')).toBe(false)
+    expect(takesSeat('approve')).toBe(true)
+    expect(isDangerousEnrollmentAction('reject')).toBe(true)
+    expect(isDangerousEnrollmentAction('approve')).toBe(false)
+    expect(requiresReason('reject')).toBe(true)
+    for (const action of ['withdraw', 'complete', 'cancel', 'reactivate', 'approve'] as const) expect(requiresReason(action)).toBe(false)
   })
 
   it('enrolls into open or running classes only, while a seat is free', () => {

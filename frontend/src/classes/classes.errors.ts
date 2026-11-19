@@ -39,6 +39,13 @@ const KNOWN_CODES = new Set([
   'not_a_student',
   'already_enrolled',
   'enrollment_not_found',
+  // MOD-19 — enrollment requests (backend/src/catalog/catalog.errors.ts) on API-058/059
+  'request_pending',
+  'course_price_unavailable',
+  'payment_required',
+  'request_has_payments',
+  'rejection_reason_required',
+  'request_not_found',
   'permission_denied',
   'origin_forbidden',
   'rate_limited',
@@ -74,6 +81,15 @@ export function isStaleClassAction(failure: ClassesFailure): boolean {
   return failure.key.startsWith(CLASSES_ERROR_PREFIX) && STALE_ACTION_CODES.has(failure.key.slice(CLASSES_ERROR_PREFIX.length))
 }
 
+/** `payment_required { invoices: [{ id, number, balance }] }` → «INV-2026-00082: 600» for the message, one per invoice. */
+export function unpaidInvoicesOf(value: unknown): string {
+  if (!Array.isArray(value)) return ''
+  return value
+    .filter((item): item is { number?: unknown; balance?: unknown } => typeof item === 'object' && item !== null)
+    .map((item) => `${typeof item.number === 'string' ? item.number : '—'}: ${typeof item.balance === 'number' ? item.balance.toFixed(2) : '?'}`)
+    .join(', ')
+}
+
 function stringList(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined
   const items = value.filter((item): item is string => typeof item === 'string')
@@ -99,6 +115,9 @@ export function describeClassesFailure(error: unknown, nameOf?: (userId: string)
     if (typeof body.capacity === 'number') params.capacity = String(body.capacity)
     // `already_enrolled` names the status of the existing enrollment (translated through labels.*).
     if (error.code === 'already_enrolled' && typeof body.status === 'string') params.status = body.status
+    // MOD-19: the unpaid invoices of `payment_required` as the server sends them (number and balance — never summed here).
+    if (error.code === 'payment_required') params.invoices = unpaidInvoicesOf(body.invoices)
+    if (typeof body.paymentCount === 'number') params.paymentCount = String(body.paymentCount)
     if (USER_CODES.has(error.code)) params.name = typeof body.userId === 'string' ? (nameOf?.(body.userId) ?? body.userId) : ''
     if (Object.keys(params).length > 0) failure.params = params
     return failure

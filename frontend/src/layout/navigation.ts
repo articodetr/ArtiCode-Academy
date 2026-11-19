@@ -6,6 +6,7 @@ import {
   BarChartOutlined,
   BellOutlined,
   BookOutlined,
+  CompassOutlined,
   CalendarOutlined,
   CreditCardOutlined,
   DashboardOutlined,
@@ -13,6 +14,7 @@ import {
   FileDoneOutlined,
   FileTextOutlined,
   FormOutlined,
+  FundProjectionScreenOutlined,
   HomeOutlined,
   PercentageOutlined,
   PlayCircleOutlined,
@@ -22,6 +24,7 @@ import {
   SafetyOutlined,
   ScheduleOutlined,
   SettingOutlined,
+  SolutionOutlined,
   TeamOutlined,
   TrophyOutlined,
 } from '@ant-design/icons'
@@ -111,6 +114,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // MOD-05 (J-F04): «my classes» (API-060) needs no permission key — ownership; shown to whoever holds the
   // `student` or `guardian` server role, as the server reads them (an admin or a teacher alone gets an empty list).
   { key: 'myClasses', path: '/my-classes', labelKey: 'nav.myClasses', icon: createElement(ReadOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-05' },
+  // MOD-19 (roadmap §4p): «explore courses» (API-219/220 read with `courses.read`, every seeded role holds it) and «my courses»
+  // (API-060 + API-222, ownership) for the learners — the server role keys, like «my classes»; enrolling oneself needs
+  // `enrollments.self_enroll` and the `student` role, which the page reads from the server's `selfService`.
+  { key: 'catalog', path: '/catalog', labelKey: 'nav.catalog', icon: createElement(CompassOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-19' },
+  { key: 'myCourses', path: '/my-courses', labelKey: 'nav.myCourses', icon: createElement(FundProjectionScreenOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-19' },
+  // MOD-19: the office's requests (API-224/225) — the one key every read requires; teachers hold it not (seed).
+  { key: 'enrollmentRequests', path: '/enrollment-requests', labelKey: 'nav.enrollmentRequests', icon: createElement(SolutionOutlined), permissions: ['enrollments.manage'], module: 'MOD-19' },
   // MOD-07 (J-F05): the schedule API is real — «my schedule» needs `schedule.read` (every seeded role holds it) and the
   // academy view `schedule.manage` or `classes.manage` (D-R27); any of the three shows the entry (ADR-042 pattern).
   { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), permissions: ['schedule.read', 'schedule.manage', 'classes.manage'], module: 'MOD-07' },

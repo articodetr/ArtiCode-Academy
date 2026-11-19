@@ -6,8 +6,8 @@
 // the server in the recipient's language when the notification was created.
 import { apiRequest } from './client'
 
-/** In the order of `NOTIFICATION_CATEGORIES` (notifications.events.ts); API-171 lists the six in this order. */
-export const NOTIFICATION_CATEGORIES = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements'] as const
+/** In the order of `NOTIFICATION_CATEGORIES` (notifications.events.ts); API-171 lists the seven in this order — `enrollments` since MOD-19 (D-R128). */
+export const NOTIFICATION_CATEGORIES = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements', 'enrollments'] as const
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number]
 
 export const MY_NOTIFICATIONS_PAGE_MAX = 100

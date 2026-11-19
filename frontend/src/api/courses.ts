@@ -21,6 +21,20 @@ export interface CourseLevel {
   isActive: boolean
 }
 
+/** MOD-19 (D-R122): `free` unless the course names the fee plan that prices a request. */
+export type CoursePricing = 'free' | 'paid'
+
+/** `CourseFeePlanDto` (MOD-19): the plan that prices a request — its total in the academy currency (D15). */
+export interface CourseFeePlan {
+  id: string
+  name: LocalizedLabel
+  /** false = deactivated: requests are refused with `course_price_unavailable`. */
+  isActive: boolean
+  total: number
+  currency: string
+  installments: number
+}
+
 /** `CourseDto` (API-042..API-046). */
 export interface Course {
   id: string
@@ -35,6 +49,11 @@ export interface Course {
   minAge: number | null
   maxAge: number | null
   syllabusCount: number
+  /** MOD-19 (D-R129): an absolute http(s) URL of the cover image, or null. */
+  coverImageUrl: string | null
+  /** MOD-19: paid exactly when `enrollmentFeePlan` is set. */
+  pricing: CoursePricing
+  enrollmentFeePlan: CourseFeePlan | null
   createdAt: string
   updatedAt: string
 }
@@ -70,6 +89,10 @@ export interface CreateCourseInput {
   sessionsCount?: number
   minAge?: number
   maxAge?: number
+  /** MOD-19: an absolute http(s) URL (no upload). */
+  coverImageUrl?: string
+  /** MOD-19: an active general fee plan; needs `fee_plans.manage` besides `courses.manage`. */
+  enrollmentFeePlanId?: string
 }
 
 /** Body of API-045 (`UpdateCourseDto`): absent = unchanged, null clears the optional fields. */
@@ -83,6 +106,10 @@ export interface UpdateCourseInput {
   sessionsCount?: number | null
   minAge?: number | null
   maxAge?: number | null
+  /** MOD-19: null clears the cover. */
+  coverImageUrl?: string | null
+  /** MOD-19 (D-R122): a fee plan of this course or a general one; null = free again. Needs `fee_plans.manage`. */
+  enrollmentFeePlanId?: string | null
 }
 
 export const COURSES_PATH = '/api/courses'

@@ -5,6 +5,7 @@ import type { Course } from '../api/courses'
 import { ar } from '../i18n/ar'
 import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, makeLevel, makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
+import { makeFeePlan } from '../test/payments'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CourseDrawer } from './CourseDrawer'
 
@@ -171,5 +172,63 @@ describe('CourseDrawer', () => {
     expect(await screen.findByText('الحد الأقصى 200 حرفاً')).toBeInTheDocument()
     expect(ar.courses.validation.maxLength.replace('{{max}}', '200')).toBe('الحد الأقصى 200 حرفاً')
     expect(calls.every((call) => call.method === 'GET')).toBe(true)
+  })
+})
+
+describe('CourseDrawer — cover and price (MOD-19)', () => {
+  const plan = makeFeePlan({ id: 'plan-1', name: { ar: 'رسوم الدورة الكاملة' }, total: 1000 })
+  const classPlan = makeFeePlan({ id: 'plan-class', name: { ar: 'خطة فصل' }, class: { id: 'cls', code: 'PY-101-A', name: { ar: 'فصل' } } })
+
+  /** As mockCourseApi, plus the fee plans of API-140. */
+  function mockPricingApi(detail: () => Course, patch?: Response) {
+    const calls: Call[] = []
+    mockFetch((url, init) => {
+      const method = init?.method ?? 'GET'
+      calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      if (method === 'GET' && url.startsWith('/api/fee-plans')) return jsonResponse(200, { items: [plan, classPlan] })
+      if (method === 'GET') return jsonResponse(200, url.endsWith('/syllabus') ? makeSyllabus() : detail())
+      return patch ?? jsonResponse(500, { statusCode: 500, message: 'unexpected' })
+    })
+    return calls
+  }
+
+  it('shows the price and the cover read-only, and keeps the price out of the form without fee_plans.manage', async () => {
+    const calls = mockPricingApi(() =>
+      makeCourse({ pricing: 'paid', coverImageUrl: 'https://cdn.example.org/py.jpg', enrollmentFeePlan: { id: 'plan-1', name: { ar: 'رسوم الدورة الكاملة' }, isActive: false, total: 1000, currency: 'SAR', installments: 2 } }),
+    )
+    renderDrawer(COURSE_MANAGER_PERMISSIONS)
+    expect(await screen.findByText('رسوم الدورة الكاملة')).toBeInTheDocument()
+    expect(screen.getByText(ar.courses.pricing.paid)).toBeInTheDocument()
+    expect(screen.getByText('https://cdn.example.org/py.jpg')).toBeInTheDocument()
+    expect(screen.getByText(ar.courses.pricing.planInactive)).toBeInTheDocument()
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    expect(await screen.findByText(ar.courses.hints.pricingReadOnly)).toBeInTheDocument()
+    expect(screen.queryByText(ar.courses.fields.pricing, { selector: 'label' })).toBeNull()
+    expect(calls.some((call) => call.url.startsWith('/api/fee-plans'))).toBe(false)
+  })
+
+  it('prices a free course with a fitting plan in the smallest PATCH, and refuses a bad cover URL before sending', async () => {
+    const saved = makeCourse({ pricing: 'paid', enrollmentFeePlan: { id: 'plan-1', name: plan.name, isActive: true, total: 1000, currency: 'SAR', installments: 2 }, updatedAt: '2026-11-19T10:00:00.000Z' })
+    const calls = mockPricingApi(() => makeCourse(), jsonResponse(200, saved))
+    const { onUpdated } = renderDrawer([...COURSE_MANAGER_PERMISSIONS, 'fee_plans.manage'])
+    await screen.findByText('PY-101')
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+
+    const cover = await screen.findByLabelText(ar.courses.fields.coverImageUrl)
+    fireEvent.change(cover, { target: { value: 'cdn.example.org/py.jpg' } })
+    fireEvent.click(screen.getByText(ar.courses.pricing.paid))
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+    expect(await screen.findByText(ar.courses.validation.coverUrl)).toBeInTheDocument()
+    expect(await screen.findByText(ar.courses.validation.feePlanRequired)).toBeInTheDocument()
+    expect(calls.filter((call) => call.method === 'PATCH')).toHaveLength(0)
+
+    fireEvent.change(cover, { target: { value: '' } })
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.courses.fields.feePlan }))
+    // The class plan does not fit a course and is not offered.
+    await waitFor(() => expect(document.querySelectorAll('.ant-select-item-option')).toHaveLength(1))
+    fireEvent.click(screen.getByText(/رسوم الدورة الكاملة/, { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(saved))
+    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ enrollmentFeePlanId: 'plan-1' }])
   })
 })

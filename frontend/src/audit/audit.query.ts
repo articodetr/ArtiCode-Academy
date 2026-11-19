@@ -104,6 +104,8 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'enrollments.',
   'enrollments.created',
   'enrollments.status.changed',
+  // MOD-19 (D-R125): a pending request with its invoice (self-service API-221, or the office's API-058 on a paid course).
+  'enrollments.requested',
   // MOD-07-T02/T03 (CH-0095, CH-0096) — first offered with J-F05 (CH-0105)
   'rooms.',
   'rooms.created',
