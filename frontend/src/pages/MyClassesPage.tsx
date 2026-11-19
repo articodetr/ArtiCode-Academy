@@ -35,7 +35,7 @@ export function MyClassesPage() {
       title: t('myClasses.columns.class'),
       key: 'class',
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text strong>{localizedLabel(row.class.name, language)}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             <bdi dir="ltr">{row.class.code}</bdi>
@@ -59,7 +59,7 @@ export function MyClassesPage() {
       title: t('myClasses.columns.enrollmentStatus'),
       key: 'enrollmentStatus',
       render: (_, row) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <StatusTag value={row.enrollmentStatus} />
           {row.enrollmentStatus === 'completed' && row.completedAt ? (
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -113,7 +113,7 @@ export function MyClassesPage() {
           <Alert
             type="error"
             showIcon
-            message={failureMessage(t, failure)}
+            title={failureMessage(t, failure)}
             action={
               <Button size="small" onClick={my.reload}>
                 {t('myClasses.refresh')}
@@ -129,7 +129,9 @@ export function MyClassesPage() {
           dataSource={my.items}
           loading={my.loading}
           pagination={false}
-          scroll={{ x: 'max-content' }}
+          // `true`, not 'max-content' (the users and courses tables — KI-094/KI-095): the table keeps its box's width
+          // wherever its columns fit, and only a screen too narrow for them scrolls it in its own box.
+          scroll={{ x: true }}
           locale={{ emptyText: my.status ? t('myClasses.emptyFiltered') : t('myClasses.empty') }}
         />
       </Card>

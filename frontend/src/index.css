@@ -81,3 +81,14 @@ body h2.ant-typography.section-title {
 .ant-select[dir='ltr'] {
   direction: ltr;
 }
+
+/*
+ * A table cell breaks its text between words, never inside one. antd's Typography sets `word-break: break-word`, which
+ * lets the browser break a word anywhere when it sizes a table's columns: a squeezed column broke the due date
+ * «2026/11/19، 11:59 م» of «my assignments» into «2/11/19» + «،026», and titles, names, role keys and e-mails letter by
+ * letter (QA 2026-11-19 — 1366 px with a guardian's extra column, and every phone). With whole words a table that no
+ * longer fits its box scrolls in it (`scroll={{ x: true }}`). Two classes outrank antd's one (`:where(…).ant-typography`).
+ */
+.ant-table-cell .ant-typography {
+  word-break: normal;
+}
