@@ -126,8 +126,8 @@ export function CertificateDrawer({ certificateId, onClose, onUpdated }: Certifi
             key: 'serial',
             label: t('certificates.drawer.serial'),
             children: (
-              <Typography.Text strong copyable dir="ltr">
-                {shown.serial}
+              <Typography.Text strong copyable={{ text: shown.serial }}>
+                <bdi dir="ltr">{shown.serial}</bdi>
               </Typography.Text>
             ),
           },
@@ -141,8 +141,8 @@ export function CertificateDrawer({ certificateId, onClose, onUpdated }: Certifi
                 {snapshot.student.fullNameLatin ? (
                   <>
                     <br />
-                    <Typography.Text type="secondary" dir="ltr">
-                      {snapshot.student.fullNameLatin}
+                    <Typography.Text type="secondary">
+                      <bdi dir="ltr">{snapshot.student.fullNameLatin}</bdi>
                     </Typography.Text>
                   </>
                 ) : null}
@@ -190,17 +190,16 @@ export function CertificateDrawer({ certificateId, onClose, onUpdated }: Certifi
             label: t('certificates.drawer.verificationCode'),
             children: (
               <span>
-                <Typography.Text code dir="ltr">
-                  {groupVerificationCode(shown.verificationCode)}
+                <Typography.Text code>
+                  <bdi dir="ltr">{groupVerificationCode(shown.verificationCode)}</bdi>
                 </Typography.Text>
                 <br />
                 <Typography.Text
                   type="secondary"
-                  dir="ltr"
                   style={{ fontSize: 12, wordBreak: 'break-all' }}
                   copyable={{ text: verificationUrl(shown.verificationCode, window.location.origin), tooltips: [t('certificates.drawer.copyLink'), t('certificates.drawer.copied')] }}
                 >
-                  {verificationUrl(shown.verificationCode, window.location.origin)}
+                  <bdi dir="ltr">{verificationUrl(shown.verificationCode, window.location.origin)}</bdi>
                 </Typography.Text>
               </span>
             ),

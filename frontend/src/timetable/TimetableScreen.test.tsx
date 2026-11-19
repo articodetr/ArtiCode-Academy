@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
@@ -45,7 +45,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('TimetableScreen — the «upcoming» panel reports only its own failures', () => {
+describe('TimetableScreen — the «upcoming» panel and the grid’s alert report only their own failures', () => {
   it('keeps the panel’s slots when a date of the shown week outside its seven days fails; the grid keeps its alert', async () => {
     const asked = mockApi('2026-11-09')
     renderScreen()
@@ -60,12 +60,32 @@ describe('TimetableScreen — the «upcoming» panel reports only its own failur
     expect(within(upcomingPanel()).queryByText(ar.schedule.upcoming.failed)).not.toBeInTheDocument()
   })
 
-  it('shows the panel’s failure when one of its own dates fails, even outside the shown week', async () => {
-    mockApi('2026-11-16')
+  it('shows the panel’s failure when one of its own dates fails outside the shown week — in the panel alone, with no alert over the grid (KI-120)', async () => {
+    const asked = mockApi('2026-11-16')
     renderScreen()
 
     expect(await within(upcomingPanel()).findByText(ar.schedule.upcoming.failed)).toBeInTheDocument()
     expect(within(upcomingPanel()).queryByRole('listitem')).not.toBeInTheDocument()
+    // Every date of the shown week answered: the grid shows its Sunday slot and no network alert.
+    await waitFor(() => expect([...new Set(asked)].sort()).toEqual([...new Set([...WEEK, ...UPCOMING])].sort()))
+    const grid = screen.getByRole('region', { name: ar.schedule.calendar.grid })
+    expect(within(grid).getByRole('button', { name: /من 10:00 إلى 11:30/ })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('in the day view, follows the shown day: a failure on another date of the week shows no alert until that date is shown (KI-120)', async () => {
+    mockApi('2026-11-09')
+    renderScreen()
+
+    // The week view shows Monday 9: its failure is the grid's alert.
+    expect(await screen.findByRole('alert')).toHaveTextContent(ar.schedule.calendar.failed)
+    // The day view of today (Thursday 12, which answered with no slot): no alert, and the empty day says so.
+    fireEvent.click(screen.getByText(ar.schedule.calendar.dayView))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByText(ar.schedule.calendar.emptyDay)).toBeInTheDocument()
+    // Back to Monday 9, the date that failed: the alert again, and no empty-day claim.
+    for (let step = 0; step < 3; step += 1) fireEvent.click(screen.getByLabelText(ar.schedule.calendar.previousDay))
     expect(screen.getByRole('alert')).toHaveTextContent(ar.schedule.calendar.failed)
+    expect(screen.queryByText(ar.schedule.calendar.emptyDay)).not.toBeInTheDocument()
   })
 })

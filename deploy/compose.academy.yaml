@@ -18,6 +18,12 @@
 #                restore drill (deploy/backup/).
 #   maintenance  the daily token cleanup (`node dist/maintenance/main.js`) from the runtime
 #                image, in a loop of its own process — no scheduler inside the API (D-R93).
+#   account      the account command, never started by `up` (profile `tools`) — only through
+#                `docker compose -p academy-<slug> … run --rm account npm run auth:bootstrap-admin`
+#                (run it with no command for the usage). The same image as `migrate`,
+#                connected as the application role, with NO Docker log (`logging: driver:
+#                none` — KI-087, D-R141): anything typed before the password prompt and
+#                echoed by the terminal is never written to a container log.
 #
 # Every value comes from the env file given with --env-file (template:
 # deploy/env/academy.env.example). Each service receives only the variables it needs.
@@ -95,6 +101,40 @@ services:
       SEED_ACADEMY_CURRENCY: ${SEED_ACADEMY_CURRENCY:?set SEED_ACADEMY_CURRENCY in the academy env file}
       SEED_ACADEMY_LOCALE: ${SEED_ACADEMY_LOCALE:-ar}
     logging: *logging
+
+  account:
+    <<: *hardened
+    build:
+      <<: *api-build
+      target: tools
+    # The image `migrate` builds; `up` never builds or starts this service.
+    image: articode-api-tools:${ACADEMY_IMAGE_TAG:-local}
+    # Only `docker compose run account …` starts it (a service named on the command line).
+    profiles: ["tools"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # auth:bootstrap-admin connects as the application role (DATABASE_URL is derived from
+      # these); BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_FULL_NAME come with `run -e`.
+      <<: *app-db
+    # Without a command: the usage, exit 0 — nothing is read or written.
+    command:
+      - sh
+      - -c
+      - |
+        cat <<'EOF'
+        The account command of an academy (run it in an interactive terminal):
+          docker compose -p academy-<slug> -f deploy/compose.academy.yaml --env-file deploy/env/<slug>.env \
+            run --rm -e BOOTSTRAP_ADMIN_EMAIL=<e-mail> -e BOOTSTRAP_ADMIN_FULL_NAME="<name>" \
+            account npm run auth:bootstrap-admin
+        It creates the first academy admin and prompts for the password twice.
+        Always with --rm. Wait for the password prompt before typing.
+        EOF
+    # KI-087: no Docker log at all — the attached terminal still shows everything.
+    logging:
+      driver: none
 
   api:
     <<: *hardened

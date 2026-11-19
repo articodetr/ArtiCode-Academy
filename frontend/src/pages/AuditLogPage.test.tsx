@@ -12,6 +12,42 @@ import { AuditLogPage } from './AuditLogPage'
 
 const OTHER_ACTOR = '0192f0a0-0000-7000-8000-000000000009'
 
+/** AuditLogPage.css read from disk, comments removed: vitest empties every `.css` import, `?raw` included. */
+async function auditCss(): Promise<string> {
+  const fsModule = 'node:fs'
+  const fs = (await import(/* @vite-ignore */ fsModule)) as { readFileSync: (path: URL, encoding: 'utf8') => string }
+  // A variable, not a literal: Vite rewrites `new URL('./AuditLogPage.css', import.meta.url)` into the asset's served URL.
+  const path = './AuditLogPage.css'
+  return fs.readFileSync(new URL(path, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
+/** The body of the `@supports <condition>` block of `css` ('' when there is none). */
+function supportsBlock(css: string, condition: string): string {
+  const start = css.indexOf(`@supports ${condition}`)
+  if (start < 0) return ''
+  const open = css.indexOf('{', start)
+  let depth = 0
+  for (let index = open; index < css.length; index += 1) {
+    if (css[index] === '{') depth += 1
+    else if (css[index] === '}' && --depth === 0) return css.slice(open + 1, index)
+  }
+  return ''
+}
+
+/** The declarations of the plain rule written exactly with `selector` at the top level of `css`, as property → value. */
+function declarationsOf(css: string, selector: string): Record<string, string> {
+  const topLevel = css.replace(/@supports[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '')
+  const declarations: Record<string, string> = {}
+  for (const match of topLevel.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (match[1]!.trim() !== selector) continue
+    for (const part of match[2]!.split(';')) {
+      const colon = part.indexOf(':')
+      if (colon > 0) declarations[part.slice(0, colon).trim()] = part.slice(colon + 1).trim()
+    }
+  }
+  return declarations
+}
+
 const suspended = makeAuditItem()
 const bootstrap = makeAuditItem({ id: '0192f0a0-0000-7000-8000-0000000000a2', action: 'auth.bootstrap.admin_created', actorUserId: null, entityId: ADMIN_ID, metadata: null, userAgent: null, ipAddress: null, createdAt: '2026-10-29T08:00:00.000Z' })
 const roleCreated = makeAuditItem({ id: '0192f0a0-0000-7000-8000-0000000000a3', action: 'roles.created', actorUserId: OTHER_ACTOR, entityType: 'roles', entityId: 'role-1', metadata: { key: 'librarian', permissions: ['users.read'] } })
@@ -186,15 +222,36 @@ describe('AuditLogPage', () => {
     // The filter buttons wrap: one 321 px row widened the page to 438 px at 390 px (CH-0297, real browser).
     expect(screen.getByTestId('audit-filter-actions')).toHaveStyle({ flexWrap: 'wrap' })
 
-    // The details sit in a box of no width of its own that grows to the cell (KI-099): the long ids, the user agent
-    // and the metadata never size the table.
+    // The details take their width from AuditLogPage.css (KI-099, KI-120 — the next test reads it), never from their
+    // text: no inline width of their own, and they sit in the scroll box the stylesheet makes a size container.
     await userEvent.click(document.querySelector<HTMLButtonElement>('.ant-table-row-expand-icon')!)
     const box = await screen.findByTestId('audit-event-details')
     expect(box.closest('tr')).toHaveClass('ant-table-expanded-row')
-    expect(box.style.width).toBe('0px')
-    expect(box.style.minWidth).toBe('100%')
+    expect(box).toHaveClass('audit-event-details')
+    expect(box.getAttribute('style')).toBeNull()
+    const scrollBox = document.querySelector('.audit-table .ant-table-content')
+    expect(scrollBox).not.toBeNull()
+    expect(scrollBox).toContainElement(table)
+    expect(scrollBox).toContainElement(box)
     expect(within(box).getByText(suspended.id)).toBeInTheDocument()
     expect(table.style.width).toBe('auto')
+  })
+
+  it('wraps an opened event at the width of the table’s visible box, not of the whole scrolled table, and keeps it in view while the table scrolls (KI-120, 390 px)', async () => {
+    const css = await auditCss()
+    // Without container queries: the KI-099 box — no width of its own, the cell's at least.
+    expect(declarationsOf(css, '.audit-table .audit-event-details')).toMatchObject({ width: '0', 'min-width': '100%', 'overflow-wrap': 'anywhere' })
+    // With them: the scroll box is a size container and the details take its visible width less the cell's two 8 px
+    // paddings (`size="middle"`), sticking to its start edge — the right edge in Arabic — as the table scrolls.
+    const supported = supportsBlock(css, '(width: 1cqi)')
+    expect(declarationsOf(supported, '.audit-table .ant-table-content')).toEqual({ 'container-type': 'inline-size' })
+    expect(declarationsOf(supported, '.audit-table .audit-event-details')).toEqual({
+      position: 'sticky',
+      'inset-inline-start': '8px',
+      'box-sizing': 'border-box',
+      'min-width': '0',
+      width: 'calc(100cqi - 16px)',
+    })
   })
 
   it('narrows the list to the clicked actor and fills the filter', async () => {

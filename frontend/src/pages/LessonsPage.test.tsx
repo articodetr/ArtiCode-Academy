@@ -90,6 +90,28 @@ function bodyRows() {
 }
 
 describe('LessonsPage', () => {
+  it('keeps the table at its card’s width, so the status column is in view at 1366 px, and scrolls in its own box only when it cannot fit (KI-120)', async () => {
+    mockLessonsApi(makeLessonList([variables, loops]))
+    renderPage(LESSON_TEACHER_PERMISSIONS)
+    expect(await screen.findByText('المتغيرات وأنواع البيانات')).toBeInTheDocument()
+
+    // jsdom has no layout: assert the configuration (the users and roster tables — KI-094/KI-116). 'max-content' sized
+    // the table to its one-line content and started the status column off-screen at 1366 px; `x: true` keeps the table
+    // at its box's width wherever the cells can wrap, and still scrolls it in that box on a phone.
+    const table = screen.getByRole('table')
+    expect(table.closest('.ant-table')).toHaveClass('ant-table-scroll-horizontal')
+    expect(table.style.width).toBe('auto')
+    expect(table.style.minWidth).toBe('100%')
+    // The class code and the room sit in a plain LTR isolate: a dir on the Typography loses to its `-rtl` class.
+    const [first] = bodyRows()
+    for (const value of ['PY-101-A', 'LAB-1 — مختبر 1']) {
+      const element = within(first!).getByText(value)
+      expect(element.tagName).toBe('BDI')
+      expect(element).toHaveAttribute('dir', 'ltr')
+    }
+    expect(first!.querySelectorAll('.ant-typography[dir]')).toHaveLength(0)
+  })
+
   it('shows a teacher the lessons of GET /api/lessons from today on: day, times, title, mode, class, course, teacher, place and status', async () => {
     const api = mockLessonsApi(makeLessonList([variables, loops]))
     renderPage(LESSON_TEACHER_PERMISSIONS)

@@ -193,8 +193,8 @@ export function GuardianLinksTab({ user, side, onUnsavedChange }: GuardianLinksT
                 description={
                   <Space wrap size={[12, 4]}>
                     {identifier ? (
-                      <Typography.Text type="secondary" dir="ltr">
-                        {identifier}
+                      <Typography.Text type="secondary">
+                        <bdi dir="ltr">{identifier}</bdi>
                       </Typography.Text>
                     ) : null}
                     <Typography.Text type="secondary">

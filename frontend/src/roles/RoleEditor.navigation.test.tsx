@@ -34,9 +34,9 @@ async function renderEditor(target: EditorTarget) {
   return { router, onClose, dialog }
 }
 
-/** The matrix checkbox of one permission key, found by its code text (no accessible-name scan — KI-044). */
+/** The matrix checkbox of one permission key, found by its code text — in a plain LTR isolate inside the code mark since KI-120 (no accessible-name scan — KI-044). */
 function permissionBox(dialog: HTMLElement, key: string): HTMLInputElement {
-  return within(dialog).getByText(key, { selector: 'code' }).closest('label')!.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+  return within(dialog).getByText(key, { selector: 'code bdi' }).closest('label')!.querySelector<HTMLInputElement>('input[type="checkbox"]')!
 }
 
 const expectBackOnPrevious = async () => expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')

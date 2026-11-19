@@ -584,22 +584,79 @@
 }
 
 /* A sliver (several slots side by side in a seven-day week): the course alone; the time is its
-   position and height, its accessible name and its details. */
+   position and height, its accessible name and its details. A card of a cascade keeps its start time:
+   it is never a sliver (about 54 px of a 102 px column hold «09:00» beside the padding). */
 @container (max-width: 64px) {
-  .tt-slot .tt-event:not(.is-card) {
+  .tt-slot:not(.is-cascade) .tt-event:not(.is-card) {
     padding: 5px;
   }
 
-  .tt-slot .tt-event:not(.is-card) .tt-event__title {
+  .tt-slot:not(.is-cascade) .tt-event:not(.is-card) .tt-event__title {
     font-size: 11px;
     -webkit-line-clamp: 4;
     overflow-wrap: anywhere;
     hyphens: auto;
   }
 
-  .tt-slot .tt-event:not(.is-card) .tt-event__sub,
-  .tt-slot .tt-event:not(.is-card) .tt-event__time {
+  .tt-slot:not(.is-cascade) .tt-event:not(.is-card) .tt-event__sub,
+  .tt-slot:not(.is-cascade) .tt-event:not(.is-card) .tt-event__time {
     display: none;
+  }
+}
+
+/* Three or more overlapping slots in a week column (KI-119, D-R142 — timetable.layout.ts `slotBox()`): a
+   cascade instead of slivers. Each card is 60 % of the column and each later lane starts a step further
+   from the inline-start edge; the cards stay in start order, so a card painted later lies on top and the
+   one that starts last shows its course and start time. A covered card keeps its top unless another card
+   starts at the same time; while a card of a later lane lies on it, it keeps a strip at its inline-start
+   edge, where its text begins, but a later card that takes a lower lane back covers that edge and leaves
+   it a strip at its inline-end edge instead. A ring of the surface colour marks where one card lies on
+   another (two slots of one course share a tone). The pointer and the keyboard bring a card to the front
+   whole — keyboard focus only, so a card clicked (and focused again when its drawer closes) does not stay
+   on top over the others; the slot's transparent padding lets the pointer through to the card underneath. */
+.tt-slot.is-cascade {
+  pointer-events: none;
+}
+
+.tt-slot.is-cascade:hover {
+  z-index: 1;
+}
+
+/* A rule of its own: a browser without `:has()` drops a whole selector list it cannot read, and hover would
+   go with it (timetable.css.test.ts). */
+.tt-slot.is-cascade:has(> .tt-event:focus-visible) {
+  z-index: 1;
+}
+
+.tt-slot.is-cascade > .tt-event {
+  pointer-events: auto;
+  box-shadow: 0 0 0 1.5px var(--tt-surface);
+}
+
+.tt-slot.is-cascade > .tt-event:hover {
+  box-shadow:
+    0 0 0 1.5px var(--tt-surface),
+    0 10px 22px -14px rgba(37, 32, 74, 0.55);
+}
+
+/* A one-row (tiny) card of a cascade is too narrow for its course and its start on one row: the start would
+   squeeze the course to a letter. From 30 px of height (about 34 minutes at 64 px per hour) it puts the
+   course over the start, two tight lines; a shorter one keeps its one row, the course first. */
+@container tt-slot (min-height: 30px) {
+  .tt-slot.is-cascade .tt-event.is-tiny {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 0;
+    padding-block: 1px;
+  }
+
+  .tt-slot.is-cascade .tt-event.is-tiny .tt-event__title {
+    line-height: 1.2;
+  }
+
+  .tt-slot.is-cascade .tt-event.is-tiny .tt-event__time {
+    line-height: 1.2;
   }
 }
 
@@ -955,9 +1012,13 @@
 /* The mode switch of the page header («Academy schedule | My schedule» is 241 px in English) narrows
    with a 320 px phone instead of scrolling the page (KI-056): its holder and the switch never exceed
    the page, its items may shrink, and a label then ends in antd's ellipsis — the item's title and its
-   accessible name keep the whole label. Nothing shrinks while the switch fits. */
-.tt-mobile div:has(> .tt-mode-switch),
+   accessible name keep the whole label. Nothing shrinks while the switch fits. Two rules: a browser
+   without `:has()` would drop the switch's own limit with a shared selector list. */
 .tt-mobile .tt-mode-switch {
+  max-width: 100%;
+}
+
+.tt-mobile div:has(> .tt-mode-switch) {
   max-width: 100%;
 }
 

@@ -117,8 +117,8 @@ function VerificationResult({ result }: { result: CertificateVerification }) {
             key: 'serial',
             label: t('certificates.verify.fields.serial'),
             children: (
-              <Typography.Text strong dir="ltr">
-                {result.serial}
+              <Typography.Text strong>
+                <bdi dir="ltr">{result.serial}</bdi>
               </Typography.Text>
             ),
           },
@@ -132,8 +132,8 @@ function VerificationResult({ result }: { result: CertificateVerification }) {
                 {result.student.fullNameLatin ? (
                   <>
                     <br />
-                    <Typography.Text type="secondary" dir="ltr">
-                      {result.student.fullNameLatin}
+                    <Typography.Text type="secondary">
+                      <bdi dir="ltr">{result.student.fullNameLatin}</bdi>
                     </Typography.Text>
                   </>
                 ) : null}

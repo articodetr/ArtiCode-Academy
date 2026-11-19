@@ -295,8 +295,8 @@ function RoleHeader({ role }: { role: Role }) {
             key: 'key',
             label: t('rolesAdmin.fields.key'),
             children: (
-              <Typography.Text code dir="ltr">
-                {role.key}
+              <Typography.Text code>
+                <bdi dir="ltr">{role.key}</bdi>
               </Typography.Text>
             ),
           },

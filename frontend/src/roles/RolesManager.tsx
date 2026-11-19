@@ -45,8 +45,8 @@ export function RolesManager() {
       render: (_, role) => (
         <Space orientation="vertical" size={0}>
           <Typography.Text strong>{localizedLabel(role.label, language)}</Typography.Text>
-          <Typography.Text type="secondary" code dir="ltr">
-            {role.key}
+          <Typography.Text type="secondary" code>
+            <bdi dir="ltr">{role.key}</bdi>
           </Typography.Text>
         </Space>
       ),

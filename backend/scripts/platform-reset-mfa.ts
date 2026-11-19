@@ -3,6 +3,9 @@
 //
 //   npm run platform:reset-mfa -- --email ops@example.com --reason "Lost phone; identity confirmed"
 //
+// In a deployment it runs in the `account` service of deploy/compose.platform.yaml
+// (KI-087): `docker compose … run --rm account npm run platform:reset-mfa -- …`.
+//
 // Arguments: --email <address> (required), --reason "<text>" (optional, 1..500
 // characters after trimming; recorded in the event). The account's MFA columns
 // are cleared, its recovery codes deleted, its open sign-in challenges consumed

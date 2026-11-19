@@ -49,8 +49,8 @@ export function CertificatesPage() {
       title: t('certificates.columns.serial'),
       key: 'serial',
       render: (_, row) => (
-        <Typography.Text strong dir="ltr">
-          {row.serial}
+        <Typography.Text strong>
+          <bdi dir="ltr">{row.serial}</bdi>
         </Typography.Text>
       ),
     },
@@ -64,8 +64,8 @@ export function CertificatesPage() {
           {row.student.fullNameLatin ? (
             <>
               <br />
-              <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-                {row.student.fullNameLatin}
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <bdi dir="ltr">{row.student.fullNameLatin}</bdi>
               </Typography.Text>
             </>
           ) : null}
@@ -79,8 +79,8 @@ export function CertificatesPage() {
         <span>
           <span>{localizedLabel(row.course.name, language)}</span>
           <br />
-          <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-            {row.course.code}
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <bdi dir="ltr">{row.course.code}</bdi>
           </Typography.Text>
         </span>
       ),
@@ -90,7 +90,7 @@ export function CertificatesPage() {
       key: 'class',
       render: (_, row) => (
         <span>
-          <Typography.Text dir="ltr">{row.class.code}</Typography.Text>
+          <Typography.Text><bdi dir="ltr">{row.class.code}</bdi></Typography.Text>
           <br />
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {localizedLabel(row.class.name, language)}

@@ -239,7 +239,9 @@ describe('useTimetable', () => {
     const dates = [SUNDAY, MONDAY, TUESDAY]
     const { result } = renderHook(() => useTimetable('mine', {}, dates, true))
     await waitFor(() => expect(result.current.pending.size).toBe(0))
-    expect([...result.current.failedDates]).toEqual([MONDAY])
+    expect([...result.current.failedDates.keys()]).toEqual([MONDAY])
+    // Each failed date carries its own failure (KI-120: the grid's alert words a failure of its own dates).
+    expect((result.current.failedDates.get(MONDAY) as ApiError).status).toBe(500)
     expect(result.current.failed).toBe(true)
     expect((result.current.error as ApiError).status).toBe(500)
     expect(result.current.byDate.get(SUNDAY)).toHaveLength(1)
@@ -248,7 +250,7 @@ describe('useTimetable', () => {
     // A reload forgets the failure with the rest; Monday, asked again, fails again.
     act(() => result.current.reload())
     expect(result.current.failedDates.size).toBe(0)
-    await waitFor(() => expect([...result.current.failedDates]).toEqual([MONDAY]))
+    await waitFor(() => expect([...result.current.failedDates.keys()]).toEqual([MONDAY]))
   })
 
   it('aborts a request still running on reload, asks again and ignores the late answer of the old one', async () => {

@@ -94,8 +94,8 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
       key: 'class',
       render: (_, row) => (
         <span>
-          <Typography.Text dir="ltr" strong>
-            {row.class.code}
+          <Typography.Text strong>
+            <bdi dir="ltr">{row.class.code}</bdi>
           </Typography.Text>
           <br />
           <Typography.Text type="secondary">{localizedLabel(row.class.name, language)}</Typography.Text>
@@ -113,7 +113,7 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
       key: 'place',
       render: (_, row) => (
         <span>
-          {row.room ? <Typography.Text dir="ltr">{lessonRoomLabel(row.room, language)}</Typography.Text> : <Typography.Text type="secondary">{t('lessons.drawer.noRoom')}</Typography.Text>}
+          {row.room ? <Typography.Text><bdi dir="ltr">{lessonRoomLabel(row.room, language)}</bdi></Typography.Text> : <Typography.Text type="secondary">{t('lessons.drawer.noRoom')}</Typography.Text>}
           {row.meetingUrl ? (
             <>
               <br />
@@ -256,7 +256,10 @@ function LessonsScreen({ dayZone }: { dayZone: string }) {
           dataSource={list.items}
           loading={list.loading}
           pagination={false}
-          scroll={{ x: 'max-content' }}
+          // `true`, not 'max-content' (KI-120, the users and roster tables — KI-094/KI-116): the table keeps its card's width
+          // wherever its columns can wrap to fit, so the status column is in view at 1366 px — 'max-content' sized the table
+          // to its one-line content and started that column off-screen — and scrolls in its own box only when it cannot fit.
+          scroll={{ x: true }}
           locale={{ emptyText }}
           onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
         />

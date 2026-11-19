@@ -18,7 +18,7 @@ import {
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { Env } from '../config/env.schema.js';
-import { AuthThrottlerGuard } from './auth-throttler.guard.js';
+import { AuthThrottlerGuard, REFRESH_CLIENT_LIMIT, REFRESH_IP_LIMIT, RefreshThrottle } from './auth-throttler.guard.js';
 import { authError } from './auth.errors.js';
 import {
   AuthErrorDto,
@@ -45,8 +45,6 @@ import { TokenService } from './token.service.js';
  */
 const LOGIN_LIMIT = { login: { limit: 10, ttl: 15 * 60 * 1000 } };
 const LOCKED_STATUS = 423;
-/** 30 refreshes per minute per IP. */
-const REFRESH_LIMIT = { login: { limit: 30, ttl: 60 * 1000 } };
 
 @ApiTags('auth')
 @Controller('auth')
@@ -128,7 +126,9 @@ export class AuthController {
   @Post('refresh')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @Throttle(REFRESH_LIMIT)
+  // D-R140 (KI-098): per (IP, cookie digest), never per bare IP — a school behind one NAT shares no
+  // budget; a request without the cookie is counted only by the per-IP ceiling (auth-throttler.guard.ts).
+  @RefreshThrottle()
   @ApiOperation({
     summary: 'Rotate the refresh token and get a new access token',
     description:
@@ -136,6 +136,12 @@ export class AuthController {
   })
   @ApiOkResponse({ type: SessionResponseDto })
   @ApiUnauthorizedResponse({ type: AuthErrorDto, description: 'refresh_missing | refresh_invalid | refresh_expired | refresh_reused | session_invalid' })
+  @ApiTooManyRequestsResponse({
+    type: AuthErrorDto,
+    description:
+      `rate_limited — more than ${REFRESH_CLIENT_LIMIT} refreshes a minute with the same cookie from one IP (header \`Retry-After-login\`), ` +
+      `or more than ${REFRESH_IP_LIMIT} refreshes a minute from one IP with any cookie or none (header \`Retry-After-refresh_ip\`)`,
+  })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<SessionResponseDto> {
     const token = readRefreshCookie(req);
     if (!token) {

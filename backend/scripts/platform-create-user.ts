@@ -3,6 +3,10 @@
 //
 //   npm run platform:create-user -- --role support --email ops@example.com --name "Ops Person"
 //
+// In a deployment it runs in the `account` service, which keeps no Docker log
+// (deploy/compose.platform.yaml, KI-087): `docker compose … run --rm account npm
+// run platform:create-user -- …`.
+//
 // Arguments: --role support|super_admin, --email <address>, --name <full name>.
 // Password: PLATFORM_NEW_USER_PASSWORD, else prompted twice without echo when
 // stdin is a terminal. Read from the environment and from backend/.env.local,

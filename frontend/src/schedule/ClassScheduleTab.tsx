@@ -85,7 +85,7 @@ export function ClassScheduleTab({ cls, onUnsavedChange }: ClassScheduleTabProps
     <>
       <Flex justify="space-between" align="center" wrap gap={8} style={{ marginBottom: 12 }}>
         <Space wrap>
-          <Typography.Text dir="ltr">{cls.code}</Typography.Text>
+          <Typography.Text><bdi dir="ltr">{cls.code}</bdi></Typography.Text>
           <StatusTag value={cls.status} />
           {schedule ? <Typography.Text type="secondary">{t('classSchedule.summary', { count: schedule.slots.length })}</Typography.Text> : null}
         </Space>

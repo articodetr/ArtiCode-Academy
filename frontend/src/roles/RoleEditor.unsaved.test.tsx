@@ -50,9 +50,9 @@ const mask = () => document.querySelector<HTMLElement>('.ant-drawer-mask')!
 /** Escape and the mask do nothing at all while the form holds unsaved work: no close and no «discard?» question either. */
 const expectNoDiscardQuestion = () => expect(screen.queryByText(ar.common.unsaved.title)).not.toBeInTheDocument()
 
-/** The matrix checkbox of one permission key, found by its code text (no accessible-name scan — KI-044). */
+/** The matrix checkbox of one permission key, found by its code text — in a plain LTR isolate inside the code mark since KI-120 (no accessible-name scan — KI-044). */
 function permissionBox(dialog: HTMLElement, key: string): HTMLInputElement {
-  return within(dialog).getByText(key, { selector: 'code' }).closest('label')!.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+  return within(dialog).getByText(key, { selector: 'code bdi' }).closest('label')!.querySelector<HTMLInputElement>('input[type="checkbox"]')!
 }
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */

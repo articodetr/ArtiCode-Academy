@@ -211,8 +211,8 @@ export function MyExamsPage() {
       key: 'class',
       render: (_, row) => (
         <span>
-          <Typography.Text dir="ltr" strong>
-            {row.class.code}
+          <Typography.Text strong>
+            <bdi dir="ltr">{row.class.code}</bdi>
           </Typography.Text>
           <br />
           <Typography.Text type="secondary">{`${localizedLabel(row.class.name, language)} · ${localizedLabel(row.class.course.name, language)}`}</Typography.Text>

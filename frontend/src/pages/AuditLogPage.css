@@ -6,3 +6,32 @@
 .audit-filters .audit-ltr-field input {
   direction: ltr;
 }
+
+/* The expanded row of an event (EventDetails). Its text breaks anywhere (a full id has no space to wrap at). Without
+   container queries it keeps the KI-099 box: no width of its own and the cell's at least, so its text never sizes the
+   table. */
+.audit-table .audit-event-details {
+  width: 0;
+  min-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* KI-120: on a phone the table scrolls sideways in its own box (KI-094), and an expanded row's cell spans the whole
+   table, so the details wrapped at the table's width and ran past the visible box at 390 px. The scroll box is a size
+   container; the details take its visible width, less the cell's two 8 px paddings (`size="middle"`), and stay at its
+   start edge while the table scrolls under them (`inset-inline-start` is the right edge in Arabic). Their width comes
+   from the box, never from their text, so they still never widen the table (KI-099). Where the table fits its box (a
+   desktop) the box is the table's width and the details are the cell's, as before. */
+@supports (width: 1cqi) {
+  .audit-table .ant-table-content {
+    container-type: inline-size;
+  }
+
+  .audit-table .audit-event-details {
+    position: sticky;
+    inset-inline-start: 8px;
+    box-sizing: border-box;
+    min-width: 0;
+    width: calc(100cqi - 16px);
+  }
+}

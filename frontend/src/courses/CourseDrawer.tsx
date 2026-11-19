@@ -184,7 +184,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
     ) : (
       <Descriptions column={1} bordered size="small">
         <Descriptions.Item label={t('courses.fields.code')}>
-          <Typography.Text dir="ltr">{course.code}</Typography.Text>
+          <Typography.Text><bdi dir="ltr">{course.code}</bdi></Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label={t('common.status')}>
           <StatusTag value={course.status} />

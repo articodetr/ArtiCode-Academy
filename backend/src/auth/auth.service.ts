@@ -470,10 +470,30 @@ export class AuthService {
     if (stored.revokedAt !== null || stored.replacedById !== null) {
       // Reuse of a rotated token: someone else holds a copy. Kill the family.
       await db.$transaction(async (tx) => {
-        await tx.refreshToken.updateMany({
+        const revoked = await tx.refreshToken.updateMany({
           where: { familyId: stored.familyId, revokedAt: null },
           data: { revokedAt: now },
         });
+        // KI-098 follow-up: a family that revoked live tokens now (the theft signal) is recorded every time.
+        // A family that was already dead is recorded only while it has no reuse event yet — the first replay
+        // after a deliberate revocation (logout-all, MFA enable, a password change…) stays visible, but
+        // replaying its rotated tokens in a loop cannot write one append-only row per request (each cookie
+        // has its own refresh budget since D-R140, so only the 1200/min per-IP ceiling would bound it).
+        // The lookup is served by the (entity_type, entity_id) index of audit_logs. Two replays racing on a
+        // dead family may both record — accepted. The platform records only when live tokens were revoked
+        // (platform-session.service.ts); the academy keeps that first sign of reuse.
+        if (revoked.count === 0) {
+          const recorded = await tx.auditLog.findFirst({
+            where: {
+              action: AUDIT_ACTIONS.refreshReuse,
+              entityType: 'users',
+              entityId: stored.userId,
+              metadata: { path: ['familyId'], equals: stored.familyId },
+            },
+            select: { id: true },
+          });
+          if (recorded) return;
+        }
         await this.audit.record(
           { action: AUDIT_ACTIONS.refreshReuse, actorUserId: stored.userId, entityType: 'users', entityId: stored.userId, metadata: { familyId: stored.familyId }, ...ctx },
           tx,

@@ -47,8 +47,8 @@ export function MyCertificatesPage() {
       key: 'serial',
       render: (_, row) => (
         <span>
-          <Typography.Text strong dir="ltr">
-            {row.serial}
+          <Typography.Text strong>
+            <bdi dir="ltr">{row.serial}</bdi>
           </Typography.Text>
           <br />
           <CertificateStatusTag status={row.status} />
@@ -67,8 +67,8 @@ export function MyCertificatesPage() {
         <span>
           <span>{localizedLabel(row.snapshot.course.name, language)}</span>
           <br />
-          <Typography.Text type="secondary" dir="ltr" style={{ fontSize: 12 }}>
-            {row.snapshot.course.code}
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <bdi dir="ltr">{row.snapshot.course.code}</bdi>
           </Typography.Text>
         </span>
       ),
@@ -78,7 +78,7 @@ export function MyCertificatesPage() {
       key: 'class',
       render: (_, row) => (
         <span>
-          <Typography.Text dir="ltr">{row.snapshot.class.code}</Typography.Text>
+          <Typography.Text><bdi dir="ltr">{row.snapshot.class.code}</bdi></Typography.Text>
           <br />
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {localizedLabel(row.snapshot.class.name, language)}

@@ -19,6 +19,10 @@
 //        migration than the database answers 503 `schema_outdated`;
 //   AC4  the database publishes no port on the host;
 //   AC5  the migrator role has no CREATEDB.
+// KI-087: the first-admin command runs in a service of its own, `account` — the tools image
+// under the `tools` profile (`up` never creates it), hardened, with the `none` log driver (a
+// `run` container has no Docker log), the application role only, and a default command that
+// only prints its usage; `migrate` carries no AUTH_MFA_ENCRYPTION_KEY and no JWT_SECRET.
 // Then: backup and maintenance are running, the maintenance loop printed its first line.
 // The project, its volumes and its network are removed at the end (never another project's).
 
@@ -64,8 +68,20 @@ function run(cmd, argv, { env, input, timeoutMs = 20 * 60_000 } = {}) {
     maxBuffer: 256 * 1024 * 1024,
     env: env ? { ...process.env, ...env } : process.env,
   });
-  return { code: res.status ?? 1, out: (res.stdout ?? '') + (res.stderr ?? '') + (res.error ? String(res.error) : '') };
+  return { code: res.status ?? 1, out: (res.stdout ?? '') + (res.stderr ?? '') + (res.error ? String(res.error) : ''), stdout: res.stdout ?? '' };
 }
+
+/** The variable names of a container's environment (the values hold secrets and are never read out). */
+function containerEnvNames(id) {
+  try {
+    return (JSON.parse(run('docker', ['inspect', '--format', '{{json .Config.Env}}', id]).out.trim()) ?? []).map((e) => e.split('=')[0]);
+  } catch {
+    return [];
+  }
+}
+
+/** The containers of this project that `service` has, `run` containers included (even outside the active profiles). */
+const containersOfService = (service) => run('docker', ['ps', '-a', '-q', '--filter', `label=com.docker.compose.project=${PROJECT}`, '--filter', `label=com.docker.compose.service=${service}`]).out.trim();
 
 /** `docker compose` on this test's project only. */
 const compose = (argv, opts) => run('docker', ['compose', '-p', PROJECT, '-f', 'deploy/compose.academy.yaml', '--env-file', envFile, ...argv], opts);
@@ -136,6 +152,31 @@ async function main() {
   if (config.code === 0) pass('compose config is valid with the generated env file');
   else return fail('compose config is valid with the generated env file', tail(config.out, 10));
 
+  // --- KI-087: the first-admin command runs in `account`, which keeps no Docker log ---------
+  // The rendered file holds the env file's secrets: it is parsed here and never printed.
+  const rendered = compose(['--profile', 'tools', 'config', '--format', 'json']);
+  let services = {};
+  try {
+    services = JSON.parse(rendered.stdout).services ?? {};
+  } catch {
+    // reported by the checks below
+  }
+  const account = services.account ?? {};
+  if (rendered.code === 0 && account.logging?.driver === 'none' && account.profiles?.includes('tools') && account.build?.target === 'tools' && account.image === services.migrate?.image && account.restart === 'no' && account.cap_drop?.includes('ALL') && account.security_opt?.includes('no-new-privileges:true'))
+    pass('account: the tools image under the `tools` profile, hardened, with the `none` log driver (KI-087)', `image ${account.image}, profiles ${account.profiles.join(',')}, logging ${account.logging.driver}`);
+  else fail('account: the tools image under the `tools` profile, hardened, with the `none` log driver (KI-087)', `config exit ${rendered.code}; ${JSON.stringify({ logging: account.logging, profiles: account.profiles, target: account.build?.target, image: account.image, restart: account.restart })}`);
+  const accountEnv = Object.keys(account.environment ?? {}).sort();
+  const appDb = ['DB_HOST', 'POSTGRES_PORT', 'POSTGRES_DB', 'DB_APP_USER', 'DB_APP_PASSWORD'];
+  if (accountEnv.length === appDb.length && appDb.every((n) => accountEnv.includes(n))) pass('account: the application role only (no migrator, superuser, JWT secret or MFA key)', accountEnv.join(', '));
+  else fail('account: the application role only (no migrator, superuser, JWT secret or MFA key)', accountEnv.join(', '));
+  const migrateEnv = Object.keys(services.migrate?.environment ?? {}).sort();
+  if (migrateEnv.includes('DB_MIGRATOR_PASSWORD') && !migrateEnv.some((n) => n === 'AUTH_MFA_ENCRYPTION_KEY' || n === 'JWT_SECRET')) pass('migrate carries no AUTH_MFA_ENCRYPTION_KEY and no JWT_SECRET', migrateEnv.join(', '));
+  else fail('migrate carries no AUTH_MFA_ENCRYPTION_KEY and no JWT_SECRET', migrateEnv.join(', '));
+  const listed = compose(['config', '--services']);
+  const defaultServices = listed.stdout.trim().split(/\r?\n/);
+  if (listed.code === 0 && defaultServices.includes('migrate') && !defaultServices.includes('account')) pass('account is outside the default profile', `up starts ${defaultServices.join(', ')}`);
+  else fail('account is outside the default profile', `exit ${listed.code}: ${defaultServices.join(', ')}`);
+
   // --- AC1 ----------------------------------------------------------------------
   const started = Date.now();
   const up = compose(['up', '-d', ...(flag('--no-build') ? ['--no-build'] : ['--build'])]);
@@ -153,6 +194,10 @@ async function main() {
     console.log(tail(compose(['logs', '--tail', '40', 'api']).out));
     return;
   }
+  const createdAccounts = containersOfService('account');
+  const migrateNames = containerEnvNames(containerOf('migrate'));
+  if (createdAccounts === '' && migrateNames.length > 0 && !migrateNames.includes('AUTH_MFA_ENCRYPTION_KEY')) pass('`up` creates no account container, and the migrate container carries no AUTH_MFA_ENCRYPTION_KEY');
+  else fail('`up` creates no account container, and the migrate container carries no AUTH_MFA_ENCRYPTION_KEY', `account containers: ${createdAccounts.split('\n').filter(Boolean).length}; migrate variables: ${migrateNames.length}`);
 
   await waitFor(async () => (await http('/api/health').catch(() => ({ status: 0 }))).body?.status === 'ok', 60);
   const ready = await http('/api/health/ready');
@@ -165,9 +210,19 @@ async function main() {
 
   const email = `admin-${RUN}@example.test`;
   const password = `T202-${randomBytes(12).toString('base64url')}`;
-  const boot = compose(['run', '--rm', '-T', '-e', 'BOOTSTRAP_ADMIN_EMAIL', '-e', 'BOOTSTRAP_ADMIN_FULL_NAME', '-e', 'BOOTSTRAP_ADMIN_PASSWORD', 'migrate', 'npm', 'run', '--silent', 'auth:bootstrap-admin'], { env: { BOOTSTRAP_ADMIN_EMAIL: email, BOOTSTRAP_ADMIN_FULL_NAME: 'T202 Admin', BOOTSTRAP_ADMIN_PASSWORD: password } });
-  if (boot.code === 0 && /First academy admin created/.test(boot.out) && !boot.out.includes(password)) pass('AC1 the first admin is created with the documented command', 'compose run --rm migrate npm run auth:bootstrap-admin');
+  const boot = compose(['run', '--rm', '-T', '-e', 'BOOTSTRAP_ADMIN_EMAIL', '-e', 'BOOTSTRAP_ADMIN_FULL_NAME', '-e', 'BOOTSTRAP_ADMIN_PASSWORD', 'account', 'npm', 'run', '--silent', 'auth:bootstrap-admin'], { env: { BOOTSTRAP_ADMIN_EMAIL: email, BOOTSTRAP_ADMIN_FULL_NAME: 'T202 Admin', BOOTSTRAP_ADMIN_PASSWORD: password } });
+  if (boot.code === 0 && /First academy admin created/.test(boot.out) && !boot.out.includes(password) && containersOfService('account') === '') pass('AC1 the first admin is created with the documented command', 'compose run --rm account npm run auth:bootstrap-admin; its output reached the caller, no container left');
   else fail('AC1 the first admin is created with the documented command', tail(boot.out.replaceAll(password, '***'), 8));
+
+  // KI-087 at run time: a `run` container of account (kept here, without --rm, to be inspected).
+  const usageName = `${PROJECT}-account-usage`;
+  const usage = compose(['run', '-T', '--name', usageName, 'account']);
+  const [logType, capDrop, securityOpt, user, usageExit] = run('docker', ['inspect', '--format', '{{.HostConfig.LogConfig.Type}}|{{json .HostConfig.CapDrop}}|{{json .HostConfig.SecurityOpt}}|{{.Config.User}}|{{.State.ExitCode}}', usageName]).out.trim().split('|');
+  const usageLogs = run('docker', ['logs', usageName]);
+  run('docker', ['rm', '-f', usageName]);
+  if (usage.code === 0 && /account npm run auth:bootstrap-admin/.test(usage.out) && logType === 'none' && usageExit === '0' && !usageLogs.out.includes('auth:bootstrap-admin') && /"ALL"/.test(capDrop) && /no-new-privileges:true/.test(securityOpt) && user === 'node')
+    pass('a `run` container of account keeps no Docker log; its default command only prints the usage', `LogConfig.Type none; docker logs: ${tail(usageLogs.out, 1) || 'nothing'}; user node, cap_drop ALL, no-new-privileges; exit 0`);
+  else fail('a `run` container of account keeps no Docker log; its default command only prints the usage', `run exit ${usage.code}, LogConfig.Type ${logType}, exit ${usageExit}, user ${user}, docker logs: ${tail(usageLogs.out, 3)}; output: ${tail(usage.out, 4)}`);
 
   const login = await http('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: ORIGIN }, body: JSON.stringify({ identifier: email, password }) });
   const token = login.body?.accessToken;

@@ -127,8 +127,8 @@ export function ClassCertificatesTab({ cls }: { cls: AcademyClass }) {
       render: (_, row) =>
         row.certificate ? (
           <span>
-            <Typography.Text strong dir="ltr">
-              {row.certificate.serial}
+            <Typography.Text strong>
+              <bdi dir="ltr">{row.certificate.serial}</bdi>
             </Typography.Text>{' '}
             <Button
               type="link"

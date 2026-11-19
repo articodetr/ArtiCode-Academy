@@ -49,8 +49,8 @@ export function ClassesPage() {
       title: t('classes.columns.code'),
       key: 'code',
       render: (_, row) => (
-        <Typography.Text dir="ltr" strong>
-          {row.code}
+        <Typography.Text strong>
+          <bdi dir="ltr">{row.code}</bdi>
         </Typography.Text>
       ),
     },

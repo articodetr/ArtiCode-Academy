@@ -27,7 +27,9 @@
 // `certificates.read_all` or `certificates.issue` (D-R57); it holds no editor.
 // Since CH-0297 the students tab knows when the drawer's read of the class
 // failed (`classReadFailed`): the retry of its roster error then re-reads the
-// class too, so the drawer's error does not outlive the recovery.
+// class too, so the drawer's error does not outlive the recovery; since KI-120
+// the drawer's own retry («تحديث» in its error) re-reads an opened students
+// tab's roster as well (rosterRefresh) — a tab never opened asks nothing.
 // MOD-20 (D-R137): a «تقدّم التعلّم» tab after the students tab, for the same
 // readers as the roster (`canReadRoster()`) — each student's progress in the
 // course's lessons (ClassLearningProgressTab on API-235); it holds no editor.
@@ -99,6 +101,8 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
   const [cls, setCls] = useState<AcademyClass | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  // Moved by the drawer's own retry only: an opened students tab reads its roster again (KI-120).
+  const [rosterRefresh, setRosterRefresh] = useState(0)
   const [tab, setTab] = useState<DrawerTab>('details')
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<ClassMenuAction | null>(null)
@@ -138,6 +142,11 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
   }, [classId, reloadTick, t])
 
   const reload = useCallback(() => setReloadTick((tick) => tick + 1), [])
+  // The retry of the drawer's error: the class, and the roster of an opened students tab with it (KI-120).
+  const retry = () => {
+    reload()
+    setRosterRefresh((count) => count + 1)
+  }
 
   const close = () => {
     setCls(null)
@@ -187,7 +196,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
     ) : (
       <Descriptions column={1} bordered size="small">
         <Descriptions.Item label={t('classes.fields.code')}>
-          <Typography.Text dir="ltr">{cls.code}</Typography.Text>
+          <Typography.Text><bdi dir="ltr">{cls.code}</bdi></Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label={t('common.status')}>
           <StatusTag value={cls.status} />
@@ -256,7 +265,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
           showIcon
           message={loadError}
           action={
-            <Button size="small" onClick={reload}>
+            <Button size="small" onClick={retry}>
               {t('classes.refresh')}
             </Button>
           }
@@ -289,6 +298,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
                         onClassChanged={applyUpdate}
                         onStale={reload}
                         classReadFailed={loadError !== null}
+                        rosterRefresh={rosterRefresh}
                         onUnsavedChange={reportUnsaved.students}
                       />
                     ),

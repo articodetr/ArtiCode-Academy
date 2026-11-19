@@ -2,6 +2,11 @@
 //
 //   npm run auth:bootstrap-admin
 //
+// In a deployment it runs in the `account` service, which keeps no Docker log
+// (deploy/compose.academy.yaml, KI-087): `docker compose … run --rm -e
+// BOOTSTRAP_ADMIN_EMAIL=… -e BOOTSTRAP_ADMIN_FULL_NAME="…" account npm run
+// auth:bootstrap-admin`.
+//
 // Input (no defaults, nothing stored in the repository):
 //   BOOTSTRAP_ADMIN_EMAIL       required
 //   BOOTSTRAP_ADMIN_FULL_NAME   required

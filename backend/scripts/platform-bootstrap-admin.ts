@@ -2,6 +2,11 @@
 //
 //   npm run platform:bootstrap-admin
 //
+// In a deployment it runs in the `account` service, which keeps no Docker log
+// (deploy/compose.platform.yaml, KI-087): `docker compose … run --rm -e
+// PLATFORM_BOOTSTRAP_EMAIL=… -e PLATFORM_BOOTSTRAP_FULL_NAME="…" account npm run
+// platform:bootstrap-admin`.
+//
 // Input (no defaults, nothing stored in the repository):
 //   PLATFORM_BOOTSTRAP_EMAIL       required
 //   PLATFORM_BOOTSTRAP_FULL_NAME   required

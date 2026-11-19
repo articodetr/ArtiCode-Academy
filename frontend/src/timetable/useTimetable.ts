@@ -85,10 +85,11 @@ export interface TimetableData {
   failed: boolean
   error: unknown
   /**
-   * The requested dates that failed, so a view of some of the dates (the
-   * "upcoming" panel) reports only its own failures, never another date's.
+   * The requested dates that failed, each with its failure, so a view of some
+   * of the dates (the "upcoming" panel, the grid's alert) reports only its own
+   * failures, never another date's (KI-118, KI-120).
    */
-  failedDates: ReadonlySet<CalendarDate>
+  failedDates: ReadonlyMap<CalendarDate, unknown>
   /** Forgets every answer and failure and aborts what is running, so the shown dates are read again. */
   reload: () => void
 }
@@ -168,14 +169,14 @@ export function useTimetable(mode: TimetableMode, filters: AcademyFilters, dates
 
   const byDate = new Map<CalendarDate, TimetableEntry[]>()
   const pending = new Set<CalendarDate>()
-  const failedDates = new Set<CalendarDate>()
+  const failedDates = new Map<CalendarDate, unknown>()
   let error: unknown = null
   for (const { date, key } of requests) {
     const result = key.includes(SKIPPED) ? NO_ENTRIES : store.results.get(key)
     if (result) byDate.set(date, result)
     else if (store.failures.has(key)) {
       if (failedDates.size === 0) error = store.failures.get(key)
-      failedDates.add(date)
+      failedDates.set(date, store.failures.get(key))
     } else if (enabled) pending.add(date)
   }
   return { byDate, pending, failed: failedDates.size > 0, error, failedDates, reload }
