@@ -72,7 +72,7 @@ const TABLES = [
   'announcements',
   // MOD-01-H06 / MFA-T01 (20261116123656_mfa_totp) — details in TEST-225.
   'mfa_recovery_codes',
-  // MOD-20 (20261119131517_mod20_learning) — details in TEST-245.
+  // MOD-20 (20261119131517_mod20_learning) — details in TEST-259.
   'course_sections',
   'learning_progress',
 ] as const;
