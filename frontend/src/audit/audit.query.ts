@@ -93,6 +93,9 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'courses.deleted',
   // MOD-04-T04 (CH-0050) — first offered in the frontend with O7-F (CH-0067)
   'courses.syllabus.changed',
+  // MOD-20 (CH-0304): the curriculum by levels and a lesson's content.
+  'courses.curriculum.changed',
+  'courses.curriculum.content.changed',
   // MOD-05-T02/T03 (CH-0053, CH-0054)
   'classes.',
   'classes.created',

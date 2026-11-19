@@ -1,0 +1,96 @@
+/* The public catalog for visitors (MOD-20, D-R138): /explore and /explore/:courseId, outside the app layout.
+   The page covers the viewport with its own background (Ant Design's App wrapper has no height — LoginPage.css). */
+.public-catalog {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fa;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.public-catalog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e6e9ef;
+}
+
+/* The academy's logo and name; the name is the link's only accessible name (the logo is decorative). */
+.public-catalog__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.public-catalog__brand:hover,
+.public-catalog__brand:focus-visible {
+  color: #0f6cbd;
+}
+
+.public-catalog__logo {
+  display: block;
+  height: 36px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+.public-catalog__name {
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-catalog__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* No self-registration exists: the line under the sign-in button stands where a «register» button would. */
+.public-catalog__sign-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.public-catalog__note {
+  font-size: 12px;
+}
+
+.public-catalog__main {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.public-catalog__loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 575px) {
+  .public-catalog__header,
+  .public-catalog__main {
+    padding-inline: 16px;
+  }
+}

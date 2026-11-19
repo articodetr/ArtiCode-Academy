@@ -7,7 +7,6 @@
 import { brandLogoSrc } from '../academy/academy.brand'
 import type { CatalogClass, CatalogCourseCard, CatalogCourseDetail, ListCatalogParams, RequestState } from '../api/catalog'
 import type { CoursePricing } from '../api/courses'
-import type { MyClassCourse, MyClassItem } from '../api/enrollments'
 
 /** The filters of the catalog list (API-219); `undefined` = no filter. */
 export interface CatalogFilters {
@@ -103,21 +102,4 @@ export const REQUEST_STATE_COLORS: Record<RequestState, string> = {
 /** The amount shown for a price: two decimals, as every finance screen. */
 export function priceAmount(amount: number): string {
   return amount.toFixed(2)
-}
-
-export interface CourseGroup {
-  course: MyClassCourse
-  items: MyClassItem[]
-}
-
-/** «My courses»: the enrollments of API-060 grouped by course, in the order the server listed them. */
-export function groupByCourse(items: readonly MyClassItem[]): CourseGroup[] {
-  const groups = new Map<string, CourseGroup>()
-  for (const item of items) {
-    const course = item.class.course
-    const group = groups.get(course.id)
-    if (group) group.items.push(item)
-    else groups.set(course.id, { course, items: [item] })
-  }
-  return [...groups.values()]
 }

@@ -4,9 +4,20 @@
 // null; the localized name travels as a whole object when any of its locales
 // changes; the weekly-schedule keys travel under `settings.scheduling`, key by
 // key (academy.settings.ts — J-F02), and since J-F51 the certificate prefix
-// under `settings.certificates` in the same body; nothing changed → null.
+// under `settings.certificates` in the same body, and since MOD-20 the playback
+// threshold under `settings.learning` and the public catalog switch under
+// `settings.catalog`; nothing changed → null.
 import type { Academy, AcademyLocale, AcademySettingsInput, LocalizedLabel, UpdateAcademyInput } from '../api/academy'
-import { planCertificatesPatch, planSchedulingPatch, schedulingFormValuesOf, serialPrefixOf } from './academy.settings'
+import {
+  planCatalogPatch,
+  planCertificatesPatch,
+  planLearningPatch,
+  planSchedulingPatch,
+  publicBrowsingOf,
+  schedulingFormValuesOf,
+  serialPrefixOf,
+  videoCompletionPercentOf,
+} from './academy.settings'
 import type { SchedulingFormValues } from './academy.settings'
 import { normaliseCurrency } from './academy.validation'
 
@@ -14,6 +25,10 @@ import { normaliseCurrency } from './academy.validation'
 export interface GeneralSettingsFormValues extends SchedulingFormValues {
   /** `settings.certificates.serialPrefix` as typed; blank = not set (the default `CERT`). */
   serialPrefix?: string
+  /** `settings.learning.videoCompletionPercent`; `null` (an empty field) = not set (the default 90). */
+  videoCompletionPercent?: number | null
+  /** `settings.catalog.publicBrowsing` as a switch: off = not set. */
+  publicBrowsing?: boolean
   nameAr: string
   nameEn?: string
   nameTr?: string
@@ -41,6 +56,8 @@ export function settingsFormValuesOf(academy: Academy): GeneralSettingsFormValue
     contactPhone: text(academy.contactPhone),
     ...schedulingFormValuesOf(academy.settings.scheduling),
     serialPrefix: text(serialPrefixOf(academy.settings)),
+    videoCompletionPercent: videoCompletionPercentOf(academy.settings),
+    publicBrowsing: publicBrowsingOf(academy.settings) === true,
   }
 }
 
@@ -100,6 +117,10 @@ export function planAcademyPatch(current: Academy, values: GeneralSettingsFormVa
   if (scheduling) settings.scheduling = scheduling
   const certificates = planCertificatesPatch(serialPrefixOf(current.settings), values.serialPrefix)
   if (certificates) settings.certificates = certificates
+  const learning = planLearningPatch(videoCompletionPercentOf(current.settings), values.videoCompletionPercent)
+  if (learning) settings.learning = learning
+  const catalog = planCatalogPatch(publicBrowsingOf(current.settings), values.publicBrowsing)
+  if (catalog) settings.catalog = catalog
   if (Object.keys(settings).length > 0) body.settings = settings
 
   return Object.keys(body).length === 0 ? null : body

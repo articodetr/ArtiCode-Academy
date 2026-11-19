@@ -1,8 +1,10 @@
-import { LockOutlined, UserOutlined } from '@ant-design/icons'
+import { BookOutlined, LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Form, Input, Spin, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { usePublicAcademy } from '../academy/usePublicAcademy'
+import { isCatalogPublic } from '../api/academy'
 import { isMfaChallenge } from '../api/auth'
 import type { MfaChallenge } from '../api/auth'
 import { ApiError } from '../api/client'
@@ -64,6 +66,8 @@ export function LoginPage() {
   // Why the visitor is (back) at the password form: the second step ended, or a password reset sent them here.
   // From the router state only a known notice id (and the whole minutes of a lock) is ever read — never text.
   const [notice, setNotice] = useState<ShownSignInNotice | null>(() => signInNoticeOf(location.state))
+  // API-205, once the visitor is known to be signed out: whether the academy opens its catalog to visitors (D-R138).
+  const publicAcademy = usePublicAcademy(status === 'anonymous')
 
   if (status === 'loading') {
     return (
@@ -156,6 +160,15 @@ export function LoginPage() {
                 {submitting ? t('login.signingIn') : t('login.submit')}
               </Button>
             </Form>
+
+            {/* The public catalog (/explore) — only while the academy offers it; a failed read shows no link. */}
+            {isCatalogPublic(publicAcademy.academy) ? (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                <Link to="/explore">
+                  <BookOutlined /> {t('login.browseCourses')}
+                </Link>
+              </div>
+            ) : null}
           </>
         )}
 

@@ -96,6 +96,11 @@ export interface ApiRequestOptions {
   auth?: boolean
   /** Internal: prevents a second refresh-and-retry cycle. */
   retry?: boolean
+  /**
+   * Lets the request outlive the page (MOD-20: the last playback save when the tab is hidden).
+   * The browser caps a keepalive body at 64 KB.
+   */
+  keepalive?: boolean
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -104,7 +109,7 @@ async function parseBody(response: Response): Promise<unknown> {
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, auth = true, retry = true } = options
+  const { method = 'GET', body, signal, auth = true, retry = true, keepalive } = options
   const headers = new Headers({ Accept: 'application/json' })
   if (body !== undefined) headers.set('Content-Type', 'application/json')
   const token = auth ? getAccessToken() : null
@@ -115,6 +120,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
+    ...(keepalive ? { keepalive: true } : {}),
     credentials: 'include',
   })
   const payload = await parseBody(response)

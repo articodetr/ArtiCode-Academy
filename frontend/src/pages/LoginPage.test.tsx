@@ -1,10 +1,13 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { useLocation } from 'react-router'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ACADEMY_PUBLIC_PATH } from '../api/academy'
 import { ApiError } from '../api/client'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
-import { mfaChallengeResponse } from '../test/http'
+import { makePublicAcademy } from '../test/academy'
+import { jsonResponse, mfaChallengeResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import type { AuthContextValue } from '../auth/auth-context'
@@ -36,6 +39,11 @@ async function submitCredentials(identifier = 'admin', password = 'Secret123!') 
 }
 
 describe('LoginPage', () => {
+  // API-205 (read for the «تصفّح الدورات» link): closed by default, so the other tests see no link.
+  beforeEach(() => {
+    mockFetch((url) => (url === ACADEMY_PUBLIC_PATH ? jsonResponse(200, makePublicAcademy()) : jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })))
+  })
+
   it('renders the sign-in form in Arabic (RTL) by default', () => {
     renderLogin()
     expect(screen.getByText(ar.common.appName)).toBeInTheDocument()
@@ -339,5 +347,88 @@ describe('LoginPage', () => {
     expect(link).toHaveAttribute('href', '/forgot-password')
     await userEvent.click(link)
     expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/forgot-password')
+  })
+})
+
+/** Where the page navigated, query string included (LocationProbe shows the pathname only). */
+function PathProbe() {
+  const location = useLocation()
+  return <output data-testid="path">{`${location.pathname}${location.search}`}</output>
+}
+
+describe('LoginPage — the public catalog and the intended action (MOD-20, D-R138)', () => {
+  const browseLink = () => screen.queryByText(ar.login.browseCourses)?.closest('a') ?? null
+
+  function mockPublicAcademy(body: unknown, status = 200) {
+    return mockFetch((url) => (url === ACADEMY_PUBLIC_PATH ? jsonResponse(status, body) : jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })))
+  }
+
+  /** Lets the answer of API-205 reach the page. */
+  async function settle(fetchMock: ReturnType<typeof mockFetch>) {
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+
+  it('links to the public catalog when API-205 says the academy offers it, reading it without a token', async () => {
+    const fetchMock = mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
+    renderLogin()
+
+    await waitFor(() => expect(browseLink()).not.toBeNull())
+    expect(browseLink()).toHaveAttribute('href', '/explore')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toBe(ACADEMY_PUBLIC_PATH)
+    expect(new Headers(init?.headers).get('Authorization')).toBeNull()
+
+    await userEvent.click(browseLink()!)
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/explore')
+  })
+
+  it('shows no link while the catalog is closed, on a server before MOD-20 and when the read fails', async () => {
+    for (const [body, status] of [[makePublicAcademy({ catalogPublic: false }), 200], [{ name: { ar: 'أ' }, logoUrl: null, defaultLocale: 'ar' }, 200], [{ statusCode: 429, code: 'rate_limited', message: 'slow' }, 429]] as const) {
+      const fetchMock = mockPublicAcademy(body, status)
+      const { unmount } = renderLogin()
+      await settle(fetchMock)
+      expect(browseLink()).toBeNull()
+      // The form itself is untouched by the read.
+      expect(screen.getByLabelText(ar.login.identifier)).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('reads nothing while the session is still being restored, nor for a signed-in user', async () => {
+    const fetchMock = mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
+    const { unmount } = renderLogin(makeAuth({ status: 'loading' }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    unmount()
+    renderLogin(makeAuth({ user: makeUser() }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns to the intended action with its query string after the sign-in', async () => {
+    mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
+    const auth = makeAuth()
+    vi.mocked(auth.login).mockResolvedValue(makeUser({ role: 'student', roles: ['student'] }))
+    renderWithProviders(<LoginPage />, {
+      auth,
+      route: { pathname: '/login', state: { from: '/catalog/c-1?intent=enroll' } },
+      routes: { '*': <PathProbe /> },
+    })
+    await submitCredentials()
+    expect((await screen.findByTestId('path')).textContent).toBe('/catalog/c-1?intent=enroll')
+  })
+
+  it('still sends a user who must change the password to the profile page first (KI-086)', async () => {
+    mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
+    const auth = makeAuth()
+    vi.mocked(auth.login).mockResolvedValue(makeUser({ mustChangePassword: true }))
+    renderWithProviders(<LoginPage />, {
+      auth,
+      route: { pathname: '/login', state: { from: '/catalog/c-1?intent=enroll' } },
+      routes: { '*': <PathProbe /> },
+    })
+    await submitCredentials()
+    expect((await screen.findByTestId('path')).textContent).toBe('/profile')
   })
 })

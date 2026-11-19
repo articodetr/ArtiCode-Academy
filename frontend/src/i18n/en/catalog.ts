@@ -59,6 +59,8 @@ export const catalog: typeof arCatalog = {
     unavailable: 'Enrollment is not available right now',
     unavailableHint: 'No class of this course is open for enrollment with a free seat right now. Check again later.',
     noClasses: 'No class of this course is open for enrollment.',
+    // MOD-20 (D-R138): the visitor chose “Enroll in this course” on the public page and signed in.
+    intentNotice: 'Choose the class you want to enroll in',
   },
   class: {
     status: 'Class status',

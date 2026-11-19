@@ -4,9 +4,12 @@
 // rules mirror the server (academy.validation.ts); the server stays the boundary.
 // Since J-F02 the same form also edits the weekly schedule (`settings.scheduling`,
 // MOD-02-T03) and saves it in the same single PATCH; since J-F51 the prefix of
-// the certificate serials too (`settings.certificates.serialPrefix`, D-R51).
+// the certificate serials too (`settings.certificates.serialPrefix`, D-R51), and
+// since MOD-20 the playback share that completes a video or audio lesson
+// (`settings.learning.videoCompletionPercent`, D-R134) and the public catalog
+// switch (`settings.catalog.publicBrowsing`, D-R138).
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, AutoComplete, Button, Card, Checkbox, Flex, Form, Input, Select, Skeleton, Space, Typography } from 'antd'
+import { Alert, App, AutoComplete, Button, Card, Checkbox, Flex, Form, Input, InputNumber, Select, Skeleton, Space, Switch, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ACADEMY_LOCALES, updateAcademy } from '../api/academy'
@@ -20,10 +23,14 @@ import { planAcademyPatch, settingsFormValuesOf } from './academy.patch'
 import type { GeneralSettingsFormValues } from './academy.patch'
 import {
   DEFAULT_CERTIFICATE_SERIAL_PREFIX,
+  DEFAULT_VIDEO_COMPLETION_PERCENT,
   exampleSerial,
   isSerialPrefixInput,
+  isVideoCompletionInput,
   orderedWeekdays,
   SERIAL_PREFIX_MAX_LENGTH,
+  VIDEO_COMPLETION_MAX,
+  VIDEO_COMPLETION_MIN,
   WEEKDAY_KEYS,
   WEEKDAYS,
 } from './academy.settings'
@@ -208,6 +215,35 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
         ]}
       >
         <Input dir="ltr" maxLength={SERIAL_PREFIX_MAX_LENGTH} placeholder={DEFAULT_CERTIFICATE_SERIAL_PREFIX} style={{ maxWidth: 200 }} />
+      </Form.Item>
+
+      <Typography.Title level={5} style={{ marginTop: 8 }}>
+        {t('settings.learning.title')}
+      </Typography.Title>
+      <Typography.Paragraph type="secondary">{t('settings.learning.intro')}</Typography.Paragraph>
+      <Form.Item
+        name="videoCompletionPercent"
+        label={t('settings.learning.videoCompletionPercent')}
+        extra={t('settings.learning.videoCompletionHint', { min: VIDEO_COMPLETION_MIN, max: VIDEO_COMPLETION_MAX, default: DEFAULT_VIDEO_COMPLETION_PERCENT })}
+        rules={[
+          {
+            validator: (_, value: unknown) =>
+              isVideoCompletionInput(value)
+                ? Promise.resolve()
+                : Promise.reject(new Error(t('settings.learning.invalid', { min: VIDEO_COMPLETION_MIN, max: VIDEO_COMPLETION_MAX }))),
+          },
+        ]}
+      >
+        {/* No min/max/precision: antd would change a typed value silently on blur — the rule above refuses it instead. */}
+        <InputNumber<number> placeholder={String(DEFAULT_VIDEO_COMPLETION_PERCENT)} suffix="%" style={{ maxWidth: 160, width: '100%' }} />
+      </Form.Item>
+
+      <Typography.Title level={5} style={{ marginTop: 8 }}>
+        {t('settings.catalog.title')}
+      </Typography.Title>
+      <Typography.Paragraph type="secondary">{t('settings.catalog.intro')}</Typography.Paragraph>
+      <Form.Item name="publicBrowsing" label={t('settings.catalog.publicBrowsing')} valuePropName="checked">
+        <Switch />
       </Form.Item>
 
       <Flex justify="space-between" align="center" wrap gap={12}>

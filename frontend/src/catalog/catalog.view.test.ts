@@ -1,7 +1,6 @@
 // MOD-19 — the pure rules of the learner's catalog screens.
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
-import { makeMyClassItem } from '../test/enrollments'
 import { makeCatalogCard, makeCatalogClass, makeCatalogDetail } from '../test/catalog'
 import { catalogFailureKey, isCourseGone } from './catalog.errors'
 import {
@@ -10,7 +9,6 @@ import {
   coverSrc,
   enrollableClasses,
   enrollmentUnavailable,
-  groupByCourse,
   isCatalogNarrowed,
   priceAmount,
   weekdayKey,
@@ -70,18 +68,6 @@ describe('small formatters', () => {
     expect(priceAmount(1200)).toBe('1200.00')
   })
 
-  it('groups «my classes» by course in the server order', () => {
-    const a = makeMyClassItem()
-    const b = makeMyClassItem({ enrollmentId: 'e-2', class: { ...a.class, id: 'c-2', code: 'PY-101-B' } })
-    const other = makeMyClassItem({ enrollmentId: 'e-3', class: { ...a.class, id: 'c-3', course: { id: 'course-2', code: 'WEB', name: { ar: 'الويب' } } } })
-    expect(groupByCourse([a, other, b]).map((group) => [group.course.id, group.items.map((item) => item.enrollmentId)])).toEqual([
-      [a.class.course.id, [a.enrollmentId, 'e-2']],
-      ['course-2', ['e-3']],
-    ])
-  })
-})
-
-describe('catalog failures', () => {
   it('maps the server codes, a 403 without code, a network failure and anything else', () => {
     expect(catalogFailureKey(new ApiError(409, 'x', { code: 'class_full' }))).toBe('catalog.errors.class_full')
     expect(catalogFailureKey(new ApiError(403, 'x', {}))).toBe('catalog.errors.permission_denied')

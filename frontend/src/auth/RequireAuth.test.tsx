@@ -42,6 +42,16 @@ describe('RequireAuth', () => {
     expect(screen.queryByText(SECRET)).not.toBeInTheDocument()
   })
 
+  it('keeps the query string in `from`, so an intended action survives the sign-in (MOD-20, D-R138)', () => {
+    renderWithProviders(
+      <RequireAuth>
+        <p>{SECRET}</p>
+      </RequireAuth>,
+      { route: '/catalog/c-1?intent=enroll', path: '/catalog/:courseId', routes: { '/login': <LocationProbe /> } },
+    )
+    expect(redirectState()).toEqual({ pathname: '/login', state: { from: '/catalog/c-1?intent=enroll' } })
+  })
+
   it('renders the page for a signed-in user', () => {
     renderWithProviders(
       <RequireAuth>

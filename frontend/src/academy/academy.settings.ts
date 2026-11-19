@@ -6,6 +6,8 @@
 // an unchanged key is left out, a cleared one becomes `null`. Since J-F51 also
 // the certificates key `settings.certificates.serialPrefix` (MOD-10-T02,
 // D-R51) — the same rules, in the same single PATCH (at the end of this file).
+// Since MOD-20 also `settings.learning.videoCompletionPercent` (D-R134) and
+// `settings.catalog.publicBrowsing` (D-R138), at the very end.
 import type { AcademySettingsInput, SchedulingSettings, Weekday } from '../api/academy'
 
 /** 0 = Sunday … 6 = Saturday. */
@@ -116,4 +118,70 @@ export function exampleSerial(value: string | null | undefined, year: number): s
   const typed = normaliseSerialPrefix(value)
   const prefix = SERIAL_PREFIX_PATTERN.test(typed) ? typed : DEFAULT_CERTIFICATE_SERIAL_PREFIX
   return `${prefix}-${year}-00001`
+}
+
+// --- Learning (MOD-20, D-R134) ---
+
+/**
+ * Mirror of the backend schema of `settings.learning.videoCompletionPercent` (backend/src/academy/academy.settings.ts —
+ * keep in sync): an integer from 50 to 100; `null` = not set, the server then uses the default 90.
+ */
+export const VIDEO_COMPLETION_MIN = 50
+export const VIDEO_COMPLETION_MAX = 100
+/** The share the server applies while the academy has set none (`DEFAULT_COMPLETION_PERCENT`). */
+export const DEFAULT_VIDEO_COMPLETION_PERCENT = 90
+
+export type LearningPatch = NonNullable<AcademySettingsInput['learning']>
+export type CatalogPatch = NonNullable<AcademySettingsInput['catalog']>
+
+export function isVideoCompletionPercent(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= VIDEO_COMPLETION_MIN && value <= VIDEO_COMPLETION_MAX
+}
+
+/** True for an empty field (= not set, the default 90) or a share the server accepts. */
+export function isVideoCompletionInput(value: unknown): boolean {
+  return value === null || value === undefined || value === '' || isVideoCompletionPercent(value)
+}
+
+function domainOf(settings: unknown, domain: string): Record<string, unknown> | null {
+  const section = typeof settings === 'object' && settings !== null ? (settings as Record<string, unknown>)[domain] : undefined
+  return typeof section === 'object' && section !== null && !Array.isArray(section) ? (section as Record<string, unknown>) : null
+}
+
+/**
+ * The stored share, read defensively: a server before MOD-20 sends no `settings.learning`, and anything outside the
+ * schema reads as not set — as the server's lenient `readSettings()` reads it.
+ */
+export function videoCompletionPercentOf(settings: unknown): number | null {
+  const value = domainOf(settings, 'learning')?.videoCompletionPercent
+  return isVideoCompletionPercent(value) ? value : null
+}
+
+/**
+ * The `settings.learning` PATCH that moves `current` to the typed share (an emptied field clears it), or `null` when
+ * nothing differs — and for a form without the field at all (`undefined`), which changes nothing.
+ */
+export function planLearningPatch(current: number | null, value: number | null | undefined): LearningPatch | null {
+  if (value === undefined) return null
+  const next = isVideoCompletionPercent(value) ? value : null
+  return next === current ? null : { videoCompletionPercent: next }
+}
+
+// --- Public catalog (MOD-20, D-R138) ---
+
+/** The stored switch: `true`, `false` (stored by hand) or `null` (not set); anything else reads as not set. */
+export function publicBrowsingOf(settings: unknown): boolean | null {
+  const value = domainOf(settings, 'catalog')?.publicBrowsing
+  return typeof value === 'boolean' ? value : null
+}
+
+/**
+ * The `settings.catalog` PATCH for the switch: on → `true`, off → `null` (not set — off is the default, so the
+ * academy never stores `false`), or `null` when the switch shows what is stored (a stored `false` reads as off) — and
+ * for a form without the switch (`undefined`).
+ */
+export function planCatalogPatch(current: boolean | null, checked: boolean | undefined): CatalogPatch | null {
+  if (checked === undefined) return null
+  if (checked === (current === true)) return null
+  return { publicBrowsing: checked ? true : null }
 }

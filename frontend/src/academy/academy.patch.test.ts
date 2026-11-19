@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { makeAcademy } from '../test/academy'
 import { nameOf, planAcademyPatch, sameName, settingsFormValuesOf } from './academy.patch'
 
+/** The MOD-20 keys as a freshly seeded academy holds them. */
+const UNSET_MOD20 = { learning: { videoCompletionPercent: null }, catalog: { publicBrowsing: null } }
+
 describe('settingsFormValuesOf', () => {
   it('turns nulls and missing locales into empty strings', () => {
     expect(settingsFormValuesOf(makeAcademy())).toEqual({
@@ -17,6 +20,8 @@ describe('settingsFormValuesOf', () => {
       weekStartsOn: undefined,
       workingDays: [],
       serialPrefix: '',
+      videoCompletionPercent: null,
+      publicBrowsing: false,
     })
   })
 })
@@ -63,7 +68,7 @@ describe('planAcademyPatch', () => {
   })
 
   it('adds the changed weekly-schedule keys under settings.scheduling, in the same body as the row fields (J-F02)', () => {
-    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1, 2, 3, 4] }, certificates: { serialPrefix: null } } })
+    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1, 2, 3, 4] }, certificates: { serialPrefix: null }, ...UNSET_MOD20 } })
     const values = settingsFormValuesOf(academy)
     expect(planAcademyPatch(academy, { ...values, workingDays: [4, 3, 2, 1, 0] })).toBeNull()
     expect(planAcademyPatch(academy, { ...values, currency: 'TRY', weekStartsOn: 6, workingDays: [] })).toEqual({
@@ -79,7 +84,7 @@ describe('planAcademyPatch', () => {
   })
 
   it('adds the certificate prefix under settings.certificates in the same body, upper-cased; blank clears it to null (J-F51)', () => {
-    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: null }, certificates: { serialPrefix: 'ACA' } } })
+    const academy = makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: null }, certificates: { serialPrefix: 'ACA' }, ...UNSET_MOD20 } })
     const values = settingsFormValuesOf(academy)
     expect(values.serialPrefix).toBe('ACA')
     expect(planAcademyPatch(academy, { ...values, serialPrefix: ' aca ' })).toBeNull()
@@ -96,5 +101,33 @@ describe('planAcademyPatch', () => {
     expect(settingsFormValuesOf(academy).serialPrefix).toBe('')
     expect(planAcademyPatch(academy, settingsFormValuesOf(academy))).toBeNull()
     expect(planAcademyPatch(academy, { ...settingsFormValuesOf(academy), serialPrefix: 'ACA' })).toEqual({ settings: { certificates: { serialPrefix: 'ACA' } } })
+  })
+
+  it('adds the playback share under settings.learning and the catalog switch under settings.catalog in the same body (MOD-20)', () => {
+    const academy = makeAcademy()
+    const values = settingsFormValuesOf(academy)
+    expect(planAcademyPatch(academy, { ...values, videoCompletionPercent: 80, publicBrowsing: true, weekStartsOn: 6 })).toEqual({
+      settings: { scheduling: { weekStartsOn: 6 }, learning: { videoCompletionPercent: 80 }, catalog: { publicBrowsing: true } },
+    })
+  })
+
+  it('clears the share with null and turns the switch off as null (not set), never as false', () => {
+    const academy = makeAcademy({
+      settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null }, learning: { videoCompletionPercent: 75 }, catalog: { publicBrowsing: true } },
+    })
+    const values = settingsFormValuesOf(academy)
+    expect(values.videoCompletionPercent).toBe(75)
+    expect(values.publicBrowsing).toBe(true)
+    expect(planAcademyPatch(academy, values)).toBeNull()
+    expect(planAcademyPatch(academy, { ...values, videoCompletionPercent: null, publicBrowsing: false })).toEqual({
+      settings: { learning: { videoCompletionPercent: null }, catalog: { publicBrowsing: null } },
+    })
+  })
+
+  it('reads a server before MOD-20 (no settings.learning / settings.catalog) as not set', () => {
+    const academy = { ...makeAcademy(), settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } } } as unknown as ReturnType<typeof makeAcademy>
+    expect(settingsFormValuesOf(academy)).toMatchObject({ videoCompletionPercent: null, publicBrowsing: false })
+    expect(planAcademyPatch(academy, settingsFormValuesOf(academy))).toBeNull()
+    expect(planAcademyPatch(academy, { ...settingsFormValuesOf(academy), publicBrowsing: true })).toEqual({ settings: { catalog: { publicBrowsing: true } } })
   })
 })
