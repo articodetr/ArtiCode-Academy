@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsBoolean, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { codeParam, rawNumber } from '../courses/courses.validation.js';
@@ -8,6 +8,11 @@ import { ClassStatus, ClassTeacherRole, CourseStatus } from '../generated/prisma
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { IsCalendarDate, nullableTextParam, textParam } from '../users/users.validation.js';
 import { CLASS_STATUS_ACTIONS } from './classes.status.js';
+
+/** Body booleans are JSON booleans: implicit conversion would turn "no" into true (the guardians.dto.ts rule). */
+function rawBoolean({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
+  return obj[key];
+}
 import type { ClassStatusAction } from './classes.status.js';
 
 export const CLASSES_PAGE_DEFAULT = 20;
@@ -123,6 +128,15 @@ export class CreateClassDto {
   @IsString()
   @Length(1, CLASS_NOTES_MAX_LENGTH)
   notes?: string;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: 'MOD-19 (D-R123): open to self-service enrollment from the catalog while the class is open or running and its course published',
+  })
+  @IsOptional()
+  @Transform(rawBoolean)
+  @IsBoolean()
+  selfEnrollment?: boolean;
 }
 
 /**
@@ -170,6 +184,12 @@ export class UpdateClassDto {
   @IsString()
   @Length(1, CLASS_NOTES_MAX_LENGTH)
   notes?: string | null;
+
+  @ApiPropertyOptional({ description: 'MOD-19 (D-R123): open or close self-service enrollment; a JSON boolean, not nullable. Existing requests and enrollments are kept.' })
+  @ValidateIf((dto: UpdateClassDto) => dto.selfEnrollment !== undefined)
+  @Transform(rawBoolean)
+  @IsBoolean()
+  selfEnrollment?: boolean;
 }
 
 export class ChangeClassStatusDto {
@@ -258,6 +278,9 @@ export class ClassDto {
 
   @ApiProperty({ example: 12, description: 'Active enrollments (computed, never stored)' })
   enrolledCount: number;
+
+  @ApiProperty({ description: 'MOD-19 (D-R123): open to self-service enrollment from the catalog' })
+  selfEnrollment: boolean;
 
   @ApiProperty({ description: 'ISO 8601' })
   createdAt: string;

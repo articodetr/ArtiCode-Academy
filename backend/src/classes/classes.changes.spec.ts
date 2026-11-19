@@ -10,6 +10,7 @@ const CURRENT: ClassValues = {
   startsOn: '2026-11-10',
   endsOn: '2026-12-20',
   notes: null,
+  selfEnrollment: false,
 };
 
 describe('planClassUpdate', () => {

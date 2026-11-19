@@ -41,6 +41,8 @@ const DTO_KEYS = [
   'id',
   'name',
   'notes',
+  // MOD-19 (CH-0301): open to self-service enrollment from the catalog.
+  'selfEnrollment',
   'startsOn',
   'status',
   'teachers',

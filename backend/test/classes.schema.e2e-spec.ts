@@ -172,7 +172,8 @@ describe.skipIf(!available)('database schema — MOD-05 classes, class teachers,
       const student = await user(client, 'student-u');
       const ENROLL_SQL = `INSERT INTO enrollments (class_id, student_user_id, status) VALUES ($1, $2, $3)`;
       await client.query(ENROLL_SQL, [classId, student, 'active']);
-      await expectSqlError(client, ENROLL_SQL, [classId, student, 'pending'], UNIQUE_VIOLATION);
+      // Any other status is refused by the unique index too (`pending` would now need `requested_at` — MOD-19 CHECK).
+      await expectSqlError(client, ENROLL_SQL, [classId, student, 'withdrawn'], UNIQUE_VIOLATION);
       await client.query(ENROLL_SQL, [second, student, 'active']);
     });
   });

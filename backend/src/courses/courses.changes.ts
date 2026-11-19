@@ -16,6 +16,9 @@ export const COURSE_PATCH_FIELDS = [
   'sessionsCount',
   'minAge',
   'maxAge',
+  // MOD-19 (D-R122/D-R129): the cover and the plan that prices a request.
+  'coverImageUrl',
+  'enrollmentFeePlanId',
 ] as const;
 export type CoursePatchField = (typeof COURSE_PATCH_FIELDS)[number];
 
@@ -32,6 +35,8 @@ export interface CourseValues {
   sessionsCount: number | null;
   minAge: number | null;
   maxAge: number | null;
+  coverImageUrl: string | null;
+  enrollmentFeePlanId: string | null;
 }
 
 export type CoursePatch = Partial<CourseValues>;

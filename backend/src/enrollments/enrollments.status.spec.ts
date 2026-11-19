@@ -1,4 +1,5 @@
-// TEST-050 (unit) — the enrollment rules of MOD-05-T04.
+// TEST-050 (unit) — the enrollment rules of MOD-05-T04; TEST-242 (unit) — the
+// approve / reject actions of a request (MOD-19, D-R125/D-R126).
 import { describe, expect, it } from 'vitest';
 import type { EnrollmentStatus } from '../generated/prisma/client.js';
 import {
@@ -30,20 +31,23 @@ describe('enrollment state machine', () => {
         'cancel:active->cancelled',
         'reactivate:withdrawn->active',
         'reactivate:cancelled->active',
+        // MOD-19: a pending enrollment is a request.
+        'approve:pending->active',
+        'reject:pending->cancelled',
       ].sort(),
     );
   });
 
-  it('lists the allowed actions per status in catalogue order; completed and pending allow nothing', () => {
+  it('lists the allowed actions per status in catalogue order; completed allows nothing, pending approve and reject only', () => {
     expect(allowedEnrollmentActions('active')).toEqual(['withdraw', 'complete', 'cancel']);
     expect(allowedEnrollmentActions('withdrawn')).toEqual(['reactivate']);
     expect(allowedEnrollmentActions('cancelled')).toEqual(['reactivate']);
     expect(allowedEnrollmentActions('completed')).toEqual([]);
-    expect(allowedEnrollmentActions('pending')).toEqual([]);
+    expect(allowedEnrollmentActions('pending')).toEqual(['approve', 'reject']);
   });
 
-  it('only reactivate takes a seat again', () => {
-    expect(ENROLLMENT_STATUS_ACTIONS.filter(takesSeat)).toEqual(['reactivate']);
+  it('reactivate and approve take a seat (again)', () => {
+    expect(ENROLLMENT_STATUS_ACTIONS.filter(takesSeat)).toEqual(['reactivate', 'approve']);
   });
 });
 
@@ -78,13 +82,27 @@ describe('enrollmentWrite', () => {
     expect(enrollmentWrite('cancel', 'cancelled', now, 'error')).toEqual({ status: 'cancelled' });
   });
 
-  it('reactivation stamps activated_at and clears the withdrawal and completion columns', () => {
-    expect(enrollmentWrite('reactivate', 'active', now, 'back')).toEqual({
+  it('reactivation and approval stamp activated_at and clear the withdrawal, completion and rejection columns', () => {
+    const active = {
       status: 'active',
       activatedAt: now,
       withdrawnAt: null,
       withdrawalReason: null,
       completedAt: null,
+      rejectedAt: null,
+      rejectedById: null,
+      rejectionReason: null,
+    };
+    expect(enrollmentWrite('reactivate', 'active', now, 'back')).toEqual(active);
+    expect(enrollmentWrite('approve', 'active', now, null, 'admin-1')).toEqual(active);
+  });
+
+  it('a rejection keeps who rejected it and the required reason (D-R126)', () => {
+    expect(enrollmentWrite('reject', 'cancelled', now, 'no seat for this level', 'admin-1')).toEqual({
+      status: 'cancelled',
+      rejectedAt: now,
+      rejectedById: 'admin-1',
+      rejectionReason: 'no seat for this level',
     });
   });
 });

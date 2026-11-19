@@ -73,6 +73,8 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     isDefaultForSignup: true,
     permissions: [
       'courses.read',
+      // MOD-19 (D-R124): explore the catalog and enroll oneself (granted to existing academies once by the fourteenth migration).
+      'enrollments.self_enroll',
       'schedule.read',
       'lessons.read',
       'assignments.read',

@@ -1,4 +1,4 @@
-// Wording of the fifteen automatic notifications in Arabic (reference
+// Wording of the nineteen automatic notifications (fifteen of MOD-12, four of MOD-19) in Arabic (reference
 // language), English and Turkish (owner decision D-R83: templates in code,
 // rendered in the recipient's language at creation; Turkish since S6-C).
 // Every event words itself once per template locale through `w.pick()`, so a
@@ -220,6 +220,55 @@ const RENDERERS: { [K in NotificationEventKey]: Renderer<K> } = {
       en: { title: `Payment reversed: ${p.receiptNumber}`, body: `The payment with receipt ${p.receiptNumber} on invoice ${p.invoiceNumber} was reversed.` },
       tr: { title: `Ödeme geri alındı: ${p.receiptNumber}`, body: `${p.invoiceNumber} numaralı faturadaki ${p.receiptNumber} makbuz numaralı ödeme geri alındı.` },
     }),
+  // MOD-19 (D-R128): the enrollment events. The request's title names the
+  // course only — the amount is in the body; the rejection never words its
+  // reason (the parameters do not carry it).
+  'enrollment.requested': (p, w) => {
+    const course = w.text(p.courseName);
+    const klass = w.text(p.className);
+    const due = p.firstDueOn ? w.day(p.firstDueOn) : null;
+    return w.pick({
+      ar: {
+        title: `طلب اشتراك: ${course}`,
+        body: `استُلم طلب اشتراكك في دورة «${course}» — فصل «${klass}». صدرت الفاتورة ${p.number} بمبلغ ${p.total} ${p.currency}${due ? `؛ أول استحقاق في ${due}` : ''}. يُفعَّل الاشتراك بعد تأكيد الدفع وموافقة الإدارة.`,
+      },
+      en: {
+        title: `Enrollment request: ${course}`,
+        body: `Your request to join the course “${course}” — class “${klass}” — was received. Invoice ${p.number} was issued for ${p.total} ${p.currency}${due ? `; the first installment is due on ${due}` : ''}. The enrollment becomes active once the payment is confirmed and the academy approves it.`,
+      },
+      tr: {
+        title: `Kayıt talebi: ${course}`,
+        body: `“${course}” kursunun “${klass}” sınıfı için kayıt talebiniz alındı. ${p.number} numaralı fatura ${p.total} ${p.currency} tutarında düzenlendi${due ? `; ilk taksidin son ödeme tarihi ${due}` : ''}. Kayıt, ödeme onaylanıp akademi talebi kabul ettiğinde etkinleşir.`,
+      },
+    });
+  },
+  'enrollment.request_received': (p, w) => {
+    const course = w.text(p.courseName);
+    const klass = w.text(p.className);
+    return w.pick({
+      ar: { title: `طلب اشتراك جديد: ${course}`, body: `طلب ${p.studentName} الاشتراك في دورة «${course}» — فصل «${klass}». يُراجع الطلب في صفحة طلبات الاشتراك.` },
+      en: { title: `New enrollment request: ${course}`, body: `${p.studentName} asked to join the course “${course}” — class “${klass}”. Review it on the enrollment requests page.` },
+      tr: { title: `Yeni kayıt talebi: ${course}`, body: `${p.studentName}, “${course}” kursunun “${klass}” sınıfına katılmak istedi. Talebi kayıt talepleri sayfasında inceleyin.` },
+    });
+  },
+  'enrollment.activated': (p, w) => {
+    const course = w.text(p.courseName);
+    const klass = w.text(p.className);
+    return w.pick({
+      ar: { title: `تفعّل الاشتراك: ${course}`, body: `صار اشتراكك في دورة «${course}» — فصل «${klass}» — مفعّلاً، فتظهر دروسه وواجباته واختباراته في صفحاتك.` },
+      en: { title: `Enrollment active: ${course}`, body: `Your enrollment in the course “${course}” — class “${klass}” — is active; its lessons, assignments and exams now show on your pages.` },
+      tr: { title: `Kayıt etkin: ${course}`, body: `“${course}” kursunun “${klass}” sınıfındaki kaydınız etkinleşti; dersleri, ödevleri ve sınavları artık sayfalarınızda görünür.` },
+    });
+  },
+  'enrollment.rejected': (p, w) => {
+    const course = w.text(p.courseName);
+    const klass = w.text(p.className);
+    return w.pick({
+      ar: { title: `رُفض طلب اشتراك: ${course}`, body: `رُفض طلب اشتراكك في دورة «${course}» — فصل «${klass}». سبب الرفض في صفحة «دوراتي».` },
+      en: { title: `Enrollment request declined: ${course}`, body: `Your request to join the course “${course}” — class “${klass}” — was declined. The reason is on your “My courses” page.` },
+      tr: { title: `Kayıt talebi reddedildi: ${course}`, body: `“${course}” kursunun “${klass}” sınıfı için kayıt talebiniz reddedildi. Gerekçe “Kurslarım” sayfanızda.` },
+    });
+  },
 };
 
 /**

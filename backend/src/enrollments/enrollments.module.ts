@@ -1,4 +1,9 @@
 import { Module } from '@nestjs/common';
+import { FinanceModule } from '../finance/finance.module.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
+import { EnrollmentRequestsController } from './enrollment-requests.controller.js';
+import { EnrollmentRequestsService } from './enrollment-requests.service.js';
+import { EnrollmentRequestsWriter } from './enrollment-requests.writer.js';
 import { EnrollmentsController } from './enrollments.controller.js';
 import { EnrollmentsService } from './enrollments.service.js';
 import { MyClassesController } from './my-classes.controller.js';
@@ -16,7 +21,10 @@ import { StudentEnrollmentsService } from './student-enrollments.service.js';
  * guards, PrismaModule and AuditModule.
  */
 @Module({
-  controllers: [EnrollmentsController, MyClassesController, StudentEnrollmentsController],
-  providers: [EnrollmentsService, MyClassesService, StudentEnrollmentsService],
+  // MOD-19 (CH-0301): the request writer needs the invoices and the notification engine; the catalog module reuses it.
+  imports: [FinanceModule, NotificationsModule],
+  controllers: [EnrollmentsController, MyClassesController, StudentEnrollmentsController, EnrollmentRequestsController],
+  providers: [EnrollmentsService, MyClassesService, StudentEnrollmentsService, EnrollmentRequestsService, EnrollmentRequestsWriter],
+  exports: [EnrollmentRequestsWriter, EnrollmentRequestsService],
 })
 export class EnrollmentsModule {}

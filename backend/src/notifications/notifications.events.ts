@@ -1,5 +1,7 @@
 // The automatic notification events of MOD-12 (owner decision D-R80): fifteen
-// events from the writes of MOD-06..MOD-11, in five categories. The sixteenth
+// events from the writes of MOD-06..MOD-11, in five categories — and since
+// MOD-19 (D-R128) four enrollment events in a sixth automatic category,
+// `enrollments`, one of them for the office (scope `staff`). The sixteenth
 // event is the manual announcement (T05), which carries its sender's own
 // words instead of a template. The list lives here, in code — the database
 // only checks the shape of a key. No framework imports: pure data and types,
@@ -21,6 +23,9 @@ export const NOTIFICATION_LINKS = {
   certificates: '/my-certificates',
   invoices: '/my-invoices',
   notifications: '/notifications',
+  /** MOD-19: the learner's courses and requests, and the office's requests page. */
+  courses: '/my-courses',
+  enrollmentRequests: '/enrollment-requests',
 } as const;
 
 /** The key and category of a manual announcement (T05). */
@@ -67,6 +72,27 @@ export interface NotificationEventParams {
   'invoice.cancelled': { invoiceId: string; number: string };
   'payment.recorded': { paymentId: string; invoiceId: string; receiptNumber: string; invoiceNumber: string; amount: string; currency: string };
   'payment.reversed': { paymentId: string; invoiceId: string; receiptNumber: string; invoiceNumber: string };
+  /**
+   * MOD-19 (D-R128). A request for a paid course: the class by name and the
+   * invoice that prices it — no `classId`, because the pending enrollment is
+   * not one the «my …» pages show (the class rule of `notifyStudents()`).
+   */
+  'enrollment.requested': {
+    enrollmentId: string;
+    invoiceId: string;
+    courseName: LocalizedText;
+    className: LocalizedText;
+    number: string;
+    total: string;
+    currency: string;
+    firstDueOn: string | null;
+  };
+  /** The office side of a new request (scope `staff`): who asked, for which class — never an amount. */
+  'enrollment.request_received': { enrollmentId: string; studentName: string; courseName: LocalizedText; className: LocalizedText };
+  /** A free self-service enrollment, or an approved request: the enrollment is active (it carries `classId`). */
+  'enrollment.activated': { enrollmentId: string; classId: string; courseName: LocalizedText; className: LocalizedText };
+  /** A rejected request — never the reason (it is on the student's own requests page). */
+  'enrollment.rejected': { enrollmentId: string; courseName: LocalizedText; className: LocalizedText };
 }
 
 export type NotificationEventKey = keyof NotificationEventParams;
@@ -76,8 +102,10 @@ export type NotificationEventKey = keyof NotificationEventParams;
  * and their guardians, a guardian's copy naming their children in it.
  * `student`: one notification per (recipient × student) — the student and
  * their guardians (D-R81).
+ * `staff`: one notification per holder of the event's permission key — the
+ * office that has to act (MOD-19, D-R128 refines D-R81 for this one event).
  */
-export type NotificationScope = 'class' | 'student';
+export type NotificationScope = 'class' | 'student' | 'staff';
 
 interface EventDefinition {
   category: NotificationCategory;
@@ -101,15 +129,23 @@ export const NOTIFICATION_EVENTS = {
   'invoice.cancelled': { category: 'finance', scope: 'student', link: NOTIFICATION_LINKS.invoices },
   'payment.recorded': { category: 'finance', scope: 'student', link: NOTIFICATION_LINKS.invoices },
   'payment.reversed': { category: 'finance', scope: 'student', link: NOTIFICATION_LINKS.invoices },
+  'enrollment.requested': { category: 'enrollments', scope: 'student', link: NOTIFICATION_LINKS.courses },
+  'enrollment.request_received': { category: 'enrollments', scope: 'staff', link: NOTIFICATION_LINKS.enrollmentRequests },
+  'enrollment.activated': { category: 'enrollments', scope: 'student', link: NOTIFICATION_LINKS.courses },
+  'enrollment.rejected': { category: 'enrollments', scope: 'student', link: NOTIFICATION_LINKS.courses },
 } as const satisfies Record<NotificationEventKey, EventDefinition>;
 
 export const NOTIFICATION_EVENT_KEYS = Object.keys(NOTIFICATION_EVENTS) as NotificationEventKey[];
 
 export type ClassEventKey = { [K in NotificationEventKey]: (typeof NOTIFICATION_EVENTS)[K]['scope'] extends 'class' ? K : never }[NotificationEventKey];
-export type StudentEventKey = Exclude<NotificationEventKey, ClassEventKey>;
+export type StaffEventKey = { [K in NotificationEventKey]: (typeof NOTIFICATION_EVENTS)[K]['scope'] extends 'staff' ? K : never }[NotificationEventKey];
+export type StudentEventKey = Exclude<NotificationEventKey, ClassEventKey | StaffEventKey>;
 
-/** The six categories in the order the settings screen lists them (the declared order of the enum). */
-export const NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements'];
+/** The permission whose holders receive a `staff` event (MOD-19): the key that acts on it. */
+export const STAFF_EVENT_PERMISSIONS: Readonly<Record<StaffEventKey, string>> = { 'enrollment.request_received': 'enrollments.manage' };
+
+/** The seven categories in the order the settings screen lists them (the declared order of the enum; `enrollments` since MOD-19). */
+export const NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements', 'enrollments'];
 
 /**
  * `data` of a notification: the frontend path and the ids of the event —

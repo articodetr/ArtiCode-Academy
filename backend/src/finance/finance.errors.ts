@@ -8,7 +8,8 @@
 //   fee_plan_not_found        404 — no fee plan with this id
 //   fee_plan_invalid          400 — the plan breaks a rule ({ problems }: course_and_class,
 //                                   percent_sum, offsets_not_ascending)
-//   fee_plan_in_use           409 — invoices were created from the plan; deactivate it ({ invoiceCount })
+//   fee_plan_in_use           409 — invoices were created from the plan, or (MOD-19) a course prices its
+//                                   enrollment requests with it; deactivate it ({ invoiceCount, courseCount? })
 //   fee_plan_inactive         409 — an inactive plan creates no invoice ({ feePlanId })
 //   course_not_found          404 — the plan's course does not exist ({ courseId })
 //   class_not_found           404 — the plan's or the batch's class does not exist ({ classId })
@@ -97,8 +98,13 @@ export const financeError = {
   feePlanNotFound: (feePlanId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'fee_plan_not_found', 'No fee plan with this id', { feePlanId }),
   feePlanInvalid: (problems: readonly FeePlanProblem[]) =>
     new FinanceHttpException(HttpStatus.BAD_REQUEST, 'fee_plan_invalid', 'The fee plan breaks its rules', { problems: [...problems] }),
-  feePlanInUse: (invoiceCount: number) =>
-    new FinanceHttpException(HttpStatus.CONFLICT, 'fee_plan_in_use', 'Invoices were created from this fee plan; deactivate it instead', { invoiceCount }),
+  feePlanInUse: (invoiceCount: number, courseCount = 0) =>
+    new FinanceHttpException(
+      HttpStatus.CONFLICT,
+      'fee_plan_in_use',
+      courseCount > 0 ? 'A course prices its enrollment requests with this fee plan; deactivate it instead' : 'Invoices were created from this fee plan; deactivate it instead',
+      courseCount > 0 ? { invoiceCount, courseCount } : { invoiceCount },
+    ),
   feePlanInactive: (feePlanId: string) => new FinanceHttpException(HttpStatus.CONFLICT, 'fee_plan_inactive', 'An inactive fee plan creates no invoice', { feePlanId }),
   courseNotFound: (courseId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'course_not_found', 'No course with this id', { courseId }),
   classNotFound: (classId: string) => new FinanceHttpException(HttpStatus.NOT_FOUND, 'class_not_found', 'No class with this id', { classId }),

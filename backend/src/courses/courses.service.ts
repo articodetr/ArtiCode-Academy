@@ -8,6 +8,8 @@ import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { CourseStatus } from '../generated/prisma/client.js';
+import { COURSE_PLAN_SELECT, coursePlanFits, toCourseFeePlan } from '../catalog/course-pricing.js';
+import { FEE_PLANS_MANAGE_PERMISSION } from '../finance/finance.policy.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { escapeLikePattern } from '../users/users.validation.js';
@@ -50,13 +52,16 @@ const COURSE_SELECT = {
   maxAge: true,
   createdAt: true,
   updatedAt: true,
+  coverImageUrl: true,
   level: { select: { id: true, code: true, name: true, isActive: true } },
+  enrollmentFeePlan: { select: COURSE_PLAN_SELECT },
   _count: { select: { syllabusItems: true } },
 } satisfies Prisma.CourseSelect;
 
 type CourseRow = Prisma.CourseGetPayload<{ select: typeof COURSE_SELECT }>;
 
-function toCourseDto(row: CourseRow): CourseDto {
+/** `currency` = the academy currency, the unit of a plan's total (D15). */
+function toCourseDto(row: CourseRow, currency: string): CourseDto {
   return {
     id: row.id,
     code: row.code,
@@ -72,6 +77,9 @@ function toCourseDto(row: CourseRow): CourseDto {
     minAge: row.minAge,
     maxAge: row.maxAge,
     syllabusCount: row._count.syllabusItems,
+    coverImageUrl: row.coverImageUrl,
+    pricing: row.enrollmentFeePlan ? 'paid' : 'free',
+    enrollmentFeePlan: row.enrollmentFeePlan ? toCourseFeePlan(row.enrollmentFeePlan, currency) : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -88,6 +96,8 @@ function valuesOf(row: CourseRow): CourseValues {
     sessionsCount: row.sessionsCount,
     minAge: row.minAge,
     maxAge: row.maxAge,
+    coverImageUrl: row.coverImageUrl,
+    enrollmentFeePlanId: row.enrollmentFeePlan?.id ?? null,
   };
 }
 
@@ -107,6 +117,8 @@ function toUpdateInput(data: CoursePatch): Prisma.CourseUncheckedUpdateInput {
   if (data.sessionsCount !== undefined) input.sessionsCount = data.sessionsCount;
   if (data.minAge !== undefined) input.minAge = data.minAge;
   if (data.maxAge !== undefined) input.maxAge = data.maxAge;
+  if (data.coverImageUrl !== undefined) input.coverImageUrl = data.coverImageUrl;
+  if (data.enrollmentFeePlanId !== undefined) input.enrollmentFeePlanId = data.enrollmentFeePlanId;
   return input;
 }
 
@@ -115,9 +127,11 @@ function toUpdateInput(data: CoursePatch): Prisma.CourseUncheckedUpdateInput {
  * a level deleted meanwhile (P2003 on courses.level_id) or a course deleted
  * meanwhile (P2025).
  */
-function translateKnownError(error: unknown, courseId: string | null, code: string | null, levelId: string | null): unknown {
+function translateKnownError(error: unknown, courseId: string | null, code: string | null, levelId: string | null, feePlanId: string | null = null): unknown {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return error;
   if (error.code === 'P2002' && code !== null) return coursesError.courseCodeTaken(code);
+  // A foreign key failed: the level, or (MOD-19) the fee plan deleted meanwhile.
+  if (error.code === 'P2003' && feePlanId !== null && JSON.stringify(error.meta ?? {}).includes('enrollment_fee_plan')) return coursesError.feePlanNotFound(feePlanId);
   if (error.code === 'P2003' && levelId !== null) return coursesError.levelNotFound(levelId);
   if (error.code === 'P2025' && courseId !== null) return coursesError.courseNotFound(courseId);
   return error;
@@ -169,13 +183,14 @@ export class CoursesService {
       take: limit + 1,
       select: COURSE_SELECT,
     });
+    const currency = await this.currency();
     const page = rows.slice(0, limit);
     const last = page.at(-1);
     const nextCursor =
       rows.length > limit && last
         ? encodeKeysetCursor({ sort, order, key: sort === 'code' ? last.code : null, id: last.id })
         : null;
-    return { items: page.map(toCourseDto), nextCursor };
+    return { items: page.map((item) => toCourseDto(item, currency)), nextCursor };
   }
 
   /**
@@ -197,7 +212,7 @@ export class CoursesService {
   async get(id: string, caller: AuthPrincipal): Promise<CourseDto> {
     const row = await this.prisma.db.course.findUnique({ where: { id }, select: COURSE_SELECT });
     if (!row || (row.status !== 'published' && !canManageCourses(caller.permissions))) throw coursesError.courseNotFound(id);
-    return toCourseDto(row);
+    return toCourseDto(row, await this.currency());
   }
 
   async create(input: CreateCourseDto, caller: AuthPrincipal, ctx: RequestContext): Promise<CourseDto> {
@@ -207,6 +222,7 @@ export class CoursesService {
     const clash = await this.prisma.db.course.findUnique({ where: { code: input.code }, select: { id: true } });
     if (clash) throw coursesError.courseCodeTaken(input.code);
     if (input.levelId) await this.assertLevelExists(input.levelId);
+    if (input.enrollmentFeePlanId !== undefined) await this.assertPricingAllowed(input.enrollmentFeePlanId, null, caller);
 
     let courseId: string;
     try {
@@ -222,6 +238,8 @@ export class CoursesService {
             sessionsCount: input.sessionsCount ?? null,
             minAge,
             maxAge,
+            coverImageUrl: input.coverImageUrl ?? null,
+            enrollmentFeePlanId: input.enrollmentFeePlanId ?? null,
             createdById: caller.id,
           },
           select: { id: true },
@@ -232,7 +250,7 @@ export class CoursesService {
             actorUserId: caller.id,
             entityType: COURSES_ENTITY_TYPE,
             entityId: course.id,
-            metadata: { code: input.code, status: 'draft' },
+            metadata: { code: input.code, status: 'draft', pricing: input.enrollmentFeePlanId ? 'paid' : 'free' },
             ...ctx,
           },
           tx,
@@ -240,7 +258,7 @@ export class CoursesService {
         return course.id;
       });
     } catch (error) {
-      throw translateKnownError(error, null, input.code, input.levelId ?? null);
+      throw translateKnownError(error, null, input.code, input.levelId ?? null, input.enrollmentFeePlanId ?? null);
     }
     return this.getForManager(courseId);
   }
@@ -260,18 +278,22 @@ export class CoursesService {
     if (input.sessionsCount !== undefined) patch.sessionsCount = input.sessionsCount;
     if (input.minAge !== undefined) patch.minAge = input.minAge;
     if (input.maxAge !== undefined) patch.maxAge = input.maxAge;
+    if (input.coverImageUrl !== undefined) patch.coverImageUrl = input.coverImageUrl;
+    if (input.enrollmentFeePlanId !== undefined) patch.enrollmentFeePlanId = input.enrollmentFeePlanId;
 
     const current = valuesOf(row);
     const badRange = invalidAgeRange(current, patch);
     if (badRange) throw coursesError.ageRangeInvalid(badRange.minAge, badRange.maxAge);
     const plan = planCourseUpdate(current, patch);
-    if (plan.fields.length === 0) return toCourseDto(row);
+    if (plan.fields.length === 0) return toCourseDto(row, await this.currency());
 
     if (plan.data.code !== undefined) {
       const clash = await this.prisma.db.course.findUnique({ where: { code: plan.data.code }, select: { id: true } });
       if (clash && clash.id !== id) throw coursesError.courseCodeTaken(plan.data.code);
     }
     if (plan.data.levelId) await this.assertLevelExists(plan.data.levelId);
+    // MOD-19 (D-R122): a price change also needs fee_plans.manage; clearing it (free again) too.
+    if (plan.data.enrollmentFeePlanId !== undefined) await this.assertPricingAllowed(plan.data.enrollmentFeePlanId, id, caller);
 
     try {
       await this.prisma.db.$transaction(async (tx) => {
@@ -289,7 +311,7 @@ export class CoursesService {
         );
       });
     } catch (error) {
-      throw translateKnownError(error, id, plan.data.code ?? null, plan.data.levelId ?? null);
+      throw translateKnownError(error, id, plan.data.code ?? null, plan.data.levelId ?? null, plan.data.enrollmentFeePlanId ?? null);
     }
     return this.getForManager(id);
   }
@@ -360,7 +382,29 @@ export class CoursesService {
   private async getForManager(id: string): Promise<CourseDto> {
     const row = await this.prisma.db.course.findUnique({ where: { id }, select: COURSE_SELECT });
     if (!row) throw coursesError.courseNotFound(id);
-    return toCourseDto(row);
+    return toCourseDto(row, await this.currency());
+  }
+
+  /** The academy currency, the unit of a plan's total (D15); `XXX` (no currency) without the academy row. */
+  private async currency(): Promise<string> {
+    const academy = await this.prisma.db.academy.findFirst({ select: { currency: true } });
+    return academy?.currency ?? 'XXX';
+  }
+
+  /**
+   * MOD-19 (D-R122): setting or clearing the price needs `fee_plans.manage`
+   * besides `courses.manage` (403 permission_denied { missing }); a plan must
+   * exist (404 fee_plan_not_found), be active (422 fee_plan_inactive) and price
+   * no class and no other course (422 fee_plan_mismatch). `courseId` null = a
+   * course being created, which only a general plan fits.
+   */
+  private async assertPricingAllowed(feePlanId: string | null, courseId: string | null, caller: AuthPrincipal): Promise<void> {
+    if (!caller.permissions.includes(FEE_PLANS_MANAGE_PERMISSION)) throw authError.permissionDenied([FEE_PLANS_MANAGE_PERMISSION]);
+    if (feePlanId === null) return;
+    const plan = await this.prisma.db.feePlan.findUnique({ where: { id: feePlanId }, select: COURSE_PLAN_SELECT });
+    if (!plan) throw coursesError.feePlanNotFound(feePlanId);
+    if (!plan.isActive) throw coursesError.feePlanInactive(feePlanId);
+    if (!coursePlanFits(plan, courseId)) throw coursesError.feePlanMismatch(feePlanId, courseId);
   }
 
   private async assertLevelExists(levelId: string): Promise<void> {

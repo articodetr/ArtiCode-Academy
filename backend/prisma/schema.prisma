@@ -179,6 +179,8 @@ model User {
   classTeacherAssignments ClassTeacher[]           @relation("ClassTeacherAssignedBy")
   enrollments             Enrollment[]             @relation("EnrollmentStudent")
   enrollmentsCreated      Enrollment[]             @relation("EnrollmentCreatedBy")
+  /// MOD-19: enrollment requests this user rejected (D-R126).
+  enrollmentsRejected     Enrollment[]             @relation("EnrollmentRejectedBy")
   /// MOD-07: weekly slots this user teaches and the slots they created.
   classSchedulesTaught    ClassSchedule[]          @relation("ClassScheduleTeacher")
   classSchedulesCreated   ClassSchedule[]          @relation("ClassScheduleCreatedBy")
@@ -445,35 +447,43 @@ model Level {
 /// A course as an educational product. Deleting is allowed only for an unused
 /// draft (service rule); otherwise it is archived (D-R14).
 model Course {
-  id            String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  code          String       @unique @db.VarChar(32)
+  id                  String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code                String       @unique @db.VarChar(32)
   /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
-  name          Json
-  summary       Json?
-  description   Json?
-  levelId       String?      @map("level_id") @db.Uuid
-  status        CourseStatus @default(draft)
-  durationHours Decimal?     @map("duration_hours") @db.Decimal(6, 1)
-  sessionsCount Int?         @map("sessions_count") @db.SmallInt
-  minAge        Int?         @map("min_age") @db.SmallInt
-  maxAge        Int?         @map("max_age") @db.SmallInt
-  createdById   String?      @map("created_by") @db.Uuid
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  name                Json
+  summary             Json?
+  description         Json?
+  levelId             String?      @map("level_id") @db.Uuid
+  status              CourseStatus @default(draft)
+  durationHours       Decimal?     @map("duration_hours") @db.Decimal(6, 1)
+  sessionsCount       Int?         @map("sessions_count") @db.SmallInt
+  /// MOD-19 (D-R129): an absolute http(s) URL of the cover image, no upload (CHECK in SQL).
+  coverImageUrl       String?      @map("cover_image_url")
+  /// MOD-19 (D-R122): the fee plan that prices a self-service enrollment; null = a free course.
+  /// NO ACTION: a plan a course points to cannot be deleted (409 fee_plan_in_use).
+  enrollmentFeePlanId String?      @map("enrollment_fee_plan_id") @db.Uuid
+  minAge              Int?         @map("min_age") @db.SmallInt
+  maxAge              Int?         @map("max_age") @db.SmallInt
+  createdById         String?      @map("created_by") @db.Uuid
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  level         Level?               @relation(fields: [levelId], references: [id], onDelete: Restrict)
-  createdBy     User?                @relation("CourseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  syllabusItems CourseSyllabusItem[]
+  level             Level?               @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  createdBy         User?                @relation("CourseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  syllabusItems     CourseSyllabusItem[]
   /// MOD-05: runs of this course (Restrict — a course with classes cannot be deleted).
-  classes       Class[]
+  classes           Class[]
   /// MOD-10: certificates of this course (Restrict).
-  certificates  Certificate[]
+  certificates      Certificate[]
   /// MOD-11: fee plans pricing this course (deleted with it).
-  feePlans      FeePlan[]
+  feePlans          FeePlan[]            @relation("FeePlanCourse")
+  /// MOD-19: the plan charged for an enrollment request (D-R122).
+  enrollmentFeePlan FeePlan?             @relation("CourseEnrollmentFeePlan", fields: [enrollmentFeePlanId], references: [id], onDelete: NoAction)
 
   @@index([status])
   @@index([levelId])
   @@index([createdById])
+  @@index([enrollmentFeePlanId])
   @@map("courses")
 }
 
@@ -550,21 +560,23 @@ enum EnrollmentSource {
 /// enrollments can be deleted, any other is cancelled. The enrolled count is
 /// computed from `enrollments`, never stored (6.7.4-C).
 model Class {
-  id          String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  courseId    String      @map("course_id") @db.Uuid
-  code        String      @unique @db.VarChar(32)
+  id             String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courseId       String      @map("course_id") @db.Uuid
+  code           String      @unique @db.VarChar(32)
   /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
-  name        Json
+  name           Json
   /// Hard capacity (D-R18); > 0 (CHECK in SQL).
-  capacity    Int         @db.SmallInt
-  status      ClassStatus @default(planned)
+  capacity       Int         @db.SmallInt
+  status         ClassStatus @default(planned)
   /// Display dates only (D-R17); ends_on >= starts_on (CHECK in SQL).
-  startsOn    DateTime?   @map("starts_on") @db.Date
-  endsOn      DateTime?   @map("ends_on") @db.Date
-  notes       String?
-  createdById String?     @map("created_by") @db.Uuid
-  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  startsOn       DateTime?   @map("starts_on") @db.Date
+  endsOn         DateTime?   @map("ends_on") @db.Date
+  notes          String?
+  /// MOD-19 (D-R123): open to self-service enrollment from the catalog while open/running and the course is published.
+  selfEnrollment Boolean     @default(false) @map("self_enrollment")
+  createdById    String?     @map("created_by") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   course        Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
   createdBy     User?           @relation("ClassCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -622,6 +634,12 @@ model Enrollment {
   completedAt      DateTime?        @map("completed_at") @db.Timestamptz(6)
   withdrawnAt      DateTime?        @map("withdrawn_at") @db.Timestamptz(6)
   withdrawalReason String?          @map("withdrawal_reason")
+  /// MOD-19 (D-R121): when the current request was made; required while `pending` (CHECK in SQL).
+  requestedAt      DateTime?        @map("requested_at") @db.Timestamptz(6)
+  /// MOD-19 (D-R126): a rejected request is `cancelled` with these set; the reason is required (CHECKs in SQL).
+  rejectedAt       DateTime?        @map("rejected_at") @db.Timestamptz(6)
+  rejectedById     String?          @map("rejected_by") @db.Uuid
+  rejectionReason  String?          @map("rejection_reason")
   createdById      String?          @map("created_by") @db.Uuid
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -629,6 +647,7 @@ model Enrollment {
   class        Class         @relation(fields: [classId], references: [id], onDelete: Restrict)
   student      User          @relation("EnrollmentStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
   createdBy    User?         @relation("EnrollmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  rejectedBy   User?         @relation("EnrollmentRejectedBy", fields: [rejectedById], references: [id], onDelete: SetNull)
   /// MOD-09: the final grade fixed for this enrollment (D-R44/D-R45), if any.
   finalGrade   FinalGrade?
   /// MOD-10: its certificates — at most one `issued` (partial unique in SQL).
@@ -640,6 +659,8 @@ model Enrollment {
   @@index([studentUserId])
   @@index([status])
   @@index([createdById])
+  @@index([rejectedById])
+  @@index([requestedAt])
   @@map("enrollments")
 }
 
@@ -1276,10 +1297,12 @@ model FeePlan {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  course    Course?   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  class     Class?    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  createdBy User?     @relation("FeePlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  invoices  Invoice[]
+  course        Course?   @relation("FeePlanCourse", fields: [courseId], references: [id], onDelete: Cascade)
+  class         Class?    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  /// MOD-19: the courses charging this plan for an enrollment request (D-R122).
+  pricedCourses Course[]  @relation("CourseEnrollmentFeePlan")
+  createdBy     User?     @relation("FeePlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  invoices      Invoice[]
 
   @@index([courseId])
   @@index([classId])
@@ -1414,6 +1437,8 @@ enum NotificationCategory {
   grades
   finance
   announcements
+  /// MOD-19 (D-R128): requests, activations and rejections of enrollments.
+  enrollments
 
   @@map("notification_category")
 }

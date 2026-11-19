@@ -20,6 +20,10 @@
 //   cursor_invalid        400  — the list cursor does not belong to this sort/order
 //   syllabus_invalid      400  — a syllabus replacement names an item of another
 //                                course (or none) or repeats an id ({ unknown, duplicates })
+//   -- MOD-19 (D-R122): the plan that prices a request --
+//   fee_plan_not_found    404  — no fee plan with this id ({ feePlanId })
+//   fee_plan_inactive     422  — the plan is deactivated ({ feePlanId })
+//   fee_plan_mismatch     422  — the plan prices a class, or another course ({ feePlanId, courseId })
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -37,6 +41,9 @@ export const COURSES_ERROR_CODES = [
   'age_range_invalid',
   'cursor_invalid',
   'syllabus_invalid',
+  'fee_plan_not_found',
+  'fee_plan_inactive',
+  'fee_plan_mismatch',
 ] as const;
 
 export type CoursesErrorCode = (typeof COURSES_ERROR_CODES)[number];
@@ -132,5 +139,16 @@ export const coursesError = {
       'syllabus_invalid',
       'Every item id must belong to this course and appear at most once; new items carry no id',
       { unknown: [...unknown], duplicates: [...duplicates] },
+    ),
+  feePlanNotFound: (feePlanId: string) =>
+    new CoursesHttpException(HttpStatus.NOT_FOUND, 'fee_plan_not_found', 'No fee plan with this id', { feePlanId }),
+  feePlanInactive: (feePlanId: string) =>
+    new CoursesHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'fee_plan_inactive', 'The fee plan is deactivated', { feePlanId }),
+  feePlanMismatch: (feePlanId: string, courseId: string | null) =>
+    new CoursesHttpException(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      'fee_plan_mismatch',
+      'Only a general fee plan or a plan of this course (not of a class) can price the course',
+      { feePlanId, courseId },
     ),
 };
