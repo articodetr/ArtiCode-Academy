@@ -220,6 +220,8 @@ model User {
   announcementsSent       Announcement[]           @relation("AnnouncementSender")
   /// MOD-01-H06: their one-time MFA recovery codes (hashes only; deleted with them).
   mfaRecoveryCodes        MfaRecoveryCode[]
+  /// MOD-20: their own learning progress as a student (Restrict — accounts are soft-deleted, never removed).
+  learningProgress        LearningProgress[]       @relation("LearningProgressStudent")
 
   @@index([phone])
   @@index([status])
@@ -479,6 +481,10 @@ model Course {
   feePlans          FeePlan[]            @relation("FeePlanCourse")
   /// MOD-19: the plan charged for an enrollment request (D-R122).
   enrollmentFeePlan FeePlan?             @relation("CourseEnrollmentFeePlan", fields: [enrollmentFeePlanId], references: [id], onDelete: NoAction)
+  /// MOD-20: the curriculum levels of this course (deleted with it).
+  sections          CourseSection[]
+  /// MOD-20: the learners' progress on this course's lessons (Restrict).
+  learningProgress  LearningProgress[]
 
   @@index([status])
   @@index([levelId])
@@ -490,21 +496,40 @@ model Course {
 /// One ordered item of a course syllabus — the lesson template MOD-06 builds on.
 /// `(course_id, sort_order)` is unique but DEFERRABLE (SQL) for reordering.
 model CourseSyllabusItem {
-  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  courseId         String   @map("course_id") @db.Uuid
-  sortOrder        Int      @map("sort_order") @db.SmallInt
+  id               String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courseId         String           @map("course_id") @db.Uuid
+  sortOrder        Int              @map("sort_order") @db.SmallInt
   /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
   title            Json
   description      Json?
-  estimatedMinutes Int?     @map("estimated_minutes") @db.SmallInt
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  estimatedMinutes Int?             @map("estimated_minutes") @db.SmallInt
+  /// MOD-20 (D-R130): the curriculum level («المستوى») of the course the lesson sits in; null = not placed in one.
+  sectionId        String?          @map("section_id") @db.Uuid
+  /// MOD-20 (D-R131): what the lesson holds; its `content` follows this kind (validated in code).
+  kind             LearningItemKind @default(text)
+  /// MOD-20 (D-R131): the lesson's content by kind — an object (CHECK in SQL); null = no content yet.
+  content          Json?
+  /// MOD-20: downloadable resources `[{ title, url }]` — an array of at most 20 (CHECK in SQL).
+  resources        Json             @default("[]")
+  /// MOD-20 (D-R135): a required lesson counts in the course progress; an optional one never blocks it.
+  isRequired       Boolean          @default(true) @map("is_required")
+  /// MOD-20 (D-R135): an unpublished lesson is hidden from learners and left out of their progress.
+  isPublished      Boolean          @default(true) @map("is_published")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course   Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  /// MOD-20: the level the lesson sits in (the link is cleared when the level goes).
+  section  CourseSection?     @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   /// MOD-06: lessons that cover this item (the link is cleared when the item goes).
-  lessons Lesson[]
+  lessons  Lesson[]
+  /// MOD-20: the learners' progress on this lesson (Restrict — a lesson someone studied is unpublished, never deleted).
+  progress LearningProgress[]
 
   @@unique([courseId, sortOrder], map: "uq_course_syllabus_items_course_order")
+  /// MOD-20: the target of the composite FK that keeps `learning_progress.course_id` equal to the lesson's course.
+  @@unique([id, courseId], map: "uq_course_syllabus_items_id_course")
+  @@index([sectionId])
   @@map("course_syllabus_items")
 }
 
@@ -1556,4 +1581,96 @@ model MfaRecoveryCode {
 
   @@index([userId])
   @@map("mfa_recovery_codes")
+}
+
+// MOD-20 — «My School»: the course curriculum as levels and lessons, the
+// lesson content, and each learner's progress (roadmap §4q; decisions
+// D-R130..D-R139, ADR-078). A course's curriculum is its syllabus items
+// (MOD-04) grouped into ordered levels (`course_sections` — «المستوى الأول»,
+// …), distinct from the catalog's `levels` (MOD-04: a course's difficulty).
+// Progress is stored per (student, lesson) only; level and course progress,
+// the last lesson opened and the completion of a course are computed on read
+// (ADR-078). Content is referenced by absolute https URL — there is no file
+// storage — and text is plain text, never HTML (D-R131).
+
+enum LearningItemKind {
+  text
+  video
+  audio
+  pdf
+  image
+  file
+  live
+
+  @@map("learning_item_kind")
+}
+
+enum LearningStatus {
+  in_progress
+  completed
+
+  @@map("learning_status")
+}
+
+/// How a stored completion came about: the learner's explicit action, or enough of the media played (D-R134).
+enum LearningCompletionSource {
+  manual
+  playback
+
+  @@map("learning_completion_source")
+}
+
+model CourseSection {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courseId    String   @map("course_id") @db.Uuid
+  /// Position of the level in its course (0 first); deferred unique per course (ADR-046 — swaps inside one transaction).
+  sortOrder   Int      @map("sort_order") @db.SmallInt
+  /// Optional localized title `{ ar, en?, tr? }` shown after «المستوى N»; `ar` required when present (CHECK in SQL).
+  title       Json?
+  description Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  items  CourseSyllabusItem[]
+
+  @@unique([courseId, sortOrder], map: "uq_course_sections_course_order")
+  @@map("course_sections")
+}
+
+/// One learner's progress on one lesson (no row = not started). Written only by the learner's own requests (D-R134).
+model LearningProgress {
+  studentUserId        String                    @map("student_user_id") @db.Uuid
+  syllabusItemId       String                    @map("syllabus_item_id") @db.Uuid
+  /// The lesson's course (kept equal to it by the composite FK) for the per-course reads.
+  courseId             String                    @map("course_id") @db.Uuid
+  status               LearningStatus
+  /// Exactly for `completed` (CHECK in SQL).
+  completionSource     LearningCompletionSource? @map("completion_source")
+  firstOpenedAt        DateTime                  @map("first_opened_at") @db.Timestamptz(6)
+  lastOpenedAt         DateTime                  @map("last_opened_at") @db.Timestamptz(6)
+  /// Exactly for `completed` (CHECK in SQL); never cleared — reviewing a lesson keeps it complete.
+  completedAt          DateTime?                 @map("completed_at") @db.Timestamptz(6)
+  /// Resume point of a played media lesson, in whole seconds.
+  positionSeconds      Int?                      @map("position_seconds")
+  /// The media length the coverage was measured against (the authored duration).
+  mediaDurationSeconds Int?                      @map("media_duration_seconds")
+  /// Seconds of the media actually played: the length of `watched_ranges`, never the furthest point reached.
+  watchedSeconds       Int                       @default(0) @map("watched_seconds")
+  /// Merged played intervals `[[start, end], …]` in whole seconds (an array — CHECK in SQL).
+  watchedRanges        Json                      @default("[]") @map("watched_ranges")
+  /// The previous playback save — the clock the credited coverage is capped by.
+  lastPlaybackAt       DateTime?                 @map("last_playback_at") @db.Timestamptz(6)
+  createdAt            DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student      User               @relation("LearningProgressStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  syllabusItem CourseSyllabusItem @relation(fields: [syllabusItemId, courseId], references: [id, courseId], onDelete: Restrict)
+  course       Course             @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@id([studentUserId, syllabusItemId])
+  @@index([syllabusItemId, courseId])
+  @@index([courseId])
+  @@index([studentUserId, courseId, lastOpenedAt(sort: Desc)])
+  @@map("learning_progress")
 }

@@ -15,6 +15,8 @@ import { ReplaceSyllabusDto, SYLLABUS_ITEMS_MAX, SYLLABUS_MINUTES_MAX } from '..
 import { ATTENDANCE_BATCH_MAX, ATTENDANCE_NOTE_MAX_LENGTH, MINUTES_LATE_MAX, RecordAttendanceDto } from '../src/lessons/attendance.dto.js';
 import { RESULT_FEEDBACK_MAX_LENGTH, RESULTS_BATCH_MAX, RecordExamResultsDto } from '../src/exams/exam-results.dto.js';
 import { EXAM_SCORE_LIMIT } from '../src/exams/exams.dto.js';
+import { CURRICULUM_SECTIONS_MAX, ReplaceCurriculumDto, ReplaceLessonContentDto } from '../src/learning/curriculum.dto.js';
+import { RESOURCES_MAX, SHORT_TEXT_MAX, TEXT_BODY_MAX, URL_MAX } from '../src/learning/learning.content.js';
 import { LOCALIZED_TEXT_MAX_LENGTH } from '../src/roles/roles.dto.js';
 
 @Controller('courses/:id/syllabus')
@@ -43,6 +45,21 @@ class ExamResultsProbeController {
   }
 }
 
+// MOD-20 (API-227): PUT /courses/:id/curriculum with the real ReplaceCurriculumDto.
+@Controller('courses/:id/curriculum')
+class CurriculumProbeController {
+  @Put()
+  replace(@Body() body: ReplaceCurriculumDto): { sections: number } {
+    return { sections: body.sections.length };
+  }
+
+  // MOD-20 (API-228): PUT /courses/:id/curriculum/items/:itemId/content with the real ReplaceLessonContentDto.
+  @Put('items/:itemId/content')
+  content(@Body() body: ReplaceLessonContentDto): { resources: number } {
+    return { resources: body.resources.length };
+  }
+}
+
 @Controller('probe')
 class ProbeController {
   @Put()
@@ -60,6 +77,34 @@ const KB = 1024;
 const SYLLABUS_PATH = `/api/courses/${randomUUID()}/syllabus`;
 const ATTENDANCE_PATH = `/api/lessons/${randomUUID()}/attendance`;
 const RESULTS_PATH = `/api/exams/${randomUUID()}/results`;
+const CURRICULUM_PATH = `/api/courses/${randomUUID()}/curriculum`;
+const CONTENT_PATH = `${CURRICULUM_PATH}/items/${randomUUID()}/content`;
+
+/** The largest curriculum the DTO accepts: 50 levels and 200 lessons with Arabic, English and Turkish text (two-byte letters for ar and tr). */
+function largestCurriculum(): { sections: unknown[] } {
+  const text = (letter: string) => letter.repeat(LOCALIZED_TEXT_MAX_LENGTH);
+  const localized = () => ({ ar: text('ش'), en: text('a'), tr: text('ş') });
+  const lesson = () => ({ id: randomUUID(), title: localized(), description: localized(), estimatedMinutes: SYLLABUS_MINUTES_MAX, isRequired: false, isPublished: false });
+  const perSection = SYLLABUS_ITEMS_MAX / CURRICULUM_SECTIONS_MAX;
+  return {
+    sections: Array.from({ length: CURRICULUM_SECTIONS_MAX }, () => ({
+      id: randomUUID(),
+      title: localized(),
+      description: localized(),
+      items: Array.from({ length: perSection }, lesson),
+    })),
+  };
+}
+
+/** The largest lesson content the limits allow: the longest text body and 20 resources, in three-byte letters. */
+function largestContent(): Record<string, unknown> {
+  const text = (length: number) => ({ ar: '漢'.repeat(length), en: '漢'.repeat(length), tr: '漢'.repeat(length) });
+  return {
+    kind: 'text',
+    content: { body: text(TEXT_BODY_MAX) },
+    resources: Array.from({ length: RESOURCES_MAX }, () => ({ title: text(SHORT_TEXT_MAX), url: `https://${'a'.repeat(URL_MAX - 8)}` })),
+  };
+}
 
 /** The largest results batch the DTO accepts: 500 scored students with the highest score and the longest feedback in three-byte letters. */
 function largestResults(): { results: unknown[] } {
@@ -115,7 +160,7 @@ describe('JSON body limits (KI-050, TEST-064)', () => {
           validate: () => validateEnv({ SWAGGER_ENABLED: 'false' }),
         }),
       ],
-      controllers: [SyllabusProbeController, AttendanceProbeController, ExamResultsProbeController, ProbeController],
+      controllers: [SyllabusProbeController, AttendanceProbeController, ExamResultsProbeController, CurriculumProbeController, ProbeController],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>(APP_CREATE_OPTIONS);
     configureApp(app);
@@ -183,5 +228,31 @@ describe('JSON body limits (KI-050, TEST-064)', () => {
     await api().post(RESULTS_PATH).send(results).expect(413);
     await api().put('/api/probe').send(results).expect(413);
     await api().put(SYLLABUS_PATH).send(results).expect(413);
+  });
+
+  it('MOD-20: the largest valid curriculum is above 512 KB and below 640 KB, PUT /courses/:id/curriculum reads and validates it, every other route and method keeps its limit', async () => {
+    const curriculum = largestCurriculum();
+    const curriculumBytes = Buffer.byteLength(JSON.stringify(curriculum));
+    expect(curriculumBytes).toBeGreaterThan(512 * KB);
+    expect(curriculumBytes).toBeLessThan(640 * KB);
+    const res = await api().put(CURRICULUM_PATH).send(curriculum).expect(200);
+    expect(res.body).toEqual({ sections: CURRICULUM_SECTIONS_MAX });
+    await api().post(CURRICULUM_PATH).send(curriculum).expect(413);
+    await api().put('/api/probe').send(curriculum).expect(413);
+    await api().put(SYLLABUS_PATH).send(curriculum).expect(413); // above the syllabus route's 512 KB
+    await api().put(CONTENT_PATH).send(curriculum).expect(413); // above the content route's 192 KB
+    await api().put(CURRICULUM_PATH).send({ sections: [], pad: 'x'.repeat(650 * KB) }).expect(413);
+  });
+
+  it('MOD-20: the largest lesson content is above 100 KB and below 192 KB, PUT /courses/:id/curriculum/items/:itemId/content reads it, every other route keeps its limit', async () => {
+    const content = largestContent();
+    const contentBytes = Buffer.byteLength(JSON.stringify(content));
+    expect(contentBytes).toBeGreaterThan(100 * KB);
+    expect(contentBytes).toBeLessThan(192 * KB);
+    const res = await api().put(CONTENT_PATH).send(content).expect(200);
+    expect(res.body).toEqual({ resources: RESOURCES_MAX });
+    await api().post(CONTENT_PATH).send(content).expect(413);
+    await api().put('/api/probe').send(content).expect(413);
+    await api().put(CONTENT_PATH).send({ kind: 'text', content: null, resources: [], pad: 'x'.repeat(200 * KB) }).expect(413);
   });
 });

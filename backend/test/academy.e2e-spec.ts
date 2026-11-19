@@ -182,8 +182,11 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     expect(res.body.updatedAt).toBe(original.updatedAt.toISOString());
     for (const key of collectKeys(res.body)) expect(key).not.toMatch(SENSITIVE_KEY);
     // TEST-068: every known settings key, null when unset — never the raw jsonb.
-    expect(Object.keys(res.body.settings)).toEqual(['scheduling', 'certificates']);
+    expect(Object.keys(res.body.settings)).toEqual(['scheduling', 'certificates', 'learning', 'catalog']);
     expect(Object.keys(res.body.settings.scheduling).sort()).toEqual(['weekStartsOn', 'workingDays']);
+    // TEST-248 (MOD-20): the two learning keys.
+    expect(Object.keys(res.body.settings.learning)).toEqual(['videoCompletionPercent']);
+    expect(Object.keys(res.body.settings.catalog)).toEqual(['publicBrowsing']);
     expect(res.body).not.toHaveProperty('platformAcademyId');
     expect(res.body).not.toHaveProperty('singleton');
 
@@ -246,6 +249,17 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
       { settings: { scheduling: { workingDays: [7] } } },
       { settings: { scheduling: { workingDays: ['1'] } } },
       { settings: { scheduling: { workingDays: 'mon' } } },
+      // TEST-248 (MOD-20)
+      { settings: { learning: null } },
+      { settings: { learning: { theme: 1 } } },
+      { settings: { learning: { videoCompletionPercent: 49 } } },
+      { settings: { learning: { videoCompletionPercent: 101 } } },
+      { settings: { learning: { videoCompletionPercent: 90.5 } } },
+      { settings: { learning: { videoCompletionPercent: '90' } } },
+      { settings: { catalog: null } },
+      { settings: { catalog: { publicBrowsing: 'true' } } },
+      { settings: { catalog: { publicBrowsing: 1 } } },
+      { settings: { catalog: { open: true } } },
     ];
     for (const body of invalid) {
       const res = await api().patch(ACADEMY).set(bearer('manager')).send(body);
@@ -423,6 +437,35 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     expect((await eventsSince(m)).map((event) => event.metadata)).toEqual([
       { fields: ['settings.certificates.serialPrefix'] },
       { fields: ['settings.certificates.serialPrefix'] },
+    ]);
+  });
+
+  it('MOD-20 (TEST-248) — settings.learning.videoCompletionPercent (50–100) and settings.catalog.publicBrowsing (a JSON boolean): one event per change naming the dotted field, the same value changes nothing, null clears', async () => {
+    await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { learning: { videoCompletionPercent: null }, catalog: { publicBrowsing: null } } }).expect(200);
+    const m = await mark();
+    const percent = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { learning: { videoCompletionPercent: 75 } } }).expect(200);
+    expect(percent.body.settings.learning).toEqual({ videoCompletionPercent: 75 });
+    await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { learning: { videoCompletionPercent: 75 } } }).expect(200); // same value: nothing
+    const off = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { catalog: { publicBrowsing: false } } }).expect(200);
+    expect(off.body.settings.catalog).toEqual({ publicBrowsing: false });
+    const both = await api()
+      .patch(ACADEMY)
+      .set(bearer('manager'))
+      .send({ settings: { catalog: { publicBrowsing: true }, learning: { videoCompletionPercent: 100 } } })
+      .expect(200);
+    expect(both.body.settings.learning).toEqual({ videoCompletionPercent: 100 });
+    expect(both.body.settings.catalog).toEqual({ publicBrowsing: true });
+    const stored = await prisma.academy.findUniqueOrThrow({ where: { id: original.id }, select: { settings: true } });
+    expect(stored.settings).toMatchObject({ learning: { videoCompletionPercent: 100 }, catalog: { publicBrowsing: true } });
+    expect((await api().patch(ACADEMY).set(bearer('reader')).send({ settings: { catalog: { publicBrowsing: false } } })).status).toBe(403);
+    const cleared = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { learning: { videoCompletionPercent: null }, catalog: { publicBrowsing: null } } }).expect(200);
+    expect(cleared.body.settings.learning).toEqual({ videoCompletionPercent: null });
+    expect(cleared.body.settings.catalog).toEqual({ publicBrowsing: null });
+    expect((await eventsSince(m)).map((event) => event.metadata)).toEqual([
+      { fields: ['settings.learning.videoCompletionPercent'] },
+      { fields: ['settings.catalog.publicBrowsing'] },
+      { fields: ['settings.learning.videoCompletionPercent', 'settings.catalog.publicBrowsing'] },
+      { fields: ['settings.learning.videoCompletionPercent', 'settings.catalog.publicBrowsing'] },
     ]);
   });
 
