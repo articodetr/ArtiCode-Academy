@@ -1,6 +1,8 @@
 // MOD-20 — the «المنهج» tab of the course drawer (CurriculumTab, TEST-252): the levels and lessons of API-226, the
 // editor's edits saved as ONE PUT (API-227) only when something differs, the lessons learners have progress on
 // (no delete; a 409 lesson_has_progress puts them back), the read-only view of a teacher and the 404 of anyone else.
+// LRN-T06 (TEST-264): a new lesson is an unpublished draft (D-R144), «نشر المستوى»/«نشر الكل» then ONE PUT with the
+// flags, a level's releaseAfterDays in the body (D-R145), the sessions tag (D-R143), the preview link off while dirty.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Curriculum, CurriculumInput } from '../api/curriculum'
@@ -112,7 +114,8 @@ describe('CurriculumTab (MOD-20)', () => {
             ],
           },
           { id: SECTION_IDS[1], items: [{ id: ITEM_IDS[2], title: { ar: 'الحلقات', en: 'Loops', tr: 'Döngüler' }, isRequired: true, isPublished: true }] },
-          { title: { ar: 'المتقدم' }, items: [{ title: { ar: 'الدوال' }, estimatedMinutes: 20, isRequired: false, isPublished: true }] },
+          // A new lesson starts as an unpublished draft (D-R144).
+          { title: { ar: 'المتقدم' }, items: [{ title: { ar: 'الدوال' }, estimatedMinutes: 20, isRequired: false, isPublished: false }] },
         ],
         looseItems: [{ id: ITEM_IDS[3], title: { ar: 'مراجعة' }, isRequired: false, isPublished: false }],
       },
@@ -244,6 +247,132 @@ describe('CurriculumTab (MOD-20)', () => {
     // The structure itself is untouched: nothing to save.
     expect(saveButton()).toBeDisabled()
     expect(lastReport(onUnsavedChange)).toBe(false)
+  })
+
+  it('LRN-T06 — a new lesson is a draft without content; «نشر المستوى» publishes that level in the draft only, then ONE PUT sends the flags', async () => {
+    const calls = mockCurriculumApi(
+      () => makeCurriculum(),
+      () => jsonResponse(200, makeCurriculum()),
+    )
+    renderTab()
+    await screen.findByText('المستوى الأول — البداية', HEADING)
+    expect(screen.getByTestId('curriculum-publish-hint')).toHaveTextContent(ar.curriculum.publishHint)
+    // Every lesson of the first level is published: nothing to publish there.
+    expect(within(levels()[0]!).getByText(ar.curriculum.level.publish).closest('button')).toBeDisabled()
+
+    fireEvent.click(within(levels()[1]!).getByText(ar.curriculum.lesson.add).closest('button')!)
+    const row = lessonsOf(levels()[1]!)[1]!
+    expect(within(row).getByLabelText(ar.curriculum.lesson.fields.published)).not.toBeChecked()
+    expect(within(row).getByText(ar.curriculum.lesson.unpublished)).toBeInTheDocument()
+    expect(within(row).getByText(ar.curriculum.noContent)).toBeInTheDocument()
+    fireEvent.change(within(row).getByLabelText(ar.curriculum.lesson.fields.titleAr), { target: { value: 'الدوال' } })
+
+    const publish = within(levels()[1]!).getByText(ar.curriculum.level.publish).closest('button')!
+    expect(publish).toBeEnabled()
+    fireEvent.click(publish)
+    expect(within(lessonsOf(levels()[1]!)[1]!).getByLabelText(ar.curriculum.lesson.fields.published)).toBeChecked()
+    expect(within(lessonsOf(levels()[1]!)[1]!).queryByText(ar.curriculum.lesson.unpublished)).not.toBeInTheDocument()
+    expect(within(levels()[1]!).getByText(ar.curriculum.level.publish).closest('button')).toBeDisabled()
+    // Only the draft changed: nothing was sent yet, and the lesson outside the levels is still a draft.
+    expect(puts(calls)).toEqual([])
+    expect(within(lessonsOf(screen.getByTestId('curriculum-loose'))[0]!).getByText(ar.curriculum.lesson.unpublished)).toBeInTheDocument()
+
+    fireEvent.click(saveButton())
+    await screen.findByText(ar.curriculum.saved, undefined, SLOW)
+    expect(puts(calls)).toHaveLength(1)
+    const body = puts(calls)[0]!.body as CurriculumInput
+    expect(body.sections[1]!.items).toEqual([
+      { id: ITEM_IDS[2], title: { ar: 'الحلقات', en: 'Loops', tr: 'Döngüler' }, isRequired: true, isPublished: true },
+      { title: { ar: 'الدوال' }, isRequired: true, isPublished: true },
+    ])
+    expect(body.looseItems).toEqual([{ id: ITEM_IDS[3], title: { ar: 'مراجعة' }, isRequired: false, isPublished: false }])
+  })
+
+  it('LRN-T06 — «نشر الكل» publishes every lesson, the ones outside the levels too, and is off once nothing is left to publish', async () => {
+    const calls = mockCurriculumApi(
+      () => makeCurriculum(),
+      () => jsonResponse(200, makeCurriculum()),
+    )
+    renderTab()
+    await screen.findByText('المستوى الأول — البداية', HEADING)
+    const toolbar = screen.getByTestId('curriculum-toolbar')
+    const publishAll = () => within(toolbar).getByText(ar.curriculum.publishAll).closest('button')!
+
+    expect(publishAll()).toBeEnabled()
+    fireEvent.click(publishAll())
+    expect(publishAll()).toBeDisabled()
+    expect(within(lessonsOf(screen.getByTestId('curriculum-loose'))[0]!).getByLabelText(ar.curriculum.lesson.fields.published)).toBeChecked()
+    expect(puts(calls)).toEqual([])
+
+    fireEvent.click(saveButton())
+    await screen.findByText(ar.curriculum.saved, undefined, SLOW)
+    expect(puts(calls)).toHaveLength(1)
+    const body = puts(calls)[0]!.body as CurriculumInput
+    expect([...body.sections.flatMap((section) => section.items), ...body.looseItems!].map((item) => item.isPublished)).toEqual([true, true, true, true])
+    expect(body.looseItems).toEqual([{ id: ITEM_IDS[3], title: { ar: 'مراجعة' }, isRequired: false, isPublished: true }])
+  })
+
+  it('LRN-T06 — sends a level’s «opens after … days» in the body, refuses a value out of 0..365 locally, and shows when a level opens', async () => {
+    const stored = makeCurriculum()
+    const saved = makeCurriculum({ sections: [stored.sections[0]!, { ...stored.sections[1]!, releaseAfterDays: 14 }] })
+    const calls = mockCurriculumApi(
+      () => saved,
+      () => jsonResponse(200, saved),
+    )
+    renderTab()
+    await screen.findByText('المستوى الأول — البداية', HEADING)
+    // The second level opens 14 days after the class starts; the first at once (no tag, an empty field).
+    expect(within(levels()[1]!).getByTestId('curriculum-release')).toHaveTextContent('يُفتح بعد 14 يوماً من بدء الفصل')
+    expect(within(levels()[0]!).queryByTestId('curriculum-release')).not.toBeInTheDocument()
+    const days = (level: HTMLElement) => within(level).getByLabelText<HTMLInputElement>(ar.curriculum.level.releaseAfterDays)
+    expect(days(levels()[0]!).value).toBe('')
+    expect(days(levels()[0]!)).toHaveAttribute('placeholder', ar.curriculum.level.releasePlaceholder)
+    expect(days(levels()[1]!).value).toBe('14')
+
+    fireEvent.change(days(levels()[0]!), { target: { value: '400' } })
+    fireEvent.click(saveButton())
+    expect(await within(levels()[0]!).findByText(ar.curriculum.validation.releaseDays.replace('{{max}}', '365'))).toBeInTheDocument()
+    expect(puts(calls)).toEqual([])
+
+    fireEvent.change(days(levels()[0]!), { target: { value: '0' } })
+    expect(within(levels()[0]!).getByTestId('curriculum-release')).toHaveTextContent(ar.curriculum.level.releaseOnStart)
+    fireEvent.change(days(levels()[1]!), { target: { value: '' } })
+    fireEvent.click(saveButton())
+    await screen.findByText(ar.curriculum.saved, undefined, SLOW)
+    const body = puts(calls)[0]!.body as CurriculumInput
+    expect(body.sections[0]).toMatchObject({ id: SECTION_IDS[0], releaseAfterDays: 0 })
+    // Emptied = open at once: the value is absent from the body (absent = null on the server).
+    expect(body.sections[1]).not.toHaveProperty('releaseAfterDays')
+    expect(puts(calls)).toHaveLength(1)
+  })
+
+  it('LRN-T06 — names the class sessions linked to a lesson, and opens the learner preview in a new tab only while nothing is unsaved', async () => {
+    const stored = makeCurriculum()
+    const [first, second] = stored.sections[0]!.items
+    mockCurriculumApi(() => makeCurriculum({ sections: [{ ...stored.sections[0]!, items: [{ ...first!, sessionCount: 3 }, { ...second!, sessionCount: 1 }] }, stored.sections[1]!] }))
+    renderTab()
+    await screen.findByText('المستوى الأول — البداية', HEADING)
+    const [withThree, withOne] = lessonsOf(levels()[0]!)
+    expect(within(withThree!).getByTestId('curriculum-session-count')).toHaveTextContent('3 حصص')
+    expect(within(withOne!).getByTestId('curriculum-session-count')).toHaveTextContent('حصة واحدة')
+    // No session linked: no tag.
+    expect(within(lessonsOf(levels()[1]!)[0]!).queryByTestId('curriculum-session-count')).not.toBeInTheDocument()
+
+    const preview = () => within(screen.getByTestId('curriculum-toolbar')).getByText(ar.curriculum.preview).closest('a')!
+    expect(preview()).toHaveAttribute('href', `/learn/${COURSE_ID}/preview`)
+    expect(preview()).toHaveAttribute('target', '_blank')
+    expect(preview()).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.queryByTestId('curriculum-preview-hint')).not.toBeInTheDocument()
+
+    // A draft that differs: the preview (of the saved curriculum) waits for the save.
+    fireEvent.click(within(withThree!).getByLabelText(ar.curriculum.lesson.fields.required))
+    expect(preview()).toHaveAttribute('aria-disabled', 'true')
+    expect(preview()).not.toHaveAttribute('href')
+    expect(screen.getByTestId('curriculum-preview-hint')).toHaveTextContent(ar.curriculum.previewSaveFirst)
+    // Changed back: available again.
+    fireEvent.click(within(lessonsOf(levels()[0]!)[0]!).getByLabelText(ar.curriculum.lesson.fields.required))
+    expect(preview()).toHaveAttribute('href', `/learn/${COURSE_ID}/preview`)
+    expect(screen.queryByTestId('curriculum-preview-hint')).not.toBeInTheDocument()
   })
 
   it('shows a teacher (canManage false) the curriculum read-only, without any editor', async () => {

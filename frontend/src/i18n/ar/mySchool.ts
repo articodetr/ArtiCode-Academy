@@ -44,6 +44,12 @@ export const mySchool = {
     progress: 'نسبة الإنجاز',
     noRequired: 'لا دروس مطلوبة بعد',
     lastLesson: 'آخر درس: {{title}}',
+    // D-R143: the class's next session (API-229 `nextSession`), on the wall clock of its own zone.
+    nextSession: 'الحصة القادمة: {{title}}',
+    nextSessionLive: 'الحصة جارية الآن: {{title}}',
+    sessionZone: 'بتوقيت {{zone}}',
+    meetingLink: 'رابط الحصة',
+    newTab: '(يفتح في نافذة جديدة)',
     lessonsDone: 'أنجزت {{completed}} من {{count}} درس',
     lessonsDone_one: 'أنجزت {{completed}} من درس واحد',
     lessonsDone_two: 'أنجزت {{completed}} من درسين',

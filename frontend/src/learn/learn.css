@@ -216,6 +216,30 @@
   overflow-wrap: anywhere;
 }
 
+/* The level's name and, under it, when it opens (D-R145) or the preview's release rule. */
+.learn-level__label {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.learn-level__opens {
+  color: #5f6368;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.learn-level--locked .learn-level__name {
+  color: #5f6368;
+}
+
+.learn-state--locked {
+  color: #8a9097;
+  font-size: 14px;
+}
+
 .learn-level__count {
   flex: none;
   color: #5f6368;
@@ -265,6 +289,160 @@
   background: #f0f6fd;
   border-color: #0f6cbd;
   box-shadow: inset 0 0 0 1px #0f6cbd;
+}
+
+/* A lesson of a level not open yet (D-R145): listed, not a link. */
+.learn-item--locked {
+  color: #5f6368;
+  cursor: not-allowed;
+  background: #f7f8fa;
+}
+
+.learn-item--locked:hover {
+  color: #5f6368;
+  border-color: #eceef1;
+}
+
+.learn-item--locked .learn-kind-icon {
+  color: #8a9097;
+}
+
+/* --- Class sessions under the levels (D-R143) -------------------------------- */
+
+.learn-csessions {
+  margin-block-start: 16px;
+  background: #fff;
+  border: 1px solid #e6e8eb;
+  border-radius: 8px;
+}
+
+.learn-csessions__heading {
+  margin: 0;
+  font-size: inherit;
+}
+
+.learn-csessions__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 0 10px;
+  padding-inline: 10px;
+}
+
+.learn-csessions__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-csessions__empty {
+  margin: 0;
+  font-size: 13px;
+}
+
+.learn-csessions__past-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  inline-size: 100%;
+  padding-block: 6px;
+  padding-inline: 4px;
+  color: #0f6cbd;
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.learn-csessions__past-toggle:focus-visible,
+.learn-csession__lesson:focus-visible {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 2px;
+}
+
+.learn-csessions__past-toggle[aria-expanded='true'] .learn-level__chevron {
+  transform: rotate(180deg);
+}
+
+.learn-csession {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-block: 8px;
+  padding-inline: 10px;
+  border: 1px solid #eceef1;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.learn-csession__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.learn-csession__when {
+  font-size: 12px;
+}
+
+.learn-csession__lesson {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+a.learn-csession__lesson {
+  color: #0f6cbd;
+}
+
+.learn-csession__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.learn-csession__meta .ant-tag {
+  margin: 0;
+}
+
+/* --- The author's preview (D-R144) ------------------------------------------ */
+
+.learn-preview-banner {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-block: 8px;
+  padding-inline: 24px;
+  color: #5c3c00;
+  background: #fff7e0;
+  border-block-end: 1px solid #f0d58a;
+}
+
+.learn-preview-banner__text,
+.learn-preview-banner__drafts {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.learn-completion__preview {
+  margin: 0;
+  font-size: 13px;
 }
 
 .learn-kind-icon {
@@ -645,7 +823,8 @@
 }
 
 @media (max-width: 991.98px) {
-  .learn-header {
+  .learn-header,
+  .learn-preview-banner {
     padding-inline: 16px;
   }
 

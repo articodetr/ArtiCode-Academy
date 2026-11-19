@@ -28,11 +28,16 @@ export const learn = {
     // «المستوى الأول» … «المستوى العاشر», then «المستوى 11» (learn.format.ts).
     complete: 'المستوى مكتمل',
     incomplete: 'المستوى غير مكتمل',
+    // D-R145: a level that opens on a date (the class's start + its releaseAfterDays, the academy's zone).
+    opensOn: 'يُفتح في {{date}}',
+    notOpenYet: 'لم يُفتح بعد',
+    locked: 'مستوى مقفل حتى موعد فتحه',
   },
   sidebar: {
     title: 'محتوى الدورة',
     optional: 'اختياري',
     empty: 'لا توجد دروس منشورة في هذه الدورة بعد.',
+    locked: 'مقفل حتى يُفتح مستواه',
   },
   kinds: {
     text: 'قراءة',
@@ -54,6 +59,8 @@ export const learn = {
   notices: {
     replaced: 'الدرس الذي توقفت عنده لم يعد متاحاً، فانتقلنا إلى التالي',
     lessonUnavailable: 'هذا الدرس غير متاح حالياً، فانتقلنا إلى درس متاح',
+    levelNotOpen: 'هذا الدرس في مستوى يُفتح في {{date}}، فانتقلنا إلى درس متاح',
+    levelNotOpenNoDate: 'هذا الدرس في مستوى لم يُفتح بعد، فانتقلنا إلى درس متاح',
   },
   access: {
     pendingTitle: 'اشتراكك بانتظار الدفع أو الموافقة',
@@ -65,6 +72,8 @@ export const learn = {
     notFoundTitle: 'الدورة غير موجودة أو لم تعد متاحة',
     notFoundText: 'ربما أُزيلت الدورة أو تغيّر رابطها.',
     noLessons: 'لا توجد دروس منشورة في هذه الدورة بعد.',
+    allLocked: 'لم يُفتح أي مستوى من هذه الدورة بعد: تُفتح أولى دروسها في {{date}}.',
+    allLockedNoDate: 'لم يُفتح أي مستوى من هذه الدورة بعد.',
   },
   load: {
     courseError: 'تعذّر تحميل الدورة.',
@@ -111,6 +120,47 @@ export const learn = {
     lateBy: 'حضرت متأخراً {{minutes}} د',
     noAttendance: 'لم يُسجَّل حضورك بعد',
   },
+  // D-R143: the sessions of the learner's class in the sidebar (API-230 `sessions`).
+  classSessions: {
+    title: 'حصص الفصل',
+    upcomingCount: 'لا حصص قادمة',
+    upcomingCount_one: 'حصة قادمة',
+    upcomingCount_two: 'حصتان قادمتان',
+    upcomingCount_few: '{{count}} حصص قادمة',
+    upcomingCount_many: '{{count}} حصة قادمة',
+    upcomingCount_other: '{{count}} حصة قادمة',
+    upcoming: 'الحصص القادمة',
+    noUpcoming: 'لا حصص قادمة لهذا الفصل.',
+    // `n` = the number of past sessions, in parentheses (no noun to agree with, so no plural forms).
+    past: 'الحصص السابقة ({{n}})',
+    pastLabel: 'الحصص السابقة',
+    lesson: 'الدرس: {{title}}',
+    lessonLocked: 'الدرس: {{title}} (لم يُفتح بعد)',
+    live: 'جارية الآن',
+    join: 'رابط الحصة',
+  },
+  // D-R144: «معاينة كطالب» — the author's view of the curriculum (API-226); nothing is recorded.
+  preview: {
+    banner: 'معاينة كطالب — لا يُحفظ تقدّم',
+    showDrafts: 'إظهار المسودّات',
+    draft: 'مسودّة',
+    opensAtStart: 'يُفتح مع بدء الفصل',
+    // `count` = the level's releaseAfterDays (1..365; 0 reads opensAtStart).
+    opensAfter: 'يُفتح بعد {{count}} يوم من بدء الفصل',
+    opensAfter_one: 'يُفتح بعد يوم واحد من بدء الفصل',
+    opensAfter_two: 'يُفتح بعد يومين من بدء الفصل',
+    opensAfter_few: 'يُفتح بعد {{count}} أيام من بدء الفصل',
+    opensAfter_many: 'يُفتح بعد {{count}} يوماً من بدء الفصل',
+    opensAfter_other: 'يُفتح بعد {{count}} يوم من بدء الفصل',
+    completionHint: 'في المعاينة لا يُسجَّل إكمال الدرس ولا يُحفظ أي تقدّم.',
+    notAllowedTitle: 'المعاينة متاحة لمن يدير الدورة أو يدرّسها',
+    notAllowedText: 'افتح المعاينة من منهج دورة تديرها أو تدرّس أحد فصولها.',
+    loadError: 'تعذّر تحميل منهج الدورة.',
+    noPublished: 'لا دروس منشورة في هذه الدورة بعد. فعّل «إظهار المسودّات» لمعاينة الدروس غير المنشورة.',
+    noLessons: 'لا دروس في منهج هذه الدورة بعد.',
+    backToCourses: 'العودة إلى الدورات',
+    courses: 'الدورات',
+  },
   completion: {
     markComplete: 'تحديد كمكتمل',
     completed: 'مكتمل',
@@ -154,6 +204,7 @@ export const learn = {
     previous: 'السابق',
     next: 'التالي',
     backToContents: 'العودة إلى محتوى الدورة',
+    locked: '(لم يُفتح بعد)',
   },
   done: {
     title: 'أتممت جميع دروس الدورة المطلوبة',
@@ -166,5 +217,6 @@ export const learn = {
     completion_by_attendance: 'يكتمل هذا الدرس بحضور الحصة.',
     rate_limited: 'طلبات كثيرة في وقت قصير. انتظر قليلاً ثم حاول مرة أخرى.',
     network: 'تعذّر الاتصال بالخادم. تحقّق من الاتصال ثم حاول مرة أخرى.',
+    level_not_open: 'هذا الدرس في مستوى لم يُفتح بعد.',
   },
 }

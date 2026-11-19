@@ -21,6 +21,15 @@ export function levelName(t: Translate, language: Language, number: number, titl
   return title ? t('curriculum.level.withTitle', { name, title: localizedLabel(title, language) }) : name
 }
 
+/** «يُفتح مع بدء الفصل» / «يُفتح بعد 14 يوماً من بدء الفصل» for a level's `releaseAfterDays` (D-R145); null when it opens at once. */
+export function releaseLabel(t: Translate, days: number | null): string | null {
+  if (days === null) return null
+  return days === 0 ? t('curriculum.level.releaseOnStart') : t('curriculum.level.releaseTag', { count: days })
+}
+
+/** The learner's view of a course for its author (D-R144 — agent F1's page): the saved curriculum, no progress written. */
+export const previewPath = (courseId: string) => `/learn/${encodeURIComponent(courseId)}/preview`
+
 /** A media length as `m:ss` or `h:mm:ss` (Latin digits, shown in an LTR isolate). */
 export function formatMediaDuration(seconds: number): string {
   const whole = Math.max(0, Math.round(seconds))

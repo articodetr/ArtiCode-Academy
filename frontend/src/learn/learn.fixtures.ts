@@ -2,8 +2,9 @@
 // backend/src/learning/my-learning.dto.ts answers them. A course `c1` with two
 // levels — «المستوى الأول — أساسيات» (i1 text, completed; i2 YouTube video)
 // and «المستوى الثاني» (i3 PDF; i4 optional reading) — and every lesson's
-// neighbours in learning order. Test-only.
-import type { ItemProgress, LearningItem, LearningWorkspace, ProgressCounts, WorkspaceItem } from '../api/learning'
+// neighbours in learning order; every level open and no class session unless a
+// test says otherwise (makeSession for D-R143). Test-only.
+import type { ItemProgress, LearningItem, LearningWorkspace, ProgressCounts, WorkspaceItem, WorkspaceSession } from '../api/learning'
 
 export function makeCounts(overrides: Partial<ProgressCounts> = {}): ProgressCounts {
   return { total: 0, required: 0, completed: 0, completedRequired: 0, percent: null, isComplete: false, completedAt: null, ...overrides }
@@ -35,6 +36,24 @@ function workspaceItem(id: FixtureItemId, overrides: Partial<WorkspaceItem> = {}
     completionMode: 'manual',
     state: 'not_started',
     completedAt: null,
+    available: true,
+    ...overrides,
+  }
+}
+
+/** A class session of the workspace (D-R143): scheduled, online, in UTC, linked to no lesson. */
+export function makeSession(overrides: Partial<WorkspaceSession> = {}): WorkspaceSession {
+  return {
+    id: 'ses-1',
+    title: { ar: 'حصة المراجعة' },
+    startsAt: '2030-01-20T10:00:00.000Z',
+    endsAt: '2030-01-20T11:00:00.000Z',
+    status: 'scheduled',
+    deliveryMode: 'online',
+    meetingUrl: 'https://meet.example.org/review',
+    timeZone: 'UTC',
+    syllabusItemId: null,
+    attendance: null,
     ...overrides,
   }
 }
@@ -55,6 +74,8 @@ export function makeWorkspace(overrides: Partial<LearningWorkspace> = {}): Learn
           workspaceItem('i2', { kind: 'video', durationSeconds: 245 }),
         ],
         progress: makeCounts({ total: 2, required: 2, completed: 1, completedRequired: 1, percent: 50 }),
+        isOpen: true,
+        opensOn: null,
       },
       {
         id: 's2',
@@ -63,10 +84,13 @@ export function makeWorkspace(overrides: Partial<LearningWorkspace> = {}): Learn
         description: null,
         items: [workspaceItem('i3', { kind: 'pdf' }), workspaceItem('i4', { isRequired: false })],
         progress: makeCounts({ total: 2, required: 1, completed: 0, completedRequired: 0, percent: 0 }),
+        isOpen: true,
+        opensOn: null,
       },
     ],
     progress: makeCounts({ total: 4, required: 3, completed: 1, completedRequired: 1, percent: 33 }),
     resume: { itemId: 'i2', reason: 'last', positionSeconds: null },
+    sessions: [],
     ...overrides,
   }
 }
@@ -79,7 +103,7 @@ const SECTIONS: Record<FixtureItemId, { id: string; number: number; title: { ar:
 }
 
 function neighbor(id: FixtureItemId | undefined) {
-  return id ? { id, title: { ar: TITLES[id] } } : null
+  return id ? { id, title: { ar: TITLES[id] }, available: true } : null
 }
 
 export function makeItem(id: FixtureItemId, overrides: Partial<LearningItem> = {}): LearningItem {
@@ -119,4 +143,17 @@ export function makeItem(id: FixtureItemId, overrides: Partial<LearningItem> = {
   }
   if (id === 'i4') base.isRequired = false
   return { ...base, ...overrides }
+}
+
+/**
+ * The fixture workspace with its second level («المستوى الثاني» — i3, i4)
+ * closed until `opensOn` (D-R145): listed, not available.
+ */
+export function withSecondLevelClosed(workspace: LearningWorkspace, opensOn: string | null = '2030-02-01'): LearningWorkspace {
+  return {
+    ...workspace,
+    sections: workspace.sections.map((section) =>
+      section.id === 's2' ? { ...section, isOpen: false, opensOn, items: section.items.map((item) => ({ ...item, available: false })) } : section,
+    ),
+  }
 }

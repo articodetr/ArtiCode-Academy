@@ -1,6 +1,6 @@
 // Test fixtures of «My School» (MOD-20): the shapes of API-229 as the backend
 // returns them (my-learning.dto.ts). Imported by tests only.
-import type { MyLearningCourse, ProgressCounts } from '../api/learning'
+import type { MyLearningCourse, NextSession, ProgressCounts } from '../api/learning'
 
 export const LEARNING_COURSE_IDS = ['0195a000-0000-7000-8000-00000000a001', '0195a000-0000-7000-8000-00000000a002', '0195a000-0000-7000-8000-00000000a003'] as const
 export const LEARNING_ENROLLMENT_IDS = ['0195a000-0000-7000-8000-00000000b001', '0195a000-0000-7000-8000-00000000b002', '0195a000-0000-7000-8000-00000000b003'] as const
@@ -29,11 +29,27 @@ export function makeLearningCourse(overrides: Partial<MyLearningCourse> = {}): M
       level: null,
     },
     leadTeacher: { fullName: 'خالد المعلم', displayName: null },
+    nextSession: null,
     progress: makeProgress(),
     lastLesson: { id: '0195a000-0000-7000-8000-00000000e001', title: { ar: 'المتغيرات', en: 'Variables' }, sectionNumber: 1, sectionTitle: null, openedAt: '2026-11-18T10:00:00.000Z' },
     lastActivityAt: '2026-11-18T10:00:00.000Z',
     action: 'continue',
     canLearn: true,
+    ...overrides,
+  }
+}
+
+/** The class's next session (D-R143): online, in UTC, far ahead, with a meeting link. */
+export function makeNextSession(overrides: Partial<NextSession> = {}): NextSession {
+  return {
+    id: '0195a000-0000-7000-8000-00000000f001',
+    title: { ar: 'حصة الحلقات', en: 'Loops session' },
+    startsAt: '2030-01-20T10:00:00.000Z',
+    endsAt: '2030-01-20T11:30:00.000Z',
+    timeZone: 'UTC',
+    deliveryMode: 'online',
+    meetingUrl: 'https://meet.example.org/loops',
+    syllabusItemId: null,
     ...overrides,
   }
 }

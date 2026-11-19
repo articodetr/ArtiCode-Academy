@@ -8,6 +8,11 @@
 // completed lesson back. Unit-tested in learn.state.test.ts.
 import type { ItemProgress, LearningWorkspace, ProgressCounts, WorkspaceItem, WorkspaceSection } from '../api/learning'
 
+/** Where a learner opens a lesson of the course: `/learn/:courseId/:itemId`. */
+export function learnerItemPath(courseId: string): (itemId: string) => string {
+  return (itemId) => `/learn/${encodeURIComponent(courseId)}/${encodeURIComponent(itemId)}`
+}
+
 /** A stable key of a level; the implicit group of lessons outside every level has none of its own. */
 export function sectionKeyOf(section: Pick<WorkspaceSection, 'id'>): string {
   return section.id ?? 'loose'
@@ -34,15 +39,53 @@ export function learningOrderOf(workspace: LearningWorkspace): string[] {
 }
 
 /**
+ * False only when the server says the lesson's level is not open yet (D-R145);
+ * a body without the field (a server before LRN-T06) reads as open.
+ */
+export function isItemAvailable(item: Pick<WorkspaceItem, 'available'>): boolean {
+  return item.available !== false
+}
+
+/** False only when the server says the level is not open yet (D-R145). */
+export function isSectionOpen(section: Pick<WorkspaceSection, 'isOpen'>): boolean {
+  return section.isOpen !== false
+}
+
+/** The lessons the learner can open now, in learning order. */
+function availableOrderOf(workspace: LearningWorkspace): string[] {
+  return workspace.sections.flatMap((section) => section.items.filter(isItemAvailable).map((item) => item.id))
+}
+
+/**
  * Where the workspace opens: the server's resume target, unless that lesson
- * proved unavailable in this visit (`missing`) or is not shown — then the
- * first lesson shown that is not missing; null when nothing is left.
+ * proved unavailable in this visit (`missing`), is not shown or cannot be
+ * opened yet (D-R145) — then the first available lesson shown that is not
+ * missing; null when nothing is left.
  */
 export function openingItemOf(workspace: LearningWorkspace, missing: ReadonlySet<string> = new Set()): string | null {
-  const order = learningOrderOf(workspace)
+  const order = availableOrderOf(workspace)
   const resume = workspace.resume?.itemId
   if (resume && !missing.has(resume) && order.includes(resume)) return resume
   return order.find((id) => !missing.has(id)) ?? null
+}
+
+/**
+ * The earliest opening day (`YYYY-MM-DD`) among the levels that are not open
+ * yet and hold a lesson — what the learner is told when no lesson can be
+ * opened today; null when none names a day.
+ */
+export function firstOpeningDayOf(workspace: LearningWorkspace): string | null {
+  const days = workspace.sections
+    .filter((section) => !isSectionOpen(section) && section.items.length > 0 && typeof section.opensOn === 'string')
+    .map((section) => section.opensOn as string)
+    .sort()
+  return days[0] ?? null
+}
+
+/** True when the workspace lists lessons but none of them can be opened today (every one in a level not open yet). */
+export function everyLessonLocked(workspace: LearningWorkspace): boolean {
+  const items = workspace.sections.flatMap((section) => section.items)
+  return items.length > 0 && items.every((item) => !isItemAvailable(item))
 }
 
 /** The newer of two answers about one lesson, by D-R134: a completed lesson stays completed whatever arrives after. */

@@ -2,11 +2,16 @@
 // the access refusals, the curriculum sidebar, moving between lessons, the
 // manual completion and its answer, the content by kind, and the «course
 // complete» confirmation that follows the server's word only.
+// TEST-263 (LRN-T06) — the class sessions under the levels (D-R143), a level
+// that opens on a date (D-R145): its lessons listed, not links, the steps
+// toward them disabled, and a 403 level_not_open back to the resume target.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CompletionResult, LearningItem, LearningWorkspace } from '../api/learning'
-import { makeCounts, makeItem, makeProgress, makeWorkspace } from '../learn/learn.fixtures'
+import { makeCounts, makeItem, makeProgress, makeSession, makeWorkspace, withSecondLevelClosed } from '../learn/learn.fixtures'
 import type { FixtureItemId } from '../learn/learn.fixtures'
+import { formatLessonTimes } from '../lessons/lessons.format'
+import { formatDay } from '../users/users.format'
 import { makeAcademy } from '../test/academy'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
@@ -372,5 +377,142 @@ describe('LearnPage — the course player (TEST-251)', () => {
     expect(screen.getByText('يكتمل الدرس بعد مشاهدة 90٪ منه')).toBeInTheDocument()
     expect(screen.getByText('شاهدت 40٪ منه حتى الآن')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'تحديد كمكتمل' })).not.toBeInTheDocument()
+  })
+})
+
+describe('LearnPage — class sessions and levels that open on a date (TEST-263)', () => {
+  const sessionsPanel = () => within(screen.getByTestId('learn-class-sessions'))
+
+  // The expanded levels are remembered for the browser session (useLevelToggles): start every test from none.
+  beforeEach(() => window.sessionStorage.clear())
+
+  it('lists the class sessions under the levels — upcoming first, the past behind their toggle — each with the learner’s own attendance', async () => {
+    const workspace = makeWorkspace({
+      sessions: [
+        makeSession({ id: 'past', title: { ar: 'الحصة الأولى' }, startsAt: '2026-01-10T10:00:00.000Z', endsAt: '2026-01-10T11:00:00.000Z', status: 'completed', attendance: { status: 'late', minutesLate: 10 } }),
+        makeSession({ id: 'later', title: { ar: 'حصة التطبيق' }, startsAt: '2030-01-27T10:00:00.000Z', endsAt: '2030-01-27T11:00:00.000Z', meetingUrl: 'https://meet.example.org/apply' }),
+        makeSession({ id: 'cancelled', title: { ar: 'حصة ملغاة' }, startsAt: '2030-01-24T10:00:00.000Z', endsAt: '2030-01-24T11:00:00.000Z', status: 'cancelled', meetingUrl: null }),
+        makeSession({ id: 'soon', title: { ar: 'حصة الدليل' }, syllabusItemId: 'i3' }),
+      ],
+    })
+    const server = serve({ workspace, items: allItems() })
+    renderLearn('/learn/c1/i2')
+    await waitFor(() => expect(lessonHeading()).toHaveTextContent('فيديو الترحيب'))
+
+    const panel = sessionsPanel()
+    const toggle = panel.getByText('حصص الفصل').closest('button')!
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).toHaveTextContent('3 حصص قادمة')
+    // The soonest first; a cancelled session keeps its place, says so and offers no link.
+    const upcoming = within(panel.getByRole('list', { name: 'الحصص القادمة' }))
+    const rows = upcoming.getAllByRole('listitem')
+    expect(rows.map((row) => row.getAttribute('data-session-id'))).toEqual(['soon', 'cancelled', 'later'])
+    const soon = within(rows[0]!)
+    expect(soon.getByText(formatLessonTimes('2030-01-20T10:00:00.000Z', '2030-01-20T11:00:00.000Z', 'ar', 'UTC'))).toBeInTheDocument()
+    expect(soon.getByText('مجدولة')).toBeInTheDocument()
+    expect(soon.getByRole('link', { name: /رابط الحصة/ })).toHaveAttribute('href', 'https://meet.example.org/review')
+    expect(soon.getByRole('link', { name: /رابط الحصة/ })).toHaveAttribute('target', '_blank')
+    // Nothing to say about attendance before a session starts.
+    expect(soon.queryByText('لم يُسجَّل حضورك بعد')).not.toBeInTheDocument()
+    const cancelled = within(rows[1]!)
+    expect(cancelled.getByText('ملغاة')).toBeInTheDocument()
+    expect(cancelled.queryByRole('link')).not.toBeInTheDocument()
+
+    // The past sessions are folded; opening them shows the learner's own attendance.
+    const pastToggle = panel.getByText('الحصص السابقة (1)').closest('button')!
+    expect(pastToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(panel.queryByText('الحصة الأولى')).not.toBeInTheDocument()
+    fireEvent.click(pastToggle)
+    const past = within(panel.getByRole('list', { name: 'الحصص السابقة' }))
+    expect(past.getByText('الحصة الأولى')).toBeInTheDocument()
+    expect(past.getByText('انعقدت')).toBeInTheDocument()
+    expect(past.getByText('حضرت متأخراً 10 د')).toBeInTheDocument()
+
+    // A session covering a curriculum lesson opens that lesson.
+    fireEvent.click(soon.getByRole('link', { name: 'الدرس: دليل الدورة' }))
+    await waitFor(() => expect(lessonHeading()).toHaveTextContent('دليل الدورة'))
+    expect(server.count('GET', '/api/me/learning/courses/c1')).toBe(1)
+
+    // The panel folds.
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(panel.queryByRole('list', { name: 'الحصص القادمة' })).not.toBeInTheDocument()
+  })
+
+  it('shows no sessions panel for a class without sessions', async () => {
+    serve({ workspace: makeWorkspace(), items: allItems() })
+    renderLearn('/learn/c1/i2')
+    await waitFor(() => expect(lessonHeading()).toHaveTextContent('فيديو الترحيب'))
+    expect(screen.queryByTestId('learn-class-sessions')).not.toBeInTheDocument()
+  })
+
+  it('locks a level that opens on a date: its lessons are listed, never links, and «next» does not step into it', async () => {
+    const workspace = withSecondLevelClosed(makeWorkspace({ sessions: [makeSession({ syllabusItemId: 'i3' })] }))
+    const nextLocked = { ...makeItem('i2').neighbors, next: { id: 'i3', title: { ar: 'دليل الدورة' }, available: false } }
+    serve({ workspace, items: allItems({ i2: { neighbors: nextLocked } }) })
+    renderLearn('/learn/c1/i2')
+    await waitFor(() => expect(lessonHeading()).toHaveTextContent('فيديو الترحيب'))
+
+    const nav = curriculum()
+    const opensOn = `يُفتح في ${formatDay('2030-02-01', 'ar')}`
+    const second = within(nav).getByText('المستوى الثاني').closest('button')!
+    expect(second).toHaveTextContent(opensOn)
+    expect(within(second).getByRole('img', { name: 'مستوى مقفل حتى موعد فتحه' })).toBeInTheDocument()
+    fireEvent.click(second)
+    expect(second).toHaveAttribute('aria-expanded', 'true')
+    // Listed, but not links.
+    const guide = within(nav).getByText('دليل الدورة').closest('.learn-item')!
+    expect(guide).toHaveAttribute('aria-disabled', 'true')
+    expect(guide.tagName).not.toBe('A')
+    expect(guide.closest('a')).toBeNull()
+    expect(within(nav).getByText('قراءة إضافية').closest('[aria-disabled="true"]')).not.toBeNull()
+    // The first level stays open and its lessons stay links.
+    expect(within(nav).getByText('مقدمة الدورة').closest('a')).not.toBeNull()
+
+    // «Next» names the locked lesson but does not step into it.
+    const lessonNav = within(screen.getByRole('navigation', { name: 'التنقل بين الدروس' }))
+    const next = lessonNav.getByText('التالي').closest('button')!
+    expect(next).toBeDisabled()
+    expect(next).toHaveTextContent('دليل الدورة')
+    expect(next).toHaveTextContent('(لم يُفتح بعد)')
+
+    // A session covering a locked lesson names it without a link.
+    const session = within(screen.getByTestId('learn-class-sessions'))
+    expect(session.getByText('الدرس: دليل الدورة (لم يُفتح بعد)')).toBeInTheDocument()
+    expect(session.queryByRole('link', { name: /الدرس:/ })).not.toBeInTheDocument()
+  })
+
+  it('goes back to the resume target naming the day when a lesson’s level is not open', async () => {
+    const workspace = withSecondLevelClosed(makeWorkspace())
+    const server = serve({
+      workspace,
+      items: {
+        ...allItems(),
+        i3: jsonResponse(403, { statusCode: 403, code: 'level_not_open', message: 'This level is not open yet', itemId: 'i3', opensOn: '2030-02-01' }),
+      },
+    })
+    renderLearn('/learn/c1/i3')
+
+    await waitFor(() => expect(lessonHeading()).toHaveTextContent('فيديو الترحيب'))
+    expect(screen.getByText(`هذا الدرس في مستوى يُفتح في ${formatDay('2030-02-01', 'ar')}، فانتقلنا إلى درس متاح`)).toBeInTheDocument()
+    expect(server.count('GET', '/api/me/learning/items/i3')).toBe(1)
+    // A refused lesson is never visited; the workspace is read afresh.
+    expect(server.count('POST', '/api/me/learning/items/i3/visit')).toBe(0)
+    expect(server.count('GET', '/api/me/learning/courses/c1')).toBe(2)
+  })
+
+  it('never opens a locked lesson as the resume target, and says when nothing can be opened yet', async () => {
+    const closed = withSecondLevelClosed(makeWorkspace({ resume: null }), '2030-02-01')
+    const workspace = {
+      ...closed,
+      sections: closed.sections.map((section) =>
+        section.id === 's1' ? { ...section, isOpen: false, opensOn: '2030-01-15', items: section.items.map((item) => ({ ...item, available: false })) } : section,
+      ),
+    }
+    const server = serve({ workspace, items: allItems() })
+    renderLearn('/learn/c1')
+
+    expect(await screen.findByText(`لم يُفتح أي مستوى من هذه الدورة بعد: تُفتح أولى دروسها في ${formatDay('2030-01-15', 'ar')}.`)).toBeInTheDocument()
+    expect(server.calls.some((call) => call.path.startsWith('/api/me/learning/items/'))).toBe(false)
   })
 })

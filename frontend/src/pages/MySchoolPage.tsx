@@ -100,7 +100,8 @@ export function MySchoolPage() {
     if (key === 'continue') return courses ? continueItems(courses).length : null
     if (key === 'courses') return courses ? courses.length : null
     if (key === 'completed') return summary.completedCourses
-    if (key === 'requests') return summary.pendingRequests
+    // The section lists every request (pending, rejected, cancelled …), so its count is the list's; the summary strip keeps the pending ones.
+    if (key === 'requests') return requestsKnown ? requests.items.length : null
     if (key === 'certificates') return summary.certificates
     return null
   }

@@ -7,7 +7,11 @@
 // lessons keeps the workspace on screen — it is read again only after a
 // completion. Every progress shown is the server's (D-R133): the answers of
 // API-232..234 move the sidebar, the level and the course at once, and the
-// «course complete» confirmation follows the server's word alone.
+// «course complete» confirmation follows the server's word alone. A level that
+// opens on a date (D-R145) lists its lessons without opening them; a lesson
+// the server refuses with 403 level_not_open sends the learner back to the
+// resume target with a notice naming the day. The class sessions (D-R143) sit
+// under the levels.
 import { Alert, Button, Drawer, Skeleton } from 'antd'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,9 +23,9 @@ import { academyTimeZoneOf } from '../common/timeZone'
 import { useLocalized } from '../i18n/useLocalized'
 import { CourseDoneModal } from '../learn/CourseDoneModal'
 import { CurriculumNav } from '../learn/CurriculumNav'
-import { accessFailureOf, isLessonGone } from '../learn/learn.errors'
+import { accessFailureOf, calendarDayOrNull, isLessonGone, levelNotOpenOf } from '../learn/learn.errors'
 import { levelName } from '../learn/learn.format'
-import { completesCourse, openingItemOf, placeOf, sectionKeyOf, withItemProgress } from '../learn/learn.state'
+import { completesCourse, everyLessonLocked, firstOpeningDayOf, openingItemOf, placeOf, sectionKeyOf, withItemProgress } from '../learn/learn.state'
 import type { CountsUpdate } from '../learn/learn.state'
 import { LearnAccessNotice } from '../learn/LearnAccessNotice'
 import { LearnHeader } from '../learn/LearnHeader'
@@ -30,16 +34,33 @@ import { useLearningItem } from '../learn/useLearningItem'
 import { useLearningWorkspace } from '../learn/useLearningWorkspace'
 import { useLevelToggles } from '../learn/useLevelToggles'
 import { useNarrowScreen } from '../learn/useNarrowScreen'
-import { localizedLabel } from '../users/users.format'
+import { formatDay, localizedLabel } from '../users/users.format'
 import '../learn/learn.css'
 
-type NoticeKind = 'replaced' | 'lessonUnavailable'
+type NoticeKind = 'replaced' | 'lessonUnavailable' | 'levelNotOpen'
 
-/** The notice a redirect hands to the lesson it opens (router state), or null. */
-function noticeOf(state: unknown): NoticeKind | null {
+interface Notice {
+  kind: NoticeKind
+  /** The opening day of a refused lesson's level (`levelNotOpen` only). */
+  opensOn: string | null
+}
+
+/**
+ * The notice a redirect hands to the lesson it opens (router state), or null.
+ * Only a known notice id and a `YYYY-MM-DD` day are ever read from the state.
+ */
+function noticeOf(state: unknown): Notice | null {
   if (typeof state !== 'object' || state === null || !('learnNotice' in state)) return null
-  const value = (state as { learnNotice: unknown }).learnNotice
-  return value === 'replaced' || value === 'lessonUnavailable' ? value : null
+  const record = state as { learnNotice: unknown; opensOn?: unknown }
+  const value = record.learnNotice
+  if (value === 'replaced' || value === 'lessonUnavailable') return { kind: value, opensOn: null }
+  if (value === 'levelNotOpen') return { kind: value, opensOn: calendarDayOrNull(record.opensOn) }
+  return null
+}
+
+/** The router state that hands a notice over. */
+function stateOf(notice: Notice): { learnNotice: NoticeKind; opensOn?: string } {
+  return notice.opensOn ? { learnNotice: notice.kind, opensOn: notice.opensOn } : { learnNotice: notice.kind }
 }
 
 const SIDEBAR_HEADING = 'learn-curriculum-heading'
@@ -67,10 +88,12 @@ export function LearnPage() {
   const { workspace, update: updateWorkspace, reload: reloadWorkspace } = workspaceReading
   // Lessons this visit found gone (API-231 404): never opened again, never a resume target.
   const [missing, setMissing] = useState<ReadonlySet<string>>(() => new Set())
+  // Lessons the server refused as not open yet (403 level_not_open — D-R145), with their level's opening day.
+  const [locked, setLocked] = useState<ReadonlyMap<string, string | null>>(() => new Map())
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [courseDone, setCourseDone] = useState(false)
 
-  const itemReading = useLearningItem(itemId && !missing.has(itemId) ? itemId : undefined, {
+  const itemReading = useLearningItem(itemId && !missing.has(itemId) && !locked.has(itemId) ? itemId : undefined, {
     onVisited: (id, progress) => updateWorkspace((current) => withItemProgress(current, id, progress)),
     onGone: (id) => {
       setMissing((previous) => new Set(previous).add(id))
@@ -78,20 +101,27 @@ export function LearnPage() {
       reloadWorkspace()
       navigate(coursePath(courseId), { replace: true, state: { learnNotice: 'lessonUnavailable' } })
     },
+    onLocked: (id, opensOn) => {
+      setLocked((previous) => new Map(previous).set(id, opensOn))
+      // The level is not open (yet): read the curriculum afresh, then open the resume target with the day.
+      reloadWorkspace()
+      navigate(coursePath(courseId), { replace: true, state: stateOf({ kind: 'levelNotOpen', opensOn }) })
+    },
   })
   const { setProgress } = itemReading
 
   // A notice handed over by a redirect shows once, on the lesson it opened (the router state is then cleared).
   const incoming = noticeOf(location.state)
-  const [notice, setNotice] = useState<{ kind: NoticeKind; itemId: string } | null>(null)
+  const incomingKind = incoming?.kind ?? null
+  const [notice, setNotice] = useState<(Notice & { itemId: string }) | null>(null)
   const [seenLocation, setSeenLocation] = useState<string | null>(null)
   if (itemId && incoming && location.key !== seenLocation) {
     setSeenLocation(location.key)
-    setNotice({ kind: incoming, itemId })
+    setNotice({ ...incoming, itemId })
   }
   useEffect(() => {
-    if (itemId && incoming) navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
-  }, [itemId, incoming, location.pathname, location.search, navigate])
+    if (itemId && incomingKind) navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
+  }, [itemId, incomingKind, location.pathname, location.search, navigate])
 
   const workspaceRef = useRef<LearningWorkspace | null>(workspace)
   useLayoutEffect(() => {
@@ -162,6 +192,9 @@ export function LearnPage() {
   }
 
   if (itemId && missing.has(itemId)) return <Navigate to={coursePath(courseId)} replace state={{ learnNotice: 'lessonUnavailable' }} />
+  if (itemId && locked.has(itemId)) {
+    return <Navigate to={coursePath(courseId)} replace state={stateOf({ kind: 'levelNotOpen', opensOn: locked.get(itemId) ?? null })} />
+  }
 
   // --- No workspace yet ---------------------------------------------------------
   if (workspace === null) {
@@ -192,11 +225,17 @@ export function LearnPage() {
 
   // --- /learn/:courseId — open where the learner stopped ------------------------
   if (!itemId && workspaceReading.settled) {
-    const target = openingItemOf(workspace, missing)
+    const target = openingItemOf(workspace, new Set([...missing, ...locked.keys()]))
     if (target) {
-      const forward = incoming ?? (workspace.resume?.reason === 'replaced' && workspace.resume.itemId === target ? 'replaced' : null)
-      return <Navigate to={lessonPath(courseId, target)} replace state={forward ? { learnNotice: forward } : undefined} />
+      const replaced: Notice | null = workspace.resume?.reason === 'replaced' && workspace.resume.itemId === target ? { kind: 'replaced', opensOn: null } : null
+      const forward = incoming ?? replaced
+      return <Navigate to={lessonPath(courseId, target)} replace state={forward ? stateOf(forward) : undefined} />
     }
+  }
+
+  const noticeText = (shown: Notice): string => {
+    if (shown.kind !== 'levelNotOpen') return t(`learn.notices.${shown.kind}`)
+    return shown.opensOn ? t('learn.notices.levelNotOpen', { date: formatDay(shown.opensOn, language) }) : t('learn.notices.levelNotOpenNoDate')
   }
 
   const item = itemReading.item
@@ -204,13 +243,16 @@ export function LearnPage() {
   const section = place?.section ?? item?.section ?? null
   const lessonTitle = item ? localizedLabel(item.title, language) : place ? localizedLabel(place.item.title, language) : null
   const trail = [courseName, ...(section ? [levelName(section, t, language)] : []), ...(lessonTitle ? [lessonTitle] : [])]
-  const shownNotice = notice !== null && notice.itemId === itemId ? notice.kind : null
+  const shownNotice = notice !== null && notice.itemId === itemId ? notice : null
   const noLessons = !itemId && workspaceReading.settled
 
   let main
   if (noLessons) {
-    main = <Alert type="info" showIcon title={t('learn.access.noLessons')} />
-  } else if (!itemId || itemReading.loading || isLessonGone(itemReading.error)) {
+    const firstDay = firstOpeningDayOf(workspace)
+    let text = t('learn.access.noLessons')
+    if (everyLessonLocked(workspace)) text = firstDay ? t('learn.access.allLocked', { date: formatDay(firstDay, language) }) : t('learn.access.allLockedNoDate')
+    main = <Alert type="info" showIcon title={text} />
+  } else if (!itemId || itemReading.loading || isLessonGone(itemReading.error) || levelNotOpenOf(itemReading.error)) {
     main = <Skeleton active paragraph={{ rows: 8 }} />
   } else if (itemReading.error) {
     main = (
@@ -251,7 +293,7 @@ export function LearnPage() {
         )}
         <main className="learn-main" id="learn-main">
           <div className="learn-main__inner">
-            {shownNotice ? <Alert type="info" showIcon closable onClose={() => setNotice(null)} title={t(`learn.notices.${shownNotice}`)} /> : null}
+            {shownNotice ? <Alert type="info" showIcon closable onClose={() => setNotice(null)} title={noticeText(shownNotice)} /> : null}
             {main}
           </div>
         </main>

@@ -180,7 +180,7 @@ export function EnrollmentRequestDrawer({ requestId, onClose, onChanged }: Enrol
               <StatusTag value={request.class.status} />
             </Descriptions.Item>
             <Descriptions.Item label={t('enrollmentRequests.drawer.seats')}>
-              <bdi dir="ltr">{t('enrollmentRequests.drawer.seatsValue', { enrolled: request.class.enrolledCount, capacity: request.class.capacity })}</bdi>
+              {t('enrollmentRequests.drawer.seatsValue', { enrolled: request.class.enrolledCount, capacity: request.class.capacity })}
             </Descriptions.Item>
             <Descriptions.Item label={t('enrollmentRequests.drawer.teacher')}>
               {request.class.leadTeacher ? displayNameOf(request.class.leadTeacher) : t('enrollmentRequests.drawer.noTeacher')}

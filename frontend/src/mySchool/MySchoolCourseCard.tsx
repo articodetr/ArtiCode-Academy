@@ -3,16 +3,23 @@
 // teacher by name, the server's progress — the bar and the counts of required
 // lessons, or «no required lessons yet» —, the last lesson opened and ONE
 // action by the server's `action`: start, continue or review, each opening the
-// learning workspace, which resumes by itself. A guardian's card about a child
-// names the student and has no action: a guardian follows, never studies.
-import { BookOutlined } from '@ant-design/icons'
+// learning workspace, which resumes by itself. The class's next session
+// (D-R143 — API-229 `nextSession`): its day and times on the wall clock of its
+// own zone (D-R41), its title, and the meeting link — nothing when the class
+// has none left. A guardian's card about a child names the student and has no
+// action and no meeting link: a guardian follows, never studies.
+import { BookOutlined, CalendarOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { Button, Card, Progress, Space, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
-import type { MyLearningCourse } from '../api/learning'
+import type { MyLearningCourse, NextSession } from '../api/learning'
 import { coverSrc } from '../catalog/catalog.view'
+import { differsFromDevice } from '../common/timeZone'
 import { useLocalized } from '../i18n/useLocalized'
+import { isHttpsUrl } from '../learn/learn.format'
+import { isSessionLive } from '../learn/learn.sessions'
+import { formatLessonDay, formatLessonTimes } from '../lessons/lessons.format'
 import { displayNameOf, localizedLabel } from '../users/users.format'
 import { COURSE_STATE_COLORS, cardActionOf, courseStateOf, learnPath } from './mySchool.view'
 
@@ -39,6 +46,35 @@ function Cover({ url }: { url: string | null }) {
       data-testid="course-cover"
       style={{ display: 'block', width: '100%', height: COVER_HEIGHT, objectFit: 'cover' }}
     />
+  )
+}
+
+/** «الحصة القادمة» (D-R143), or «الحصة جارية الآن» while it runs; the meeting link only for the learner's own card. */
+function NextSessionLine({ session, withLink }: { session: NextSession; withLink: boolean }) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const zone = session.timeZone
+  const title = localizedLabel(session.title, language)
+  const link = withLink && isHttpsUrl(session.meetingUrl) ? session.meetingUrl : null
+  return (
+    <div className="ms-card__session" data-testid="next-session">
+      <CalendarOutlined className="ms-card__session-icon" aria-hidden />
+      <div className="ms-card__session-body">
+        <Typography.Text strong style={{ fontSize: 13 }}>
+          {t(isSessionLive(session) ? 'mySchool.card.nextSessionLive' : 'mySchool.card.nextSession', { title })}
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+          {formatLessonDay(session.startsAt, language, zone)} · <bdi dir="ltr">{formatLessonTimes(session.startsAt, session.endsAt, language, zone)}</bdi>
+          {differsFromDevice(zone) ? <> ({t('mySchool.card.sessionZone', { zone })})</> : null}
+        </Typography.Text>
+      </div>
+      {link ? (
+        <Button size="small" icon={<VideoCameraOutlined aria-hidden />} href={link} target="_blank" rel="noopener noreferrer">
+          {t('mySchool.card.meetingLink')}
+          <span className="ms-sr-only"> {t('mySchool.card.newTab')}</span>
+        </Button>
+      ) : null}
+    </div>
   )
 }
 
@@ -83,6 +119,8 @@ export function MySchoolCourseCard({ item }: { item: MyLearningCourse }) {
       </Space>
 
       {item.leadTeacher ? <Typography.Text type="secondary">{t('mySchool.card.teacher', { name: displayNameOf(item.leadTeacher) })}</Typography.Text> : null}
+
+      {item.nextSession ? <NextSessionLine session={item.nextSession} withLink={!child} /> : null}
 
       {progress.percent === null ? (
         <Typography.Text type="secondary">{t('mySchool.card.noRequired')}</Typography.Text>

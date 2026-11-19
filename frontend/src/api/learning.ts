@@ -78,6 +78,22 @@ export interface LessonResource {
 
 // --- API-229 «My School» -----------------------------------------------------
 
+/**
+ * The next class session of a course card (D-R143): the earliest MOD-06 lesson of
+ * that class that is not cancelled and has not ended yet, on the wall clock of its
+ * own zone (D-R41); `syllabusItemId` = the curriculum lesson it covers, if any.
+ */
+export interface NextSession {
+  id: string
+  title: LocalizedLabel
+  startsAt: string
+  endsAt: string
+  timeZone: string
+  deliveryMode: string
+  meetingUrl: string | null
+  syllabusItemId: string | null
+}
+
 export interface MyLearningCourse {
   enrollmentId: string
   relation: 'self' | 'child'
@@ -93,6 +109,8 @@ export interface MyLearningCourse {
     level: { id: string; name: LocalizedLabel } | null
   }
   leadTeacher: { fullName: string; displayName: string | null } | null
+  /** null when the class has no session left (D-R143). */
+  nextSession: NextSession | null
   progress: ProgressCounts
   lastLesson: { id: string; title: LocalizedLabel; sectionNumber: number; sectionTitle: LocalizedLabel | null; openedAt: string } | null
   lastActivityAt: string | null
@@ -117,6 +135,8 @@ export interface WorkspaceItem {
   completionMode: CompletionMode
   state: LearningState
   completedAt: string | null
+  /** False while its level is not open yet (D-R145): listed, never opened, visited, played or completed. */
+  available: boolean
 }
 
 export interface WorkspaceSection {
@@ -128,6 +148,26 @@ export interface WorkspaceSection {
   description: LocalizedLabel | null
   items: WorkspaceItem[]
   progress: ProgressCounts
+  /** False before the level's opening day (D-R145): the class's start + the level's `releaseAfterDays`, in the academy's zone. */
+  isOpen: boolean
+  /** `YYYY-MM-DD` (the academy's zone) of a level that opens on a date; null for a level that is always open. */
+  opensOn: string | null
+}
+
+/** One class session of the workspace (D-R143): a MOD-06 lesson of the learner's class, with their own attendance only. */
+export interface WorkspaceSession {
+  id: string
+  title: LocalizedLabel
+  startsAt: string
+  endsAt: string
+  status: 'scheduled' | 'completed' | 'cancelled'
+  deliveryMode: string
+  /** null for a cancelled session. */
+  meetingUrl: string | null
+  timeZone: string
+  /** The curriculum lesson the session covers, if any. */
+  syllabusItemId: string | null
+  attendance: { status: string; minutesLate: number | null } | null
 }
 
 export interface LearningWorkspace {
@@ -137,7 +177,10 @@ export interface LearningWorkspace {
   completionPercent: number
   sections: WorkspaceSection[]
   progress: ProgressCounts
+  /** Never an unavailable lesson (D-R145): the first available one otherwise; null when none is. */
   resume: { itemId: string; reason: 'last' | 'replaced' | 'first'; positionSeconds: number | null } | null
+  /** Every session of the chosen enrollment's class, by `startsAt` (at most 300). */
+  sessions: WorkspaceSession[]
 }
 
 // --- API-231 one lesson ------------------------------------------------------
@@ -173,6 +216,12 @@ export interface LessonExam {
   status: string
 }
 
+export interface LearningNeighbor {
+  id: string
+  title: LocalizedLabel
+  available: boolean
+}
+
 export interface LearningItem {
   id: string
   courseId: string
@@ -188,7 +237,8 @@ export interface LearningItem {
   completionMode: CompletionMode
   completionPercent: number
   progress: ItemProgress
-  neighbors: { previous: { id: string; title: LocalizedLabel } | null; next: { id: string; title: LocalizedLabel } | null }
+  /** In learning order across the levels — none skipped; `available` is false toward a lesson of a level not open yet (D-R145). */
+  neighbors: { previous: LearningNeighbor | null; next: LearningNeighbor | null }
   sessions: LessonSession[]
   assignments: LessonAssignment[]
   exams: LessonExam[]
@@ -226,7 +276,7 @@ export function getLearningWorkspace(courseId: string, signal?: AbortSignal): Pr
   return apiRequest<LearningWorkspace>(`/api/me/learning/courses/${encodeURIComponent(courseId)}`, { signal })
 }
 
-/** API-231 — reads only; opening is recorded by visitLearningItem(). */
+/** API-231 — reads only; opening is recorded by visitLearningItem(). A lesson of a level not open yet: 403 level_not_open { itemId, opensOn } (also API-232..234). */
 export function getLearningItem(itemId: string, signal?: AbortSignal): Promise<LearningItem> {
   return apiRequest<LearningItem>(`/api/me/learning/items/${encodeURIComponent(itemId)}`, { signal })
 }

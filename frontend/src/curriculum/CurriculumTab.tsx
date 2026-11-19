@@ -13,7 +13,24 @@
 // as «available to who manages or teaches the course». While the structure
 // holds unsaved work the tab reports it to the drawer (`onUnsavedChange`), so
 // Escape, a mask click and a browser back keep it (KI-054/KI-055).
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, FileTextOutlined, PlusOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons'
+// LRN-T06: a new lesson starts as an unpublished draft (D-R144); «نشر المستوى»
+// and «نشر الكل» switch the draft's flags only — the same single save sends
+// them; «معاينة كطالب» opens the SAVED curriculum as a learner sees it in a new
+// tab (/learn/:courseId/preview), so it waits for a save while the draft
+// differs; a level may open some days after the class starts (D-R145); each
+// lesson names the class sessions linked to it (`sessionCount`, D-R143).
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  CloudUploadOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  LockOutlined,
+  PlusOutlined,
+  SaveOutlined,
+  UndoOutlined,
+} from '@ant-design/icons'
 import { Alert, App, Button, Card, Col, Empty, Flex, Form, Input, InputNumber, Popconfirm, Row, Select, Skeleton, Space, Switch, Tag, Tooltip, Typography, theme } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -25,7 +42,7 @@ import { localizedOf } from '../courses/courses.form'
 import { localizedLabel } from '../users/users.format'
 import { describeCurriculumFailure, failureMessage } from './curriculum.errors'
 import type { CurriculumFailure } from './curriculum.errors'
-import { formatMediaDuration, levelName } from './curriculum.format'
+import { formatMediaDuration, levelName, previewPath, releaseLabel } from './curriculum.format'
 import {
   LOOSE_GROUP,
   CURRICULUM_PROBLEM,
@@ -44,9 +61,12 @@ import {
   newDraftKey,
   planCurriculumSave,
   problemKey,
+  publishAll,
+  publishLevel,
   removeLesson,
   removeLevel,
   restoreLessons,
+  unpublishedCount,
   updateLesson,
   updateLevel,
   withItem,
@@ -224,7 +244,7 @@ function CurriculumView({ curriculum }: { curriculum: Curriculum }) {
           <Flex key={item.id} gap={8} wrap align="center" data-testid="curriculum-view-lesson">
             <Typography.Text type="secondary">{t('curriculum.lesson.number', { number: numbers.get(item.id) })}</Typography.Text>
             <Typography.Text strong>{localizedLabel(item.title, language)}</Typography.Text>
-            <LessonTags item={item} />
+            <LessonTags item={item} isRequired={item.isRequired} isPublished={item.isPublished} />
           </Flex>
         ))}
       </Flex>
@@ -235,7 +255,17 @@ function CurriculumView({ curriculum }: { curriculum: Curriculum }) {
       <Alert type="info" showIcon title={t('curriculum.readOnly')} />
       {items.length === 0 && curriculum.sections.length === 0 ? <Empty description={t('curriculum.empty')} /> : null}
       {curriculum.sections.map((section) => (
-        <Card key={section.id} size="small" title={levelName(t, language, section.number, section.title)} data-testid="curriculum-level">
+        <Card
+          key={section.id}
+          size="small"
+          title={
+            <Space size={6} wrap>
+              <span>{levelName(t, language, section.number, section.title)}</span>
+              <ReleaseTag days={section.releaseAfterDays ?? null} />
+            </Space>
+          }
+          data-testid="curriculum-level"
+        >
           {section.description ? <Typography.Paragraph type="secondary">{localizedLabel(section.description, language)}</Typography.Paragraph> : null}
           {lessonRows(section.items)}
         </Card>
@@ -249,23 +279,44 @@ function CurriculumView({ curriculum }: { curriculum: Curriculum }) {
   )
 }
 
-/** Kind, length and state of a stored lesson. */
-function LessonTags({ item }: { item: CurriculumItem }) {
+/**
+ * Kind, length, linked sessions and state of a lesson: the stored lesson's kind, content and sessions (`item` —
+ * absent for a lesson not saved yet, which has no content), and the required/published state as shown — the
+ * draft's in the editor, so «نشر المستوى» clears «غير منشور» at once.
+ */
+function LessonTags({ item, isRequired, isPublished }: { item: CurriculumItem | undefined; isRequired: boolean; isPublished: boolean }) {
   const { t } = useTranslation()
+  const sessions = item?.sessionCount ?? 0
   return (
     <Space size={4} wrap>
-      <Tag>{t(`curriculum.kinds.${item.kind}`)}</Tag>
-      {item.content === null && item.kind !== 'live' ? <Tag color="warning">{t('curriculum.noContent')}</Tag> : null}
-      {item.completionMode === 'manual' ? null : <Tag color="geekblue">{t(`curriculum.completion.${item.completionMode}`)}</Tag>}
-      {item.durationSeconds !== null ? (
+      {item ? <Tag>{t(`curriculum.kinds.${item.kind}`)}</Tag> : null}
+      {!item || (item.content === null && item.kind !== 'live') ? <Tag color="warning">{t('curriculum.noContent')}</Tag> : null}
+      {item && item.completionMode !== 'manual' ? <Tag color="geekblue">{t(`curriculum.completion.${item.completionMode}`)}</Tag> : null}
+      {item && item.durationSeconds !== null ? (
         <Tag>
           <bdi dir="ltr">{formatMediaDuration(item.durationSeconds)}</bdi>
         </Tag>
       ) : null}
-      {item.isRequired ? null : <Tag color="default">{t('curriculum.lesson.optional')}</Tag>}
-      {item.isPublished ? null : <Tag color="orange">{t('curriculum.lesson.unpublished')}</Tag>}
+      {sessions > 0 ? (
+        <Tag color="cyan" title={t('curriculum.lesson.sessionCountTitle')} data-testid="curriculum-session-count">
+          {t('curriculum.lesson.sessionCount', { count: sessions })}
+        </Tag>
+      ) : null}
+      {isRequired ? null : <Tag color="default">{t('curriculum.lesson.optional')}</Tag>}
+      {isPublished ? null : <Tag color="orange">{t('curriculum.lesson.unpublished')}</Tag>}
     </Space>
   )
+}
+
+/** When a level opens for a learner (D-R145); nothing for a level open at once. */
+function ReleaseTag({ days }: { days: number | null }) {
+  const { t } = useTranslation()
+  const label = releaseLabel(t, days)
+  return label ? (
+    <Tag color="gold" icon={<LockOutlined />} data-testid="curriculum-release">
+      {label}
+    </Tag>
+  ) : null
 }
 
 // --- The editor (`courses.manage`) -------------------------------------------
@@ -294,6 +345,7 @@ function CurriculumEditor({ saved, draft, unsaved, saving, showErrors, refused, 
   const total = lessonCount(draft)
   const atLessonLimit = total >= CURRICULUM_ITEMS_MAX
   const atLevelLimit = draft.levels.length >= CURRICULUM_SECTIONS_MAX
+  const unpublished = unpublishedCount(draft)
   const showsLoose = draft.loose.length > 0 || draft.levels.length === 0
   const looseTitle = draft.levels.length > 0 ? t('curriculum.loose.title') : t('curriculum.loose.only')
 
@@ -358,7 +410,18 @@ function CurriculumEditor({ saved, draft, unsaved, saving, showErrors, refused, 
           align="center"
           wrap
           gap={8}
-          style={{ position: 'sticky', top: 0, zIndex: 3, background: token.colorBgElevated, paddingBlock: 8 }}
+          // Sticks over the drawer body's own top padding too: with `top: 0` the lesson fields showed through that strip when
+          // scrolled (MOD-20 acceptance). The negative margin takes back the tab bar's bottom margin, so the unscrolled
+          // toolbar sits where it did, 8 px lower at most.
+          style={{
+            position: 'sticky',
+            top: -token.paddingLG,
+            zIndex: 3,
+            background: token.colorBgElevated,
+            marginBlockStart: -token.margin,
+            paddingBlockStart: token.paddingLG + 8,
+            paddingBlockEnd: 8,
+          }}
           data-testid="curriculum-toolbar"
         >
           <Space orientation="vertical" size={0}>
@@ -366,8 +429,29 @@ function CurriculumEditor({ saved, draft, unsaved, saving, showErrors, refused, 
               {t('curriculum.summary', { levels: t('curriculum.levelCount', { count: draft.levels.length }), lessons: t('curriculum.lessonCount', { count: total }) })}
             </Typography.Text>
             {unsaved ? <Typography.Text type="warning">{t('curriculum.unsavedHint')}</Typography.Text> : null}
+            {unsaved ? (
+              <Typography.Text type="secondary" id="curriculum-preview-hint" data-testid="curriculum-preview-hint">
+                {t('curriculum.previewSaveFirst')}
+              </Typography.Text>
+            ) : null}
           </Space>
           <Space wrap>
+            {/* The learner's view of the SAVED curriculum (D-R144): a draft that differs is not what it would show. */}
+            <Tooltip title={unsaved ? t('curriculum.previewSaveFirst') : t('curriculum.previewHint')}>
+              <span>
+                <Button icon={<EyeOutlined />} href={previewPath(saved.courseId)} target="_blank" rel="noopener noreferrer" disabled={unsaved || saving} aria-describedby={unsaved ? 'curriculum-preview-hint' : undefined}>
+                  {t('curriculum.preview')}
+                </Button>
+              </span>
+            </Tooltip>
+            <Button
+              icon={<CloudUploadOutlined />}
+              onClick={() => edit(publishAll)}
+              disabled={unpublished === 0}
+              title={unpublished === 0 ? t('curriculum.allPublished') : undefined}
+            >
+              {t('curriculum.publishAll')}
+            </Button>
             <Popconfirm title={t('curriculum.discardConfirm')} okText={t('curriculum.discard')} cancelText={t('common.cancel')} onConfirm={onDiscard} disabled={!unsaved || saving}>
               <Button icon={<UndoOutlined />} disabled={!unsaved || saving}>
                 {t('curriculum.discard')}
@@ -382,6 +466,9 @@ function CurriculumEditor({ saved, draft, unsaved, saving, showErrors, refused, 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
           {t('curriculum.intro')}
         </Typography.Paragraph>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }} data-testid="curriculum-publish-hint">
+          {t('curriculum.publishHint')}
+        </Typography.Paragraph>
         {notice ? <Alert type={notice.type} showIcon title={notice.text} closable={{ onClose: onNoticeClose }} /> : null}
         {structureProblem ? <Alert type="error" showIcon title={t(structureProblem.key, structureProblem.params)} /> : null}
         {draft.levels.length === 0 && draft.loose.length === 0 ? <Empty description={t('curriculum.emptyManager')} /> : null}
@@ -389,6 +476,7 @@ function CurriculumEditor({ saved, draft, unsaved, saving, showErrors, refused, 
         {draft.levels.map((level, index) => {
           const name = nameOfLevel(level, index)
           const levelBlocked = level.lessons.some(deleteBlocked)
+          const levelUnpublished = unpublishedCount(draft, level.key)
           const removeButton = (
             <Button
               size="small"
@@ -408,10 +496,21 @@ function CurriculumEditor({ saved, draft, unsaved, saving, showErrors, refused, 
                 <Space size={6} wrap>
                   <span>{name}</span>
                   {level.id ? null : <Tag color="blue">{t('curriculum.newEntry')}</Tag>}
+                  <ReleaseTag days={level.releaseAfterDays} />
                 </Space>
               }
               extra={
-                <Space size={4}>
+                <Space size={4} wrap>
+                  {/* Switches the draft only (D-R144): «حفظ المنهج» sends it with the rest. */}
+                  <Button
+                    size="small"
+                    icon={<CloudUploadOutlined />}
+                    disabled={levelUnpublished === 0}
+                    title={levelUnpublished === 0 ? t('curriculum.level.allPublished') : undefined}
+                    onClick={() => edit((current) => publishLevel(current, level.key))}
+                  >
+                    {t('curriculum.level.publish')}
+                  </Button>
                   <Button size="small" icon={<ArrowUpOutlined />} aria-label={t('curriculum.level.moveUp')} disabled={index === 0} onClick={() => edit((current) => moveLevel(current, level.key, -1))} />
                   <Button
                     size="small"
@@ -474,9 +573,15 @@ function CurriculumEditor({ saved, draft, unsaved, saving, showErrors, refused, 
   )
 }
 
-/** The text fields of one level: an optional title and description (Arabic first). */
+/**
+ * The fields of one level: an optional title and description (Arabic first), and when it opens — the days after the
+ * learner's class starts (D-R145), empty = at once. No InputNumber min/max/precision: antd would clamp or round a
+ * typed value silently on blur; the check before the save words it instead (curriculumProblems — 0..365, whole).
+ */
 function LevelFields({ level, problemText, onChange }: { level: LevelDraft; problemText: (field: string) => string | undefined; onChange: (patch: LevelPatch) => void }) {
   const { t } = useTranslation()
+  const releaseId = `curriculum-${level.key}-releaseAfterDays`
+  const releaseError = problemText('releaseAfterDays')
   const field = (name: 'titleAr' | 'titleEn' | 'descriptionAr' | 'descriptionEn', multiline: boolean): ReactNode => {
     const id = `curriculum-${level.key}-${name}`
     const error = problemText(name)
@@ -501,6 +606,25 @@ function LevelFields({ level, problemText, onChange }: { level: LevelDraft; prob
       </Col>
       <Col xs={24} md={12}>
         {field('descriptionEn', true)}
+      </Col>
+      <Col xs={24}>
+        <Form.Item
+          label={t('curriculum.level.releaseAfterDays')}
+          htmlFor={releaseId}
+          validateStatus={releaseError ? 'error' : undefined}
+          help={releaseError}
+          extra={t('curriculum.level.releaseHint')}
+          style={{ marginBottom: 8 }}
+        >
+          <InputNumber
+            id={releaseId}
+            step={1}
+            value={level.releaseAfterDays}
+            placeholder={t('curriculum.level.releasePlaceholder')}
+            onChange={(value) => onChange({ releaseAfterDays: typeof value === 'number' ? value : null })}
+            style={{ width: 140 }}
+          />
+        </Form.Item>
       </Col>
     </Row>
   )
@@ -569,7 +693,8 @@ function LessonEditor({ lesson, item, number, first, last, groupKey, moveTargets
       <Flex justify="space-between" align="center" wrap gap={8} style={{ marginBottom: 8 }}>
         <Space size={4} wrap>
           <Typography.Text strong>{t('curriculum.lesson.number', { number })}</Typography.Text>
-          {item ? <LessonTags item={item} /> : <Tag color="blue">{t('curriculum.newEntry')}</Tag>}
+          {item ? null : <Tag color="blue">{t('curriculum.newEntry')}</Tag>}
+          <LessonTags item={item} isRequired={lesson.isRequired} isPublished={lesson.isPublished} />
           {item && item.progressCount > 0 ? <Tag color="purple">{t('curriculum.lesson.progressCount', { count: item.progressCount })}</Tag> : null}
           {refused ? <Tag color="red">{t('curriculum.lesson.refused')}</Tag> : null}
         </Space>

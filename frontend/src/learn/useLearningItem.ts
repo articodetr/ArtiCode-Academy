@@ -4,10 +4,12 @@
 // again later (A → B → A) is another opening, a retry after a failed read is
 // the first. Opening never completes a lesson (D-R134). The progress shown is
 // replaced only by the server's answers (setProgress), never computed here.
+// A lesson of a level not open yet (403 level_not_open — D-R145) is never
+// visited: the read is refused before any visit is posted.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getLearningItem, visitLearningItem } from '../api/learning'
 import type { ItemProgress, LearningItem } from '../api/learning'
-import { isLessonGone } from './learn.errors'
+import { isLessonGone, levelNotOpenOf } from './learn.errors'
 import { mergeProgress } from './learn.state'
 
 interface State {
@@ -21,6 +23,8 @@ export interface LearningItemCallbacks {
   onVisited?: (itemId: string, progress: ItemProgress) => void
   /** API-231 answered 404: the lesson is unknown, unpublished or of another course. */
   onGone?: (itemId: string) => void
+  /** API-231 answered 403 level_not_open (D-R145): the lesson's level opens on `opensOn` (null when unnamed). */
+  onLocked?: (itemId: string, opensOn: string | null) => void
 }
 
 export interface LearningItemReading {
@@ -63,6 +67,8 @@ export function useLearningItem(itemId: string | undefined, callbacks: LearningI
         if (controller.signal.aborted) return
         setState({ key: requestKey, item: null, error })
         if (isLessonGone(error)) callbacksRef.current.onGone?.(itemId)
+        const locked = levelNotOpenOf(error)
+        if (locked) callbacksRef.current.onLocked?.(itemId, locked.opensOn)
       },
     )
     return () => controller.abort()

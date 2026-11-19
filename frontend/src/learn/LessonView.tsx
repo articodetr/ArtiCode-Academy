@@ -1,15 +1,17 @@
 // One lesson in the course player (MOD-20): its heading (level, kind, length,
 // «اختياري»), its content by kind, how it completes, what it carries beside
 // (description, resources, assignments, exams), and the way on — «السابق» /
-// «التالي» in learning order across the levels (API-231 `neighbors`), and
-// back to the curriculum. Mounted once per lesson (keyed by its id), so a
+// «التالي» in learning order across the levels (API-231 `neighbors` — none
+// skipped; a step toward a lesson of a level not open yet is disabled,
+// D-R145), and back to the curriculum. The author's preview renders it with
+// `preview`: nothing is tracked or completed, the draft lesson tagged. Mounted once per lesson (keyed by its id), so a
 // player, a form or a failure of one lesson never leaks into the next; the
 // heading takes the focus when the learner moved here from another lesson.
-import { ArrowLeftOutlined, ArrowRightOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, ArrowRightOutlined, LockOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Button, Tag } from 'antd'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { LearningItem, PlaybackResult } from '../api/learning'
+import type { LearningItem, LearningNeighbor, PlaybackResult } from '../api/learning'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { CompletionPanel } from './CompletionPanel'
@@ -28,9 +30,18 @@ export interface LessonViewProps {
   shouldFocus: (itemId: string) => boolean
   /** The academy's zone for exam times (API-231 exams carry none). */
   examZone: string | undefined
+  /** The author's preview: no playback is saved, the completion button is disabled (D-R144). */
+  preview?: boolean
+  /** The lesson is not published (preview only): tagged «مسودّة». */
+  draft?: boolean
 }
 
-export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToContents, shouldFocus, examZone }: LessonViewProps) {
+/** A step of «السابق» / «التالي» is possible toward a lesson that can be opened (D-R145 — a body without the field reads as open). */
+function reachable(neighbor: LearningNeighbor | null): neighbor is LearningNeighbor {
+  return neighbor !== null && neighbor.available !== false
+}
+
+export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToContents, shouldFocus, examZone, preview = false, draft = false }: LessonViewProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -59,14 +70,19 @@ export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToC
           </span>
           {duration ? <span>{duration.clock ? <bdi dir="ltr">{duration.text}</bdi> : duration.text}</span> : null}
           {item.isRequired ? null : <Tag bordered={false}>{t('learn.lesson.optional')}</Tag>}
+          {draft ? (
+            <Tag color="gold" bordered={false}>
+              {t('learn.preview.draft')}
+            </Tag>
+          ) : null}
         </p>
       </header>
 
       <section className="learn-card learn-lesson__content">
-        <LessonContent item={item} onPlayback={(result) => onPlayback(item.id, result)} />
+        <LessonContent item={item} onPlayback={(result) => onPlayback(item.id, result)} trackPlayback={!preview} />
       </section>
 
-      <CompletionPanel item={item} onComplete={onComplete} />
+      <CompletionPanel item={item} onComplete={onComplete} preview={preview} />
 
       <LessonSections item={item} examZone={examZone} />
 
@@ -74,12 +90,12 @@ export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToC
         <Button
           className="learn-nav__step"
           icon={rtl ? <ArrowRightOutlined aria-hidden /> : <ArrowLeftOutlined aria-hidden />}
-          disabled={previous === null}
-          onClick={() => previous && onNavigate(previous.id)}
+          disabled={!reachable(previous)}
+          onClick={() => reachable(previous) && onNavigate(previous.id)}
         >
           <span className="learn-nav__label">
             <span>{t('learn.nav.previous')}</span>
-            {previous ? <span className="learn-nav__title">{localizedLabel(previous.title, language)}</span> : null}
+            {previous ? <NeighborTitle neighbor={previous} /> : null}
           </span>
         </Button>
         <Button className="learn-nav__contents" type="text" icon={<UnorderedListOutlined aria-hidden />} onClick={onBackToContents}>
@@ -87,18 +103,31 @@ export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToC
         </Button>
         <Button
           className="learn-nav__step learn-nav__step--next"
-          type={next ? 'primary' : 'default'}
+          type={reachable(next) ? 'primary' : 'default'}
           icon={rtl ? <ArrowLeftOutlined aria-hidden /> : <ArrowRightOutlined aria-hidden />}
           iconPlacement="end"
-          disabled={next === null}
-          onClick={() => next && onNavigate(next.id)}
+          disabled={!reachable(next)}
+          onClick={() => reachable(next) && onNavigate(next.id)}
         >
           <span className="learn-nav__label">
             <span>{t('learn.nav.next')}</span>
-            {next ? <span className="learn-nav__title">{localizedLabel(next.title, language)}</span> : null}
+            {next ? <NeighborTitle neighbor={next} /> : null}
           </span>
         </Button>
       </nav>
     </article>
+  )
+}
+
+/** The neighbour's title; one whose level is not open yet carries a lock and says so (D-R145). */
+function NeighborTitle({ neighbor }: { neighbor: LearningNeighbor }) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const locked = neighbor.available === false
+  return (
+    <span className="learn-nav__title">
+      {locked ? <LockOutlined aria-hidden /> : null} {localizedLabel(neighbor.title, language)}
+      {locked ? <span className="learn-sr-only"> {t('learn.nav.locked')}</span> : null}
+    </span>
   )
 }

@@ -12,19 +12,28 @@
 // from the shared API-035 store, else this device's, which the form says. The
 // typed wall clock stays when the room changes and is read in the new zone at
 // submit, so 10:00 typed for a Berlin room is 10:00 in Berlin — the instant a
-// weekly slot at 10:00 in that room generates.
+// weekly slot at 10:00 in that room generates. Once a class is chosen (or
+// given), its course's curriculum lessons (API-048) and the curriculum lessons
+// its sessions cover (API-093) are read, and the first lesson of the curriculum
+// no non-cancelled session covers yet is preselected as the syllabus item,
+// with the hint «اقتراح: الدرس التالي في المنهج» (LRN-T06, D-R143) — once per
+// class, never over a choice the user made, and the user may change or clear it.
 import { Alert, Form, Modal } from 'antd'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { createLesson } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import type { Room } from '../api/rooms'
+import { useAuth } from '../auth/auth-context'
 import { LessonFormFields } from './LessonFormFields'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
 import { buildCreateLessonInput } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
 import { lessonZoneFor } from './lessons.format'
+import { nextCurriculumItem } from './lessons.suggestion'
+import { useCoveredSyllabusItems } from './useCoveredSyllabusItems'
+import { useSyllabusItems } from './useSyllabusItems'
 import { useAcademyZone } from './useAcademyZone'
 
 interface CreateLessonModalProps {
@@ -85,6 +94,25 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
   const academy = useAcademyZone()
   const zone = lessonZoneFor(room, { timeZone: academy.timeZone, source: academy.source })
 
+  // The next curriculum lesson of the class (LRN-T06, D-R143): the syllabus is read here once and handed to the select.
+  const classId = klass?.id
+  const syllabus = useSyllabusItems(klass?.course.id)
+  const canReadLessons = useAuth().hasPermission('lessons.read')
+  const covered = useCoveredSyllabusItems(classId, canReadLessons)
+  const suggestion = useMemo(
+    () => (covered && !syllabus.loading && !syllabus.error ? nextCurriculumItem(syllabus.items, covered) : null),
+    [covered, syllabus.items, syllabus.loading, syllabus.error],
+  )
+  // The class whose syllabus item is settled: the suggestion was applied, or the user chose (or cleared) one first.
+  const settledFor = useRef<string | null>(null)
+  const watchedItem = Form.useWatch('syllabusItemId', form) as string | undefined
+
+  useEffect(() => {
+    if (!classId || !suggestion || settledFor.current === classId) return
+    settledFor.current = classId
+    if (!form.getFieldValue('syllabusItemId')) form.setFieldsValue({ syllabusItemId: suggestion.id })
+  }, [classId, suggestion, form])
+
   // Hands the modal's OK button this session's form (onReady is stable; the form instance too), and takes it back
   // when the session ends — the next session's first frame then shows a disabled OK, never a stale one.
   useEffect(() => {
@@ -122,6 +150,10 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
         requiredMark={false}
         initialValues={{ classId: initialClass?.id, deliveryMode: 'in_person' }}
         onFinish={(values) => void submit(values as LessonFormValues)}
+        // A syllabus item the user picks or clears is theirs: the suggestion never replaces it.
+        onValuesChange={(changed: Record<string, unknown>) => {
+          if ('syllabusItemId' in changed && classId) settledFor.current = classId
+        }}
         disabled={saving}
       >
         <LessonFormFields
@@ -132,9 +164,12 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
           klass={klass}
           onClassChange={(next) => {
             setKlass(next ?? null)
-            // The teacher and the syllabus item belong to the class: start over when it changes.
+            // The teacher and the syllabus item belong to the class: start over when it changes (a new suggestion too).
             form.setFieldsValue({ teacherUserId: undefined, syllabusItemId: undefined })
+            settledFor.current = null
           }}
+          syllabus={syllabus}
+          syllabusHint={suggestion && watchedItem === suggestion.id ? t('lessons.syllabus.suggested') : undefined}
         />
       </Form>
     </>
