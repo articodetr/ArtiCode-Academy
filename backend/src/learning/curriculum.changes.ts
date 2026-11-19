@@ -13,7 +13,8 @@
 //
 // The lesson's kind, content and resources are not part of this plan
 // (API-228 writes them); a new lesson starts as a `text` lesson without
-// content.
+// content. A level's `releaseAfterDays` (LRN-T06, D-R145) is one of its
+// values: a changed value counts the level as `updated`.
 import { sameLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { CurriculumIdProblems } from './learning.errors.js';
@@ -21,6 +22,8 @@ import type { CurriculumIdProblems } from './learning.errors.js';
 export interface SectionValues {
   title: LocalizedText | null;
   description: LocalizedText | null;
+  /** D-R145: the level opens N days after the learner's class starts; null = open from the start. */
+  releaseAfterDays: number | null;
 }
 
 export interface ExistingSection extends SectionValues {
@@ -156,7 +159,7 @@ export function planCurriculumReplacement(
   const targets: SectionTarget[] = [];
   let sectionsUpdated = 0;
   requested.sections.forEach((section, sortOrder) => {
-    const values: SectionValues = { title: section.title, description: section.description };
+    const values: SectionValues = { title: section.title, description: section.description, releaseAfterDays: section.releaseAfterDays };
     if (section.id === undefined) {
       targets.push({ createIndex: sectionCreate.length });
       sectionCreate.push({ ...values, sortOrder });
@@ -172,6 +175,10 @@ export function planCurriculumReplacement(
     }
     if (!sameLocalizedText(current.description, values.description)) {
       change.description = values.description;
+      valuesChanged = true;
+    }
+    if (current.releaseAfterDays !== values.releaseAfterDays) {
+      change.releaseAfterDays = values.releaseAfterDays;
       valuesChanged = true;
     }
     if (current.sortOrder !== sortOrder) change.sortOrder = sortOrder;
@@ -260,6 +267,17 @@ export function planCurriculumReplacement(
       totalItems: placed.length,
     },
   };
+}
+
+/**
+ * How many lessons this plan makes newly published (LRN-T06, D-R146): the
+ * lessons it creates published, and the kept lessons it switches from
+ * unpublished to published (an update carries `isPublished` only when the
+ * flag changes). Editing or moving a lesson that was already published does
+ * not count.
+ */
+export function newlyPublishedCount(plan: { items: { create: readonly ItemCreate[]; update: readonly ItemUpdate[] } }): number {
+  return plan.items.create.filter((item) => item.isPublished).length + plan.items.update.filter((change) => change.isPublished === true).length;
 }
 
 /**

@@ -85,6 +85,15 @@ export class MyLearningItemProgressDto {
   watchedPercent: number | null;
 }
 
+/** The caller's own attendance at a MOD-06 session (never the note, the recorder or anyone else's). */
+export class LearningSessionAttendanceDto {
+  @ApiProperty({ enum: ATTENDANCE_STATUSES })
+  status: AttendanceStatus;
+
+  @ApiProperty({ type: 'integer', nullable: true, description: 'With status `late` only' })
+  minutesLate: number | null;
+}
+
 // ---------------------------------------------------------------------------
 // API-229 — «مدرستي»
 // ---------------------------------------------------------------------------
@@ -170,6 +179,33 @@ export class MyLearningLastLessonDto {
   openedAt: string;
 }
 
+/** D-R143 — the class's next session (MOD-06 lesson): the earliest one not cancelled that has not ended yet. */
+export class MyLearningNextSessionDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto })
+  title: LocalizedText;
+
+  @ApiProperty({ type: String, format: 'date-time', description: 'ISO 8601' })
+  startsAt: string;
+
+  @ApiProperty({ type: String, format: 'date-time', description: 'ISO 8601 — after now' })
+  endsAt: string;
+
+  @ApiProperty({ example: 'Europe/Istanbul', description: 'The room’s branch zone, else the academy’s (D-R41)' })
+  timeZone: string;
+
+  @ApiProperty({ enum: DELIVERY_MODES })
+  deliveryMode: DeliveryMode;
+
+  @ApiProperty({ type: String, nullable: true, description: 'The meeting link; null when none' })
+  meetingUrl: string | null;
+
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: 'The curriculum lesson the session covers, while it is published; null otherwise' })
+  syllabusItemId: string | null;
+}
+
 /** One owned enrollment on the «My School» page (a guardian sees each child's enrollment, read-only). */
 export class MyLearningCourseDto {
   @ApiProperty({ format: 'uuid' })
@@ -207,6 +243,9 @@ export class MyLearningCourseDto {
 
   @ApiProperty({ description: 'True for the caller’s own enrollment — a guardian follows the progress but never opens the content' })
   canLearn: boolean;
+
+  @ApiProperty({ type: () => MyLearningNextSessionDto, nullable: true, description: 'The class’s next session (D-R143) — the earliest non-cancelled MOD-06 lesson of this class that ends after now; null when none' })
+  nextSession: MyLearningNextSessionDto | null;
 }
 
 export class MyLearningListDto {
@@ -281,6 +320,9 @@ export class WorkspaceItemDto {
 
   @ApiProperty({ type: String, format: 'date-time', nullable: true })
   completedAt: string | null;
+
+  @ApiProperty({ description: 'True when its level is open for the caller (D-R145); a lesson of a closed level is listed but cannot be opened (`403 level_not_open`)' })
+  available: boolean;
 }
 
 export class WorkspaceSectionDto {
@@ -299,15 +341,63 @@ export class WorkspaceSectionDto {
   @ApiProperty({ type: () => [WorkspaceItemDto], description: 'Published lessons in learning order' })
   items: WorkspaceItemDto[];
 
-  @ApiProperty({ type: () => MyLearningProgressCountsDto })
+  @ApiProperty({ type: () => MyLearningProgressCountsDto, description: 'Counts every published lesson of the level, a closed level’s too (D-R145)' })
   progress: MyLearningProgressCountsDto;
+
+  @ApiProperty({ description: 'True when the level is open for the caller today (D-R145): no release date, the class has no start date, or the date has come; the lessons outside every level are always open' })
+  isOpen: boolean;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '2026-12-01',
+    description: 'YYYY-MM-DD in the academy’s time zone — the day the level opens: the caller’s class `startsOn` + `releaseAfterDays` (also once passed); null for a level that is always open',
+  })
+  opensOn: string | null;
+}
+
+/** D-R143 — a MOD-06 session of the class that opens the course, linked to a curriculum lesson or not. */
+export class WorkspaceSessionDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto })
+  title: LocalizedText;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  startsAt: string;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  endsAt: string;
+
+  @ApiProperty({ enum: LESSON_STATUSES })
+  status: LessonStatus;
+
+  @ApiProperty({ enum: DELIVERY_MODES })
+  deliveryMode: DeliveryMode;
+
+  @ApiProperty({ type: String, nullable: true, description: 'The meeting link; null when none and always null for a cancelled session' })
+  meetingUrl: string | null;
+
+  @ApiProperty({ example: 'Europe/Istanbul', description: 'The room’s branch zone, else the academy’s (D-R41)' })
+  timeZone: string;
+
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: 'The curriculum lesson the session covers, while it is published; null otherwise' })
+  syllabusItemId: string | null;
+
+  @ApiProperty({ type: () => LearningSessionAttendanceDto, nullable: true, description: 'The caller’s own attendance (never the note); null until recorded' })
+  attendance: LearningSessionAttendanceDto | null;
 }
 
 export class LearningResumeDto {
   @ApiProperty({ format: 'uuid' })
   itemId: string;
 
-  @ApiProperty({ enum: RESUME_REASONS, description: '`last` = the lesson opened last; `replaced` = that lesson is no longer published, the next one not completed is offered; `first` = nothing opened yet' })
+  @ApiProperty({
+    enum: RESUME_REASONS,
+    description:
+      '`last` = the lesson opened last; `replaced` = that lesson is no longer published or its level is not open, the next one not completed is offered; `first` = nothing opened yet. Always a lesson whose level is open (D-R145)',
+  })
   reason: ResumeReason;
 
   @ApiProperty({ type: 'integer', nullable: true, description: 'Where the medium of a playback lesson was left, in seconds; null otherwise' })
@@ -330,8 +420,14 @@ export class LearningWorkspaceDto {
   @ApiProperty({ type: () => MyLearningProgressCountsDto })
   progress: MyLearningProgressCountsDto;
 
-  @ApiProperty({ type: () => LearningResumeDto, nullable: true, description: 'Where «continue learning» opens; null when the course shows no lesson' })
+  @ApiProperty({ type: () => LearningResumeDto, nullable: true, description: 'Where «continue learning» opens; null when the course shows no lesson whose level is open' })
   resume: LearningResumeDto | null;
+
+  @ApiProperty({
+    type: () => [WorkspaceSessionDto],
+    description: 'Every MOD-06 session of the enrollment’s class (D-R143), by start time, cancelled ones too; at most 300',
+  })
+  sessions: WorkspaceSessionDto[];
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +459,9 @@ export class LearningNeighborDto {
 
   @ApiProperty({ type: () => LocalizedTextDto })
   title: LocalizedText;
+
+  @ApiProperty({ description: 'True when its level is open for the caller (D-R145)' })
+  available: boolean;
 }
 
 export class LearningNeighborsDto {
@@ -371,14 +470,6 @@ export class LearningNeighborsDto {
 
   @ApiProperty({ type: () => LearningNeighborDto, nullable: true })
   next: LearningNeighborDto | null;
-}
-
-export class LearningSessionAttendanceDto {
-  @ApiProperty({ enum: ATTENDANCE_STATUSES })
-  status: AttendanceStatus;
-
-  @ApiProperty({ type: 'integer', nullable: true, description: 'With status `late` only' })
-  minutesLate: number | null;
 }
 
 /** A MOD-06 session of one of the caller's classes that covers the lesson. */

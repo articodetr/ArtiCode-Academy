@@ -11,7 +11,9 @@
 // (sessions, assignments and exams cascade), the course (levels and lessons
 // cascade), users and nothing else. The learner routes record no audit event:
 // the events of the student fixtures are counted above an id watermark taken
-// after their sign-ins.
+// after their sign-ins. Since LRN-T06 (D-R143) also each class's next session
+// on «My School» and the class's sessions in the workspace (AC6, AC10); the
+// release of a level by date (D-R145) is TEST-262 (learning-release.e2e-spec.ts).
 import { randomUUID } from 'node:crypto';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -40,7 +42,7 @@ const COVER = 'https://cdn.example.org/courses/my-school.jpg';
 const SECRET_KEY = /hash|password|token/i;
 // `note` is not listed: a live lesson's content carries its author's `note`; the attendance note is checked by its text (AC6).
 const FORBIDDEN_KEYS = new Set(['email', 'username', 'phone', 'emailVerifiedAt', 'lastLoginAt', 'recordedBy', 'recordedById', 'recordedAt', 'cancellationReason', 'createdBy', 'createdById', 'withdrawalReason', 'watchedRanges', 'teacherUserId']);
-const COURSE_ITEM_KEYS = ['action', 'canLearn', 'class', 'course', 'enrollment', 'enrollmentId', 'lastActivityAt', 'lastLesson', 'leadTeacher', 'progress', 'relation', 'student'];
+const COURSE_ITEM_KEYS = ['action', 'canLearn', 'class', 'course', 'enrollment', 'enrollmentId', 'lastActivityAt', 'lastLesson', 'leadTeacher', 'nextSession', 'progress', 'relation', 'student'];
 const LESSON_KEYS = [
   'assignments',
   'completionMode',
@@ -81,11 +83,13 @@ interface CourseItem {
   lastActivityAt: string | null;
   action: string | null;
   canLearn: boolean;
+  nextSession: Record<string, unknown> | null;
 }
 interface WorkspaceBody {
-  sections: { id: string | null; number: number; title: unknown; items: { id: string; state: string; completedAt: string | null }[]; progress: Counts }[];
+  sections: { id: string | null; number: number; title: unknown; items: { id: string; state: string; completedAt: string | null; available: boolean }[]; progress: Counts; isOpen: boolean; opensOn: string | null }[];
   progress: Counts;
   resume: { itemId: string; reason: string; positionSeconds: number | null } | null;
+  sessions: { id: string; status: string; meetingUrl: string | null; syllabusItemId: string | null; attendance: unknown }[];
 }
 
 async function canConnect(url: string): Promise<boolean> {
@@ -293,8 +297,9 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       lastActivityAt: null,
       action: 'start',
       canLearn: true,
+      nextSession: null, // the class has no session yet (D-R143)
     });
-    expect(list[1]).toMatchObject({ enrollmentId: enrollments['B:sA'], enrollment: { status: 'completed' }, action: 'start', canLearn: true });
+    expect(list[1]).toMatchObject({ enrollmentId: enrollments['B:sA'], enrollment: { status: 'completed' }, action: 'start', canLearn: true, nextSession: null });
 
     const child = (await learning('guardian').expect(200)).body.items as CourseItem[];
     expect(child.map((entry) => [entry.enrollmentId, entry.relation, entry.student.id, entry.action, entry.canLearn])).toEqual([
@@ -319,7 +324,15 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       completionPercent: threshold,
       progress: { total: 6, required: 5, completed: 0, completedRequired: 0, percent: 0, isComplete: false, completedAt: null },
       resume: { itemId: items['T1'], reason: 'first', positionSeconds: null },
+      sessions: [], // no MOD-06 session in class A yet (D-R143)
     });
+    // No level has a release delay: every level is open, with no date (D-R145).
+    expect(body.sections.map((section) => [section.isOpen, section.opensOn])).toEqual([
+      [true, null],
+      [true, null],
+      [true, null],
+    ]);
+    expect(body.sections.flatMap((section) => section.items).every((entry) => entry.available)).toBe(true);
     expect(body.sections.map((section) => [section.id, section.number, itemNames(section.items)])).toEqual([
       [sections['S1'], 1, ['T1', 'V1']],
       [sections['S2'], 2, ['Y1', 'L1', 'OPT']],
@@ -338,6 +351,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       completionMode: 'manual',
       state: 'not_started',
       completedAt: null,
+      available: true,
     });
     expect(workspaceItem(body, 'V1')).toMatchObject({ kind: 'video', completionMode: 'playback', durationSeconds: 100 });
     expect(workspaceItem(body, 'Y1')).toMatchObject({ kind: 'video', completionMode: 'manual', durationSeconds: null });
@@ -370,7 +384,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       completionMode: 'manual',
       completionPercent: threshold,
       progress: { state: 'not_started', completedAt: null, completionSource: null, positionSeconds: null, watchedSeconds: 0, watchedPercent: null },
-      neighbors: { previous: { id: items['V1'], title: { ar: 'درس V1', en: 'Lesson V1' } }, next: { id: items['L1'] } },
+      neighbors: { previous: { id: items['V1'], title: { ar: 'درس V1', en: 'Lesson V1' }, available: true }, next: { id: items['L1'], available: true } },
       sessions: [],
       assignments: [],
       exams: [],
@@ -569,6 +583,38 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
     await prisma.exam.create({ data: { classId: classes['A']!, lessonId: sessionA.id, title: { ar: 'اختبار مسودة' }, type: 'quiz', maxScore: 20 }, select: { id: true } });
 
     const ws = (await workspace('sA').expect(200)).body as WorkspaceBody;
+    // D-R143 — the workspace lists every session of the enrollment's class (A), cancelled ones without their link; never class D's.
+    expect(ws.sessions).toEqual([
+      {
+        id: sessionA.id,
+        title: { ar: 'جلسة مباشرة' },
+        startsAt: '2026-03-01T10:00:00.000Z',
+        endsAt: '2026-03-01T11:00:00.000Z',
+        status: 'completed',
+        deliveryMode: 'live_online',
+        meetingUrl: 'https://meet.example.com/live-a',
+        timeZone: academyTimeZone,
+        syllabusItemId: items['L1'],
+        attendance: { status: 'present', minutesLate: null },
+      },
+      {
+        id: cancelled.id,
+        title: { ar: 'جلسة ملغاة' },
+        startsAt: '2026-03-08T10:00:00.000Z',
+        endsAt: '2026-03-08T11:00:00.000Z',
+        status: 'cancelled',
+        deliveryMode: 'live_online',
+        meetingUrl: null,
+        timeZone: academyTimeZone,
+        syllabusItemId: items['L1'],
+        attendance: null,
+      },
+    ]);
+    const wsB = (await workspace('sB').expect(200)).body as WorkspaceBody;
+    expect(wsB.sessions.map((entry) => [entry.id, entry.attendance])).toEqual([
+      [sessionA.id, null], // only the caller's own record
+      [cancelled.id, { status: 'present', minutesLate: null }],
+    ]);
     expect(workspaceItem(ws, 'L1')).toMatchObject({ state: 'completed', completedAt: '2026-03-01T10:00:00.000Z' });
     expect(ws.progress).toMatchObject({ completed: 4, completedRequired: 4, percent: 80 });
     expect(ws.sections[1]!.progress).toMatchObject({ completedRequired: 2, percent: 100, isComplete: true, completedAt: (await progressRow('sA', 'Y1'))!.completedAt!.toISOString() });
@@ -662,6 +708,60 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
     }
   });
 
+  it('AC10 — «My School» shows each class’s next session (D-R143): the earliest not cancelled that has not ended; the workspace lists them all', async () => {
+    const minute = 60_000;
+    const now = Date.now();
+    const lessonIn = async (suffix: string, data: Record<string, unknown>) =>
+      (await prisma.lesson.create({ data: { classId: classes[suffix]!, title: { ar: `حصة ${suffix}` }, ...data } as never, select: { id: true } })).id;
+    // Class A: a cancelled session soon, then the next one (linked to T1), then one linked to the unpublished lesson.
+    const cancelledSoon = await lessonIn('A', { startsAt: new Date(now + 60 * minute), endsAt: new Date(now + 120 * minute), status: 'cancelled', meetingUrl: 'https://meet.example.com/cancelled-soon' });
+    const nextA = await lessonIn('A', {
+      syllabusItemId: items['T1'],
+      title: { ar: 'الحصة القادمة', en: 'Next session' },
+      startsAt: new Date(now + 2 * 24 * 60 * minute),
+      endsAt: new Date(now + 2 * 24 * 60 * minute + 90 * minute),
+      deliveryMode: 'live_online',
+      meetingUrl: 'https://meet.example.com/next-a',
+    });
+    const draftLinked = await lessonIn('A', { syllabusItemId: items['HID'], startsAt: new Date(now + 3 * 24 * 60 * minute), endsAt: new Date(now + 3 * 24 * 60 * minute + 60 * minute) });
+    // Class B: one that ended a minute ago, and one running now (it has not ended) linked to the unpublished lesson.
+    await lessonIn('B', { startsAt: new Date(now - 61 * minute), endsAt: new Date(now - minute) });
+    const runningB = await lessonIn('B', { syllabusItemId: items['HID'], startsAt: new Date(now - 10 * minute), endsAt: new Date(now + 50 * minute) });
+    // Class D (not sA's) has a session sooner than all of them.
+    await lessonIn('D', { startsAt: new Date(now + 5 * minute), endsAt: new Date(now + 30 * minute) });
+
+    const list = (await learning('sA').expect(200)).body.items as CourseItem[];
+    const byClass = new Map(list.map((entry) => [entry.class.id, entry]));
+    const lessonA = await prisma.lesson.findUniqueOrThrow({ where: { id: nextA }, select: { startsAt: true, endsAt: true } });
+    expect(byClass.get(classes['A']!)!.nextSession).toEqual({
+      id: nextA,
+      title: { ar: 'الحصة القادمة', en: 'Next session' },
+      startsAt: lessonA.startsAt.toISOString(),
+      endsAt: lessonA.endsAt.toISOString(),
+      timeZone: academyTimeZone,
+      deliveryMode: 'live_online',
+      meetingUrl: 'https://meet.example.com/next-a',
+      syllabusItemId: items['T1'],
+    });
+    expect(byClass.get(classes['B']!)!.nextSession).toMatchObject({ id: runningB, syllabusItemId: null, meetingUrl: null, deliveryMode: 'in_person' }); // a draft lesson is never named
+    const child = (await learning('guardian').expect(200)).body.items as CourseItem[];
+    expect(child.map((entry) => [entry.class.id, (entry.nextSession as { id: string } | null)?.id ?? null]).sort()).toEqual(
+      [
+        [classes['A'], nextA],
+        [classes['B'], runningB],
+      ].sort(),
+    );
+
+    const ws = (await workspace('sA').expect(200)).body as WorkspaceBody;
+    expect(ws.sessions.slice(-3).map((entry) => [entry.id, entry.status, entry.meetingUrl, entry.syllabusItemId])).toEqual([
+      [cancelledSoon, 'cancelled', null, null],
+      [nextA, 'scheduled', 'https://meet.example.com/next-a', items['T1']],
+      [draftLinked, 'scheduled', null, null],
+    ]);
+    expect(ws.sessions).toHaveLength(5); // the two of AC6 and these three — class A only
+    expect(ws.sessions.map((entry) => entry.id)).not.toContain(runningB);
+  });
+
   it(
     'documents the routes in OpenAPI',
     async () => {
@@ -673,9 +773,25 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       expect(Object.keys(docs.body.paths['/api/me/learning/items/{itemId}/playback'])).toEqual(['put']);
       expect(Object.keys(docs.body.paths['/api/me/learning/items/{itemId}/complete'])).toEqual(['post']);
       const schemas = docs.body.components.schemas;
-      for (const schema of ['MyLearningListDto', 'MyLearningCourseDto', 'LearningWorkspaceDto', 'WorkspaceItemDto', 'LearningItemDto', 'SavePlaybackDto', 'LearningPlaybackResultDto', 'LearningCompleteResultDto']) {
+      for (const schema of [
+        'MyLearningListDto',
+        'MyLearningCourseDto',
+        'MyLearningNextSessionDto',
+        'LearningWorkspaceDto',
+        'WorkspaceItemDto',
+        'WorkspaceSessionDto',
+        'LearningItemDto',
+        'SavePlaybackDto',
+        'LearningPlaybackResultDto',
+        'LearningCompleteResultDto',
+      ]) {
         expect(schemas).toHaveProperty(schema);
       }
+      expect(schemas.MyLearningCourseDto.properties).toHaveProperty('nextSession');
+      expect(schemas.LearningWorkspaceDto.properties).toHaveProperty('sessions');
+      expect(schemas.WorkspaceSectionDto.properties.opensOn).toMatchObject({ type: 'string', nullable: true });
+      expect(schemas.WorkspaceItemDto.properties.available).toMatchObject({ type: 'boolean' });
+      expect(schemas.LearningNeighborDto.properties.available).toMatchObject({ type: 'boolean' });
       expect(schemas.SavePlaybackDto.properties.ranges).toMatchObject({ type: 'array', items: { type: 'array', items: { type: 'number' } } });
       expect(schemas.LearningItemDto.properties.content).toMatchObject({ type: 'object', additionalProperties: true, nullable: true });
     },

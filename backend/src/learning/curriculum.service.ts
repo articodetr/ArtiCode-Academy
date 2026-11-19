@@ -8,10 +8,12 @@ import { canManageCourses } from '../courses/courses.policy.js';
 import { COURSES_ENTITY_TYPE } from '../courses/courses.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { canonicalJson } from '../grades/gradebook.calc.js';
+import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
+import type { NotificationBatch } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import type { LocalizedTextDto } from '../roles/roles.dto.js';
-import { planCurriculumReplacement } from './curriculum.changes.js';
+import { newlyPublishedCount, planCurriculumReplacement } from './curriculum.changes.js';
 import type { ExistingItem, ExistingSection, RequestedItem, SectionTarget } from './curriculum.changes.js';
 import { assertNoProgressOnDeletion } from './curriculum.deletion.js';
 import type { CurriculumDto, CurriculumItemDto, CurriculumItemInputDto, ReplaceCurriculumDto, ReplaceLessonContentDto } from './curriculum.dto.js';
@@ -33,10 +35,15 @@ export const CURRICULUM_AUDIT_ACTIONS = {
 } as const;
 
 const CURRICULUM_ITEM_SELECT = { ...ITEM_SELECT, updatedAt: true } satisfies Prisma.CourseSyllabusItemSelect;
+/** The level with its opening rule (D-R145) — the shared select plus `releaseAfterDays`. */
+const CURRICULUM_SECTION_SELECT = { ...SECTION_SELECT, releaseAfterDays: true } satisfies Prisma.CourseSectionSelect;
+
+/** D-R146: the classes whose learners hear of newly published lessons — the ones learning now. */
+const NOTIFIED_CLASS_STATUSES = ['open', 'running'] as const;
 
 type Db = PrismaService['db'] | Prisma.TransactionClient;
 type ItemRow = Prisma.CourseSyllabusItemGetPayload<{ select: typeof CURRICULUM_ITEM_SELECT }>;
-type SectionRow = Prisma.CourseSectionGetPayload<{ select: typeof SECTION_SELECT }>;
+type SectionRow = Prisma.CourseSectionGetPayload<{ select: typeof CURRICULUM_SECTION_SELECT }>;
 
 /** Optional localized jsonb: null is the database NULL (the CHECKs refuse a JSON null). */
 function optionalJson(value: LocalizedText | null): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -58,7 +65,7 @@ function requestedItem(item: CurriculumItemInputDto): RequestedItem {
   };
 }
 
-function toItemDto(row: ItemRow, progressCount: number): CurriculumItemDto {
+function toItemDto(row: ItemRow, progressCount: number, sessionCount: number): CurriculumItemDto {
   const content = readLessonContent(row.kind, row.content);
   return {
     id: row.id,
@@ -74,12 +81,19 @@ function toItemDto(row: ItemRow, progressCount: number): CurriculumItemDto {
     completionMode: completionModeOf(row.kind, content),
     durationSeconds: displayDurationSecondsOf(row.kind, content, row.estimatedMinutes),
     progressCount,
+    sessionCount,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
 function existingSectionOf(row: SectionRow): ExistingSection {
-  return { id: row.id, sortOrder: row.sortOrder, title: readLocalizedText(row.title), description: readLocalizedText(row.description) };
+  return {
+    id: row.id,
+    sortOrder: row.sortOrder,
+    title: readLocalizedText(row.title),
+    description: readLocalizedText(row.description),
+    releaseAfterDays: row.releaseAfterDays,
+  };
 }
 
 function existingItemOf(row: ItemRow): ExistingItem {
@@ -100,6 +114,25 @@ function prefixed(root: 'content' | 'resources', problems: readonly string[]): s
   return problems.map((problem) => `${root}: ${problem}`);
 }
 
+/** Several notify…() results as the one batch handed to the dispatcher after the commit. */
+function mergeBatches(batches: readonly NotificationBatch[]): NotificationBatch {
+  if (batches.length === 0) return EMPTY_BATCH;
+  return { created: batches.reduce((sum, batch) => sum + batch.created, 0), queuedIds: batches.flatMap((batch) => batch.queuedIds) };
+}
+
+/** Non-cancelled class sessions (MOD-06 lessons) linked to each of these curriculum lessons, in every class (D-R143). */
+async function sessionCountsOf(db: Db, itemIds: readonly string[]): Promise<Map<string, number>> {
+  if (itemIds.length === 0) return new Map();
+  const rows = await db.lesson.groupBy({
+    by: ['syllabusItemId'],
+    where: { syllabusItemId: { in: [...itemIds] }, status: { not: 'cancelled' } },
+    _count: { _all: true },
+  });
+  const counts = new Map<string, number>();
+  for (const row of rows) if (row.syllabusItemId !== null) counts.set(row.syllabusItemId, row._count._all);
+  return counts;
+}
+
 /**
  * MOD-20 «My School» — the course curriculum for authors (API-226..228;
  * roadmap §4q, D-R130..D-R135). A course is divided into levels
@@ -112,12 +145,19 @@ function prefixed(root: 'content' | 'resources', problems: readonly string[]): s
  * never interleave) and records exactly one audit event, nothing when nothing
  * differs. The position swaps are legal because both order uniques are
  * deferred (ADR-046).
+ *
+ * LRN-T06: a level carries `releaseAfterDays` (D-R145), each lesson its
+ * `sessionCount` (D-R143), and an API-227 write that makes lessons newly
+ * published tells every `open`/`running` class of the course once
+ * (`curriculum.lessons_published`, D-R146) — written inside the transaction,
+ * e-mailed after the commit (the MOD-12 pattern). API-228 notifies nobody.
  */
 @Injectable()
 export class CurriculumService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** API-226. */
@@ -140,25 +180,26 @@ export class CurriculumService {
         ...(section.id !== undefined ? { id: section.id } : {}),
         title: optionalText(section.title),
         description: optionalText(section.description),
+        releaseAfterDays: section.releaseAfterDays ?? null,
         items: section.items.map(requestedItem),
       })),
       looseItems: (input.looseItems ?? []).map(requestedItem),
     };
     const canManage = canManageCourses(caller.permissions);
 
-    return this.prisma.db.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ code: string }[]>`SELECT code FROM courses WHERE id = ${courseId}::uuid FOR NO KEY UPDATE`;
+    const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ code: string; name: unknown }[]>`SELECT code, name FROM courses WHERE id = ${courseId}::uuid FOR NO KEY UPDATE`;
       if (locked.length === 0) throw coursesError.courseNotFound(courseId);
       const course = { id: courseId, code: locked[0]!.code };
 
-      const sectionRows = await tx.courseSection.findMany({ where: { courseId }, orderBy: [{ sortOrder: 'asc' }], select: SECTION_SELECT });
+      const sectionRows = await tx.courseSection.findMany({ where: { courseId }, orderBy: [{ sortOrder: 'asc' }], select: CURRICULUM_SECTION_SELECT });
       const itemRows = await tx.courseSyllabusItem.findMany({ where: { courseId }, orderBy: [{ sortOrder: 'asc' }], select: CURRICULUM_ITEM_SELECT });
       const plan = planCurriculumReplacement(sectionRows.map(existingSectionOf), itemRows.map(existingItemOf), requested);
       if (!plan.ok) {
         const { unknownSections, duplicateSections, unknownItems, duplicateItems } = plan;
         throw learningError.curriculumInvalid({ unknownSections, duplicateSections, unknownItems, duplicateItems });
       }
-      if (!plan.changed) return this.read(tx, course, canManage);
+      if (!plan.changed) return { dto: await this.read(tx, course, canManage), batch: EMPTY_BATCH };
       await assertNoProgressOnDeletion(tx, plan.items.remove);
 
       if (plan.items.remove.length > 0) await tx.courseSyllabusItem.deleteMany({ where: { courseId, id: { in: plan.items.remove } } });
@@ -168,12 +209,19 @@ export class CurriculumService {
         if (change.sortOrder !== undefined) data.sortOrder = change.sortOrder;
         if (change.title !== undefined) data.title = optionalJson(change.title);
         if (change.description !== undefined) data.description = optionalJson(change.description);
+        if (change.releaseAfterDays !== undefined) data.releaseAfterDays = change.releaseAfterDays;
         await tx.courseSection.update({ where: { id: change.id }, data, select: { id: true } });
       }
       const createdSectionIds: string[] = [];
       for (const section of plan.sections.create) {
         const created = await tx.courseSection.create({
-          data: { courseId, sortOrder: section.sortOrder, title: optionalJson(section.title), description: optionalJson(section.description) },
+          data: {
+            courseId,
+            sortOrder: section.sortOrder,
+            title: optionalJson(section.title),
+            description: optionalJson(section.description),
+            releaseAfterDays: section.releaseAfterDays,
+          },
           select: { id: true },
         });
         createdSectionIds.push(created.id);
@@ -218,8 +266,26 @@ export class CurriculumService {
         },
         tx,
       );
-      return this.read(tx, course, canManage);
+
+      // D-R146: lessons newly published by this write reach the classes learning the course now.
+      const count = newlyPublishedCount(plan);
+      const batches: NotificationBatch[] = [];
+      if (count > 0) {
+        const classes = await tx.class.findMany({
+          where: { courseId, status: { in: [...NOTIFIED_CLASS_STATUSES] } },
+          orderBy: { id: 'asc' },
+          select: { id: true },
+        });
+        const courseName = readLocalizedText(locked[0]!.name) ?? { ar: course.code };
+        for (const klass of classes) {
+          batches.push(await this.notifications.notifyClass(tx, 'curriculum.lessons_published', klass.id, { courseId, courseName, count }));
+        }
+      }
+      return { dto: await this.read(tx, course, canManage), batch: mergeBatches(batches) };
     });
+    // After the commit: the e-mail copies go out in the background, never inside the request.
+    this.notifications.dispatch(batch);
+    return dto;
   }
 
   /** API-228: one lesson's kind, content and resources. */
@@ -266,17 +332,22 @@ export class CurriculumService {
         );
       }
       const progressCount = await tx.learningProgress.count({ where: { syllabusItemId: itemId } });
-      return toItemDto(current, progressCount);
+      const sessionCount = await tx.lesson.count({ where: { syllabusItemId: itemId, status: { not: 'cancelled' } } });
+      return toItemDto(current, progressCount, sessionCount);
     });
   }
 
   private async read(db: Db, course: { id: string; code: string }, canManage: boolean): Promise<CurriculumDto> {
-    const sections = await db.courseSection.findMany({ where: { courseId: course.id }, orderBy: [{ sortOrder: 'asc' }], select: SECTION_SELECT });
+    const sections = await db.courseSection.findMany({ where: { courseId: course.id }, orderBy: [{ sortOrder: 'asc' }], select: CURRICULUM_SECTION_SELECT });
     const items = await db.courseSyllabusItem.findMany({ where: { courseId: course.id }, orderBy: [{ sortOrder: 'asc' }], select: CURRICULUM_ITEM_SELECT });
     const counts = await db.learningProgress.groupBy({ by: ['syllabusItemId'], where: { courseId: course.id }, _count: { _all: true } });
     const progressByItem = new Map(counts.map((row) => [row.syllabusItemId, row._count._all]));
+    const sessionsByItem = await sessionCountsOf(
+      db,
+      items.map((item) => item.id),
+    );
     const groups = buildCurriculum(sections, items, { learner: false });
-    const itemDto = (row: ItemRow) => toItemDto(row, progressByItem.get(row.id) ?? 0);
+    const itemDto = (row: ItemRow) => toItemDto(row, progressByItem.get(row.id) ?? 0, sessionsByItem.get(row.id) ?? 0);
     return {
       courseId: course.id,
       courseCode: course.code,
@@ -291,6 +362,7 @@ export class CurriculumService {
                 sortOrder: group.section.sortOrder,
                 title: readLocalizedText(group.section.title),
                 description: readLocalizedText(group.section.description),
+                releaseAfterDays: group.section.releaseAfterDays,
                 items: group.items.map(itemDto),
               },
             ],

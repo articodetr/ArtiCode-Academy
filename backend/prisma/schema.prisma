@@ -1621,15 +1621,17 @@ enum LearningCompletionSource {
 }
 
 model CourseSection {
-  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  courseId    String   @map("course_id") @db.Uuid
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courseId         String   @map("course_id") @db.Uuid
   /// Position of the level in its course (0 first); deferred unique per course (ADR-046 — swaps inside one transaction).
-  sortOrder   Int      @map("sort_order") @db.SmallInt
+  sortOrder        Int      @map("sort_order") @db.SmallInt
   /// Optional localized title `{ ar, en?, tr? }` shown after «المستوى N»; `ar` required when present (CHECK in SQL).
-  title       Json?
-  description Json?
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  title            Json?
+  description      Json?
+  /// MOD-20 (D-R145): the level opens N days after its class starts (0..365, in the academy's zone); null = open at once.
+  releaseAfterDays Int?     @map("release_after_days") @db.SmallInt
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   course Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
   items  CourseSyllabusItem[]

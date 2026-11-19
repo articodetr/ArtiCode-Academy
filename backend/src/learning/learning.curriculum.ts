@@ -11,8 +11,17 @@
 // every device. Learners see published lessons only, and a level without a
 // published lesson is not shown to them.
 //
-// Every level is open to an enrolled learner (D-R132): completing an earlier
-// level is never a condition for opening a later one.
+// Completing an earlier level is never a condition for opening a later one
+// (D-R132). A level may open by date instead (D-R145): with
+// `releaseAfterDays` N it opens for a learner on their class's `starts_on` + N
+// days, in the academy's time zone; before that day its lessons are listed but
+// cannot be opened, visited, played or completed. A class without `starts_on`,
+// a level without N, and the lessons outside every level are always open. A
+// locked required lesson still counts in the progress: the course is complete
+// only once it is done too.
+
+/** One calendar day in milliseconds (the dates are UTC midnights — no DST). */
+const DAY_MS = 86_400_000;
 
 export interface CurriculumSectionRow {
   id: string;
@@ -82,13 +91,16 @@ export function neighborsOf(order: readonly string[], itemId: string): Neighbors
 }
 
 /**
- * Where «continue learning» opens (D-R133):
- * - `last` — the lesson the learner opened last, while it is still published;
- * - `replaced` — that lesson was removed or unpublished: the first lesson
- *   after where it stood that is not completed, else the first not completed,
- *   else the first lesson (the screen tells the learner why);
+ * Where «continue learning» opens (D-R133), among the lessons the learner may
+ * open today (D-R145):
+ * - `last` — the lesson the learner opened last, while it is still published
+ *   and its level open;
+ * - `replaced` — that lesson was removed, unpublished or is in a level that is
+ *   not open: the first lesson after where it stood that is not completed,
+ *   else the first not completed, else the first lesson (the screen tells the
+ *   learner why);
  * - `first` — nothing opened yet: the first lesson.
- * null when the course shows no lesson at all.
+ * null when the course shows no lesson the learner may open.
  */
 export type ResumeReason = 'last' | 'replaced' | 'first';
 
@@ -102,11 +114,52 @@ export function resumeTargetOf(
   lastOpened: { itemId: string; sortKey: number } | null,
   completed: ReadonlySet<string>,
   sortKeyOf: (itemId: string) => number,
+  /**
+   * D-R145 — the lessons the learner may open today (their level is open);
+   * omitted = every lesson of `order`. The target is never outside it: an
+   * unavailable last lesson is `replaced` like an unpublished one, and when no
+   * lesson is available the result is null.
+   */
+  available?: ReadonlySet<string>,
 ): ResumeTarget | null {
-  if (order.length === 0) return null;
-  if (lastOpened === null) return { itemId: order[0]!, reason: 'first' };
-  if (order.includes(lastOpened.itemId)) return { itemId: lastOpened.itemId, reason: 'last' };
-  const after = order.find((id) => sortKeyOf(id) > lastOpened.sortKey && !completed.has(id));
-  const anyOpen = order.find((id) => !completed.has(id));
-  return { itemId: after ?? anyOpen ?? order[0]!, reason: 'replaced' };
+  const open = available === undefined ? order : order.filter((id) => available.has(id));
+  if (open.length === 0) return null;
+  if (lastOpened === null) return { itemId: open[0]!, reason: 'first' };
+  if (open.includes(lastOpened.itemId)) return { itemId: lastOpened.itemId, reason: 'last' };
+  const after = open.find((id) => sortKeyOf(id) > lastOpened.sortKey && !completed.has(id));
+  const anyOpen = open.find((id) => !completed.has(id));
+  return { itemId: after ?? anyOpen ?? open[0]!, reason: 'replaced' };
+}
+
+// ---------------------------------------------------------------------------
+// D-R145 — a level that opens by date
+// ---------------------------------------------------------------------------
+
+/**
+ * The day (`YYYY-MM-DD`) a level opens for a learner: their class's start
+ * plus `releaseAfterDays` days. null = no date — the class has no `starts_on`
+ * or the level no release delay — and the level is open.
+ */
+export function levelOpensOn(classStartsOn: string | null, releaseAfterDays: number | null): string | null {
+  if (classStartsOn === null || releaseAfterDays === null) return null;
+  const start = Date.parse(`${classStartsOn}T00:00:00.000Z`);
+  if (Number.isNaN(start)) return null;
+  return new Date(start + releaseAfterDays * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** True when the level is open on `today` (`YYYY-MM-DD` in the academy's time zone): no date, or the date has come. */
+export function isLevelOpen(opensOn: string | null, today: string): boolean {
+  return opensOn === null || today >= opensOn;
+}
+
+export interface LevelState {
+  isOpen: boolean;
+  /** The opening day, also once it has passed; null for a level without a date (always open). */
+  opensOn: string | null;
+}
+
+/** The state of one group for a learner: the implicit group of lessons outside every level is always open. */
+export function levelStateOf(section: { releaseAfterDays: number | null } | null, classStartsOn: string | null, today: string): LevelState {
+  const opensOn = section === null ? null : levelOpensOn(classStartsOn, section.releaseAfterDays);
+  return { isOpen: isLevelOpen(opensOn, today), opensOn };
 }

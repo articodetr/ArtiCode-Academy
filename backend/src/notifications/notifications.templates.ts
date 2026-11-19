@@ -1,4 +1,4 @@
-// Wording of the nineteen automatic notifications (fifteen of MOD-12, four of MOD-19) in Arabic (reference
+// Wording of the twenty automatic notifications (fifteen of MOD-12, four of MOD-19, one of MOD-20) in Arabic (reference
 // language), English and Turkish (owner decision D-R83: templates in code,
 // rendered in the recipient's language at creation; Turkish since S6-C).
 // Every event words itself once per template locale through `w.pick()`, so a
@@ -87,6 +87,21 @@ interface Wording {
 }
 
 type Renderer<K extends NotificationEventKey> = (params: NotificationEventParams[K], w: Wording) => RenderedNotification;
+
+/**
+ * «N new lessons» in Arabic, where the counted noun follows the number: one
+ * and two are worded without a digit, 3–10 take the plural, 11–99 the
+ * singular accusative, and above 100 the last two digits decide (100, 101 and
+ * 102 the singular genitive).
+ */
+export function arabicNewLessons(count: number): string {
+  if (count === 1) return 'درس جديد';
+  if (count === 2) return 'درسان جديدان';
+  const rest = count % 100;
+  if (count >= 100 && rest <= 2) return `${count} درس جديد`;
+  if (rest >= 3 && rest <= 10) return `${count} دروس جديدة`;
+  return `${count} درسًا جديدًا`;
+}
 
 const RENDERERS: { [K in NotificationEventKey]: Renderer<K> } = {
   'lesson.cancelled': (p, w) => {
@@ -267,6 +282,26 @@ const RENDERERS: { [K in NotificationEventKey]: Renderer<K> } = {
       ar: { title: `رُفض طلب اشتراك: ${course}`, body: `رُفض طلب اشتراكك في دورة «${course}» — فصل «${klass}». سبب الرفض في صفحة «دوراتي».` },
       en: { title: `Enrollment request declined: ${course}`, body: `Your request to join the course “${course}” — class “${klass}” — was declined. The reason is on your “My courses” page.` },
       tr: { title: `Kayıt talebi reddedildi: ${course}`, body: `“${course}” kursunun “${klass}” sınıfı için kayıt talebiniz reddedildi. Gerekçe “Kurslarım” sayfanızda.` },
+    });
+  },
+  // MOD-20 LRN-T06 (D-R146): lessons newly published in a course. The title
+  // names the course; the body says how many and where to find them.
+  'curriculum.lessons_published': (p, w) => {
+    const course = w.text(p.courseName);
+    const one = p.count === 1;
+    return w.pick({
+      ar: {
+        title: one ? `درس جديد في ${course}` : `دروس جديدة في ${course}`,
+        body: `نُشر في دورة «${course}» ${arabicNewLessons(p.count)}. افتح «مدرستي» لمتابعة التعلّم.`,
+      },
+      en: {
+        title: one ? `New lesson in ${course}` : `New lessons in ${course}`,
+        body: `${one ? 'A new lesson was' : `${p.count} new lessons were`} published in the course “${course}”. Open “My School” to continue learning.`,
+      },
+      tr: {
+        title: one ? `Yeni ders: ${course}` : `Yeni dersler: ${course}`,
+        body: `“${course}” kursunda ${one ? 'yeni bir ders' : `${p.count} yeni ders`} yayımlandı. Öğrenmeye devam etmek için “Okulum” sayfasını açın.`,
+      },
     });
   },
 };

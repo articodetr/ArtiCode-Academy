@@ -301,6 +301,7 @@ describe.skipIf(!available)('database schema — MOD-20 curriculum and learning 
     );
     expect(constraints.rows).toEqual([
       { table_name: 'course_sections', conname: 'ck_course_sections_description_localized', contype: 'c' },
+      { table_name: 'course_sections', conname: 'ck_course_sections_release_after_days', contype: 'c' },
       { table_name: 'course_sections', conname: 'ck_course_sections_sort_order_nonnegative', contype: 'c' },
       { table_name: 'course_sections', conname: 'ck_course_sections_title_localized', contype: 'c' },
       { table_name: 'course_sections', conname: 'course_sections_course_id_fkey', contype: 'f' },

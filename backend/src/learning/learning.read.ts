@@ -1,5 +1,6 @@
 // Shared database reads of MOD-20 «My School» (roadmap §4q, ADR-078): the
-// curriculum rows of courses and each learner's lesson states, from which
+// curriculum rows of courses (each level with its `releaseAfterDays` — D-R145)
+// and each learner's lesson states, from which
 // every screen computes its levels, progress and resume point with the pure
 // rules of learning.curriculum.ts / learning.progress.ts. Used by the
 // learner's own reads (API-229..231) and the class progress (API-235), so a
@@ -24,6 +25,8 @@ export const SECTION_SELECT = {
   sortOrder: true,
   title: true,
   description: true,
+  /** D-R145 — the level opens N days after the learner's class starts; null = open at once. */
+  releaseAfterDays: true,
 } satisfies Prisma.CourseSectionSelect;
 
 export const ITEM_SELECT = {

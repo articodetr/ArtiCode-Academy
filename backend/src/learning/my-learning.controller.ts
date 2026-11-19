@@ -32,6 +32,7 @@ import { MyLearningService } from './my-learning.service.js';
 const LEARNER_WRITE_LIMIT = { login: { limit: 120, ttl: 60 * 1000 } };
 
 const NOT_ENROLLED = 'not_enrolled — no active or completed enrollment of the caller’s own in a class of the course (`reason: pending` while a request awaits approval; a guardian is refused too)';
+const LEVEL_NOT_OPEN = 'level_not_open { itemId, opensOn } — the lesson’s level opens later for the caller’s class (D-R145; checked after not_enrolled)';
 
 /**
  * MOD-20 «My School» — the learner's side (roadmap §4q, API-229..234). No
@@ -53,7 +54,7 @@ export class MyLearningController {
     summary: 'My School — my courses and my children’s',
     description:
       'One item per owned enrollment: the caller’s own `active`/`completed` enrollments (`relation: self`) and, while the caller holds the `guardian` role, those of their linked, not soft-deleted children (`relation: child`, read-only — `action` null, `canLearn` false). ' +
-      'Each item carries the class and course, the lead teacher by name, the student’s progress on the course’s published lessons (computed on read; it follows the student across classes of the course), the last opened lesson while still published, the latest activity and the next step (`start`/`continue`/`review`). ' +
+      'Each item carries the class and course, the lead teacher by name, the student’s progress on the course’s published lessons (computed on read; it follows the student across classes of the course), the last opened lesson while still published, the latest activity, the next step (`start`/`continue`/`review`) and the class’s next session (`nextSession` — D-R143). ' +
       '`self` first, then the latest activity, then the newest enrollment; at most 200; no pagination. No permission key; no audit event.',
   })
   @ApiOkResponse({ type: MyLearningListDto })
@@ -67,7 +68,8 @@ export class MyLearningController {
     summary: 'The learning workspace of a course',
     description:
       'The course’s levels with their published lessons in learning order (a level without a published lesson is not shown; lessons outside every level come last), the caller’s state on each, the progress per level and for the course, and where «continue learning» opens (`last`, `replaced` when that lesson was unpublished, `first`). ' +
-      'Every level is open (no prerequisite). Needs an own `active` or `completed` enrollment in a class of the course (the active one first, then the newest). Read-only.',
+      'No level is a prerequisite of another; a level with a release delay opens on the class’s start date + N days in the academy’s zone (`isOpen`, `opensOn`; its lessons are listed with `available: false` and the resume never points at them — D-R145). ' +
+      '`sessions` lists every MOD-06 session of the class with the caller’s own attendance (D-R143). Needs an own `active` or `completed` enrollment in a class of the course (the active one first, then the newest) — that class decides the levels and the sessions. Read-only.',
   })
   @ApiOkResponse({ type: LearningWorkspaceDto })
   @ApiBadRequestResponse({ description: 'Validation failed (`courseId` is not a uuid)' })
@@ -88,7 +90,7 @@ export class MyLearningController {
   })
   @ApiOkResponse({ type: LearningItemDto })
   @ApiBadRequestResponse({ description: 'Validation failed (`itemId` is not a uuid)' })
-  @ApiForbiddenResponse({ description: NOT_ENROLLED })
+  @ApiForbiddenResponse({ description: `${NOT_ENROLLED}; ${LEVEL_NOT_OPEN}` })
   @ApiNotFoundResponse({ description: 'lesson_not_found' })
   item(@Param('itemId', new ParseUUIDPipe()) itemId: string, @CurrentUser() caller: AuthPrincipal): Promise<LearningItemDto> {
     return this.learning.item(itemId, caller);
@@ -106,7 +108,7 @@ export class MyLearningController {
   })
   @ApiOkResponse({ type: LearningVisitResultDto })
   @ApiBadRequestResponse({ description: 'Validation failed (`itemId` is not a uuid)' })
-  @ApiForbiddenResponse({ description: `${NOT_ENROLLED}; origin_forbidden` })
+  @ApiForbiddenResponse({ description: `${NOT_ENROLLED}; ${LEVEL_NOT_OPEN}; origin_forbidden` })
   @ApiNotFoundResponse({ description: 'lesson_not_found' })
   @ApiTooManyRequestsResponse({ type: AuthErrorDto, description: 'rate_limited' })
   visit(@Param('itemId', new ParseUUIDPipe()) itemId: string, @CurrentUser() caller: AuthPrincipal): Promise<LearningVisitResultDto> {
@@ -126,7 +128,7 @@ export class MyLearningController {
   })
   @ApiOkResponse({ type: LearningPlaybackResultDto })
   @ApiBadRequestResponse({ description: 'Validation failed (`positionSeconds` 0..86400, `ranges` at most 50 pairs of numbers 0..86400 — raw JSON numbers)' })
-  @ApiForbiddenResponse({ description: `${NOT_ENROLLED}; origin_forbidden` })
+  @ApiForbiddenResponse({ description: `${NOT_ENROLLED}; ${LEVEL_NOT_OPEN}; origin_forbidden` })
   @ApiNotFoundResponse({ description: 'lesson_not_found' })
   @ApiConflictResponse({ description: 'playback_not_tracked — the lesson has no measurable medium' })
   @ApiTooManyRequestsResponse({ type: AuthErrorDto, description: 'rate_limited' })
@@ -147,7 +149,7 @@ export class MyLearningController {
   })
   @ApiOkResponse({ type: LearningCompleteResultDto })
   @ApiBadRequestResponse({ description: 'Validation failed (`itemId` is not a uuid)' })
-  @ApiForbiddenResponse({ description: `${NOT_ENROLLED}; origin_forbidden` })
+  @ApiForbiddenResponse({ description: `${NOT_ENROLLED}; ${LEVEL_NOT_OPEN}; origin_forbidden` })
   @ApiNotFoundResponse({ description: 'lesson_not_found' })
   @ApiConflictResponse({ description: 'completion_by_playback { thresholdPercent } — the medium completes it | completion_by_attendance — a live lesson completes by attending a session' })
   @ApiTooManyRequestsResponse({ type: AuthErrorDto, description: 'rate_limited' })

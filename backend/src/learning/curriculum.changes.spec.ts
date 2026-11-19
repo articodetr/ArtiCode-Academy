@@ -1,6 +1,7 @@
 // TEST-246 (unit part) — MOD-20 curriculum replacement planning (API-227,
-// D-R130/D-R135) — no database.
-import { learningOrderOf, planCurriculumReplacement } from './curriculum.changes.js';
+// D-R130/D-R135) — no database. TEST-260 (LRN-T06): a level's
+// `releaseAfterDays` (D-R145) and the newly published lessons (D-R146).
+import { learningOrderOf, newlyPublishedCount, planCurriculumReplacement } from './curriculum.changes.js';
 import type { ExistingItem, ExistingSection, RequestedCurriculum, RequestedItem, RequestedSection } from './curriculum.changes.js';
 
 const section = (id: string, sortOrder: number, title: string | null = null): ExistingSection => ({
@@ -8,6 +9,7 @@ const section = (id: string, sortOrder: number, title: string | null = null): Ex
   sortOrder,
   title: title === null ? null : { ar: title },
   description: null,
+  releaseAfterDays: null,
 });
 const item = (id: string, sectionId: string | null, sortOrder: number): ExistingItem => ({
   id,
@@ -32,6 +34,7 @@ const keepSection = (existing: ExistingSection, items: RequestedItem[], override
   id: existing.id,
   title: existing.title,
   description: existing.description,
+  releaseAfterDays: existing.releaseAfterDays,
   items,
   ...overrides,
 });
@@ -78,11 +81,15 @@ describe('curriculum replacement planning', () => {
 
   it('creates levels and lessons: a new lesson points at its new level by index, positions follow the flattened order', () => {
     const plan = planOf({
-      sections: [keepSection(s1, [keepItem(a), keepItem(b)]), keepSection(s2, [keepItem(c)]), { title: { ar: 'جديد' }, description: null, items: [newItem('e'), keepItem(d)] }],
+      sections: [
+        keepSection(s1, [keepItem(a), keepItem(b)]),
+        keepSection(s2, [keepItem(c)]),
+        { title: { ar: 'جديد' }, description: null, releaseAfterDays: 14, items: [newItem('e'), keepItem(d)] },
+      ],
       looseItems: [newItem('f', { isRequired: false })],
     });
     expect(plan.changed).toBe(true);
-    expect(plan.sections.create).toEqual([{ title: { ar: 'جديد' }, description: null, sortOrder: 2 }]);
+    expect(plan.sections.create).toEqual([{ title: { ar: 'جديد' }, description: null, releaseAfterDays: 14, sortOrder: 2 }]);
     expect(plan.items.create).toEqual([
       { ...newItem('e'), sortOrder: 3, section: { createIndex: 0 } },
       { ...newItem('f', { isRequired: false }), sortOrder: 5, section: null },
@@ -168,10 +175,68 @@ describe('curriculum replacement planning', () => {
 
   it('refuses unknown and repeated level and lesson ids, all reported at once', () => {
     const result = planCurriculumReplacement(stored.sections, stored.items, {
-      sections: [keepSection(s1, [keepItem(a), keepItem(a)]), keepSection(s1, []), { id: 'zz', title: null, description: null, items: [{ ...newItem('x'), id: 'yy' }] }],
+      sections: [keepSection(s1, [keepItem(a), keepItem(a)]), keepSection(s1, []), { id: 'zz', title: null, description: null, releaseAfterDays: null, items: [{ ...newItem('x'), id: 'yy' }] }],
       looseItems: [keepItem(d), keepItem(d)],
     });
     expect(result).toEqual({ ok: false, unknownSections: ['zz'], duplicateSections: ['s1'], unknownItems: ['yy'], duplicateItems: ['a', 'd'] });
+  });
+
+  it('D-R145 — a changed releaseAfterDays counts the level as updated, also with a move; an identical value writes nothing', () => {
+    const timed = { ...s2, releaseAfterDays: 7 };
+    const stored2 = [s1, timed];
+    const plan = planCurriculumReplacement(stored2, stored.items, {
+      sections: [keepSection(s1, [keepItem(a), keepItem(b)], { releaseAfterDays: 0 }), keepSection(timed, [keepItem(c)], { releaseAfterDays: null })],
+      looseItems: [keepItem(d)],
+    });
+    if (!plan.ok) throw new Error('expected ok');
+    expect(plan.sections.update).toEqual([
+      { id: 's1', releaseAfterDays: 0 },
+      { id: 's2', releaseAfterDays: null },
+    ]);
+    expect(plan.counts.sections).toEqual({ added: 0, updated: 2, removed: 0 });
+    expect(plan.items.update).toEqual([]);
+
+    const unchanged = planCurriculumReplacement(stored2, stored.items, {
+      sections: [keepSection(s1, [keepItem(a), keepItem(b)]), keepSection(timed, [keepItem(c)])],
+      looseItems: [keepItem(d)],
+    });
+    expect(unchanged).toMatchObject({ ok: true, changed: false, sections: { update: [] } });
+
+    // A swap that also changes the value: one update per level, the value counted once.
+    const swapped = planCurriculumReplacement(stored2, stored.items, {
+      sections: [keepSection(timed, [keepItem(c)], { releaseAfterDays: 30 }), keepSection(s1, [keepItem(a), keepItem(b)])],
+      looseItems: [keepItem(d)],
+    });
+    if (!swapped.ok) throw new Error('expected ok');
+    expect(swapped.sections.update).toEqual([
+      { id: 's2', releaseAfterDays: 30, sortOrder: 0 },
+      { id: 's1', sortOrder: 1 },
+    ]);
+    expect(swapped.counts).toMatchObject({ sections: { updated: 1 }, reordered: true });
+  });
+
+  it('D-R146 — newlyPublishedCount: lessons created published and kept lessons switched to published; nothing else', () => {
+    const draft = { ...item('h', 's1', 4), isPublished: false };
+    const withDraft = [...stored.items, draft];
+    const planWith = (requested: RequestedCurriculum) => {
+      const plan = planCurriculumReplacement(stored.sections, withDraft, requested);
+      if (!plan.ok) throw new Error('expected ok');
+      return plan;
+    };
+    const base = (hOverrides: Partial<RequestedItem> = {}, extra: RequestedItem[] = []) => ({
+      sections: [keepSection(s1, [keepItem(a), keepItem(b), keepItem(draft, hOverrides), ...extra]), keepSection(s2, [keepItem(c)])],
+      looseItems: [keepItem(d)],
+    });
+    expect(newlyPublishedCount(planWith(base()))).toBe(0);
+    expect(newlyPublishedCount(planWith(base({ isPublished: true })))).toBe(1);
+    expect(newlyPublishedCount(planWith(base({ isPublished: true }, [newItem('n1'), newItem('n2', { isPublished: false }), newItem('n3')])))).toBe(3);
+    // Unpublishing, renaming or moving a published lesson publishes nothing.
+    const quiet = planWith({
+      sections: [keepSection(s1, [keepItem(a, { isPublished: false }), keepItem(draft)]), keepSection(s2, [keepItem(b, { title: { ar: 'b2' } }), keepItem(c)])],
+      looseItems: [keepItem(d)],
+    });
+    expect(quiet.changed).toBe(true);
+    expect(newlyPublishedCount(quiet)).toBe(0);
   });
 
   it('learningOrderOf: levels in order with their lessons by position, then the loose lessons and those of a missing level', () => {
