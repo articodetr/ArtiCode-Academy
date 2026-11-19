@@ -2,15 +2,16 @@ import { Injectable } from '@nestjs/common';
 import type { AuthPrincipal } from '../auth/principal.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { ownedEnrollmentsWhere } from '../lessons/my-lessons.policy.js';
 import { relationOf } from '../enrollments/my-classes.policy.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { calendarDateIn } from '../schedule/schedule.time.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { completionModeOf, displayDurationSecondsOf, playbackDurationOf, readLessonContent, readLessonResources } from './learning.content.js';
 import type { CompletionMode, LessonContent } from './learning.content.js';
-import { buildCurriculum, learningOrder, neighborsOf, resumeTargetOf } from './learning.curriculum.js';
-import type { CurriculumGroup } from './learning.curriculum.js';
+import { buildCurriculum, learningOrder, levelStateOf, neighborsOf, resumeTargetOf } from './learning.curriculum.js';
+import type { CurriculumGroup, LevelState } from './learning.curriculum.js';
 import { learningError } from './learning.errors.js';
 import { learningActionOf, planPlayback, progressOf, readStoredRanges } from './learning.progress.js';
 import type { ProgressCounts } from './learning.progress.js';
@@ -25,10 +26,12 @@ import type {
   MyLearningCourseDto,
   MyLearningItemProgressDto,
   MyLearningListDto,
+  MyLearningNextSessionDto,
   MyLearningProgressCountsDto,
   OwnedEnrollmentStatus,
   SavePlaybackDto,
   WorkspaceItemDto,
+  WorkspaceSessionDto,
 } from './my-learning.dto.js';
 import { compareMyLearning, completionPercentOf, lastActivityOf, learningAccessOf, MY_LEARNING_ITEMS_MAX, watchedPercentOf } from './my-learning.policy.js';
 
@@ -39,6 +42,8 @@ type Group = CurriculumGroup<SectionRow, ItemRow>;
 const FALLBACK_TIME_ZONE = 'UTC';
 /** Sessions of one lesson shown at most (a lesson is normally covered by one session per class). */
 const SESSIONS_MAX = 100;
+/** Sessions of the class listed in the workspace at most (D-R143). */
+const CLASS_SESSIONS_MAX = 300;
 
 // Only what a learner may know about their own (or their child's) enrollment:
 // the student's identity, the class and course summary, the lead teacher by name.
@@ -66,12 +71,13 @@ const ENROLLMENT_SELECT = {
 
 type EnrollmentRow = Prisma.EnrollmentGetPayload<{ select: typeof ENROLLMENT_SELECT }>;
 
-const ACCESS_SELECT = { id: true, status: true, enrolledAt: true, class: { select: { id: true, code: true, name: true } } } satisfies Prisma.EnrollmentSelect;
+const ACCESS_SELECT = { id: true, status: true, enrolledAt: true, class: { select: { id: true, code: true, name: true, startsOn: true } } } satisfies Prisma.EnrollmentSelect;
 type AccessRow = Prisma.EnrollmentGetPayload<{ select: typeof ACCESS_SELECT }>;
 
 const SESSION_SELECT = {
   id: true,
   classId: true,
+  syllabusItemId: true,
   title: true,
   startsAt: true,
   endsAt: true,
@@ -80,6 +86,8 @@ const SESSION_SELECT = {
   meetingUrl: true,
   room: { select: { branch: { select: { timezone: true } } } },
 } satisfies Prisma.LessonSelect;
+
+type SessionRow = Prisma.LessonGetPayload<{ select: typeof SESSION_SELECT }>;
 
 interface AcademyLearning {
   completionPercent: number;
@@ -140,6 +148,29 @@ function ownedStatus(status: string): OwnedEnrollmentStatus {
   return status === 'completed' ? 'completed' : 'active';
 }
 
+/** D-R145 — the lessons of the groups open for the learner today. */
+function availableIdsOf(groups: readonly Group[], levels: readonly LevelState[]): Set<string> {
+  return new Set(groups.flatMap((group, index) => (levels[index]?.isOpen === false ? [] : group.items.map((item) => item.id))));
+}
+
+/** A session's curriculum lesson while the learner can see it (published); null otherwise — a draft lesson is never named. */
+function linkedItemOf(itemId: string | null, published: ReadonlySet<string>): string | null {
+  return itemId !== null && published.has(itemId) ? itemId : null;
+}
+
+function toNextSession(row: SessionRow, published: ReadonlySet<string>, academyTimeZone: string): MyLearningNextSessionDto {
+  return {
+    id: row.id,
+    title: titleOf(row.title),
+    startsAt: row.startsAt.toISOString(),
+    endsAt: row.endsAt.toISOString(),
+    timeZone: displayTimeZone(row.room?.branch?.timezone, academyTimeZone),
+    deliveryMode: row.deliveryMode,
+    meetingUrl: row.meetingUrl,
+    syllabusItemId: linkedItemOf(row.syllabusItemId, published),
+  };
+}
+
 /**
  * MOD-20 — «My School», the learner's side (roadmap §4q, API-229..234). By
  * ownership, no permission key (D-R132): the caller's own `active`/`completed`
@@ -148,7 +179,9 @@ function ownedStatus(status: string): OwnedEnrollmentStatus {
  * keyed by the caller's own id — no route takes a student id. The progress is
  * computed on read from the stored per-lesson rows and the attendance of live
  * lessons (ADR-078, D-R133..D-R135); the writes (visit, playback, completion)
- * record no audit event (D-R139).
+ * record no audit event (D-R139). A level may open by date for the learner's
+ * class (D-R145 — `level_not_open` on API-231..234), and the class's MOD-06
+ * sessions show on «My School» (the next one) and in the workspace (D-R143).
  */
 @Injectable()
 export class MyLearningService {
@@ -173,6 +206,8 @@ export class MyLearningService {
     const allItems = [...curricula.values()].flatMap((rows) => rows.items);
     const states = await loadLessonStates(db, studentIds, courseIds, allItems);
     const lastOpened = await loadLastOpened(db, studentIds, courseIds);
+    const academy = await this.academy(db);
+    const nextSessions = await this.nextSessions(db, [...new Set(enrollments.map((row) => row.class.id))], new Date());
 
     const groupsByCourse = new Map<string, Group[]>();
     for (const [courseId, rows] of curricula) groupsByCourse.set(courseId, buildCurriculum(rows.sections, rows.items, { learner: true }));
@@ -188,7 +223,9 @@ export class MyLearningService {
       const relation = relationOf(row.studentUserId, caller.id);
       const hasHistory = opened !== null || courseStates.some((state) => state.state !== 'not_started');
       const lastActivityAt = lastActivityOf(courseStates);
-      return { row, relation, lastActivityAt, dto: this.toCourseItem(row, relation, groups, progress, opened, lastActivityAt, hasHistory) };
+      const next = nextSessions.get(row.class.id);
+      const nextSession = next ? toNextSession(next, new Set(published.map((item) => item.id)), academy.timeZone) : null;
+      return { row, relation, lastActivityAt, dto: this.toCourseItem(row, relation, groups, progress, opened, lastActivityAt, hasHistory, nextSession) };
     });
     items.sort((a, b) =>
       compareMyLearning(
@@ -207,6 +244,7 @@ export class MyLearningService {
     opened: { itemId: string; at: Date } | null,
     lastActivityAt: Date | null,
     hasHistory: boolean,
+    nextSession: MyLearningNextSessionDto | null,
   ): MyLearningCourseDto {
     const course = row.class.course;
     const lead = row.class.teachers[0]?.teacher ?? null;
@@ -248,7 +286,29 @@ export class MyLearningService {
       lastActivityAt: iso(lastActivityAt),
       action: relation === 'self' ? learningActionOf(hasHistory, progress) : null,
       canLearn: relation === 'self',
+      nextSession,
     };
+  }
+
+  /**
+   * D-R143 — the next session of each class: the earliest non-cancelled MOD-06
+   * lesson whose end is after `now`, by class id. Two queries whatever the
+   * number of classes (DISTINCT ON over the `(class_id, starts_at)` index, then
+   * the rows), never one per class.
+   */
+  private async nextSessions(db: Db, classIds: readonly string[], now: Date): Promise<Map<string, SessionRow>> {
+    const out = new Map<string, SessionRow>();
+    if (classIds.length === 0) return out;
+    const ids = Prisma.join(classIds.map((id) => Prisma.sql`${id}::uuid`));
+    const firsts = await db.$queryRaw<{ id: string }[]>`
+      SELECT DISTINCT ON (class_id) id
+        FROM lessons
+       WHERE class_id IN (${ids}) AND status <> 'cancelled' AND ends_at > ${now.toISOString()}::timestamptz
+       ORDER BY class_id, starts_at, id`;
+    if (firsts.length === 0) return out;
+    const rows = await db.lesson.findMany({ where: { id: { in: firsts.map((row) => row.id) } }, select: SESSION_SELECT });
+    for (const row of rows) out.set(row.classId, row);
+    return out;
   }
 
   // -------------------------------------------------------------------------
@@ -262,6 +322,11 @@ export class MyLearningService {
     const access = await this.requireAccess(db, caller.id, courseId);
     const view = await this.courseView(db, caller.id, courseId);
     const academy = await this.academy(db);
+    // D-R145 — the levels open for the class that opens the course (the active enrollment first, then the newest).
+    const startsOn = dateOnly(access.enrollment.class.startsOn);
+    const today = calendarDateIn(academy.timeZone);
+    const levels = view.groups.map((group) => levelStateOf(group.section, startsOn, today));
+    const available = availableIdsOf(view.groups, levels);
 
     const sortKey = new Map(view.items.map((item) => [item.id, item.sortOrder]));
     const order = learningOrder(view.groups);
@@ -271,10 +336,12 @@ export class MyLearningService {
       view.lastOpened ? { itemId: view.lastOpened.itemId, sortKey: sortKey.get(view.lastOpened.itemId) ?? -1 } : null,
       completed,
       (id) => sortKey.get(id) ?? -1,
+      available,
     );
     const targetItem = target ? view.published.find((item) => item.id === target.itemId) : undefined;
     const targetState = targetItem ? view.states.get(targetItem.id) : undefined;
     const tracksPosition = targetItem !== undefined && playbackDurationOf(targetItem.kind, contentOf(targetItem)) !== null;
+    const sessions = await this.classSessions(db, access.enrollment.class.id, caller.id, academy.timeZone, new Set(order));
 
     return {
       course: { id: course.id, code: course.code, name: readLocalizedText(course.name) ?? { ar: course.code }, coverImageUrl: course.coverImageUrl },
@@ -288,20 +355,58 @@ export class MyLearningService {
         },
       },
       completionPercent: academy.completionPercent,
-      sections: view.groups.map((group) => ({
-        id: group.section?.id ?? null,
-        number: group.number,
-        title: group.section ? readLocalizedText(group.section.title) : null,
-        description: group.section ? readLocalizedText(group.section.description) : null,
-        items: group.items.map((item) => this.toWorkspaceItem(item, view.states.get(item.id)!)),
-        progress: toCounts(progressOf(group.items, view.states)),
-      })),
+      sections: view.groups.map((group, index) => {
+        const level = levels[index]!;
+        return {
+          id: group.section?.id ?? null,
+          number: group.number,
+          title: group.section ? readLocalizedText(group.section.title) : null,
+          description: group.section ? readLocalizedText(group.section.description) : null,
+          items: group.items.map((item) => this.toWorkspaceItem(item, view.states.get(item.id)!, level.isOpen)),
+          // A closed level's required lessons still count (D-R145): the course completes only once they are done.
+          progress: toCounts(progressOf(group.items, view.states)),
+          isOpen: level.isOpen,
+          opensOn: level.opensOn,
+        };
+      }),
       progress: toCounts(progressOf(view.published, view.states)),
       resume: target ? { itemId: target.itemId, reason: target.reason, positionSeconds: tracksPosition ? (targetState?.positionSeconds ?? null) : null } : null,
+      sessions,
     };
   }
 
-  private toWorkspaceItem(item: ItemRow, state: StoredLessonState): WorkspaceItemDto {
+  /**
+   * D-R143 — every MOD-06 session of the class by start time (cancelled ones
+   * too, without their meeting link), at most CLASS_SESSIONS_MAX, each with the
+   * learner's own attendance only — never the note, the recorder or the
+   * cancellation reason.
+   */
+  private async classSessions(db: Db, classId: string, studentId: string, academyTimeZone: string, published: ReadonlySet<string>): Promise<WorkspaceSessionDto[]> {
+    const rows = await db.lesson.findMany({ where: { classId }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], take: CLASS_SESSIONS_MAX, select: SESSION_SELECT });
+    if (rows.length === 0) return [];
+    const records = await db.attendanceRecord.findMany({
+      where: { lessonId: { in: rows.map((row) => row.id) }, studentUserId: studentId },
+      select: { lessonId: true, status: true, minutesLate: true },
+    });
+    const recordOf = new Map(records.map((row) => [row.lessonId, row]));
+    return rows.map((row) => {
+      const record = recordOf.get(row.id);
+      return {
+        id: row.id,
+        title: titleOf(row.title),
+        startsAt: row.startsAt.toISOString(),
+        endsAt: row.endsAt.toISOString(),
+        status: row.status,
+        deliveryMode: row.deliveryMode,
+        meetingUrl: row.status === 'cancelled' ? null : row.meetingUrl,
+        timeZone: displayTimeZone(row.room?.branch?.timezone, academyTimeZone),
+        syllabusItemId: linkedItemOf(row.syllabusItemId, published),
+        attendance: record ? { status: record.status, minutesLate: record.minutesLate } : null,
+      };
+    });
+  }
+
+  private toWorkspaceItem(item: ItemRow, state: StoredLessonState, available: boolean): WorkspaceItemDto {
     const content = contentOf(item);
     return {
       id: item.id,
@@ -313,6 +418,7 @@ export class MyLearningService {
       completionMode: completionModeOf(item.kind, content),
       state: state.state,
       completedAt: iso(state.completedAt),
+      available,
     };
   }
 
@@ -324,16 +430,23 @@ export class MyLearningService {
     const db = this.prisma.db;
     const item = await this.publishedItem(db, itemId);
     const access = await this.requireAccess(db, caller.id, item.courseId);
-    const view = await this.courseView(db, caller.id, item.courseId);
     const academy = await this.academy(db);
+    const today = calendarDateIn(academy.timeZone);
+    await this.requireOpenLevel(db, item, access.enrollment, today);
+    const view = await this.courseView(db, caller.id, item.courseId);
     const content = contentOf(item);
     const group = groupOf(view.groups, item.id);
     const order = learningOrder(view.groups);
     const neighbors = neighborsOf(order, item.id);
+    const startsOn = dateOnly(access.enrollment.class.startsOn);
+    const available = availableIdsOf(
+      view.groups,
+      view.groups.map((entry) => levelStateOf(entry.section, startsOn, today)),
+    );
     const byId = new Map(view.published.map((row) => [row.id, row]));
     const neighbor = (id: string | null) => {
       const row = id === null ? undefined : byId.get(id);
-      return row ? { id: row.id, title: titleOf(row.title) } : null;
+      return row ? { id: row.id, title: titleOf(row.title), available: available.has(row.id) } : null;
     };
 
     const classIds = access.owned.map((row) => row.class.id);
@@ -415,7 +528,9 @@ export class MyLearningService {
   async visit(itemId: string, caller: AuthPrincipal): Promise<LearningVisitResultDto> {
     const db = this.prisma.db;
     const item = await this.publishedItem(db, itemId);
-    await this.requireAccess(db, caller.id, item.courseId);
+    const access = await this.requireAccess(db, caller.id, item.courseId);
+    const academy = await this.academy(db);
+    await this.requireOpenLevel(db, item, access.enrollment, calendarDateIn(academy.timeZone));
     const now = new Date().toISOString();
     // One statement: a new row is `in_progress`; an existing one only moves `last_opened_at` (a completed lesson stays completed).
     await db.$executeRaw`
@@ -432,10 +547,12 @@ export class MyLearningService {
   async playback(itemId: string, body: SavePlaybackDto, caller: AuthPrincipal): Promise<LearningPlaybackResultDto> {
     const db = this.prisma.db;
     const item = await this.publishedItem(db, itemId);
-    await this.requireAccess(db, caller.id, item.courseId);
+    const access = await this.requireAccess(db, caller.id, item.courseId);
+    const academy = await this.academy(db);
+    await this.requireOpenLevel(db, item, access.enrollment, calendarDateIn(academy.timeZone));
     const duration = playbackDurationOf(item.kind, contentOf(item));
     if (duration === null) throw learningError.playbackNotTracked(item.id);
-    const { completionPercent } = await this.academy(db);
+    const { completionPercent } = academy;
 
     const plan = await db.$transaction(async (tx) => {
       const now = new Date();
@@ -481,9 +598,11 @@ export class MyLearningService {
   async complete(itemId: string, caller: AuthPrincipal): Promise<LearningCompleteResultDto> {
     const db = this.prisma.db;
     const item = await this.publishedItem(db, itemId);
-    await this.requireAccess(db, caller.id, item.courseId);
+    const access = await this.requireAccess(db, caller.id, item.courseId);
+    const academy = await this.academy(db);
+    await this.requireOpenLevel(db, item, access.enrollment, calendarDateIn(academy.timeZone));
     const mode: CompletionMode = completionModeOf(item.kind, contentOf(item));
-    if (mode === 'playback') throw learningError.completionByPlayback(item.id, (await this.academy(db)).completionPercent);
+    if (mode === 'playback') throw learningError.completionByPlayback(item.id, academy.completionPercent);
     if (mode === 'attendance') throw learningError.completionByAttendance(item.id);
 
     const now = new Date().toISOString();
@@ -524,6 +643,20 @@ export class MyLearningService {
     const access = learningAccessOf(rows);
     if (!access.allowed) throw learningError.notEnrolled(courseId, access.reason);
     return { enrollment: access.enrollment, owned: access.owned };
+  }
+
+  /**
+   * D-R145 — `403 level_not_open { itemId, opensOn }` for a lesson whose level
+   * opens later for the class that opens the course (`enrollment`: the one the
+   * workspace chose). Checked after `lesson_not_found` and `not_enrolled`.
+   */
+  private async requireOpenLevel(db: Db, item: ItemRow, enrollment: AccessRow, today: string): Promise<void> {
+    if (item.sectionId === null) return;
+    const section = await db.courseSection.findUnique({ where: { id: item.sectionId }, select: { courseId: true, releaseAfterDays: true } });
+    // A lesson whose level is missing or of another course is shown outside every level (buildCurriculum()) — always open.
+    if (!section || section.courseId !== item.courseId) return;
+    const level = levelStateOf(section, dateOnly(enrollment.class.startsOn), today);
+    if (!level.isOpen && level.opensOn !== null) throw learningError.levelNotOpen(item.id, level.opensOn);
   }
 
   private async courseView(db: Db, studentId: string, courseId: string): Promise<CourseView> {

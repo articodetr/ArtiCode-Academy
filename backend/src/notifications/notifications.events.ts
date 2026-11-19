@@ -1,9 +1,10 @@
 // The automatic notification events of MOD-12 (owner decision D-R80): fifteen
 // events from the writes of MOD-06..MOD-11, in five categories — and since
 // MOD-19 (D-R128) four enrollment events in a sixth automatic category,
-// `enrollments`, one of them for the office (scope `staff`). The sixteenth
-// event is the manual announcement (T05), which carries its sender's own
-// words instead of a template. The list lives here, in code — the database
+// `enrollments`, one of them for the office (scope `staff`) — and since
+// MOD-20 LRN-T06 (D-R146) one class event of «My School» in the `lessons`
+// category, `curriculum.lessons_published`. The manual announcement (T05)
+// carries its sender's own words instead of a template. The list lives here, in code — the database
 // only checks the shape of a key. No framework imports: pure data and types,
 // unit-tested in notifications.templates.spec.ts.
 import type { LocalizedText } from '../authorization/localized-text.js';
@@ -26,6 +27,8 @@ export const NOTIFICATION_LINKS = {
   /** MOD-19: the learner's courses and requests, and the office's requests page. */
   courses: '/my-courses',
   enrollmentRequests: '/enrollment-requests',
+  /** MOD-20: the learner's «My School» (their courses and lessons). */
+  mySchool: '/my-school',
 } as const;
 
 /** The key and category of a manual announcement (T05). */
@@ -93,6 +96,13 @@ export interface NotificationEventParams {
   'enrollment.activated': { enrollmentId: string; classId: string; courseName: LocalizedText; className: LocalizedText };
   /** A rejected request — never the reason (it is on the student's own requests page). */
   'enrollment.rejected': { enrollmentId: string; courseName: LocalizedText; className: LocalizedText };
+  /**
+   * MOD-20 LRN-T06 (D-R146): one curriculum write (API-227) made `count` (≥ 1)
+   * lessons of the course newly published — told to every `open` or
+   * `running` class of the course. No `classId`: the course is what the
+   * learner opens in «My School».
+   */
+  'curriculum.lessons_published': { courseId: string; courseName: LocalizedText; count: number };
 }
 
 export type NotificationEventKey = keyof NotificationEventParams;
@@ -133,6 +143,7 @@ export const NOTIFICATION_EVENTS = {
   'enrollment.request_received': { category: 'enrollments', scope: 'staff', link: NOTIFICATION_LINKS.enrollmentRequests },
   'enrollment.activated': { category: 'enrollments', scope: 'student', link: NOTIFICATION_LINKS.courses },
   'enrollment.rejected': { category: 'enrollments', scope: 'student', link: NOTIFICATION_LINKS.courses },
+  'curriculum.lessons_published': { category: 'lessons', scope: 'class', link: NOTIFICATION_LINKS.mySchool },
 } as const satisfies Record<NotificationEventKey, EventDefinition>;
 
 export const NOTIFICATION_EVENT_KEYS = Object.keys(NOTIFICATION_EVENTS) as NotificationEventKey[];

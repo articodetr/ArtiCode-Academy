@@ -3,7 +3,7 @@
 // learners and authors, the learning order across level boundaries and
 // where «continue learning» opens.
 import { describe, expect, it } from 'vitest';
-import { buildCurriculum, learningOrder, neighborsOf, resumeTargetOf } from './learning.curriculum.js';
+import { buildCurriculum, isLevelOpen, learningOrder, levelOpensOn, levelStateOf, neighborsOf, resumeTargetOf } from './learning.curriculum.js';
 import type { CurriculumItemRow, CurriculumSectionRow } from './learning.curriculum.js';
 
 const section = (id: string, sortOrder: number): CurriculumSectionRow => ({ id, sortOrder });
@@ -109,5 +109,71 @@ describe('resumeTargetOf', () => {
   it('is null when the course shows no lesson', () => {
     expect(resumeTargetOf([], { itemId: 'c', sortKey: 2 }, new Set(), sortKeyOf)).toBeNull();
     expect(resumeTargetOf([], null, new Set(), sortKeyOf)).toBeNull();
+  });
+
+  // TEST-262 (unit) — D-R145: the resume point never lands on a lesson of a closed level.
+  it('without an available set every lesson counts, as before', () => {
+    expect(resumeTargetOf(order, { itemId: 'b', sortKey: 1 }, new Set(), sortKeyOf, undefined)).toEqual({ itemId: 'b', reason: 'last' });
+    expect(resumeTargetOf(order, { itemId: 'b', sortKey: 1 }, new Set(), sortKeyOf, new Set(order))).toEqual({ itemId: 'b', reason: 'last' });
+  });
+
+  it('starts at the first available lesson when the first level is closed', () => {
+    expect(resumeTargetOf(order, null, new Set(), sortKeyOf, new Set(['d', 'e']))).toEqual({ itemId: 'd', reason: 'first' });
+  });
+
+  it('replaces a last lesson whose level is closed by the next available one not completed, else the first available', () => {
+    // a and b open; d and e in a closed level. The learner had opened d before it closed.
+    const open = new Set(['a', 'b']);
+    expect(resumeTargetOf(order, { itemId: 'd', sortKey: 3 }, new Set(), sortKeyOf, open)).toEqual({ itemId: 'a', reason: 'replaced' });
+    expect(resumeTargetOf(order, { itemId: 'd', sortKey: 3 }, new Set(['a']), sortKeyOf, open)).toEqual({ itemId: 'b', reason: 'replaced' });
+    expect(resumeTargetOf(order, { itemId: 'd', sortKey: 3 }, new Set(['a', 'b']), sortKeyOf, open)).toEqual({ itemId: 'a', reason: 'replaced' });
+    // An unpublished last lesson (c) skips the closed d and e as well.
+    expect(resumeTargetOf(order, { itemId: 'c', sortKey: 2 }, new Set(), sortKeyOf, new Set(['a', 'b', 'e']))).toEqual({ itemId: 'e', reason: 'replaced' });
+    expect(resumeTargetOf(order, { itemId: 'c', sortKey: 2 }, new Set(['e']), sortKeyOf, new Set(['a', 'b', 'e']))).toEqual({ itemId: 'a', reason: 'replaced' });
+  });
+
+  it('is null when no lesson is available', () => {
+    expect(resumeTargetOf(order, null, new Set(), sortKeyOf, new Set())).toBeNull();
+    expect(resumeTargetOf(order, { itemId: 'a', sortKey: 0 }, new Set(), sortKeyOf, new Set(['zz']))).toBeNull();
+  });
+});
+
+// TEST-262 (unit) — D-R145: a level that opens N days after the learner's class starts, in the academy's zone.
+describe('levelOpensOn, isLevelOpen and levelStateOf', () => {
+  it('adds the delay to the class start date, across months, years and leap days', () => {
+    expect(levelOpensOn('2026-11-09', 0)).toBe('2026-11-09');
+    expect(levelOpensOn('2026-11-09', 5)).toBe('2026-11-14');
+    expect(levelOpensOn('2026-11-09', 30)).toBe('2026-12-09');
+    expect(levelOpensOn('2026-12-20', 15)).toBe('2027-01-04');
+    expect(levelOpensOn('2028-02-27', 2)).toBe('2028-02-29');
+    expect(levelOpensOn('2026-03-28', 2)).toBe('2026-03-30'); // a DST weekend changes nothing: dates are UTC midnights
+    expect(levelOpensOn('2026-01-01', 365)).toBe('2027-01-01');
+  });
+
+  it('has no date without a class start or without a delay', () => {
+    expect(levelOpensOn(null, 5)).toBeNull();
+    expect(levelOpensOn('2026-11-09', null)).toBeNull();
+    expect(levelOpensOn(null, null)).toBeNull();
+  });
+
+  it('opens on the day itself, never before', () => {
+    expect(isLevelOpen(null, '2026-11-19')).toBe(true);
+    expect(isLevelOpen('2026-11-19', '2026-11-19')).toBe(true);
+    expect(isLevelOpen('2026-11-18', '2026-11-19')).toBe(true);
+    expect(isLevelOpen('2026-11-20', '2026-11-19')).toBe(false);
+    expect(isLevelOpen('2027-01-01', '2026-12-31')).toBe(false);
+  });
+
+  it('the state of a group: the implicit group and a level without a delay are always open; a dated level keeps its day once open', () => {
+    const today = '2026-11-19';
+    const startsOn = '2026-11-09'; // ten days ago
+    expect(levelStateOf(null, startsOn, today)).toEqual({ isOpen: true, opensOn: null });
+    expect(levelStateOf({ releaseAfterDays: null }, startsOn, today)).toEqual({ isOpen: true, opensOn: null });
+    expect(levelStateOf({ releaseAfterDays: 5 }, startsOn, today)).toEqual({ isOpen: true, opensOn: '2026-11-14' });
+    expect(levelStateOf({ releaseAfterDays: 10 }, startsOn, today)).toEqual({ isOpen: true, opensOn: '2026-11-19' });
+    expect(levelStateOf({ releaseAfterDays: 30 }, startsOn, today)).toEqual({ isOpen: false, opensOn: '2026-12-09' });
+    expect(levelStateOf({ releaseAfterDays: 30 }, null, today)).toEqual({ isOpen: true, opensOn: null }); // a class without a start date opens everything
+    // Before the class starts, even a level with no delay (0) waits for the start day.
+    expect(levelStateOf({ releaseAfterDays: 0 }, '2026-11-25', today)).toEqual({ isOpen: false, opensOn: '2026-11-25' });
   });
 });

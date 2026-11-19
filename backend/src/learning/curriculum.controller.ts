@@ -61,7 +61,8 @@ export class CurriculumController {
       'levels take positions 0..n-1 and lessons their position in the flattened learning order. A lesson’s kind, content and resources are kept (API-228 writes them). ' +
       'At most 50 levels and 200 lessons. One transaction (the course row is locked) with exactly one event ' +
       '`courses.curriculum.changed { code, sections { added, updated, removed }, items { added, updated, removed, moved }, reordered, totalSections, totalItems }`; ' +
-      'the stored structure again writes nothing and records nothing. Requires `courses.manage`.',
+      'the stored structure again writes nothing and records nothing. A level may carry `releaseAfterDays` (0..365 or null): it opens that many days after each class starts (D-R145). ' +
+      'Lessons this write newly publishes notify the active students (and their guardians) of every open or running class of the course — one `curriculum.lessons_published` per class, category `lessons` (D-R146). Requires `courses.manage`.',
   })
   @ApiOkResponse({ type: CurriculumDto, description: 'The curriculum after the replacement' })
   @ApiBadRequestResponse({

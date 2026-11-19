@@ -7,7 +7,8 @@
 // `courses.read` cannot. Fixture users, roles, courses, classes and progress
 // rows carry a unique prefix or belong to the fixture users and are deleted at
 // the end (their audit rows stay — KI-032); audit events are counted by fixture
-// actor above an id watermark, as in TEST-030.
+// actor above an id watermark, as in TEST-030. LRN-T06: a level's
+// `releaseAfterDays` (D-R145) and each lesson's `sessionCount` (D-R143).
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -42,6 +43,7 @@ const ITEM_KEYS = [
   'kind',
   'progressCount',
   'resources',
+  'sessionCount',
   'sortOrder',
   'title',
   'updatedAt',
@@ -66,6 +68,7 @@ interface ItemView {
   completionMode: string;
   durationSeconds: number | null;
   progressCount: number;
+  sessionCount: number;
   updatedAt: string;
 }
 interface SectionView {
@@ -74,6 +77,7 @@ interface SectionView {
   sortOrder: number;
   title: Localized | null;
   description: Localized | null;
+  releaseAfterDays: number | null;
   items: ItemView[];
 }
 interface CurriculumView {
@@ -98,7 +102,13 @@ const keep = (item: ItemView, overrides: Record<string, unknown> = {}) => ({
 });
 /** The PUT body that states the curriculum exactly as read. */
 const bodyOf = (view: CurriculumView) => ({
-  sections: view.sections.map((section) => ({ id: section.id, title: section.title, description: section.description, items: section.items.map((item) => keep(item)) })),
+  sections: view.sections.map((section) => ({
+    id: section.id,
+    title: section.title,
+    description: section.description,
+    releaseAfterDays: section.releaseAfterDays,
+    items: section.items.map((item) => keep(item)),
+  })),
   looseItems: view.looseItems.map((item) => keep(item)),
 });
 
@@ -239,7 +249,8 @@ describe.skipIf(!available)('MOD-20 course curriculum (e2e, TEST-260)', () => {
       [2, 1, 0],
     ]);
     expect(view.sections[0]).toMatchObject({ title: { ar: 'أساسيات', en: 'Basics' }, description: { ar: 'البداية' } });
-    expect(view.sections[1]).toMatchObject({ title: null, description: null, items: [] });
+    expect(view.sections[1]).toMatchObject({ title: null, description: null, releaseAfterDays: null, items: [] });
+    expect(Object.keys(view.sections[0]!).sort()).toEqual(['description', 'id', 'items', 'number', 'releaseAfterDays', 'sortOrder', 'title']);
     expect(Object.keys(view.sections[0]!.items[0]!).sort()).toEqual(ITEM_KEYS);
     expect(view.sections[0]!.items[0]).toMatchObject({
       title: { ar: 'أ1' },
@@ -253,6 +264,7 @@ describe.skipIf(!available)('MOD-20 course curriculum (e2e, TEST-260)', () => {
       completionMode: 'manual',
       durationSeconds: 1200,
       progressCount: 0,
+      sessionCount: 0,
     });
     expect(view.looseItems.map((item) => [item.title.ar, item.sortOrder])).toEqual([['حر', 2]]);
 
@@ -583,6 +595,99 @@ describe.skipIf(!available)('MOD-20 course curriculum (e2e, TEST-260)', () => {
       await put('manager', courseId, { sections: [{ id: view.sections[0]!.id, items: [keep(view.sections[0]!.items[0]!, { title: { ar: 'درس معاد تسميته' } })] }] }).expect(200)
     ).body as CurriculumView;
     expect(renamed.sections[0]!.items[0]).toMatchObject({ title: { ar: 'درس معاد تسميته' }, kind: 'pdf', content: pdf.body.content, resources: pdf.body.resources });
+  });
+
+  it('LRN-T06 (D-R145) — releaseAfterDays: written and read back per level, absent = null, a change counts the level as updated, invalid values are 400', async () => {
+    const courseId = await createCourse('T');
+    const built = (
+      await put('manager', courseId, {
+        sections: [{ releaseAfterDays: 0, items: [lesson('أول')] }, { title: { ar: 'بعد أسبوعين' }, releaseAfterDays: 14, items: [] }, { items: [] }],
+      }).expect(200)
+    ).body as CurriculumView;
+    expect(built.sections.map((section) => section.releaseAfterDays)).toEqual([0, 14, null]);
+    expect((await read('manager', courseId).expect(200)).body).toEqual(built);
+    expect((await read('teacher', courseId).expect(200)).body.sections.map((section: SectionView) => section.releaseAfterDays)).toEqual([0, 14, null]);
+    const stored = await prisma.courseSection.findMany({ where: { courseId }, orderBy: { sortOrder: 'asc' }, select: { releaseAfterDays: true } });
+    expect(stored.map((row) => row.releaseAfterDays)).toEqual([0, 14, null]);
+    const [l1, l2, l3] = built.sections as [SectionView, SectionView, SectionView];
+
+    const m = await mark();
+    // The curriculum as read: nothing written, nothing recorded.
+    expect((await put('manager', courseId, bodyOf(built)).expect(200)).body).toEqual(built);
+    // Clear the first (absent = null), move the second to 365, set the third to 30.
+    const body = bodyOf(built);
+    body.sections = [
+      { id: l1.id, title: l1.title, description: l1.description, items: l1.items.map((item) => keep(item)) } as (typeof body.sections)[number],
+      { ...body.sections[1]!, releaseAfterDays: 365 },
+      { ...body.sections[2]!, releaseAfterDays: 30 },
+    ];
+    const changed = (await put('manager', courseId, body).expect(200)).body as CurriculumView;
+    expect(changed.sections.map((section) => [section.id, section.releaseAfterDays])).toEqual([
+      [l1.id, null],
+      [l2.id, 365],
+      [l3.id, 30],
+    ]);
+    const events = await eventsSince(m);
+    expect(events.map((event) => event.action)).toEqual(['courses.curriculum.changed']);
+    expect(events[0]!.metadata).toEqual({
+      code: `${PREFIX}-T`,
+      sections: { added: 0, updated: 3, removed: 0 },
+      items: { added: 0, updated: 0, removed: 0, moved: 0 },
+      reordered: false,
+      totalSections: 3,
+      totalItems: 1,
+    });
+
+    const m2 = await mark();
+    for (const value of [-1, 366, 1.5, '7', true, { days: 7 }, [7]]) {
+      const bad = await put('manager', courseId, { sections: [{ id: l1.id, releaseAfterDays: value, items: l1.items.map((item) => keep(item)) }] });
+      expect(bad.status, JSON.stringify(value)).toBe(400);
+      expect(bad.body.code, JSON.stringify(value)).not.toBe('curriculum_invalid');
+    }
+    expect(await eventsSince(m2)).toEqual([]);
+    expect((await read('manager', courseId).expect(200)).body).toEqual(changed);
+  });
+
+  it('LRN-T06 (D-R143) — sessionCount counts the non-cancelled class sessions (MOD-06 lessons) linked to each lesson, in every class of the course', async () => {
+    const courseId = await createCourse('N');
+    const firstClass = await prisma.class.findFirstOrThrow({ where: { code: `${PREFIX}-N-K` }, select: { id: true } });
+    const secondClass = await prisma.class.create({ data: { courseId, code: `${PREFIX}-N-K2`, name: { ar: 'فصل ثان' }, capacity: 10 }, select: { id: true } });
+    const built = (await put('manager', courseId, { sections: [{ items: [lesson('مع حصص'), lesson('بلا حصص')] }], looseItems: [lesson('حر')] }).expect(200)).body as CurriculumView;
+    const [linked, unlinked] = built.sections[0]!.items as [ItemView, ItemView];
+    expect([...built.sections[0]!.items, ...built.looseItems].map((item) => item.sessionCount)).toEqual([0, 0, 0]);
+
+    const session = async (classId: string, syllabusItemId: string | null, dayOffset: number, status: 'scheduled' | 'completed' | 'cancelled') => {
+      const startsAt = new Date(Date.UTC(2031, 0, 5 + dayOffset, 9));
+      await prisma.lesson.create({
+        data: {
+          classId,
+          syllabusItemId,
+          title: { ar: `حصة ${dayOffset}` },
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 60 * 60 * 1000),
+          status,
+          ...(status === 'cancelled' ? { cancellationReason: 'test' } : {}),
+        },
+        select: { id: true },
+      });
+    };
+    await session(firstClass.id, linked.id, 0, 'scheduled');
+    await session(firstClass.id, linked.id, 1, 'completed');
+    await session(secondClass.id, linked.id, 2, 'scheduled');
+    await session(firstClass.id, linked.id, 3, 'cancelled');
+    await session(firstClass.id, null, 4, 'scheduled');
+
+    const view = (await read('manager', courseId).expect(200)).body as CurriculumView;
+    expect(view.sections[0]!.items.map((item) => [item.id, item.sessionCount])).toEqual([
+      [linked.id, 3],
+      [unlinked.id, 0],
+    ]);
+    expect(view.looseItems[0]!.sessionCount).toBe(0);
+    expect(((await read('teacher', courseId).expect(200)).body as CurriculumView).sections[0]!.items[0]!.sessionCount).toBe(3);
+    // The API-227 and API-228 answers carry it too.
+    expect(((await put('manager', courseId, bodyOf(view)).expect(200)).body as CurriculumView).sections[0]!.items[0]!.sessionCount).toBe(3);
+    const content = await putContent('manager', courseId, linked.id, { kind: 'live', content: { note: { ar: 'حصة مباشرة' } }, resources: [] }).expect(200);
+    expect(content.body).toMatchObject({ id: linked.id, kind: 'live', sessionCount: 3 });
   });
 
   it('API-049 keeps the level, kind, content, resources and flags of a kept lesson, and puts a new one outside every level', async () => {

@@ -1,12 +1,13 @@
 // TEST-175 — MOD-12-T02: the catalog of the fifteen automatic events and
 // their wording in Arabic and English (D-R80, D-R83). Pure, no database.
 // TEST-215 — S6-C: and in Turkish, every event, with the same privacy rules.
+// TEST-261 — MOD-20 LRN-T06 (D-R146): the class event curriculum.lessons_published.
 import { describe, expect, it } from 'vitest';
 import { TEMPLATE_LOCALES, templateLocale } from '../mail/mail.templates.js';
 import type { TemplateLocale } from '../mail/mail.templates.js';
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_EVENTS, NOTIFICATION_EVENT_KEYS, notificationData } from './notifications.events.js';
 import type { NotificationEventKey, NotificationEventParams } from './notifications.events.js';
-import { childrenSuffix, formatDay, formatNumber, formatTime, formatWhen, renderNotification } from './notifications.templates.js';
+import { arabicNewLessons, childrenSuffix, formatDay, formatNumber, formatTime, formatWhen, renderNotification } from './notifications.templates.js';
 
 const LESSON_ID = '019a0000-0000-7000-8000-00000000000a';
 const CLASS_ID = '019a0000-0000-7000-8000-00000000000b';
@@ -67,6 +68,8 @@ const SAMPLES: { [K in NotificationEventKey]: NotificationEventParams[K] } = {
   'enrollment.request_received': { enrollmentId: LESSON_ID, studentName: 'Lina Haddad', courseName: ARABIC_COURSE, className: lesson.className },
   'enrollment.activated': { enrollmentId: LESSON_ID, classId: CLASS_ID, courseName: ARABIC_COURSE, className: lesson.className },
   'enrollment.rejected': { enrollmentId: LESSON_ID, courseName: ARABIC_COURSE, className: lesson.className },
+  // MOD-20 LRN-T06 (D-R146, TEST-261).
+  'curriculum.lessons_published': { courseId: OTHER_ID, courseName: ARABIC_COURSE, count: 3 },
 };
 
 const ARABIC_LETTER = /[؀-ۿ]/;
@@ -76,7 +79,7 @@ const LEAK = /undefined|null|\[object |NaN|\$\{/;
 const render = <K extends NotificationEventKey>(key: K, locale: TemplateLocale) => renderNotification(key, SAMPLES[key], locale);
 
 describe('notification events (D-R80, TEST-175)', () => {
-  it('lists the nineteen automatic events in six categories, each with a scope and a link of this app', () => {
+  it('lists the twenty automatic events in six categories, each with a scope and a link of this app', () => {
     expect(NOTIFICATION_EVENT_KEYS).toEqual([
       'lesson.cancelled',
       'lesson.rescheduled',
@@ -97,10 +100,12 @@ describe('notification events (D-R80, TEST-175)', () => {
       'enrollment.request_received',
       'enrollment.activated',
       'enrollment.rejected',
+      'curriculum.lessons_published',
     ]);
     const perCategory = (category: string) => NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].category === category).length;
     expect(NOTIFICATION_CATEGORIES.map((category) => [category, perCategory(category)])).toEqual([
-      ['lessons', 3],
+      // MOD-20 (D-R146): the «new lessons» class event shares the lessons switch.
+      ['lessons', 4],
       ['assignments', 3],
       ['exams', 2],
       ['grades', 3],
@@ -111,7 +116,13 @@ describe('notification events (D-R80, TEST-175)', () => {
       ['enrollments', 4],
     ]);
     // A class event reaches the class once per recipient; every other event is about one student.
-    expect(NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].scope === 'class')).toEqual(['lesson.cancelled', 'lesson.rescheduled', 'assignment.published', 'exam.scheduled']);
+    expect(NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].scope === 'class')).toEqual([
+      'lesson.cancelled',
+      'lesson.rescheduled',
+      'assignment.published',
+      'exam.scheduled',
+      'curriculum.lessons_published',
+    ]);
     // MOD-19: the one office event reaches the holders of enrollments.manage.
     expect(NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].scope === 'staff')).toEqual(['enrollment.request_received']);
     for (const key of NOTIFICATION_EVENT_KEYS) {
@@ -130,6 +141,8 @@ describe('notification events (D-R80, TEST-175)', () => {
     expect(notificationData('enrollment.requested', SAMPLES['enrollment.requested'])).toEqual({ link: '/my-courses', enrollmentId: LESSON_ID, invoiceId: OTHER_ID });
     expect(notificationData('enrollment.request_received', SAMPLES['enrollment.request_received'])).toEqual({ link: '/enrollment-requests', enrollmentId: LESSON_ID });
     expect(notificationData('enrollment.activated', SAMPLES['enrollment.activated'])).toEqual({ link: '/my-courses', enrollmentId: LESSON_ID, classId: CLASS_ID });
+    // MOD-20: the course id only — neither its name nor the count.
+    expect(notificationData('curriculum.lessons_published', SAMPLES['curriculum.lessons_published'])).toEqual({ link: '/my-school', courseId: OTHER_ID });
     // A single child is the row's own student; several are named in `data`.
     expect(notificationData('lesson.cancelled', lesson, [OTHER_ID])).toEqual({ link: '/my-lessons', lessonId: LESSON_ID, classId: CLASS_ID });
     expect(notificationData('lesson.cancelled', lesson, [OTHER_ID, LESSON_ID])).toEqual({ link: '/my-lessons', lessonId: LESSON_ID, classId: CLASS_ID, studentIds: [OTHER_ID, LESSON_ID] });
@@ -207,6 +220,42 @@ describe('notification wording (D-R83, TEST-175)', () => {
     expect(render('submission.graded', 'ar')).toEqual({ title: 'صُحّح واجب: مقال', body: 'صُحّح تسليم واجب «مقال»: الدرجة 7.25 من 19.75.' });
     expect(render('invoice.cancelled', 'en')).toEqual({ title: 'Invoice cancelled: INV-2026-00082', body: 'Invoice INV-2026-00082 was cancelled.' });
     expect(render('payment.reversed', 'ar')).toEqual({ title: 'عُكست دفعة: RCPT-2026-00052', body: 'عُكست الدفعة ذات الإيصال RCPT-2026-00052 على الفاتورة INV-2026-00082.' });
+  });
+
+  it('words the «new lessons» event of «My School» with its count in the body, singular and plural (D-R146, TEST-261)', () => {
+    expect(render('curriculum.lessons_published', 'ar')).toEqual({ title: 'دروس جديدة في اللغة العربية', body: 'نُشر في دورة «اللغة العربية» 3 دروس جديدة. افتح «مدرستي» لمتابعة التعلّم.' });
+    expect(render('curriculum.lessons_published', 'en')).toEqual({
+      title: 'New lessons in Arabic',
+      body: '3 new lessons were published in the course “Arabic”. Open “My School” to continue learning.',
+    });
+    expect(render('curriculum.lessons_published', 'tr')).toEqual({
+      title: 'Yeni dersler: Arapça',
+      body: '“Arapça” kursunda 3 yeni ders yayımlandı. Öğrenmeye devam etmek için “Okulum” sayfasını açın.',
+    });
+    const one = { ...SAMPLES['curriculum.lessons_published'], count: 1 };
+    expect(renderNotification('curriculum.lessons_published', one, 'ar')).toEqual({ title: 'درس جديد في اللغة العربية', body: 'نُشر في دورة «اللغة العربية» درس جديد. افتح «مدرستي» لمتابعة التعلّم.' });
+    expect(renderNotification('curriculum.lessons_published', one, 'en').body).toBe('A new lesson was published in the course “Arabic”. Open “My School” to continue learning.');
+    expect(renderNotification('curriculum.lessons_published', one, 'en').title).toBe('New lesson in Arabic');
+    expect(renderNotification('curriculum.lessons_published', one, 'tr')).toEqual({
+      title: 'Yeni ders: Arapça',
+      body: '“Arapça” kursunda yeni bir ders yayımlandı. Öğrenmeye devam etmek için “Okulum” sayfasını açın.',
+    });
+    // The Arabic counted noun follows the number.
+    expect([1, 2, 3, 10, 11, 99, 100, 101, 102, 103, 110, 111, 200].map(arabicNewLessons)).toEqual([
+      'درس جديد',
+      'درسان جديدان',
+      '3 دروس جديدة',
+      '10 دروس جديدة',
+      '11 درسًا جديدًا',
+      '99 درسًا جديدًا',
+      '100 درس جديد',
+      '101 درس جديد',
+      '102 درس جديد',
+      '103 دروس جديدة',
+      '110 دروس جديدة',
+      '111 درسًا جديدًا',
+      '200 درس جديد',
+    ]);
   });
 
   it('picks stored texts in the reader language, else the academy default, else Arabic', () => {

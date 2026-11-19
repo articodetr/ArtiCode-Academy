@@ -25,6 +25,9 @@
 //                                      ({ itemId })
 //   playback_not_tracked        409  — this lesson has no measurable media (D-R134) ({ itemId })
 //   catalog_not_public          404  — the academy does not offer its catalog to visitors (D-R138)
+//   level_not_open              403  — the lesson's level opens later for the caller's class (D-R145):
+//                                      its lessons are listed but cannot be opened, visited, played or
+//                                      completed before `opensOn` (`YYYY-MM-DD`, academy zone) ({ itemId, opensOn })
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -39,6 +42,7 @@ export const LEARNING_ERROR_CODES = [
   'completion_by_attendance',
   'playback_not_tracked',
   'catalog_not_public',
+  'level_not_open',
 ] as const;
 
 export type LearningErrorCode = (typeof LEARNING_ERROR_CODES)[number];
@@ -81,4 +85,6 @@ export const learningError = {
   playbackNotTracked: (itemId: string) =>
     new LearningHttpException(HttpStatus.CONFLICT, 'playback_not_tracked', 'This lesson has no measurable media', { itemId }),
   catalogNotPublic: () => new LearningHttpException(HttpStatus.NOT_FOUND, 'catalog_not_public', 'This academy does not offer its catalog to visitors'),
+  levelNotOpen: (itemId: string, opensOn: string) =>
+    new LearningHttpException(HttpStatus.FORBIDDEN, 'level_not_open', 'This lesson’s level is not open yet', { itemId, opensOn }),
 };

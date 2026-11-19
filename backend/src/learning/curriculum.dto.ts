@@ -29,6 +29,9 @@ import type { CompletionMode } from './learning.content.js';
 /** At most 50 levels per course (D-R130); the lessons stay bounded by SYLLABUS_ITEMS_MAX in total. */
 export const CURRICULUM_SECTIONS_MAX = 50;
 
+/** D-R145: a level opens at most a year after the learner's class starts (the column's CHECK: 0..365). */
+export const RELEASE_AFTER_DAYS_MAX = 365;
+
 export const COMPLETION_MODES = ['manual', 'playback', 'attendance'] as const satisfies readonly CompletionMode[];
 
 /** The raw JSON value: no implicit conversion of a free-form object or array. */
@@ -104,6 +107,24 @@ export class CurriculumSectionInputDto {
   @ValidateNested()
   @Type(() => LocalizedTextDto)
   description?: LocalizedTextDto | null;
+
+  @ApiPropertyOptional({
+    type: 'integer',
+    nullable: true,
+    minimum: 0,
+    maximum: RELEASE_AFTER_DAYS_MAX,
+    example: 14,
+    description:
+      'D-R145: for a learner the level opens on their class’s start day + N days (the academy’s time zone); absent or null = open from the start ' +
+      '(the structure is the complete state); a JSON number',
+  })
+  @IsOptional()
+  @Transform(rawNumber)
+  @ValidateIf((_dto, value) => value !== null)
+  @IsInt()
+  @Min(0)
+  @Max(RELEASE_AFTER_DAYS_MAX)
+  releaseAfterDays?: number | null;
 
   @ApiProperty({ type: [CurriculumItemInputDto], maxItems: SYLLABUS_ITEMS_MAX, description: 'The lessons of this level in order' })
   @IsArray()
@@ -236,6 +257,9 @@ export class CurriculumItemDto {
   @ApiProperty({ type: 'integer', description: 'Learners with progress on this lesson — such a lesson can only be unpublished, never deleted (D-R135)' })
   progressCount: number;
 
+  @ApiProperty({ type: 'integer', description: 'D-R143: the non-cancelled class sessions (MOD-06 lessons) linked to this lesson, in every class of the course' })
+  sessionCount: number;
+
   @ApiProperty({ description: 'ISO 8601' })
   updatedAt: string;
 }
@@ -255,6 +279,15 @@ export class CurriculumSectionDto {
 
   @ApiProperty({ type: () => LocalizedTextDto, nullable: true })
   description: LocalizedText | null;
+
+  @ApiProperty({
+    type: 'integer',
+    nullable: true,
+    minimum: 0,
+    maximum: RELEASE_AFTER_DAYS_MAX,
+    description: 'D-R145: the level opens for a learner on their class’s start day + N days; null = open from the start',
+  })
+  releaseAfterDays: number | null;
 
   @ApiProperty({ type: () => [CurriculumItemDto], description: 'In order; empty for an empty level' })
   items: CurriculumItemDto[];
