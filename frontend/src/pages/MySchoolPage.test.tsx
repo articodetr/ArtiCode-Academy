@@ -1,6 +1,8 @@
 // MOD-20 — «My School» (TEST-250): the sections and the URL, the course cards with the server's progress and their
 // one action, a guardian's child card without a learn button, the request actions, the assessments and the
 // certificates, every source failing and retrying on its own, the local search and the phone's section bar.
+// TEST-263 (LRN-T06, D-R143): the class's next session on a card — day and times in its own zone, title, meeting link
+// (never on a guardian's card), nothing when the class has none left.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useLocation } from 'react-router'
@@ -10,7 +12,8 @@ import type { MyAssignmentItem } from '../api/myAssignments'
 import type { MyCertificateItem } from '../api/myCertificates'
 import type { MyExamItem } from '../api/myExams'
 import { ar } from '../i18n/ar'
-import { LEARNING_COURSE_IDS, LEARNING_ENROLLMENT_IDS, makeChildCourse, makeCompletedCourse, makeLearningCourse, makeProgress } from '../mySchool/mySchool.fixtures'
+import { formatLessonDay, formatLessonTimes } from '../lessons/lessons.format'
+import { LEARNING_COURSE_IDS, LEARNING_ENROLLMENT_IDS, makeChildCourse, makeCompletedCourse, makeLearningCourse, makeNextSession, makeProgress } from '../mySchool/mySchool.fixtures'
 import { CATALOG_COURSE_IDS, REQUEST_IDS, makeMyRequest, makeMyRequestList } from '../test/catalog'
 import { CERTIFICATE_ID, CERTIFICATE_ID_2 } from '../test/certificates'
 import { jsonResponse, mockFetch } from '../test/http'
@@ -142,6 +145,8 @@ describe('MySchoolPage', () => {
     expect(statValue('activeCourses')).toBe('2')
     expect(statValue('completedCourses')).toBe('1')
     expect(statValue('pendingRequests')).toBe('1')
+    // KI-125: the «requests» section counts every request it lists (the rejected one too); the summary keeps the pending.
+    expect(sectionsNav().getByText(ar.mySchool.sections.requests).querySelector('.ms-nav-count')?.textContent).toBe('2')
     expect([...api.urls].sort()).toEqual(['/api/me/certificates', '/api/me/enrollment-requests', '/api/me/learning'])
 
     fireEvent.click(python.getByText(ar.mySchool.card.actions.continue).closest('button')!)
@@ -368,5 +373,42 @@ describe('MySchoolPage', () => {
     await waitFor(() => expect(screen.getByTestId('search').textContent).toBe('?section=completed'))
     expect(await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[1]}`)).toBeInTheDocument()
   })
-})
 
+  it('shows the class’s next session on a card — in its own zone, with the meeting link — and nothing without one', async () => {
+    const zone = 'Asia/Riyadh'
+    const session = makeNextSession({ timeZone: zone })
+    mockSchoolApi({ learning: [makeLearningCourse({ nextSession: session }), makeCompletedCourse()] })
+    renderPage({ route: '/my-school?section=courses' })
+    await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[1]}`)
+
+    const python = card(LEARNING_ENROLLMENT_IDS[0])
+    const line = within(python.getByTestId('next-session'))
+    expect(line.getByText('الحصة القادمة: حصة الحلقات')).toBeInTheDocument()
+    expect(line.getByText(formatLessonTimes(session.startsAt, session.endsAt, 'ar', zone))).toBeInTheDocument()
+    expect(python.getByTestId('next-session')).toHaveTextContent(formatLessonDay(session.startsAt, 'ar', zone))
+    const link = line.getByText(ar.mySchool.card.meetingLink).closest('a')!
+    expect(link).toHaveAttribute('href', 'https://meet.example.org/loops')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    // A course whose class has no session left shows no line.
+    expect(card(LEARNING_ENROLLMENT_IDS[1]).queryByTestId('next-session')).not.toBeInTheDocument()
+  })
+
+  it('names a guardian’s child’s next session without a meeting link, and never renders a non-https link', async () => {
+    mockSchoolApi({
+      learning: [
+        makeChildCourse({ nextSession: makeNextSession() }),
+        makeLearningCourse({ nextSession: makeNextSession({ title: { ar: 'حصة بلا رابط آمن' }, meetingUrl: 'http://meet.example.org/plain' }) }),
+      ],
+    })
+    renderPage({ roles: ['student', 'guardian'], route: '/my-school?section=courses' })
+    await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[2]}`)
+
+    const child = card(LEARNING_ENROLLMENT_IDS[2])
+    expect(child.getByText('الحصة القادمة: حصة الحلقات')).toBeInTheDocument()
+    expect(child.queryByText(ar.mySchool.card.meetingLink)).not.toBeInTheDocument()
+    const own = card(LEARNING_ENROLLMENT_IDS[0])
+    expect(own.getByText('الحصة القادمة: حصة بلا رابط آمن')).toBeInTheDocument()
+    expect(own.queryByText(ar.mySchool.card.meetingLink)).not.toBeInTheDocument()
+  })
+})

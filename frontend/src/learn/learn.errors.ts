@@ -30,11 +30,30 @@ export function isLessonGone(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404
 }
 
+const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/** A `YYYY-MM-DD` day, or null for anything else (a day handed through the router state is checked again here). */
+export function calendarDayOrNull(value: unknown): string | null {
+  return typeof value === 'string' && CALENDAR_DAY.test(value) ? value : null
+}
+
+/**
+ * API-231's 403 level_not_open { itemId, opensOn } (D-R145): the lesson belongs to a level that opens on
+ * `opensOn` (the academy's zone) — null when the body names no usable day. Null for any other failure.
+ */
+export function levelNotOpenOf(error: unknown): { opensOn: string | null } | null {
+  if (!(error instanceof ApiError) || error.status !== 403 || error.code !== 'level_not_open') return null
+  const body = error.body
+  const opensOn = typeof body === 'object' && body !== null && 'opensOn' in body ? (body as { opensOn: unknown }).opensOn : null
+  return { opensOn: calendarDayOrNull(opensOn) }
+}
+
 /** The i18n key of a failed progress write (API-234) shown beside the button. */
 export function actionFailureKey(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'completion_by_playback') return 'learn.errors.completion_by_playback'
     if (error.code === 'completion_by_attendance') return 'learn.errors.completion_by_attendance'
+    if (error.code === 'level_not_open') return 'learn.errors.level_not_open'
     if (error.status === 429) return 'learn.errors.rate_limited'
     return 'learn.completion.failed'
   }

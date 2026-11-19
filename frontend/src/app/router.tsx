@@ -13,6 +13,7 @@ import { CatalogPage } from '../pages/CatalogPage'
 import { EnrollmentRequestsPage } from '../pages/EnrollmentRequestsPage'
 import { MySchoolPage } from '../pages/MySchoolPage'
 import { LearnPage } from '../pages/LearnPage'
+import { LearnPreviewPage } from '../pages/LearnPreviewPage'
 import { PublicCatalogPage } from '../pages/PublicCatalogPage'
 import { PublicCoursePage } from '../pages/PublicCoursePage'
 import { CertificatePrintPage } from '../pages/CertificatePrintPage'
@@ -63,6 +64,10 @@ const router = createBrowserRouter([
   // MOD-20: the learning workspace, outside the layout (a focused course player). Signed in; the server opens a course's
   // lessons only with an own active or completed enrollment (D-R132) and answers 403 not_enrolled otherwise.
   { path: '/learn/:courseId', element: <RequireAuth><LearnPage /></RequireAuth> },
+  // «معاينة كطالب» (D-R144): the author's view of the player from API-226 (`courses.manage` or a teacher of the course —
+  // anyone else 404); it records nothing. Listed before /learn/:courseId/:itemId (the static segment ranks first anyway).
+  { path: '/learn/:courseId/preview', element: <RequireAuth><LearnPreviewPage /></RequireAuth> },
+  { path: '/learn/:courseId/preview/:itemId', element: <RequireAuth><LearnPreviewPage /></RequireAuth> },
   { path: '/learn/:courseId/:itemId', element: <RequireAuth><LearnPage /></RequireAuth> },
   // Certificate print pages (J-F51 — D-R50): signed in, outside the layout so neither the screen nor the paper has the
   // menu; API-131 for `certificates.read_all`/`certificates.issue`, API-135 for a student's or a guardian's own.

@@ -26,6 +26,7 @@ export function makeCurriculumItem(overrides: Partial<CurriculumItem> = {}): Cur
     completionMode: 'manual',
     durationSeconds: 2700,
     progressCount: 0,
+    sessionCount: 0,
     updatedAt: '2026-11-19T10:00:00.000Z',
     ...overrides,
   }
@@ -38,6 +39,7 @@ export function makeCurriculumSection(overrides: Partial<CurriculumSection> = {}
     sortOrder: 0,
     title: null,
     description: null,
+    releaseAfterDays: null,
     items: [],
     ...overrides,
   }

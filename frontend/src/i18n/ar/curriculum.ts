@@ -34,6 +34,14 @@ export const curriculum = {
   progressRestored: 'لبعض الدروس المحذوفة تقدّم لدى طلاب، فأُعيدت إلى المنهج وهي معلّمة أدناه. ألغِ نشرها بدلاً من حذفها، ثم احفظ.',
   newEntry: 'جديد',
   noContent: 'بلا محتوى بعد',
+  // LRN-T06 (D-R144): a new lesson is a draft; publishing a level or everything changes the draft, the save sends it.
+  publishHint: 'الدرس الجديد يبدأ مسودة غير منشورة لا يراها الطلاب. «نشر المستوى» و«نشر الكل» يغيّران المسودة فقط، ويُرسَل ذلك مع «حفظ المنهج».',
+  publishAll: 'نشر الكل',
+  allPublished: 'كل الدروس منشورة',
+  // D-R144: the course as a learner sees it, from the SAVED curriculum, in a new tab; no progress is written.
+  preview: 'معاينة كطالب',
+  previewHint: 'تفتح الدورة في علامة تبويب جديدة كما يراها الطالب، دون تسجيل أي تقدّم.',
+  previewSaveFirst: 'احفظ أولاً؛ تعرض المعاينة المنهج المحفوظ.',
   level: {
     name: 'المستوى {{ordinal}}',
     withTitle: '{{name}} — {{title}}',
@@ -51,6 +59,20 @@ export const curriculum = {
     removeBlocked: 'في هذا المستوى دروس لها تقدّم لدى طلاب؛ انقلها إلى مستوى آخر قبل حذفه.',
     empty: 'لا دروس في هذا المستوى بعد.',
     maxReached: 'بلغ المنهج الحد الأقصى ({{max}} مستوى)',
+    publish: 'نشر المستوى',
+    allPublished: 'كل دروس هذا المستوى منشورة',
+    // D-R145: the level opens N days after the learner's class starts (the academy's days); empty = at once.
+    releaseAfterDays: 'يُفتح بعد … يوماً من بدء الفصل',
+    releasePlaceholder: 'فوراً',
+    releaseHint: 'فارغ = يُفتح فوراً. يُحسب من يوم بدء فصل الطالب بتوقيت الأكاديمية؛ قبل ذلك تظهر دروسه مقفلة. فصل بلا تاريخ بدء يفتحه فوراً.',
+    releaseOnStart: 'يُفتح مع بدء الفصل',
+    // `count` ≥ 1 (0 is releaseOnStart).
+    releaseTag: 'يُفتح بعد {{count}} يوم من بدء الفصل',
+    releaseTag_one: 'يُفتح بعد يوم من بدء الفصل',
+    releaseTag_two: 'يُفتح بعد يومين من بدء الفصل',
+    releaseTag_few: 'يُفتح بعد {{count}} أيام من بدء الفصل',
+    releaseTag_many: 'يُفتح بعد {{count}} يوماً من بدء الفصل',
+    releaseTag_other: 'يُفتح بعد {{count}} يوم من بدء الفصل',
   },
   loose: {
     title: 'دروس خارج المستويات',
@@ -82,6 +104,14 @@ export const curriculum = {
     progressCount_few: 'تقدّم لدى {{count}} طلاب',
     progressCount_many: 'تقدّم لدى {{count}} طالباً',
     progressCount_other: 'تقدّم لدى {{count}} طالب',
+    // D-R143: the class sessions (MOD-06 lessons, not cancelled, every class) linked to this lesson; shown from 1.
+    sessionCount: '{{count}} حصة',
+    sessionCount_one: 'حصة واحدة',
+    sessionCount_two: 'حصتان',
+    sessionCount_few: '{{count}} حصص',
+    sessionCount_many: '{{count}} حصة',
+    sessionCount_other: '{{count}} حصة',
+    sessionCountTitle: 'حصص الفصول (غير الملغاة) المرتبطة بهذا الدرس',
     optional: 'اختياري',
     unpublished: 'غير منشور',
     refused: 'أُعيد: له تقدّم لدى طلاب',
@@ -106,6 +136,7 @@ export const curriculum = {
     arabicFirst: 'اكتب النص العربي أولاً',
     maxLength: 'الحد الأقصى {{max}} حرفاً',
     minutes: 'عدد صحيح من 1 إلى {{max}}',
+    releaseDays: 'عدد صحيح من 0 إلى {{max}} يوماً، أو اتركه فارغاً ليُفتح فوراً',
   },
   errors: {
     course_not_found: 'الدورة غير موجودة، أو المنهج غير متاح لك.',

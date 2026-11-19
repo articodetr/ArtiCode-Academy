@@ -19,6 +19,7 @@ import { NO_TEACHER } from './lessons.form'
 import { syllabusItemLabel } from './lessons.format'
 import { isClassOpenForLessons } from './lessons.status'
 import { useSyllabusItems } from './useSyllabusItems'
+import type { SyllabusItems } from './useSyllabusItems'
 
 const CLASS_OPTIONS_LIMIT = 20
 
@@ -97,6 +98,8 @@ interface SyllabusItemSelectProps {
   courseId: string | undefined
   /** Edit only: the lesson's current item, kept as an option while the syllabus loads or when it changed. */
   current?: Lesson['syllabusItem']
+  /** The course's syllabus when the caller reads it itself (the creation form, for its suggestion — LRN-T06): no second request. */
+  syllabus?: SyllabusItems
   value?: string
   onChange?: (value: string | undefined) => void
   disabled?: boolean
@@ -104,10 +107,12 @@ interface SyllabusItemSelectProps {
   'aria-label'?: string
 }
 
-export function SyllabusItemSelect({ courseId, current, value, onChange, disabled, id, ...rest }: SyllabusItemSelectProps) {
+export function SyllabusItemSelect({ courseId, current, syllabus, value, onChange, disabled, id, ...rest }: SyllabusItemSelectProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const { items, loading, error } = useSyllabusItems(courseId)
+  // Reads the syllabus itself only when the caller did not hand it over.
+  const own = useSyllabusItems(syllabus ? undefined : courseId)
+  const { items, loading, error } = syllabus ?? own
   const options = items.map((item) => ({ value: item.id, label: syllabusItemLabel(item, language) }))
   if (current && !items.some((item) => item.id === current.id)) options.unshift({ value: current.id, label: syllabusItemLabel(current, language) })
   const placeholder = error ? t('lessons.syllabus.loadFailed') : courseId && !loading && items.length === 0 ? t('lessons.syllabus.empty') : t('lessons.syllabus.placeholder')

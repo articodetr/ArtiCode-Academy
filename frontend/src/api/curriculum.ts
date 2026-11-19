@@ -19,6 +19,8 @@ export const CURRICULUM_SECTIONS_MAX = 50
 export const CURRICULUM_ITEMS_MAX = 200
 export const LESSON_MINUTES_MAX = 1440
 export const LESSON_RESOURCES_MAX = 20
+/** A level opens at most a year after its class starts (D-R145 — the CHECK 0..365 of `course_sections.release_after_days`). */
+export const RELEASE_AFTER_DAYS_MAX = 365
 /** A title or description in one language (LocalizedTextDto). */
 export const CURRICULUM_TEXT_MAX = 200
 
@@ -53,6 +55,8 @@ export interface CurriculumItem {
   durationSeconds: number | null
   /** Learners with progress on it: such a lesson cannot be deleted, only unpublished (D-R135). */
   progressCount: number
+  /** The class sessions that cover it: the non-cancelled MOD-06 lessons of every class of the course linked to it (LRN-T06, D-R143). */
+  sessionCount: number
   updatedAt: string
 }
 
@@ -64,6 +68,11 @@ export interface CurriculumSection {
   sortOrder: number
   title: LocalizedLabel | null
   description: LocalizedLabel | null
+  /**
+   * D-R145: for a learner the level opens this many days after their class's start day (the academy's days); null =
+   * at once. A class without a start day opens it at once too.
+   */
+  releaseAfterDays: number | null
   items: CurriculumItem[]
 }
 
@@ -88,11 +97,13 @@ export interface CurriculumItemInput {
   isPublished: boolean
 }
 
-/** One level of the PUT body: no `id` = a new level; absent title/description = none. */
+/** One level of the PUT body: no `id` = a new level; absent title/description = none, absent `releaseAfterDays` = open at once. */
 export interface CurriculumSectionInput {
   id?: string
   title?: LocalizedLabel | null
   description?: LocalizedLabel | null
+  /** An integer 0..365 (a raw JSON number) — the days after the class's start day (D-R145); null or absent = open at once. */
+  releaseAfterDays?: number | null
   items: CurriculumItemInput[]
 }
 

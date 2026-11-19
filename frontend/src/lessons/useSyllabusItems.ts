@@ -12,7 +12,14 @@ interface SyllabusState {
   error: boolean
 }
 
-export function useSyllabusItems(courseId: string | undefined): { items: SyllabusItem[]; loading: boolean; error: boolean } {
+/** The syllabus of a course as the lesson forms read it (also handed to SyllabusItemSelect by a caller that reads it itself). */
+export interface SyllabusItems {
+  items: SyllabusItem[]
+  loading: boolean
+  error: boolean
+}
+
+export function useSyllabusItems(courseId: string | undefined): SyllabusItems {
   const [state, setState] = useState<SyllabusState>({ courseId: undefined, items: [], error: false })
 
   useEffect(() => {

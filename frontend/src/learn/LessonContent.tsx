@@ -44,9 +44,12 @@ function Unavailable() {
 export interface LessonContentProps {
   item: LearningItem
   onPlayback: (result: PlaybackResult) => void
+  /** False in the author's preview: a medium plays, nothing is saved (D-R144). */
+  trackPlayback?: boolean
 }
 
-export function LessonContent({ item, onPlayback }: LessonContentProps) {
+export function LessonContent({ item, onPlayback, trackPlayback = true }: LessonContentProps) {
+  const tracked = trackPlayback && item.completionMode === 'playback'
   const { language } = useLocalized()
   const content: unknown = item.content
   const title = localizedLabel(item.title, language)
@@ -65,7 +68,7 @@ export function LessonContent({ item, onPlayback }: LessonContentProps) {
       return text.trim() ? <PlainText text={text} className="learn-text--lesson" /> : <Unavailable />
     }
     case 'video':
-      return <VideoView item={item} content={content as unknown as VideoContent} title={title} onPlayback={onPlayback} />
+      return <VideoView item={item} content={content as unknown as VideoContent} title={title} tracked={tracked} onPlayback={onPlayback} />
     case 'audio': {
       const audio = content as unknown as AudioContent
       if (!isHttpsUrl(audio.url)) return <Unavailable />
@@ -75,7 +78,7 @@ export function LessonContent({ item, onPlayback }: LessonContentProps) {
           itemId={item.id}
           src={audio.url}
           title={title}
-          tracked={item.completionMode === 'playback'}
+          tracked={tracked}
           startPosition={item.progress.positionSeconds}
           onSaved={onPlayback}
         />
@@ -92,7 +95,19 @@ export function LessonContent({ item, onPlayback }: LessonContentProps) {
   }
 }
 
-function VideoView({ item, content, title, onPlayback }: { item: LearningItem; content: VideoContent; title: string; onPlayback: (result: PlaybackResult) => void }) {
+function VideoView({
+  item,
+  content,
+  title,
+  tracked,
+  onPlayback,
+}: {
+  item: LearningItem
+  content: VideoContent
+  title: string
+  tracked: boolean
+  onPlayback: (result: PlaybackResult) => void
+}) {
   const { t } = useTranslation()
   if (content.provider === 'file') {
     if (!isHttpsUrl(content.url)) return <Unavailable />
@@ -103,7 +118,7 @@ function VideoView({ item, content, title, onPlayback }: { item: LearningItem; c
         src={content.url}
         title={title}
         captions={Array.isArray(content.captions) ? content.captions : []}
-        tracked={item.completionMode === 'playback'}
+        tracked={tracked}
         startPosition={item.progress.positionSeconds}
         onSaved={onPlayback}
       />

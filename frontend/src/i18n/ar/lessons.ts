@@ -90,6 +90,8 @@ export const lessons = {
     placeholder: 'بلا بند',
     loadFailed: 'تعذّر تحميل منهج الدورة',
     empty: 'لا بنود في منهج الدورة',
+    // LRN-T06 (D-R143): the first lesson of the curriculum no session of the class covers yet, preselected.
+    suggested: 'اقتراح: الدرس التالي في المنهج',
   },
   validation: {
     classRequired: 'اختر الفصل',

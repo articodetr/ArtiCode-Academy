@@ -44,7 +44,10 @@ export function RequestCard({ request, busy, onCancel, action }: RequestCardProp
   ]
   if (request.requestedAt) items.push({ key: 'requestedAt', label: t('myCourses.requests.requestedAt'), children: formatDateTime(request.requestedAt, language) })
   if (request.decidedAt) items.push({ key: 'decidedAt', label: t('myCourses.requests.decidedAt'), children: formatDateTime(request.decidedAt, language) })
-  if (payment.required) {
+  // A closed request (rejected, cancelled, withdrawn) has no payment to make: its cancelled invoices are listed below with
+  // their status, never «no invoice issued» and totals of 0.00 (MOD-19 acceptance, 2026-11-19).
+  const closed = request.state === 'rejected' || request.state === 'cancelled' || request.state === 'withdrawn'
+  if (payment.required && !closed) {
     items.push({ key: 'payment', label: t('myCourses.requests.payment'), children: <Tag>{t(`myCourses.paymentStates.${payment.state}`)}</Tag> })
     items.push({ key: 'total', label: t('myCourses.requests.total'), children: money(payment.total) })
     items.push({ key: 'paid', label: t('myCourses.requests.paid'), children: money(payment.paid) })

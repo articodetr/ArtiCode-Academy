@@ -105,7 +105,7 @@ export const catalog = {
     enrolledContent: 'صار تسجيلك في فصل «{{className}}» مفعّلاً.',
     requestedTitle: 'أُرسل طلب الاشتراك',
     requestedContent: 'صدرت الفاتورة {{number}} بمبلغ {{total}}. سدّد الرسوم لدى الأكاديمية، ثم يُفعَّل الاشتراك بعد تأكيد الدفع وموافقة الإدارة.',
-    myCourses: 'دوراتي',
+    myCourses: 'مدرستي',
     myLessons: 'دروسي',
     invoices: 'فواتيري',
   },

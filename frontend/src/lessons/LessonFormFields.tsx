@@ -13,7 +13,9 @@
 // form; `onRoomChange` hands it the picker's item, whose RoomDto `timeZone`
 // names that zone without another request). A line above the day names the
 // zone, with this device's when they differ, and follows the room as it
-// changes.
+// changes. On creation the caller may hand over the course's syllabus it read
+// itself and a hint under the syllabus item — the next curriculum lesson it
+// suggested (LRN-T06, D-R143).
 import { Alert, Col, Form, Input, Row, Select, Typography } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -30,6 +32,7 @@ import { LessonClassPicker, LessonTeacherSelect, SyllabusItemSelect } from './Le
 import { isMeetingUrlValid } from './lessons.form'
 import { NEXT_DAY_MARK, differsFromDevice, durationMinutes, formatLessonDay, nextDayRangeOf, rangeOf, rangeProblem } from './lessons.format'
 import type { LessonZone } from './lessons.format'
+import type { SyllabusItems } from './useSyllabusItems'
 
 interface LessonFormFieldsProps {
   form: FormInstance
@@ -47,9 +50,13 @@ interface LessonFormFieldsProps {
   timingLocked?: boolean
   /** Create only: the chosen class changed (the teacher and syllabus fields are reset by the caller). */
   onClassChange?: (klass: AcademyClass | undefined) => void
+  /** Create only: the course's syllabus the caller read itself (for its suggestion), so the select asks nothing more. */
+  syllabus?: SyllabusItems
+  /** Create only: a line under the syllabus item — «the next lesson of the curriculum» while the suggestion is chosen (LRN-T06). */
+  syllabusHint?: string
 }
 
-export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson, timingLocked = false, onClassChange }: LessonFormFieldsProps) {
+export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson, timingLocked = false, onClassChange, syllabus, syllabusHint }: LessonFormFieldsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   // GET /api/classes(/:id) needs classes.read at the controller: without it the class list and the class's teachers stay unknown.
@@ -193,8 +200,8 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
           </Form.Item>
         </Col>
         <Col xs={24} md={12}>
-          <Form.Item name="syllabusItemId" label={t('lessons.fields.syllabusItem')}>
-            <SyllabusItemSelect courseId={courseId} current={lesson?.syllabusItem} />
+          <Form.Item name="syllabusItemId" label={t('lessons.fields.syllabusItem')} extra={syllabusHint}>
+            <SyllabusItemSelect courseId={courseId} current={lesson?.syllabusItem} syllabus={syllabus} />
           </Form.Item>
         </Col>
       </Row>

@@ -2,12 +2,13 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Academy } from '../api/academy'
+import type { Lesson } from '../api/lessons'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
 import { CLASS_ID, TEACHER_IDS, makeClass, makeClassList, makeClassTeacher } from '../test/classes'
 import { SYLLABUS_ITEM_IDS, makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
-import { FAR_TIME_ZONE, LESSON_ADMIN_PERMISSIONS, LESSON_TIME_ZONE, makeLesson } from '../test/lessons'
+import { FAR_TIME_ZONE, LESSON_ADMIN_PERMISSIONS, LESSON_TIME_ZONE, makeLesson, makeLessonList } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { BRANCH_ID, ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
 import { zonedInstant } from '../timetable/timetable.dates'
@@ -31,14 +32,22 @@ const farRoom = makeRoom({ id: 'room-far', code: 'FAR-1', name: { ar: 'قاعة 
 
 /**
  * Serves the academy (API-035 — the zone the times are read in, makeAcademy()'s Asia/Riyadh by default), the class
- * picker (an open and a completed class), the rooms, the syllabus and POST /api/classes/:id/lessons.
+ * picker (an open and a completed class), the rooms, the syllabus and POST /api/classes/:id/lessons — and, given
+ * `lessonPages`, the class's sessions (API-093 with `classId`, one page per cursor: '' then 'p2', 'p3' …) for the
+ * next-curriculum-lesson suggestion (LRN-T06); without them that read is a 404 and nothing is suggested.
  */
-function mockCreateApi(createResponse: Response = jsonResponse(201, makeLesson({ id: 'new-1' })), academy: Academy | Response = makeAcademy()) {
+function mockCreateApi(createResponse: Response = jsonResponse(201, makeLesson({ id: 'new-1' })), academy: Academy | Response = makeAcademy(), lessonPages?: Lesson[][], lessonReads: string[] = []) {
   const posts: unknown[] = []
   mockFetch((url, init) => {
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
     if (parsed.pathname === '/api/academy') return academy instanceof Response ? academy : jsonResponse(200, academy)
+    if (parsed.pathname === '/api/lessons' && method === 'GET' && lessonPages) {
+      lessonReads.push(`${parsed.pathname}${parsed.search}`)
+      const cursor = parsed.searchParams.get('cursor')
+      const index = cursor ? Number(cursor.slice(1)) - 1 : 0
+      return jsonResponse(200, makeLessonList(lessonPages[index] ?? [], index + 1 < lessonPages.length ? `p${index + 2}` : null))
+    }
     if (parsed.pathname === '/api/classes') return jsonResponse(200, makeClassList([twoTeachers, makeClass({ id: 'closed-1', code: 'OLD-A', name: { ar: 'فصل قديم' }, status: 'completed' })]))
     if (parsed.pathname === '/api/rooms') return jsonResponse(200, makeRoomList([makeRoom(), berlinRoom, farRoom]))
     if (parsed.pathname.endsWith('/syllabus')) return jsonResponse(200, makeSyllabus())
@@ -95,6 +104,15 @@ function clearRoom(dialog: HTMLElement) {
 
 const zoneHintOf = (dialog: HTMLElement) => within(dialog).getByTestId('lesson-zone-hint')
 
+/** The syllabus item select's box (its chosen label shows inside it). */
+const syllabusBox = (dialog: HTMLElement) => within(dialog).getByLabelText(ar.lessons.fields.syllabusItem).closest('.ant-select') as HTMLElement
+
+/** Sessions of the class: one covering «المتغيرات», a cancelled one on «الشروط» (it covers nothing), one without a syllabus item. */
+const sessionPages = (): Lesson[][] => [
+  [makeLesson({ id: 'l-1' }), makeLesson({ id: 'l-2', status: 'cancelled', syllabusItem: { id: SYLLABUS_ITEM_IDS[1], sortOrder: 1, title: { ar: 'الشروط' } } })],
+  [makeLesson({ id: 'l-3', syllabusItem: null })],
+]
+
 describe('CreateLessonModal', () => {
   it('offers a completed class disabled, and once a class is chosen its teachers (lead first, then «no teacher») and its syllabus items', async () => {
     mockCreateApi()
@@ -116,6 +134,63 @@ describe('CreateLessonModal', () => {
 
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.syllabusItem))
     expect(await screen.findByText('2. الشروط', { selector: '.ant-select-item-option-content' })).toBeInTheDocument()
+  })
+
+  it('LRN-T06 — preselects the first curriculum lesson no session of the class covers yet (a cancelled one covers nothing) with its hint, and sends it (D-R143)', async () => {
+    const reads: string[] = []
+    const posts = mockCreateApi(undefined, undefined, sessionPages(), reads)
+    const { dialog } = await renderOpen()
+    expect(within(dialog).queryByText(ar.lessons.syllabus.suggested)).not.toBeInTheDocument()
+    await chooseClass(dialog)
+
+    await waitFor(() => expect(syllabusBox(dialog)).toHaveTextContent('2. الشروط'))
+    expect(within(dialog).getByText(ar.lessons.syllabus.suggested)).toBeInTheDocument()
+    // Every page of the class's sessions, through the API-093 class filter.
+    expect(reads).toEqual([`/api/lessons?classId=${CLASS_ID}&order=asc&limit=100`, `/api/lessons?classId=${CLASS_ID}&order=asc&limit=100&cursor=p2`])
+
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'الشروط')
+    fillTimes(dialog, '2026-11-12', '10:00', '11:00')
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0]).toMatchObject({ syllabusItemId: SYLLABUS_ITEM_IDS[1] })
+  })
+
+  it('LRN-T06 — the suggestion is the user’s to change or clear: another item, or none, is sent as chosen and never replaced', async () => {
+    const posts = mockCreateApi(undefined, undefined, sessionPages())
+    const { dialog } = await renderOpen()
+    await chooseClass(dialog)
+    await waitFor(() => expect(syllabusBox(dialog)).toHaveTextContent('2. الشروط'))
+
+    // Another lesson of the curriculum: the hint goes, the choice stays.
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.syllabusItem))
+    fireEvent.click(await screen.findByText('3. الحلقات', { selector: '.ant-select-item-option-content' }))
+    await waitFor(() => expect(syllabusBox(dialog)).toHaveTextContent('3. الحلقات'))
+    expect(within(dialog).queryByText(ar.lessons.syllabus.suggested)).not.toBeInTheDocument()
+
+    // Cleared: no syllabus item, and the suggestion does not come back.
+    fireEvent.click(syllabusBox(dialog).querySelector('.ant-select-clear')!)
+    await waitFor(() => expect(syllabusBox(dialog)).not.toHaveTextContent('3. الحلقات'))
+    expect(syllabusBox(dialog)).not.toHaveTextContent('2. الشروط')
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'درس حر')
+    fillTimes(dialog, '2026-11-12', '10:00', '11:00')
+    expect(syllabusBox(dialog)).not.toHaveTextContent('2. الشروط')
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0]).not.toHaveProperty('syllabusItemId')
+  })
+
+  it('LRN-T06 — suggests nothing once every curriculum lesson has a session of the class', async () => {
+    const reads: string[] = []
+    const covering = [0, 1, 2].map((index) => makeLesson({ id: `l-${index}`, syllabusItem: { id: SYLLABUS_ITEM_IDS[index]!, sortOrder: index, title: { ar: 'درس' } } }))
+    mockCreateApi(undefined, undefined, [covering], reads)
+    const { dialog } = await renderOpen()
+    await chooseClass(dialog)
+    await waitFor(() => expect(reads).toHaveLength(1))
+    // The select still offers the curriculum; nothing is chosen for the user.
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.syllabusItem))
+    expect(await screen.findByText('1. المتغيرات', { selector: '.ant-select-item-option-content' })).toBeInTheDocument()
+    expect(syllabusBox(dialog)).not.toHaveTextContent(/\d\. /)
+    expect(within(dialog).queryByText(ar.lessons.syllabus.suggested)).not.toBeInTheDocument()
   })
 
   it('refuses locally an end time equal to the start, a lesson longer than 12 hours and an http meeting link, before any request', async () => {

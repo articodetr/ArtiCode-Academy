@@ -7,7 +7,7 @@ import { ar } from '../i18n/ar'
 import { dayEndInstant, dayStartInstant, formatLessonDay, formatLessonTimes, rangeOf, todayIn } from '../lessons/lessons.format'
 import { makeAcademy } from '../test/academy'
 import { CLASS_ID, makeClass, makeClassList, makeTeacherCandidate } from '../test/classes'
-import { makeSyllabus } from '../test/courses'
+import { SYLLABUS_ITEM_IDS, makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
 import {
   FAR_TIME_ZONE,
@@ -270,19 +270,23 @@ describe('LessonsPage', () => {
     const dialog = (await screen.findByText(ar.lessons.create.title)).closest('[role="dialog"]') as HTMLElement
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.class))
     fireEvent.click(await screen.findByText('PY-101-A — بايثون — الفصل أ', { selector: '.ant-select-item-option-content' }))
+    // LRN-T06 (D-R143): the listed session covers «المتغيرات», so the next curriculum lesson «الشروط» is preselected.
+    expect(await within(dialog).findByText(ar.lessons.syllabus.suggested)).toBeInTheDocument()
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), ' الدوال ')
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.date), { target: { value: '2026-11-12' } })
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: '09:00' } })
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.endTime), { target: { value: '10:30' } })
-    const before = api.queries.length
+    // The list's own reads (the suggestion reads the class's sessions with a classId).
+    const listReads = () => api.queries.filter((query) => !query.has('classId')).length
+    const before = listReads()
     fireEvent.click(within(dialog).getByText(ar.lessons.create.submit).closest('button')!)
 
     // Typed in the academy's zone (Asia/Riyadh): 09:00 is 06:00 UTC.
     const range = rangeOf('2026-11-12', '09:00', '10:30', LESSON_TIME_ZONE)!
     expect(range).toMatchObject({ startsAt: '2026-11-12T06:00:00.000Z', endsAt: '2026-11-12T07:30:00.000Z' })
-    await waitFor(() => expect(api.posts).toEqual([{ url: `/api/classes/${CLASS_ID}/lessons`, body: { title: { ar: 'الدوال' }, deliveryMode: 'in_person', startsAt: range.startsAt, endsAt: range.endsAt } }]))
+    await waitFor(() => expect(api.posts).toEqual([{ url: `/api/classes/${CLASS_ID}/lessons`, body: { title: { ar: 'الدوال' }, deliveryMode: 'in_person', startsAt: range.startsAt, endsAt: range.endsAt, syllabusItemId: SYLLABUS_ITEM_IDS[1] } }]))
     expect(await screen.findByText('تم إنشاء الدرس «الدوال»')).toBeInTheDocument()
-    await waitFor(() => expect(api.queries.length).toBeGreaterThan(before))
+    await waitFor(() => expect(listReads()).toBeGreaterThan(before))
     // The drawer opens on the created lesson.
     expect(await screen.findByText(ar.lessons.fields.origin)).toBeInTheDocument()
   })

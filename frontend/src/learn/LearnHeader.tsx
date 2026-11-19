@@ -2,7 +2,8 @@
 // (small), the way back to «مدرستي», the language, on a narrow screen the
 // button that opens the curriculum drawer, the breadcrumb مدرستي › course ›
 // level › lesson, and the course progress as the server computed it (D-R135 —
-// a bar with the percent and «n من m» of the required lessons).
+// a bar with the percent and «n من m» of the required lessons). The author's
+// preview (D-R144) names its own way back (`home`) and shows no progress.
 import { ArrowLeftOutlined, ArrowRightOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { Breadcrumb, Button } from 'antd'
 import { useState } from 'react'
@@ -60,7 +61,16 @@ export function CourseProgressBar({ progress }: { progress: ProgressCounts }) {
   )
 }
 
+/** Where the header leads back to: the first breadcrumb entry and the back link. */
+export interface LearnHome {
+  to: string
+  crumb: string
+  back: string
+}
+
 export interface LearnHeaderProps {
+  /** «مدرستي» (/my-school) by default. */
+  home?: LearnHome
   /** Breadcrumb entries after «مدرستي» (course, level, lesson) — only those known. */
   trail?: readonly string[]
   progress?: ProgressCounts | null
@@ -70,21 +80,22 @@ export interface LearnHeaderProps {
   children?: ReactNode
 }
 
-export function LearnHeader({ trail = [], progress = null, onOpenContents, children }: LearnHeaderProps) {
+export function LearnHeader({ home, trail = [], progress = null, onOpenContents, children }: LearnHeaderProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const rtl = language === 'ar'
+  const way = home ?? { to: '/my-school', crumb: t('learn.header.mySchool'), back: t('learn.header.backToMySchool') }
   const items = [
-    { key: 'school', title: <Link to="/my-school">{t('learn.header.mySchool')}</Link> },
+    { key: 'school', title: <Link to={way.to}>{way.crumb}</Link> },
     ...trail.map((entry, index) => ({ key: `trail-${index}`, title: <bdi dir="auto">{entry}</bdi> })),
   ]
   return (
     <header className="learn-header">
       <div className="learn-header__row">
         <LearnBrand />
-        <Link className="learn-header__back" to="/my-school">
+        <Link className="learn-header__back" to={way.to}>
           {rtl ? <ArrowRightOutlined aria-hidden /> : <ArrowLeftOutlined aria-hidden />}
-          <span>{t('learn.header.backToMySchool')}</span>
+          <span>{way.back}</span>
         </Link>
         <span className="learn-header__spacer" />
         {onOpenContents ? (

@@ -1,8 +1,9 @@
 // MOD-20 — the curriculum editor's pure rules: the draft of API-226, its edits, the API-227 body, the dirty check,
-// the local checks and the lessons put back after a 409 lesson_has_progress.
+// the local checks and the lessons put back after a 409 lesson_has_progress; LRN-T06 (TEST-264): a new lesson is a
+// draft (D-R144), «publish level» / «publish all» switch the draft only, a level's releaseAfterDays (D-R145).
 import { describe, expect, it } from 'vitest'
 import { ITEM_IDS, SECTION_IDS, makeCurriculum } from '../test/curriculum'
-import { arabicOrdinal, formatMediaDuration } from './curriculum.format'
+import { arabicOrdinal, formatMediaDuration, previewPath } from './curriculum.format'
 import {
   CURRICULUM_PROBLEM,
   LOOSE_GROUP,
@@ -19,9 +20,12 @@ import {
   moveLevel,
   planCurriculumSave,
   problemKey,
+  publishAll,
+  publishLevel,
   removeLesson,
   removeLevel,
   restoreLessons,
+  unpublishedCount,
   updateLesson,
   updateLevel,
   withItem,
@@ -70,7 +74,8 @@ describe('curriculum plan (MOD-20)', () => {
     draft = updateLevel(draft, 'new-l', { titleAr: 'المتقدم' })
     expect(groupOfLesson(draft, 'new-x')).toBe('new-l')
     const body = planCurriculumSave(saved, draft)!
-    expect(body.sections[2]).toEqual({ title: { ar: 'المتقدم' }, items: [{ title: { ar: 'درس جديد' }, estimatedMinutes: 30, isRequired: true, isPublished: true }] })
+    // A new lesson is an unpublished draft (D-R144); a new level opens at once (no releaseAfterDays in the body).
+    expect(body.sections[2]).toEqual({ title: { ar: 'المتقدم' }, items: [{ title: { ar: 'درس جديد' }, estimatedMinutes: 30, isRequired: true, isPublished: false }] })
     expect(curriculumHasChanges(saved, draft)).toBe(true)
 
     draft = removeLevel(draft, 'new-l')
@@ -157,6 +162,71 @@ describe('curriculum plan (MOD-20)', () => {
     expect(planCurriculumSave(updated, curriculumDraftOf(saved))).toBeNull()
   })
 
+  it('LRN-T06 — publishes one level or every lesson in the draft only, and changes nothing when all are published already (D-R144)', () => {
+    const saved = makeCurriculum()
+    let draft = addLesson(curriculumDraftOf(saved), SECTION_IDS[1], 'new-p')
+    draft = updateLesson(draft, 'new-p', { titleAr: 'درس مسودة' })
+    // The stored «مراجعة» (outside the levels) and the new lesson are unpublished.
+    expect(unpublishedCount(draft)).toBe(2)
+    expect(unpublishedCount(draft, SECTION_IDS[0])).toBe(0)
+    expect(unpublishedCount(draft, SECTION_IDS[1])).toBe(1)
+    expect(publishLevel(draft, SECTION_IDS[0])).toBe(draft)
+
+    const level = publishLevel(draft, SECTION_IDS[1])
+    expect(unpublishedCount(level, SECTION_IDS[1])).toBe(0)
+    // Only that level: the lesson outside the levels stays a draft.
+    expect(unpublishedCount(level)).toBe(1)
+    const body = planCurriculumSave(saved, level)!
+    expect(body.sections[1]!.items).toEqual([
+      { id: ITEM_IDS[2], title: { ar: 'الحلقات', en: 'Loops', tr: 'Döngüler' }, isRequired: true, isPublished: true },
+      { title: { ar: 'درس مسودة' }, isRequired: true, isPublished: true },
+    ])
+    expect(body.looseItems).toEqual([{ id: ITEM_IDS[3], title: { ar: 'مراجعة' }, isRequired: false, isPublished: false }])
+
+    const all = publishAll(draft)
+    expect(unpublishedCount(all)).toBe(0)
+    expect(publishAll(all)).toBe(all)
+    expect(planCurriculumSave(saved, all)!.looseItems).toEqual([{ id: ITEM_IDS[3], title: { ar: 'مراجعة' }, isRequired: false, isPublished: true }])
+    // Publishing a stored lesson and switching it back is no change.
+    const back = updateLesson(publishAll(curriculumDraftOf(saved)), ITEM_IDS[3], { isPublished: false })
+    expect(planCurriculumSave(saved, back)).toBeNull()
+    expect(curriculumHasChanges(saved, back)).toBe(false)
+  })
+
+  it('LRN-T06 — carries a level’s releaseAfterDays: read from the server, sent when set, part of the dirty check, checked 0..365 (D-R145)', () => {
+    const saved = makeCurriculum({
+      sections: [makeCurriculum().sections[0]!, { ...makeCurriculum().sections[1]!, releaseAfterDays: 14 }],
+    })
+    const draft = curriculumDraftOf(saved)
+    expect(draft.levels.map((level) => level.releaseAfterDays)).toEqual([null, 14])
+    expect(planCurriculumSave(saved, draft)).toBeNull()
+    // Sent when set; absent when the level opens at once (absent = null on the server).
+    const built = buildCurriculumInput(draft, saved)
+    expect(built.sections[0]).not.toHaveProperty('releaseAfterDays')
+    expect(built.sections[1]).toEqual({ id: SECTION_IDS[1], releaseAfterDays: 14, items: [{ id: ITEM_IDS[2], title: { ar: 'الحلقات', en: 'Loops', tr: 'Döngüler' }, isRequired: true, isPublished: true }] })
+
+    // A changed value is a change; 0 (on the class's start day) differs from null (at once).
+    const opened = updateLevel(draft, SECTION_IDS[0], { releaseAfterDays: 0 })
+    expect(curriculumHasChanges(saved, opened)).toBe(true)
+    expect(planCurriculumSave(saved, opened)!.sections[0]).toMatchObject({ id: SECTION_IDS[0], releaseAfterDays: 0 })
+    const cleared = updateLevel(draft, SECTION_IDS[1], { releaseAfterDays: null })
+    expect(planCurriculumSave(saved, cleared)!.sections[1]).not.toHaveProperty('releaseAfterDays')
+    // Changed back: nothing to send.
+    expect(planCurriculumSave(saved, updateLevel(cleared, SECTION_IDS[1], { releaseAfterDays: 14 }))).toBeNull()
+    // A new level carries its value too.
+    const added = updateLevel(addLevel(draft, 'new-r'), 'new-r', { releaseAfterDays: 30 })
+    expect(planCurriculumSave(saved, added)!.sections[2]).toEqual({ releaseAfterDays: 30, items: [] })
+
+    // The server's rule: a whole number 0..365.
+    for (const days of [-1, 366, 2.5]) {
+      expect(curriculumProblems(updateLevel(draft, SECTION_IDS[0], { releaseAfterDays: days })).get(problemKey(SECTION_IDS[0], 'releaseAfterDays'))).toEqual({
+        key: 'curriculum.validation.releaseDays',
+        params: { max: 365 },
+      })
+    }
+    for (const days of [0, 365, null]) expect(curriculumProblems(updateLevel(draft, SECTION_IDS[0], { releaseAfterDays: days })).size).toBe(0)
+  })
+
   it('names the levels with Arabic ordinals and formats media lengths', () => {
     expect([1, 2, 3, 10, 11, 12, 19, 20, 21, 22, 35, 50, 99, 100].map(arabicOrdinal)).toEqual([
       'الأول',
@@ -175,5 +245,6 @@ describe('curriculum plan (MOD-20)', () => {
       '100',
     ])
     expect([0, 59, 125, 3600, 3725].map(formatMediaDuration)).toEqual(['0:00', '0:59', '2:05', '1:00:00', '1:02:05'])
+    expect(previewPath('c/1')).toBe('/learn/c%2F1/preview')
   })
 })

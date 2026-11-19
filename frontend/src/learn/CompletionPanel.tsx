@@ -4,7 +4,8 @@
 // measured medium by playing the academy's share of it (the watched share is
 // the server's — API-231, then each API-233 answer), a live lesson by
 // attending a session that covers it. A completed lesson stays completed when
-// the learner comes back to review it.
+// the learner comes back to review it. In the author's preview (D-R144)
+// nothing is recorded: the button shows disabled, with the reason beside it.
 import { CheckCircleFilled } from '@ant-design/icons'
 import { Alert, Button } from 'antd'
 import { useState } from 'react'
@@ -18,9 +19,11 @@ export interface CompletionPanelProps {
   item: LearningItem
   /** Sends API-234 and applies its answer; rejects with the server's refusal. */
   onComplete: (itemId: string) => Promise<void>
+  /** The author's preview: the button is disabled and API-234 is never sent. */
+  preview?: boolean
 }
 
-export function CompletionPanel({ item, onComplete }: CompletionPanelProps) {
+export function CompletionPanel({ item, onComplete, preview = false }: CompletionPanelProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const [busy, setBusy] = useState(false)
@@ -29,7 +32,7 @@ export function CompletionPanel({ item, onComplete }: CompletionPanelProps) {
   const completed = progress.state === 'completed'
 
   const complete = async () => {
-    if (busy) return
+    if (busy || preview) return
     setBusy(true)
     setFailure(null)
     try {
@@ -63,10 +66,11 @@ export function CompletionPanel({ item, onComplete }: CompletionPanelProps) {
         <p className="learn-muted learn-completion__watched">{t('learn.completion.watched', { percent: progress.watchedPercent })}</p>
       ) : null}
       {item.completionMode === 'manual' && !completed ? (
-        <Button type="primary" loading={busy} onClick={() => void complete()}>
+        <Button type="primary" loading={busy} disabled={preview} onClick={() => void complete()}>
           {t('learn.completion.markComplete')}
         </Button>
       ) : null}
+      {preview ? <p className="learn-muted learn-completion__preview">{t('learn.preview.completionHint')}</p> : null}
       {failure ? <Alert className="learn-completion__error" type="error" showIcon title={t(failure)} /> : null}
     </section>
   )

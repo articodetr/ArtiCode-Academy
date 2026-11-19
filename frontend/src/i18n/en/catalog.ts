@@ -103,7 +103,7 @@ export const catalog: typeof arCatalog = {
     enrolledContent: 'Your enrollment in the class “{{className}}” is active.',
     requestedTitle: 'Enrollment request sent',
     requestedContent: 'Invoice {{number}} was issued for {{total}}. Pay the fees at the academy; the enrollment becomes active once the payment is confirmed and the office approves it.',
-    myCourses: 'My courses',
+    myCourses: 'My School',
     myLessons: 'My lessons',
     invoices: 'My invoices',
   },

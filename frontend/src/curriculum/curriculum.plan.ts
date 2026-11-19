@@ -5,9 +5,13 @@
 // level or lesson with an `id` is kept, without one it is created, a missing
 // one is deleted; positions are the order of the body. An existing level or
 // lesson keeps a Turkish text the editor does not show. The unchanged
-// structure is never sent: the server would write nothing anyway.
+// structure is never sent: the server would write nothing anyway. LRN-T06: a
+// new lesson starts as an unpublished draft (D-R144) — «publish level» and
+// «publish all» only switch the draft's flags, the usual ONE PUT sends them —
+// and a level may open some days after its class starts (`releaseAfterDays`,
+// D-R145), part of the body and of the dirty check like its texts.
 import type { Curriculum, CurriculumInput, CurriculumItem, CurriculumItemInput, CurriculumSection, CurriculumSectionInput } from '../api/curriculum'
-import { CURRICULUM_ITEMS_MAX, CURRICULUM_SECTIONS_MAX, CURRICULUM_TEXT_MAX, LESSON_MINUTES_MAX } from '../api/curriculum'
+import { CURRICULUM_ITEMS_MAX, CURRICULUM_SECTIONS_MAX, CURRICULUM_TEXT_MAX, LESSON_MINUTES_MAX, RELEASE_AFTER_DAYS_MAX } from '../api/curriculum'
 import type { LocalizedLabel } from '../api/users'
 import { englishWithoutArabic, localizedOf, sameLabel } from '../courses/courses.form'
 
@@ -35,6 +39,8 @@ export interface LevelDraft {
   titleEn: string
   descriptionAr: string
   descriptionEn: string
+  /** Days after the class's start day before learners may open the level (D-R145); null = at once. */
+  releaseAfterDays: number | null
   lessons: LessonDraft[]
 }
 
@@ -71,6 +77,7 @@ export function levelDraftOf(section: CurriculumSection): LevelDraft {
     titleEn: section.title?.en ?? '',
     descriptionAr: section.description?.ar ?? '',
     descriptionEn: section.description?.en ?? '',
+    releaseAfterDays: section.releaseAfterDays ?? null,
     lessons: section.items.map(lessonDraftOf),
   }
 }
@@ -100,13 +107,14 @@ export function newDraftKey(): string {
   return `new-${draftSequence}`
 }
 
-/** A new lesson: required and published, as the server's defaults. */
+/** A new lesson: required, and an unpublished draft until its author publishes it (D-R144 — learners never see a lesson half written). */
 export function emptyLessonDraft(key: string): LessonDraft {
-  return { key, titleAr: '', titleEn: '', descriptionAr: '', descriptionEn: '', estimatedMinutes: null, isRequired: true, isPublished: true }
+  return { key, titleAr: '', titleEn: '', descriptionAr: '', descriptionEn: '', estimatedMinutes: null, isRequired: true, isPublished: false }
 }
 
+/** A new level: open at once (no `releaseAfterDays`). */
 export function emptyLevelDraft(key: string): LevelDraft {
-  return { key, titleAr: '', titleEn: '', descriptionAr: '', descriptionEn: '', lessons: [] }
+  return { key, titleAr: '', titleEn: '', descriptionAr: '', descriptionEn: '', releaseAfterDays: null, lessons: [] }
 }
 
 export function lessonCount(draft: CurriculumDraft): number {
@@ -159,6 +167,24 @@ export function updateLesson(draft: CurriculumDraft, lessonKey: string, patch: L
 
 export function removeLesson(draft: CurriculumDraft, lessonKey: string): CurriculumDraft {
   return mapGroups(draft, (lessons) => lessons.filter((lesson) => lesson.key !== lessonKey))
+}
+
+/** The lessons of the draft that are not published yet (a level's, or every lesson when `levelKey` is absent). */
+export function unpublishedCount(draft: CurriculumDraft, levelKey?: string): number {
+  const lessons = levelKey === undefined ? [...draft.levels.flatMap((level) => level.lessons), ...draft.loose] : (draft.levels.find((level) => level.key === levelKey)?.lessons ?? [])
+  return lessons.filter((lesson) => !lesson.isPublished).length
+}
+
+/** «نشر المستوى»: every lesson of the level published — in the draft only, the save sends it (D-R144). */
+export function publishLevel(draft: CurriculumDraft, levelKey: string): CurriculumDraft {
+  if (unpublishedCount(draft, levelKey) === 0) return draft
+  return mapGroups(draft, (lessons, group) => (group === levelKey ? lessons.map((lesson) => (lesson.isPublished ? lesson : { ...lesson, isPublished: true })) : lessons))
+}
+
+/** «نشر الكل»: every lesson of the curriculum published, the ones outside the levels too — in the draft only (D-R144). */
+export function publishAll(draft: CurriculumDraft): CurriculumDraft {
+  if (unpublishedCount(draft) === 0) return draft
+  return mapGroups(draft, (lessons) => lessons.map((lesson) => (lesson.isPublished ? lesson : { ...lesson, isPublished: true })))
 }
 
 /** Up or down inside its own group. */
@@ -223,7 +249,7 @@ function lessonInputOf(draft: LessonDraft, previous: CurriculumItem | undefined)
   return item
 }
 
-/** One level of the body; only a filled title or description travels (absent = none). */
+/** One level of the body; only a filled title or description and a set `releaseAfterDays` travel (absent = none, open at once). */
 function levelInputOf(draft: LevelDraft, previous: CurriculumSection | undefined, items: ReadonlyMap<string, CurriculumItem>): CurriculumSectionInput {
   const level: CurriculumSectionInput = { items: draft.lessons.map((lesson) => lessonInputOf(lesson, lesson.id ? items.get(lesson.id) : undefined)) }
   if (draft.id) level.id = draft.id
@@ -231,6 +257,7 @@ function levelInputOf(draft: LevelDraft, previous: CurriculumSection | undefined
   if (title) level.title = title
   const description = localizedOf(draft.descriptionAr, draft.descriptionEn, previous?.description?.tr)
   if (description) level.description = description
+  if (draft.releaseAfterDays !== null) level.releaseAfterDays = draft.releaseAfterDays
   return level
 }
 
@@ -272,6 +299,7 @@ export function planCurriculumSave(saved: Curriculum, draft: CurriculumDraft): C
         level.id === stored.id &&
         sameLabel(level.title ?? null, stored.title) &&
         sameLabel(level.description ?? null, stored.description) &&
+        (level.releaseAfterDays ?? null) === (stored.releaseAfterDays ?? null) &&
         sameLessons(level.items, stored.items)
       )
     }) &&
@@ -305,7 +333,7 @@ export const problemKey = (draftKey: string, field: string) => `${draftKey}:${fi
 /** The structure-wide problems (`CURRICULUM_PROBLEM`). */
 export const CURRICULUM_PROBLEM = 'curriculum'
 
-/** What the server would refuse, by field — mirrors of the DTO rules (Arabic first, lengths, minutes, the counts). */
+/** What the server would refuse, by field — mirrors of the DTO rules (Arabic first, lengths, minutes, a level's days, the counts). */
 export function curriculumProblems(draft: CurriculumDraft): Map<string, DraftProblem> {
   const problems = new Map<string, DraftProblem>()
   const text = (draftKey: string, field: string, value: string) => {
@@ -329,6 +357,10 @@ export function curriculumProblems(draft: CurriculumDraft): Map<string, DraftPro
   }
   for (const level of draft.levels) {
     checkTexts(level)
+    const days = level.releaseAfterDays
+    if (days !== null && (!Number.isInteger(days) || days < 0 || days > RELEASE_AFTER_DAYS_MAX)) {
+      problems.set(problemKey(level.key, 'releaseAfterDays'), { key: 'curriculum.validation.releaseDays', params: { max: RELEASE_AFTER_DAYS_MAX } })
+    }
     level.lessons.forEach(checkLesson)
   }
   draft.loose.forEach(checkLesson)
