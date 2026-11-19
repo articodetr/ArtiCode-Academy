@@ -1,4 +1,4 @@
-// TEST-246 — MOD-20 «My School» course curriculum for authors (API-226..228;
+// TEST-260 — MOD-20 «My School» course curriculum for authors (API-226..228;
 // roadmap §4q, D-R130..D-R135) and the D-R135 guard of the flat syllabus PUT
 // (API-049), against the live development database. Skipped when no database
 // is reachable. A custom manager role (`courses.read` + `courses.manage`)
@@ -27,7 +27,7 @@ const DATABASE_URL = process.env['DATABASE_URL'] || postgresUrlFromEnv(process.e
 const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`.toUpperCase();
 const PREFIX = `V${RUN}`;
 const PASSWORD = 'Correct-Horse-Battery-9';
-const USER_AGENT = 'TEST-246 supertest';
+const USER_AGENT = 'TEST-260 supertest';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 const YOUTUBE_ID = 'dQw4w9WgXcQ';
 const ITEM_KEYS = [
@@ -116,7 +116,7 @@ async function canConnect(url: string): Promise<boolean> {
 
 const available = DATABASE_URL ? await canConnect(DATABASE_URL) : false;
 
-describe.skipIf(!available)('MOD-20 course curriculum (e2e, TEST-246)', () => {
+describe.skipIf(!available)('MOD-20 course curriculum (e2e, TEST-260)', () => {
   let app: NestExpressApplication;
   let prisma: PrismaClient;
   let passwords: PasswordService;

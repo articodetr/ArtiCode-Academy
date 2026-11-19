@@ -1,4 +1,4 @@
-// TEST-245 — MOD-20 «My School» schema (migration 20261119131517_mod20_learning;
+// TEST-259 — MOD-20 «My School» schema (migration 20261119131517_mod20_learning;
 // roadmap §4q, D-R130..D-R135): the `course_sections` table with its deferred
 // order unique, the new curriculum columns of `course_syllabus_items` (kind,
 // content object, resources array of at most 20, level SetNull) and the
@@ -44,7 +44,7 @@ async function canConnect(url: string): Promise<boolean> {
 
 const available = DATABASE_URL ? await canConnect(DATABASE_URL) : false;
 
-describe.skipIf(!available)('database schema — MOD-20 curriculum and learning progress (e2e, TEST-245)', () => {
+describe.skipIf(!available)('database schema — MOD-20 curriculum and learning progress (e2e, TEST-259)', () => {
   let pool: Pool;
 
   beforeAll(() => {
