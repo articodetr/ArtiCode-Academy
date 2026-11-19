@@ -21,6 +21,9 @@ import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
 import { LevelsModule } from './levels/levels.module.js';
+import { CurriculumModule } from './learning/curriculum.module.js';
+import { LearningReportsModule } from './learning/learning-reports.module.js';
+import { MyLearningModule } from './learning/my-learning.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ReportsModule } from './reports/reports.module.js';
@@ -82,6 +85,10 @@ import { UsersModule } from './users/users.module.js';
     FinanceModule,
     // MOD-19 (§4p): the course catalog, self-service enrollment and the student's own requests (the office side lives in EnrollmentsModule).
     CatalogModule,
+    // MOD-20 (§4q): «My School» — the course curriculum (levels and lesson content), the learner's workspace and progress, and the class progress.
+    CurriculumModule,
+    MyLearningModule,
+    LearningReportsModule,
     // MOD-13 (§4k): reports — attendance (T01); academic, financial and the overview follow in T02..T04.
     ReportsModule,
     // MOD-12 (§4j): notifications — the engine, «my notifications» and the e-mail preferences (T02); the writers call it in T03/T04, announcements in T05.

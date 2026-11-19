@@ -48,7 +48,8 @@ export class AcademyController {
   @ApiOperation({
     summary: 'Read the academy branding (public)',
     description:
-      'No sign-in: the localized `name`, the `logoUrl` and the `defaultLocale` the sign-in page shows before anybody is authenticated — nothing else ' +
+      'No sign-in: the localized `name`, the `logoUrl` and the `defaultLocale` the sign-in page shows before anybody is authenticated, and `catalogPublic` ' +
+      '(true when `settings.catalog.publicBrowsing` is true — visitors may browse the published courses, API-236/237) — nothing else ' +
       '(no id, slug, contact details, time zone, currency or settings). 60 requests per minute per IP; no audit event.',
   })
   @ApiOkResponse({ type: AcademyPublicDto })
@@ -65,7 +66,8 @@ export class AcademyController {
     description:
       'Identity and settings of this deployment: `slug`, localized `name`, `logoUrl`, `defaultLocale`, `timezone`, `currency`, contact details. ' +
       'Every authenticated user may read it (the frontend needs the name, logo, locale, time zone and currency in every role). ' +
-      '`settings` carries every known key, `null` when not set (MOD-02-T03: `scheduling.weekStartsOn`, `scheduling.workingDays`); `platformAcademyId` is not exposed.',
+      '`settings` carries every known key, `null` when not set (MOD-02-T03: `scheduling.weekStartsOn`, `scheduling.workingDays`; MOD-10: `certificates.serialPrefix`; ' +
+      'MOD-20: `learning.videoCompletionPercent` (null = 90), `catalog.publicBrowsing` (null = off)); `platformAcademyId` is not exposed.',
   })
   @ApiOkResponse({ type: AcademyDto })
   get(): Promise<AcademyDto> {

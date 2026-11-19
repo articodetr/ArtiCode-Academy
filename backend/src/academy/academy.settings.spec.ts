@@ -1,19 +1,38 @@
 // TEST-068 (unit part) — MOD-02-T03 settings schema (D3, D-R20): the zod rules of
 // the two scheduling keys, the lenient read (corrupt values read as null), the
 // flattening of a PATCH and the merge that keeps unknown keys — pure functions.
+// TEST-248 (unit part) — MOD-20 adds `learning.videoCompletionPercent` (D-R134)
+// and `catalog.publicBrowsing` (D-R138).
 import {
   applySettingsChanges,
+  hasStoredKey,
+  publicBrowsingSchema,
   readSettings,
   sameSettingValue,
   SETTINGS_FIELDS,
   settingsPatchEntries,
+  videoCompletionPercentSchema,
   weekStartsOnSchema,
   workingDaysSchema,
 } from './academy.settings.js';
 
+/** Every known key unset. */
+const EMPTY = {
+  scheduling: { weekStartsOn: null, workingDays: null },
+  certificates: { serialPrefix: null },
+  learning: { videoCompletionPercent: null },
+  catalog: { publicBrowsing: null },
+};
+
 describe('academy settings (TEST-068)', () => {
-  it('knows exactly the two scheduling keys, in a fixed order', () => {
-    expect(SETTINGS_FIELDS.map((entry) => entry.field)).toEqual(['settings.scheduling.weekStartsOn', 'settings.scheduling.workingDays', 'settings.certificates.serialPrefix']);
+  it('knows exactly the five keys, in a fixed order', () => {
+    expect(SETTINGS_FIELDS.map((entry) => entry.field)).toEqual([
+      'settings.scheduling.weekStartsOn',
+      'settings.scheduling.workingDays',
+      'settings.certificates.serialPrefix',
+      'settings.learning.videoCompletionPercent',
+      'settings.catalog.publicBrowsing',
+    ]);
   });
 
   it('accepts a weekday 0–6 as the first day of the week and nothing else', () => {
@@ -30,11 +49,12 @@ describe('academy settings (TEST-068)', () => {
   });
 
   it('reads every known key, null when unset or unreadable, and never throws on a corrupt column', () => {
-    expect(readSettings({})).toEqual({ scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } });
-    expect(readSettings({ scheduling: { weekStartsOn: 6, workingDays: [4, 0] } })).toEqual({ scheduling: { weekStartsOn: 6, workingDays: [0, 4] }, certificates: { serialPrefix: null } });
-    expect(readSettings({ scheduling: { weekStartsOn: 'sat', workingDays: [] } })).toEqual({ scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } });
-    for (const stored of [null, 'text', 42, [], { scheduling: 'x' }, { scheduling: [1] }]) {
-      expect(readSettings(stored), JSON.stringify(stored)).toEqual({ scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } });
+    expect(readSettings({})).toEqual(EMPTY);
+    expect(Object.keys(readSettings({}))).toEqual(['scheduling', 'certificates', 'learning', 'catalog']);
+    expect(readSettings({ scheduling: { weekStartsOn: 6, workingDays: [4, 0] } })).toEqual({ ...EMPTY, scheduling: { weekStartsOn: 6, workingDays: [0, 4] } });
+    expect(readSettings({ scheduling: { weekStartsOn: 'sat', workingDays: [] } })).toEqual(EMPTY);
+    for (const stored of [null, 'text', 42, [], { scheduling: 'x' }, { scheduling: [1] }, { learning: 'x', catalog: [true] }]) {
+      expect(readSettings(stored), JSON.stringify(stored)).toEqual(EMPTY);
     }
   });
 
@@ -59,6 +79,44 @@ describe('academy settings (TEST-068)', () => {
     expect(applySettingsChanges(null, [['settings.scheduling.weekStartsOn', 0]])).toEqual({ scheduling: { weekStartsOn: 0 } });
   });
 
+  it('MOD-20 (TEST-248) — accepts an integer 50–100 as the video completion share and nothing else', () => {
+    for (const value of [50, 75, 90, 100]) expect(videoCompletionPercentSchema.safeParse(value).success, String(value)).toBe(true);
+    for (const value of [49, 101, 0, -1, 90.5, '90', null, true, [90]]) expect(videoCompletionPercentSchema.safeParse(value).success, JSON.stringify(value)).toBe(false);
+  });
+
+  it('MOD-20 (TEST-248) — accepts a JSON boolean as the public browsing switch and nothing else', () => {
+    for (const value of [true, false]) expect(publicBrowsingSchema.safeParse(value).success, String(value)).toBe(true);
+    for (const value of ['true', 'false', 1, 0, null, [], {}]) expect(publicBrowsingSchema.safeParse(value).success, JSON.stringify(value)).toBe(false);
+  });
+
+  it('MOD-20 (TEST-248) — reads the two learning keys leniently: false stays false, an unreadable value reads as null', () => {
+    expect(readSettings({ learning: { videoCompletionPercent: 80 }, catalog: { publicBrowsing: true } })).toEqual({
+      ...EMPTY,
+      learning: { videoCompletionPercent: 80 },
+      catalog: { publicBrowsing: true },
+    });
+    expect(readSettings({ catalog: { publicBrowsing: false } }).catalog.publicBrowsing).toBe(false);
+    expect(readSettings({ learning: { videoCompletionPercent: 30 }, catalog: { publicBrowsing: 'yes' } })).toEqual(EMPTY);
+    expect(hasStoredKey({ catalog: { publicBrowsing: 'yes' } }, 'settings.catalog.publicBrowsing')).toBe(true);
+    expect(hasStoredKey({ catalog: {} }, 'settings.catalog.publicBrowsing')).toBe(false);
+  });
+
+  it('MOD-20 (TEST-248) — flattens and merges the two learning keys like the others (null clears, false is a value)', () => {
+    expect(settingsPatchEntries({ catalog: { publicBrowsing: false }, learning: { videoCompletionPercent: 75 }, certificates: { serialPrefix: null } })).toEqual([
+      ['settings.certificates.serialPrefix', null],
+      ['settings.learning.videoCompletionPercent', 75],
+      ['settings.catalog.publicBrowsing', false],
+    ]);
+    const stored = { scheduling: { weekStartsOn: 6 }, catalog: { publicBrowsing: true } };
+    expect(
+      applySettingsChanges(stored, [
+        ['settings.learning.videoCompletionPercent', 75],
+        ['settings.catalog.publicBrowsing', null],
+      ]),
+    ).toEqual({ scheduling: { weekStartsOn: 6 }, learning: { videoCompletionPercent: 75 } });
+    expect(applySettingsChanges({}, [['settings.catalog.publicBrowsing', false]])).toEqual({ catalog: { publicBrowsing: false } });
+  });
+
   it('compares values by content', () => {
     expect(sameSettingValue([0, 1], [0, 1])).toBe(true);
     expect(sameSettingValue([0, 1], [0, 2])).toBe(false);
@@ -66,5 +124,9 @@ describe('academy settings (TEST-068)', () => {
     expect(sameSettingValue(6, 6)).toBe(true);
     expect(sameSettingValue(null, 0)).toBe(false);
     expect(sameSettingValue(null, null)).toBe(true);
+    expect(sameSettingValue(true, true)).toBe(true);
+    expect(sameSettingValue(false, true)).toBe(false);
+    expect(sameSettingValue(false, null)).toBe(false);
+    expect(sameSettingValue(90, 90)).toBe(true);
   });
 });

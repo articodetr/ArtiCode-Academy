@@ -25,11 +25,12 @@ import type {
 import { catalogError } from './catalog.errors.js';
 import { classBlocker, isSelfServiceOpen, seatsLeft, selfServiceReason } from './catalog.policy.js';
 import { COURSE_PLAN_SELECT, coursePlanUsable, toCourseFeePlan } from './course-pricing.js';
+import type { CourseFeePlan, CoursePlanRow } from './course-pricing.js';
 
 const CATALOG_SORT = 'code';
 const CATALOG_ORDER = 'asc';
 
-const COURSE_CARD_SELECT = {
+export const COURSE_CARD_SELECT = {
   id: true,
   code: true,
   name: true,
@@ -39,7 +40,8 @@ const COURSE_CARD_SELECT = {
   sessionsCount: true,
   level: { select: { id: true, code: true, name: true } },
   enrollmentFeePlan: { select: COURSE_PLAN_SELECT },
-  _count: { select: { syllabusItems: true } },
+  // MOD-20 (D-R135): an unpublished lesson is hidden from learners — the catalog counts and lists published lessons only.
+  _count: { select: { syllabusItems: { where: { isPublished: true } } } },
 } satisfies Prisma.CourseSelect;
 
 type CourseCardRow = Prisma.CourseGetPayload<{ select: typeof COURSE_CARD_SELECT }>;
@@ -58,7 +60,82 @@ const CLASS_SELECT = {
   _count: { select: { enrollments: { where: { status: 'active' } } } },
 } satisfies Prisma.ClassSelect;
 
-type ClassRow = Prisma.ClassGetPayload<{ select: typeof CLASS_SELECT }>;
+export type ClassRow = Prisma.ClassGetPayload<{ select: typeof CLASS_SELECT }>;
+
+type Db = PrismaService['db'];
+
+// ---------------------------------------------------------------------------
+// Shared with the public catalog (MOD-20, D-R138 — API-236/237 in
+// public-catalog.service.ts): the published-course search, the code keyset,
+// the classes open to self-service and a course's price and availability. One
+// rule set, so a visitor and a signed-in reader see the same courses, prices
+// and seats.
+// ---------------------------------------------------------------------------
+
+/** `q` of API-219: the code (literal, case-insensitive) or the Arabic/English name (the KI-048 rule). */
+export async function courseSearchFilter(db: Db, q: string): Promise<Prisma.CourseWhereInput> {
+  const pattern = escapeLikePattern(q);
+  return { OR: [{ code: { contains: pattern, mode: 'insensitive' } }, { id: { in: await courseIdsByName(db, pattern) } }] };
+}
+
+/** The code keyset of API-219: the courses after the cursor; 400 cursor_invalid for a malformed or foreign one. */
+export function codeCursorFilter(cursor: string): Prisma.CourseWhereInput {
+  const decoded = decodeKeysetCursor(cursor, CATALOG_SORT, CATALOG_ORDER, true, () => coursesError.cursorInvalid());
+  return { code: { gt: String(decoded.key) } };
+}
+
+/** The page of rows read with `take: limit + 1` (by code), and the cursor of the next page. */
+export function codePageOf<T extends { id: string; code: string }>(rows: readonly T[], limit: number): { page: T[]; nextCursor: string | null } {
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  const nextCursor = rows.length > limit && last ? encodeKeysetCursor({ sort: CATALOG_SORT, order: CATALOG_ORDER, key: last.code, id: last.id }) : null;
+  return { page, nextCursor };
+}
+
+/** The classes of these courses open to self-service now (D-R123). */
+export async function selfServiceClassesOf(db: Db, courseIds: readonly string[]): Promise<ClassRow[]> {
+  if (courseIds.length === 0) return [];
+  const rows = await db.class.findMany({
+    where: { courseId: { in: [...courseIds] }, selfEnrollment: true, status: { in: ['open', 'running'] } },
+    orderBy: { code: 'asc' },
+    select: CLASS_SELECT,
+  });
+  return rows.filter(isSelfServiceOpen);
+}
+
+export interface CourseOffer {
+  /** The course's classes open to self-service now. */
+  classes: ClassRow[];
+  /** Of those, the ones with a free seat (and, for a paid course, a plan that can price a request). */
+  available: ClassRow[];
+  /** The course price (D-R122); null for a free course or a paid one whose plan cannot price a request now. */
+  price: CourseFeePlan | null;
+}
+
+/** What a course card says about its price and its open classes (API-219 and the public catalog). */
+export function courseOfferOf(row: { id: string; enrollmentFeePlan: CoursePlanRow | null }, open: readonly ClassRow[], currency: string): CourseOffer {
+  const classes = open.filter((klass) => klass.courseId === row.id);
+  const plan = row.enrollmentFeePlan;
+  const priceUsable = plan !== null && coursePlanUsable(plan, row.id);
+  const price = plan !== null && priceUsable ? toCourseFeePlan(plan, currency) : null;
+  const available = classes.filter((klass) => klass._count.enrollments < klass.capacity && (plan === null || priceUsable));
+  return { classes, available, price };
+}
+
+/** The academy currency (D15); `XXX` without the academy row. */
+export async function academyCurrency(db: Db): Promise<string> {
+  const academy = await db.academy.findFirst({ select: { currency: true } });
+  return academy?.currency ?? 'XXX';
+}
+
+/** The KI-048 rule of the course list: a parameterised ILIKE with the backslash as ESCAPE on the Arabic and English names. */
+async function courseIdsByName(db: Db, pattern: string): Promise<string[]> {
+  const like = `%${pattern}%`;
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT id FROM courses
+    WHERE name ->> 'ar' ILIKE ${like} ESCAPE '\\' OR name ->> 'en' ILIKE ${like} ESCAPE '\\'`;
+  return rows.map((row) => row.id);
+}
 
 const MINE_SELECT = {
   id: true,
@@ -102,22 +179,14 @@ export class CatalogService {
     if (query.levelId) filters.push({ levelId: query.levelId });
     if (query.pricing === 'free') filters.push({ enrollmentFeePlanId: null });
     if (query.pricing === 'paid') filters.push({ enrollmentFeePlanId: { not: null } });
-    if (query.q) {
-      const pattern = escapeLikePattern(query.q);
-      filters.push({ OR: [{ code: { contains: pattern, mode: 'insensitive' } }, { id: { in: await this.courseIdsByName(pattern) } }] });
-    }
+    if (query.q) filters.push(await courseSearchFilter(db, query.q));
     if (query.available !== undefined) {
       const ids = await this.availableCourseIds();
       filters.push(query.available ? { id: { in: ids } } : { id: { notIn: ids } });
     }
-    if (query.cursor) {
-      const cursor = decodeKeysetCursor(query.cursor, CATALOG_SORT, CATALOG_ORDER, true, () => coursesError.cursorInvalid());
-      filters.push({ code: { gt: String(cursor.key) } });
-    }
+    if (query.cursor) filters.push(codeCursorFilter(query.cursor));
     const rows = await db.course.findMany({ where: { AND: filters }, orderBy: [{ code: 'asc' }], take: limit + 1, select: COURSE_CARD_SELECT });
-    const page = rows.slice(0, limit);
-    const last = page.at(-1);
-    const nextCursor = rows.length > limit && last ? encodeKeysetCursor({ sort: CATALOG_SORT, order: CATALOG_ORDER, key: last.code, id: last.id }) : null;
+    const { page, nextCursor } = codePageOf(rows, limit);
 
     const courseIds = page.map((row) => row.id);
     const [classes, mine, currency] = await Promise.all([this.openClasses(courseIds), this.mineIn(caller.id, courseIds), this.currency()]);
@@ -134,7 +203,7 @@ export class CatalogService {
         description: true,
         minAge: true,
         maxAge: true,
-        syllabusItems: { orderBy: { sortOrder: 'asc' }, select: { title: true, description: true, estimatedMinutes: true } },
+        syllabusItems: { where: { isPublished: true }, orderBy: { sortOrder: 'asc' }, select: { title: true, description: true, estimatedMinutes: true } },
       },
     });
     if (!row) throw catalogError.courseNotFound(id);
@@ -190,11 +259,8 @@ export class CatalogService {
   // ---------------------------------------------------------------------------
 
   private toCard(row: CourseCardRow, open: readonly ClassRow[], mine: readonly MineRow[], currency: string): CatalogCourseCardDto {
-    const classes = open.filter((klass) => klass.courseId === row.id);
+    const { classes, available, price } = courseOfferOf(row, open, currency);
     const plan = row.enrollmentFeePlan;
-    const priceUsable = plan !== null && coursePlanUsable(plan, row.id);
-    const price = plan !== null && priceUsable ? toCourseFeePlan(plan, currency) : null;
-    const available = classes.filter((klass) => klass._count.enrollments < klass.capacity && (plan === null || priceUsable));
     const teachers = new Map<string, { fullName: string; displayName: string | null }>();
     for (const klass of classes) {
       const lead = klass.teachers[0]?.teacher;
@@ -264,14 +330,8 @@ export class CatalogService {
   }
 
   /** The classes of these courses open to self-service now (D-R123). */
-  private async openClasses(courseIds: readonly string[]): Promise<ClassRow[]> {
-    if (courseIds.length === 0) return [];
-    const rows = await this.prisma.db.class.findMany({
-      where: { courseId: { in: [...courseIds] }, selfEnrollment: true, status: { in: ['open', 'running'] } },
-      orderBy: { code: 'asc' },
-      select: CLASS_SELECT,
-    });
-    return rows.filter(isSelfServiceOpen);
+  private openClasses(courseIds: readonly string[]): Promise<ClassRow[]> {
+    return selfServiceClassesOf(this.prisma.db, courseIds);
   }
 
   /** The reader's own enrollments in classes of these courses (any status; closed requests are filtered by the callers). */
@@ -322,18 +382,8 @@ export class CatalogService {
     return rows.map((row) => row.id);
   }
 
-  /** The KI-048 rule of the course list: a parameterised ILIKE with the backslash as ESCAPE on the Arabic and English names. */
-  private async courseIdsByName(pattern: string): Promise<string[]> {
-    const like = `%${pattern}%`;
-    const rows = await this.prisma.db.$queryRaw<{ id: string }[]>`
-      SELECT id FROM courses
-      WHERE name ->> 'ar' ILIKE ${like} ESCAPE '\\' OR name ->> 'en' ILIKE ${like} ESCAPE '\\'`;
-    return rows.map((row) => row.id);
-  }
-
-  private async currency(): Promise<string> {
-    const academy = await this.prisma.db.academy.findFirst({ select: { currency: true } });
-    return academy?.currency ?? 'XXX';
+  private currency(): Promise<string> {
+    return academyCurrency(this.prisma.db);
   }
 
   private async academyZone(): Promise<string> {

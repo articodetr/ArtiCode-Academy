@@ -75,7 +75,12 @@ describe('AcademyService', () => {
       'updatedAt',
     ]);
     expect(dto.createdAt).toBe('2026-10-29T12:00:00.000Z');
-    expect(dto.settings).toEqual({ scheduling: { weekStartsOn: 6, workingDays: null }, certificates: { serialPrefix: null } });
+    expect(dto.settings).toEqual({
+      scheduling: { weekStartsOn: 6, workingDays: null },
+      certificates: { serialPrefix: null },
+      learning: { videoCompletionPercent: null },
+      catalog: { publicBrowsing: null },
+    });
 
     const same = await service.update({ currency: 'SAR', name: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' }, logoUrl: null }, CALLER, CTX);
     expect(same).toEqual(dto);
@@ -83,5 +88,20 @@ describe('AcademyService', () => {
     expect(await service.update({ settings: { scheduling: { weekStartsOn: 6 } } }, CALLER, CTX)).toEqual(dto);
     expect(transaction).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
+  });
+
+  it('API-205 answers catalogPublic true only when settings.catalog.publicBrowsing is exactly true (MOD-20, TEST-248)', async () => {
+    const cases: Array<[unknown, boolean]> = [
+      [{}, false],
+      [{ catalog: { publicBrowsing: false } }, false],
+      [{ catalog: { publicBrowsing: 'true' } }, false],
+      [{ catalog: { publicBrowsing: true } }, true],
+    ];
+    for (const [settings, expected] of cases) {
+      const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings });
+      const dto = await service.getPublic();
+      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'logoUrl', 'name']);
+      expect(dto.catalogPublic, JSON.stringify(settings)).toBe(expected);
+    }
   });
 });

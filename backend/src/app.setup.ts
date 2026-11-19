@@ -51,6 +51,15 @@ export const LARGE_JSON_ROUTES: readonly LargeJsonRoute[] = [
   // a status, a score and a feedback of up to 500 characters — about 800 KB at
   // most with three-byte text (TEST-064).
   { method: 'PUT', path: /^\/exams\/[^/]+\/results\/?$/i, limit: '1mb' },
+  // API-227 (MOD-20): up to 50 levels (CURRICULUM_SECTIONS_MAX) with a title
+  // and a description, and 200 lessons in all (SYLLABUS_ITEMS_MAX) with the
+  // syllabus fields and two flags — about 530 KB at most in Arabic, English
+  // and Turkish text (TEST-064).
+  { method: 'PUT', path: /^\/courses\/[^/]+\/curriculum\/?$/i, limit: '640kb' },
+  // API-228 (MOD-20): a text body of up to 8,000 characters per locale and 20
+  // resources with a 2,048-character URL and a 300-character title per locale
+  // — about 164 KB at most with three-byte text (TEST-064).
+  { method: 'PUT', path: /^\/courses\/[^/]+\/curriculum\/items\/[^/]+\/content\/?$/i, limit: '192kb' },
 ];
 
 /** Same media type the default JSON parser accepts (`application/json`, any parameters). */

@@ -4,6 +4,7 @@ import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { Prisma } from '../generated/prisma/client.js';
+import { assertNoProgressOnDeletion } from '../learning/curriculum.deletion.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { coursesError } from './courses.errors.js';
@@ -66,6 +67,10 @@ function optionalJson(value: LocalizedText | null): Prisma.InputJsonValue | type
  * tables may still reference the course). The position swaps are legal because
  * `uq_course_syllabus_items_course_order` is deferred (ADR-046). Exactly one
  * `courses.syllabus.changed` event per effective write (counts only).
+ * MOD-20: the replacement touches only the title, description, minutes and
+ * position of a kept item — its level, kind, content, resources and flags
+ * stay as they are, and a new item sits outside every level; deleting an item
+ * a learner has progress on is `409 lesson_has_progress` (D-R135).
  */
 @Injectable()
 export class SyllabusService {
@@ -96,6 +101,8 @@ export class SyllabusService {
       const plan = planSyllabusReplacement(rows.map(existingOf), requested);
       if (!plan.ok) throw coursesError.syllabusInvalid(plan.unknown, plan.duplicates);
       if (!plan.changed) return { courseId, items: rows.map(toItemDto) };
+      // MOD-20 (D-R135): a lesson some learner has progress on is unpublished, never deleted — 409 lesson_has_progress before any write.
+      await assertNoProgressOnDeletion(tx, plan.remove);
 
       if (plan.remove.length > 0) await tx.courseSyllabusItem.deleteMany({ where: { courseId, id: { in: plan.remove } } });
       for (const change of plan.update) {

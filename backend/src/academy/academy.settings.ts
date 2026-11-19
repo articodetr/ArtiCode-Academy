@@ -35,6 +35,20 @@ export const serialPrefixSchema = z.string().regex(/^[A-Z0-9]{2,10}$/);
 export const DEFAULT_CERTIFICATE_SERIAL_PREFIX = 'CERT';
 
 /**
+ * MOD-20 (D-R134): the share of a media lesson's AUTHORED duration a learner
+ * must have played for it to complete by playback — an integer 50–100;
+ * `null` = the default 90 (`DEFAULT_COMPLETION_PERCENT` of
+ * learning/learning.progress.ts).
+ */
+export const videoCompletionPercentSchema = z.number().int().min(50).max(100);
+
+/**
+ * MOD-20 (D-R138): whether visitors who are not signed in may browse the
+ * published courses (API-236/237) — a JSON boolean; `null` = off.
+ */
+export const publicBrowsingSchema = z.boolean();
+
+/**
  * Every known key with its dotted name (used in the audit `fields`) and its
  * path in the stored object, in the fixed order of the audit metadata.
  */
@@ -42,10 +56,12 @@ export const SETTINGS_FIELDS = [
   { field: 'settings.scheduling.weekStartsOn', domain: 'scheduling', key: 'weekStartsOn', schema: weekStartsOnSchema },
   { field: 'settings.scheduling.workingDays', domain: 'scheduling', key: 'workingDays', schema: workingDaysSchema },
   { field: 'settings.certificates.serialPrefix', domain: 'certificates', key: 'serialPrefix', schema: serialPrefixSchema },
+  { field: 'settings.learning.videoCompletionPercent', domain: 'learning', key: 'videoCompletionPercent', schema: videoCompletionPercentSchema },
+  { field: 'settings.catalog.publicBrowsing', domain: 'catalog', key: 'publicBrowsing', schema: publicBrowsingSchema },
 ] as const;
 
 export type SettingsField = (typeof SETTINGS_FIELDS)[number]['field'];
-export type SettingValue = number | number[] | string;
+export type SettingValue = number | number[] | string | boolean;
 
 export interface SchedulingSettings {
   weekStartsOn: number | null;
@@ -56,10 +72,22 @@ export interface CertificatesSettings {
   serialPrefix: string | null;
 }
 
+export interface LearningSettings {
+  /** null = the default 90. */
+  videoCompletionPercent: number | null;
+}
+
+export interface CatalogSettings {
+  /** null = off (only `true` opens the public catalog). */
+  publicBrowsing: boolean | null;
+}
+
 /** The settings as the API returns them: every known key, `null` when not set. */
 export interface AcademySettings {
   scheduling: SchedulingSettings;
   certificates: CertificatesSettings;
+  learning: LearningSettings;
+  catalog: CatalogSettings;
 }
 
 /** A validated PATCH of the settings: absent = unchanged, `null` = clear, a value = replace. */
@@ -70,6 +98,12 @@ export interface SettingsPatch {
   };
   certificates?: {
     serialPrefix?: string | null;
+  };
+  learning?: {
+    videoCompletionPercent?: number | null;
+  };
+  catalog?: {
+    publicBrowsing?: boolean | null;
   };
 }
 
@@ -82,7 +116,7 @@ function asObject(value: unknown): JsonObject {
 /** The stored jsonb → every known key (lenient: anything that fails its schema reads as null). */
 export function readSettings(stored: unknown): AcademySettings {
   const root = asObject(stored);
-  const out: Record<string, Record<string, unknown>> = { scheduling: {}, certificates: {} };
+  const out: Record<string, Record<string, unknown>> = { scheduling: {}, certificates: {}, learning: {}, catalog: {} };
   for (const { domain, key, schema } of SETTINGS_FIELDS) {
     const parsed = schema.safeParse(asObject(root[domain])[key]);
     (out[domain] ??= {})[key] = parsed.success ? parsed.data : null;
@@ -108,7 +142,7 @@ export function settingsPatchEntries(patch: SettingsPatch | undefined): Array<[S
   return entries;
 }
 
-/** Same value? Days are compared after sorting (both sides are normalised). */
+/** Same value? Days are compared after sorting (both sides are normalised); numbers, strings and booleans by identity (`false` is not `null`). */
 export function sameSettingValue(a: SettingValue | null, b: SettingValue | null): boolean {
   if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((day, i) => day === b[i]);
   return a === b;

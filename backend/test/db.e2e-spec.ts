@@ -72,6 +72,9 @@ const TABLES = [
   'announcements',
   // MOD-01-H06 / MFA-T01 (20261116123656_mfa_totp) — details in TEST-225.
   'mfa_recovery_codes',
+  // MOD-20 (20261119131517_mod20_learning) — details in TEST-245.
+  'course_sections',
+  'learning_progress',
 ] as const;
 
 // PostgreSQL SQLSTATE codes
@@ -152,7 +155,7 @@ describe.skipIf(!available)('database schema — first migration (e2e, TEST-007)
     return rows[0]!.id;
   }
 
-  it('records the applied migrations (first one first) and the 41 tables', async () => {
+  it('records the applied migrations (first one first) and the 43 tables', async () => {
     const migrations = await pool.query<{ migration_name: string; finished: boolean; rolled_back: boolean }>(
       `SELECT migration_name, finished_at IS NOT NULL AS finished, rolled_back_at IS NOT NULL AS rolled_back
          FROM _prisma_migrations ORDER BY started_at`,

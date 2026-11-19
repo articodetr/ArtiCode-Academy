@@ -38,13 +38,16 @@ const ACADEMY_SELECT = {
 
 type AcademyRow = Prisma.AcademyGetPayload<{ select: typeof ACADEMY_SELECT }>;
 
-// The public branding (API-205): the three answered fields and the slug, only as
-// the last-resort name — nothing else is read for an anonymous caller.
+// The public branding (API-205): the three answered fields, the slug only as the
+// last-resort name, and the settings only for the derived `catalogPublic` flag
+// (MOD-20, D-R138) — nothing else is read for an anonymous caller, and no
+// setting is ever answered as such.
 const ACADEMY_PUBLIC_SELECT = {
   slug: true,
   name: true,
   logoUrl: true,
   defaultLocale: true,
+  settings: true,
 } satisfies Prisma.AcademySelect;
 
 /** The jsonb name as `{ ar, en?, tr? }`; the CHECK guarantees `ar`, the slug is a last resort. */
@@ -125,8 +128,10 @@ export class AcademyService {
 
   /**
    * API-205: the branding of the sign-in page for an anonymous caller — the
-   * name (only its string locales), the logo and the default locale. Read-only,
-   * no audit event; 503 `academy_not_configured` without the row.
+   * name (only its string locales), the logo, the default locale and whether
+   * the public catalog is open (`settings.catalog.publicBrowsing === true`,
+   * MOD-20). Read-only, no audit event; 503 `academy_not_configured` without
+   * the row.
    */
   async getPublic(): Promise<AcademyPublicDto> {
     const row = await this.prisma.db.academy.findFirst({ select: ACADEMY_PUBLIC_SELECT });
@@ -135,6 +140,7 @@ export class AcademyService {
       name: readLocalizedText(row.name) ?? { ar: row.slug },
       logoUrl: row.logoUrl,
       defaultLocale: row.defaultLocale as LocaleCode,
+      catalogPublic: readSettings(row.settings).catalog.publicBrowsing === true,
     };
   }
 

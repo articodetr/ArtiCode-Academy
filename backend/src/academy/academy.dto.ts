@@ -6,7 +6,14 @@ import type { LocaleCode, LocalizedText } from '../authorization/localized-text.
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { E164_PATTERN, EMAIL_MAX_LENGTH, nullableIdentifierParam, nullableTextParam, trimParam } from '../users/users.validation.js';
 import { CURRENCY_PATTERN, IsIanaTimeZone, TIME_ZONE_MAX_LENGTH, currencyParam } from './academy.validation.js';
-import { MatchesSchema, serialPrefixSchema, weekStartsOnSchema, workingDaysSchema } from './academy.settings.js';
+import {
+  MatchesSchema,
+  publicBrowsingSchema,
+  serialPrefixSchema,
+  videoCompletionPercentSchema,
+  weekStartsOnSchema,
+  workingDaysSchema,
+} from './academy.settings.js';
 import type { AcademySettings } from './academy.settings.js';
 
 /** Body values of the settings stay raw JSON: the implicit conversion must not turn "6" into 6. */
@@ -43,6 +50,36 @@ export class CertificatesSettingsPatchDto {
   serialPrefix?: string | null;
 }
 
+/** `settings.learning` of a PATCH (MOD-20, D-R134): absent = unchanged, `null` = clear (the default 90). */
+export class LearningSettingsPatchDto {
+  @ApiPropertyOptional({
+    type: 'integer',
+    nullable: true,
+    minimum: 50,
+    maximum: 100,
+    example: 90,
+    description: 'Share (%) of a media lesson’s authored duration a learner must have played to complete it by playback; null clears it (the default 90)',
+  })
+  @ValidateIf((dto: LearningSettingsPatchDto) => dto.videoCompletionPercent !== undefined && dto.videoCompletionPercent !== null)
+  @Transform(rawValue)
+  @MatchesSchema(videoCompletionPercentSchema, 'settings.learning.videoCompletionPercent must be an integer 50–100 or null')
+  videoCompletionPercent?: number | null;
+}
+
+/** `settings.catalog` of a PATCH (MOD-20, D-R138): absent = unchanged, `null` = clear (off). */
+export class CatalogSettingsPatchDto {
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    example: true,
+    description: 'true = visitors who are not signed in may browse the published courses (API-236/237); a JSON boolean; null clears it (off)',
+  })
+  @ValidateIf((dto: CatalogSettingsPatchDto) => dto.publicBrowsing !== undefined && dto.publicBrowsing !== null)
+  @Transform(rawValue)
+  @MatchesSchema(publicBrowsingSchema, 'settings.catalog.publicBrowsing must be a JSON boolean or null')
+  publicBrowsing?: boolean | null;
+}
+
 /** `settings` of a PATCH: the known domains only (unknown keys are 400 through forbidNonWhitelisted). */
 export class AcademySettingsPatchDto {
   @ApiPropertyOptional({ type: SchedulingSettingsPatchDto })
@@ -58,6 +95,20 @@ export class AcademySettingsPatchDto {
   @ValidateNested()
   @Type(() => CertificatesSettingsPatchDto)
   certificates?: CertificatesSettingsPatchDto;
+
+  @ApiPropertyOptional({ type: LearningSettingsPatchDto })
+  @ValidateIf((dto: AcademySettingsPatchDto) => dto.learning !== undefined)
+  @IsObject({ message: 'settings.learning must be an object' })
+  @ValidateNested()
+  @Type(() => LearningSettingsPatchDto)
+  learning?: LearningSettingsPatchDto;
+
+  @ApiPropertyOptional({ type: CatalogSettingsPatchDto })
+  @ValidateIf((dto: AcademySettingsPatchDto) => dto.catalog !== undefined)
+  @IsObject({ message: 'settings.catalog must be an object' })
+  @ValidateNested()
+  @Type(() => CatalogSettingsPatchDto)
+  catalog?: CatalogSettingsPatchDto;
 }
 
 /** Upper bound of the logo URL in a request (`logo_url` is unbounded text). */
@@ -181,8 +232,9 @@ export class AcademyDto {
 
 /**
  * The public branding of the academy (API-205, MOD-02-T04): what the sign-in
- * page shows before anybody is authenticated. Exactly these three keys — never
- * the id, slug, contact details, time zone, currency or settings.
+ * page shows before anybody is authenticated. Exactly these four keys — never
+ * the id, slug, contact details, time zone, currency or the settings
+ * themselves (`catalogPublic` is the one derived flag — MOD-20, D-R138).
  */
 export class AcademyPublicDto {
   @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }` (only the locales stored)', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
@@ -193,6 +245,13 @@ export class AcademyPublicDto {
 
   @ApiProperty({ enum: LOCALES, example: 'ar', description: 'Language of the academy — the sign-in page’s language before the user picks one' })
   defaultLocale: LocaleCode;
+
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description: 'true when the academy lets visitors browse its published courses without signing in (`settings.catalog.publicBrowsing` — API-236/237, MOD-20)',
+  })
+  catalogPublic: boolean;
 }
 
 export class SchedulingSettingsDto {
@@ -208,10 +267,26 @@ export class CertificatesSettingsDto {
   serialPrefix: string | null;
 }
 
+export class LearningSettingsDto {
+  @ApiProperty({ type: 'integer', nullable: true, minimum: 50, maximum: 100, example: 90, description: 'Playback share (%) that completes a media lesson; null = the default 90' })
+  videoCompletionPercent: number | null;
+}
+
+export class CatalogSettingsDto {
+  @ApiProperty({ type: Boolean, nullable: true, example: false, description: 'Visitors may browse the published courses without signing in; null = off' })
+  publicBrowsing: boolean | null;
+}
+
 export class AcademySettingsDto {
   @ApiProperty({ type: SchedulingSettingsDto })
   scheduling: SchedulingSettingsDto;
 
   @ApiProperty({ type: CertificatesSettingsDto })
   certificates: CertificatesSettingsDto;
+
+  @ApiProperty({ type: LearningSettingsDto })
+  learning: LearningSettingsDto;
+
+  @ApiProperty({ type: CatalogSettingsDto })
+  catalog: CatalogSettingsDto;
 }

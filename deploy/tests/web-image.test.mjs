@@ -68,9 +68,9 @@ const HSTS = 'max-age=31536000; includeSubDomains';
 // The UI's Content-Security-Policy (KI-080), exactly as deploy/Caddyfile sends it: one
 // policy, whose img-src also allows http: images on a page served over plain http.
 const CSP_HEADER = 'content-security-policy';
-const uiCsp = (img) => `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src ${img}; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`;
-const CSP_HTTPS = uiCsp("'self' data: https:");
-const CSP_HTTP = uiCsp("'self' data: https: http:");
+const uiCsp = (img, media) => `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src ${img}; media-src ${media}; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`;
+const CSP_HTTPS = uiCsp("'self' data: https:", "'self' https:");
+const CSP_HTTP = uiCsp("'self' data: https: http:", "'self' https: http:");
 
 const results = [];
 const report = (status, name, detail = '') => {
