@@ -11,8 +11,12 @@
 // Since J-F27 the same unsaved work also holds a browser back/forward, which
 // asks the same question (NavigationBlocker), and a reload or a tab close gets
 // the browser's own prompt (useUnsavedChangesGuard — KI-055).
+// MOD-19 (D-R122/D-R129): the details show the cover and the price (free, or
+// the fee plan's total in the academy currency); the edit form takes the cover
+// URL, and — for holders of `fee_plans.manage` only, as the server requires —
+// the course type and its fee plan (CoursePricingFields).
 import { DeleteOutlined, DownOutlined, EditOutlined, InboxOutlined, RocketOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Modal, Skeleton, Space, Tabs, Typography } from 'antd'
+import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -25,8 +29,10 @@ import { NavigationBlocker } from '../common/NavigationBlocker'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
+import { formatMoney } from '../payments/payments.format'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CourseFormFields } from './CourseFormFields'
+import { CoursePricingFields } from './CoursePricingFields'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { courseFormHasChanges, courseFormValuesOf, planCoursePatch } from './courses.form'
 import type { CourseFormValues } from './courses.form'
@@ -191,6 +197,30 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
         <Descriptions.Item label={t('courses.fields.ageRange')}>
           {course.minAge === null && course.maxAge === null ? DASH : `${optional(course.minAge)} – ${optional(course.maxAge)}`}
         </Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.pricing')}>
+          {course.enrollmentFeePlan ? (
+            <Space direction="vertical" size={2}>
+              <Space size={4} wrap>
+                <Tag color="gold">{t('courses.pricing.paid')}</Tag>
+                <span>{localizedLabel(course.enrollmentFeePlan.name, language)}</span>
+                <bdi dir="ltr">{formatMoney(course.enrollmentFeePlan.total, course.enrollmentFeePlan.currency, language)}</bdi>
+              </Space>
+              <Typography.Text type="secondary">{t('courses.pricing.installments', { installments: course.enrollmentFeePlan.installments })}</Typography.Text>
+              {course.enrollmentFeePlan.isActive ? null : <Alert type="warning" showIcon title={t('courses.pricing.planInactive')} />}
+            </Space>
+          ) : (
+            <Tag color="green">{t('courses.pricing.free')}</Tag>
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.coverImageUrl')}>
+          {course.coverImageUrl ? (
+            <Typography.Text style={{ wordBreak: 'break-all' }}>
+              <bdi dir="ltr">{course.coverImageUrl}</bdi>
+            </Typography.Text>
+          ) : (
+            DASH
+          )}
+        </Descriptions.Item>
         <Descriptions.Item label={t('courses.fields.summary')}>{course.summary ? localizedLabel(course.summary, language) : DASH}</Descriptions.Item>
         <Descriptions.Item label={t('courses.fields.description')}>
           {course.description ? localizedLabel(course.description, language) : DASH}
@@ -310,6 +340,9 @@ interface CourseEditFormProps {
 function CourseEditForm({ course, levels, onSaved, onCancel, onUnsavedChange }: CourseEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
+  const { hasPermission } = useAuth()
+  // MOD-19 (D-R122): the price is changed with fee_plans.manage besides courses.manage; without it the form leaves it alone.
+  const canPrice = hasPermission('fee_plans.manage')
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
@@ -349,6 +382,11 @@ function CourseEditForm({ course, levels, onSaved, onCancel, onUnsavedChange }: 
       disabled={saving}
     >
       <CourseFormFields form={form} levels={levels} />
+      {canPrice ? (
+        <CoursePricingFields course={course} />
+      ) : (
+        <Alert type="info" showIcon title={t('courses.hints.pricingReadOnly')} style={{ marginBottom: 16 }} />
+      )}
       <Flex gap={8} justify="flex-end">
         <Button onClick={onCancel} disabled={saving}>
           {t('common.cancel')}

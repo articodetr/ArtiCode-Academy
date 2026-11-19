@@ -26,6 +26,8 @@ export interface ClassFormValues {
   startsOn?: string
   endsOn?: string
   notes?: string
+  /** MOD-19 (D-R123): open to self-service enrollment from the catalog (a JSON boolean). */
+  selfEnrollment?: boolean
 }
 
 export function normaliseClassCode(value: string | undefined): string {
@@ -53,6 +55,7 @@ export function classFormValuesOf(cls: AcademyClass): ClassFormValues {
     startsOn: cls.startsOn ?? '',
     endsOn: cls.endsOn ?? '',
     notes: cls.notes ?? '',
+    selfEnrollment: cls.selfEnrollment,
   }
 }
 
@@ -69,6 +72,8 @@ export function buildCreateClassInput(values: ClassFormValues): CreateClassInput
   if (startsOn) input.startsOn = startsOn
   if (endsOn) input.endsOn = endsOn
   if (notes) input.notes = notes
+  // The server's default is closed: only an opened class sends the field.
+  if (values.selfEnrollment === true) input.selfEnrollment = true
   return input
 }
 
@@ -86,10 +91,11 @@ export function planClassPatch(cls: AcademyClass, values: ClassFormValues): Upda
   if (endsOn !== cls.endsOn) body.endsOn = endsOn
   const notes = note(values.notes)
   if (notes !== cls.notes) body.notes = notes
+  if (values.selfEnrollment !== undefined && values.selfEnrollment !== cls.selfEnrollment) body.selfEnrollment = values.selfEnrollment
   return Object.keys(body).length > 0 ? body : null
 }
 
-/** The fields of the edit form (the course is fixed after creation). */
+/** The text and number fields of the edit form (the course is fixed after creation). */
 const EDIT_FIELDS = ['code', 'nameAr', 'nameEn', 'capacity', 'startsOn', 'endsOn', 'notes'] as const
 
 /**
@@ -99,5 +105,7 @@ const EDIT_FIELDS = ['code', 'nameAr', 'nameEn', 'capacity', 'startsOn', 'endsOn
  */
 export function classFormHasChanges(cls: AcademyClass, values: ClassFormValues): boolean {
   const initial = classFormValuesOf(cls)
+  // MOD-19: the self-enrollment switch — an absent value is the stored one.
+  if (values.selfEnrollment !== undefined && values.selfEnrollment !== cls.selfEnrollment) return true
   return EDIT_FIELDS.some((field) => (values[field] ?? '') !== (initial[field] ?? ''))
 }

@@ -8,8 +8,10 @@
 //   complete    active → completed                 (completedAt)
 //   cancel      active → cancelled
 //   reactivate  withdrawn | cancelled → active     (open/running class with a free seat, eligible student)
+//   approve     pending → active                   (MOD-19: as reactivate, and every issued invoice paid — 409 payment_required)
+//   reject      pending → cancelled                (MOD-19: a reason is required — 400 rejection_reason_required)
 //
-// `completed` is final; `pending` is not written by version 1 (no waitlist).
+// `completed` is final; `pending` is an enrollment request since MOD-19 (D-R121).
 import type { AcademyClass, ClassStatus } from '../api/classes'
 import type { Enrollment, EnrollmentStatus, EnrollmentStatusAction } from '../api/enrollments'
 import { ENROLLMENT_STATUS_ACTIONS } from '../api/enrollments'
@@ -20,6 +22,8 @@ const TRANSITIONS: Readonly<Record<EnrollmentStatusAction, Partial<Readonly<Reco
   complete: { active: 'completed' },
   cancel: { active: 'cancelled' },
   reactivate: { withdrawn: 'active', cancelled: 'active' },
+  approve: { pending: 'active' },
+  reject: { pending: 'cancelled' },
 }
 
 /** Class states that accept new students and reactivations. */
@@ -44,12 +48,17 @@ export function availableEnrollmentActions(status: EnrollmentStatus, canManage: 
 
 /** Actions shown in red and confirmed as dangerous. */
 export function isDangerousEnrollmentAction(action: EnrollmentStatusAction): boolean {
-  return action === 'withdraw' || action === 'cancel'
+  return action === 'withdraw' || action === 'cancel' || action === 'reject'
 }
 
-/** True when the action takes a seat again, so the tab warns about a full class before the server does. */
+/** True when the action takes a seat (again), so the tab warns about a full class before the server does — reactivate, and since MOD-19 approve. */
 export function takesSeat(action: EnrollmentStatusAction): boolean {
-  return action === 'reactivate'
+  return action === 'reactivate' || action === 'approve'
+}
+
+/** MOD-19 (D-R126): a rejection needs a reason of 1–500 characters (`400 rejection_reason_required` otherwise); every other reason is optional. */
+export function requiresReason(action: EnrollmentStatusAction): boolean {
+  return action === 'reject'
 }
 
 /** Students are enrolled (and reactivated) in an open or running class only. */

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
-import { makeCourse } from '../test/courses'
+import { COURSE_ID, makeCourse } from '../test/courses'
+import { makeFeePlan } from '../test/payments'
 import { describeCoursesFailure } from './courses.errors'
-import { buildCreateCourseInput, courseFormHasChanges, courseFormValuesOf, englishWithoutArabic, invalidAgeRange, localizedOf, planCoursePatch } from './courses.form'
+import { buildCreateCourseInput, courseFormHasChanges, courseFormValuesOf, englishWithoutArabic, invalidAgeRange, isCoverImageUrl, localizedOf, planCoursePatch, plansFittingCourse } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction, nextCourseStatus } from './courses.status'
 
 describe('course form helpers', () => {
@@ -90,5 +91,58 @@ describe('courseFormHasChanges (KI-054 — J-F23)', () => {
     expect(courseFormHasChanges(course, { ...values, descriptionEn: 'English only' })).toBe(true)
     expect(englishWithoutArabic('', ' ')).toBe(false)
     expect(englishWithoutArabic('عربي', 'English')).toBe(false)
+  })
+})
+
+describe('course cover and pricing (MOD-19, D-R122/D-R129)', () => {
+  const plan = { id: 'plan-1', name: { ar: 'رسوم' }, isActive: true, total: 1000, currency: 'SAR', installments: 1 }
+
+  it('mirrors the cover rule: an absolute http(s) URL without spaces, at most 2048 characters; blank is no cover', () => {
+    expect(isCoverImageUrl('https://cdn.example.org/a.jpg')).toBe(true)
+    expect(isCoverImageUrl('http://localhost:5173/a.png')).toBe(true)
+    expect(isCoverImageUrl('')).toBe(true)
+    expect(isCoverImageUrl(undefined)).toBe(true)
+    for (const bad of ['javascript:alert(1)', 'cdn.example.org/a.jpg', 'https://cdn.example.org/a b.jpg', `https://x.org/${'a'.repeat(2048)}`, 'ftp://x.org/a']) {
+      expect(isCoverImageUrl(bad), bad.slice(0, 20)).toBe(false)
+    }
+  })
+
+  it('creates with a trimmed cover only when one was typed', () => {
+    expect(buildCreateCourseInput({ code: 'a', nameAr: 'أ', coverImageUrl: '  https://cdn.example.org/a.jpg ' })).toMatchObject({ coverImageUrl: 'https://cdn.example.org/a.jpg' })
+    expect(buildCreateCourseInput({ code: 'a', nameAr: 'أ', coverImageUrl: '  ' })).not.toHaveProperty('coverImageUrl')
+  })
+
+  it('sends the cover and the plan only when they change; free sends null, paid without a plan sends nothing', () => {
+    const free = makeCourse()
+    const values = courseFormValuesOf(free)
+    expect(values).toMatchObject({ coverImageUrl: '', pricing: 'free', enrollmentFeePlanId: null })
+    expect(planCoursePatch(free, values)).toBeNull()
+    expect(planCoursePatch(free, { ...values, coverImageUrl: 'https://cdn.example.org/a.jpg' })).toEqual({ coverImageUrl: 'https://cdn.example.org/a.jpg' })
+    expect(planCoursePatch(free, { ...values, pricing: 'paid', enrollmentFeePlanId: 'plan-1' })).toEqual({ enrollmentFeePlanId: 'plan-1' })
+    expect(planCoursePatch(free, { ...values, pricing: 'paid', enrollmentFeePlanId: null })).toBeNull()
+    // …but that choice is typed work the drawer keeps.
+    expect(courseFormHasChanges(free, { ...values, pricing: 'paid', enrollmentFeePlanId: null })).toBe(true)
+
+    const paid = makeCourse({ pricing: 'paid', enrollmentFeePlan: plan, coverImageUrl: 'https://cdn.example.org/a.jpg' })
+    const paidValues = courseFormValuesOf(paid)
+    expect(paidValues).toMatchObject({ pricing: 'paid', enrollmentFeePlanId: 'plan-1', coverImageUrl: 'https://cdn.example.org/a.jpg' })
+    expect(planCoursePatch(paid, paidValues)).toBeNull()
+    expect(planCoursePatch(paid, { ...paidValues, pricing: 'free' })).toEqual({ enrollmentFeePlanId: null })
+    expect(planCoursePatch(paid, { ...paidValues, enrollmentFeePlanId: 'plan-2' })).toEqual({ enrollmentFeePlanId: 'plan-2' })
+    expect(planCoursePatch(paid, { ...paidValues, coverImageUrl: '' })).toEqual({ coverImageUrl: null })
+    // A form without the pricing fields (no fee_plans.manage) leaves the price alone.
+    expect(planCoursePatch(paid, { ...paidValues, pricing: undefined, enrollmentFeePlanId: undefined })).toBeNull()
+    expect(courseFormHasChanges(paid, { ...paidValues, coverImageUrl: 'not a url' })).toBe(true)
+  })
+
+  it('offers the active plans of the course and the general ones, never a class plan or another course’s', () => {
+    const plans = [
+      makeFeePlan({ id: 'general' }),
+      makeFeePlan({ id: 'mine', course: { id: COURSE_ID, code: 'PY-101', name: { ar: 'بايثون' } } }),
+      makeFeePlan({ id: 'other', course: { id: 'other-course', code: 'X', name: { ar: 'أخرى' } } }),
+      makeFeePlan({ id: 'class', class: { id: 'cls', code: 'PY-101-A', name: { ar: 'فصل' } } }),
+      makeFeePlan({ id: 'off', isActive: false }),
+    ]
+    expect(plansFittingCourse(plans, COURSE_ID).map((item) => item.id)).toEqual(['general', 'mine'])
   })
 })

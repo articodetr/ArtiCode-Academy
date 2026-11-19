@@ -12,6 +12,11 @@
 // the class, so the seats shown beside the roster match the server too. Since
 // CH-0297 the retry of the roster's error re-reads the class as well when the
 // drawer's own read of it failed, so one retry clears both errors.
+// MOD-19: a `pending` enrollment is a request — tagged as such with the
+// payment state the server computed; the office approves it (409
+// payment_required while an invoice has a balance) or rejects it with a
+// required reason. Enrolling a student into a class of a paid course answers a
+// pending request with its invoice, worded as such.
 import { DownOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Dropdown, Flex, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import type { MenuProps, TableProps } from 'antd'
@@ -29,6 +34,7 @@ import { StatusTag } from '../components/StatusTag'
 import { directionOf } from '../i18n/language'
 import type { Direction } from '../i18n/language'
 import { useLocalized } from '../i18n/useLocalized'
+import { PaymentStateTag } from '../enrollmentRequests/RequestTags'
 import { displayNameOf, formatDateTime } from '../users/users.format'
 import {
   ENROLLMENT_REASON_MAX_LENGTH,
@@ -39,6 +45,7 @@ import {
   isEnrollableClass,
   matchesRosterSearch,
   nextEnrollmentStatus,
+  requiresReason,
   studentRefusal,
   takesSeat,
 } from './enrollments.status'
@@ -49,7 +56,7 @@ const DASH = '—'
 /** Server codes after which the class on screen is out of date (count, status) and must be re-read. */
 const STALE_CLASS_CODES = new Set(['class_full', 'class_not_enrollable'])
 /** Server codes after which the roster on screen is out of date. */
-const STALE_ROSTER_CODES = new Set(['already_enrolled', 'invalid_transition', 'enrollment_not_found'])
+const STALE_ROSTER_CODES = new Set(['already_enrolled', 'invalid_transition', 'enrollment_not_found', 'request_pending', 'payment_required', 'request_has_payments'])
 
 /** «from → to» in the reading direction: arrows are not mirrored by the bidi algorithm, so RTL needs its own. */
 const TRANSITION_ARROW: Readonly<Record<Direction, string>> = { rtl: '←', ltr: '→' }
@@ -75,6 +82,8 @@ function sinceOf(row: Enrollment): string | null {
       return row.withdrawnAt
     case 'completed':
       return row.completedAt
+    case 'pending':
+      return row.requestedAt
     default:
       return row.updatedAt
   }
@@ -118,7 +127,9 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFai
     setEnrollError(null)
     try {
       const created = await enrollStudent(cls.id, { studentId: candidate.id })
-      message.success(t('classes.enrollments.enrolled', { name: displayNameOf(created.student) }))
+      // A paid course answers a pending request with its invoice (MOD-19, D-R127), not an active enrollment.
+      if (created.status === 'pending') message.info(t('classes.enrollments.requested', { name: displayNameOf(created.student) }))
+      else message.success(t('classes.enrollments.enrolled', { name: displayNameOf(created.student) }))
       setCandidate(undefined)
       setPickerKey((key) => key + 1)
       list.reload()
@@ -165,7 +176,19 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFai
         </Space>
       ),
     },
-    { title: t('common.status'), key: 'status', render: (_, row) => <StatusTag value={row.status} /> },
+    {
+      title: t('common.status'),
+      key: 'status',
+      render: (_, row) =>
+        row.status === 'pending' ? (
+          <Space size={4} wrap>
+            <Tag color="gold">{t('classes.enrollments.request')}</Tag>
+            {row.paymentState ? <PaymentStateTag state={row.paymentState} /> : null}
+          </Space>
+        ) : (
+          <StatusTag value={row.status} />
+        ),
+    },
     { title: t('classes.enrollments.columns.enrolledAt'), key: 'enrolledAt', render: (_, row) => formatDateTime(row.enrolledAt, language) },
     { title: t('classes.enrollments.columns.since'), key: 'since', render: (_, row) => formatDateTime(sinceOf(row), language) },
   ]
@@ -173,7 +196,14 @@ export function ClassEnrollmentsTab({ cls, onClassChanged, onStale, classReadFai
     columns.push({
       title: t('classes.enrollments.columns.reason'),
       key: 'reason',
-      render: (_, row) => (row.withdrawalReason ? <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{row.withdrawalReason}</Typography.Text> : DASH),
+      render: (_, row) =>
+        row.withdrawalReason ? (
+          <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{row.withdrawalReason}</Typography.Text>
+        ) : row.rejectionReason ? (
+          <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{t('classes.enrollments.rejectionReason', { reason: row.rejectionReason })}</Typography.Text>
+        ) : (
+          DASH
+        ),
     })
     columns.push({
       title: t('common.actions'),
@@ -353,8 +383,15 @@ function EnrollmentActionModal({ cls, row, action, onDone, onFailed, onCancel }:
   const [error, setError] = useState<string | null>(null)
   const name = displayNameOf(row.student)
   const warnFull = takesSeat(action) && !hasFreeSeat(cls.capacity, cls.enrolledCount)
+  // MOD-19 (D-R126): a rejection needs its reason — refused here before any request, as the server would.
+  const reasonRequired = requiresReason(action)
+  const [reasonMissing, setReasonMissing] = useState(false)
 
   const confirm = async () => {
+    if (reasonRequired && !reason.trim()) {
+      setReasonMissing(true)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -391,13 +428,22 @@ function EnrollmentActionModal({ cls, row, action, onDone, onFailed, onCancel }:
         <Alert type="warning" showIcon message={t('classes.enrollments.confirm.reactivateFull', { enrolledCount: cls.enrolledCount, capacity: cls.capacity })} style={{ marginBottom: 12 }} />
       ) : null}
       <Form layout="vertical">
-        <Form.Item label={t('classes.enrollments.confirm.reason')} extra={t('classes.enrollments.confirm.reasonHint')} htmlFor="enrollment-status-reason">
+        <Form.Item
+          label={t(reasonRequired ? 'classes.enrollments.confirm.reasonRequired' : 'classes.enrollments.confirm.reason')}
+          extra={t(reasonRequired ? 'classes.enrollments.confirm.reasonRequiredHint' : 'classes.enrollments.confirm.reasonHint')}
+          htmlFor="enrollment-status-reason"
+          validateStatus={reasonMissing ? 'error' : undefined}
+          help={reasonMissing ? t('classes.enrollments.confirm.reasonMissing') : undefined}
+        >
           <Input.TextArea
             id="enrollment-status-reason"
             rows={2}
             maxLength={ENROLLMENT_REASON_MAX_LENGTH}
             value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            onChange={(event) => {
+              setReason(event.target.value)
+              if (event.target.value.trim()) setReasonMissing(false)
+            }}
             disabled={busy}
           />
         </Form.Item>

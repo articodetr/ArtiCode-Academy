@@ -40,6 +40,7 @@ export function makeClass(overrides: Partial<AcademyClass> = {}): AcademyClass {
     course: { id: CLASS_COURSE_ID, code: 'PY-101', name: { ar: 'أساسيات بايثون', en: 'Python Basics' }, status: 'published' },
     teachers: [makeClassTeacher()],
     enrolledCount: 0,
+    selfEnrollment: false,
     createdAt: '2026-11-03T08:00:00.000Z',
     updatedAt: '2026-11-03T08:30:00.000Z',
     ...overrides,

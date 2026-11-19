@@ -14,10 +14,10 @@ describe('notifications rules', () => {
     expect(notificationLink({})).toBeNull()
   })
 
-  it('plans one PUT of the six switches only when one changed', () => {
+  it('plans one PUT of the seven switches (MOD-19 added enrollments) only when one changed', () => {
     const saved = switchesOf(makePreferences())
     expect(planPreferencesSave(saved, { ...saved })).toBeNull()
-    expect(planPreferencesSave(saved, { ...saved, exams: false })).toHaveLength(6)
+    expect(planPreferencesSave(saved, { ...saved, exams: false })).toHaveLength(7)
   })
 
   it('builds the academy audience in the server order and counts code points', () => {

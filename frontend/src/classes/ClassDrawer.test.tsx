@@ -339,3 +339,21 @@ describe('ClassDrawer', () => {
     expect(await screen.findByText(ar.classes.done.open)).toBeInTheDocument()
   })
 })
+
+describe('ClassDrawer — self-service enrollment (MOD-19)', () => {
+  it('shows whether the class is open in the catalog and opens it with the smallest PATCH', async () => {
+    const opened = makeClass({ selfEnrollment: true, updatedAt: '2026-11-19T10:00:00.000Z' })
+    const calls = mockClassApi(() => makeClass(), { PATCH: jsonResponse(200, opened) })
+    const { onUpdated } = renderDrawer(CLASS_MANAGER_PERMISSIONS)
+    expect(await screen.findByText(ar.classes.selfEnrollment.off)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    const toggle = await screen.findByRole('switch', { name: ar.classes.fields.selfEnrollment })
+    expect(toggle).not.toBeChecked()
+    fireEvent.click(toggle)
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(opened))
+    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ selfEnrollment: true }])
+    expect(await screen.findByText(ar.classes.selfEnrollment.on)).toBeInTheDocument()
+  })
+})

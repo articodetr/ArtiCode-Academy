@@ -364,8 +364,20 @@ describe('navFor', () => {
     // is theirs by seed, but the learners are excepted — and gain «my exams» (API-121) and «my grades» (API-129) right after
     // «my assignments» (J-F50), by their server role keys. Since J-F51 the certificates entry follows
     // certificates.read_all/issue, which no learner holds: both see «my certificates» (API-135) instead, right after «my grades».
-    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
-    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'myClasses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
+    // MOD-19 (CH-0302): «explore courses» and «my courses» right after «my classes», by the same server role keys.
+    expect(keysFor(viewer('student'))).toEqual(['dashboard', 'myClasses', 'catalog', 'myCourses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
+    expect(keysFor(viewer('guardian'))).toEqual(['dashboard', 'myClasses', 'catalog', 'myCourses', 'schedule', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates', 'payments', 'notifications'])
+  })
+
+  it('opens the enrollment requests to holders of enrollments.manage only, and the catalog to the learner role keys (MOD-19)', () => {
+    expect(canAccess(viewer('staff', ['enrollments.manage']), 'enrollmentRequests')).toBe(true)
+    expect(canAccess(viewer(null, ['enrollments.manage']), 'enrollmentRequests')).toBe(true)
+    // A teacher reads the roster (enrollments.read) but manages no request.
+    expect(canAccess(viewer('teacher', ['enrollments.read']), 'enrollmentRequests')).toBe(false)
+    expect(canAccess(viewer('student'), 'catalog')).toBe(true)
+    expect(canAccess(viewer('student'), 'myCourses')).toBe(true)
+    expect(canAccess(viewer('teacher'), 'catalog')).toBe(false)
+    expect(canAccess(viewer('staff'), 'myCourses')).toBe(false)
   })
 
   it('shows the users page to a teacher because the seed grants teachers users.read (reduced projection) (MOD-03-T15)', () => {

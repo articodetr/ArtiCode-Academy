@@ -8,6 +8,10 @@ import { RequireAccess, RequireAuth } from '../auth/RequireAuth'
 import { AppLayout } from '../layout/AppLayout'
 import { AssignmentsPage } from '../pages/AssignmentsPage'
 import { AuditLogPage } from '../pages/AuditLogPage'
+import { CatalogCoursePage } from '../pages/CatalogCoursePage'
+import { CatalogPage } from '../pages/CatalogPage'
+import { EnrollmentRequestsPage } from '../pages/EnrollmentRequestsPage'
+import { MyCoursesPage } from '../pages/MyCoursesPage'
 import { CertificatePrintPage } from '../pages/CertificatePrintPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
 import { ClassesPage } from '../pages/ClassesPage'
@@ -67,6 +71,10 @@ const router = createBrowserRouter([
       { path: 'courses', element: guarded('courses', <CoursesPage />) },
       { path: 'classes', element: guarded('classes', <ClassesPage />) },
       { path: 'my-classes', element: guarded('myClasses', <MyClassesPage />) }, // `student`/`guardian` role keys (J-F04, API-060 — ownership)
+      { path: 'catalog', element: guarded('catalog', <CatalogPage />) }, // MOD-19: `student`/`guardian` role keys (API-219 reads with courses.read)
+      { path: 'catalog/:courseId', element: guarded('catalog', <CatalogCoursePage />) }, // MOD-19: API-220/221
+      { path: 'my-courses', element: guarded('myCourses', <MyCoursesPage />) }, // MOD-19: `student`/`guardian` role keys (API-060 + API-222)
+      { path: 'enrollment-requests', element: guarded('enrollmentRequests', <EnrollmentRequestsPage />) }, // MOD-19: `enrollments.manage` (API-224/225)
       { path: 'schedule', element: guarded('schedule', <SchedulePage />) },
       { path: 'lessons', element: guarded('lessons', <LessonsPage />) },
       { path: 'my-lessons', element: guarded('myLessons', <MyLessonsPage />) }, // `student`/`guardian` role keys (J-F11, API-101 — ownership)

@@ -13,6 +13,8 @@ import { payments } from './ar/payments'
 import { reports, dashboard } from './ar/reports'
 import { notifications } from './ar/notifications'
 import { search } from './ar/search'
+import { catalog, myCourses } from './ar/catalog'
+import { enrollmentRequests } from './ar/enrollmentRequests'
 
 export const ar = {
   common,
@@ -54,6 +56,10 @@ export const ar = {
   server,
   emailVerification,
   forgotPassword,
+  // MOD-19 (roadmap §4p): the catalog, «my courses» and the office's enrollment requests.
+  catalog,
+  myCourses,
+  enrollmentRequests,
 }
 
 export type Translation = typeof ar

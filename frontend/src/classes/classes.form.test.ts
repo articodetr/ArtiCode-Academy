@@ -86,4 +86,22 @@ describe('classes.form', () => {
     expect(classFormHasChanges(cls, { ...initial, capacity: null })).toBe(true)
     expect(classFormHasChanges(cls, { ...initial, capacity: undefined })).toBe(true)
   })
+
+  it('opens or closes self-service from the catalog with the smallest body (MOD-19, D-R123)', () => {
+    const base = { courseId: 'c-1', code: 'a', nameAr: 'أ', capacity: 5 }
+    // Closed by default on the server: only an opened class sends the field.
+    expect(buildCreateClassInput(base)).not.toHaveProperty('selfEnrollment')
+    expect(buildCreateClassInput({ ...base, selfEnrollment: false })).not.toHaveProperty('selfEnrollment')
+    expect(buildCreateClassInput({ ...base, selfEnrollment: true })).toMatchObject({ selfEnrollment: true })
+    const closed = makeClass({ selfEnrollment: false })
+    expect(classFormValuesOf(closed).selfEnrollment).toBe(false)
+    expect(planClassPatch(closed, { ...classFormValuesOf(closed), selfEnrollment: true })).toEqual({ selfEnrollment: true })
+    expect(planClassPatch(closed, classFormValuesOf(closed))).toBeNull()
+    const open = makeClass({ selfEnrollment: true })
+    expect(planClassPatch(open, { ...classFormValuesOf(open), selfEnrollment: false })).toEqual({ selfEnrollment: false })
+    // The switch counts as unsaved work; flipped back, or absent, it is the stored value.
+    expect(classFormHasChanges(open, { ...classFormValuesOf(open), selfEnrollment: false })).toBe(true)
+    expect(classFormHasChanges(open, { ...classFormValuesOf(open), selfEnrollment: true })).toBe(false)
+    expect(classFormHasChanges(open, { ...classFormValuesOf(open), selfEnrollment: undefined })).toBe(false)
+  })
 })

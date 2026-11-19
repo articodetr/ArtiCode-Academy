@@ -337,3 +337,96 @@ describe('ClassEnrollmentsTab', () => {
     expect(english.textContent).not.toContain('←')
   })
 })
+
+describe('ClassEnrollmentsTab — enrollment requests (MOD-19)', () => {
+  const request = makeEnrollment({
+    id: ENROLLMENT_IDS[2],
+    status: 'pending',
+    activatedAt: null,
+    requestedAt: '2026-11-19T09:00:00.000Z',
+    paymentState: 'unpaid',
+    student: makeEnrollmentStudent({ id: STUDENT_IDS[1], fullName: 'ليلى حسن', email: 'layla@test.local' }),
+  })
+
+  it('tags a pending enrollment as a request with the server’s payment state and offers approve and reject only', async () => {
+    renderTabWithApi(() => [omar, request])
+    const row = (await screen.findByText('ليلى حسن')).closest('tr') as HTMLElement
+    expect(within(row).getByText(ar.classes.enrollments.request)).toBeInTheDocument()
+    expect(within(row).getByText(ar.enrollmentRequests.paymentStates.unpaid)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(`${ar.classes.enrollments.actions.menu}: ليلى حسن`))
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.map((item) => item.textContent)).toEqual([ar.classes.enrollments.actions.approve, ar.classes.enrollments.actions.reject])
+  })
+
+  it('approves through API-059, shows payment_required with the balance due, and moves the count once approved', async () => {
+    let refuse = true
+    const approved = makeEnrollment({ ...request, status: 'active', activatedAt: '2026-11-19T10:00:00.000Z', paymentState: null })
+    const api = mockRosterApi(() => [request], {
+      POST: () => {
+        if (refuse) {
+          refuse = false
+          return jsonResponse(409, { statusCode: 409, code: 'payment_required', message: 'unpaid', paymentState: 'unpaid', invoices: [{ id: 'i1', number: 'INV-2026-00082', balance: 1000 }] })
+        }
+        return jsonResponse(200, approved)
+      },
+    })
+    const { onClassChanged } = renderTab(ROSTER_MANAGER_PERMISSIONS)
+    await screen.findByText('ليلى حسن')
+    await chooseRowAction('ليلى حسن', ar.classes.enrollments.actions.approve)
+    const dialog = dialogOf(ar.classes.enrollments.confirm.approve)
+    const ok = () => within(dialog).getByText(ar.classes.enrollments.actions.approve, { selector: 'button span' }).closest('button')!
+    fireEvent.click(ok())
+    expect(await within(dialog).findByText(/INV-2026-00082: 1000\.00/)).toBeInTheDocument()
+    // The roster re-reads after the refusal (its payment state may have moved).
+    await waitFor(() => expect(api.rosterQueries).toHaveLength(2))
+    await waitFor(() => expect(ok()).not.toHaveClass('ant-btn-loading'))
+    fireEvent.click(ok())
+    await waitFor(() => expect(onClassChanged).toHaveBeenCalledWith(expect.objectContaining({ enrolledCount: 2 })))
+    expect(api.writes().map((call) => call.body)).toEqual([{ action: 'approve' }, { action: 'approve' }])
+  })
+
+  it('refuses a rejection without its reason before any request, then sends it with the reason', async () => {
+    const rejected = makeEnrollment({ ...request, status: 'cancelled', rejectedAt: '2026-11-19T10:00:00.000Z', rejectionReason: 'لا مقاعد لهذا المستوى', paymentState: null })
+    const api = mockRosterApi(() => [request], { POST: jsonResponse(200, rejected) })
+    renderTab(ROSTER_MANAGER_PERMISSIONS)
+    await screen.findByText('ليلى حسن')
+    await chooseRowAction('ليلى حسن', ar.classes.enrollments.actions.reject)
+    const dialog = dialogOf(ar.classes.enrollments.confirm.reject)
+    expect(within(dialog).getByText(ar.classes.enrollments.confirm.reasonRequired)).toBeInTheDocument()
+    const ok = () => within(dialog).getByText(ar.classes.enrollments.actions.reject, { selector: 'button span' }).closest('button')!
+    fireEvent.click(ok())
+    expect(await within(dialog).findByText(ar.classes.enrollments.confirm.reasonMissing)).toBeInTheDocument()
+    expect(api.writes()).toEqual([])
+    fireEvent.change(within(dialog).getByLabelText(ar.classes.enrollments.confirm.reasonRequired), { target: { value: ' لا مقاعد لهذا المستوى ' } })
+    fireEvent.click(ok())
+    await waitFor(() => expect(api.writes()).toHaveLength(1))
+    expect(api.writes()[0]!.body).toEqual({ action: 'reject', reason: 'لا مقاعد لهذا المستوى' })
+    const row = (await screen.findByText('ليلى حسن')).closest('tr') as HTMLElement
+    expect(await within(row).findByText('سبب الرفض: لا مقاعد لهذا المستوى')).toBeInTheDocument()
+  })
+
+  it('words an enrollment into a paid course as a request awaiting payment and approval, and keeps the count', async () => {
+    const pending = makeEnrollment({ ...request, student: makeEnrollmentStudent({ id: layla.id, fullName: layla.fullName, email: layla.email }) })
+    let rows = [omar]
+    mockRosterApi(
+      () => rows,
+      {
+        POST: () => {
+          rows = [omar, pending]
+          return jsonResponse(201, pending)
+        },
+      },
+    )
+    const { onClassChanged } = renderTab(ROSTER_MANAGER_PERMISSIONS)
+    await screen.findByText('عمر خالد')
+    await pickStudent('ليلى سعيد')
+    fireEvent.click(screen.getByText(ar.classes.enrollments.enroll).closest('button')!)
+    expect(await screen.findByText(ar.classes.enrollments.requested.replace('{{name}}', 'ليلى سعيد'))).toBeInTheDocument()
+    expect(onClassChanged).not.toHaveBeenCalled()
+  })
+})
+
+function renderTabWithApi(roster: () => Enrollment[]) {
+  mockRosterApi(roster)
+  return renderTab(ROSTER_MANAGER_PERMISSIONS)
+}

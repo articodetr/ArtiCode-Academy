@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import type { Level } from '../api/levels'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
-import { AGE_MAX, COURSE_CODE_PATTERN, COURSE_TEXT_MAX_LENGTH, DURATION_HOURS_MAX, SESSIONS_MAX, invalidAgeRange, normaliseCourseCode } from './courses.form'
+import { AGE_MAX, COURSE_CODE_PATTERN, COURSE_TEXT_MAX_LENGTH, COVER_IMAGE_URL_MAX, DURATION_HOURS_MAX, SESSIONS_MAX, invalidAgeRange, isCoverImageUrl, normaliseCourseCode } from './courses.form'
 
 interface CourseFormFieldsProps {
   form: FormInstance
@@ -93,6 +93,20 @@ export function CourseFormFields({ form, levels }: CourseFormFieldsProps) {
           </Form.Item>
         </Col>
       </Row>
+      {/* MOD-19 (D-R129): an absolute http(s) URL, no upload; blank clears it. */}
+      <Form.Item
+        name="coverImageUrl"
+        label={t('courses.fields.coverImageUrl')}
+        extra={t('courses.hints.coverImageUrl')}
+        rules={[
+          {
+            validator: (_, value: string | undefined) =>
+              isCoverImageUrl(value) ? Promise.resolve() : Promise.reject(new Error(t('courses.validation.coverUrl'))),
+          },
+        ]}
+      >
+        <Input dir="ltr" maxLength={COVER_IMAGE_URL_MAX} placeholder="https://" inputMode="url" />
+      </Form.Item>
       <Form.Item name="levelId" label={t('courses.fields.level')}>
         <Select
           allowClear

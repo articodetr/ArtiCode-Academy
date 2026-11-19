@@ -1,4 +1,6 @@
 import type { Translation } from './ar'
+import { catalog, myCourses } from './en/catalog'
+import { enrollmentRequests } from './en/enrollmentRequests'
 
 export const en: Translation = {
   common: {
@@ -53,6 +55,9 @@ export const en: Translation = {
     courses: 'Courses & levels',
     classes: 'Classes & groups',
     myClasses: 'My classes',
+    catalog: 'Explore courses',
+    myCourses: 'My courses',
+    enrollmentRequests: 'Enrollment requests',
     schedule: 'Schedule',
     lessons: 'Lessons',
     myLessons: 'My lessons',
@@ -857,11 +862,27 @@ export const en: Translation = {
       minAge: 'Minimum age',
       maxAge: 'Maximum age',
       ageRange: 'Age range',
+      coverImageUrl: 'Cover image URL',
+      pricing: 'Course type',
+      feePlan: 'Fee plan',
       createdAt: 'Created',
       updatedAt: 'Last updated',
     },
     hints: {
       code: 'Stored upper-case: Latin letters, digits and . _ - (up to 32), unique',
+      coverImageUrl: 'A full URL starting with https:// (or http://) of an image published online; no upload. Leave it empty to remove the cover.',
+      feePlan: 'An active fee plan of this course, or a general one; the student pays its total, and the enrollment becomes active only once the invoice is paid and the request approved.',
+      pricingReadOnly: 'Changing the course type and fees needs the “Manage fee plans” permission.',
+      noFeePlans: 'No active fee plan fits this course; create one on the payments page first.',
+      feePlansFailed: 'The fee plans could not be loaded.',
+    },
+    pricing: {
+      free: 'Free',
+      paid: 'Paid',
+      planSummary: '{{name}} — {{total}}',
+      installments: 'Installments: {{installments}}',
+      planInactive: 'The plan is inactive: no new request is accepted until it is activated or another plan is chosen.',
+      general: 'General plan',
     },
     validation: {
       codeRequired: 'Enter the course code',
@@ -870,6 +891,8 @@ export const en: Translation = {
       arabicFirst: 'Enter the Arabic text first',
       ageRange: 'The maximum age is below the minimum age',
       maxLength: 'At most {{max}} characters',
+      coverUrl: 'Enter a full URL starting with http:// or https://, without spaces (up to 2048 characters)',
+      feePlanRequired: 'Choose the fee plan of the paid course',
     },
     create: {
       title: 'New course',
@@ -1012,6 +1035,9 @@ export const en: Translation = {
       level_in_use_other: 'This level cannot be deleted: {{count}} courses use it. Deactivate it instead.',
       level_order_invalid: 'The level list changed elsewhere; it was reloaded.',
       syllabus_invalid: 'The syllabus changed elsewhere; it was reloaded. Please redo your edits.',
+      fee_plan_not_found: 'The chosen fee plan no longer exists.',
+      fee_plan_inactive: 'The chosen fee plan is inactive.',
+      fee_plan_mismatch: 'This plan does not fit the course: choose a plan of this course or a general plan, not a class plan.',
       nothing_to_update: 'Nothing to save.',
       permission_denied: 'You do not have the permission this action needs {{list}}',
       origin_forbidden: 'The server refused the origin of the request. Reload the page and try again.',
@@ -1060,13 +1086,19 @@ export const en: Translation = {
       startsOn: 'Start date',
       endsOn: 'End date',
       notes: 'Notes',
+      selfEnrollment: 'Open to self-service enrollment from the catalog',
       createdAt: 'Created',
       updatedAt: 'Last updated',
+    },
+    selfEnrollment: {
+      on: 'Open in the catalog',
+      off: 'Not open in the catalog',
     },
     hints: {
       course: 'A published course; the course of a class cannot change after creation',
       code: 'Stored in upper case: Latin letters, digits and . _ - (up to 32), unique',
       capacityMin: 'Not below the current enrollments ({{count}})',
+      selfEnrollment: 'Students see it in “Explore courses” and enroll themselves while the class is open or running and its course published; in a paid course the enrollment becomes a request awaiting payment and approval.',
     },
     validation: {
       courseRequired: 'Choose the course',
@@ -1114,6 +1146,8 @@ export const en: Translation = {
       noStudents: 'No matching students',
       enroll: 'Enroll',
       enrolled: '“{{name}}” was enrolled in the class',
+      requested: 'An enrollment request awaiting payment and approval was created for “{{name}}”; its invoice is issued, and it becomes active once the payment is recorded in full and the request approved.',
+      request: 'Enrollment request',
       deletedAccount: 'Deleted account',
       pagination: {
         page: 'Page {{page}}',
@@ -1124,8 +1158,9 @@ export const en: Translation = {
         student: 'Student',
         enrolledAt: 'Enrolled on',
         since: 'Since',
-        reason: 'Withdrawal reason',
+        reason: 'Reason',
       },
+      rejectionReason: 'Rejection reason: {{reason}}',
       refusals: {
         already_enrolled: 'Already enrolled in this class',
         not_a_student: 'Does not hold the student role',
@@ -1137,6 +1172,8 @@ export const en: Translation = {
         complete: 'Complete enrollment',
         cancel: 'Cancel enrollment',
         reactivate: 'Reactivate',
+        approve: 'Approve the request',
+        reject: 'Reject the request',
       },
       confirm: {
         title: '{{action}} — {{name}}',
@@ -1144,6 +1181,11 @@ export const en: Translation = {
         complete: 'The enrollment becomes completed and cannot change afterwards.',
         cancel: 'The enrollment is cancelled and frees the seat; it can be reactivated later.',
         reactivate: 'The enrollment becomes active again and takes a seat; the student, the class and the capacity are checked as for a new enrollment.',
+        approve: 'The enrollment becomes active and takes a seat, so the student reaches the class’s lessons and assignments. The server refuses the approval while an invoice of the request is not paid in full.',
+        reject: 'The request is rejected and its unpaid invoice cancelled; the student sees the reason on “My courses”. A request with a recorded payment is not rejected until that payment is reversed.',
+        reasonRequired: 'Reason (required)',
+        reasonRequiredHint: 'Shown to the student on “My courses” and kept in the audit log; 1 to 500 characters',
+        reasonMissing: 'Write the reason of the rejection',
         reactivateFull: 'The class is currently full ({{enrolledCount}} / {{capacity}}); the server will refuse the reactivation until a seat frees up.',
         reason: 'Reason (optional)',
         reasonHint: 'Kept in the audit log, and shown as the withdrawal reason on withdraw',
@@ -1153,6 +1195,8 @@ export const en: Translation = {
         complete: 'Enrollment completed',
         cancel: 'Enrollment cancelled',
         reactivate: 'Enrollment reactivated',
+        approve: 'Request approved; the enrollment is active',
+        reject: 'Request rejected',
       },
     },
     teacherRoles: {
@@ -1232,6 +1276,12 @@ export const en: Translation = {
       not_a_student: '“{{name}}” does not hold the student role.',
       already_enrolled: 'The student already has an enrollment in this class ({{status}}); reactivate it from the list instead of enrolling again.',
       enrollment_not_found: 'The enrollment no longer exists; the list was reloaded.',
+      request_pending: 'The student has an enrollment request waiting in this class; approve or reject it from the list.',
+      course_price_unavailable: 'The fee plan of this paid course is inactive or no longer fits it; no new request can be priced now.',
+      payment_required: 'The approval needs every issued invoice of the request paid in full. Still due: {{invoices}}',
+      request_has_payments: 'The request has recorded payments ({{paymentCount}}); reverse them first, then reject the request.',
+      rejection_reason_required: 'Write the reason of the rejection (1 to 500 characters).',
+      request_not_found: 'The enrollment request no longer exists.',
       permission_denied: 'You lack the permission for this action {{list}}',
       origin_forbidden: 'The server refused the origin of the request. Reload the page and try again.',
       rate_limited: 'Too many requests in a short time. Wait a moment and try again.',
@@ -2836,6 +2886,7 @@ export const en: Translation = {
       grades: 'Grades & certificates',
       finance: 'Invoices & payments',
       announcements: 'Announcements',
+      enrollments: 'Enrollments',
     },
     inbox: {
       all: 'All',
@@ -2870,6 +2921,7 @@ export const en: Translation = {
         grades: 'A final grade fixed, a certificate issued or revoked.',
         finance: 'An invoice issued or cancelled, a payment recorded or reversed.',
         announcements: 'Announcements from teachers and the office.',
+        enrollments: 'An enrollment request received, an enrollment activated or a request declined, and new requests for the office.',
       },
     },
     announcements: {
@@ -4087,4 +4139,8 @@ export const en: Translation = {
       rate_limited: 'Too many requests in a short time. Wait 15 minutes and try again.',
     },
   },
+  // MOD-19 (roadmap §4p): the catalog, «my courses» and the office's enrollment requests.
+  catalog,
+  myCourses,
+  enrollmentRequests,
 }

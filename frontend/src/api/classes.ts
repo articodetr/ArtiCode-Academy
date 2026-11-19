@@ -50,6 +50,8 @@ export interface AcademyClass {
   teachers: ClassTeacher[]
   /** Active enrollments (computed by the server). */
   enrolledCount: number
+  /** MOD-19 (D-R123): open to self-service enrollment from the catalog while open/running. */
+  selfEnrollment: boolean
   createdAt: string
   updatedAt: string
 }
@@ -85,6 +87,8 @@ export interface CreateClassInput {
   startsOn?: string
   endsOn?: string
   notes?: string
+  /** MOD-19: open to self-service from the catalog (default false). */
+  selfEnrollment?: boolean
 }
 
 /** Body of API-053 (`UpdateClassDto`): absent = unchanged, null clears the dates and the notes; the course is fixed. */
@@ -95,6 +99,8 @@ export interface UpdateClassInput {
   startsOn?: string | null
   endsOn?: string | null
   notes?: string | null
+  /** MOD-19: a JSON boolean, not nullable. */
+  selfEnrollment?: boolean
 }
 
 /** Body of API-054: `reason` is recorded in the audit event only. */

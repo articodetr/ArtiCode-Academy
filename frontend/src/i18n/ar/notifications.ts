@@ -15,6 +15,7 @@ export const notifications = {
     grades: 'الدرجات والشهادات',
     finance: 'الفواتير والمدفوعات',
     announcements: 'الإعلانات',
+    enrollments: 'التسجيل والاشتراكات',
   },
   inbox: {
     all: 'الكل',
@@ -49,6 +50,7 @@ export const notifications = {
       grades: 'تثبيت الدرجة النهائية، وإصدار شهادة أو إلغاؤها.',
       finance: 'إصدار فاتورة أو إلغاؤها، وتسجيل دفعة أو عكسها.',
       announcements: 'الإعلانات التي يرسلها المعلمون والإدارة.',
+      enrollments: 'استلام طلب اشتراك، وتفعيل التسجيل أو رفض الطلب، وطلبات الاشتراك الجديدة للإدارة.',
     },
   },
   announcements: {

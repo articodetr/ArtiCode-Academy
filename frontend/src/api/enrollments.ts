@@ -12,11 +12,20 @@ import type { LocalizedLabel, UserStatus } from './users'
 export const ENROLLMENT_STATUSES = ['pending', 'active', 'completed', 'withdrawn', 'cancelled'] as const
 export type EnrollmentStatus = (typeof ENROLLMENT_STATUSES)[number]
 
-export const ENROLLMENT_STATUS_ACTIONS = ['withdraw', 'complete', 'cancel', 'reactivate'] as const
+/** MOD-19: `approve` (pending → active, every issued invoice paid) and `reject` (pending → cancelled, a reason required) act on a request. */
+export const ENROLLMENT_STATUS_ACTIONS = ['withdraw', 'complete', 'cancel', 'reactivate', 'approve', 'reject'] as const
 export type EnrollmentStatusAction = (typeof ENROLLMENT_STATUS_ACTIONS)[number]
 
 export const ENROLLMENT_SOURCES = ['admin', 'self', 'import'] as const
 export type EnrollmentSource = (typeof ENROLLMENT_SOURCES)[number]
+
+/**
+ * MOD-19 (D-R125): the payment state of a request over the issued invoices of
+ * its enrollment — `not_required` (free, nothing invoiced), `missing` (paid
+ * course, no issued invoice), `unpaid`, `partial`, `paid`.
+ */
+export const REQUEST_PAYMENT_STATES = ['not_required', 'missing', 'unpaid', 'partial', 'paid'] as const
+export type RequestPaymentState = (typeof REQUEST_PAYMENT_STATES)[number]
 
 /** `EnrollmentStudentDto`: the caller's projection (D-R07) — contact fields are null without `users.read_contact`. */
 export interface EnrollmentStudent {
@@ -47,6 +56,13 @@ export interface Enrollment {
   withdrawnAt: string | null
   /** Null for callers without `enrollments.manage` (an assigned teacher never sees it). */
   withdrawalReason: string | null
+  /** MOD-19: when the current request was made; null for an enrollment that was never a request. */
+  requestedAt: string | null
+  rejectedAt: string | null
+  /** Null for callers without `enrollments.manage`. */
+  rejectionReason: string | null
+  /** MOD-19: for a `pending` request only — computed from its issued invoices; null otherwise. */
+  paymentState: RequestPaymentState | null
   student: EnrollmentStudent
   createdAt: string
   updatedAt: string
@@ -65,12 +81,15 @@ export interface ListEnrollmentsParams {
   cursor?: string
 }
 
-/** Body of API-058 (`CreateEnrollmentDto`): an invited or active user holding the `student` role; starts `active` (D-R18). */
+/**
+ * Body of API-058 (`CreateEnrollmentDto`): an invited or active user holding the `student` role; starts `active` (D-R18)
+ * for a free course — for a paid one (MOD-19, D-R127) a `pending` request with an issued invoice.
+ */
 export interface CreateEnrollmentInput {
   studentId: string
 }
 
-/** Body of API-059 (`ChangeEnrollmentStatusDto`): `reason` goes to the audit event, and to `withdrawalReason` on withdraw. */
+/** Body of API-059 (`ChangeEnrollmentStatusDto`): `reason` goes to the audit event, to `withdrawalReason` on withdraw and to `rejectionReason` on reject (required there). */
 export interface ChangeEnrollmentStatusInput {
   action: EnrollmentStatusAction
   reason?: string
