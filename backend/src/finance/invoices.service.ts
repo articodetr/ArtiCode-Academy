@@ -120,6 +120,19 @@ interface PlanRow {
   installments: Prisma.JsonValue;
 }
 
+/** What the MOD-19 request rules read of an enrollment's invoices. */
+export const ENROLLMENT_INVOICE_SELECT = {
+  id: true,
+  number: true,
+  status: true,
+  totalAmount: true,
+  paidAmount: true,
+  currency: true,
+  issuedAt: true,
+} satisfies Prisma.InvoiceSelect;
+
+export type EnrollmentInvoiceRow = Prisma.InvoiceGetPayload<{ select: typeof ENROLLMENT_INVOICE_SELECT }>;
+
 interface NewInvoice {
   studentId: string;
   enrollmentId: string | null;
@@ -583,6 +596,71 @@ export class InvoicesService {
     });
     this.notifications.dispatch(batch);
     return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MOD-19 (D-R125/D-R126): the invoices of an enrollment request. Called by
+  // the request writer INSIDE its transaction, after it locked the class row,
+  // so the class → invoice lock order of API-150 holds. They record no audit
+  // event and send no notification of their own: the request records exactly
+  // one `enrollments.*` event and words one `enrollment.*` notification.
+
+  /**
+   * The invoice that prices a request: built from the course plan exactly as
+   * API-146 builds a draft from a plan (lines copied, installments split from
+   * today in the academy zone, no discount) and issued at once with the next
+   * `INV-YYYY-NNNNN` as API-149 `issue` does. `issued_by` is the caller —
+   * the student for a self-service request (D-R125). The caller checked the
+   * plan is active and fits the course (`coursePlanUsable()`).
+   */
+  async issueForRequest(
+    tx: Tx,
+    input: { studentId: string; enrollmentId: string; feePlanId: string; callerId: string; now: Date },
+  ): Promise<{ invoiceId: string; number: string; total: string; currency: string; firstDueOn: string | null }> {
+    const plan = await tx.feePlan.findUnique({ where: { id: input.feePlanId }, select: { lines: true, installments: true } });
+    if (!plan) throw financeError.feePlanNotFound(input.feePlanId);
+    const academy = await this.academyOf(tx);
+    const today = dayIn(academy.timezone, input.now);
+    const lines = readPlanLines(plan.lines).map((line) => ({ description: line.description, amount: moneyText(line.amount) }));
+    const installments = splitInstallments(invoiceTotals({ lines, discountAmount: '0.00' }).total, readPlanShares(plan.installments), today);
+    const content: InvoiceContent = { enrollmentId: input.enrollmentId, lines, installments, discountAmount: '0.00', discountReason: null, notes: null };
+    const problems = checkInvoice(content);
+    if (problems.length > 0) throw financeError.invoiceInvalid(problems);
+    const year = today.slice(0, 4);
+    const number = formatNumber(INVOICE_NUMBER_PREFIX, year, await reserveNumbers(tx, INVOICE_SEQUENCE_KEY, year, 1));
+    const invoiceId = await this.insertInvoice(
+      tx,
+      { studentId: input.studentId, enrollmentId: input.enrollmentId, feePlanId: input.feePlanId, currency: academy.currency, content, issue: { number, at: input.now } },
+      input.callerId,
+    );
+    return { invoiceId, number, total: invoiceTotals(content).total, currency: academy.currency, firstDueOn: firstDueOf(installments.map((part) => part.dueOn)) };
+  }
+
+  /**
+   * Every invoice linked to the enrollment, each row locked `FOR NO KEY UPDATE`
+   * in id order: a payment or a reversal (which lock the invoice `FOR UPDATE`)
+   * waits for the approval or rejection that reads them, and vice versa.
+   */
+  async lockEnrollmentInvoices(tx: Tx, enrollmentId: string): Promise<EnrollmentInvoiceRow[]> {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM invoices WHERE enrollment_id = ${enrollmentId}::uuid ORDER BY id FOR NO KEY UPDATE`;
+    if (locked.length === 0) return [];
+    return tx.invoice.findMany({ where: { id: { in: locked.map((row) => row.id) } }, orderBy: { id: 'asc' }, select: ENROLLMENT_INVOICE_SELECT });
+  }
+
+  /** Completed payments on these invoices (a closing request with any is refused — D-R126). */
+  async completedPaymentCount(tx: Tx, invoiceIds: readonly string[]): Promise<number> {
+    if (invoiceIds.length === 0) return 0;
+    return tx.payment.count({ where: { invoiceId: { in: [...invoiceIds] }, status: 'completed' } });
+  }
+
+  /** Cancels the issued invoices of a closing request (no completed payment — the caller checked), with a fixed reason. */
+  async cancelForRequest(tx: Tx, invoiceIds: readonly string[], callerId: string, reason: string, now: Date): Promise<void> {
+    if (invoiceIds.length === 0) return;
+    await tx.invoice.updateMany({
+      where: { id: { in: [...invoiceIds] }, status: 'issued' },
+      data: { status: 'cancelled', cancelledAt: now, cancelledById: callerId, cancelReason: reason },
+    });
   }
 
   // ---------------------------------------------------------------------------

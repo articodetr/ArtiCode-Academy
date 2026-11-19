@@ -30,14 +30,18 @@ const COURSES = '/api/courses';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 const DTO_KEYS = [
   'code',
+  // MOD-19 (CH-0301): the cover and the price.
+  'coverImageUrl',
   'createdAt',
   'description',
   'durationHours',
+  'enrollmentFeePlan',
   'id',
   'level',
   'maxAge',
   'minAge',
   'name',
+  'pricing',
   'sessionsCount',
   'status',
   'summary',

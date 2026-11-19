@@ -53,6 +53,20 @@ const SAMPLES: { [K in NotificationEventKey]: NotificationEventParams[K] } = {
   'invoice.cancelled': { invoiceId: OTHER_ID, number: 'INV-2026-00082' },
   'payment.recorded': { paymentId: LESSON_ID, invoiceId: OTHER_ID, receiptNumber: 'RCPT-2026-00052', invoiceNumber: 'INV-2026-00082', amount: AMOUNT, currency: 'SAR' },
   'payment.reversed': { paymentId: LESSON_ID, invoiceId: OTHER_ID, receiptNumber: 'RCPT-2026-00052', invoiceNumber: 'INV-2026-00082' },
+  // MOD-19 (D-R128, TEST-244).
+  'enrollment.requested': {
+    enrollmentId: LESSON_ID,
+    invoiceId: OTHER_ID,
+    courseName: ARABIC_COURSE,
+    className: lesson.className,
+    number: 'INV-2026-00082',
+    total: TOTAL,
+    currency: 'SAR',
+    firstDueOn: '2026-12-01',
+  },
+  'enrollment.request_received': { enrollmentId: LESSON_ID, studentName: 'Lina Haddad', courseName: ARABIC_COURSE, className: lesson.className },
+  'enrollment.activated': { enrollmentId: LESSON_ID, classId: CLASS_ID, courseName: ARABIC_COURSE, className: lesson.className },
+  'enrollment.rejected': { enrollmentId: LESSON_ID, courseName: ARABIC_COURSE, className: lesson.className },
 };
 
 const ARABIC_LETTER = /[؀-ۿ]/;
@@ -62,7 +76,7 @@ const LEAK = /undefined|null|\[object |NaN|\$\{/;
 const render = <K extends NotificationEventKey>(key: K, locale: TemplateLocale) => renderNotification(key, SAMPLES[key], locale);
 
 describe('notification events (D-R80, TEST-175)', () => {
-  it('lists the fifteen automatic events in five categories, each with a scope and a link of this app', () => {
+  it('lists the nineteen automatic events in six categories, each with a scope and a link of this app', () => {
     expect(NOTIFICATION_EVENT_KEYS).toEqual([
       'lesson.cancelled',
       'lesson.rescheduled',
@@ -79,6 +93,10 @@ describe('notification events (D-R80, TEST-175)', () => {
       'invoice.cancelled',
       'payment.recorded',
       'payment.reversed',
+      'enrollment.requested',
+      'enrollment.request_received',
+      'enrollment.activated',
+      'enrollment.rejected',
     ]);
     const perCategory = (category: string) => NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].category === category).length;
     expect(NOTIFICATION_CATEGORIES.map((category) => [category, perCategory(category)])).toEqual([
@@ -89,9 +107,13 @@ describe('notification events (D-R80, TEST-175)', () => {
       ['finance', 4],
       // Announcements are manual (T05): no template.
       ['announcements', 0],
+      // MOD-19 (D-R128): the seventh e-mail switch.
+      ['enrollments', 4],
     ]);
     // A class event reaches the class once per recipient; every other event is about one student.
     expect(NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].scope === 'class')).toEqual(['lesson.cancelled', 'lesson.rescheduled', 'assignment.published', 'exam.scheduled']);
+    // MOD-19: the one office event reaches the holders of enrollments.manage.
+    expect(NOTIFICATION_EVENT_KEYS.filter((key) => NOTIFICATION_EVENTS[key].scope === 'staff')).toEqual(['enrollment.request_received']);
     for (const key of NOTIFICATION_EVENT_KEYS) {
       // The shape the database checks (ck_notifications_event_key_format) and the column width.
       expect(key).toMatch(/^[a-z][a-z0-9_]*([.][a-z][a-z0-9_]*)*$/);
@@ -104,6 +126,10 @@ describe('notification events (D-R80, TEST-175)', () => {
     expect(notificationData('submission.graded', SAMPLES['submission.graded'])).toEqual({ link: '/my-assignments', submissionId: LESSON_ID, assignmentId: OTHER_ID, classId: CLASS_ID });
     expect(notificationData('invoice.issued', SAMPLES['invoice.issued'])).toEqual({ link: '/my-invoices', invoiceId: OTHER_ID });
     expect(notificationData('certificate.issued', SAMPLES['certificate.issued'])).toEqual({ link: '/my-certificates', certificateId: OTHER_ID });
+    // MOD-19: the ids only — the class is in `data` for the activation alone (the pending request is no «my …» class yet).
+    expect(notificationData('enrollment.requested', SAMPLES['enrollment.requested'])).toEqual({ link: '/my-courses', enrollmentId: LESSON_ID, invoiceId: OTHER_ID });
+    expect(notificationData('enrollment.request_received', SAMPLES['enrollment.request_received'])).toEqual({ link: '/enrollment-requests', enrollmentId: LESSON_ID });
+    expect(notificationData('enrollment.activated', SAMPLES['enrollment.activated'])).toEqual({ link: '/my-courses', enrollmentId: LESSON_ID, classId: CLASS_ID });
     // A single child is the row's own student; several are named in `data`.
     expect(notificationData('lesson.cancelled', lesson, [OTHER_ID])).toEqual({ link: '/my-lessons', lessonId: LESSON_ID, classId: CLASS_ID });
     expect(notificationData('lesson.cancelled', lesson, [OTHER_ID, LESSON_ID])).toEqual({ link: '/my-lessons', lessonId: LESSON_ID, classId: CLASS_ID, studentIds: [OTHER_ID, LESSON_ID] });
@@ -160,6 +186,11 @@ describe('notification wording (D-R83, TEST-175)', () => {
       expect(render('payment.recorded', locale).body).toContain(`${AMOUNT} SAR`);
       expect(render('payment.recorded', locale).body).toContain('RCPT-2026-00052');
       expect(render('certificate.issued', locale).body).toContain('CERT-2026-00024');
+      // MOD-19: the request's body states the invoice the student sees on «my invoices»; its title names the course only.
+      expect(render('enrollment.requested', locale).body).toContain(`${TOTAL} SAR`);
+      expect(render('enrollment.requested', locale).body).toContain('INV-2026-00082');
+      expect(render('enrollment.requested', locale).title).not.toContain('INV-2026-00082');
+      expect(render('enrollment.request_received', locale).body).toContain('Lina Haddad');
     }
     expect(render('submission.graded', 'tr')).toEqual({ title: 'Ödev notlandırıldı: Kompozisyon', body: '“Kompozisyon” ödevinin teslimi notlandırıldı: 19.75 üzerinden 7.25.' });
     expect(render('grades.finalized', 'tr')).toEqual({ title: 'Nihai not: Sabah sınıfı', body: '“Sabah sınıfı” sınıfının nihai notu: %86.4 — Çok iyi (B).' });

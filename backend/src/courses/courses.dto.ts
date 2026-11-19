@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
@@ -20,6 +20,12 @@ export const COURSE_STATUSES = Object.values(CourseStatus) as CourseStatus[];
 export const DURATION_HOURS_MAX = 99999.9;
 export const AGE_MAX = 120;
 export const SESSIONS_MAX = 10000;
+/** MOD-19 (D-R129): the cover URL, as the CHECK ck_courses_cover_image_url. */
+export const COVER_IMAGE_URL_MAX = 2048;
+const COVER_URL_OPTIONS = { protocols: ['http', 'https'], require_protocol: true, require_tld: false };
+const COVER_URL_MESSAGE = 'coverImageUrl must be an absolute http(s) URL';
+export const COURSE_PRICINGS = ['free', 'paid'] as const;
+export type CoursePricing = (typeof COURSE_PRICINGS)[number];
 
 const CODE_MESSAGE = 'code must be 1–32 characters: letters, digits, ".", "_" or "-" (stored upper-case)';
 
@@ -144,6 +150,27 @@ export class CreateCourseDto {
   @Min(0)
   @Max(AGE_MAX)
   maxAge?: number;
+
+  @ApiPropertyOptional({
+    maxLength: COVER_IMAGE_URL_MAX,
+    example: 'https://cdn.example.org/courses/py-101.jpg',
+    description: 'MOD-19: an absolute http(s) URL of the cover image (no upload)',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(1, COVER_IMAGE_URL_MAX)
+  @IsUrl(COVER_URL_OPTIONS, { message: COVER_URL_MESSAGE })
+  coverImageUrl?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'MOD-19 (D-R122): an active general fee plan that prices a request for this course; absent = a free course. ' +
+      'Needs `fee_plans.manage` besides `courses.manage`.',
+  })
+  @IsOptional()
+  @IsUUID('all')
+  enrollmentFeePlanId?: string;
 }
 
 /**
@@ -224,6 +251,25 @@ export class UpdateCourseDto {
   @Min(0)
   @Max(AGE_MAX)
   maxAge?: number | null;
+
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: COVER_IMAGE_URL_MAX, description: 'MOD-19: an absolute http(s) URL; null clears it' })
+  @ValidateIf((_dto, value) => value !== undefined && value !== null)
+  @IsString()
+  @Length(1, COVER_IMAGE_URL_MAX)
+  @IsUrl(COVER_URL_OPTIONS, { message: COVER_URL_MESSAGE })
+  coverImageUrl?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'MOD-19 (D-R122): an active fee plan of this course or a general plan; null makes the course free again ' +
+      '(enrollments already active are not touched). Needs `fee_plans.manage` besides `courses.manage`.',
+  })
+  @ValidateIf((_dto, value) => value !== undefined && value !== null)
+  @IsUUID('all')
+  enrollmentFeePlanId?: string | null;
 }
 
 export class ChangeCourseStatusDto {
@@ -248,6 +294,27 @@ export class CourseLevelDto {
 
   @ApiProperty()
   isActive: boolean;
+}
+
+/** MOD-19 (D-R122): the plan that prices a request — its total in the academy currency. */
+export class CourseFeePlanDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto })
+  name: LocalizedText;
+
+  @ApiProperty({ description: 'false = the plan was deactivated: requests are refused with course_price_unavailable' })
+  isActive: boolean;
+
+  @ApiProperty({ type: Number, example: 1200, description: 'Sum of the plan lines, two decimals' })
+  total: number;
+
+  @ApiProperty({ example: 'SAR', description: 'The academy currency (D15)' })
+  currency: string;
+
+  @ApiProperty({ type: 'integer', description: 'Installments of an invoice built from the plan' })
+  installments: number;
 }
 
 export class CourseDto {
@@ -286,6 +353,15 @@ export class CourseDto {
 
   @ApiProperty({ description: 'Number of syllabus items (MOD-04-T04)' })
   syllabusCount: number;
+
+  @ApiProperty({ type: String, nullable: true, description: 'MOD-19: an absolute http(s) URL of the cover image' })
+  coverImageUrl: string | null;
+
+  @ApiProperty({ enum: COURSE_PRICINGS, description: 'MOD-19 (D-R122): paid exactly when `enrollmentFeePlan` is set' })
+  pricing: CoursePricing;
+
+  @ApiProperty({ type: CourseFeePlanDto, nullable: true })
+  enrollmentFeePlan: CourseFeePlanDto | null;
 
   @ApiProperty({ description: 'ISO 8601' })
   createdAt: string;

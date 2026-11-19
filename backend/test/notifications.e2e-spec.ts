@@ -46,7 +46,8 @@ const INBOX = '/api/me/notifications';
 const PREFERENCES = '/api/me/notification-preferences';
 const ZERO_ID = '00000000-0000-0000-0000-000000000000';
 const ITEM_KEYS = ['announcementId', 'body', 'category', 'createdAt', 'data', 'eventKey', 'id', 'readAt', 'sender', 'student', 'title'];
-const CATEGORIES = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements'];
+// MOD-19 (CH-0301) added the seventh switch `enrollments`.
+const CATEGORIES = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements', 'enrollments'];
 
 async function canConnect(url: string): Promise<boolean> {
   const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url, connectionTimeoutMillis: 3000 }) });
@@ -621,7 +622,7 @@ describe.skipIf(!available)('MOD-12 notification engine and «my notifications»
     await api().post(`${INBOX}/${target}/read`).expect(401);
   });
 
-  it('the e-mail preferences are the caller’s own six switches; a change replaces the named categories only (API-171/172)', async () => {
+  it('the e-mail preferences are the caller’s own seven switches; a change replaces the named categories only (API-171/172)', async () => {
     const allOn = CATEGORIES.map((category) => ({ category, emailEnabled: true }));
     const switches = (off: string[]) => CATEGORIES.map((category) => ({ category, emailEnabled: !off.includes(category) }));
     // The guardian changed nothing yet: everything on, the address confirmed, a transport configured.

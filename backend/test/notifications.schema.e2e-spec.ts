@@ -162,7 +162,8 @@ describe.skipIf(!available)('database schema — MOD-12 notifications (e2e, TEST
     expect(names.indexOf(MIGRATION)).toBeGreaterThan(names.indexOf(PREVIOUS_MIGRATION));
     expect(migrations.rows.every((row) => row.ok)).toBe(true);
     const enums = async (name: string) => (await pool.query<{ v: string }>(`SELECT unnest(enum_range(NULL::${name}))::text AS v`)).rows.map((row) => row.v);
-    expect(await enums('notification_category')).toEqual(['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements']);
+    // The seventh value `enrollments` came with the fourteenth migration (MOD-19, CH-0301).
+    expect(await enums('notification_category')).toEqual(['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements', 'enrollments']);
     expect(await enums('notification_email_status')).toEqual(['none', 'queued', 'sent', 'failed', 'skipped']);
 
     await inRollback(async (client) => {

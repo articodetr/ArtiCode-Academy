@@ -75,7 +75,8 @@ const HOUR = 3_600_000;
 /** An instant relative to now, as the API takes and returns it (UTC, milliseconds). */
 const at = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 /** The six categories in the order the preferences list them. */
-const CATEGORIES = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements'] as const;
+// MOD-19 (CH-0301) added the seventh switch `enrollments`.
+const CATEGORIES = ['lessons', 'assignments', 'exams', 'grades', 'finance', 'announcements', 'enrollments'] as const;
 
 /** Whose inbox the journey reads, and the language their notifications are worded in. */
 const READERS = ['student', 'guardian'] as const;

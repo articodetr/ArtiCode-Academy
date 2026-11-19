@@ -45,6 +45,7 @@ const CLASS_SELECT = {
   startsOn: true,
   endsOn: true,
   notes: true,
+  selfEnrollment: true,
   createdAt: true,
   updatedAt: true,
   course: { select: { id: true, code: true, name: true, status: true } },
@@ -85,6 +86,7 @@ function toClassDto(row: ClassRow): ClassDto {
       assignedAt: teacher.assignedAt.toISOString(),
     })),
     enrolledCount: row._count.enrollments,
+    selfEnrollment: row.selfEnrollment,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -98,6 +100,7 @@ function valuesOf(row: ClassRow): ClassValues {
     startsOn: dateOnly(row.startsOn),
     endsOn: dateOnly(row.endsOn),
     notes: row.notes,
+    selfEnrollment: row.selfEnrollment,
   };
 }
 
@@ -113,6 +116,7 @@ function toUpdateInput(data: ClassPatch): Prisma.ClassUncheckedUpdateInput {
   if (data.startsOn !== undefined) input.startsOn = toDateColumn(data.startsOn);
   if (data.endsOn !== undefined) input.endsOn = toDateColumn(data.endsOn);
   if (data.notes !== undefined) input.notes = data.notes;
+  if (data.selfEnrollment !== undefined) input.selfEnrollment = data.selfEnrollment;
   return input;
 }
 
@@ -223,6 +227,7 @@ export class ClassesService {
             startsOn: toDateColumn(startsOn),
             endsOn: toDateColumn(endsOn),
             notes: input.notes ?? null,
+            selfEnrollment: input.selfEnrollment ?? false,
             createdById: caller.id,
           },
           select: { id: true, status: true },
@@ -258,6 +263,7 @@ export class ClassesService {
     if (input.startsOn !== undefined) patch.startsOn = input.startsOn;
     if (input.endsOn !== undefined) patch.endsOn = input.endsOn;
     if (input.notes !== undefined) patch.notes = input.notes;
+    if (input.selfEnrollment !== undefined) patch.selfEnrollment = input.selfEnrollment;
 
     const current = valuesOf(row);
     const badRange = invalidDateRange(current, patch);

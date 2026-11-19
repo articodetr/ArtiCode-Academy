@@ -7,7 +7,7 @@
 import { sameLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 
-export const CLASS_PATCH_FIELDS = ['code', 'name', 'capacity', 'startsOn', 'endsOn', 'notes'] as const;
+export const CLASS_PATCH_FIELDS = ['code', 'name', 'capacity', 'startsOn', 'endsOn', 'notes', 'selfEnrollment'] as const;
 export type ClassPatchField = (typeof CLASS_PATCH_FIELDS)[number];
 
 export interface ClassValues {
@@ -18,6 +18,8 @@ export interface ClassValues {
   startsOn: string | null;
   endsOn: string | null;
   notes: string | null;
+  /** MOD-19 (D-R123): open to self-service enrollment from the catalog. */
+  selfEnrollment: boolean;
 }
 
 export type ClassPatch = Partial<ClassValues>;

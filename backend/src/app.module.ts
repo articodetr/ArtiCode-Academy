@@ -11,6 +11,7 @@ import { ClassesModule } from './classes/classes.module.js';
 import { ENV_FILE_PATHS } from './config/env-files.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { validateEnv } from './config/env.schema.js';
+import { CatalogModule } from './catalog/catalog.module.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { ExamsModule } from './exams/exams.module.js';
 import { CertificatesModule } from './certificates/certificates.module.js';
@@ -79,6 +80,8 @@ import { UsersModule } from './users/users.module.js';
     CertificatesModule,
     // MOD-11 (§4i): fee plans (T02); invoices, payments and «my invoices» follow in T03..T05.
     FinanceModule,
+    // MOD-19 (§4p): the course catalog, self-service enrollment and the student's own requests (the office side lives in EnrollmentsModule).
+    CatalogModule,
     // MOD-13 (§4k): reports — attendance (T01); academic, financial and the overview follow in T02..T04.
     ReportsModule,
     // MOD-12 (§4j): notifications — the engine, «my notifications» and the e-mail preferences (T02); the writers call it in T03/T04, announcements in T05.

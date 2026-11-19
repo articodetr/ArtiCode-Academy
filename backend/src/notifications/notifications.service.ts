@@ -6,8 +6,8 @@ import { MY_LESSONS_ENROLLMENT_STATUSES } from '../lessons/my-lessons.policy.js'
 import { MailService } from '../mail/mail.service.js';
 import { templateLocale } from '../mail/mail.templates.js';
 import { NotificationDispatcher } from './notifications.dispatcher.js';
-import { NOTIFICATION_EVENTS, notificationData } from './notifications.events.js';
-import type { ClassEventKey, NotificationEventKey, NotificationEventParams, StudentEventKey } from './notifications.events.js';
+import { NOTIFICATION_EVENTS, notificationData, STAFF_EVENT_PERMISSIONS } from './notifications.events.js';
+import type { ClassEventKey, NotificationEventKey, NotificationEventParams, StaffEventKey, StudentEventKey } from './notifications.events.js';
 import { emailStatusFor, planClassRecipients, planStudentRecipients } from './notifications.recipients.js';
 import type { EventStudent, GuardianLink, PlannedRecipient, RecipientUser } from './notifications.recipients.js';
 import { childrenSuffix, renderNotification } from './notifications.templates.js';
@@ -38,6 +38,9 @@ const enrollmentKey = (classId: string, studentId: string) => `${classId}|${stud
 
 /** Rows per INSERT; a class is far below it, an announcement to 5,000 recipients (T05) takes five. */
 export const NOTIFICATION_INSERT_CHUNK = 1000;
+
+/** Upper bound of the recipients of one staff event (MOD-19): an office, not an announcement. */
+export const STAFF_RECIPIENTS_MAX = 200;
 
 const RECIPIENT_SELECT = { id: true, fullName: true, displayName: true, locale: true, email: true, emailVerifiedAt: true } as const;
 const STUDENT_SELECT = { ...RECIPIENT_SELECT, status: true } as const;
@@ -127,6 +130,46 @@ export class NotificationsService {
     const audience = await this.audience(tx, studentIds, NOTIFICATION_EVENTS[key].category);
     const students = studentIds.map((id) => audience.students.get(id)).filter((student): student is EventStudent => student !== undefined);
     const rows = planClassRecipients(students, audience.links, audience.guardians).map((recipient) => this.row(key, params, recipient, audience));
+    return this.write(tx, rows);
+  }
+
+  /**
+   * A staff event (MOD-19, D-R128): one notification per active, not
+   * soft-deleted user whose roles grant the event's permission key
+   * (`STAFF_EVENT_PERMISSIONS`) — the office that has to act — never the
+   * users in `exclude` (the actor). Guardians are not involved, and the row
+   * names no student (`student_user_id` null): the office reads the request
+   * on its own page. At most `STAFF_RECIPIENTS_MAX` recipients, the oldest
+   * accounts first.
+   */
+  async notifyStaff<K extends StaffEventKey>(tx: NotificationTx, key: K, params: NotificationEventParams[K], exclude: readonly string[] = []): Promise<NotificationBatch> {
+    const permissionKey = STAFF_EVENT_PERMISSIONS[key];
+    const users = await tx.user.findMany({
+      where: {
+        id: { notIn: [...exclude] },
+        deletedAt: null,
+        status: 'active',
+        roles: { some: { role: { permissions: { some: { permissionKey } } } } },
+      },
+      orderBy: { id: 'asc' },
+      take: STAFF_RECIPIENTS_MAX,
+      select: RECIPIENT_SELECT,
+    });
+    if (users.length === 0) return EMPTY_BATCH;
+    const category = NOTIFICATION_EVENTS[key].category;
+    const mutedRows = await tx.notificationPreference.findMany({
+      where: { userId: { in: users.map((user) => user.id) }, category, emailEnabled: false },
+      select: { userId: true },
+    });
+    const academy = await tx.academy.findFirst({ select: { defaultLocale: true } });
+    const audience: Audience = {
+      students: new Map(),
+      links: [],
+      guardians: new Map(),
+      muted: new Set(mutedRows.map((row) => row.userId)),
+      defaultLocale: academy?.defaultLocale ?? 'ar',
+    };
+    const rows = users.map((user) => this.row(key, params, { user, self: false, children: [], studentId: null }, audience));
     return this.write(tx, rows);
   }
 

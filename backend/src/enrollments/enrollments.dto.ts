@@ -3,6 +3,8 @@ import { Transform } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import { EnrollmentSource, EnrollmentStatus, UserStatus } from '../generated/prisma/client.js';
 import { textParam } from '../users/users.validation.js';
+import { REQUEST_PAYMENT_STATES } from './enrollment-requests.policy.js';
+import type { RequestPaymentState } from './enrollment-requests.policy.js';
 import { ENROLLMENT_STATUS_ACTIONS } from './enrollments.status.js';
 import type { EnrollmentStatusAction } from './enrollments.status.js';
 
@@ -37,7 +39,9 @@ export class ListEnrollmentsQueryDto {
 export class CreateEnrollmentDto {
   @ApiProperty({
     format: 'uuid',
-    description: 'An invited or active user who holds the `student` role; the enrollment starts `active` (D-R18)',
+    description:
+      'An invited or active user who holds the `student` role; the enrollment starts `active` (D-R18) for a free course. ' +
+      'For a paid course (MOD-19, D-R127) it starts `pending` with an issued invoice from the course plan: record the payment (API-151), then `approve` it (API-059).',
   })
   @IsUUID('all')
   studentId: string;
@@ -48,14 +52,16 @@ export class ChangeEnrollmentStatusDto {
     enum: ENROLLMENT_STATUS_ACTIONS,
     description:
       'withdraw: active→withdrawn · complete: active→completed · cancel: active→cancelled · ' +
-      'reactivate: withdrawn|cancelled→active (the class must be open or running and have a free seat)',
+      'reactivate: withdrawn|cancelled→active (the class must be open or running and have a free seat; a row that never was active in a paid course also needs its invoices paid) · ' +
+      'MOD-19: approve: pending→active (as reactivate, and every issued invoice of the enrollment paid in full — 409 payment_required) · ' +
+      'reject: pending→cancelled (a reason is required; refused with a completed payment — 409 request_has_payments; the unpaid issued invoices are cancelled)',
   })
   @IsIn(ENROLLMENT_STATUS_ACTIONS)
   action: EnrollmentStatusAction;
 
   @ApiPropertyOptional({
     maxLength: ENROLLMENT_REASON_MAX_LENGTH,
-    description: 'Free text recorded in the audit event, and in `withdrawalReason` on withdraw; trimmed, blank = absent',
+    description: 'Free text recorded in the audit event, in `withdrawalReason` on withdraw and in `rejectionReason` on reject (required there); trimmed, blank = absent',
   })
   @IsOptional()
   @Transform(textParam)
@@ -112,10 +118,10 @@ export class EnrollmentDto {
   @ApiProperty({ format: 'uuid' })
   classId: string;
 
-  @ApiProperty({ enum: ENROLLMENT_STATUSES, description: 'Version 1 never writes `pending` (no waitlist — D-R18)' })
+  @ApiProperty({ enum: ENROLLMENT_STATUSES, description: '`pending` = an enrollment request (MOD-19, D-R121): no access to the class until it is approved' })
   status: EnrollmentStatus;
 
-  @ApiProperty({ enum: ENROLLMENT_SOURCES, description: 'Version 1 writes `admin` only' })
+  @ApiProperty({ enum: ENROLLMENT_SOURCES, description: '`admin` (the office, API-058) or `self` (the catalog, API-221 — MOD-19)' })
   source: EnrollmentSource;
 
   @ApiProperty({ description: 'ISO 8601 — first enrollment; kept on reactivation' })
@@ -136,6 +142,22 @@ export class EnrollmentDto {
     description: 'Set on withdraw; null for callers without `enrollments.manage` (an assigned teacher reading the roster sees `student.deletedAt` but not the reason)',
   })
   withdrawalReason: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'MOD-19: when the current request was made; null for an enrollment that was never a request' })
+  requestedAt: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'MOD-19: set when the request was rejected' })
+  rejectedAt: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: 'MOD-19: the rejection reason; null for callers without `enrollments.manage`' })
+  rejectionReason: string | null;
+
+  @ApiProperty({
+    enum: REQUEST_PAYMENT_STATES,
+    nullable: true,
+    description: 'MOD-19: for a `pending` request only — computed from its issued invoices (not_required | missing | unpaid | partial | paid); null otherwise',
+  })
+  paymentState: RequestPaymentState | null;
 
   @ApiProperty({ type: EnrollmentStudentDto })
   student: EnrollmentStudentDto;

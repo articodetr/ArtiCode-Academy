@@ -37,6 +37,11 @@ const ENROLLMENT_KEYS = [
   'createdAt',
   'enrolledAt',
   'id',
+  // MOD-19 (CH-0301): the request fields — null for an office enrollment of a free course.
+  'paymentState',
+  'rejectedAt',
+  'rejectionReason',
+  'requestedAt',
   'source',
   'status',
   'student',

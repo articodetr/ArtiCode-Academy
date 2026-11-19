@@ -6,13 +6,17 @@
 //   complete    active → completed                 (completed_at)
 //   cancel      active → cancelled
 //   reactivate  withdrawn | cancelled → active     (needs an eligible student and an open/running class with a free seat)
+//   approve     pending → active                   (MOD-19, D-R125: the reactivate checks + every issued invoice paid)
+//   reject      pending → cancelled                (MOD-19, D-R126: rejected_at/by + a required reason)
 //
-// `completed` is final; `pending` is not used by version 1 (no waitlist), so
-// no action applies to it. The class state machine (classes.status.ts) moves
-// active enrollments to completed/cancelled on its own `complete`/`cancel`.
+// `completed` is final. `pending` is an enrollment REQUEST since MOD-19
+// (D-R121; it was unused before — no waitlist): only approve and reject apply
+// to it, and the student's own cancel goes through API-223. The class state
+// machine (classes.status.ts) moves active enrollments to completed/cancelled
+// on its own `complete`/`cancel`; pending requests stay for the office.
 import type { ClassStatus, EnrollmentStatus, Prisma } from '../generated/prisma/client.js';
 
-export const ENROLLMENT_STATUS_ACTIONS = ['withdraw', 'complete', 'cancel', 'reactivate'] as const;
+export const ENROLLMENT_STATUS_ACTIONS = ['withdraw', 'complete', 'cancel', 'reactivate', 'approve', 'reject'] as const;
 export type EnrollmentStatusAction = (typeof ENROLLMENT_STATUS_ACTIONS)[number];
 
 const TRANSITIONS: Readonly<Record<EnrollmentStatusAction, Partial<Readonly<Record<EnrollmentStatus, EnrollmentStatus>>>>> = {
@@ -20,6 +24,8 @@ const TRANSITIONS: Readonly<Record<EnrollmentStatusAction, Partial<Readonly<Reco
   complete: { active: 'completed' },
   cancel: { active: 'cancelled' },
   reactivate: { withdrawn: 'active', cancelled: 'active' },
+  approve: { pending: 'active' },
+  reject: { pending: 'cancelled' },
 };
 
 /** Class states that accept new students and reactivations. */
@@ -35,9 +41,9 @@ export function allowedEnrollmentActions(from: EnrollmentStatus): EnrollmentStat
   return ENROLLMENT_STATUS_ACTIONS.filter((action) => TRANSITIONS[action][from] !== undefined);
 }
 
-/** True when the action takes a seat again, so the student, the class state and the capacity are checked under the class lock, as for a new enrollment. */
+/** True when the action takes a seat (again), so the student, the class state and the capacity are checked under the class lock, as for a new enrollment. */
 export function takesSeat(action: EnrollmentStatusAction): boolean {
-  return action === 'reactivate';
+  return action === 'reactivate' || action === 'approve';
 }
 
 /** Students are enrolled (and reactivated) in an open or running class only. */
@@ -55,13 +61,17 @@ export function hasFreeSeat(capacity: number, activeCount: number): boolean {
  * `withdrawn_at` and keeps the reason in `withdrawal_reason`; `complete`
  * stamps `completed_at`; `reactivate` stamps `activated_at` and clears the
  * withdrawal and completion columns (the row describes the current
- * enrollment; its history is in the audit log).
+ * enrollment; its history is in the audit log) — and the rejection columns of
+ * a closed request it reopens. `approve` writes what `reactivate` writes;
+ * `reject` stamps `rejected_at`/`rejected_by` and keeps the reason in
+ * `rejection_reason` (D-R126).
  */
 export function enrollmentWrite(
   action: EnrollmentStatusAction,
   to: EnrollmentStatus,
   now: Date,
   reason: string | null,
+  actorId: string | null = null,
 ): Prisma.EnrollmentUncheckedUpdateManyInput {
   switch (action) {
     case 'withdraw':
@@ -71,7 +81,19 @@ export function enrollmentWrite(
     case 'cancel':
       return { status: to };
     case 'reactivate':
-      return { status: to, activatedAt: now, withdrawnAt: null, withdrawalReason: null, completedAt: null };
+    case 'approve':
+      return {
+        status: to,
+        activatedAt: now,
+        withdrawnAt: null,
+        withdrawalReason: null,
+        completedAt: null,
+        rejectedAt: null,
+        rejectedById: null,
+        rejectionReason: null,
+      };
+    case 'reject':
+      return { status: to, rejectedAt: now, rejectedById: actorId, rejectionReason: reason };
   }
 }
 

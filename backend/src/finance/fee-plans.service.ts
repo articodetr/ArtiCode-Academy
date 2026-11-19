@@ -204,7 +204,9 @@ export class FeePlansService {
       const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM fee_plans WHERE id = ${id}::uuid FOR UPDATE`;
       if (!locked[0]) throw financeError.feePlanNotFound(id);
       const invoiceCount = await tx.invoice.count({ where: { feePlanId: id } });
-      if (invoiceCount > 0) throw financeError.feePlanInUse(invoiceCount);
+      // MOD-19 (D-R122): a course pricing its requests with the plan keeps it too (the FK is NO ACTION).
+      const courseCount = await tx.course.count({ where: { enrollmentFeePlanId: id } });
+      if (invoiceCount > 0 || courseCount > 0) throw financeError.feePlanInUse(invoiceCount, courseCount);
       await tx.feePlan.delete({ where: { id } });
       await this.audit.record({ action: FEE_PLANS_AUDIT_ACTIONS.deleted, actorUserId: caller.id, entityType: FEE_PLANS_ENTITY_TYPE, entityId: id, metadata: {}, ...ctx }, tx);
     });

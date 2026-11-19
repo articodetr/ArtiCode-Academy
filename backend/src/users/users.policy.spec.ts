@@ -59,7 +59,9 @@ describe('users creation policy', () => {
     expect(exceedingPermissions(PERMISSION_KEYS, PERMISSION_KEYS)).toEqual([]);
     expect(exceedingPermissions(teacher, PERMISSION_KEYS)).toEqual([]);
     // A caller with users.roles.assign but little else cannot mint an admin.
-    expect(exceedingPermissions(PERMISSION_KEYS, ['users.create', 'users.roles.assign']).length).toBeGreaterThan(40);
+    // Everything but the two keys held and the learner baseline (which grew by enrollments.self_enroll in MOD-19 — D-R124).
+    expect(exceedingPermissions(PERMISSION_KEYS, ['users.create', 'users.roles.assign']).length).toBe(PERMISSION_KEYS.length - 2 - LEARNER_BASELINE_PERMISSIONS.size);
+    expect(exceedingPermissions(PERMISSION_KEYS, ['users.create', 'users.roles.assign']).length).toBeGreaterThan(35);
     // Result is sorted and de-duplicated.
     expect(exceedingPermissions(['b.x', 'a.x', 'b.x'], [])).toEqual(['a.x', 'b.x']);
   });
