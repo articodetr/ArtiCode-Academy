@@ -1,5 +1,8 @@
 import type { Translation } from './ar'
 import { catalog, myCourses } from './en/catalog'
+import { mySchool } from './en/mySchool'
+import { learn } from './en/learn'
+import { curriculum, learningProgress, publicCatalog } from './en/curriculum'
 import { enrollmentRequests } from './en/enrollmentRequests'
 
 export const en: Translation = {
@@ -57,6 +60,7 @@ export const en: Translation = {
     myClasses: 'My classes',
     catalog: 'Explore courses',
     myCourses: 'My courses',
+    mySchool: 'My School',
     enrollmentRequests: 'Enrollment requests',
     schedule: 'Schedule',
     lessons: 'Lessons',
@@ -145,6 +149,8 @@ export const en: Translation = {
     signingIn: 'Signing in...',
     identifierRequired: 'Enter your email or username',
     passwordRequired: 'Enter your password',
+    // MOD-20 (D-R138): shown only while the academy opens its catalog to visitors (API-205 `catalogPublic`).
+    browseCourses: 'Browse courses',
     sessionSwitched:
       'Another account signed in from another tab of this browser, so this tab now runs as {{name}}. The last request was not sent. To use two accounts at once, open the second one in a private window or another browser.',
     // The start-up session check could not tell after its retries (AuthProvider, CH-0296): never the sign-in form.
@@ -3192,6 +3198,20 @@ export const en: Translation = {
       workingDays: 'Working days',
       workingDaysHint: 'Clearing every day sets the working days back to “not set”.',
     },
+    // MOD-20 (D-R134): when a lesson of an uploaded video or audio counts as completed in «My School».
+    learning: {
+      title: 'Learning in “My School”',
+      intro: 'A lesson of an uploaded video or audio file is completed once the student has played this share of its length; YouTube and Vimeo lessons, texts and files are completed by the student.',
+      videoCompletionPercent: 'Share played to complete a lesson',
+      videoCompletionHint: 'A whole number from {{min}} to {{max}}. Leave it empty to use {{default}}%.',
+      invalid: 'Enter a whole number from {{min}} to {{max}}, or leave it empty.',
+    },
+    // MOD-20 (D-R138): the public catalog for visitors (/explore).
+    catalog: {
+      title: 'Course browsing for visitors',
+      intro: 'When on, visitors who are not signed in can browse the published courses: their overview, fees and lesson titles only — never teacher names or class schedules — and the sign-in page links to “Browse courses”.',
+      publicBrowsing: 'Let visitors browse the courses',
+    },
     weekdays: {
       sun: 'Sunday',
       mon: 'Monday',
@@ -4143,4 +4163,10 @@ export const en: Translation = {
   catalog,
   myCourses,
   enrollmentRequests,
+  // MOD-20 (roadmap §4q): «My School», the learning workspace, the curriculum editor, the class learning progress and the public catalog.
+  mySchool,
+  learn,
+  curriculum,
+  learningProgress,
+  publicCatalog,
 }

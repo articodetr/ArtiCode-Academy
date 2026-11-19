@@ -28,6 +28,20 @@ export const settings = {
     workingDays: 'أيام العمل',
     workingDaysHint: 'إلغاء تحديد كل الأيام يعيد أيام العمل إلى «غير مضبوط».',
   },
+  // MOD-20 (D-R134): when a lesson of an uploaded video or audio counts as completed in «مدرستي».
+  learning: {
+    title: 'التعلّم في «مدرستي»',
+    intro: 'يكتمل درس الفيديو أو الصوت المرفوع ملفاً حين يشاهد الطالب هذه النسبة من مدته؛ دروس يوتيوب وفيميو والنصوص والملفات يُكملها الطالب بنفسه.',
+    videoCompletionPercent: 'نسبة المشاهدة اللازمة لاكتمال الدرس',
+    videoCompletionHint: 'عدد صحيح من {{min}} إلى {{max}}. اتركه فارغاً لاعتماد {{default}}٪.',
+    invalid: 'أدخل عدداً صحيحاً من {{min}} إلى {{max}}، أو اتركه فارغاً.',
+  },
+  // MOD-20 (D-R138): the public catalog for visitors (/explore).
+  catalog: {
+    title: 'تصفّح الزوار للدورات',
+    intro: 'عند التفعيل يتصفّح الزوار دون تسجيل دخول الدورات المنشورة: نبذتها ورسومها وعناوين دروسها فقط، دون أسماء المعلمين أو مواعيد الفصول، وتظهر في صفحة الدخول وصلة «تصفّح الدورات».',
+    publicBrowsing: 'السماح للزوار بتصفّح الدورات',
+  },
   weekdays: {
     sun: 'الأحد',
     mon: 'الاثنين',

@@ -2,15 +2,20 @@ import { describe, expect, it } from 'vitest'
 import {
   exampleSerial,
   isSerialPrefixInput,
+  isVideoCompletionInput,
   isWeekday,
   normaliseSerialPrefix,
   normaliseWorkingDays,
   orderedWeekdays,
+  planCatalogPatch,
   planCertificatesPatch,
+  planLearningPatch,
   planSchedulingPatch,
+  publicBrowsingOf,
   sameDays,
   schedulingFormValuesOf,
   serialPrefixOf,
+  videoCompletionPercentOf,
 } from './academy.settings'
 
 const UNSET = { weekStartsOn: null, workingDays: null }
@@ -93,5 +98,49 @@ describe('certificate prefix (J-F51 — mirror of serialPrefixSchema, D-R51)', (
     expect(exampleSerial('aca', 2026)).toBe('ACA-2026-00001')
     expect(exampleSerial('', 2026)).toBe('CERT-2026-00001')
     expect(exampleSerial('A', 2027)).toBe('CERT-2027-00001')
+  })
+})
+
+describe('playback share (MOD-20, D-R134 — mirror of settings.learning.videoCompletionPercent)', () => {
+  it('accepts an empty field (the default 90) or an integer from 50 to 100', () => {
+    for (const value of [null, undefined, '', 50, 90, 100]) expect(isVideoCompletionInput(value)).toBe(true)
+    for (const value of [49, 101, 75.5, '80', Number.NaN, true]) expect(isVideoCompletionInput(value)).toBe(false)
+  })
+
+  it('reads the stored share defensively: a missing domain or a value outside the schema reads as not set', () => {
+    expect(videoCompletionPercentOf({ learning: { videoCompletionPercent: 80 } })).toBe(80)
+    expect(videoCompletionPercentOf({ learning: { videoCompletionPercent: null } })).toBeNull()
+    expect(videoCompletionPercentOf({ learning: { videoCompletionPercent: 40 } })).toBeNull()
+    expect(videoCompletionPercentOf({ learning: { videoCompletionPercent: '80' } })).toBeNull()
+    expect(videoCompletionPercentOf({ scheduling: UNSET })).toBeNull()
+    expect(videoCompletionPercentOf(null)).toBeNull()
+  })
+
+  it('plans the smallest settings.learning patch: unchanged → null, a new share, an emptied field clears it', () => {
+    expect(planLearningPatch(null, null)).toBeNull()
+    expect(planLearningPatch(80, 80)).toBeNull()
+    expect(planLearningPatch(null, 80)).toEqual({ videoCompletionPercent: 80 })
+    expect(planLearningPatch(80, null)).toEqual({ videoCompletionPercent: null })
+    expect(planLearningPatch(80, undefined)).toBeNull()
+  })
+})
+
+describe('public catalog switch (MOD-20, D-R138 — mirror of settings.catalog.publicBrowsing)', () => {
+  it('reads the stored switch: a boolean as stored, anything else as not set', () => {
+    expect(publicBrowsingOf({ catalog: { publicBrowsing: true } })).toBe(true)
+    expect(publicBrowsingOf({ catalog: { publicBrowsing: false } })).toBe(false)
+    expect(publicBrowsingOf({ catalog: { publicBrowsing: 'yes' } })).toBeNull()
+    expect(publicBrowsingOf({ catalog: [] })).toBeNull()
+    expect(publicBrowsingOf({})).toBeNull()
+  })
+
+  it('sends true to switch it on and null to switch it off; a stored false already reads as off', () => {
+    expect(planCatalogPatch(null, false)).toBeNull()
+    expect(planCatalogPatch(false, false)).toBeNull()
+    expect(planCatalogPatch(true, true)).toBeNull()
+    expect(planCatalogPatch(null, true)).toEqual({ publicBrowsing: true })
+    expect(planCatalogPatch(false, true)).toEqual({ publicBrowsing: true })
+    expect(planCatalogPatch(true, false)).toEqual({ publicBrowsing: null })
+    expect(planCatalogPatch(true, undefined)).toBeNull()
   })
 })

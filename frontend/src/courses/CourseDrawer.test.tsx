@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Course } from '../api/courses'
 import { ar } from '../i18n/ar'
-import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, makeLevel, makeSyllabus } from '../test/courses'
+import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, makeLevel } from '../test/courses'
+import { makeCurriculum } from '../test/curriculum'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeFeePlan } from '../test/payments'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -21,7 +22,7 @@ function mockCourseApi(detail: () => Course, writes: Partial<Record<string, Resp
   mockFetch((url, init) => {
     const method = init?.method ?? 'GET'
     calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-    if (method === 'GET') return jsonResponse(200, url.endsWith('/syllabus') ? makeSyllabus() : detail())
+    if (method === 'GET') return jsonResponse(200, url.endsWith('/curriculum') ? makeCurriculum() : detail())
     return writes[method] ?? jsonResponse(500, { statusCode: 500, message: 'unexpected' })
   })
   return calls
@@ -150,15 +151,21 @@ describe('CourseDrawer', () => {
     expect(await screen.findByLabelText(ar.courses.fields.nameEn)).toHaveValue('Python Basics')
   })
 
-  it('shows the syllabus tab (MOD-04-T06): the items in order, read-only for a reader', async () => {
-    const calls = mockCourseApi(() => makeCourse({ status: 'published' }))
+  it('shows the curriculum tab (MOD-20): its levels and lessons, read-only for a teacher of the course (canManage false), read only once it opens', async () => {
+    const urls: string[] = []
+    mockFetch((url) => {
+      urls.push(url)
+      return jsonResponse(200, url.endsWith('/curriculum') ? makeCurriculum({ canManage: false }) : makeCourse({ status: 'published' }))
+    })
     renderDrawer(COURSE_READER_PERMISSIONS)
     await screen.findByText('PY-101')
+    expect(urls).toEqual([`/api/courses/${COURSE_ID}`])
 
-    fireEvent.click(screen.getByText(ar.courses.drawer.tabs.syllabus))
+    fireEvent.click(screen.getByRole('tab', { name: ar.curriculum.tab }))
     expect(await screen.findByText('الشروط')).toBeInTheDocument()
-    expect(screen.queryByText(ar.courses.syllabus.edit)).not.toBeInTheDocument()
-    expect(calls.map((call) => call.url)).toEqual([`/api/courses/${COURSE_ID}`, `/api/courses/${COURSE_ID}/syllabus`])
+    expect(screen.getByText(ar.curriculum.readOnly)).toBeInTheDocument()
+    expect(screen.queryByText(ar.curriculum.save)).not.toBeInTheDocument()
+    expect(urls).toEqual([`/api/courses/${COURSE_ID}`, `/api/courses/${COURSE_ID}/curriculum`])
   })
 
   it('words the length limit of a text field in its own message, not antd default text, and sends nothing (J-F23)', async () => {
@@ -186,7 +193,7 @@ describe('CourseDrawer — cover and price (MOD-19)', () => {
       const method = init?.method ?? 'GET'
       calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
       if (method === 'GET' && url.startsWith('/api/fee-plans')) return jsonResponse(200, { items: [plan, classPlan] })
-      if (method === 'GET') return jsonResponse(200, url.endsWith('/syllabus') ? makeSyllabus() : detail())
+      if (method === 'GET') return jsonResponse(200, url.endsWith('/curriculum') ? makeCurriculum() : detail())
       return patch ?? jsonResponse(500, { statusCode: 500, message: 'unexpected' })
     })
     return calls

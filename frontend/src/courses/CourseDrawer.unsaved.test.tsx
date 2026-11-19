@@ -1,4 +1,4 @@
-// KI-054 (J-F23): while the edit form or the syllabus editor of the course drawer
+// KI-054 (J-F23): while the edit form or the curriculum editor (MOD-20) of the course drawer
 // holds unsaved work, Escape and a mask click no longer close the drawer, and the
 // close button asks before discarding it. An editor opened without a change, or
 // changed back, holds nothing (the J-F21 rule of the class drawer).
@@ -6,13 +6,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
-import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse, makeLevel, makeSyllabus } from '../test/courses'
+import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse, makeLevel } from '../test/courses'
+import { makeCurriculum } from '../test/curriculum'
 import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CourseDrawer } from './CourseDrawer'
 
-/** The course and its syllabus; every write is recorded and refused. */
+/** The course and its curriculum; every write is recorded and refused. */
 function mockCourseApi() {
   const writes: string[] = []
   mockFetch((url, init) => {
@@ -21,7 +22,7 @@ function mockCourseApi() {
       writes.push(`${method} ${url}`)
       return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
     }
-    return jsonResponse(200, url.endsWith('/syllabus') ? makeSyllabus() : makeCourse())
+    return jsonResponse(200, url.endsWith('/curriculum') ? makeCurriculum() : makeCourse())
   })
   return { writes }
 }
@@ -48,12 +49,14 @@ async function startEditing() {
   return screen.findByLabelText(ar.courses.fields.nameEn)
 }
 
-async function startSyllabusEditing() {
+/** Opens the curriculum tab: its editor is there at once for a manager. */
+async function startCurriculumEditing() {
   await screen.findByText('PY-101')
-  fireEvent.click(screen.getByRole('tab', { name: ar.courses.drawer.tabs.syllabus }))
-  fireEvent.click((await screen.findByText(ar.courses.syllabus.edit)).closest('button')!)
-  await screen.findAllByTestId('syllabus-item-editor')
+  fireEvent.click(screen.getByRole('tab', { name: ar.curriculum.tab }))
+  await screen.findAllByTestId('curriculum-lesson')
 }
+
+const lessonRows = () => screen.getAllByTestId('curriculum-lesson')
 
 /** Clicks the drawer's close button and returns the «discard?» confirmation it opens (the latest one). */
 async function openDiscardDialog(): Promise<HTMLElement> {
@@ -131,21 +134,21 @@ describe('CourseDrawer — unsaved editors (KI-054)', () => {
     expect(writes).toEqual([])
   })
 
-  it('keeps the syllabus draft on Escape and on a mask click; the close button asks, and confirm closes', async () => {
+  it('keeps the curriculum draft on Escape and on a mask click; the close button asks, and confirm closes', async () => {
     const { writes } = mockCourseApi()
     const { onClose } = renderDrawer()
-    await startSyllabusEditing()
+    await startCurriculumEditing()
 
-    // A change without opening any popup: the first item leaves the list.
-    fireEvent.click(screen.getByLabelText(`${ar.courses.syllabus.remove} 1`))
-    expect(screen.getAllByTestId('syllabus-item-editor')).toHaveLength(2)
+    // A change without opening any popup: the first lesson leaves the curriculum.
+    fireEvent.click(within(lessonRows()[0]!).getByLabelText(ar.curriculum.lesson.remove))
+    expect(lessonRows()).toHaveLength(3)
 
     pressEscape()
     pressEscape()
     await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
-    expect(screen.getAllByTestId('syllabus-item-editor')).toHaveLength(2)
+    expect(lessonRows()).toHaveLength(3)
 
     const first = await openDiscardDialog()
     fireEvent.click(within(first).getByText(ar.common.unsaved.cancel).closest('button')!)
@@ -156,28 +159,28 @@ describe('CourseDrawer — unsaved editors (KI-054)', () => {
     expect(writes).toEqual([])
   })
 
-  it('holds nothing while the syllabus editor is open without a change: Escape closes at once', async () => {
+  it('holds nothing while the curriculum editor is open without a change: Escape closes at once', async () => {
     mockCourseApi()
     const { onClose } = renderDrawer()
-    await startSyllabusEditing()
+    await startCurriculumEditing()
 
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()
   })
 
-  it('lets go of an item added and removed again: Escape keeps the editor while the list differs and closes once it matches', async () => {
+  it('lets go of a lesson added and removed again: Escape keeps the editor while the curriculum differs and closes once it matches', async () => {
     const { writes } = mockCourseApi()
     const { onClose } = renderDrawer()
-    await startSyllabusEditing()
+    await startCurriculumEditing()
 
-    fireEvent.click(screen.getByText(ar.courses.syllabus.add).closest('button')!)
-    expect(screen.getAllByTestId('syllabus-item-editor')).toHaveLength(4)
+    fireEvent.click(within(screen.getByTestId('curriculum-loose')).getByText(ar.curriculum.lesson.add).closest('button')!)
+    expect(lessonRows()).toHaveLength(5)
     pressEscape()
     expect(onClose).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByLabelText(`${ar.courses.syllabus.remove} 4`))
-    expect(screen.getAllByTestId('syllabus-item-editor')).toHaveLength(3)
+    fireEvent.click(within(lessonRows()[4]!).getByLabelText(ar.curriculum.lesson.remove))
+    expect(lessonRows()).toHaveLength(4)
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()

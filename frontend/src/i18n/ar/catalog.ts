@@ -1,5 +1,5 @@
 // MOD-19 (roadmap §4p) — the learner side: «استكشف الدورات» (/catalog), a
-// course of the catalog (/catalog/:courseId) and «دوراتي» (/my-courses).
+// course of the catalog (/catalog/:courseId) and «دوراتي» (/my-courses — صارت «مدرستي» /my-school في MOD-20).
 // English in ../en/catalog.ts with the same keys (`Translation = typeof ar`).
 // No pluralised count: every number stands as the value of a label.
 
@@ -61,6 +61,8 @@ export const catalog = {
     unavailable: 'التسجيل غير متاح حالياً',
     unavailableHint: 'لا يوجد في هذه الدورة الآن فصل مفتوح للتسجيل وفيه مقعد شاغر. راجع الصفحة لاحقاً.',
     noClasses: 'لا يوجد فصل مفتوح للتسجيل في هذه الدورة.',
+    // MOD-20 (D-R138): the visitor chose «سجّل في هذه الدورة» on the public page and signed in.
+    intentNotice: 'اختر الفصل الذي تريد التسجيل فيه',
   },
   class: {
     status: 'حالة الفصل',

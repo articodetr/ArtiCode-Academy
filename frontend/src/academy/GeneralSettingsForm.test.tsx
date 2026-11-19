@@ -35,13 +35,18 @@ function mockAcademyApi({ academy = makeAcademy(), write }: Options = {}) {
   return { writes, fetchMock, gets: () => gets }
 }
 
-type SettingsPatch = { scheduling?: Record<string, unknown>; certificates?: Record<string, unknown> }
+type SettingsPatch = { scheduling?: Record<string, unknown>; certificates?: Record<string, unknown>; learning?: Record<string, unknown>; catalog?: Record<string, unknown> }
+
+/** The MOD-20 keys as a freshly seeded academy holds them. */
+const UNSET_MOD20 = { learning: { videoCompletionPercent: null }, catalog: { publicBrowsing: null } }
 
 /** What the server does with `settings` of a PATCH: key by key, `null` clears (days already sorted by the form). */
 function mergeSettings(current: AcademySettings, patch: SettingsPatch | undefined): AcademySettings {
   return {
     scheduling: { ...current.scheduling, ...(patch?.scheduling ?? {}) } as AcademySettings['scheduling'],
     certificates: { ...current.certificates, ...(patch?.certificates ?? {}) } as AcademySettings['certificates'],
+    learning: { ...current.learning, ...(patch?.learning ?? {}) } as AcademySettings['learning'],
+    catalog: { ...current.catalog, ...(patch?.catalog ?? {}) } as AcademySettings['catalog'],
   }
 }
 
@@ -202,7 +207,7 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
   const { sun, mon, tue, wed, thu, fri, sat } = ar.settings.weekdays
 
   it('shows the stored first day in the select and the working days checked, ordered from that first day', async () => {
-    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] }, certificates: { serialPrefix: null } } }) })
+    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0, 1, 2, 3, 4] }, certificates: { serialPrefix: null }, ...UNSET_MOD20 } }) })
     renderForm()
 
     await screen.findByLabelText(ar.settings.academyNameAr)
@@ -235,7 +240,7 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
   })
 
   it('clears the working days with null when every day is unchecked, and leaves the first day out of the body', async () => {
-    const api = mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1] }, certificates: { serialPrefix: null } } }) })
+    const api = mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 0, workingDays: [0, 1] }, certificates: { serialPrefix: null }, ...UNSET_MOD20 } }) })
     renderForm()
 
     await screen.findByLabelText(ar.settings.academyNameAr)
@@ -248,7 +253,7 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
   })
 
   it('shows the schedule read-only to a viewer without academy.settings.manage', async () => {
-    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0] }, certificates: { serialPrefix: null } } }) })
+    mockAcademyApi({ academy: makeAcademy({ settings: { scheduling: { weekStartsOn: 6, workingDays: [0] }, certificates: { serialPrefix: null }, ...UNSET_MOD20 } }) })
     renderForm(SETTINGS_READER_PERMISSIONS)
 
     await screen.findByLabelText(ar.settings.academyNameAr)
@@ -262,7 +267,7 @@ describe('GeneralSettingsForm — weekly schedule (J-F02)', () => {
 describe('GeneralSettingsForm — certificate prefix (J-F51)', () => {
   const year = new Date().getFullYear()
   const prefixField = () => screen.getByLabelText(ar.certificates.settings.serialPrefix) as HTMLInputElement
-  const withPrefix = (serialPrefix: string | null) => makeAcademy({ settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix } } })
+  const withPrefix = (serialPrefix: string | null) => makeAcademy({ settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix }, ...UNSET_MOD20 } })
 
   it('shows the stored prefix with the first serial of the year, and the default CERT while none is set', async () => {
     mockAcademyApi({ academy: withPrefix('ACA') })
@@ -337,5 +342,81 @@ describe('GeneralSettingsForm — certificate prefix (J-F51)', () => {
     await screen.findByLabelText(ar.settings.academyNameAr)
     expect(prefixField()).toHaveValue('ACA')
     expect(prefixField()).toBeDisabled()
+  })
+})
+
+describe('GeneralSettingsForm — learning and the public catalog (MOD-20)', () => {
+  const percentField = () => screen.getByLabelText(ar.settings.learning.videoCompletionPercent) as HTMLInputElement
+  const browsingSwitch = () => screen.getByLabelText(ar.settings.catalog.publicBrowsing)
+  const withMod20 = (videoCompletionPercent: number | null, publicBrowsing: boolean | null) =>
+    makeAcademy({
+      settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null }, learning: { videoCompletionPercent }, catalog: { publicBrowsing } },
+    })
+
+  it('shows an unset share as an empty field with the default 90, and an unset switch as off', async () => {
+    mockAcademyApi()
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(percentField()).toHaveValue('')
+    expect(percentField()).toHaveAttribute('placeholder', '90')
+    expect(within(fieldOf(ar.settings.learning.videoCompletionPercent)).getByText('عدد صحيح من 50 إلى 100. اتركه فارغاً لاعتماد 90٪.')).toBeInTheDocument()
+    expect(browsingSwitch()).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText(ar.settings.catalog.intro)).toBeInTheDocument()
+  })
+
+  it('saves the share and switches the catalog on in the same single PATCH, then shows the answer', async () => {
+    const api = mockAcademyApi()
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    fireEvent.change(percentField(), { target: { value: '80' } })
+    fireEvent.click(browsingSwitch())
+    fireEvent.change(screen.getByLabelText(ar.settings.currency), { target: { value: 'try' } })
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(api.writes).toHaveLength(1))
+    expect(api.writes[0]).toEqual({ currency: 'TRY', settings: { learning: { videoCompletionPercent: 80 }, catalog: { publicBrowsing: true } } })
+    expect(await screen.findByText(ar.settings.saved)).toBeInTheDocument()
+    await waitFor(() => expect(percentField()).toHaveValue('80'))
+    expect(browsingSwitch()).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('clears the share with null and turns the catalog off as null (not set)', async () => {
+    const api = mockAcademyApi({ academy: withMod20(75, true) })
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(percentField()).toHaveValue('75')
+    expect(browsingSwitch()).toHaveAttribute('aria-checked', 'true')
+    fireEvent.change(percentField(), { target: { value: '' } })
+    fireEvent.click(browsingSwitch())
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(api.writes).toHaveLength(1))
+    expect(api.writes[0]).toEqual({ settings: { learning: { videoCompletionPercent: null }, catalog: { publicBrowsing: null } } })
+  })
+
+  it('refuses a share outside 50–100 locally, before any request', async () => {
+    const api = mockAcademyApi()
+    renderForm()
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    fireEvent.change(percentField(), { target: { value: '40' } })
+    fireEvent.click(saveButton())
+
+    expect(await screen.findByText('أدخل عدداً صحيحاً من 50 إلى 100، أو اتركه فارغاً.')).toBeInTheDocument()
+    expect(api.writes).toEqual([])
+  })
+
+  it('shows both read-only to a viewer without academy.settings.manage', async () => {
+    mockAcademyApi({ academy: withMod20(85, true) })
+    renderForm(SETTINGS_READER_PERMISSIONS)
+
+    await screen.findByLabelText(ar.settings.academyNameAr)
+    expect(percentField()).toHaveValue('85')
+    expect(percentField()).toBeDisabled()
+    expect(browsingSwitch()).toHaveAttribute('aria-checked', 'true')
+    expect(browsingSwitch()).toBeDisabled()
   })
 })

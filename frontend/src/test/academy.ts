@@ -1,6 +1,6 @@
 // Fixtures for the academy settings screen (MOD-02/MOD-14): the shape of
 // API-035 as the backend returns it, plus the permission sets the tests use.
-import type { Academy } from '../api/academy'
+import type { Academy, PublicAcademy } from '../api/academy'
 
 export const ACADEMY_ID = '0192f0b0-0000-7000-8000-00000000a001'
 
@@ -15,10 +15,26 @@ export function makeAcademy(overrides: Partial<Academy> = {}): Academy {
     currency: 'SAR',
     contactEmail: 'info@articode.test',
     contactPhone: null,
-    // As a freshly seeded academy: nothing set (MOD-02-T03; the certificate prefix since MOD-10-T02).
-    settings: { scheduling: { weekStartsOn: null, workingDays: null }, certificates: { serialPrefix: null } },
+    // As a freshly seeded academy: nothing set (MOD-02-T03; the certificate prefix since MOD-10-T02; learning and catalog since MOD-20).
+    settings: {
+      scheduling: { weekStartsOn: null, workingDays: null },
+      certificates: { serialPrefix: null },
+      learning: { videoCompletionPercent: null },
+      catalog: { publicBrowsing: null },
+    },
     createdAt: '2026-10-29T12:00:00.000Z',
     updatedAt: '2026-10-30T09:30:00.000Z',
+    ...overrides,
+  }
+}
+
+/** API-205 as the server answers it; the catalog is closed to visitors unless overridden (D-R138). */
+export function makePublicAcademy(overrides: Partial<PublicAcademy> = {}): PublicAcademy {
+  return {
+    name: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' },
+    logoUrl: null,
+    defaultLocale: 'ar',
+    catalogPublic: false,
     ...overrides,
   }
 }

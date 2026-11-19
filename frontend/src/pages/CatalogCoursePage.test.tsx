@@ -1,7 +1,8 @@
 // MOD-19 — a course of the catalog (API-220) and the self-service enrollment (API-221): what the page shows of the
 // server's answer, the confirmation before a request, the outcome, the refusals, and the re-read after every attempt.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { useLocation } from 'react-router'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogCourseDetail, CatalogEnrollResult } from '../api/catalog'
 import { ar } from '../i18n/ar'
 import { formatMoney } from '../payments/payments.format'
@@ -42,7 +43,7 @@ function renderPage(roles: string[] = ['student']) {
     auth: makeAuth({ user: makeUser({ id: 'st-1', role: 'student', roles, permissions: ['courses.read', 'enrollments.self_enroll'] }) }),
     route: `/catalog/${CATALOG_COURSE_IDS[0]}`,
     path: '/catalog/:courseId',
-    routes: { '/my-courses': <LocationProbe />, '/payments': <LocationProbe />, '/catalog': <LocationProbe />, '/my-lessons': <LocationProbe /> },
+    routes: { '/my-school': <LocationProbe />, '/payments': <LocationProbe />, '/catalog': <LocationProbe />, '/my-lessons': <LocationProbe /> },
   })
 }
 
@@ -99,7 +100,7 @@ describe('CatalogCoursePage', () => {
     expect(api.posts).toEqual([{ url: ENROLL_PATH, body: {} }])
     await waitFor(() => expect(api.reads).toBe(2))
     fireEvent.click(screen.getByText(ar.catalog.result.myCourses).closest('button')!)
-    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/my-courses')
+    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/my-school')
   })
 
   it('requests a paid course: the confirmation names the price and the two conditions, the answer names the invoice', async () => {
@@ -173,5 +174,83 @@ describe('CatalogCoursePage', () => {
     expect(await screen.findByText(ar.catalog.detail.notFound)).toBeInTheDocument()
     fireEvent.click(screen.getByText(ar.catalog.detail.back).closest('button')!)
     expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/catalog')
+  })
+})
+
+/** The query string of the page (the enroll intent leaves it — replace). */
+function SearchProbe() {
+  const location = useLocation()
+  return <output data-testid="search">{location.search}</output>
+}
+
+describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R138)', () => {
+  const scrollIntoView = vi.fn()
+  const original = Element.prototype.scrollIntoView
+
+  beforeEach(() => {
+    scrollIntoView.mockClear()
+    // jsdom lays nothing out and has no scrollIntoView.
+    Element.prototype.scrollIntoView = scrollIntoView
+  })
+  afterEach(() => {
+    Element.prototype.scrollIntoView = original
+  })
+
+  function renderWithIntent(search: string, roles: string[] = ['student']) {
+    return renderWithProviders(
+      <>
+        <CatalogCoursePage />
+        <SearchProbe />
+      </>,
+      {
+        auth: makeAuth({ user: makeUser({ id: 'st-1', role: 'student', roles, permissions: ['courses.read', 'enrollments.self_enroll'] }) }),
+        route: `/catalog/${CATALOG_COURSE_IDS[0]}${search}`,
+        path: '/catalog/:courseId',
+      },
+    )
+  }
+
+  const classes = () => screen.getByTestId('catalog-classes')
+
+  it('brings the classes into view with «اختر الفصل…», drops the intent from the URL, and enrolls nobody by itself', async () => {
+    const api = mockCourseApi(makeCatalogDetail())
+    renderWithIntent('?intent=enroll')
+
+    expect(await within(await screen.findByTestId('catalog-classes')).findByText(ar.catalog.detail.intentNotice)).toBeInTheDocument()
+    expect(classes()).toHaveAttribute('data-intent', 'enroll')
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1))
+    expect(scrollIntoView.mock.contexts[0]).toBe(classes().parentElement)
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    // The notice stays once the parameter has gone; the learner still chooses and confirms.
+    expect(within(classes()).getByText(ar.catalog.detail.intentNotice)).toBeInTheDocument()
+    expect(api.posts).toEqual([])
+    expect(screen.queryByText(ar.catalog.confirm.freeTitle)).not.toBeInTheDocument()
+
+    // Closing the notice takes the highlight with it.
+    fireEvent.click(within(classes()).getByLabelText(/close|إغلاق/i))
+    await waitFor(() => expect(within(classes()).queryByText(ar.catalog.detail.intentNotice)).not.toBeInTheDocument())
+    expect(classes()).not.toHaveAttribute('data-intent')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps any other parameter and shows nothing special without the intent', async () => {
+    mockCourseApi(makeCatalogDetail())
+    renderWithIntent('?from=home')
+
+    await screen.findByText('أساسيات بايثون')
+    expect(within(classes()).queryByText(ar.catalog.detail.intentNotice)).not.toBeInTheDocument()
+    expect(classes()).not.toHaveAttribute('data-intent')
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(screen.getByTestId('search').textContent).toBe('?from=home')
+  })
+
+  it('still brings the classes into view for a reader who may not enroll themself, without the notice', async () => {
+    mockCourseApi(makeCatalogDetail({ selfService: { allowed: false, reason: 'not_a_student' }, classes: [makeCatalogClass({ enrollable: false, blocker: 'not_allowed' })] }))
+    renderWithIntent('?intent=enroll', ['guardian'])
+
+    expect(await screen.findByText(ar.catalog.selfService.not_a_student)).toBeInTheDocument()
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1))
+    expect(within(classes()).queryByText(ar.catalog.detail.intentNotice)).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
   })
 })

@@ -22,6 +22,8 @@ export const login = {
   signingIn: 'جارٍ تسجيل الدخول...',
   identifierRequired: 'أدخل البريد الإلكتروني أو اسم المستخدم',
   passwordRequired: 'أدخل كلمة المرور',
+  // MOD-20 (D-R138): shown only while the academy opens its catalog to visitors (API-205 `catalogPublic`).
+  browseCourses: 'تصفّح الدورات',
   sessionSwitched:
     'سُجّل الدخول بحساب آخر في تبويب آخر من هذا المتصفح، فصار هذا التبويب يعمل بحساب {{name}}. لم يُنفَّذ الطلب الأخير. لاستخدام حسابين معاً افتح الثاني في نافذة خاصة أو متصفح آخر.',
   // The start-up session check could not tell after its retries (AuthProvider, CH-0296): never the sign-in form.

@@ -8,13 +8,17 @@
 // behind a confirmation that, for a paid course, says the invoice comes first
 // and the enrollment opens only after the payment is confirmed AND the academy
 // approves (D-R125). After every attempt the course is read again, so what
-// shows is always the server's state.
+// shows is always the server's state. MOD-20 (D-R138): a visitor who chose
+// «سجّل في هذه الدورة» on the public course page arrives here after the sign-in
+// with `?intent=enroll` — the page scrolls to the classes, highlights them with
+// «اختر الفصل الذي تريد التسجيل فيه» and drops the parameter from the URL
+// (replace); it never enrolls by itself, the learner confirms as always.
 import { ArrowRightOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Col, Descriptions, Flex, List, Row, Skeleton, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { enrollInClass } from '../api/catalog'
 import type { CatalogClass, CatalogCourseDetail, CatalogEnrollResult } from '../api/catalog'
 import { catalogFailureKey, isCourseGone } from '../catalog/catalog.errors'
@@ -47,6 +51,37 @@ export function CatalogCoursePage() {
   const [busyClassId, setBusyClassId] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<EnrollOutcome | null>(null)
   const [failureKey, setFailureKey] = useState<string | null>(null)
+
+  // The enroll intent (D-R138), kept for this course once the parameter has left the URL.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const intentInUrl = searchParams.get('intent') === 'enroll'
+  const [intentFor, setIntentFor] = useState<string | null>(null)
+  if (intentInUrl && intentFor !== courseId) setIntentFor(courseId)
+  const enrollIntent = intentFor === courseId
+  const classesRef = useRef<HTMLDivElement>(null)
+  const scrolledFor = useRef<string | null>(null)
+
+  // A reload or a copied link does not repeat the intent.
+  useEffect(() => {
+    if (!intentInUrl) return
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('intent')
+        return next
+      },
+      { replace: true },
+    )
+  }, [intentInUrl, setSearchParams])
+
+  // Once the course is on screen, its classes come into view (once per course).
+  const courseShown = course !== null
+  useEffect(() => {
+    if (!enrollIntent || !courseShown || scrolledFor.current === courseId) return
+    scrolledFor.current = courseId
+    const node = classesRef.current
+    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [enrollIntent, courseShown, courseId])
 
   const back = (
     <Button icon={<ArrowRightOutlined />} onClick={() => navigate('/catalog')}>
@@ -96,9 +131,12 @@ export function CatalogCoursePage() {
   const enrollable = enrollableClasses(course)
   const recommendedId = enrollable.length === 1 ? enrollable[0]!.id : null
   const unavailable = enrollmentUnavailable(course)
+  // The notice and the highlight only where the reader may enroll themself; otherwise the page already says why not.
+  const highlightClasses = enrollIntent && course.selfService.allowed
 
   async function enroll(klass: CatalogClass) {
     const className = localizedLabel(klass.name, language)
+    setIntentFor(null)
     setBusyClassId(klass.id)
     setOutcome(null)
     setFailureKey(null)
@@ -207,81 +245,92 @@ export function CatalogCoursePage() {
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card title={t('catalog.detail.classes')} aria-busy={loading}>
-            <Flex vertical gap={12}>
-              {course.selfService.allowed ? null : <Alert type="info" showIcon title={t(`catalog.selfService.${course.selfService.reason ?? 'no_permission'}`)} />}
-              {outcome ? (
-                outcome.result.outcome === 'enrolled' ? (
+          <div ref={classesRef} style={{ scrollMarginTop: 16 }}>
+            <Card
+              title={t('catalog.detail.classes')}
+              aria-busy={loading}
+              data-testid="catalog-classes"
+              data-intent={highlightClasses ? 'enroll' : undefined}
+              style={highlightClasses ? { boxShadow: '0 0 0 2px #0f6cbd' } : undefined}
+            >
+              <Flex vertical gap={12}>
+                {highlightClasses ? (
+                  <Alert type="info" showIcon title={t('catalog.detail.intentNotice')} closable onClose={() => setIntentFor(null)} />
+                ) : null}
+                {course.selfService.allowed ? null : <Alert type="info" showIcon title={t(`catalog.selfService.${course.selfService.reason ?? 'no_permission'}`)} />}
+                {outcome ? (
+                  outcome.result.outcome === 'enrolled' ? (
+                    <Alert
+                      type="success"
+                      showIcon
+                      title={t('catalog.result.enrolledTitle')}
+                      description={
+                        <Flex vertical gap={8}>
+                          <span>{t('catalog.result.enrolledContent', { className: outcome.className })}</span>
+                          <Space wrap>
+                            <Button size="small" onClick={() => navigate('/my-school')}>
+                              {t('catalog.result.myCourses')}
+                            </Button>
+                            <Button size="small" onClick={() => navigate('/my-lessons')}>
+                              {t('catalog.result.myLessons')}
+                            </Button>
+                          </Space>
+                        </Flex>
+                      }
+                    />
+                  ) : (
+                    <Alert
+                      type="info"
+                      showIcon
+                      title={t('catalog.result.requestedTitle')}
+                      description={
+                        <Flex vertical gap={8}>
+                          <span>
+                            {t('catalog.result.requestedContent', {
+                              number: invoiceOf(outcome.result)?.number ?? '—',
+                              total: outcome.result.enrollment.payment.currency
+                                ? formatMoney(outcome.result.enrollment.payment.total, outcome.result.enrollment.payment.currency, language)
+                                : outcome.result.enrollment.payment.total.toFixed(2),
+                            })}
+                          </span>
+                          <Space wrap>
+                            <Button size="small" onClick={() => navigate('/payments')}>
+                              {t('catalog.result.invoices')}
+                            </Button>
+                            <Button size="small" onClick={() => navigate('/my-school')}>
+                              {t('catalog.result.myCourses')}
+                            </Button>
+                          </Space>
+                        </Flex>
+                      }
+                    />
+                  )
+                ) : null}
+                {failureKey ? <Alert type="error" showIcon title={t(failureKey)} closable onClose={() => setFailureKey(null)} /> : null}
+                {unavailable ? (
                   <Alert
-                    type="success"
+                    type="warning"
                     showIcon
-                    title={t('catalog.result.enrolledTitle')}
-                    description={
-                      <Flex vertical gap={8}>
-                        <span>{t('catalog.result.enrolledContent', { className: outcome.className })}</span>
-                        <Space wrap>
-                          <Button size="small" onClick={() => navigate('/my-courses')}>
-                            {t('catalog.result.myCourses')}
-                          </Button>
-                          <Button size="small" onClick={() => navigate('/my-lessons')}>
-                            {t('catalog.result.myLessons')}
-                          </Button>
-                        </Space>
-                      </Flex>
-                    }
+                    title={t('catalog.detail.unavailable')}
+                    description={course.classes.length === 0 ? t('catalog.detail.noClasses') : t('catalog.detail.unavailableHint')}
                   />
-                ) : (
-                  <Alert
-                    type="info"
-                    showIcon
-                    title={t('catalog.result.requestedTitle')}
-                    description={
-                      <Flex vertical gap={8}>
-                        <span>
-                          {t('catalog.result.requestedContent', {
-                            number: invoiceOf(outcome.result)?.number ?? '—',
-                            total: outcome.result.enrollment.payment.currency
-                              ? formatMoney(outcome.result.enrollment.payment.total, outcome.result.enrollment.payment.currency, language)
-                              : outcome.result.enrollment.payment.total.toFixed(2),
-                          })}
-                        </span>
-                        <Space wrap>
-                          <Button size="small" onClick={() => navigate('/payments')}>
-                            {t('catalog.result.invoices')}
-                          </Button>
-                          <Button size="small" onClick={() => navigate('/my-courses')}>
-                            {t('catalog.result.myCourses')}
-                          </Button>
-                        </Space>
-                      </Flex>
-                    }
+                ) : null}
+                {course.classes.length === 0 && !course.selfService.allowed ? <Typography.Text type="secondary">{t('catalog.detail.noClasses')}</Typography.Text> : null}
+                {course.classes.map((klass) => (
+                  <ClassOffer
+                    key={klass.id}
+                    klass={klass}
+                    pricing={course.pricing}
+                    canEnroll={course.selfService.allowed}
+                    recommended={klass.id === recommendedId}
+                    busy={busyClassId === klass.id}
+                    disabled={busyClassId !== null}
+                    onEnroll={confirmEnroll}
                   />
-                )
-              ) : null}
-              {failureKey ? <Alert type="error" showIcon title={t(failureKey)} closable onClose={() => setFailureKey(null)} /> : null}
-              {unavailable ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  title={t('catalog.detail.unavailable')}
-                  description={course.classes.length === 0 ? t('catalog.detail.noClasses') : t('catalog.detail.unavailableHint')}
-                />
-              ) : null}
-              {course.classes.length === 0 && !course.selfService.allowed ? <Typography.Text type="secondary">{t('catalog.detail.noClasses')}</Typography.Text> : null}
-              {course.classes.map((klass) => (
-                <ClassOffer
-                  key={klass.id}
-                  klass={klass}
-                  pricing={course.pricing}
-                  canEnroll={course.selfService.allowed}
-                  recommended={klass.id === recommendedId}
-                  busy={busyClassId === klass.id}
-                  disabled={busyClassId !== null}
-                  onEnroll={confirmEnroll}
-                />
-              ))}
-            </Flex>
-          </Card>
+                ))}
+              </Flex>
+            </Card>
+          </div>
         </Col>
       </Row>
     </>

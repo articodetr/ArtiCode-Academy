@@ -14,6 +14,9 @@ import { reports, dashboard } from './ar/reports'
 import { notifications } from './ar/notifications'
 import { search } from './ar/search'
 import { catalog, myCourses } from './ar/catalog'
+import { mySchool } from './ar/mySchool'
+import { learn } from './ar/learn'
+import { curriculum, learningProgress, publicCatalog } from './ar/curriculum'
 import { enrollmentRequests } from './ar/enrollmentRequests'
 
 export const ar = {
@@ -60,6 +63,12 @@ export const ar = {
   catalog,
   myCourses,
   enrollmentRequests,
+  // MOD-20 (roadmap §4q): «My School», the learning workspace, the curriculum editor, the class learning progress and the public catalog.
+  mySchool,
+  learn,
+  curriculum,
+  learningProgress,
+  publicCatalog,
 }
 
 export type Translation = typeof ar

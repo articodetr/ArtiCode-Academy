@@ -40,6 +40,11 @@ function renderSignIn(options: { mfa: boolean; user?: Partial<SessionUser>; seco
   return fetchMock
 }
 
+/** The requests of the sign-in itself — without the page's own read of API-205 for the catalog link (MOD-20). */
+function authCalls(fetchMock: ReturnType<typeof mockFetch>) {
+  return fetchMock.mock.calls.filter(([url]) => String(url) !== '/api/academy/public')
+}
+
 async function submitPassword() {
   const user = userEvent.setup()
   // The form shows once the provider knows there is no session to restore.
@@ -66,8 +71,8 @@ describe('LoginPage with the real AuthProvider', () => {
 
     expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/users')
     expect(getAccessToken()).toBe('access-mfa')
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/login', '/api/auth/login/mfa'])
-    const [, init] = fetchMock.mock.calls[2]
+    expect(authCalls(fetchMock).map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/login', '/api/auth/login/mfa'])
+    const [, init] = authCalls(fetchMock)[2]!
     expect(JSON.parse(String(init?.body))).toEqual({ challenge: challenge.challenge, code: '123456' })
     expect(new Headers(init?.headers).has('Authorization')).toBe(false)
     // Neither the password, the challenge nor the code was written anywhere.
@@ -99,7 +104,7 @@ describe('LoginPage with the real AuthProvider', () => {
     expect(screen.getByLabelText(ar.login.password)).toHaveValue('')
     expect(getAccessToken()).toBeNull()
     expect(screen.queryByTestId('location')).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/login', '/api/auth/login/mfa'])
+    expect(authCalls(fetchMock).map(([url]) => url)).toEqual(['/api/auth/refresh', '/api/auth/login', '/api/auth/login/mfa'])
   })
 
   it('still sends a user who must change the password to the profile page without two-step verification', async () => {

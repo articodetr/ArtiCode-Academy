@@ -14,13 +14,16 @@ function SessionLoading() {
   )
 }
 
-/** Waits for the session check, then redirects signed-out visitors to the login page. */
+/**
+ * Waits for the session check, then redirects signed-out visitors to the login page. `from` keeps the query string
+ * too, so an intended action survives the sign-in (MOD-20: `/catalog/<id>?intent=enroll` — D-R138).
+ */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth()
   const location = useLocation()
   if (status === 'loading') return <SessionLoading />
   if (status === 'anonymous') {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
   }
   return children
 }

@@ -1,11 +1,13 @@
 // Detail drawer of one course (MOD-04-T05/T06): reads GET /api/courses/:id
-// (API-043) and shows two tabs — details and syllabus (SyllabusTab, T06).
+// (API-043) and shows two tabs — details and, since MOD-20, the curriculum
+// (CurriculumTab on API-226..228: levels, their lessons and each lesson's
+// content; it replaced the flat syllabus tab of T06).
 // For holders of `courses.manage`: an edit form (smallest PATCH — API-045) and
 // an actions menu built from the mirrored state machine (courses.status.ts →
 // API-046, and API-047 for a draft), each action confirmed in a modal.
 // Everyone else sees the published course read-only.
 // Since J-F23 (KI-054, the rule of the class drawer's KI-052 after J-F21):
-// while the edit form or the syllabus editor holds unsaved work, Escape and a
+// while the edit form or the curriculum editor holds unsaved work, Escape and a
 // mask click no longer close the drawer, and the close button asks first; an
 // editor opened without a change, or changed back, holds nothing.
 // Since J-F27 the same unsaved work also holds a browser back/forward, which
@@ -28,6 +30,7 @@ import { useAuth } from '../auth/auth-context'
 import { NavigationBlocker } from '../common/NavigationBlocker'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
+import { CurriculumTab } from '../curriculum/CurriculumTab'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatMoney } from '../payments/payments.format'
 import { formatDateTime, localizedLabel } from '../users/users.format'
@@ -38,7 +41,6 @@ import { courseFormHasChanges, courseFormValuesOf, planCoursePatch } from './cou
 import type { CourseFormValues } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction } from './courses.status'
 import type { CourseMenuAction } from './courses.status'
-import { SyllabusTab } from './SyllabusTab'
 
 const ICONS: Readonly<Record<CourseMenuAction, ReactNode>> = {
   publish: <RocketOutlined />,
@@ -50,10 +52,10 @@ const ICONS: Readonly<Record<CourseMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'syllabus'
+type DrawerTab = 'details' | 'curriculum'
 
-/** The editors of the drawer that report unsaved work (KI-054): the edit form and the syllabus editor. */
-const NOTHING_UNSAVED: Readonly<Record<DrawerTab, boolean>> = { details: false, syllabus: false }
+/** The editors of the drawer that report unsaved work (KI-054): the edit form and the curriculum editor. */
+const NOTHING_UNSAVED: Readonly<Record<DrawerTab, boolean>> = { details: false, curriculum: false }
 
 interface CourseDrawerProps {
   courseId: string | null
@@ -84,10 +86,10 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
   // One stable reporter per editor (the editors report from an effect that depends on it).
   const reportUnsaved = useMemo(() => {
     const reporter = (part: DrawerTab) => (unsaved: boolean) => setUnsavedParts((current) => (current[part] === unsaved ? current : { ...current, [part]: unsaved }))
-    return { details: reporter('details'), syllabus: reporter('syllabus') }
+    return { details: reporter('details'), curriculum: reporter('curriculum') }
   }, [])
   // KI-054: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
-  const unsaved = (editing && unsavedParts.details) || unsavedParts.syllabus
+  const unsaved = (editing && unsavedParts.details) || unsavedParts.curriculum
 
   useEffect(() => {
     if (!courseId) return
@@ -294,7 +296,8 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
           onChange={(key) => setTab(key as DrawerTab)}
           items={[
             { key: 'details', label: t('courses.drawer.tabs.details'), children: details },
-            { key: 'syllabus', label: t('courses.drawer.tabs.syllabus'), children: <SyllabusTab courseId={course.id} canManage={canManage} onUnsavedChange={reportUnsaved.syllabus} />, disabled: editing },
+            // MOD-20: the server decides who reads (courses.manage or a teacher of the course) and who edits (`canManage`).
+            { key: 'curriculum', label: t('curriculum.tab'), children: <CurriculumTab courseId={course.id} onUnsavedChange={reportUnsaved.curriculum} />, disabled: editing },
           ]}
         />
       ) : null}

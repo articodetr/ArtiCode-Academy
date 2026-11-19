@@ -11,7 +11,10 @@ import { AuditLogPage } from '../pages/AuditLogPage'
 import { CatalogCoursePage } from '../pages/CatalogCoursePage'
 import { CatalogPage } from '../pages/CatalogPage'
 import { EnrollmentRequestsPage } from '../pages/EnrollmentRequestsPage'
-import { MyCoursesPage } from '../pages/MyCoursesPage'
+import { MySchoolPage } from '../pages/MySchoolPage'
+import { LearnPage } from '../pages/LearnPage'
+import { PublicCatalogPage } from '../pages/PublicCatalogPage'
+import { PublicCoursePage } from '../pages/PublicCoursePage'
 import { CertificatePrintPage } from '../pages/CertificatePrintPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
 import { ClassesPage } from '../pages/ClassesPage'
@@ -54,6 +57,13 @@ const router = createBrowserRouter([
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/verify', element: <VerifyCertificatePage /> },
   { path: '/verify/:code', element: <VerifyCertificatePage /> },
+  // MOD-20 (D-R138): the public catalog for visitors — the server answers 404 catalog_not_public unless the academy offers it.
+  { path: '/explore', element: <PublicCatalogPage /> },
+  { path: '/explore/:courseId', element: <PublicCoursePage /> },
+  // MOD-20: the learning workspace, outside the layout (a focused course player). Signed in; the server opens a course's
+  // lessons only with an own active or completed enrollment (D-R132) and answers 403 not_enrolled otherwise.
+  { path: '/learn/:courseId', element: <RequireAuth><LearnPage /></RequireAuth> },
+  { path: '/learn/:courseId/:itemId', element: <RequireAuth><LearnPage /></RequireAuth> },
   // Certificate print pages (J-F51 — D-R50): signed in, outside the layout so neither the screen nor the paper has the
   // menu; API-131 for `certificates.read_all`/`certificates.issue`, API-135 for a student's or a guardian's own.
   { path: '/certificates/:id/print', element: <RequireAuth>{guarded('certificates', <CertificatePrintPage source="academy" />)}</RequireAuth> },
@@ -73,7 +83,9 @@ const router = createBrowserRouter([
       { path: 'my-classes', element: guarded('myClasses', <MyClassesPage />) }, // `student`/`guardian` role keys (J-F04, API-060 — ownership)
       { path: 'catalog', element: guarded('catalog', <CatalogPage />) }, // MOD-19: `student`/`guardian` role keys (API-219 reads with courses.read)
       { path: 'catalog/:courseId', element: guarded('catalog', <CatalogCoursePage />) }, // MOD-19: API-220/221
-      { path: 'my-courses', element: guarded('myCourses', <MyCoursesPage />) }, // MOD-19: `student`/`guardian` role keys (API-060 + API-222)
+      { path: 'my-school', element: guarded('mySchool', <MySchoolPage />) }, // MOD-20: `student`/`guardian` role keys (API-229 + API-222 — ownership)
+      // MOD-19's «my courses» became «My School» (MOD-20): old links and notifications keep working.
+      { path: 'my-courses', element: <Navigate to="/my-school" replace /> },
       { path: 'enrollment-requests', element: guarded('enrollmentRequests', <EnrollmentRequestsPage />) }, // MOD-19: `enrollments.manage` (API-224/225)
       { path: 'schedule', element: guarded('schedule', <SchedulePage />) },
       { path: 'lessons', element: guarded('lessons', <LessonsPage />) },

@@ -28,6 +28,9 @@
 // Since CH-0297 the students tab knows when the drawer's read of the class
 // failed (`classReadFailed`): the retry of its roster error then re-reads the
 // class too, so the drawer's error does not outlive the recovery.
+// MOD-20 (D-R137): a «تقدّم التعلّم» tab after the students tab, for the same
+// readers as the roster (`canReadRoster()`) — each student's progress in the
+// course's lessons (ClassLearningProgressTab on API-235); it holds no editor.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -46,6 +49,7 @@ import { ClassEnrollmentsTab } from '../enrollments/ClassEnrollmentsTab'
 import { canReadRoster } from '../enrollments/enrollments.status'
 import { ClassGradebookTab } from '../grades/ClassGradebookTab'
 import { useLocalized } from '../i18n/useLocalized'
+import { ClassLearningProgressTab } from '../learningProgress/ClassLearningProgressTab'
 import { ClassScheduleTab } from '../schedule/ClassScheduleTab'
 import { formatDateTime, formatDay, localizedLabel } from '../users/users.format'
 import { ClassFormFields } from './ClassFormFields'
@@ -68,10 +72,10 @@ const ICONS: Readonly<Record<ClassMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'teachers' | 'students' | 'schedule' | 'gradebook' | 'certificates'
+type DrawerTab = 'details' | 'teachers' | 'students' | 'learning' | 'schedule' | 'gradebook' | 'certificates'
 
-/** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself, the gradebook and the certificates tab hold none. */
-type EditorTab = Exclude<DrawerTab, 'details' | 'gradebook' | 'certificates'>
+/** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself, the learning progress, the gradebook and the certificates tab hold none. */
+type EditorTab = Exclude<DrawerTab, 'details' | 'learning' | 'gradebook' | 'certificates'>
 
 const NOTHING_UNSAVED: Readonly<Record<EditorTab, boolean>> = { teachers: false, students: false, schedule: false }
 
@@ -290,6 +294,8 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
                     ),
                     disabled: editing,
                   },
+                  // MOD-20 (D-R137): the roster's readers; the server answers 404 to anyone else.
+                  { key: 'learning', label: t('learningProgress.tab'), children: <ClassLearningProgressTab cls={cls} />, disabled: editing },
                 ]
               : []),
             {

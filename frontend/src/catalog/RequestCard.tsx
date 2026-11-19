@@ -2,9 +2,11 @@
 // and class, the state, when it was asked and decided, what is invoiced, paid
 // and due (the server's sums over the issued invoices), the invoices by
 // number, the rejection reason, and «cancel the request» while it is pending
-// (API-223, behind a confirmation).
+// (API-223, behind a confirmation). «My School» (MOD-20) adds the context
+// action of the state through `action` — pay, wait for approval, ask again.
 import { Alert, Button, Card, Descriptions, Popconfirm, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { MyEnrollmentRequest } from '../api/catalog'
 import { useLocalized } from '../i18n/useLocalized'
@@ -16,9 +18,11 @@ interface RequestCardProps {
   request: MyEnrollmentRequest
   busy: boolean
   onCancel: (request: MyEnrollmentRequest) => void
+  /** The context action of the state (MOD-20), shown beside «cancel the request». */
+  action?: ReactNode
 }
 
-export function RequestCard({ request, busy, onCancel }: RequestCardProps) {
+export function RequestCard({ request, busy, onCancel, action }: RequestCardProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const payment = request.payment
@@ -77,19 +81,22 @@ export function RequestCard({ request, busy, onCancel }: RequestCardProps) {
       {request.state === 'rejected' && request.rejectionReason ? (
         <Alert type="warning" showIcon title={t('myCourses.requests.rejectionReason')} description={request.rejectionReason} />
       ) : null}
-      {request.status === 'pending' ? (
-        <div>
-          <Popconfirm
-            title={t('myCourses.requests.cancelConfirm')}
-            okText={t('myCourses.requests.cancelOk')}
-            cancelText={t('myCourses.requests.cancelKeep')}
-            onConfirm={() => onCancel(request)}
-          >
-            <Button danger loading={busy}>
-              {t('myCourses.requests.cancel')}
-            </Button>
-          </Popconfirm>
-        </div>
+      {action || request.status === 'pending' ? (
+        <Space size={8} wrap>
+          {action}
+          {request.status === 'pending' ? (
+            <Popconfirm
+              title={t('myCourses.requests.cancelConfirm')}
+              okText={t('myCourses.requests.cancelOk')}
+              cancelText={t('myCourses.requests.cancelKeep')}
+              onConfirm={() => onCancel(request)}
+            >
+              <Button danger loading={busy}>
+                {t('myCourses.requests.cancel')}
+              </Button>
+            </Popconfirm>
+          ) : null}
+        </Space>
       ) : null}
     </Card>
   )

@@ -1,0 +1,73 @@
+// MOD-20 (D-R138) — the pure rules of the public catalog: the page request, «المزيد», availability, level names
+// (D-R130), lesson lengths, failures and the enroll intent.
+import { describe, expect, it } from 'vitest'
+import { ApiError } from '../api/client'
+import i18n from '../i18n'
+import { CATALOG_NOT_PUBLIC, PUBLIC_COURSE_IDS, makePublicCard } from '../test/publicCatalog'
+import {
+  appendCards,
+  availabilityOf,
+  durationMinutes,
+  enrollIntentPath,
+  isPublicCourseGone,
+  levelNameOf,
+  publicCatalogParams,
+  publicFailureKey,
+} from './publicCatalog.view'
+
+const t = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('ar')(key, options)
+const tEn = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('en')(key, options)
+
+describe('publicCatalog.view', () => {
+  it('asks for 24 cards, the search trimmed and capped, the cursor only when there is one', () => {
+    expect(publicCatalogParams('', undefined)).toEqual({ limit: 24 })
+    expect(publicCatalogParams('  بايثون ', 'c1')).toEqual({ limit: 24, q: 'بايثون', cursor: 'c1' })
+    expect(publicCatalogParams('x'.repeat(150), undefined).q).toHaveLength(100)
+  })
+
+  it('appends the next page after the cards on screen, never showing a course twice', () => {
+    const first = makePublicCard({ id: PUBLIC_COURSE_IDS[0] })
+    const second = makePublicCard({ id: PUBLIC_COURSE_IDS[1] })
+    const third = makePublicCard({ id: PUBLIC_COURSE_IDS[2] })
+    expect(appendCards([first, second], [second, third]).map((card) => card.id)).toEqual([...PUBLIC_COURSE_IDS])
+  })
+
+  it('words availability from the server counts only', () => {
+    expect(availabilityOf({ openClasses: 2, hasFreeSeat: true })).toBe('available')
+    expect(availabilityOf({ openClasses: 1, hasFreeSeat: false })).toBe('full')
+    expect(availabilityOf({ openClasses: 0, hasFreeSeat: false })).toBe('closed')
+  })
+
+  it('names a level by its ordinal, with its title when it has one; past the tenth by its number (D-R130)', () => {
+    expect(levelNameOf({ number: 1, title: null }, t, 'ar')).toBe('المستوى الأول')
+    expect(levelNameOf({ number: 2, title: { ar: 'الأساسيات', en: 'Basics' } }, t, 'ar')).toBe('المستوى الثاني — الأساسيات')
+    expect(levelNameOf({ number: 10, title: { ar: '  ' } }, t, 'ar')).toBe('المستوى العاشر')
+    expect(levelNameOf({ number: 12, title: null }, t, 'ar')).toBe('المستوى الثاني عشر')
+    expect(levelNameOf({ number: 2, title: { ar: 'الأساسيات', en: 'Basics' } }, tEn, 'en')).toBe('Level 2 — Basics')
+    expect(levelNameOf({ number: 3, title: { ar: 'فقط بالعربية' } }, tEn, 'en')).toBe('Level 3 — فقط بالعربية')
+  })
+
+  it('rounds a lesson length to whole minutes (at least one) and has none without a length', () => {
+    expect(durationMinutes(600)).toBe(10)
+    expect(durationMinutes(20)).toBe(1)
+    expect(durationMinutes(89)).toBe(1)
+    expect(durationMinutes(91)).toBe(2)
+    expect(durationMinutes(0)).toBeNull()
+    expect(durationMinutes(null)).toBeNull()
+  })
+
+  it('tells a missing course from a closed catalog, and words the other failures', () => {
+    const closed = new ApiError(404, 'closed', CATALOG_NOT_PUBLIC)
+    const gone = new ApiError(404, 'gone', { statusCode: 404, code: 'course_not_found', message: 'gone' })
+    expect(isPublicCourseGone(gone)).toBe(true)
+    expect(isPublicCourseGone(closed)).toBe(false)
+    expect(publicFailureKey(new ApiError(429, 'slow', { statusCode: 429, code: 'rate_limited', message: 'slow' }))).toBe('publicCatalog.errors.rate_limited')
+    expect(publicFailureKey(new ApiError(500, 'boom', { statusCode: 500, message: 'boom' }))).toBe('publicCatalog.errors.server')
+    expect(publicFailureKey(new TypeError('Failed to fetch'))).toBe('publicCatalog.errors.network')
+  })
+
+  it('leads the enroll button to the signed-in course page with the enroll intent', () => {
+    expect(enrollIntentPath(PUBLIC_COURSE_IDS[0])).toBe(`/catalog/${PUBLIC_COURSE_IDS[0]}?intent=enroll`)
+    expect(enrollIntentPath('a/b')).toBe('/catalog/a%2Fb?intent=enroll')
+  })
+})

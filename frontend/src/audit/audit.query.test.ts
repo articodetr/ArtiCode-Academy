@@ -88,6 +88,12 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
     expect(AUDIT_ACTION_SUGGESTIONS).toEqual(expect.arrayContaining(['levels.', 'courses.']))
   })
 
+  it('offers the two MOD-20 curriculum events once each (CH-0304)', () => {
+    for (const event of ['courses.curriculum.changed', 'courses.curriculum.content.changed']) {
+      expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
+    }
+  })
+
   it('offers the three branch events of MOD-02-T06 (CH-0089) once, and their prefix', () => {
     for (const event of ['branches.created', 'branches.updated', 'branches.deleted']) {
       expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])
