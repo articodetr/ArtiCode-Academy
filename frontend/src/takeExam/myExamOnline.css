@@ -1,0 +1,58 @@
+/* The online side of a «my exams» row (MyExamOnline) and the confirmation before an attempt starts
+   (StartAttemptModal). Everything sits inside the cells the table already has; logical properties only. */
+
+.my-exam-online__when {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.my-exam-online {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-block-start: 6px;
+}
+
+.my-exam-online__action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.my-exam-online__reason {
+  display: block;
+  max-inline-size: 280px;
+}
+
+.my-exam-online__result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.my-exam-online__attempts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.my-exam-start__rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.my-exam-start__instructions {
+  margin-block-start: 16px;
+}
+
+.my-exam-start__instructions summary {
+  font-weight: 600;
+  cursor: pointer;
+}

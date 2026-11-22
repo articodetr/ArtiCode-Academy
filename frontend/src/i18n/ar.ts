@@ -18,6 +18,10 @@ import { mySchool } from './ar/mySchool'
 import { learn } from './ar/learn'
 import { curriculum, learningProgress, publicCatalog } from './ar/curriculum'
 import { enrollmentRequests } from './ar/enrollmentRequests'
+import { questionBanks } from './ar/questionBanks'
+import { examOnline } from './ar/examOnline'
+import { examAttempts } from './ar/examAttempts'
+import { takeExam } from './ar/takeExam'
 
 export const ar = {
   common,
@@ -69,6 +73,11 @@ export const ar = {
   curriculum,
   learningProgress,
   publicCatalog,
+  // MOD-09 phase 2 (roadmap §4r): question banks, the online side of an exam for its teacher, and taking an exam.
+  questionBanks,
+  examOnline,
+  examAttempts,
+  takeExam,
 }
 
 export type Translation = typeof ar

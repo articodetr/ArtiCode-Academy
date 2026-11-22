@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDurationValid, isExamMaxScoreValid, isExamWeightValid, isPassScoreValid, isResultScoreValid, missingSchedulePart, passScoreAboveMax } from './exams.validation'
+import { isAttemptsAllowedValid, isDurationValid, isExamMaxScoreValid, isExamWeightValid, isPassScoreValid, isResultScoreValid, isWindowInverted, missingSchedulePart, passScoreAboveMax } from './exams.validation'
 
 describe('exams.validation (mirrors of CreateExamDto / UpdateExamDto and the result score)', () => {
   it('accepts a maximum score of 0.01..9999.99 with at most two decimals', () => {
@@ -33,5 +33,21 @@ describe('exams.validation (mirrors of CreateExamDto / UpdateExamDto and the res
     expect(missingSchedulePart(undefined, '10:00')).toBe('date')
     expect(missingSchedulePart('2026-11-20', '10:00')).toBeNull()
     expect(missingSchedulePart('', '')).toBeNull()
+  })
+
+  it('accepts 1..20 whole attempts for an online exam, never a blank', () => {
+    expect([1, 2, 20].every(isAttemptsAllowedValid)).toBe(true)
+    expect([0, 21, 1.5, -1, Number.NaN, '2', null, undefined].some(isAttemptsAllowedValid)).toBe(false)
+  })
+
+  it('refuses a window that closes at or before it opens (window_invalid) — only when both instants are known', () => {
+    expect(isWindowInverted('2026-11-20T07:00:00.000Z', '2026-11-20T06:59:00.000Z')).toBe(true)
+    expect(isWindowInverted('2026-11-20T07:00:00.000Z', '2026-11-20T07:00:00.000Z')).toBe(true)
+    expect(isWindowInverted('2026-11-20T07:00:00.000Z', '2026-11-20T07:01:00.000Z')).toBe(false)
+    expect(isWindowInverted(null, '2026-11-20T07:00:00.000Z')).toBe(false)
+    expect(isWindowInverted('2026-11-20T07:00:00.000Z', null)).toBe(false)
+    // A half-typed date or time is the other rule's refusal, not this one's.
+    expect(isWindowInverted(undefined, '2026-11-20T07:00:00.000Z')).toBe(false)
+    expect(isWindowInverted('2026-11-20T07:00:00.000Z', undefined)).toBe(false)
   })
 })

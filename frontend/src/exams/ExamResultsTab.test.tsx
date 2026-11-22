@@ -5,6 +5,7 @@ import type { ExamResultsSheet } from '../api/examResults'
 import type { ExamStatus } from '../api/exams'
 import { formatZonedDateTime } from '../assignments/assignments.format'
 import { ar } from '../i18n/ar'
+import { HIND_ID, fiveOnlineResultStudents, makeOnlineResultsSheet } from '../test/examAttempts'
 import { EXAM_ID, EXAM_READER_PERMISSIONS, EXAM_TEACHER_PERMISSIONS, EXAM_TIME_ZONE, RESULT_STUDENT_IDS, fourResultStudents, makeExamResult, makeResultsSheet } from '../test/exams'
 import { jsonResponse, mockFetch } from '../test/http'
 import { FAR_TIME_ZONE } from '../test/lessons'
@@ -381,5 +382,196 @@ describe('ExamResultsTab', () => {
     const reader = renderTab(EXAM_READER_PERMISSIONS)
     expect(await screen.findByText(ar.exams.results.readOnly)).toBeInTheDocument()
     expect(reader.onUnsavedChange.mock.calls.every(([unsaved]) => unsaved === false)).toBe(true)
+  })
+})
+
+describe('ExamResultsTab — an online exam (D-R160: what a student did online is not typed over)', () => {
+  const SHEET = ar.examAttempts.sheet
+  const SOURCE = ar.examAttempts.source
+  const RESULTS_URL = `/api/exams/${EXAM_ID}/results`
+
+  it('says whose results come from attempts, names the source of every result, and keeps the rows of students who have an attempt read-only with the reason', async () => {
+    mockSheetApi(() => makeOnlineResultsSheet())
+    renderTab(EXAM_TEACHER_PERMISSIONS)
+
+    const sara = await findRow('سارة الطالبة')
+    expect(screen.getByTestId('online-sheet-note')).toHaveTextContent(SHEET.note)
+
+    // سارة took it twice: her result is her counted attempt, written by the server — shown, never typed over.
+    expect(within(sara).getByText(SOURCE.online)).toBeInTheDocument()
+    expect(within(sara).getByText(SHEET.lockedRow)).toBeInTheDocument()
+    expect(within(sara).getByText(SHEET.recordedByServer, { exact: false })).toBeInTheDocument()
+    expect(sara.textContent).not.toContain('سجّلها')
+    expect(within(sara).getByText(ar.exams.results.status.scored)).toHaveClass(`ant-tag-${RESULT_STATUS_COLORS.scored}`)
+    expect(within(sara).getByText('6')).toBeInTheDocument()
+    expect(sara.querySelector('input')).toBeNull()
+
+    // يوسف is still taking it: no result yet, and none can be typed for him.
+    const yousef = row('يوسف الطالب')
+    expect(within(yousef).getByText(SHEET.lockedRow)).toBeInTheDocument()
+    expect(within(yousef).getByText(ar.exams.results.notRecorded)).toBeInTheDocument()
+    expect(within(yousef).queryByText(SOURCE.online)).not.toBeInTheDocument()
+    expect(yousef.querySelector('input')).toBeNull()
+
+    // ليلى: withdrawn after the exam AND an attempt — both reasons show.
+    const layla = row('ليلى المنسحبة')
+    expect(within(layla).getByText(ar.exams.results.readOnlyRow)).toBeInTheDocument()
+    expect(within(layla).getByText(SHEET.lockedRow)).toBeInTheDocument()
+    expect(within(layla).getByText(SOURCE.online)).toBeInTheDocument()
+
+    // عمر did not take it: recorded absent on this sheet, and still editable here.
+    const omar = row('عمر الخريج')
+    expect(within(omar).getByText(SOURCE.manual)).toBeInTheDocument()
+    expect(within(omar).queryByText(SHEET.lockedRow)).not.toBeInTheDocument()
+    expect(within(omar).getByLabelText(ar.exams.results.status.absent)).toBeChecked()
+    expect(within(omar).getByText(/خالد المعلم/)).toBeInTheDocument()
+
+    // هند: no attempt and no result — the row this sheet is for.
+    const hind = row('هند الطالبة')
+    expect(within(hind).queryByText(SHEET.lockedRow)).not.toBeInTheDocument()
+    expect(within(hind).queryByText(SOURCE.manual)).not.toBeInTheDocument()
+    expect(within(hind).getByLabelText(ar.exams.results.status.scored)).not.toBeChecked()
+    expect(saveButton()).toBeDisabled()
+  })
+
+  it('reads the sheet again in the same session when the drawer signals a change made elsewhere — the new result shows and an unsaved row stays', async () => {
+    let saraScore = 6
+    const calls = mockSheetApi(() => {
+      const items = fiveOnlineResultStudents()
+      return makeOnlineResultsSheet({ items: [{ ...items[0]!, result: { ...items[0]!.result!, score: saraScore } }, ...items.slice(1)] })
+    })
+    const sheetTab = (refreshSignal: number) => (
+      <ExamResultsTab exam={{ id: EXAM_ID, timeZone: EXAM_TIME_ZONE, status: 'scheduled' }} onSaved={vi.fn()} onExamStale={vi.fn()} refreshSignal={refreshSignal} />
+    )
+    const view = renderWithProviders(sheetTab(0), { auth: makeAuth({ user: makeUser({ permissions: EXAM_TEACHER_PERMISSIONS }) }), route: '/exams' })
+    await findRow('هند الطالبة')
+    expect(within(row('سارة الطالبة')).getByText('6')).toBeInTheDocument()
+    // The teacher starts recording هند (no attempt) — then a key correction in the «questions» tab rewrites سارة's result.
+    mark('هند الطالبة', 'excused')
+    saraScore = 8
+    view.rerender(sheetTab(1))
+
+    await waitFor(() => expect(within(row('سارة الطالبة')).getByText('8')).toBeInTheDocument())
+    expect(gets(calls)).toHaveLength(2)
+    expect(within(row('هند الطالبة')).getByLabelText(ar.exams.results.status.excused)).toBeChecked()
+    // The same signal again reads nothing.
+    view.rerender(sheetTab(1))
+    expect(gets(calls)).toHaveLength(2)
+  })
+
+  it('shows a reader the same note, sources and reasons', async () => {
+    mockSheetApi(() => makeOnlineResultsSheet())
+    renderTab(EXAM_READER_PERMISSIONS)
+    const sara = await findRow('سارة الطالبة')
+    expect(screen.getByTestId('online-sheet-note')).toBeInTheDocument()
+    expect(within(sara).getByText(SOURCE.online)).toBeInTheDocument()
+    expect(within(sara).getByText(SHEET.lockedRow)).toBeInTheDocument()
+    expect(within(row('عمر الخريج')).getByText(SOURCE.manual)).toBeInTheDocument()
+    expect(within(row('عمر الخريج')).queryByLabelText(ar.exams.results.status.absent)).not.toBeInTheDocument()
+    expect(screen.queryByText(ar.exams.results.save)).not.toBeInTheDocument()
+  })
+
+  it('records the students who have no attempt in ONE PUT and never sends a row that has one', async () => {
+    const items = fiveOnlineResultStudents()
+    const answer = makeOnlineResultsSheet({
+      counts: { students: 4, scored: 3, absent: 0, excused: 1 },
+      items: [items[0]!, items[1]!, items[2]!, { ...items[3]!, result: makeExamResult({ status: 'excused', score: null }) }, { ...items[4]!, result: makeExamResult({ score: 7.5 }) }],
+    })
+    const calls = mockSheetApi(
+      () => makeOnlineResultsSheet(),
+      () => jsonResponse(200, answer),
+    )
+    const { onSaved } = renderTab(EXAM_TEACHER_PERMISSIONS)
+    await findRow('هند الطالبة')
+
+    mark('هند الطالبة', 'scored')
+    await userEvent.type(scoreOf('هند الطالبة'), '7.5')
+    mark('عمر الخريج', 'excused')
+    expect(screen.getByText(ar.exams.results.unsaved.replace('{{count}}', '2'))).toBeInTheDocument()
+    fireEvent.click(saveButton())
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(answer))
+    expect(puts(calls)).toEqual([
+      { method: 'PUT', url: RESULTS_URL, body: { results: [{ studentId: OMAR, status: 'excused' }, { studentId: HIND_ID, status: 'scored', score: 7.5 }] } },
+    ])
+    // A result typed here is a manual one; the server's counts follow its answer.
+    expect(await within(row('هند الطالبة')).findByText(SOURCE.manual)).toBeInTheDocument()
+    expect(screen.getByText('نتائج مسجّلة: 4')).toBeInTheDocument()
+    expect(gets(calls)).toHaveLength(1)
+  })
+
+  it('names and marks a student who started an attempt after the sheet was read, drops her change, keeps the others and reads the sheet again in the same session', async () => {
+    let started = false
+    let refuse = true
+    const sheetNow = () => {
+      const items = fiveOnlineResultStudents()
+      // Once she has started, the sheet read again says so — and the results were published meanwhile.
+      return started ? makeOnlineResultsSheet({ examStatus: 'published', items: [items[0]!, items[1]!, items[2]!, items[3]!, { ...items[4]!, attemptCount: 1 }] }) : makeOnlineResultsSheet({ items })
+    }
+    const calls = mockSheetApi(sheetNow, () =>
+      refuse
+        ? jsonResponse(409, { statusCode: 409, code: 'result_from_attempt', studentIds: [HIND_ID], message: 'The result of these students comes from their attempts' })
+        : jsonResponse(200, sheetNow()),
+    )
+    const { onSaved, onExamStale, onUnsavedChange } = renderTab(EXAM_TEACHER_PERMISSIONS)
+    await findRow('هند الطالبة')
+    mark('هند الطالبة', 'absent')
+    mark('عمر الخريج', 'excused')
+    started = true
+    fireEvent.click(saveButton())
+
+    const refusal = SHEET.errors.result_from_attempt.replace('{{names}}', 'هند الطالبة')
+    expect(await screen.findByText(refusal)).toBeInTheDocument()
+    // Read again without a new session: her row locks, with the mark and the reason …
+    await waitFor(() => expect(within(row('هند الطالبة')).getByText(SHEET.lockedRow)).toBeInTheDocument())
+    expect(gets(calls)).toHaveLength(2)
+    expect(within(row('هند الطالبة')).getByText(ar.exams.results.refusedRow)).toBeInTheDocument()
+    expect(row('هند الطالبة').querySelector('input')).toBeNull()
+    // … and the other change is still there, unsaved, under the message.
+    expect(within(row('عمر الخريج')).getByLabelText(ar.exams.results.status.excused)).toBeChecked()
+    expect(screen.getByText(ar.exams.results.unsaved.replace('{{count}}', '1'))).toBeInTheDocument()
+    expect(screen.getByText(refusal)).toBeInTheDocument()
+    expect(lastReported(onUnsavedChange)).toBe(true)
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(onExamStale).not.toHaveBeenCalled()
+    // The sheet read again is the newer fact about the exam too (its results are published now).
+    expect(screen.getByText(ar.exams.results.publishedNote)).toBeInTheDocument()
+
+    // The next save sends the remaining change alone.
+    refuse = false
+    await waitFor(() => expect(saveButton()).not.toHaveClass('ant-btn-loading'))
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(puts(calls).map((call) => call.body)).toEqual([
+      { results: [{ studentId: OMAR, status: 'excused' }, { studentId: HIND_ID, status: 'absent' }] },
+      { results: [{ studentId: OMAR, status: 'excused' }] },
+    ])
+  })
+
+  it('reads the sheet again and keeps every change when the refusal names nobody', async () => {
+    const calls = mockSheetApi(
+      () => makeOnlineResultsSheet(),
+      () => jsonResponse(409, { statusCode: 409, code: 'result_from_attempt', message: 'attempts' }),
+    )
+    renderTab(EXAM_TEACHER_PERMISSIONS)
+    await findRow('هند الطالبة')
+    mark('هند الطالبة', 'absent')
+    fireEvent.click(saveButton())
+
+    expect(await screen.findByText(SHEET.errors.result_from_attempt_unnamed)).toBeInTheDocument()
+    await waitFor(() => expect(gets(calls)).toHaveLength(2))
+    expect(within(row('هند الطالبة')).getByLabelText(ar.exams.results.status.absent)).toBeChecked()
+    expect(screen.queryByText(ar.exams.results.refusedRow)).not.toBeInTheDocument()
+  })
+
+  it('shows none of this for a manual exam: no note, no source, no «has an attempt»', async () => {
+    mockSheetApi(() => makeResultsSheet())
+    renderTab(EXAM_TEACHER_PERMISSIONS)
+    await findRow('يوسف الطالب')
+    expect(screen.queryByTestId('online-sheet-note')).not.toBeInTheDocument()
+    expect(screen.queryByText(SOURCE.manual)).not.toBeInTheDocument()
+    expect(screen.queryByText(SOURCE.online)).not.toBeInTheDocument()
+    expect(screen.queryByText(SHEET.lockedRow)).not.toBeInTheDocument()
+    expect(screen.queryByText(SHEET.recordedByServer, { exact: false })).not.toBeInTheDocument()
   })
 })
