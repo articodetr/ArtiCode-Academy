@@ -1,19 +1,87 @@
-import { BellOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons'
-import { Avatar, Badge, Button, Dropdown, Layout, Menu, Typography, theme } from 'antd'
-import type { MenuProps } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { BellOutlined, LeftOutlined, LogoutOutlined, MenuOutlined, ProfileOutlined, RightOutlined, UserOutlined } from '@ant-design/icons'
+import { Avatar, Badge, Button, ConfigProvider, Drawer, Dropdown, Layout, Menu, Typography } from 'antd'
+import type { DrawerProps, MenuProps, ThemeConfig } from 'antd'
+import { useContext, useEffect, useId, useRef, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
+import { useAcademyBrand } from '../academy/useAcademyBrand'
 import { useAuth } from '../auth/auth-context'
 import { installMenuSpaceActivation } from '../common/menuSpaceKey'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
-import { HeaderBrand, SiderAcademyName } from './AcademyBrand'
-import { navFor } from './navigation'
+import { isLearnerOnly } from '../dashboard/learner.data'
+import { HeaderBrand, SiderBrand } from './AcademyBrand'
+import { navFor, navGroupsFor } from './navigation'
+import type { NavItem, NavViewer } from './navigation'
+import { useIsPhone } from './useIsPhone'
 import { useUnreadCount } from '../notifications/useUnreadCount'
 import { GlobalSearch } from '../search/GlobalSearch'
 import './AppLayout.css'
 
 const { Header, Sider, Content } = Layout
+
+/** The side menu's width on a desktop; the icon rail keeps antd's 80 px. */
+const SIDER_WIDTH = 248
+/** The phone drawer's width (a 320 px screen keeps a strip of the page beside it). */
+const DRAWER_WIDTH = 280
+
+/**
+ * The dark side menu (the Sider, its trigger and the Menu, on a desktop and in the phone drawer): antd's own dark
+ * theme with its colours pointed at the shell's palette — the CSS custom properties on `:root` in AppLayout.css,
+ * defined once there so an academy's branding can override them later. None of these tokens goes through antd's colour
+ * arithmetic (menu/style, layout/style), so a `var(...)` is passed through as it is. Scoped to the side menu: the rest
+ * of the app keeps the global theme (app/App.tsx).
+ */
+const SIDE_MENU_THEME: ThemeConfig = {
+  components: {
+    Layout: {
+      siderBg: 'var(--ac-sider-bg)',
+      triggerBg: 'var(--ac-sider-trigger-bg)',
+      triggerColor: 'var(--ac-sider-text)',
+    },
+    Menu: {
+      darkItemBg: 'transparent',
+      darkSubMenuItemBg: 'transparent',
+      darkPopupBg: 'var(--ac-sider-bg)',
+      darkItemColor: 'var(--ac-sider-text)',
+      darkItemHoverColor: 'var(--ac-sider-text-strong)',
+      darkItemHoverBg: 'var(--ac-sider-hover-bg)',
+      darkItemSelectedBg: 'var(--ac-sider-selected-bg)',
+      darkItemSelectedColor: 'var(--ac-sider-selected-text)',
+      darkGroupTitleColor: 'var(--ac-sider-muted)',
+      colorSplit: 'var(--ac-sider-border)',
+      // The keyboard focus ring of the items (antd's genFocusOutline), drawn outside the item on the dark background.
+      colorPrimaryBorder: 'var(--ac-focus-ring)',
+      lineWidthFocus: 2,
+      itemBorderRadius: 10,
+      itemMarginInline: 12,
+    },
+  },
+}
+
+type MenuItems = NonNullable<MenuProps['items']>
+
+/**
+ * The side menu's entries — exactly those of `navFor()`. A learner-only viewer (a student or a guardian and nothing
+ * else) keeps the flat list in the order of NAV_ITEMS, without headings; anyone else gets the titled sections of
+ * NAV_GROUPS, or — on the icon rail, where a heading does not fit — the same order with a divider between sections.
+ */
+function sideMenuItems(viewer: NavViewer, rail: boolean, label: (key: string) => string): MenuItems {
+  const entry = (item: NavItem) => ({ key: item.path, icon: item.icon, label: label(item.labelKey) })
+  if (isLearnerOnly(viewer.roles)) return navFor(viewer).map(entry)
+  const items: MenuItems = []
+  navGroupsFor(viewer).forEach((group, index) => {
+    if (rail) {
+      if (index > 0) items.push({ type: 'divider', key: `divider:${group.key}` })
+      items.push(...group.items.map(entry))
+    } else if (group.labelKey === null) {
+      items.push(...group.items.map(entry))
+    } else {
+      items.push({ type: 'group', key: `group:${group.key}`, label: label(group.labelKey), children: group.items.map(entry) })
+    }
+  })
+  return items
+}
 
 function selectedPath(pathname: string, paths: string[]): string | undefined {
   if (pathname === '/') return '/'
@@ -33,23 +101,60 @@ export function AppLayout() {
   // Set by an Escape pressed inside the open user menu, read when it closes (changeUserMenuOpen): the menu's own keydown
   // runs before the popup's Escape listener on the window that closes it.
   const escapedUserMenu = useRef(false)
-  const { token } = theme.useToken()
+  // Below 768 px the side menu is a drawer opened from the header (useIsPhone — `false` in jsdom = a desktop).
+  const phone = useIsPhone()
+  const drawerId = useId()
+  // The drawer is open for the page it was opened on: any navigation (an entry, the search, the bell, the browser's
+  // back) closes it, and so does leaving the phone layout.
+  const [drawerOpenAt, setDrawerOpenAt] = useState<string | null>(null)
+  if (!phone && drawerOpenAt !== null) setDrawerOpenAt(null)
+  const drawerOpen = phone && drawerOpenAt === location.key
+  // antd mirrors the layout for RTL but not a drawer's placement: the drawer slides in from the inline start.
+  const { direction } = useContext(ConfigProvider.ConfigContext)
+  const rtl = direction === 'rtl'
   // Space picks a focused item of every menu under the layout — the side menu and every dropdown's actions — as Enter
   // does (KI-108; @rc-component/menu acts on Enter only).
   useEffect(() => installMenuSpaceActivation(), [])
+  // The desktop menu scrolls inside the side menu (AppLayout.css): the current page's entry is brought into its view —
+  // the menu box alone, never the page.
+  const siderNav = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = siderNav.current
+    const entry = nav?.querySelector('.ant-menu-item-selected')
+    if (!nav || !(entry instanceof HTMLElement)) return
+    const box = nav.getBoundingClientRect()
+    const item = entry.getBoundingClientRect()
+    if (item.top < box.top) nav.scrollTop -= box.top - item.top + 8
+    else if (item.bottom > box.bottom) nav.scrollTop += item.bottom - box.bottom + 8
+  }, [location.pathname, collapsed, phone])
 
   if (!user) return <Navigate to="/login" replace />
 
   // Entries by permission where the module has an API, by the role matrix elsewhere (MOD-03-T15).
   const navItems = navFor(user)
-  const menuItems: MenuProps['items'] = navItems.map((item) => ({
-    key: item.path,
-    icon: item.icon,
-    label: t(item.labelKey),
-  }))
   const selected = selectedPath(
     location.pathname,
     navItems.map((item) => item.path),
+  )
+
+  /**
+   * The side menu (rendered inside SIDE_MENU_THEME), on the desktop Sider (`rail` while collapsed to icons) or in the
+   * phone drawer (`onPick` closes it).
+   */
+  const sideMenu = (rail: boolean, onPick?: () => void, ref?: RefObject<HTMLElement | null>) => (
+    <nav ref={ref} className="app-nav" aria-label={t('nav.mainMenu')}>
+      <Menu
+        theme="dark"
+        mode="inline"
+        inlineIndent={16}
+        items={sideMenuItems(user, rail, (key) => t(key))}
+        selectedKeys={selected ? [selected] : []}
+        onClick={({ key }) => {
+          onPick?.()
+          navigate(key)
+        }}
+      />
+    </nav>
   )
 
   const userMenu: MenuProps['items'] = [
@@ -85,46 +190,53 @@ export function AppLayout() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      {/* `app-sider`: the print rules of the reports page hide the side menu by this class (reports.css). */}
-      <Sider
-        className="app-sider"
-        theme="light"
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        breakpoint="lg"
-        width={240}
-        style={{ borderInlineEnd: `1px solid ${token.colorBorderSecondary}` }}
-      >
-        <div
-          className="app-brand"
-          style={{ borderBottom: `1px solid ${token.colorBorderSecondary}` }}
-        >
-          <span className="app-brand__title" style={{ color: token.colorPrimary }}>
-            {collapsed ? 'AC' : t('common.appName')}
-          </span>
-          {collapsed ? null : <SiderAcademyName />}
-        </div>
-        <Menu
-          mode="inline"
-          items={menuItems}
-          selectedKeys={selected ? [selected] : []}
-          onClick={({ key }) => navigate(key)}
-          style={{ borderInlineEnd: 0 }}
-        />
-      </Sider>
+    <Layout className="app-shell" hasSider={!phone} style={{ minHeight: '100vh', background: 'var(--ac-content-bg)' }}>
+      {phone ? (
+        <NavDrawer id={drawerId} open={drawerOpen} placement={rtl ? 'right' : 'left'} onClose={() => setDrawerOpenAt(null)}>
+          <ConfigProvider theme={SIDE_MENU_THEME}>{sideMenu(false, () => setDrawerOpenAt(null))}</ConfigProvider>
+        </NavDrawer>
+      ) : (
+        <ConfigProvider theme={SIDE_MENU_THEME}>
+          {/* `app-sider`: the print rules of the reports page hide the side menu by this class (reports.css). */}
+          <Sider
+            className="app-sider"
+            theme="dark"
+            collapsible
+            collapsed={collapsed}
+            onCollapse={setCollapsed}
+            breakpoint="lg"
+            width={SIDER_WIDTH}
+            // A real button inside antd's trigger bar (whose own click toggles the rail): Tab reaches it, Enter and Space
+            // press it. Its arrow points where the menu moves, as antd's default trigger does in either direction.
+            trigger={
+              <button type="button" className="app-sider__trigger" aria-label={collapsed ? t('nav.expandMenu') : t('nav.collapseMenu')} aria-expanded={!collapsed}>
+                {collapsed !== rtl ? <RightOutlined aria-hidden /> : <LeftOutlined aria-hidden />}
+              </button>
+            }
+          >
+            <SiderBrand collapsed={collapsed} />
+            {sideMenu(collapsed, undefined, siderNav)}
+          </Sider>
+        </ConfigProvider>
+      )}
 
       <Layout>
-        <Header
-          className="app-header"
-          style={{
-            background: token.colorBgContainer,
-            borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          }}
-        >
-          {/* The academy's name and logo from API-035 (J-F13); no name until they arrive, the static one after a failure (J-F24). */}
-          <HeaderBrand />
+        <Header className="app-header" style={{ background: 'var(--ac-card-bg)', borderBottom: '1px solid var(--ac-border)' }}>
+          <div className="app-header__start">
+            {phone ? (
+              <Button
+                type="text"
+                className="app-header__menu-button"
+                icon={<MenuOutlined />}
+                aria-label={t('nav.openMenu')}
+                aria-expanded={drawerOpen}
+                aria-controls={drawerId}
+                onClick={() => setDrawerOpenAt(location.key)}
+              />
+            ) : null}
+            {/* The academy's name and logo from API-035 (J-F13); no name until they arrive, the static one after a failure (J-F24). */}
+            <HeaderBrand />
+          </div>
 
           <div className="app-header__actions">
             {/* The global search (Ctrl/Cmd+K or «/») and the unread bell — ported from the redesign branch. */}
@@ -178,11 +290,57 @@ export function AppLayout() {
           </div>
         </Header>
 
-        <Content className="app-content" style={{ background: token.colorBgLayout }}>
+        <Content className="app-content" style={{ background: 'var(--ac-content-bg)' }}>
           <Outlet />
         </Content>
       </Layout>
     </Layout>
+  )
+}
+
+interface NavDrawerProps {
+  id: string
+  open: boolean
+  placement: NonNullable<DrawerProps['placement']>
+  onClose: () => void
+  children: ReactNode
+}
+
+/**
+ * The side menu on a phone: a drawer from the inline start, in the menu's dark colours, headed by the academy's name
+ * (none while the first read runs — the drawer is then named by its label alone). Picking an entry closes it
+ * (AppLayout); antd hands the focus back to the header's menu button when it closes.
+ */
+function NavDrawer({ id, open, placement, onClose, children }: NavDrawerProps) {
+  const { t } = useTranslation()
+  const { name } = useAcademyBrand()
+  return (
+    <Drawer
+      id={id}
+      open={open}
+      onClose={onClose}
+      placement={placement}
+      size={DRAWER_WIDTH}
+      rootClassName="app-nav-drawer"
+      aria-label={t('nav.mainMenu')}
+      closable={{ 'aria-label': t('nav.closeMenu') }}
+      title={
+        name ? (
+          <bdi dir="auto" className="app-nav-drawer__title" title={name}>
+            {name}
+          </bdi>
+        ) : undefined
+      }
+      styles={{
+        section: { background: 'var(--ac-sider-bg)', color: 'var(--ac-sider-text)' },
+        header: { borderBottom: '1px solid var(--ac-sider-border)' },
+        title: { color: 'var(--ac-sider-text-strong)', minWidth: 0 },
+        close: { color: 'var(--ac-sider-text)' },
+        body: { padding: '8px 0' },
+      }}
+    >
+      {children}
+    </Drawer>
   )
 }
 

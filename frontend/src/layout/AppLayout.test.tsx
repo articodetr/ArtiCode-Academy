@@ -1,5 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { ConfigProvider } from 'antd'
+import type { ReactElement } from 'react'
 import { Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import i18n from '../i18n'
@@ -10,6 +12,7 @@ import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { AppLayout } from './AppLayout'
+import { PHONE_QUERY } from './useIsPhone'
 
 function menuLabels(): string[] {
   return within(screen.getByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent?.trim() ?? '')
@@ -35,8 +38,10 @@ describe('AppLayout navigation', () => {
     const admin = menuLabels()
     expect(admin).toContain(ar.nav.roles)
     expect(admin).toContain(ar.nav.audit)
-    expect(admin.indexOf(ar.nav.roles)).toBe(admin.indexOf(ar.nav.users) + 1)
-    expect(admin.indexOf(ar.nav.audit)).toBe(admin.indexOf(ar.nav.settings) - 1)
+    // Since the grouped menu (2026-11-22) both close the «system» section, after the settings: settings, roles, audit.
+    expect(admin.indexOf(ar.nav.roles)).toBe(admin.indexOf(ar.nav.settings) + 1)
+    expect(admin.indexOf(ar.nav.audit)).toBe(admin.indexOf(ar.nav.roles) + 1)
+    expect(admin.indexOf(ar.nav.users)).toBeLessThan(admin.indexOf(ar.nav.settings))
     unmount()
 
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read'] })
@@ -137,7 +142,7 @@ const notConfigured = () => jsonResponse(503, { statusCode: 503, error: 'Service
 const header = () => document.querySelector('.app-header') as HTMLElement
 const headerTitle = () => header().querySelector('.app-header__title') as HTMLElement
 const headerLogo = () => header().querySelector('img')
-const siderName = () => document.querySelector('.app-brand__sub') as HTMLElement
+const siderName = () => document.querySelector('.app-brand__title') as HTMLElement
 
 function renderLayout() {
   return renderWithProviders(<AppLayout />, { auth: makeAuth({ user: makeUser() }), route: '/' })
@@ -310,10 +315,11 @@ async function layoutCss(): Promise<string> {
   return fs.readFileSync(new URL(path, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 }
 
-/** The declarations of the rule written exactly with `selector` inside `@media (max-width: 768px)`, as `property → value`. */
+/** The declarations of the rule written exactly with `selector` inside the phone block (`@media (max-width: 767.98px)`), as `property → value`. */
 async function phoneDeclarations(selector: string): Promise<Map<string, string>> {
   const css = await layoutCss()
-  const start = css.indexOf('@media (max-width: 768px)')
+  const start = css.indexOf('@media (max-width: 767.98px)')
+  expect(start).toBeGreaterThan(-1)
   const block = css.slice(css.indexOf('{', start) + 1)
   const declarations = new Map<string, string>()
   for (const match of block.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -343,7 +349,7 @@ describe('AppLayout — the header’s user, bell and menus (KI-108)', () => {
     // The badge belongs to the bell inside the header's actions.
     const bell = within(header()).getByLabelText(ar.nav.notifications)
     expect(bell.closest('.ant-badge')?.parentElement).toHaveClass('app-header__actions')
-    // jsdom has no layout: assert the configuration — the phone rule replaces the fixed 64 px height, and its padding
+    // jsdom has no layout: assert the configuration — the phone rule replaces the fixed 72 px height, and its padding
     // keeps the badge (half above the bell) below the top of the page. The browser check measures it.
     const phone = await phoneDeclarations('.app-header')
     expect(phone.get('height')).toBe('auto')
@@ -452,5 +458,273 @@ describe('AppLayout — the header’s user, bell and menus (KI-108)', () => {
     expect(fireEvent.keyDown(profile, space)).toBe(false)
     fireEvent.keyUp(profile, space)
     expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/profile')
+  })
+})
+
+/** The keys of an academy admin that open one entry of every staff section (the system section without branches and rooms). */
+const STAFF_SECTIONS_PERMISSIONS = [
+  'users.read',
+  'enrollments.manage',
+  'courses.read',
+  'classes.read',
+  'schedule.read',
+  'lessons.read',
+  'assignments.read',
+  'exams.read',
+  'certificates.read_all',
+  'invoices.read_all',
+  'reports.attendance.view',
+  'academy.settings.read',
+  'academy.settings.manage',
+  'roles.manage',
+  'audit.read',
+]
+
+const sider = () => document.querySelector('.app-sider') as HTMLElement
+const siderMenu = () => within(sider()).getByRole('menu')
+const headings = (menu: HTMLElement) => Array.from(menu.querySelectorAll('.ant-menu-item-group-title')).map((title) => title.textContent?.trim() ?? '')
+const labelsIn = (root: Element) => Array.from(root.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent?.trim() ?? '')
+
+/** Each titled section of a menu: its heading and the entries under it. */
+function sections(menu: HTMLElement): Array<[string, string[]]> {
+  return Array.from(menu.querySelectorAll('.ant-menu-item-group')).map((group) => [group.querySelector('.ant-menu-item-group-title')?.textContent?.trim() ?? '', labelsIn(group)])
+}
+
+/** A phone-sized viewport for useIsPhone(): its query matches, every other one (antd's breakpoints) does not. */
+function onPhone() {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) => ({ ...original(query), matches: query === PHONE_QUERY })) as typeof window.matchMedia
+  onTestFinished(() => {
+    window.matchMedia = original
+  })
+}
+
+/** The layout around a probe of the current location (an entry's navigation keeps the layout mounted). */
+function renderShell(user = makeUser({ permissions: STAFF_SECTIONS_PERMISSIONS }), options: { route?: string; wrap?: (ui: ReactElement) => ReactElement } = {}) {
+  const { route = '/', wrap = (ui) => ui } = options
+  return renderWithProviders(
+    wrap(
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="*" element={<LocationProbe />} />
+        </Route>
+      </Routes>,
+    ),
+    { auth: makeAuth({ user }), route, path: '/*' },
+  )
+}
+
+describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 2026-11-22)', () => {
+  beforeEach(() => {
+    mockFetch(() => new Promise<Response>(() => {}))
+  })
+
+  it('heads a staff viewer’s menu with the landing page, then titled sections in the spec’s order; a section with nothing visible is left out', () => {
+    renderShell()
+    const menu = siderMenu()
+    // The landing page heads the menu on its own, outside any section.
+    expect(menu.firstElementChild).toHaveAttribute('role', 'menuitem')
+    expect(menu.firstElementChild).toHaveTextContent(ar.nav.dashboard)
+    expect(sections(menu)).toEqual([
+      [ar.nav.groups.academy, [ar.nav.users, ar.nav.enrollmentRequests]],
+      [ar.nav.groups.academics, [ar.nav.courses, ar.nav.classes, ar.nav.lessons, ar.nav.schedule]],
+      [ar.nav.groups.assessment, [ar.nav.assignments, ar.nav.exams, ar.nav.certificates]],
+      [ar.nav.groups.finance, [ar.nav.payments]],
+      [ar.nav.groups.followUp, [ar.nav.reports, ar.nav.notifications]],
+      [ar.nav.groups.system, [ar.nav.settings, ar.nav.gradeSchemes, ar.nav.roles, ar.nav.audit]],
+    ])
+    // «My pages» has nothing for an admin who is no learner: no empty heading.
+    expect(headings(menu)).not.toContain(ar.nav.groups.mine)
+    expect(menu.querySelector('.ant-menu-item-divider')).toBeNull()
+  })
+
+  it('shows a teacher who is also a guardian their own pages under «my pages», between the academy and teaching sections', () => {
+    renderShell(makeUser({ role: 'teacher', roles: ['teacher', 'guardian'], permissions: ['users.read', 'classes.read', 'lessons.read', 'schedule.read'] }))
+    const menu = siderMenu()
+    expect(headings(menu)).toEqual([ar.nav.groups.academy, ar.nav.groups.mine, ar.nav.groups.academics, ar.nav.groups.followUp])
+    const mine = sections(menu).find(([heading]) => heading === ar.nav.groups.mine)!
+    expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.mySchool, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
+  })
+
+  it('keeps a learner-only viewer’s flat menu in the order of NAV_ITEMS, with no heading — expanded or on the rail', async () => {
+    const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'schedule.read', 'lessons.read', 'assignments.read', 'exams.read'] })
+    renderShell(student)
+    const flat = [ar.nav.dashboard, ar.nav.myClasses, ar.nav.catalog, ar.nav.mySchool, ar.nav.schedule, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates, ar.nav.notifications]
+    expect(labelsIn(siderMenu())).toEqual(flat)
+    expect(siderMenu().querySelector('.ant-menu-item-group')).toBeNull()
+
+    fireEvent.click(within(sider()).getByRole('button', { name: ar.nav.collapseMenu }))
+    await waitFor(() => expect(sider()).toHaveClass('ant-layout-sider-collapsed'))
+    expect(labelsIn(siderMenu())).toEqual(flat)
+    expect(siderMenu().querySelector('.ant-menu-item-divider')).toBeNull()
+  })
+
+  it('folds the sections into dividers on the icon rail — headings do not fit 80 px — and the trigger is a button that says what it does', async () => {
+    renderShell()
+    const expanded = labelsIn(siderMenu())
+    const trigger = within(sider()).getByRole('button', { name: ar.nav.collapseMenu })
+    expect(trigger).toHaveClass('app-sider__trigger')
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(trigger)
+    await waitFor(() => expect(sider()).toHaveClass('ant-layout-sider-collapsed'))
+    const menu = siderMenu()
+    expect(menu.querySelector('.ant-menu-item-group-title')).toBeNull()
+    // The same entries in the same order, a divider between two sections (seven sections, six dividers).
+    expect(labelsIn(menu)).toEqual(expanded)
+    expect(menu.querySelectorAll('.ant-menu-item-divider')).toHaveLength(6)
+    expect(menu.firstElementChild).toHaveTextContent(ar.nav.dashboard)
+    expect(menu.children[1]).toHaveClass('ant-menu-item-divider')
+    const rail = within(sider()).getByRole('button', { name: ar.nav.expandMenu })
+    expect(rail).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(rail)
+    await waitFor(() => expect(sider()).not.toHaveClass('ant-layout-sider-collapsed'))
+    expect(headings(siderMenu())).toContain(ar.nav.groups.system)
+  })
+
+  it('selects the entry of the current page inside its section and navigates from the grouped menu', async () => {
+    renderShell(undefined, { route: '/settings/roles' })
+    const selected = siderMenu().querySelectorAll('.ant-menu-item-selected')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]).toHaveTextContent(ar.nav.roles)
+    expect(selected[0]!.closest('.ant-menu-item-group')?.querySelector('.ant-menu-item-group-title')).toHaveTextContent(ar.nav.groups.system)
+
+    fireEvent.click(within(siderMenu()).getByText(ar.nav.exams))
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/exams')
+  })
+
+  it('names the side menu as a landmark', () => {
+    renderShell()
+    expect(within(sider()).getByRole('navigation', { name: ar.nav.mainMenu })).toContainElement(siderMenu())
+  })
+})
+
+describe('AppLayout — the academy at the top of the side menu', () => {
+  it('shows the academy’s name, not the product’s, and on the rail its initial', async () => {
+    mockAcademyApi(() => jsonResponse(200, BRANDED))
+    renderShell()
+
+    await waitFor(() => expect(siderName()).toHaveTextContent(NAME.ar))
+    expect(sider().contains(siderName())).toBe(true)
+    expect(siderName().tagName).toBe('BDI')
+    expect(siderName()).toHaveAttribute('dir', 'auto')
+    expect(siderName()).toHaveAttribute('title', NAME.ar)
+    expect(within(sider()).queryByText(ar.common.appName)).not.toBeInTheDocument()
+    expect(within(sider()).queryByText('AC')).not.toBeInTheDocument()
+
+    fireEvent.click(within(sider()).getByRole('button', { name: ar.nav.collapseMenu }))
+    await waitFor(() => expect(sider().querySelector('.app-brand__mark')).not.toBeNull())
+    const mark = sider().querySelector('.app-brand__mark') as HTMLElement
+    expect(mark).toHaveTextContent('أ')
+    // Decorative: the name is in the header; the full name shows on hover.
+    expect(mark).toHaveAttribute('aria-hidden', 'true')
+    expect(mark.parentElement).toHaveAttribute('title', NAME.ar)
+    expect(sider().querySelector('.app-brand__title')).toBeNull()
+  })
+
+  it('shows the academy’s logo on the rail when it has one, decorative, and the initial once the logo fails to load', async () => {
+    mockAcademyApi(() => jsonResponse(200, makeAcademy({ name: { ar: 'nour academy' }, logoUrl: 'https://cdn.example.test/brand/logo.png' })))
+    renderShell()
+    await waitFor(() => expect(siderName()).toHaveTextContent('nour academy'))
+
+    fireEvent.click(within(sider()).getByRole('button', { name: ar.nav.collapseMenu }))
+    await waitFor(() => expect(sider().querySelector('img')).not.toBeNull())
+    const logo = sider().querySelector('img') as HTMLImageElement
+    expect(logo).toHaveAttribute('src', 'https://cdn.example.test/brand/logo.png')
+    expect(logo).toHaveAttribute('alt', '')
+    expect(logo).toHaveAttribute('referrerpolicy', 'no-referrer')
+
+    fireEvent.error(logo)
+    expect(sider().querySelector('img')).toBeNull()
+    expect(sider().querySelector('.app-brand__mark')).toHaveTextContent('N')
+  })
+
+  it('shows nothing at the top of the side menu while the academy is loading, expanded or on the rail', async () => {
+    mockFetch(() => new Promise<Response>(() => {}))
+    renderShell()
+    expect(siderName()).toBeEmptyDOMElement()
+    expect(siderName()).not.toHaveAttribute('title')
+    fireEvent.click(within(sider()).getByRole('button', { name: ar.nav.collapseMenu }))
+    await waitFor(() => expect(sider()).toHaveClass('ant-layout-sider-collapsed'))
+    const brand = sider().querySelector('.app-brand') as HTMLElement
+    expect(brand).toBeEmptyDOMElement()
+    expect(brand).not.toHaveAttribute('title')
+  })
+})
+
+describe('AppLayout — the side menu as a drawer on a phone', () => {
+  beforeEach(() => {
+    mockFetch(() => new Promise<Response>(() => {}))
+  })
+
+  it('has no Sider; the menu button at the start of the header opens a drawer from the right in Arabic, an entry navigates and closes it', async () => {
+    onPhone()
+    mockAcademyApi(() => jsonResponse(200, BRANDED))
+    renderShell(makeUser({ permissions: ['users.read', 'audit.read'] }))
+
+    expect(document.querySelector('.ant-layout-sider')).toBeNull()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    const start = header().querySelector('.app-header__start') as HTMLElement
+    const button = within(start).getByRole('button', { name: ar.nav.openMenu })
+    expect(start.firstElementChild).toBe(button)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog')
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(button).toHaveAttribute('aria-controls', dialog.id)
+    const drawer = dialog.closest('.app-nav-drawer') as HTMLElement
+    expect(drawer).toHaveClass('ant-drawer-open')
+    // The inline start of the Arabic UI is the right.
+    expect(drawer).toHaveClass('ant-drawer-right')
+    // Headed by the academy's name, with a close button that says what it does.
+    await waitFor(() => expect(dialog.querySelector('.app-nav-drawer__title')).toHaveTextContent(NAME.ar))
+    expect(within(dialog).getByRole('button', { name: ar.nav.closeMenu })).toBeInTheDocument()
+    const menu = within(dialog).getByRole('menu')
+    expect(labelsIn(menu)).toEqual([ar.nav.dashboard, ar.nav.users, ar.nav.notifications, ar.nav.audit])
+    expect(headings(menu)).toEqual([ar.nav.groups.academy, ar.nav.groups.followUp, ar.nav.groups.system])
+
+    fireEvent.click(within(menu).getByText(ar.nav.users))
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/users')
+    await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'false'))
+    expect(drawer).not.toHaveClass('ant-drawer-open')
+  })
+
+  it('closes the drawer with its close button, on the same page', async () => {
+    onPhone()
+    renderShell(makeUser({ permissions: ['users.read'] }))
+    const button = within(header()).getByRole('button', { name: ar.nav.openMenu })
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: ar.nav.closeMenu }))
+    await waitFor(() => expect(button).toHaveAttribute('aria-expanded', 'false'))
+    expect(dialog.closest('.app-nav-drawer')).not.toHaveClass('ant-drawer-open')
+    expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/')
+  })
+
+  it('opens the drawer from the left in a left-to-right UI', async () => {
+    onPhone()
+    renderShell(makeUser({ permissions: ['users.read'] }), { wrap: (ui) => <ConfigProvider direction="ltr">{ui}</ConfigProvider> })
+    fireEvent.click(within(header()).getByRole('button', { name: ar.nav.openMenu }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.closest('.app-nav-drawer')).toHaveClass('ant-drawer-left')
+  })
+
+  it('keeps every function of the header on a phone: the search, the bell, the language and the user’s menu', () => {
+    onPhone()
+    renderShell(makeUser({ name: 'سارة أحمد', permissions: ['users.read'] }))
+    const bar = header()
+    expect(within(bar).getByRole('button', { name: ar.search.open })).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: ar.nav.notifications })).toBeInTheDocument()
+    expect(bar.querySelector('.ant-segmented')).not.toBeNull()
+    expect(within(bar).getByRole('button', { name: 'سارة أحمد' })).toHaveAttribute('aria-haspopup', 'menu')
+  })
+
+  it('shows no menu button on a desktop, where the Sider holds the menu', () => {
+    renderShell()
+    expect(within(header()).queryByRole('button', { name: ar.nav.openMenu })).not.toBeInTheDocument()
+    expect(sider()).toHaveClass('ant-layout-sider')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import { useLocation } from 'react-router'
 import type { RoleList } from '../api/roles'
 import type { UserDetail, UserList } from '../api/users'
 import { ar } from '../i18n/ar'
@@ -47,6 +48,11 @@ function mockUsersApi(
     return jsonResponse(404, { statusCode: 404, code: 'user_not_found', message: 'User not found' })
   })
   return { queries, rolesRequests, fetchMock, lastQuery: () => queries[queries.length - 1] }
+}
+
+/** The address's query string, to see that `?create=` is dropped once read (J-F59). */
+function SearchProbe() {
+  return <output data-testid="search">{useLocation().search}</output>
 }
 
 function renderPage(permissions: string[] = ADMIN_PERMISSIONS) {
@@ -301,5 +307,46 @@ describe('UsersPage', () => {
     expect(api.rolesRequests).toEqual(['/api/roles', '/api/roles'])
     fireEvent.mouseDown(select)
     expect(await screen.findByText(ROLE_LABELS.librarian.ar, { selector: '.ant-select-dropdown .ant-select-item-option-content' })).toBeInTheDocument()
+  })
+
+  it('opens the wizard on the teacher kind from ?create=teacher (the dashboard’s quick action) and drops the parameter (J-F59)', async () => {
+    mockUsersApi({ first: makeUserList([]) })
+    renderWithProviders(
+      <>
+        <UsersPage />
+        <SearchProbe />
+      </>,
+      { auth: makeAuth({ user: makeUser({ permissions: ADMIN_PERMISSIONS }) }), route: '/users?create=teacher' },
+    )
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.teacher}`) })).toBeChecked()
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+  })
+
+  it('opens no wizard from ?create= without users.create or for an unknown kind, and drops the parameter either way (J-F59)', async () => {
+    mockUsersApi({ first: makeUserList([]) })
+    const { unmount } = renderWithProviders(
+      <>
+        <UsersPage />
+        <SearchProbe />
+      </>,
+      { auth: makeAuth({ user: makeUser({ permissions: READ_ONLY_PERMISSIONS }) }), route: '/users?create=student' },
+    )
+    await screen.findByText(ar.users.empty)
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    unmount()
+
+    renderWithProviders(
+      <>
+        <UsersPage />
+        <SearchProbe />
+      </>,
+      { auth: makeAuth({ user: makeUser({ permissions: ADMIN_PERMISSIONS }) }), route: '/users?create=admin' },
+    )
+    await screen.findByText(ar.users.empty)
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

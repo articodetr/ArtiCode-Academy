@@ -1,0 +1,429 @@
+/*
+ * The admin home (J-F59). Colours come from the shell's custom properties (layout/AppLayout.css, `--ac-*`), with the
+ * spec's defaults as fallbacks, so an academy's branding can change them in one place. Every grid is laid out on its
+ * own section's width (container queries), so the sidebar's state (open, collapsed, a phone's drawer) never breaks it,
+ * and nothing here makes the page scroll sideways.
+ */
+.admin-home {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--ac-text, #17243d);
+}
+
+.admin-home .admin-section__title.ant-typography {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ac-text, #17243d);
+}
+
+/* ── Welcome ─────────────────────────────────────────────────────────────── */
+
+.admin-welcome {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: var(--ac-card-bg, #fff);
+  border: 1px solid var(--ac-border, #e5eaf2);
+  /* The academy's gold, as a thin edge at the inline start (the right in Arabic). */
+  border-inline-start: 4px solid var(--ac-accent, #e9ac3c);
+}
+
+.admin-welcome__text {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.admin-home .admin-welcome__title.ant-typography {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ac-text, #17243d);
+}
+
+.admin-welcome__date.ant-typography {
+  display: block;
+  font-weight: 600;
+  color: var(--ac-primary, #2e5bba);
+}
+
+.admin-home .admin-welcome__intro.ant-typography {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+
+/* ── Quick actions ───────────────────────────────────────────────────────── */
+
+.admin-actions {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-actions__grid {
+  display: grid;
+  /* 2 per row on a phone, 3 on a narrow tablet, 4 on a small laptop, 6 from a wide content area (the spec's table). */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (min-width: 520px) {
+  .admin-actions__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 700px) {
+  .admin-actions__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 1000px) {
+  .admin-actions__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.admin-action {
+  min-width: 0;
+}
+
+.admin-action__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  min-height: 136px;
+  padding: 18px 10px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--ac-border, #e5eaf2);
+  background: var(--ac-card-bg, #fff);
+  color: var(--ac-text, #17243d);
+  text-align: center;
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.admin-action__link:hover {
+  color: var(--ac-text, #17243d);
+  border-color: var(--ac-primary, #2e5bba);
+  box-shadow: 0 6px 18px rgb(30 58 115 / 10%);
+  transform: translateY(-2px);
+}
+
+.admin-action__link:focus-visible {
+  outline: 3px solid var(--ac-primary, #2e5bba);
+  outline-offset: 2px;
+  border-color: var(--ac-primary, #2e5bba);
+}
+
+.admin-action__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ac-primary, #2e5bba) 7%, transparent);
+  font-size: 48px;
+  line-height: 1;
+}
+
+.admin-action__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  /* A long title wraps on whole words (KI-121) and never leaves its card. */
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+/* «Show more» lives on a phone only; a wider screen shows every card. */
+.admin-actions__more {
+  display: none;
+  justify-content: center;
+}
+
+@media (max-width: 767.98px) {
+  .admin-actions__grid--collapsed .admin-action--extra {
+    display: none;
+  }
+  .admin-actions__more {
+    display: flex;
+  }
+  .admin-action__link {
+    min-height: 120px;
+    padding: 14px 8px 12px;
+  }
+  .admin-action__icon {
+    width: 60px;
+    height: 60px;
+    font-size: 40px;
+  }
+  .admin-welcome {
+    padding: 16px;
+  }
+  .admin-home .admin-welcome__title.ant-typography {
+    font-size: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-action__link,
+  .admin-action__link:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ── Statistics ──────────────────────────────────────────────────────────── */
+
+.admin-stats {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-stat {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--ac-border, #e5eaf2);
+  background: var(--ac-card-bg, #fff);
+}
+
+.admin-stat__icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 22px;
+}
+
+.admin-stat__icon--blue {
+  color: var(--ac-primary, #2e5bba);
+  background: color-mix(in srgb, var(--ac-primary, #2e5bba) 12%, transparent);
+}
+
+.admin-stat__icon--gold {
+  color: #9a6a12;
+  background: color-mix(in srgb, var(--ac-accent, #e9ac3c) 20%, transparent);
+}
+
+.admin-stat__icon--green {
+  color: #1f7a4a;
+  background: #e6f4ec;
+}
+
+.admin-stat__icon--violet {
+  color: #5b44b2;
+  background: #eeeafb;
+}
+
+.admin-stat__body {
+  min-width: 0;
+}
+
+.admin-stat__label {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--ac-text, #17243d) 70%, transparent);
+}
+
+.admin-stat__value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ac-text, #17243d);
+  overflow-wrap: anywhere;
+}
+
+.admin-stat__money {
+  display: flex;
+  flex-direction: column;
+  font-size: 18px;
+}
+
+.admin-stat__hint {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--ac-text, #17243d) 60%, transparent);
+}
+
+/* Two tiles per row on a phone (seven stacked tiles made the page long); a smaller icon leaves the number its room. */
+@media (max-width: 767.98px) {
+  .admin-stats__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .admin-stat {
+    gap: 10px;
+    padding: 12px;
+  }
+  .admin-stat__icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 17px;
+  }
+  .admin-stat__value {
+    font-size: 20px;
+  }
+  .admin-stat__money {
+    font-size: 15px;
+  }
+}
+
+.admin-stats__failure {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--ac-border, #e5eaf2);
+  background: var(--ac-card-bg, #fff);
+}
+
+/* ── Schedule and notifications ─────────────────────────────────────────── */
+
+.admin-bottom {
+  display: grid;
+  /* The schedule first — at the inline start (the right in Arabic) — beside the notifications; stacked on a phone. */
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.admin-bottom--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 991.98px) {
+  .admin-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.admin-panel {
+  min-width: 0;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--ac-border, #e5eaf2);
+  background: var(--ac-card-bg, #fff);
+}
+
+.admin-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.admin-panel__tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-lessons__day + .admin-lessons__day {
+  margin-top: 12px;
+}
+
+.admin-lessons__day-title.ant-typography {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ac-primary, #2e5bba);
+}
+
+.admin-lessons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-lesson {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--ac-border, #e5eaf2);
+}
+
+.admin-lessons .admin-lesson:first-child {
+  border-top: 0;
+}
+
+.admin-lesson__time {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ac-primary, #2e5bba);
+}
+
+.admin-lesson__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-lesson__title.ant-typography,
+.admin-lesson__class.ant-typography {
+  overflow-wrap: break-word;
+}
+
+.admin-lesson__class.ant-typography {
+  font-size: 12px;
+}
+
+.admin-lesson__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 575.98px) {
+  .admin-panel {
+    padding: 14px;
+  }
+  /* The time and the title on one row, the state and the links under them. */
+  .admin-lesson {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .admin-lesson__meta {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}

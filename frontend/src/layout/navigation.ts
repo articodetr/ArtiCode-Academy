@@ -230,6 +230,54 @@ export function navFor(viewer: NavViewer): NavItem[] {
   return NAV_ITEMS.filter((item) => sees(item, viewer))
 }
 
+/** The titled sections of the side menu («Admin Dashboard Modern Redesign», 2026-11-22). */
+export type NavGroupKey = 'home' | 'academy' | 'mine' | 'academics' | 'assessment' | 'finance' | 'followUp' | 'system'
+
+interface NavGroupDefinition {
+  key: NavGroupKey
+  /** The section's heading (`nav.groups.*`); null for the landing page, which heads the menu on its own. */
+  labelKey: string | null
+  /** `NAV_ITEMS` keys, in the order the section shows them. */
+  items: readonly string[]
+}
+
+/**
+ * Where each entry sits in the grouped menu: every `NAV_ITEMS` key in exactly one section (navigation.test.ts). The
+ * sections only arrange what `navFor()` lets through — they never show or hide an entry. «My pages» holds the
+ * ownership pages, which only a teacher or an admin who is also a student or a guardian sees beside the staff ones; a
+ * learner-only viewer keeps the flat menu (AppLayout).
+ */
+export const NAV_GROUPS: readonly NavGroupDefinition[] = [
+  { key: 'home', labelKey: null, items: ['dashboard'] },
+  { key: 'academy', labelKey: 'nav.groups.academy', items: ['users', 'enrollmentRequests'] },
+  { key: 'mine', labelKey: 'nav.groups.mine', items: ['myClasses', 'catalog', 'mySchool', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates'] },
+  { key: 'academics', labelKey: 'nav.groups.academics', items: ['courses', 'classes', 'lessons', 'schedule'] },
+  { key: 'assessment', labelKey: 'nav.groups.assessment', items: ['assignments', 'exams', 'certificates'] },
+  { key: 'finance', labelKey: 'nav.groups.finance', items: ['payments'] },
+  { key: 'followUp', labelKey: 'nav.groups.followUp', items: ['reports', 'notifications'] },
+  { key: 'system', labelKey: 'nav.groups.system', items: ['settings', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit'] },
+]
+
+export interface NavGroup {
+  key: NavGroupKey
+  labelKey: string | null
+  /** The section's entries the viewer sees, never empty. */
+  items: NavItem[]
+}
+
+/** The viewer's entries (exactly those of `navFor()`) arranged by section; a section with none of them is left out. */
+export function navGroupsFor(viewer: NavViewer): NavGroup[] {
+  const visible = new Map(navFor(viewer).map((item) => [item.key, item]))
+  return NAV_GROUPS.map((group) => ({
+    key: group.key,
+    labelKey: group.labelKey,
+    items: group.items.flatMap((key) => {
+      const item = visible.get(key)
+      return item ? [item] : []
+    }),
+  })).filter((group) => group.items.length > 0)
+}
+
 /** UI-level gate behind `RequireAccess` (not a security boundary — the server enforces permissions). */
 export function canAccess(viewer: NavViewer, navKey: string): boolean {
   const item = NAV_ITEMS.find((entry) => entry.key === navKey)
