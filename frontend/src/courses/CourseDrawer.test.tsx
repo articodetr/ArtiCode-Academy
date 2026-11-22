@@ -238,4 +238,25 @@ describe('CourseDrawer — cover and price (MOD-19)', () => {
     await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(saved))
     expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ enrollmentFeePlanId: 'plan-1' }])
   })
+
+  it('says why no plan fits when the only plan prices one class, and names it (PORTAL-04)', async () => {
+    mockFetch((url, init) => {
+      const method = init?.method ?? 'GET'
+      if (method === 'GET' && url.startsWith('/api/fee-plans')) return jsonResponse(200, { items: [classPlan] })
+      if (method === 'GET') return jsonResponse(200, url.endsWith('/curriculum') ? makeCurriculum() : makeCourse())
+      return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
+    })
+    renderDrawer([...COURSE_MANAGER_PERMISSIONS, 'fee_plans.manage'])
+    await screen.findByText('PY-101')
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    fireEvent.click(await screen.findByText(ar.courses.pricing.paid))
+
+    const warning = await screen.findByTestId('course-no-fee-plans')
+    expect(warning).toHaveTextContent(ar.courses.hints.noFeePlans)
+    // The plan made for one class is recognised — and still not offered.
+    expect(warning).toHaveTextContent('خطط مرتبطة بفصل واحد ولا تصلح رسوماً للدورة: «خطة فصل» (PY-101-A).')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.courses.fields.feePlan }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(document.querySelectorAll('.ant-select-item-option')).toHaveLength(0)
+  })
 })

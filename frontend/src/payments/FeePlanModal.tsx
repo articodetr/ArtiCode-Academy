@@ -141,6 +141,8 @@ function FeePlanBody({ plan, currency, onClose, onSaved }: { plan: FeePlan | nul
           label={t('payments.feePlans.scope')}
           validateStatus={problems.includes('course_and_class') ? 'error' : undefined}
           help={problems.includes('course_and_class') ? problemText('course_and_class') : undefined}
+          // A plan of one class prices that class's invoices only — never the fee of a paid course (PORTAL-04).
+          extra={scope === 'class' ? t('payments.feePlans.classScopeHint') : undefined}
         >
           <Radio.Group
             name="fee-plan-scope"

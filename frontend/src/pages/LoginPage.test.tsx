@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -81,6 +81,8 @@ describe('LoginPage', () => {
     renderLogin(auth, '/users')
     await submitCredentials()
     expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/profile')
+    // Where the user was going travels along, so the profile page continues there after the change (PORTAL-04).
+    expect(screen.getByTestId('location')).toHaveAttribute('data-state', JSON.stringify({ from: '/users' }))
   })
 
   it('shows the dedicated message for a known backend code and stays on the page', async () => {
@@ -135,6 +137,7 @@ describe('LoginPage', () => {
     // The provider's state can reach the page before the navigation of the sign-in: both name one destination.
     renderLogin(makeAuth({ user: makeUser({ mustChangePassword: true }) }), '/users')
     expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/profile')
+    expect(screen.getByTestId('location')).toHaveAttribute('data-state', JSON.stringify({ from: '/users' }))
   })
 
   it('shows only a spinner while the session is still being restored', () => {
@@ -189,6 +192,7 @@ describe('LoginPage', () => {
       await userEvent.type(code, '123456{Enter}')
 
       expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/profile')
+      expect(screen.getByTestId('location')).toHaveAttribute('data-state', JSON.stringify({ from: '/users' }))
     })
 
     it('keeps the second step after a wrong code', async () => {
@@ -419,16 +423,70 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
     expect((await screen.findByTestId('path')).textContent).toBe('/catalog/c-1?intent=enroll')
   })
 
-  it('still sends a user who must change the password to the profile page first (KI-086)', async () => {
+  it('still sends a user who must change the password to the profile page first (KI-086), carrying the chosen course', async () => {
     mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
     const auth = makeAuth()
     vi.mocked(auth.login).mockResolvedValue(makeUser({ mustChangePassword: true }))
+    renderLogin(auth, '/catalog/c-1?intent=enroll')
+    await submitCredentials()
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/profile')
+    expect(screen.getByTestId('location')).toHaveAttribute('data-state', JSON.stringify({ from: '/catalog/c-1?intent=enroll' }))
+  })
+
+  it('returns to the chosen course after the second step of a sign-in too (PORTAL-04)', async () => {
+    mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
+    const auth = makeAuth()
+    vi.mocked(auth.login).mockResolvedValue(mfaChallengeResponse())
+    vi.mocked(auth.completeMfaLogin).mockResolvedValue(makeUser({ role: 'student', roles: ['student'] }))
     renderWithProviders(<LoginPage />, {
       auth,
       route: { pathname: '/login', state: { from: '/catalog/c-1?intent=enroll' } },
       routes: { '*': <PathProbe /> },
     })
     await submitCredentials()
-    expect((await screen.findByTestId('path')).textContent).toBe('/profile')
+    // The notice about the chosen course stays above the second step.
+    expect(screen.getByTestId('login-enroll-intent')).toBeInTheDocument()
+    await userEvent.type(await screen.findByLabelText(ar.login.mfa.code), '123456{Enter}')
+    expect((await screen.findByTestId('path')).textContent).toBe('/catalog/c-1?intent=enroll')
+  })
+
+  it('says the chosen course waits behind the sign-in, with its way back while the catalog is public (PORTAL-04)', async () => {
+    const fetchMock = mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
+    const auth = makeAuth()
+    renderLogin(auth, '/catalog/c-1?intent=enroll')
+    const notice = screen.getByTestId('login-enroll-intent')
+    expect(notice).toHaveTextContent(ar.login.enrollIntent.title)
+    expect(notice).toHaveTextContent(ar.login.enrollIntent.text)
+    await settle(fetchMock)
+    const back = await within(notice).findByRole('link', { name: ar.login.enrollIntent.back })
+    expect(back).toHaveAttribute('href', '/explore/c-1')
+    // Going back signs nobody in and enrolls nothing.
+    await userEvent.click(back)
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/explore/c-1')
+    expect(auth.login).not.toHaveBeenCalled()
+  })
+
+  it('offers no way back to a public page while the catalog is closed, and no notice without a chosen course', async () => {
+    const fetchMock = mockPublicAcademy(makePublicAcademy({ catalogPublic: false }))
+    const { unmount } = renderLogin(makeAuth(), '/catalog/c-1?intent=enroll')
+    await settle(fetchMock)
+    expect(screen.getByTestId('login-enroll-intent')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: ar.login.enrollIntent.back })).not.toBeInTheDocument()
+    unmount()
+    renderLogin(makeAuth(), '/catalog/c-1')
+    expect(screen.queryByTestId('login-enroll-intent')).not.toBeInTheDocument()
+  })
+
+  it('never follows a return path that leaves this site — the sign-in goes home instead', async () => {
+    mockPublicAcademy(makePublicAcademy({ catalogPublic: true }))
+    for (const hostile of ['https://evil.example/catalog/c-1?intent=enroll', '//evil.example', '/\\evil.example']) {
+      const auth = makeAuth()
+      vi.mocked(auth.login).mockResolvedValue(makeUser({ role: 'student', roles: ['student'] }))
+      const { unmount } = renderLogin(auth, hostile)
+      expect(screen.queryByTestId('login-enroll-intent')).not.toBeInTheDocument()
+      await submitCredentials()
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+      unmount()
+    }
   })
 })
