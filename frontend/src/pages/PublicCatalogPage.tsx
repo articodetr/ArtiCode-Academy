@@ -64,7 +64,7 @@ function PublicCatalogList() {
     <>
       <PublicTitle page={t('publicCatalog.list.title')} />
       <div style={{ marginBottom: 16 }}>
-        <Typography.Title level={2} style={{ marginBottom: 4 }}>
+        <Typography.Title level={1} style={{ marginBottom: 4, fontSize: 30 }}>
           {t('publicCatalog.list.title')}
         </Typography.Title>
         <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
@@ -123,7 +123,7 @@ function PublicCatalogList() {
         <Row gutter={[16, 16]} aria-busy={list.loading}>
           {list.items.map((card) => (
             <Col key={card.id} xs={24} sm={12} lg={8} xl={6}>
-              <PublicCourseCard card={card} href={pathOf(card.id)} />
+              <PublicCourseCard card={card} href={pathOf(card.id)} headingLevel={2} />
             </Col>
           ))}
         </Row>

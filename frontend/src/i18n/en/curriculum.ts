@@ -248,6 +248,7 @@ export const publicCatalog = {
     signIn: 'Sign in',
     accountsNote: 'Accounts are created by the academy',
     navLabel: 'Main navigation',
+    academyFallback: 'The academy',
     homeLink: 'Home',
     programsLink: 'Programs',
     mySchool: 'My School',

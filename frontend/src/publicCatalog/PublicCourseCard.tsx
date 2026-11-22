@@ -7,8 +7,9 @@
 // card's only tab stop; «التفاصيل» is the same link for the pointer, kept out of
 // the tab order and of the accessibility tree so nothing is announced twice.
 // Without `href` (a viewer who may open no course page — PORTAL-04 review) the
-// card is a plain preview: no link and no «التفاصيل». The name is an h3: the
-// cards sit under the page's or the section's h2.
+// card is a plain preview: no link and no «التفاصيل». The name is a heading one
+// level under the place the card sits in (`headingLevel`): h2 under the /explore
+// h1, h3 (the default) under a /home section h2.
 import { ApartmentOutlined, CalendarOutlined, ClockCircleOutlined, ReadOutlined } from '@ant-design/icons'
 import { Card, Flex, Space, Tag, Typography } from 'antd'
 import type { ReactNode } from 'react'
@@ -30,7 +31,7 @@ function Fact({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   )
 }
 
-export function PublicCourseCard({ card, href }: { card: PublicCourseCardData; href: string | null }) {
+export function PublicCourseCard({ card, href, headingLevel = 3 }: { card: PublicCourseCardData; href: string | null; headingLevel?: 2 | 3 }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const availability = availabilityOf(card)
@@ -56,7 +57,7 @@ export function PublicCourseCard({ card, href }: { card: PublicCourseCardData; h
       }
     >
       <div>
-        <Typography.Title level={3} style={{ margin: 0, fontSize: 16 }}>
+        <Typography.Title level={headingLevel} style={{ margin: 0, fontSize: 16 }}>
           {href !== null ? (
             <Link to={href} className="public-card__link">
               {name}

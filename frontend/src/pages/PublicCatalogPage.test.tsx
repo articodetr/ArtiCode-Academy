@@ -107,6 +107,9 @@ describe('PublicCatalogPage', () => {
     expect(api.requests[0]!.query.get('limit')).toBe('24')
     expect(api.requests[0]!.query.has('q')).toBe(false)
     expect(api.requests[0]!.headers.get('Authorization')).toBeNull()
+    // One h1 for the page; each card's name is an h2 under it (PORTAL-04 review).
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(pc.list.title)
+    expect(card(PUBLIC_COURSE_IDS[0]).getByRole('heading', { level: 2 })).toHaveTextContent('أساسيات بايثون')
   })
 
   it('opens a course page from its card', async () => {

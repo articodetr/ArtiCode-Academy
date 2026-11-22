@@ -80,6 +80,11 @@ describe('PublicCoursePage', () => {
     expect(outline.getByText(pc.kinds.live)).toBeInTheDocument()
     expect(outline.getByText('10 دقائق')).toBeInTheDocument()
     expect(outline.getByText('60 دقيقة')).toBeInTheDocument()
+    // The course name is the page's h1, each level an h2, and the lessons a plain ordered list (antd List is deprecated).
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('أساسيات بايثون')
+    expect(outline.getByRole('heading', { level: 2, name: 'المستوى الأول — البداية' })).toBeInTheDocument()
+    expect(outline.getAllByRole('list')).toHaveLength(2)
+    expect(outline.getAllByRole('listitem')).toHaveLength(4)
 
     expect(api.reads).toBe(1)
     expect(api.headers[0]!.get('Authorization')).toBeNull()

@@ -88,7 +88,7 @@ export function PublicShell({ children, academy, catalogOpen }: { children: Reac
         </div>
       </header>
       <main className="public-catalog__main">
-        <PublicAcademyNameContext value={reading.academy ? name : ''}>{children}</PublicAcademyNameContext>
+        <PublicAcademyNameContext value={name}>{children}</PublicAcademyNameContext>
       </main>
       <footer className="public-catalog__footer" data-testid="public-footer">
         <div className="public-catalog__footer-inner">

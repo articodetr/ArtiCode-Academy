@@ -257,6 +257,8 @@ export const publicCatalog = {
     accountsNote: 'الحسابات تُنشأ من إدارة الأكاديمية',
     // PORTAL-04 (#208): the main links of the public pages and the action of a signed-in viewer.
     navLabel: 'التنقل الرئيسي',
+    // After a failed read of API-205: a neutral name — never the product's (the public pages are the academy's site).
+    academyFallback: 'الأكاديمية',
     homeLink: 'الرئيسية',
     programsLink: 'البرامج',
     mySchool: 'مدرستي',

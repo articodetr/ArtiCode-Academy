@@ -16,7 +16,7 @@
 // `404 catalog_not_public` shows the calm «closed» page; a signed-in
 // user goes (replace) to /catalog/<id>.
 import { ArrowLeftOutlined, ArrowRightOutlined, LoginOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Descriptions, Flex, List, Skeleton, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Flex, Skeleton, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
@@ -152,7 +152,7 @@ function CourseSummary({ course, onEnroll }: { course: PublicCourseDetail; onEnr
     <Card style={{ marginBottom: 16 }} cover={course.coverImageUrl ? <CourseCover key={course.coverImageUrl} url={course.coverImageUrl} height={220} /> : undefined}>
       <Flex vertical gap={12}>
         <div>
-          <Typography.Title level={2} style={{ margin: 0 }}>
+          <Typography.Title level={1} style={{ margin: 0, fontSize: 30 }}>
             {localizedLabel(course.name, language)}
           </Typography.Title>
           <Typography.Text type="secondary">
@@ -201,17 +201,15 @@ function CourseOutline({ course }: { course: PublicCourseDetail }) {
         <Flex vertical gap={16}>
           {levels.map((level) => (
             <section key={level.number} aria-label={levelNameOf(level, t, language)}>
-              <Typography.Title level={5} style={{ marginTop: 0 }}>
+              <Typography.Title level={2} style={{ marginTop: 0, fontSize: 16 }}>
                 {levelNameOf(level, t, language)}
               </Typography.Title>
-              <List
-                size="small"
-                bordered
-                dataSource={level.lessons}
-                renderItem={(lesson, index) => {
+              {/* A plain ordered list (antd 6.6 deprecates `List`): the lessons in order, the number kept as it was shown. */}
+              <ol className="public-outline__lessons">
+                {level.lessons.map((lesson, index) => {
                   const minutes = durationMinutes(lesson.durationSeconds)
                   return (
-                    <List.Item>
+                    <li key={index} className="public-outline__lesson">
                       <Flex justify="space-between" align="center" gap={8} wrap style={{ width: '100%' }}>
                         <Typography.Text>
                           <bdi dir="ltr">{index + 1}.</bdi> {localizedLabel(lesson.title, language)}
@@ -221,10 +219,10 @@ function CourseOutline({ course }: { course: PublicCourseDetail }) {
                           {minutes !== null ? <Typography.Text type="secondary">{t('publicCatalog.course.minutes', { count: minutes })}</Typography.Text> : null}
                         </Space>
                       </Flex>
-                    </List.Item>
+                    </li>
                   )
-                }}
-              />
+                })}
+              </ol>
             </section>
           ))}
         </Flex>

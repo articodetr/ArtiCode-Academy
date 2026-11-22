@@ -163,6 +163,10 @@ describe('PublicHomePage', () => {
     expect(await screen.findByText(ph.hero.title)).toBeInTheDocument()
     await programs().findByText('أساسيات بايثون')
     expect(footer().queryByText(/©/)).not.toBeInTheDocument()
+    // The header and the tab show a neutral «الأكاديمية» — never the product's name (#208).
+    expect(header().getByTestId('public-academy-name')).toHaveTextContent(pc.header.academyFallback)
+    await waitFor(() => expect(document.title).toBe(pc.header.academyFallback))
+    expect(document.body.textContent).not.toContain(ar.common.appName)
   })
 
   it('offers a signed-in learner «مدرستي» and the signed-in catalog — never the sign-in page', async () => {
