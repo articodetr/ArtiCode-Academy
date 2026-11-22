@@ -23,6 +23,29 @@ export function publicCatalogParams(q: string, cursor: string | undefined): List
   return params
 }
 
+/**
+ * The search of the public catalog as an address carries it (`?q=` — PORTAL-04 PR-2): trimmed and cut to the server's
+ * limit; '' without one. /explore reads its own address with it, and a course page reads the search it was opened from.
+ */
+export function exploreSearchOf(params: URLSearchParams): string {
+  return (params.get('q') ?? '').trim().slice(0, PUBLIC_SEARCH_MAX_LENGTH)
+}
+
+/** The address of /explore for a search — /explore itself without one. Always this site's own path: the search is only
+ * ever a value of `q`, never an address, so no link can lead elsewhere. */
+export function explorePathFor(search: string): string {
+  const q = search.trim().slice(0, PUBLIC_SEARCH_MAX_LENGTH)
+  return q ? `/explore?${new URLSearchParams({ q }).toString()}` : '/explore'
+}
+
+/** A course page opened from a search keeps it in its own address (`/explore/:id?q=`), so «العودة إلى الدورات», a
+ * refresh and a new tab all lead back to the same results. */
+export function publicCoursePathFor(courseId: string, search: string): string {
+  const path = `/explore/${encodeURIComponent(courseId)}`
+  const q = search.trim().slice(0, PUBLIC_SEARCH_MAX_LENGTH)
+  return q ? `${path}?${new URLSearchParams({ q }).toString()}` : path
+}
+
 /** The cards on screen after «المزيد»: the new page after the old one, a course already shown never twice. */
 export function appendCards(current: readonly PublicCourseCard[], page: PublicCourseList['items']): PublicCourseCard[] {
   const shown = new Set(current.map((card) => card.id))
@@ -42,6 +65,16 @@ export function availabilityOf(card: Pick<PublicCourseCard, 'openClasses' | 'has
   if (card.openClasses === 0) return 'closed'
   if (card.hasFreeSeat) return 'available'
   return card.pricing === 'paid' && card.price === null ? 'priceUnavailable' : 'full'
+}
+
+/** How many placeholder tints a card without a cover can take (publicCatalog.css `.public-card__placeholder--t0` … `--t4`). */
+export const PLACEHOLDER_TINTS = 5
+
+/** A stable tint for a course without a cover (PORTAL-04 PR-1 redesign): the same course always gets the same one. */
+export function placeholderTintOf(id: string): number {
+  let hash = 0
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return hash % PLACEHOLDER_TINTS
 }
 
 export const AVAILABILITY_COLORS: Record<Exclude<PublicAvailability, 'priceUnavailable'>, string> = {

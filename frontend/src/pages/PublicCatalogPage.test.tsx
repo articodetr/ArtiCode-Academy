@@ -40,12 +40,24 @@ function mockPublicApi(list: (query: URLSearchParams) => Response) {
   return { requests, fetchMock }
 }
 
-function renderPage(auth = makeAuth()) {
-  return renderWithProviders(<PublicCatalogPage />, {
+/** The address of the page itself (PORTAL-04 PR-2: the search lives in `?q=`). */
+function AddressProbe() {
+  const location = useLocation()
+  return <output data-testid="address">{decodeURIComponent(location.search)}</output>
+}
+
+function renderPage(auth = makeAuth(), search = '') {
+  return renderWithProviders(
+    <>
+      <PublicCatalogPage />
+      <AddressProbe />
+    </>,
+    {
     auth,
-    route: '/explore',
+    route: { pathname: '/explore', search },
     routes: { '/explore/:courseId': <PathProbe />, '/login': <PathProbe />, '/catalog': <PathProbe />, '/': <PathProbe /> },
-  })
+    },
+  )
 }
 
 const card = (id: string) => within(screen.getByTestId(`public-card-${id}`))
@@ -99,9 +111,11 @@ describe('PublicCatalogPage', () => {
     // No teacher, no class code, no schedule is ever shown — the server sends none.
     expect(document.body.textContent).not.toContain('PY-101-A')
 
-    // The header: the academy's name from API-205, the sign-in button and the line that replaces a «register» button.
-    expect(await screen.findByText('أكاديمية النور')).toBeInTheDocument()
-    expect(screen.getByText(pc.header.accountsNote)).toBeInTheDocument()
+    // The header: the academy's name from API-205 and the sign-in button (the shared public header — PORTAL-04 PR-1
+    // redesign — no longer carries the accounts line; the list subtitle says how to enroll). The footer names it too.
+    const header = within(document.querySelector<HTMLElement>('.public-catalog__header')!)
+    expect(await header.findByText('أكاديمية النور')).toBeInTheDocument()
+    expect(header.getByText(pc.header.signIn).closest('button')).toBeInTheDocument()
 
     expect(api.requests).toHaveLength(1)
     expect(api.requests[0]!.query.get('limit')).toBe('24')
@@ -127,7 +141,7 @@ describe('PublicCatalogPage', () => {
     expect(link).toHaveAttribute('href', `/explore/${PUBLIC_COURSE_IDS[0]}`)
     // The link is stretched over the card (publicCatalog.css), so a click anywhere on it opens the course.
     expect(link).toHaveClass('public-card__link')
-    await waitFor(() => expect(document.title).toBe(`${pc.list.title} — أكاديمية النور`))
+    await waitFor(() => expect(document.title).toBe(`${pc.list.tabTitle} — أكاديمية النور`))
     fireEvent.click(link)
     expect((await screen.findByTestId('path')).textContent).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
   })
@@ -158,9 +172,74 @@ describe('PublicCatalogPage', () => {
     expect(api.requests.at(-1)!.query.get('q')).toBe('جافا')
     expect(api.requests.at(-1)!.query.has('cursor')).toBe(false)
 
-    fireEvent.click(screen.getByText(pc.list.clearSearch).closest('button')!)
+    // «مسح البحث» sits in the results bar and in the «no results» panel; the panel's button is used here.
+    const noResults = screen.getByText(pc.list.emptyFilteredTitle).closest<HTMLElement>('.public-home__notice')!
+    fireEvent.click(within(noResults).getByText(pc.list.clearSearch).closest('button')!)
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
     expect(api.requests.at(-1)!.query.has('q')).toBe(false)
+  })
+
+  it('keeps the search in the address: starts from ?q=, writes a new search there, and drops it when cleared', async () => {
+    const api = mockPublicApi((query) => jsonResponse(200, makePublicList(query.get('q') === 'جافا' ? [] : [makePublicCard()])))
+    renderPage(makeAuth(), '?q=بايثون')
+
+    expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
+    expect(api.requests[0]!.query.get('q')).toBe('بايثون')
+    expect(screen.getByLabelText(pc.list.searchLabel)).toHaveValue('بايثون')
+    expect(screen.getByText('نتائج البحث عن «بايثون»')).toBeInTheDocument()
+    // Each card carries the search to its course page, whose «العودة إلى الدورات» comes back to these results.
+    expect(decodeURIComponent(screen.getByText('أساسيات بايثون').closest('a')!.getAttribute('href')!)).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}?q=بايثون`)
+
+    fireEvent.change(screen.getByLabelText(pc.list.searchLabel), { target: { value: 'جافا' } })
+    await waitFor(() => expect(screen.getByTestId('address')).toHaveTextContent('?q=جافا'))
+    expect(api.requests.at(-1)!.query.get('q')).toBe('جافا')
+
+    const bar = within(document.querySelector<HTMLElement>('.public-explore__toolbar')!)
+    fireEvent.click(bar.getByText(pc.list.clearSearch).closest('button')!)
+    await waitFor(() => expect(screen.getByTestId('address')).toBeEmptyDOMElement())
+    expect(await screen.findByText(pc.list.allResults)).toBeInTheDocument()
+  })
+
+  it('starts from the first page again when a search is cleared after «عرض المزيد» — never resumes a stale page', async () => {
+    const pageTwo = makePublicCard({ id: PUBLIC_COURSE_IDS[1], code: 'WEB-201', name: { ar: 'تطوير الويب' } })
+    const found = makePublicCard({ id: PUBLIC_COURSE_IDS[2], code: 'JV-101', name: { ar: 'جافا' } })
+    const api = mockPublicApi((query) => {
+      if (query.get('q')) return jsonResponse(200, makePublicList([found], null))
+      return query.get('cursor') === 'c1' ? jsonResponse(200, makePublicList([pageTwo], null)) : jsonResponse(200, makePublicList([makePublicCard()], 'c1'))
+    })
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+    fireEvent.click(screen.getByText(pc.list.more).closest('button')!)
+    expect(await screen.findByText('تطوير الويب')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(pc.list.searchLabel), { target: { value: 'جافا' } })
+    expect(await screen.findByText('JV-101')).toBeInTheDocument()
+
+    const bar = within(document.querySelector<HTMLElement>('.public-explore__toolbar')!)
+    fireEvent.click(bar.getByText(pc.list.clearSearch).closest('button')!)
+    expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('JV-101')).not.toBeInTheDocument())
+    expect(screen.queryByText('تطوير الويب')).not.toBeInTheDocument()
+    expect(screen.getByText(pc.list.more).closest('button')).toBeInTheDocument()
+    expect(api.requests.at(-1)!.query.has('cursor')).toBe(false)
+    expect(api.requests.at(-1)!.query.has('q')).toBe(false)
+  })
+
+  it('says how many programs once the whole list is on screen — never while more pages remain', async () => {
+    const second = makePublicCard({ id: PUBLIC_COURSE_IDS[1], code: 'WEB-201', name: { ar: 'تطوير الويب' } })
+    let complete = true
+    mockPublicApi(() => jsonResponse(200, makePublicList([makePublicCard(), second], complete ? null : 'next')))
+    const first = renderPage()
+    expect(await screen.findByText('تطوير الويب')).toBeInTheDocument()
+    expect(screen.getByText(pc.list.allResults)).toBeInTheDocument()
+    expect(screen.getByText('برنامجان')).toBeInTheDocument()
+    first.unmount()
+
+    complete = false
+    renderPage()
+    expect(await screen.findByText('تطوير الويب')).toBeInTheDocument()
+    expect(screen.queryByText('برنامجان')).not.toBeInTheDocument()
+    expect(screen.getByText(pc.list.more).closest('button')).toBeInTheDocument()
   })
 
   it('says calmly that the academy does not show its courses to visitors (404 catalog_not_public), with the way to sign in', async () => {
@@ -172,6 +251,9 @@ describe('PublicCatalogPage', () => {
     expect(within(closed).getByText(pc.closed.text)).toBeInTheDocument()
     expect(screen.queryByText(pc.list.loadError)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(pc.list.searchLabel)).not.toBeInTheDocument()
+    // The page keeps its heading; the line inviting to browse would contradict the closed catalog.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(pc.list.title)
+    expect(screen.queryByText(pc.list.subtitle)).not.toBeInTheDocument()
 
     fireEvent.click(within(closed).getByText(pc.closed.signIn).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/login')

@@ -1,43 +1,38 @@
-// The closing call of the public home page: a visitor is invited to the
-// programs (once the catalog is known to be open) or to sign in; a learner back
-// to «مدرستي». Staff and a session still being restored get none, and neither
-// does a visitor while it is not known yet whether the catalog is open (its
-// button would otherwise flip from «تسجيل الدخول» to «استعرض البرامج»).
-import { AppstoreOutlined, CompassOutlined, LoginOutlined } from '@ant-design/icons'
+// The closing band of the public home page — shown only where it adds a step the
+// page has not offered twice already (PORTAL-04 PR-1 redesign): a visitor of an
+// academy that opens its catalog is invited to the programs — once the section
+// above shows some (not after a failed read or an empty catalog). A visitor of a
+// closed catalog has the sign-in in the header and the hero, a learner «مدرستي»
+// in both, staff the dashboard — none of them gets a third copy here, and nobody
+// does while the session is restored or before it is known whether the catalog
+// is open (its button would otherwise appear and vanish).
+import { CompassOutlined } from '@ant-design/icons'
 import { Button, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { programsPathFor } from '../publicCatalog/publicViewer'
 import type { PublicViewer } from '../publicCatalog/publicViewer'
 
-export function HomeCallToAction({ viewer, catalogOpen }: { viewer: PublicViewer; catalogOpen: boolean | null }) {
+export function HomeCallToAction({ viewer, catalogOpen, hasPrograms }: { viewer: PublicViewer; catalogOpen: boolean | null; hasPrograms: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  if (viewer !== 'visitor' && viewer !== 'learner') return null
-  if (viewer === 'visitor' && catalogOpen === null) return null
-  const learner = viewer === 'learner'
+  if (viewer !== 'visitor' || catalogOpen !== true || !hasPrograms) return null
 
   return (
-    <section className="public-home__cta" aria-labelledby="public-home-cta" data-testid="home-cta">
-      <Typography.Title level={2} id="public-home-cta" className="public-home__section-title">
-        {learner ? t('publicHome.cta.learnerTitle') : t('publicHome.cta.visitorTitle')}
-      </Typography.Title>
-      <Typography.Paragraph type="secondary" className="public-home__cta-text">
-        {learner ? t('publicHome.cta.learnerText') : t('publicHome.cta.visitorText')}
-      </Typography.Paragraph>
-      {learner ? (
-        <Button type="primary" size="large" icon={<AppstoreOutlined />} onClick={() => navigate('/my-school')}>
-          {t('publicHome.hero.mySchool')}
-        </Button>
-      ) : catalogOpen === true ? (
-        <Button type="primary" size="large" icon={<CompassOutlined />} onClick={() => navigate(programsPathFor(viewer))}>
-          {t('publicHome.hero.browse')}
-        </Button>
-      ) : (
-        <Button type="primary" size="large" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
-          {t('publicHome.hero.signIn')}
-        </Button>
-      )}
+    <section className="public-home__section public-home__section--cta" aria-labelledby="public-home-cta" data-testid="home-cta">
+      <div className="public-home__container">
+        <div className="public-home__cta">
+          <div className="public-home__cta-text">
+            <Typography.Title level={2} id="public-home-cta" className="public-home__cta-title">
+              {t('publicHome.cta.visitorTitle')}
+            </Typography.Title>
+            <p className="public-home__cta-line">{t('publicHome.cta.visitorText')}</p>
+          </div>
+          <Button size="large" className="public-home__cta-button" icon={<CompassOutlined />} onClick={() => navigate(programsPathFor(viewer))}>
+            {t('publicHome.hero.browse')}
+          </Button>
+        </div>
+      </div>
     </section>
   )
 }

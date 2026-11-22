@@ -40,9 +40,13 @@ export function coursePathFor(viewer: PublicViewer, courseId: string): string {
   return `/explore/${id}`
 }
 
-/** Whether a viewer sees the «البرامج» links: a visitor only while the academy opens its catalog (API-205 `catalogPublic`). */
+/**
+ * Whether a viewer sees the «البرامج» links: a visitor only while the academy opens its catalog (API-205
+ * `catalogPublic`), a learner always, staff never — and nobody while the session is still being restored: a staff
+ * session would otherwise see the link appear and vanish a moment later (it only ever appears now, never withdraws).
+ */
 export function showsProgramsLink(viewer: PublicViewer, catalogPublic: boolean): boolean {
   if (viewer === 'learner') return true
-  if (viewer === 'staff') return false
+  if (viewer === 'staff' || viewer === 'pending') return false
   return catalogPublic
 }

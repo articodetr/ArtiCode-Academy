@@ -46,10 +46,10 @@ function mockCourseApi(detail: (read: number) => Response) {
 
 const serve = (detail: PublicCourseDetail) => () => jsonResponse(200, detail)
 
-function renderPage(auth = makeAuth()) {
+function renderPage(auth = makeAuth(), search = '') {
   return renderWithProviders(<PublicCoursePage />, {
     auth,
-    route: `/explore/${COURSE_ID}`,
+    route: { pathname: `/explore/${COURSE_ID}`, search },
     path: '/explore/:courseId',
     routes: { '/explore': <PathProbe />, '/login': <PathProbe />, '/catalog/:courseId': <PathProbe /> },
   })
@@ -168,6 +168,31 @@ describe('PublicCoursePage', () => {
     expect(await screen.findByText(pc.course.notFound)).toBeInTheDocument()
     fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/explore')
+  })
+
+  it('leads «العودة إلى الدورات» back to the search the course was opened from — kept in its own address (PORTAL-04)', async () => {
+    mockCourseApi(serve(makePublicDetail()))
+    const opened = renderPage(makeAuth(), `?q=${encodeURIComponent('بايثون')}`)
+    await screen.findByText(pc.course.overview)
+    fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
+    expect(decodeURIComponent((await screen.findByTestId('path')).textContent!)).toBe('/explore?q=بايثون')
+    opened.unmount()
+
+    // Opened from a direct link (no search): back to all programs.
+    renderPage()
+    await screen.findByText(pc.course.overview)
+    fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
+    expect((await screen.findByTestId('path')).textContent).toBe('/explore')
+  })
+
+  it('never leaves the site from «العودة إلى الدورات», whatever the address carries', async () => {
+    mockCourseApi(serve(makePublicDetail()))
+    renderPage(makeAuth(), `?q=${encodeURIComponent('https://evil.example')}`)
+    await screen.findByText(pc.course.overview)
+    fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
+    const path = (await screen.findByTestId('path')).textContent!
+    expect(path.startsWith('/explore?q=')).toBe(true)
+    expect(decodeURIComponent(path)).toBe('/explore?q=https://evil.example')
   })
 
   it('reports another failure with a retry that reads the course again', async () => {

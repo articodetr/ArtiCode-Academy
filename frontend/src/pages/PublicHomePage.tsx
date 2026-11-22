@@ -7,6 +7,9 @@
 // no figure, testimonial, teacher name or contact detail the server does not
 // send (the hero text, «about», contact details and featured programs are
 // backend requirements — master doc PORTAL-04). `/` stays the protected dashboard.
+// The page lays out full-width bands (`bleed`): the welcome, the programs, the
+// steps and — for a visitor of an open catalog with programs to show — a closing band.
+import { useTranslation } from 'react-i18next'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
 import { useAuth } from '../auth/auth-context'
 import { PublicShell } from '../publicCatalog/PublicShell'
@@ -22,6 +25,7 @@ import { useHomePrograms } from '../publicHome/useHomePrograms'
 import '../publicHome/publicHome.css'
 
 export function PublicHomePage() {
+  const { t } = useTranslation()
   const academy = usePublicAcademy()
   const programs = useHomePrograms()
   const { status, user } = useAuth()
@@ -31,14 +35,14 @@ export function PublicHomePage() {
   const catalogOpen = catalogOpenOf(programs.state, academy.academy)
 
   return (
-    <PublicShell academy={academy} catalogOpen={catalogOpen}>
-      {/* The tab shows the academy's name while the page is open. */}
-      <PublicTitle />
+    <PublicShell academy={academy} catalogOpen={catalogOpen} bleed>
+      {/* The tab shows the academy's name while the page is open, and the description speaks in its name. */}
+      <PublicTitle description={knownName ? t('publicHome.meta.descriptionNamed', { name: knownName }) : t('publicHome.meta.description')} />
       <div className="public-home">
         <HomeHero name={knownName} nameLoading={academy.loading} viewer={viewer} catalogOpen={catalogOpen} />
         <HomePrograms programs={programs} viewer={viewer} />
         <HomeSteps />
-        <HomeCallToAction viewer={viewer} catalogOpen={catalogOpen} />
+        <HomeCallToAction viewer={viewer} catalogOpen={catalogOpen} hasPrograms={programs.state === 'ready'} />
       </div>
     </PublicShell>
   )

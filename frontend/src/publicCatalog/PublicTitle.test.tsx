@@ -38,4 +38,34 @@ describe('PublicTitle', () => {
     unmount()
     expect(document.title).toBe('قبل')
   })
+
+  it('speaks for the page in <meta name="description"> while shown, then puts the previous line back', () => {
+    const meta = document.createElement('meta')
+    meta.name = 'description'
+    meta.content = 'سطر المنتج'
+    document.head.appendChild(meta)
+    const { rerender, unmount } = render(
+      <PublicAcademyNameContext value="أكاديمية النور">
+        <PublicTitle description="أكاديمية النور — برامج تعليمية" />
+      </PublicAcademyNameContext>,
+    )
+    expect(meta.content).toBe('أكاديمية النور — برامج تعليمية')
+    rerender(
+      <PublicAcademyNameContext value="أكاديمية النور">
+        <PublicTitle description="سطر آخر" />
+      </PublicAcademyNameContext>,
+    )
+    expect(meta.content).toBe('سطر آخر')
+    unmount()
+    expect(meta.content).toBe('سطر المنتج')
+    meta.remove()
+  })
+
+  it('creates the description tag when the document has none, and removes it again', () => {
+    expect(document.head.querySelector('meta[name="description"]')).toBeNull()
+    const { unmount } = render(<PublicTitle description="وصف" />)
+    expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute('content', 'وصف')
+    unmount()
+    expect(document.head.querySelector('meta[name="description"]')).toBeNull()
+  })
 })

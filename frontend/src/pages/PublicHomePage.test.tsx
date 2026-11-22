@@ -72,27 +72,33 @@ describe('PublicHomePage', () => {
     // The same card as the public catalog: level, price and open classes from the server only.
     expect(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.card.free)).toBeInTheDocument()
 
-    // The header: the name, the main links, sign-in with the accounts line; never a «register» button.
+    // One h1: the heading of the welcome band; the academy’s name is in the welcome line above it.
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(ph.hero.title)
+
+    // The header: the name, the main links and the sign-in; never a «register» button. The line that accounts come
+    // from the academy is said once, in the welcome band.
     expect(header().getByText('أكاديمية النور')).toBeInTheDocument()
     expect(header().getByText(pc.header.homeLink).closest('a')).toHaveAttribute('href', '/home')
     expect(header().getByText(pc.header.programsLink).closest('a')).toHaveAttribute('href', '/explore')
-    expect(header().getByText(pc.header.accountsNote)).toBeInTheDocument()
+    expect(header().getByText(pc.header.signIn).closest('button')).toBeInTheDocument()
     expect(hero().getByText(ph.hero.accountsNote)).toBeInTheDocument()
+    expect(screen.getAllByText(ph.hero.accountsNote)).toHaveLength(1)
     expect(document.body.textContent).not.toMatch(/إنشاء حساب|أنشئ حساب/)
 
     // The footer: the same links, the certificate check and the academy’s own name.
     expect(footer().getByText(pc.footer.verifyCertificate).closest('a')).toHaveAttribute('href', '/verify')
     expect(footer().getByText(`© ${new Date().getFullYear()} أكاديمية النور`)).toBeInTheDocument()
 
-    // The tab carries the academy’s name.
+    // The tab carries the academy’s name, and so does the page’s description — never the product’s line.
     await waitFor(() => expect(document.title).toBe('أكاديمية النور'))
+    expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute('content', `أكاديمية النور — ${ph.meta.description}`)
 
     expect(api.requests).toHaveLength(1)
     expect(api.requests[0]!.query.get('limit')).toBe('6')
     expect(api.requests[0]!.headers.get('Authorization')).toBeNull()
   })
 
-  it('leads a visitor to the public catalog, a course page and the sign-in page', async () => {
+  it('leads a visitor to the public catalog, a course page and the sign-in page — signing in from the header only', async () => {
     mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])))
     const first = renderPage()
     await programs().findByText('أساسيات بايثون')
@@ -112,9 +118,19 @@ describe('PublicHomePage', () => {
     expect(await path()).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
     third.unmount()
 
+    const fourth = renderPage()
+    await programs().findByText('أساسيات بايثون')
+    // The closing band invites to the programs.
+    fireEvent.click(button(within(screen.getByTestId('home-cta')), ph.hero.browse))
+    expect(await path()).toBe('/explore')
+    fourth.unmount()
+
     renderPage()
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(button(hero(), ph.hero.signIn))
+    // While the programs are open to visitors, the sign-in is the header’s alone — not repeated in the page.
+    expect(screen.getAllByText(pc.header.signIn)).toHaveLength(1)
+    expect(hero().queryByText(ph.hero.signIn)).not.toBeInTheDocument()
+    fireEvent.click(button(header(), pc.header.signIn))
     expect(await path()).toBe('/login')
   })
 
@@ -131,10 +147,12 @@ describe('PublicHomePage', () => {
     expect(footer().queryByText(pc.header.programsLink)).not.toBeInTheDocument()
     expect(programs().queryByText(ph.programs.all)).not.toBeInTheDocument()
     expect(programs().queryByText(ph.programs.subtitle)).not.toBeInTheDocument()
-    // The closing call offers the sign-in instead of the programs.
-    expect(within(screen.getByTestId('home-cta')).queryByText(ph.hero.browse)).not.toBeInTheDocument()
+    // Sign-in twice only — the header and the welcome band; the closed panel and the closing band add none.
+    expect(within(closed).queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('home-cta')).not.toBeInTheDocument()
+    expect(screen.getAllByText(pc.header.signIn)).toHaveLength(2)
 
-    fireEvent.click(within(closed).getByText(ph.programs.closedVisitor.action).closest('button')!)
+    fireEvent.click(button(hero(), ph.hero.signIn))
     expect(await path()).toBe('/login')
   })
 
@@ -144,12 +162,15 @@ describe('PublicHomePage', () => {
 
     expect(await programs().findByText(ph.programs.loadError)).toBeInTheDocument()
     expect(programs().getByText(pc.errors.server)).toBeInTheDocument()
+    // No closing band inviting to programs that could not be shown.
+    expect(screen.queryByTestId('home-cta')).not.toBeInTheDocument()
     // The rest of the page stays.
     expect(screen.getByText('مرحبًا بك في أكاديمية النور')).toBeInTheDocument()
 
     fireEvent.click(button(programs(), ph.programs.retry))
     expect(await programs().findByText(ph.programs.empty)).toBeInTheDocument()
     expect(programs().queryByText(ph.programs.all)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('home-cta')).not.toBeInTheDocument()
     expect(api.requests).toHaveLength(2)
   })
 
@@ -160,13 +181,15 @@ describe('PublicHomePage', () => {
     })
     renderPage()
 
-    expect(await screen.findByText(ph.hero.title)).toBeInTheDocument()
+    expect(await screen.findByText(ph.hero.welcome)).toBeInTheDocument()
     await programs().findByText('أساسيات بايثون')
     expect(footer().queryByText(/©/)).not.toBeInTheDocument()
     // The header and the tab show a neutral «الأكاديمية» — never the product's name (#208).
     expect(header().getByTestId('public-academy-name')).toHaveTextContent(pc.header.academyFallback)
     await waitFor(() => expect(document.title).toBe(pc.header.academyFallback))
     expect(document.body.textContent).not.toContain(ar.common.appName)
+    // The description speaks for no academy in particular — and not for the product either.
+    expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute('content', ph.meta.description)
   })
 
   it('offers a signed-in learner «مدرستي» and the signed-in catalog — never the sign-in page', async () => {
@@ -189,6 +212,8 @@ describe('PublicHomePage', () => {
 
     renderPage(auth)
     await programs().findByText('أساسيات بايثون')
+    // «مدرستي» twice (header, welcome band) — no closing band repeating it.
+    expect(screen.queryByTestId('home-cta')).not.toBeInTheDocument()
     fireEvent.click(button(hero(), ph.hero.browse))
     expect(await path()).toBe('/catalog')
   })
@@ -232,8 +257,10 @@ describe('PublicHomePage', () => {
     expect(screen.queryByText(pc.header.signIn)).not.toBeInTheDocument()
     expect(screen.queryByText(pc.header.mySchool)).not.toBeInTheDocument()
     expect(screen.queryByTestId('home-cta')).not.toBeInTheDocument()
-    // Not even «استعرض البرامج»: a staff session would withdraw it once restored.
+    // Not even «استعرض البرامج» or the header’s «البرامج»: a staff session would withdraw them once restored.
     expect(hero().queryByText(ph.hero.browse)).not.toBeInTheDocument()
+    expect(header().queryByText(pc.header.programsLink)).not.toBeInTheDocument()
+    expect(footer().queryByText(pc.header.programsLink)).not.toBeInTheDocument()
   })
 
   it('leads staff to the courses page only with courses.read — otherwise the cards are a plain preview, never a 403', async () => {

@@ -5,10 +5,13 @@ import { ApiError } from '../api/client'
 import i18n from '../i18n'
 import { CATALOG_NOT_PUBLIC, PUBLIC_COURSE_IDS, makePublicCard } from '../test/publicCatalog'
 import {
+  publicCoursePathFor,
   appendCards,
   availabilityOf,
   durationMinutes,
   enrollIntentPath,
+  explorePathFor,
+  exploreSearchOf,
   isPublicCourseGone,
   levelNameOf,
   publicCatalogParams,
@@ -66,6 +69,26 @@ describe('publicCatalog.view', () => {
     expect(publicFailureKey(new ApiError(429, 'slow', { statusCode: 429, code: 'rate_limited', message: 'slow' }))).toBe('publicCatalog.errors.rate_limited')
     expect(publicFailureKey(new ApiError(500, 'boom', { statusCode: 500, message: 'boom' }))).toBe('publicCatalog.errors.server')
     expect(publicFailureKey(new TypeError('Failed to fetch'))).toBe('publicCatalog.errors.network')
+  })
+
+  it('carries the search of /explore in the address — to a course page and back — and never anywhere else (PORTAL-04)', () => {
+    expect(exploreSearchOf(new URLSearchParams('q=%20%D8%A8%D8%A7%D9%8A%D8%AB%D9%88%D9%86%20'))).toBe('بايثون')
+    expect(exploreSearchOf(new URLSearchParams(''))).toBe('')
+    expect(exploreSearchOf(new URLSearchParams({ q: 'x'.repeat(150) }))).toHaveLength(100)
+
+    expect(explorePathFor('')).toBe('/explore')
+    expect(explorePathFor('   ')).toBe('/explore')
+    expect(explorePathFor(' بايثون ')).toBe(`/explore?q=${encodeURIComponent('بايثون')}`)
+    expect(publicCoursePathFor('c 1', 'بايثون')).toBe(`/explore/c%201?q=${encodeURIComponent('بايثون')}`)
+    expect(publicCoursePathFor('c1', '')).toBe('/explore/c1')
+
+    // A search that looks like an address stays a value of q on this site's own /explore.
+    for (const hostile of ['//evil.example', 'https://evil.example/x', '/\\evil.example', 'javascript:alert(1)']) {
+      const path = explorePathFor(hostile)
+      expect(path.startsWith('/explore?q=')).toBe(true)
+      expect(new URL(path, 'https://academy.example').origin).toBe('https://academy.example')
+      expect(new URLSearchParams(path.slice('/explore?'.length)).get('q')).toBe(hostile)
+    }
   })
 
   it('leads the enroll button to the signed-in course page with the enroll intent', () => {

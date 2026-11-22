@@ -32,6 +32,8 @@ describe('publicViewer', () => {
     expect(showsProgramsLink('visitor', true)).toBe(true)
     expect(showsProgramsLink('visitor', false)).toBe(false)
     expect(showsProgramsLink('pending', false)).toBe(false)
+    // Not while the session is restored either: a staff session would withdraw it a moment later (PORTAL-04 redesign).
+    expect(showsProgramsLink('pending', true)).toBe(false)
     expect(showsProgramsLink('learner', false)).toBe(true)
     expect(showsProgramsLink('staff', true)).toBe(false)
   })

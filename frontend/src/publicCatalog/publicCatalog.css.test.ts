@@ -51,10 +51,36 @@ describe('publicCatalog.css', () => {
     expect(card.get('flex-direction')).toBe('column')
   })
 
-  it('on a phone keeps the brand and the action on one row, the links on the next, and drops the accounts line', () => {
+  it('on a phone keeps the brand and the action on one row and the links on the next', () => {
     const phone = css.slice(css.indexOf('@media (max-width: 767px)'))
-    expect(phone).toMatch(/\.public-catalog__header::after\s*\{[^}]*flex-basis:\s*100%/)
-    const small = css.slice(css.indexOf('@media (max-width: 575px)'))
-    expect(small).toMatch(/\.public-catalog__note\s*\{\s*display:\s*none;/)
+    expect(phone).toMatch(/\.public-catalog__header-inner::after\s*\{[^}]*flex-basis:\s*100%/)
+    expect(phone).toMatch(/\.public-catalog__header-inner\s*\{[^}]*flex-wrap:\s*wrap/)
+  })
+
+  it('keeps the header in view from a tablet up, and lets it scroll away on a phone', () => {
+    expect(declarations('.public-catalog__header').get('position')).toBe('sticky')
+    const phone = css.slice(css.indexOf('@media (max-width: 767px)'))
+    expect(phone).toMatch(/\.public-catalog__header\s*\{\s*position:\s*static;/)
+  })
+
+  it('marks the current page’s link with a bar, and never hides a focus ring', () => {
+    expect(declarations('.public-catalog__nav-link.active::after').get('background')).toBe('var(--pub-primary)')
+    expect(declarations('.public-catalog__nav-link:focus-visible').get('outline')).toBe('2px solid var(--pub-primary)')
+  })
+
+  it('shows the enrollment status as a labelled pill, and the card details in a darker grey than page-level lines', () => {
+    for (const state of ['available', 'full', 'closed']) {
+      const rule = declarations(`.public-card__availability--${state}`)
+      expect(rule.get('background'), state).toMatch(/^#/)
+      expect(rule.get('border-color'), state).toMatch(/^#/)
+      expect(rule.get('color'), state).toBeTruthy()
+    }
+    expect(declarations('.public-card .public-card__summary').get('color')).toBe('var(--pub-detail)')
+    expect(declarations('.public-card__fact').get('color')).toBe('var(--pub-detail)')
+  })
+
+  it('stops the card’s movement for a viewer who asks for reduced motion', () => {
+    const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))
+    expect(reduced).toMatch(/\.public-card--link:hover[^{]*\{\s*transform:\s*none;/)
   })
 })

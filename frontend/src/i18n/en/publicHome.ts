@@ -2,10 +2,15 @@
 import type { publicHome as arPublicHome } from '../ar/publicHome'
 
 export const publicHome: typeof arPublicHome = {
+  meta: {
+    descriptionNamed: '{{name}} — structured learning programs in levels and lessons that you follow step by step, with your progress in My School.',
+    description: 'Structured learning programs in levels and lessons that you follow step by step, with your progress in My School.',
+  },
   hero: {
-    titleNamed: 'Welcome to {{name}}',
-    title: 'Welcome',
-    subtitle: 'Structured learning programs with lessons you follow step by step, and progress you see in My School.',
+    welcomeNamed: 'Welcome to {{name}}',
+    welcome: 'Welcome',
+    title: 'Learn in clear steps, and follow your progress as you go',
+    subtitle: 'Structured programs in levels and lessons that you follow step by step, with your progress in My School.',
     browse: 'Browse programs',
     signIn: 'Sign in',
     accountsNote: 'Accounts are created by the academy.',
@@ -16,13 +21,13 @@ export const publicHome: typeof arPublicHome = {
     title: 'Learning programs',
     subtitle: 'From the academy’s published programs: their overview, content and fees.',
     all: 'All programs',
+    emptyTitle: 'No programs yet',
     empty: 'No program is published yet.',
     loadError: 'The programs could not be loaded.',
     retry: 'Try again',
     closedVisitor: {
       title: 'Programs are open to account holders',
       text: 'The academy does not show its programs to visitors. Sign in with your account to browse them.',
-      action: 'Sign in',
     },
     closedLearner: {
       title: 'Browse the courses from your account',
@@ -37,6 +42,7 @@ export const publicHome: typeof arPublicHome = {
   },
   steps: {
     title: 'How do you start?',
+    subtitle: 'Three steps from choosing a program to following your lessons.',
     choose: {
       title: 'Choose your program',
       text: 'Browse the programs and read each one’s overview, content and fees.',
@@ -53,7 +59,5 @@ export const publicHome: typeof arPublicHome = {
   cta: {
     visitorTitle: 'Ready to start?',
     visitorText: 'Choose the program that suits you, then sign in with your account to enroll.',
-    learnerTitle: 'Continue learning',
-    learnerText: 'Your lessons, progress and upcoming sessions in one place.',
   },
 }

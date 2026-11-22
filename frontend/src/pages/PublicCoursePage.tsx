@@ -14,12 +14,16 @@
 // paid course says that it becomes a request with an invoice, activated after
 // payment and approval (MOD-19). The tab reads «course — academy».
 // `404 catalog_not_public` shows the calm «closed» page; a signed-in
-// user goes (replace) to /catalog/<id>.
+// user goes (replace) to /catalog/<id>. «العودة إلى الدورات» returns to the
+// search the course was opened from — its own address carries it
+// (`/explore/:id?q=`, PORTAL-04 PR-2) — so a refresh, a new tab and a shared link
+// keep it; without one it leads to /explore. Only ever /explore: the search is a
+// value of `q`, never an address.
 import { ArrowLeftOutlined, ArrowRightOutlined, LoginOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Flex, Skeleton, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { PublicCourseDetail } from '../api/publicCatalog'
 import { CourseCover } from '../catalog/CourseCover'
@@ -31,6 +35,8 @@ import {
   availabilityOf,
   durationMinutes,
   enrollIntentPath,
+  explorePathFor,
+  exploreSearchOf,
   isPublicCourseGone,
   levelNameOf,
   publicEnrollStateOf,
@@ -56,10 +62,13 @@ function PublicCourse({ courseId }: { courseId: string }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const { course, error, reload } = usePublicCourse(courseId)
+  // Back to the results the course was opened from (`?q=` of this page), else to all programs.
+  const backPath = explorePathFor(exploreSearchOf(params))
 
   const back = (
-    <Button icon={language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />} onClick={() => navigate('/explore')} style={{ marginBottom: 16 }}>
+    <Button icon={language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ marginBottom: 16 }}>
       {t('publicCatalog.course.back')}
     </Button>
   )
