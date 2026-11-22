@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import type { RequestContext } from '../auth/principal.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -7,7 +7,7 @@ import { ATTEMPT_GRACE_MS } from './attempts.policy.js';
 import { EXAM_ATTEMPTS_ENTITY_TYPE } from './exams.audit.js';
 import { readSnapshot } from './exams.online.js';
 import { countedAttempt, gradeAttempt } from './online-grading.js';
-import type { AttemptGrade, GradableQuestion } from './online-grading.js';
+import type { AttemptGrade, GradableQuestion, GradedAnswer } from './online-grading.js';
 
 export const EXAM_ATTEMPT_AUDIT_ACTIONS = {
   started: 'exams.attempt.started',
@@ -17,6 +17,17 @@ export const EXAM_ATTEMPT_AUDIT_ACTIONS = {
 
 /** How many overdue attempts one sweep transaction closes. */
 export const SWEEP_BATCH = 25;
+
+/**
+ * Limits of the transactions of this phase. Prisma's defaults (2 s to get a connection, 5 s to finish) fit a single
+ * write, not these:
+ *   - a learner's own write (start, save, submit) may have to queue behind a whole class starting at the same
+ *     minute, so it waits longer for a connection instead of failing;
+ *   - closing a batch of attempts, publishing with attempts still open, or re-grading a whole exam grades many
+ *     attempts in one transaction.
+ */
+export const ATTEMPT_TX = { maxWait: 10_000, timeout: 15_000 } as const;
+export const GRADING_TX = { maxWait: 10_000, timeout: 60_000 } as const;
 
 const ATTEMPT_SELECT = {
   id: true,
@@ -92,6 +103,8 @@ type Tx = Prisma.TransactionClient;
  */
 @Injectable()
 export class ExamGradingService {
+  private readonly logger = new Logger(ExamGradingService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -149,7 +162,7 @@ export class ExamGradingService {
          WHERE exam_id = ${examId}::uuid AND student_user_id = ${studentUserId}::uuid AND status = 'in_progress' AND expires_at <= ${cutoff}
          ORDER BY id FOR UPDATE`;
       return this.finishLocked(tx, locked, now);
-    });
+    }, ATTEMPT_TX);
   }
 
   /**
@@ -171,25 +184,63 @@ export class ExamGradingService {
    * transaction, skipping rows another process holds. `examIds` narrows it to
    * some exams — the e2e suites use it so a shared database is left alone.
    */
-  async sweep(now: Date, options: { examIds?: readonly string[]; maxBatches?: number } = {}): Promise<number> {
+  async sweep(now: Date, options: { examIds?: readonly string[]; maxBatches?: number; batchTimeoutMs?: number } = {}): Promise<number> {
     const cutoff = new Date(now.getTime() - ATTEMPT_GRACE_MS);
     const maxBatches = options.maxBatches ?? 40;
     let closed = 0;
     for (let batch = 0; batch < maxBatches; batch += 1) {
-      const done = await this.prisma.db.$transaction(async (tx) => {
-        const locked = options.examIds
-          ? await tx.$queryRaw<{ id: string }[]>`
-              SELECT id FROM exam_attempts
-               WHERE status = 'in_progress' AND expires_at <= ${cutoff} AND exam_id = ANY(${[...options.examIds]}::uuid[])
-               ORDER BY expires_at, id LIMIT ${SWEEP_BATCH} FOR UPDATE SKIP LOCKED`
-          : await tx.$queryRaw<{ id: string }[]>`
-              SELECT id FROM exam_attempts
-               WHERE status = 'in_progress' AND expires_at <= ${cutoff}
-               ORDER BY expires_at, id LIMIT ${SWEEP_BATCH} FOR UPDATE SKIP LOCKED`;
-        return this.finishLocked(tx, locked, now);
-      });
+      let done: number;
+      try {
+        done = await this.prisma.db.$transaction(
+          async (tx) => {
+            const locked = options.examIds
+              ? await tx.$queryRaw<{ id: string }[]>`
+                  SELECT id FROM exam_attempts
+                   WHERE status = 'in_progress' AND expires_at <= ${cutoff} AND exam_id = ANY(${[...options.examIds]}::uuid[])
+                   ORDER BY expires_at, id LIMIT ${SWEEP_BATCH} FOR UPDATE SKIP LOCKED`
+              : await tx.$queryRaw<{ id: string }[]>`
+                  SELECT id FROM exam_attempts
+                   WHERE status = 'in_progress' AND expires_at <= ${cutoff}
+                   ORDER BY expires_at, id LIMIT ${SWEEP_BATCH} FOR UPDATE SKIP LOCKED`;
+            return this.finishLocked(tx, locked, now);
+          },
+          { ...GRADING_TX, ...(options.batchTimeoutMs !== undefined ? { timeout: options.batchTimeoutMs } : {}) },
+        );
+      } catch (error) {
+        // A batch that cannot finish as one transaction — too slow, or one attempt that fails — must not stop the others
+        // from ever being closed: the same attempts are tried one per transaction, and this pass ends there.
+        this.logger.warn(`a sweep batch failed (${error instanceof Error ? error.message.split('\n')[0] : String(error)}); closing its attempts one at a time`);
+        return closed + (await this.sweepOneByOne(cutoff, now, options.examIds));
+      }
       closed += done;
       if (done < SWEEP_BATCH) break;
+    }
+    return closed;
+  }
+
+  /**
+   * The fallback of `sweep()`: up to one batch of overdue attempts, each closed in a transaction of its own, so one
+   * attempt that cannot be closed costs only itself. What fails is logged by its id and left for the next pass.
+   */
+  private async sweepOneByOne(cutoff: Date, now: Date, examIds?: readonly string[]): Promise<number> {
+    const candidates = examIds
+      ? await this.prisma.db.$queryRaw<{ id: string }[]>`
+          SELECT id FROM exam_attempts
+           WHERE status = 'in_progress' AND expires_at <= ${cutoff} AND exam_id = ANY(${[...examIds]}::uuid[])
+           ORDER BY expires_at, id LIMIT ${SWEEP_BATCH}`
+      : await this.prisma.db.$queryRaw<{ id: string }[]>`
+          SELECT id FROM exam_attempts WHERE status = 'in_progress' AND expires_at <= ${cutoff} ORDER BY expires_at, id LIMIT ${SWEEP_BATCH}`;
+    let closed = 0;
+    for (const candidate of candidates) {
+      try {
+        closed += await this.prisma.db.$transaction(async (tx) => {
+          const locked = await tx.$queryRaw<{ id: string }[]>`
+            SELECT id FROM exam_attempts WHERE id = ${candidate.id}::uuid AND status = 'in_progress' AND expires_at <= ${cutoff} FOR UPDATE SKIP LOCKED`;
+          return this.finishLocked(tx, locked, now);
+        }, GRADING_TX);
+      } catch (error) {
+        this.logger.error(`attempt ${candidate.id} could not be closed by the sweep`, error instanceof Error ? error.stack : String(error));
+      }
     }
     return closed;
   }
@@ -229,16 +280,16 @@ export class ExamGradingService {
       const grade = gradeAttempt(questions, new Map(attempt.answers.map((answer) => [answer.examQuestionId, answer.response])), attempt.maxScore.toFixed(2));
       const graded = new Map(grade.answers.map((answer) => [answer.examQuestionId, answer]));
       let changed = attempt.score === null || attempt.score.toFixed(2) !== grade.score || attempt.correctCount !== grade.correctCount;
+      const differing: GradedAnswer[] = [];
       for (const answer of attempt.answers) {
         const next = graded.get(answer.examQuestionId);
         if (!next) continue;
         if (answer.isCorrect === next.isCorrect && answer.pointsAwarded !== null && answer.pointsAwarded.toFixed(2) === next.pointsAwarded) continue;
+        differing.push(next);
+      }
+      if (differing.length > 0) {
         changed = true;
-        await tx.examAnswer.update({
-          where: { attemptId_examQuestionId: { attemptId: attempt.id, examQuestionId: answer.examQuestionId } },
-          data: { isCorrect: next.isCorrect, pointsAwarded: next.pointsAwarded },
-          select: { attemptId: true },
-        });
+        await this.writeAnswerGrades(tx, attempt.id, differing);
       }
       if (!changed) continue;
       summary.changedAttempts += 1;
@@ -275,14 +326,25 @@ export class ExamGradingService {
   private async writeGrade(tx: Tx, attemptId: string, questions: readonly GradableQuestion[], maxScore: string): Promise<AttemptGrade> {
     const answers = await tx.examAnswer.findMany({ where: { attemptId }, select: { examQuestionId: true, response: true } });
     const grade = gradeAttempt(questions, new Map(answers.map((answer) => [answer.examQuestionId, answer.response])), maxScore);
-    for (const answer of grade.answers) {
-      await tx.examAnswer.update({
-        where: { attemptId_examQuestionId: { attemptId, examQuestionId: answer.examQuestionId } },
-        data: { isCorrect: answer.isCorrect, pointsAwarded: answer.pointsAwarded },
-        select: { attemptId: true },
-      });
-    }
+    await this.writeAnswerGrades(tx, attemptId, grade.answers);
     return grade;
+  }
+
+  /**
+   * Writes the grading of these answers of one attempt: one statement per (correct, points) pair — a handful, however
+   * many questions the exam asks — instead of one per answer.
+   */
+  private async writeAnswerGrades(tx: Tx, attemptId: string, graded: readonly GradedAnswer[]): Promise<void> {
+    const groups = new Map<string, { isCorrect: boolean; pointsAwarded: string; ids: string[] }>();
+    for (const answer of graded) {
+      const key = `${answer.isCorrect}|${answer.pointsAwarded}`;
+      const group = groups.get(key) ?? { isCorrect: answer.isCorrect, pointsAwarded: answer.pointsAwarded, ids: [] };
+      group.ids.push(answer.examQuestionId);
+      groups.set(key, group);
+    }
+    for (const group of groups.values()) {
+      await tx.examAnswer.updateMany({ where: { attemptId, examQuestionId: { in: group.ids } }, data: { isCorrect: group.isCorrect, pointsAwarded: group.pointsAwarded } });
+    }
   }
 
   /**

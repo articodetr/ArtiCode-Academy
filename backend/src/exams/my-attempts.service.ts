@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { attemptDeadline, isAttemptOver, isResultReleased, isReviewReleased, remainingSeconds, takeState } from './attempts.policy.js';
 import type { AttemptState } from './attempts.policy.js';
-import { EXAM_ATTEMPT_AUDIT_ACTIONS, ExamGradingService, GRADING_ATTEMPT_SELECT } from './exam-grading.service.js';
+import { ATTEMPT_TX, EXAM_ATTEMPT_AUDIT_ACTIONS, ExamGradingService, GRADING_ATTEMPT_SELECT } from './exam-grading.service.js';
 import { EXAM_ATTEMPTS_ENTITY_TYPE } from './exams.audit.js';
 import { readSnapshot } from './exams.online.js';
 import type { QuestionSnapshot } from './exams.online.js';
@@ -106,6 +106,8 @@ function answerOf(response: unknown): { optionId: string | null; value: boolean 
  *     checked against the frozen question it answers; no audit event (D-R165).
  *   - Submitting grades the attempt once under its row lock; repeating it
  *     answers the same finished attempt without grading again.
+ *   - The three writes run with `ATTEMPT_TX`: when a whole class starts in
+ *     the same minute a request queues for a connection instead of failing.
  *   - What is answered to a learner never carries a key: the options come
  *     without `isCorrect`, the score only once the exam releases it (D-R156),
  *     the correct answers and explanations only once it reveals them (D-R157).
@@ -189,7 +191,7 @@ export class MyAttemptsService {
       }
       const answeredCount = await tx.examAnswer.count({ where: { attemptId } });
       return { closed: null, saved: toClear.length + toWrite.length, answeredCount, questionCount: attempt.questionCount, expiresAt: attempt.expiresAt };
-    });
+    }, ATTEMPT_TX);
 
     // Thrown after the commit, so the server's close of an expired attempt is kept.
     if (outcome.closed !== null) throw gradesError.attemptClosed(outcome.closed);
@@ -213,7 +215,7 @@ export class MyAttemptsService {
       // Past the deadline and its allowance the server closes it; the learner did not submit in time.
       if (isAttemptOver(attempt.expiresAt, now)) await this.grading.finish(tx, attempt, 'timed_out', now, null);
       else await this.grading.finish(tx, attempt, 'submitted', now, { userId: caller.id, ctx });
-    });
+    }, ATTEMPT_TX);
     return this.read(attemptId, caller);
   }
 
@@ -289,7 +291,7 @@ export class MyAttemptsService {
         tx,
       );
       return { id: created.id, created: true };
-    });
+    }, ATTEMPT_TX);
   }
 
   /** Locks the caller's own attempt (`FOR UPDATE`) and reads it; anybody else's, or an unknown one, is 404. */

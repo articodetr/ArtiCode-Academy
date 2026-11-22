@@ -17,7 +17,7 @@ import type {
   RegradeExamDto,
   RegradeSummaryDto,
 } from './exam-attempts.dto.js';
-import { ExamGradingService } from './exam-grading.service.js';
+import { ExamGradingService, GRADING_TX } from './exam-grading.service.js';
 import { EXAM_QUESTION_LINK_SELECT, toExamQuestionItem } from './exam-questions.service.js';
 import { EXAMS_ENTITY_TYPE } from './exams.audit.js';
 import { planKeyCorrection, readSnapshot, windowStateOf } from './exams.online.js';
@@ -286,7 +286,7 @@ export class ExamAttemptsService {
       );
       const after = await tx.examQuestion.findUniqueOrThrow({ where: { id: link.id }, select: EXAM_QUESTION_LINK_SELECT });
       return { changed: true, question: toExamQuestionItem(after), regrade };
-    });
+    }, GRADING_TX);
   }
 
   /** API-273 — grades every finished attempt again from the frozen copies; nothing is written or recorded when nothing changes. */
@@ -307,17 +307,28 @@ export class ExamAttemptsService {
         tx,
       );
       return summary;
-    });
+    }, GRADING_TX);
   }
 
   // ---------------------------------------------------------------------------
 
   /**
-   * Locks the exam row (`FOR NO KEY UPDATE` — the lock of every exam write) and
-   * applies what a correction needs: a visible exam, online, made available,
-   * of a class that is not cancelled and holds no issued certificate (D-R54).
+   * Locks the class row (`FOR SHARE`) and then the exam row (`FOR NO KEY UPDATE`
+   * — the lock of every exam write) and applies what a correction needs: a
+   * visible exam, online, made available, of a class that is not cancelled and
+   * holds no issued certificate (D-R54).
+   *
+   * The class row first, because issuing certificates and fixing final grades
+   * lock it (`FOR NO KEY UPDATE`): with the shared lock a correction and either
+   * of them never interleave — the certificate count below is exact until this
+   * transaction ends, and a finalization that follows reads the corrected
+   * results. Class → exam is the order exam creation already takes; nothing
+   * locks an exam and then its class.
    */
   private async lockCorrectable(tx: Tx, examId: string, caller: AuthPrincipal): Promise<AttemptsExam> {
+    const owner = await tx.exam.findUnique({ where: { id: examId }, select: { classId: true } });
+    if (!owner) throw gradesError.examNotFound(examId);
+    await tx.$queryRaw`SELECT id FROM classes WHERE id = ${owner.classId}::uuid FOR SHARE`;
     const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM exams WHERE id = ${examId}::uuid FOR NO KEY UPDATE`;
     if (locked.length === 0) throw gradesError.examNotFound(examId);
     const exam = await tx.exam.findFirst({ where: { AND: [{ id: examId }, visibleExamsWhere(caller)] }, select: ATTEMPTS_EXAM_SELECT });
