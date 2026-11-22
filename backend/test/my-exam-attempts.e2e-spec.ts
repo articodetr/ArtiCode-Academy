@@ -544,4 +544,15 @@ describe.skipIf(!available)('MOD-09 phase 2 — taking an online exam (e2e, TEST
     expect(Object.keys(schemas['AttemptQuestionDto']!.properties).sort()).toEqual(QUESTION_KEYS);
     expect(Object.keys(schemas['MyExamOnlineDto']!.properties).sort()).toEqual(ONLINE_KEYS);
   }, 20_000);
+
+  it('AC12 — a null attempt number, a nested array of answers and any field sent with the submit are validation errors', async () => {
+    const own = attempts['s1-main-1']!;
+    const m = await h.mark();
+    expect((await h.startAttempt('s1', exams['later']!, { attemptNo: null })).status).toBe(400);
+    expect((await h.api().put(`/api/me/exam-attempts/${own}/answers`).set(h.as('s1')).send({ answers: [[{ examQuestionId: NIL_ID, value: true }]] })).status).toBe(400);
+    // The submit takes no field — so a body can never be used to pick another rate-limit bucket; the limit is per (IP, user).
+    expect((await h.api().post(`/api/me/exam-attempts/${own}/submit`).set(h.as('s1')).send({ identifier: 'somebody-else' })).status).toBe(400);
+    expect((await h.api().post(`/api/me/exam-attempts/${own}/submit`).set(h.as('s1')).send({})).status).toBe(200);
+    expect(await h.eventsSince(m)).toEqual([]);
+  });
 });

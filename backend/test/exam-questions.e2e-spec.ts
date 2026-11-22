@@ -390,4 +390,24 @@ describe.skipIf(!available)('MOD-09 phase 2 — the questions and settings of an
     },
     20_000,
   );
+
+  it('answers a null where a value is expected, and a nested array of questions, with 400 — never a server error', async () => {
+    const created = await h.createExam('teacher', 'A', base({ delivery: 'online' }));
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const examId = created.body.id as string;
+    const m = await h.mark();
+    const put = (questions: unknown) => h.api().put(`${h.EXAMS}/${examId}/questions`).set(h.as('teacher')).send({ questions });
+    expect((await put([{ questionId: q['q1'], points: null }])).status).toBe(400);
+    expect((await put([[{ questionId: q['q1'] }]])).status).toBe(400);
+    expect((await put(null)).status).toBe(400);
+    for (const field of ['delivery', 'attemptsAllowed', 'resultsRelease', 'revealAnswers']) {
+      expect((await h.createExam('teacher', 'A', base({ delivery: 'online', [field]: null }))).status, field).toBe(400);
+    }
+    // A manual exam whose body names `delivery: null` is refused the same way instead of failing in the database.
+    expect((await h.createExam('teacher', 'A', base({ delivery: null }))).status).toBe(400);
+    expect(await h.prisma.examQuestion.count({ where: { examId } })).toBe(0);
+    expect(await h.eventsSince(m)).toEqual([]);
+    // The same entry without the null takes the question's own points.
+    expect((await put([{ questionId: q['q1'] }])).body).toMatchObject({ totalPoints: 2 });
+  });
 });

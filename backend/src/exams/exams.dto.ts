@@ -166,7 +166,8 @@ export class CreateExamDto {
     default: 'manual',
     description: '`manual` (default): the teacher records the results, as every exam before the online phase · `online`: the learners take it on the platform (D-R150). Changes in a draft only',
   })
-  @IsOptional()
+  // Absent, never null (as the other three settings below): `IsOptional` would let a null through to the database.
+  @ValidateIf((dto: CreateExamDto) => dto.delivery !== undefined)
   @IsIn(EXAM_DELIVERIES)
   delivery?: ExamDeliveryValue;
 
@@ -182,7 +183,7 @@ export class CreateExamDto {
   closesAt?: string | null;
 
   @ApiPropertyOptional({ minimum: 1, maximum: EXAM_ATTEMPTS_MAX, default: 1, description: 'Online only: attempts per student (a JSON integer); the highest finished attempt counts (D-R153)' })
-  @IsOptional()
+  @ValidateIf((dto: CreateExamDto) => dto.attemptsAllowed !== undefined)
   @Transform(rawValue)
   @IsInt()
   @Min(1)
@@ -194,7 +195,7 @@ export class CreateExamDto {
     default: 'on_publish',
     description: 'Online only: when a learner sees their own score — `on_publish` (when the teacher publishes the results) or `on_submit` (as soon as their attempt is finished) — D-R156',
   })
-  @IsOptional()
+  @ValidateIf((dto: CreateExamDto) => dto.resultsRelease !== undefined)
   @IsIn(EXAM_RESULTS_RELEASES)
   resultsRelease?: ExamResultsReleaseValue;
 
@@ -203,7 +204,7 @@ export class CreateExamDto {
     default: false,
     description: 'Online only: a learner may review the correct answers and explanations of their own attempt once their result is visible and the window has closed (a JSON boolean) — D-R157',
   })
-  @IsOptional()
+  @ValidateIf((dto: CreateExamDto) => dto.revealAnswers !== undefined)
   @Transform(rawValue)
   @IsBoolean()
   revealAnswers?: boolean;

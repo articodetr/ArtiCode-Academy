@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsInt, IsOptional, IsUUID, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDefined, IsInt, IsObject, IsOptional, IsUUID, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { AssignmentInstructionsDto } from '../assignments/assignments.dto.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { ExamAttemptStatus, ExamType } from '../generated/prisma/client.js';
@@ -27,7 +27,8 @@ export class StartAttemptDto {
     description:
       'The attempt the client means to start or resume (a JSON integer). When the server would give another number — the attempt was already finished, or another one started — the answer is `409 attempt_conflict { expected, next }` instead of a new attempt, so a repeated request never uses a second attempt',
   })
-  @IsOptional()
+  // Absent, never null: a null is not «no number», and `IsOptional` would let it through as one.
+  @ValidateIf((dto: StartAttemptDto) => dto.attemptNo !== undefined)
   @Transform(rawValue)
   @IsInt()
   @Min(1)
@@ -54,6 +55,9 @@ export class AnswerEntryDto {
   value?: boolean | null;
 }
 
+/** The submit carries no body: a class without properties makes the validation pipe refuse any field sent with it. */
+export class SubmitAttemptDto {}
+
 /** One or more answers, each the whole new answer to its question; an entry with neither `optionId` nor `value` clears it. */
 export class SaveAnswersDto {
   @ApiProperty({ type: [AnswerEntryDto], minItems: 1, maxItems: EXAM_QUESTIONS_MAX, description: 'No question twice' })
@@ -61,6 +65,7 @@ export class SaveAnswersDto {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(EXAM_QUESTIONS_MAX)
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => AnswerEntryDto)
   answers: AnswerEntryDto[];

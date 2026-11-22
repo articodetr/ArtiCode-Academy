@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsDefined, IsOptional, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsDefined, IsObject, IsUUID, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { IsDecimalNumber } from '../common/decimal-number.js';
 import { OptionTextDto, QuestionTextDto } from '../questions/questions.dto.js';
@@ -23,7 +23,8 @@ export class ExamQuestionEntryDto {
   questionId: string;
 
   @ApiPropertyOptional({ minimum: 0.01, maximum: QUESTION_POINTS_LIMIT, example: 2, description: 'The points of the question in this exam (a JSON number with at most two decimals); absent = the question’s own default' })
-  @IsOptional()
+  // Absent, never null: `IsOptional` would let a null through to the service.
+  @ValidateIf((dto: ExamQuestionEntryDto) => dto.points !== undefined)
   @Transform(rawValue)
   @IsDecimalNumber(2)
   @Min(0.01)
@@ -37,6 +38,8 @@ export class ReplaceExamQuestionsDto {
   @IsDefined()
   @IsArray()
   @ArrayMaxSize(EXAM_QUESTIONS_MAX)
+  // Each entry is an object: `ValidateNested` alone would walk into a nested array.
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => ExamQuestionEntryDto)
   questions: ExamQuestionEntryDto[];

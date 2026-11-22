@@ -16,7 +16,7 @@ import { EXAM_SORT_FIELD, afterExamCursor, examCursorKey, examOrderBy } from './
 import { TAKE_EXAMS_PERMISSION } from './exams.policy.js';
 import type { ListMyExamsQueryDto, MyExamItemDto, MyExamListDto, MyExamOnlineDto } from './my-exams.dto.js';
 import { MY_EXAM_STATUSES, visibleResult } from './my-exams.policy.js';
-import type { MyExamResultView, MyExamStatus } from './my-exams.policy.js';
+import type { MyExamResultView, MyExamStatus, ResultSourceValue } from './my-exams.policy.js';
 
 /** The academy's time zone for `timeZone` (D-R41), or UTC while the academy row is missing. */
 const FALLBACK_TIME_ZONE = 'UTC';
@@ -113,7 +113,11 @@ function toOnline(row: MyExamRow, ownership: LessonOwnership, context: OnlineCon
   };
 }
 
-function toItem(row: MyExamRow, ownership: LessonOwnership, result: MyExamResultView | null, academyTimeZone: string, online: OnlineContext | null): MyExamItemDto {
+/** A stored result with where it came from — the source decides when an unpublished exam shows it. */
+type SourcedResult = MyExamResultView & { source: ResultSourceValue };
+
+function toItem(row: MyExamRow, ownership: LessonOwnership, stored: SourcedResult | null, academyTimeZone: string, online: OnlineContext | null): MyExamItemDto {
+  const result: MyExamResultView | null = stored ? { status: stored.status, score: stored.score, feedback: stored.feedback } : null;
   return {
     id: row.id,
     title: readLocalizedText(row.title) ?? { ar: '' },
@@ -137,7 +141,7 @@ function toItem(row: MyExamRow, ownership: LessonOwnership, result: MyExamResult
     },
     relation: ownership.relation,
     student: ownership.student,
-    result: visibleResult(row.status, result, row),
+    result: visibleResult(row.status, result, row, stored?.source),
     online: online ? toOnline(row, ownership, online) : null,
   };
 }
@@ -204,9 +208,11 @@ export class MyExamsService {
         ? []
         : await this.prisma.db.examResult.findMany({
             where: { examId: { in: releasedIds }, studentUserId: { in: studentIds } },
-            select: { examId: true, studentUserId: true, status: true, score: true, feedback: true },
+            select: { examId: true, studentUserId: true, status: true, score: true, feedback: true, source: true },
           });
-    const byKey = new Map(results.map((row) => [resultKey(row.examId, row.studentUserId), { status: row.status, score: row.score === null ? null : Number(row.score), feedback: row.feedback }]));
+    const byKey = new Map(
+      results.map((row): [string, SourcedResult] => [resultKey(row.examId, row.studentUserId), { status: row.status, score: row.score === null ? null : Number(row.score), feedback: row.feedback, source: row.source }]),
+    );
     const academy = await this.prisma.db.academy.findFirst({ select: { timezone: true } });
     const timeZone = academy?.timezone ?? FALLBACK_TIME_ZONE;
 

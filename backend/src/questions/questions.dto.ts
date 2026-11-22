@@ -318,7 +318,8 @@ export class CreateQuestionDto {
   explanation?: QuestionTextDto | null;
 
   @ApiPropertyOptional({ minimum: 0.01, maximum: QUESTION_POINTS_LIMIT, default: 1, example: 2, description: 'Default points when linked to an exam; a JSON number with at most two decimals' })
-  @IsOptional()
+  // Absent, never null (as `tags`, `status` and `options` below): `IsOptional` would let a null through to the service.
+  @ValidateIf((dto: CreateQuestionDto) => dto.points !== undefined)
   @Transform(rawValue)
   @IsDecimalNumber(2)
   @Min(0.01)
@@ -332,7 +333,7 @@ export class CreateQuestionDto {
   difficulty?: QuestionDifficultyValue | null;
 
   @ApiPropertyOptional({ type: [String], maxItems: QUESTION_TAGS_MAX, example: ['loops', 'python'], description: 'Up to 10 topic labels of 1–40 characters; stored trimmed, lower-cased and without repeats' })
-  @IsOptional()
+  @ValidateIf((dto: CreateQuestionDto) => dto.tags !== undefined)
   @Transform(rawValue)
   @IsArray()
   @ArrayMaxSize(QUESTION_TAGS_MAX)
@@ -341,14 +342,15 @@ export class CreateQuestionDto {
   tags?: string[];
 
   @ApiPropertyOptional({ enum: QUESTION_CREATE_STATUSES, default: 'draft', description: '`draft` may be incomplete; `ready` must pass every rule of its type (`question_invalid` otherwise) — D-R164' })
-  @IsOptional()
+  @ValidateIf((dto: CreateQuestionDto) => dto.status !== undefined)
   @IsIn(QUESTION_CREATE_STATUSES)
   status?: (typeof QUESTION_CREATE_STATUSES)[number];
 
   @ApiPropertyOptional({ type: [QuestionOptionInputDto], maxItems: QUESTION_OPTIONS_MAX, description: 'The options of a `single_choice` question, in display order; refused for `true_false`' })
-  @IsOptional()
+  @ValidateIf((dto: CreateQuestionDto) => dto.options !== undefined)
   @IsArray()
   @ArrayMaxSize(QUESTION_OPTIONS_MAX)
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => QuestionOptionInputDto)
   options?: QuestionOptionInputDto[];
@@ -415,6 +417,7 @@ export class UpdateQuestionDto {
   @ValidateIf((dto: UpdateQuestionDto) => dto.options !== undefined)
   @IsArray()
   @ArrayMaxSize(QUESTION_OPTIONS_MAX)
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => QuestionOptionInputDto)
   options?: QuestionOptionInputDto[];

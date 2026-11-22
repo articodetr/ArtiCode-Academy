@@ -15,13 +15,13 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
-import { AuthThrottlerGuard } from '../auth/auth-throttler.guard.js';
 import { AuthErrorDto } from '../auth/auth.dto.js';
 import { requestContext } from '../auth/cookies.js';
 import { CurrentUser, RequirePermissions } from '../auth/decorators.js';
 import type { AuthPrincipal } from '../auth/principal.js';
+import { AttemptThrottlerGuard } from './attempt-throttler.guard.js';
 import { TAKE_EXAMS_PERMISSION } from './exams.policy.js';
-import { MyAttemptDto, SaveAnswersDto, SaveAnswersResultDto, StartAttemptDto } from './my-attempts.dto.js';
+import { MyAttemptDto, SaveAnswersDto, SaveAnswersResultDto, StartAttemptDto, SubmitAttemptDto } from './my-attempts.dto.js';
 import { MyAttemptsService } from './my-attempts.service.js';
 
 const UNAUTHORIZED = 'unauthenticated | token_expired | token_invalid | session_invalid';
@@ -38,7 +38,8 @@ const ATTEMPT_ACTION_LIMIT = { login: { limit: 30, ttl: 60 * 1000 } };
  * class, the attempt by its owner — anything else is 404. The three writes
  * need `exams.take` (seeded to students); reading one's own attempt needs no
  * key, as «my exams». The global guards (Origin → Auth → Permissions) run
- * first; the writes are rate-limited per (IP, user).
+ * first; the writes are rate-limited per (IP, user) — by `AttemptThrottlerGuard`,
+ * which never takes its key from the request body.
  */
 @ApiTags('exams')
 @ApiBearerAuth()
@@ -49,7 +50,7 @@ export class MyAttemptsController {
 
   @Post('exams/:id/attempts')
   @RequirePermissions(TAKE_EXAMS_PERMISSION)
-  @UseGuards(AuthThrottlerGuard)
+  @UseGuards(AttemptThrottlerGuard)
   @Throttle(ATTEMPT_ACTION_LIMIT)
   @ApiOperation({
     summary: 'Start my attempt at an online exam, or resume the one in progress',
@@ -97,7 +98,7 @@ export class MyAttemptsController {
 
   @Put('exam-attempts/:id/answers')
   @RequirePermissions(TAKE_EXAMS_PERMISSION)
-  @UseGuards(AuthThrottlerGuard)
+  @UseGuards(AttemptThrottlerGuard)
   @Throttle(ANSWER_SAVE_LIMIT)
   @ApiOperation({
     summary: 'Save answers of my attempt',
@@ -119,7 +120,7 @@ export class MyAttemptsController {
   @Post('exam-attempts/:id/submit')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(TAKE_EXAMS_PERMISSION)
-  @UseGuards(AuthThrottlerGuard)
+  @UseGuards(AttemptThrottlerGuard)
   @Throttle(ATTEMPT_ACTION_LIMIT)
   @ApiOperation({
     summary: 'Submit my attempt',
@@ -131,9 +132,11 @@ export class MyAttemptsController {
   @ApiParam({ name: 'id', format: 'uuid', description: 'The attempt' })
   @ApiOkResponse({ type: MyAttemptDto })
   @ApiForbiddenResponse({ type: AuthErrorDto, description: 'permission_denied — `exams.take`; origin_forbidden' })
+  @ApiBadRequestResponse({ description: 'Validation failed — the submit takes no field' })
   @ApiNotFoundResponse({ description: 'attempt_not_found' })
   @ApiTooManyRequestsResponse({ type: AuthErrorDto, description: 'rate_limited' })
-  submit(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() caller: AuthPrincipal, @Req() req: Request): Promise<MyAttemptDto> {
+  // `_body` is declared so that the validation pipe refuses any field sent with the submit (the route takes none).
+  submit(@Param('id', new ParseUUIDPipe()) id: string, @Body() _body: SubmitAttemptDto, @CurrentUser() caller: AuthPrincipal, @Req() req: Request): Promise<MyAttemptDto> {
     return this.attempts.submit(id, caller, requestContext(req));
   }
 }

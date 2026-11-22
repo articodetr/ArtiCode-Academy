@@ -493,4 +493,59 @@ describe.skipIf(!available)('MOD-09 phase 2 — the teacher’s view of the atte
     expect(Object.keys(schemas['ExamAttemptDetailDto']!.properties).sort()).toEqual(DETAIL_KEYS);
     expect(Object.keys(schemas['RegradeSummaryDto']!.properties).sort()).toEqual(['attempts', 'changedAttempts', 'changedResults']);
   }, 20_000);
+
+  it('AC8 — a correction and the issuing of a certificate never interleave: the correction waits for the class row, then is refused', async () => {
+    // A class of its own, without a certificate yet: one student took its exam.
+    await h.klass('D', 'CA', ['teacher'], 'running');
+    const enrollmentId = await h.enroll('D', 's2');
+    exams['race'] = await h.onlineExam('teacher', 'D', five);
+    attempts['race'] = (await take('s2', 'race', ALL_RIGHT)).id;
+    const question = ((await h.readQuestions('teacher', exams['race']).expect(200)).body.items as ItemBody[])[0]!;
+
+    let lockTaken: () => void = () => undefined;
+    let release: () => void = () => undefined;
+    const taken = new Promise<void>((resolve) => (lockTaken = resolve));
+    const released = new Promise<void>((resolve) => (release = resolve));
+    // What issuing a certificate does: the class row first (FOR NO KEY UPDATE), the certificate under it.
+    const issuing = h.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM classes WHERE id = ${h.classes['D']!}::uuid FOR NO KEY UPDATE`;
+        lockTaken();
+        await released;
+        await tx.certificate.create({
+          data: {
+            serial: `${h.prefix}-2026-00002`,
+            verificationCode: verificationCode(),
+            enrollmentId,
+            classId: h.classes['D']!,
+            courseId: h.courses['CA']!,
+            studentUserId: h.id('s2'),
+            percent: 100,
+            bandLabel: { ar: 'ممتاز' },
+            snapshot: { student: { fullName: 'Test s2' } },
+          },
+          select: { id: true },
+        });
+      },
+      { timeout: 30_000 },
+    );
+    await taken;
+
+    let settled = false;
+    const correction = h.correctKey('teacher', exams['race'], question.id, { correctOptionId: question.question.options[2]!.id, reason: 'تصحيح أثناء الإصدار' }).then((res) => {
+      settled = true;
+      return res;
+    });
+    // The correction is waiting for the class row: nothing was read as «no certificate» and regraded meanwhile.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(settled).toBe(false);
+    expect(await scoreOf('race')).toBe(10);
+
+    release();
+    await issuing;
+    const res = await correction;
+    expect(res.body).toMatchObject({ statusCode: 409, code: 'grades_certified', classId: h.classes['D'], certificateCount: 1 });
+    expect(await scoreOf('race')).toBe(10);
+    expect((await snapshotOf(question.id)).corrections).toBeUndefined();
+  }, 40_000);
 });

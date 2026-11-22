@@ -386,4 +386,20 @@ describe.skipIf(!available)('MOD-09 phase 2 — question banks (e2e, TEST-281)',
     },
     20_000,
   );
+
+  it('answers a null where a value is expected, and a nested array of options, with 400 — never a server error', async () => {
+    const bank = await h.bank('teacherA', { name: { ar: 'بنك فحص المدخلات' } });
+    const m = await h.mark();
+    const post = (body: Record<string, unknown>) => h.api().post(`${h.BANKS}/${bank.id}/questions`).set(h.as('teacherA')).send(body);
+    const draft = { type: 'single_choice', prompt: { ar: 'سؤال' } };
+    for (const [field, value] of [['points', null], ['tags', null], ['status', null], ['options', null]] as const) {
+      expect((await post({ ...draft, [field]: value })).status, field).toBe(400);
+    }
+    // An option list holds objects: an array inside it is not walked into.
+    expect((await post({ ...draft, options: [[{ text: { ar: 'أ' }, isCorrect: true }]] })).status).toBe(400);
+    expect(await h.prisma.question.count({ where: { bankId: bank.id } })).toBe(0);
+    expect(await h.eventsSince(m)).toEqual([]);
+    // The same body without the null is a draft, as before.
+    expect((await post(draft)).status).toBe(201);
+  });
 });

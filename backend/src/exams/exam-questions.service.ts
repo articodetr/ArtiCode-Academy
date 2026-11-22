@@ -169,6 +169,13 @@ export class ExamQuestionsService {
       if (isClassFrozenForExams(exam.class.status)) throw gradesError.classClosed(exam.classId, exam.class.status);
       if (exam.status !== 'draft') throw gradesError.examQuestionsLocked(exam.status);
 
+      if (ids.length > 0) {
+        // The banks, then the questions, `FOR KEY SHARE` in id order: deleting one of them (or its bank) waits for this
+        // link and is then refused as «in use», or wins first and the question is simply not found below — never a
+        // foreign-key error half-way. An edit of the question takes `FOR NO KEY UPDATE` and is not held up.
+        await tx.$queryRaw`SELECT id FROM question_banks WHERE id IN (SELECT bank_id FROM questions WHERE id = ANY(${ids}::uuid[])) ORDER BY id FOR KEY SHARE`;
+        await tx.$queryRaw`SELECT id FROM questions WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR KEY SHARE`;
+      }
       const questions = ids.length === 0 ? [] : await tx.question.findMany({ where: { AND: [{ id: { in: ids } }, visibleQuestionsWhere(caller)] }, select: { id: true, status: true, points: true } });
       const byId = new Map(questions.map((question) => [question.id, question]));
       const missing = ids.filter((id) => !byId.has(id));

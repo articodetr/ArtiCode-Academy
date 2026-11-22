@@ -17,7 +17,7 @@ import { formatNumber } from '../notifications/notifications.templates.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
-import { ExamGradingService } from './exam-grading.service.js';
+import { ExamGradingService, GRADING_TX } from './exam-grading.service.js';
 import { ExamQuestionsService } from './exam-questions.service.js';
 import { EXAMS_ENTITY_TYPE } from './exams.audit.js';
 import { isEmptyExamPatch, passScoreProblem, planExamUpdate } from './exams.changes.js';
@@ -402,7 +402,8 @@ export class ExamsService {
       // Only reached once the status has moved: a refusal threw above and wrote nothing.
       const batch = await this.notifyStatusChange(tx, input.action, row, dto);
       return { dto, batch };
-    });
+      // The limits of a grading transaction: publishing an online exam closes and grades what is still open.
+    }, GRADING_TX);
     this.notifications.dispatch(batch);
     return dto;
   }

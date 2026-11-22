@@ -352,4 +352,42 @@ describe.skipIf(!available)('MOD-09 phase 2 — auto-grading and the counted res
     expect(grades[0]).toMatchObject({ relation: 'self', components: [{ kind: 'exam', id: exams['graded'], status: 'scored', score: 6, maxScore: 10, weight: 1 }], final: { percent: 60 } });
     expect(leakedKeys(grades)).toEqual([]);
   });
+
+  it('AC7 — a result the teacher typed for an exam that releases on submit still waits for the publication', async () => {
+    // «multi» releases an attempt's result at once; s3 never took it and is recorded absent on the sheet.
+    const recorded = await h.recordResults('teacher', exams['multi']!, [{ studentId: h.id('s3'), status: 'absent', feedback: 'لم يحضر الاختبار' }]);
+    expect(recorded.status, JSON.stringify(recorded.body)).toBe(200);
+    const mine = async (user: string) =>
+      ((await h.myExams(user, `?classId=${h.classes['A']}`).expect(200)).body.items as { id: string; status: string; result: unknown }[]).find((item) => item.id === exams['multi'])!;
+    // The student who took it sees their own attempt's result; the typed one is not shown before the teacher publishes.
+    expect(await mine('s1')).toMatchObject({ status: 'scheduled', result: { status: 'scored', score: 10 } });
+    expect(await mine('s3')).toMatchObject({ status: 'scheduled', result: null });
+
+    await h.closeWindow(exams['multi']!, 60);
+    expect((await h.act('teacher', exams['multi']!, 'publish')).body).toMatchObject({ status: 'published' });
+    expect((await mine('s3')).result).toEqual({ status: 'absent', score: null, feedback: 'لم يحضر الاختبار' });
+    expect((await mine('s1')).result).toMatchObject({ status: 'scored', score: 10 });
+  });
+
+  it('AC8 — a sweep batch that cannot finish as one transaction is closed one attempt at a time, each once', async () => {
+    exams['slow'] = await h.onlineExam('teacher', 'A', five);
+    const one = (await h.startAttempt('s1', exams['slow']!).expect(201)).body as AttemptBody;
+    const two = (await h.startAttempt('s2', exams['slow']!).expect(201)).body as AttemptBody;
+    // This exam was made available AFTER the first question's key was changed in the bank (AC1): its frozen copy carries the new key.
+    await h.saveAnswers('s1', one.id, pickAnswers(one.questions, [3, 0, true, false, 1])).expect(200);
+    await h.expireAttempt(one.id, 30);
+    await h.expireAttempt(two.id, 30);
+    const m = await h.mark();
+    // One millisecond is not enough for any batch: the transaction is rolled back, and the fallback closes both.
+    expect(await grading.sweep(new Date(), { examIds: [exams['slow']!], batchTimeoutMs: 1 })).toBe(2);
+    const rows = await h.prisma.examAttempt.findMany({ where: { id: { in: [one.id, two.id] } }, select: { id: true, status: true, score: true } });
+    expect(rows.map((row) => [row.id === one.id ? 'one' : 'two', row.status, Number(row.score)]).sort()).toEqual([
+      ['one', 'timed_out', 10],
+      ['two', 'timed_out', 0],
+    ]);
+    expect((await h.eventsOn(m, [one.id, two.id])).map((event) => event.action)).toEqual(['exams.attempt.timed_out', 'exams.attempt.timed_out']);
+    expect(await resultRow('slow', 's1')).toMatchObject({ score: 10, source: 'online' });
+    // Nothing is left to do.
+    expect(await grading.sweep(new Date(), { examIds: [exams['slow']!] })).toBe(0);
+  });
 });
