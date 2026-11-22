@@ -255,6 +255,17 @@ export const publicCatalog = {
     signIn: 'تسجيل الدخول',
     // No self-registration exists (accounts come by invitation): this line stands where a «register» button would.
     accountsNote: 'الحسابات تُنشأ من إدارة الأكاديمية',
+    // PORTAL-04 (#208): the main links of the public pages and the action of a signed-in viewer.
+    navLabel: 'التنقل الرئيسي',
+    homeLink: 'الرئيسية',
+    programsLink: 'البرامج',
+    mySchool: 'مدرستي',
+    dashboard: 'لوحة التحكم',
+  },
+  footer: {
+    navLabel: 'روابط الأكاديمية',
+    verifyCertificate: 'التحقق من شهادة',
+    copyright: '© {{year}} {{name}}',
   },
   list: {
     title: 'الدورات',

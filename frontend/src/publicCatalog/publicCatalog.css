@@ -52,6 +52,35 @@
   white-space: nowrap;
 }
 
+/* The main links («الرئيسية», «البرامج»); on a phone they take a row of their own under the brand and the actions. */
+.public-catalog__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.public-catalog__nav-link {
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: rgba(0, 0, 0, 0.72);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.public-catalog__nav-link:hover,
+.public-catalog__nav-link:focus-visible {
+  color: #0f6cbd;
+  background: #eef4fb;
+}
+
+.public-catalog__nav-link.active {
+  color: #0f6cbd;
+  background: #e3eefa;
+}
+
 .public-catalog__actions {
   display: flex;
   align-items: center;
@@ -80,6 +109,43 @@
   box-sizing: border-box;
 }
 
+.public-catalog__footer {
+  background: #fff;
+  border-top: 1px solid #e6e9ef;
+}
+
+.public-catalog__footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 24px;
+  box-sizing: border-box;
+}
+
+.public-catalog__footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.public-catalog__footer-links a {
+  color: rgba(0, 0, 0, 0.72);
+}
+
+.public-catalog__footer-links a:hover,
+.public-catalog__footer-links a:focus-visible {
+  color: #0f6cbd;
+}
+
+.public-catalog__copyright {
+  font-size: 13px;
+}
+
 .public-catalog__loading {
   min-height: 100vh;
   min-height: 100dvh;
@@ -88,9 +154,46 @@
   justify-content: center;
 }
 
+/* A phone: the brand and the action on the first row (the name ends in an ellipsis, never vanishes), the main links and
+   the language switch on the second. */
+@media (max-width: 767px) {
+  .public-catalog__header {
+    row-gap: 0;
+  }
+
+  /* A full-width line break between the two rows, whatever the widths of the action and the links. */
+  .public-catalog__header::after {
+    content: '';
+    order: 3;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .public-catalog__brand {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 96px;
+  }
+
+  .public-catalog__actions {
+    order: 2;
+  }
+
+  .public-catalog__nav {
+    order: 4;
+    margin-top: 8px;
+  }
+
+  .public-catalog__language {
+    order: 5;
+    margin-top: 8px;
+  }
+}
+
 @media (max-width: 575px) {
   .public-catalog__header,
-  .public-catalog__main {
+  .public-catalog__main,
+  .public-catalog__footer-inner {
     padding-inline: 16px;
   }
 }

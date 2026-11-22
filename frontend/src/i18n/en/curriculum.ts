@@ -247,6 +247,16 @@ export const publicCatalog = {
     home: 'Academy courses',
     signIn: 'Sign in',
     accountsNote: 'Accounts are created by the academy',
+    navLabel: 'Main navigation',
+    homeLink: 'Home',
+    programsLink: 'Programs',
+    mySchool: 'My School',
+    dashboard: 'Dashboard',
+  },
+  footer: {
+    navLabel: 'Academy links',
+    verifyCertificate: 'Verify a certificate',
+    copyright: '© {{year}} {{name}}',
   },
   list: {
     title: 'Courses',

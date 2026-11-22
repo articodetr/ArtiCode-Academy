@@ -15,6 +15,7 @@ import { MySchoolPage } from '../pages/MySchoolPage'
 import { LearnPage } from '../pages/LearnPage'
 import { LearnPreviewPage } from '../pages/LearnPreviewPage'
 import { PublicCatalogPage } from '../pages/PublicCatalogPage'
+import { PublicHomePage } from '../pages/PublicHomePage'
 import { PublicCoursePage } from '../pages/PublicCoursePage'
 import { CertificatePrintPage } from '../pages/CertificatePrintPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
@@ -59,6 +60,8 @@ const router = createBrowserRouter([
   { path: '/verify', element: <VerifyCertificatePage /> },
   { path: '/verify/:code', element: <VerifyCertificatePage /> },
   // MOD-20 (D-R138): the public catalog for visitors — the server answers 404 catalog_not_public unless the academy offers it.
+  // PORTAL-04 (#208): the academy's public home page — for visitors and signed-in users alike; `/` stays the dashboard.
+  { path: '/home', element: <PublicHomePage /> },
   { path: '/explore', element: <PublicCatalogPage /> },
   { path: '/explore/:courseId', element: <PublicCoursePage /> },
   // MOD-20: the learning workspace, outside the layout (a focused course player). Signed in; the server opens a course's

@@ -18,6 +18,7 @@ import { mySchool } from './ar/mySchool'
 import { learn } from './ar/learn'
 import { curriculum, learningProgress, publicCatalog } from './ar/curriculum'
 import { enrollmentRequests } from './ar/enrollmentRequests'
+import { publicHome } from './ar/publicHome'
 
 export const ar = {
   common,
@@ -69,6 +70,8 @@ export const ar = {
   curriculum,
   learningProgress,
   publicCatalog,
+  // PORTAL-04 (#208): the academy's public home page (/home).
+  publicHome,
 }
 
 export type Translation = typeof ar

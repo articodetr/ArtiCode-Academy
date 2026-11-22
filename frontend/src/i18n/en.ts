@@ -4,6 +4,7 @@ import { mySchool } from './en/mySchool'
 import { learn } from './en/learn'
 import { curriculum, learningProgress, publicCatalog } from './en/curriculum'
 import { enrollmentRequests } from './en/enrollmentRequests'
+import { publicHome } from './en/publicHome'
 
 export const en: Translation = {
   common: {
@@ -4170,4 +4171,6 @@ export const en: Translation = {
   curriculum,
   learningProgress,
   publicCatalog,
+  // PORTAL-04 (#208): the academy's public home page (/home).
+  publicHome,
 }
