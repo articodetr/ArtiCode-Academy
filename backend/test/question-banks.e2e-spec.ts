@@ -376,7 +376,7 @@ describe.skipIf(!available)('MOD-09 phase 2 — question banks (e2e, TEST-281)',
   it(
     'documents the routes in OpenAPI',
     async () => {
-      const docs = await h.api().get('/api/docs-json').expect(200);
+      const docs = { body: await h.openApiDocument() };
       expect(Object.keys(docs.body.paths['/api/question-banks']).sort()).toEqual(['get', 'post']);
       expect(Object.keys(docs.body.paths['/api/question-banks/{id}']).sort()).toEqual(['delete', 'get', 'patch']);
       expect(Object.keys(docs.body.paths['/api/question-banks/{id}/questions'])).toEqual(['post']);

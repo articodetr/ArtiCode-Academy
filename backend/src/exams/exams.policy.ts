@@ -5,16 +5,21 @@
 // (others are 404). Writing needs `exams.manage`, recording results
 // `exams.grade`, both with the same visibility. Students and guardians read
 // their own exams through `GET /api/me/exams` (T04) — `exams.read` alone opens
-// nothing to them because they are not assigned to any class. `exams.take`
-// and `questions.manage` wait for the online exams of the second phase (D-R42).
+// nothing to them because they are not assigned to any class. Since the
+// second phase (roadmap §4r) `exams.take` — seeded to students — lets a
+// learner start, answer and submit their OWN attempt at an online exam of a
+// class they are actively enrolled in, and `questions.manage` governs the
+// question banks (questions/questions.policy.ts).
 import type { AuthPrincipal } from '../auth/principal.js';
 import { canManageClasses, visibleClassesWhere } from '../classes/classes.policy.js';
 import type { ClassStatus, Prisma } from '../generated/prisma/client.js';
 
 export const READ_EXAMS_PERMISSION = 'exams.read';
 export const MANAGE_EXAMS_PERMISSION = 'exams.manage';
-/** T04: recording the results sheet. */
+/** T04: recording the results sheet; phase 2: correcting a key and regrading. */
 export const GRADE_EXAMS_PERMISSION = 'exams.grade';
+/** Phase 2: starting, answering and submitting one's own attempt at an online exam. */
+export const TAKE_EXAMS_PERMISSION = 'exams.take';
 
 /** A new exam is created for a class in one of these states (as assignments — §4h.8 (7)). */
 export const EXAM_CREATE_CLASS_STATUSES: readonly ClassStatus[] = ['planned', 'open', 'running'];

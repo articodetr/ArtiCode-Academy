@@ -13,11 +13,12 @@ import {
   mergeOnline,
   onlineFieldsOnManual,
   planExamQuestions,
+  planKeyCorrection,
   readSnapshot,
   sumPoints,
   windowStateOf,
 } from './exams.online.js';
-import type { OnlineLockValues, OnlineValues } from './exams.online.js';
+import type { OnlineLockValues, OnlineValues, QuestionSnapshot } from './exams.online.js';
 
 const OPENS = '2026-12-01T08:00:00.000Z';
 const CLOSES = '2026-12-01T10:00:00.000Z';
@@ -197,5 +198,73 @@ describe('the frozen copy (D-R158)', () => {
     for (const value of [null, undefined, 'x', [], {}, { type: 'essay', prompt: { ar: 'س' }, options: [] }, { type: 'true_false', prompt: { en: 'q' }, options: [] }, { type: 'true_false', prompt: { ar: 'س' } }, { type: 'single_choice', prompt: { ar: 'س' }, options: [{ id: 1, text: { ar: 'أ' }, isCorrect: true }] }]) {
       expect(readSnapshot(value)).toBeNull();
     }
+  });
+});
+
+describe('planKeyCorrection() — D-R161', () => {
+  const by = { userId: 'u-teacher', at: '2026-12-02T09:00:00.000Z', reason: 'المفتاح كان خاطئًا' };
+  const choice: QuestionSnapshot = {
+    type: 'single_choice',
+    prompt: { ar: 'ما نوع القيمة 3.14؟' },
+    explanation: null,
+    options: [
+      { id: 'o-int', text: { ar: 'int' }, isCorrect: false },
+      { id: 'o-float', text: { ar: 'float' }, isCorrect: true },
+      { id: 'o-str', text: { ar: 'str' }, isCorrect: false },
+    ],
+    correctBoolean: null,
+  };
+  const trueFalse: QuestionSnapshot = { type: 'true_false', prompt: { ar: 'القوائم غير قابلة للتعديل.' }, explanation: { ar: 'القوائم قابلة للتعديل' }, options: [], correctBoolean: false };
+
+  it('moves the key of a choice question to another of its own options and keeps the previous one in the copy’s history', () => {
+    const plan = planKeyCorrection(choice, { correctOptionId: 'o-int' }, by);
+    expect(plan).toMatchObject({ ok: true, changed: true });
+    if (!plan.ok || !plan.changed) throw new Error('unreachable');
+    expect(plan.next.options.map((option) => [option.id, option.isCorrect])).toEqual([['o-int', true], ['o-float', false], ['o-str', false]]);
+    expect(plan.next.corrections).toEqual([{ at: by.at, byUserId: 'u-teacher', previousOptionId: 'o-float', previousBoolean: null, reason: by.reason }]);
+    // Everything else of the copy is untouched, and the input is not mutated.
+    expect(plan.next).toMatchObject({ type: 'single_choice', prompt: choice.prompt, explanation: null, correctBoolean: null });
+    expect(choice.options[1]!.isCorrect).toBe(true);
+    expect(choice.corrections).toBeUndefined();
+  });
+
+  it('flips the key of a true/false question', () => {
+    const plan = planKeyCorrection(trueFalse, { correctAnswer: true }, by);
+    if (!plan.ok || !plan.changed) throw new Error('unreachable');
+    expect(plan.next).toMatchObject({ correctBoolean: true, options: [], explanation: trueFalse.explanation });
+    expect(plan.next.corrections).toEqual([{ at: by.at, byUserId: 'u-teacher', previousOptionId: null, previousBoolean: false, reason: by.reason }]);
+  });
+
+  it('appends to the history, oldest first, and survives the round trip through the stored JSON', () => {
+    const first = planKeyCorrection(choice, { correctOptionId: 'o-int' }, by);
+    if (!first.ok || !first.changed) throw new Error('unreachable');
+    const stored = readSnapshot(JSON.parse(JSON.stringify(first.next)));
+    expect(stored).toEqual(first.next);
+    const second = planKeyCorrection(stored!, { correctOptionId: 'o-str' }, { ...by, at: '2026-12-03T09:00:00.000Z', reason: 'تصحيح ثانٍ' });
+    if (!second.ok || !second.changed) throw new Error('unreachable');
+    expect(second.next.corrections!.map((entry) => [entry.previousOptionId, entry.reason])).toEqual([['o-float', by.reason], ['o-int', 'تصحيح ثانٍ']]);
+    expect(second.next.options.filter((option) => option.isCorrect).map((option) => option.id)).toEqual(['o-str']);
+  });
+
+  it('changes nothing when the request names the key the question already has', () => {
+    expect(planKeyCorrection(choice, { correctOptionId: 'o-float' }, by)).toEqual({ ok: true, changed: false });
+    expect(planKeyCorrection(trueFalse, { correctAnswer: false }, by)).toEqual({ ok: true, changed: false });
+  });
+
+  it('refuses a key that does not fit the question', () => {
+    expect(planKeyCorrection(choice, {}, by)).toEqual({ ok: false, problem: 'option_required' });
+    expect(planKeyCorrection(choice, { correctOptionId: null }, by)).toEqual({ ok: false, problem: 'option_required' });
+    expect(planKeyCorrection(choice, { correctOptionId: 'o-of-another-question' }, by)).toEqual({ ok: false, problem: 'option_unknown' });
+    expect(planKeyCorrection(choice, { correctAnswer: true }, by)).toEqual({ ok: false, problem: 'not_allowed_for_type' });
+    expect(planKeyCorrection(choice, { correctOptionId: 'o-int', correctAnswer: true }, by)).toEqual({ ok: false, problem: 'not_allowed_for_type' });
+    expect(planKeyCorrection(trueFalse, {}, by)).toEqual({ ok: false, problem: 'answer_required' });
+    expect(planKeyCorrection(trueFalse, { correctAnswer: null }, by)).toEqual({ ok: false, problem: 'answer_required' });
+    expect(planKeyCorrection(trueFalse, { correctOptionId: 'o-int' }, by)).toEqual({ ok: false, problem: 'not_allowed_for_type' });
+  });
+
+  it('ignores a malformed history entry in a stored copy instead of failing on it', () => {
+    const stored = readSnapshot({ ...choice, corrections: [{ at: by.at }, 'nonsense', { at: by.at, byUserId: 'u', reason: 'r', previousOptionId: 'o-float' }] });
+    expect(stored!.corrections).toEqual([{ at: by.at, byUserId: 'u', previousOptionId: 'o-float', previousBoolean: null, reason: 'r' }]);
+    expect(readSnapshot({ ...choice, corrections: 'nonsense' })!.corrections).toBeUndefined();
   });
 });

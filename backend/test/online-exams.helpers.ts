@@ -13,11 +13,14 @@
 //                             questions, attempts, answers and results).
 //
 // Fixture rows carry a prefix unique to the run. Courses, classes, teacher
-// assignments and enrollments are written through Prisma — the suites of
-// MOD-04/MOD-05 cover those routes — while everything of this phase goes
-// through the HTTP API. Audit events are read above an id watermark and
+// assignments, enrollments and guardian links are written through Prisma — the
+// suites of MOD-03..MOD-05 cover those routes — while everything of this phase
+// goes through the HTTP API. The only thing a suite changes behind the API's
+// back is the clock: `expireAttempt()` and `closeWindow()` move stored instants
+// into the past, because no test can wait for a real deadline. Audit events are read above an id watermark and
 // filtered by the fixture actors or by the entity, so another client of a
 // shared database never pollutes the counts.
+import type { AddressInfo } from 'node:net';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -81,6 +84,52 @@ export function choiceBody(prompt: string, options: readonly string[], correct: 
 /** A `true_false` body. */
 export function trueFalseBody(prompt: string, answer: boolean | null, over: Record<string, unknown> = {}): Record<string, unknown> {
   return { type: 'true_false', status: 'ready', prompt: { ar: prompt }, ...(answer === null ? {} : { correctAnswer: answer }), ...over };
+}
+
+/** A question of an attempt as a learner receives it — enough to answer it. */
+export interface AttemptQuestionBody {
+  id: string;
+  sortOrder: number;
+  points: number;
+  type: string;
+  prompt: { ar: string };
+  options: { id: string; text: { ar: string } }[];
+  answer: { optionId: string | null; value: boolean | null } | null;
+  review: { isCorrect: boolean; pointsAwarded: number; correctOptionId: string | null; correctAnswer: boolean | null; explanation: { ar: string } | null } | null;
+}
+
+/**
+ * The answers body of a pick list, one pick per question in the exam's order:
+ * a number is the index of the chosen option, a boolean the answer to a
+ * true/false question, null leaves the question unanswered.
+ */
+export function pickAnswers(questions: readonly AttemptQuestionBody[], picks: readonly (number | boolean | null)[]): Record<string, unknown>[] {
+  return questions.flatMap((question, index) => {
+    const pick = picks[index];
+    if (pick === null || pick === undefined) return [];
+    return [typeof pick === 'boolean' ? { examQuestionId: question.id, value: pick } : { examQuestionId: question.id, optionId: question.options[pick]!.id }];
+  });
+}
+
+/** Every name a key could travel under. A learner's answer may carry them only inside a released `review`. */
+export const KEY_FIELD_NAMES = ['isCorrect', 'correctBoolean', 'correctAnswer', 'correctOptionId', 'explanation', 'corrections', 'pointsAwarded', 'snapshot'] as const;
+
+/** The key-bearing property names found anywhere in a JSON value, sorted — `[]` means nothing leaked (SEC-R-24). */
+export function leakedKeys(value: unknown): string[] {
+  const found = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (node === null || typeof node !== 'object') return;
+    for (const [name, child] of Object.entries(node)) {
+      if ((KEY_FIELD_NAMES as readonly string[]).includes(name)) found.add(name);
+      walk(child);
+    }
+  };
+  walk(value);
+  return [...found].sort();
 }
 
 export async function bootHarness(testId: string) {
@@ -218,11 +267,80 @@ export async function bootHarness(testId: string) {
       .set(as(user))
       .send({ questions: entries });
 
+  // --- attempts (TEST-283..TEST-286) --------------------------------------------
+
+  const ME = '/api/me';
+  const startAttempt = (user: string, examId: string, body: Record<string, unknown> = {}) => api().post(`${ME}/exams/${examId}/attempts`).set(as(user)).send(body);
+  const readAttempt = (user: string, attemptId: string) => api().get(`${ME}/exam-attempts/${attemptId}`).set(as(user));
+  const saveAnswers = (user: string, attemptId: string, answers: readonly Record<string, unknown>[]) => api().put(`${ME}/exam-attempts/${attemptId}/answers`).set(as(user)).send({ answers });
+  const submitAttempt = (user: string, attemptId: string) => api().post(`${ME}/exam-attempts/${attemptId}/submit`).set(as(user)).send();
+  const myExams = (user: string, query = '') => api().get(`${ME}/exams${query}`).set(as(user));
+  const attemptsOf = (user: string, examId: string) => api().get(`${EXAMS}/${examId}/attempts`).set(as(user));
+  const attemptDetail = (user: string, attemptId: string) => api().get(`/api/exam-attempts/${attemptId}`).set(as(user));
+  const correctKey = (user: string, examId: string, examQuestionId: string, body: Record<string, unknown>) =>
+    api().post(`${EXAMS}/${examId}/questions/${examQuestionId}/key`).set(as(user)).send(body);
+  const regrade = (user: string, examId: string, body: Record<string, unknown>) => api().post(`${EXAMS}/${examId}/regrade`).set(as(user)).send(body);
+  const resultsSheet = (user: string, examId: string) => api().get(`${EXAMS}/${examId}/results`).set(as(user));
+  const recordResults = (user: string, examId: string, results: readonly Record<string, unknown>[]) => api().put(`${EXAMS}/${examId}/results`).set(as(user)).send({ results });
+
+  /** A window that is open now: opened an hour ago, closes tomorrow, thirty minutes per attempt. */
+  const openWindow = () => ({ scheduledAt: new Date(Date.now() - 60 * 60_000).toISOString(), closesAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(), durationMinutes: 30 });
+
+  /** An online exam of the class with these questions, made available: created, linked and scheduled through the API. Returns its id. */
+  async function onlineExam(user: string, classSuffix: string, entries: readonly { questionId: string; points?: number }[], over: Record<string, unknown> = {}): Promise<string> {
+    const created = await createExam(user, classSuffix, { title: { ar: 'اختبار إلكتروني' }, type: 'quiz', maxScore: 10, delivery: 'online', ...openWindow(), ...over });
+    if (created.status !== 201) throw new Error(`onlineExam create: ${created.status} ${JSON.stringify(created.body)}`);
+    const examId = created.body.id as string;
+    const linked = await link(user, examId, entries);
+    if (linked.status !== 200) throw new Error(`onlineExam link: ${linked.status} ${JSON.stringify(linked.body)}`);
+    const scheduled = await act(user, examId, 'schedule');
+    if (scheduled.status !== 200 && scheduled.status !== 201) throw new Error(`onlineExam schedule: ${scheduled.status} ${JSON.stringify(scheduled.body)}`);
+    return examId;
+  }
+
+  /** Moves an attempt's clock so that its deadline passed `secondsAgo` seconds ago (it started an hour before that). */
+  async function expireAttempt(attemptId: string, secondsAgo = 60): Promise<void> {
+    const expiresAt = new Date(Date.now() - secondsAgo * 1000);
+    await prisma.examAttempt.update({ where: { id: attemptId }, data: { startedAt: new Date(expiresAt.getTime() - 60 * 60_000), expiresAt }, select: { id: true } });
+  }
+
+  /** Closes the exam's window `secondsAgo` seconds ago (it opened two hours before that). */
+  async function closeWindow(examId: string, secondsAgo = 60): Promise<void> {
+    const closesAt = new Date(Date.now() - secondsAgo * 1000);
+    await prisma.exam.update({ where: { id: examId }, data: { scheduledAt: new Date(closesAt.getTime() - 2 * 60 * 60_000), closesAt }, select: { id: true } });
+  }
+
+  /** Moves the exam's window into the future: it opens in an hour. */
+  async function postponeWindow(examId: string): Promise<void> {
+    await prisma.exam.update({ where: { id: examId }, data: { scheduledAt: new Date(Date.now() + 60 * 60_000), closesAt: new Date(Date.now() + 3 * 60 * 60_000) }, select: { id: true } });
+  }
+
+  /**
+   * The OpenAPI document. Read with `fetch` from the application listening on
+   * a loopback port of its own, not through supertest: the document is large
+   * (≈ 600 KB) and on some machines the short-lived server supertest binds per
+   * request has its response reset mid-way (`read ECONNRESET` — master doc 16,
+   * KI-040). Once the application listens, supertest reuses that socket too.
+   */
+  // The document is free-form JSON for the suites, as `res.body` of supertest is.
+  async function openApiDocument(): Promise<any> {
+    const server = app.getHttpServer() as { listening: boolean; address(): AddressInfo };
+    if (!server.listening) await app.listen(0, '127.0.0.1');
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/docs-json`);
+    if (!res.ok) throw new Error(`docs-json: ${res.status}`);
+    return res.json();
+  }
+
+  async function linkGuardian(guardian: string, student: string): Promise<void> {
+    await prisma.guardianStudent.create({ data: { guardianUserId: id(guardian), studentUserId: id(student), relationship: 'mother' }, select: { studentUserId: true } });
+  }
+
   /** Deletes what the suite created. Enrollments first (Restrict), then the classes (they cascade to the exams of this phase), the banks, the courses, the users and the roles. */
   async function close(): Promise<void> {
     try {
       const classIds = Object.values(classes);
       if (classIds.length > 0) {
+        await prisma.certificate.deleteMany({ where: { classId: { in: classIds } } });
         await prisma.finalGrade.deleteMany({ where: { enrollment: { classId: { in: classIds } } } });
         await prisma.enrollment.deleteMany({ where: { classId: { in: classIds } } });
         await prisma.class.deleteMany({ where: { id: { in: classIds } } });
@@ -233,7 +351,10 @@ export async function bootHarness(testId: string) {
     } finally {
       try {
         // Notifications cascade with their recipients; the append-only audit rows keep a NULL actor.
-        if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+        if (createdUserIds.length > 0) {
+          await prisma.guardianStudent.deleteMany({ where: { OR: [{ guardianUserId: { in: createdUserIds } }, { studentUserId: { in: createdUserIds } }] } });
+          await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+        }
         if (createdRoleIds.length > 0) await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
       } finally {
         await prisma.$disconnect();
@@ -277,6 +398,24 @@ export async function bootHarness(testId: string) {
     act,
     readQuestions,
     link,
+    startAttempt,
+    readAttempt,
+    saveAnswers,
+    submitAttempt,
+    myExams,
+    attemptsOf,
+    attemptDetail,
+    correctKey,
+    regrade,
+    resultsSheet,
+    recordResults,
+    openWindow,
+    onlineExam,
+    expireAttempt,
+    closeWindow,
+    postponeWindow,
+    linkGuardian,
+    openApiDocument,
     close,
   };
 }

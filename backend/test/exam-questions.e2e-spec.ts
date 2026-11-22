@@ -55,7 +55,7 @@ interface QuestionsBody {
 }
 
 const QUESTIONS_KEYS = ['delivery', 'editable', 'examId', 'examStatus', 'frozen', 'items', 'maxScore', 'problems', 'totalPoints'];
-const ITEM_KEYS = ['bank', 'id', 'points', 'question', 'questionId', 'sortOrder'];
+const ITEM_KEYS = ['bank', 'corrections', 'id', 'points', 'question', 'questionId', 'sortOrder'];
 /** A window that is open now, and one that opens next year. */
 const OPEN = { scheduledAt: new Date(Date.now() - 60 * 60_000).toISOString(), closesAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(), durationMinutes: 30 };
 const LATER = { scheduledAt: '2031-03-01T08:00:00+03:00', closesAt: '2031-03-01T12:00:00+03:00', durationMinutes: 45 };
@@ -382,7 +382,7 @@ describe.skipIf(!available)('MOD-09 phase 2 — the questions and settings of an
   it(
     'documents the routes in OpenAPI',
     async () => {
-      const docs = await h.api().get('/api/docs-json').expect(200);
+      const docs = { body: await h.openApiDocument() };
       expect(Object.keys(docs.body.paths['/api/exams/{id}/questions']).sort()).toEqual(['get', 'put']);
       const exam = docs.body.components.schemas.ExamDto.properties;
       for (const field of ['delivery', 'closesAt', 'attemptsAllowed', 'resultsRelease', 'revealAnswers', 'online']) expect(exam[field], field).toBeDefined();
