@@ -222,6 +222,10 @@ model User {
   mfaRecoveryCodes        MfaRecoveryCode[]
   /// MOD-20: their own learning progress as a student (Restrict — accounts are soft-deleted, never removed).
   learningProgress        LearningProgress[]       @relation("LearningProgressStudent")
+  /// MOD-09 phase 2: question banks and questions they authored, and their own online exam attempts as a student.
+  questionBanksCreated    QuestionBank[]           @relation("QuestionBankCreatedBy")
+  questionsCreated        Question[]               @relation("QuestionCreatedBy")
+  examAttempts            ExamAttempt[]            @relation("ExamAttemptStudent")
 
   @@index([phone])
   @@index([status])
@@ -485,6 +489,8 @@ model Course {
   sections          CourseSection[]
   /// MOD-20: the learners' progress on this course's lessons (Restrict).
   learningProgress  LearningProgress[]
+  /// MOD-09 phase 2: question banks filed under this course (SetNull — a bank outlives its course).
+  questionBanks     QuestionBank[]
 
   @@index([status])
   @@index([levelId])
@@ -1072,35 +1078,49 @@ enum ExamResultStatus {
 /// written quiz, a final, a project, an oral exam… — optionally held in one of
 /// the class's lessons. Its weight enters the final grade (D-R43).
 model Exam {
-  id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  classId         String     @map("class_id") @db.Uuid
-  lessonId        String?    @map("lesson_id") @db.Uuid
+  id              String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  classId         String             @map("class_id") @db.Uuid
+  lessonId        String?            @map("lesson_id") @db.Uuid
   /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
   title           Json
   /// Localized text `{ ar, en?, tr? }` or NULL (CHECK in SQL).
   description     Json?
   type            ExamType
-  status          ExamStatus @default(draft)
+  status          ExamStatus         @default(draft)
   /// Instant (timestamptz) the exam takes place; the display zone is the room's branch or the academy's (D-R41).
-  scheduledAt     DateTime?  @map("scheduled_at") @db.Timestamptz(6)
+  scheduledAt     DateTime?          @map("scheduled_at") @db.Timestamptz(6)
   /// 1..720 (CHECK in SQL).
-  durationMinutes Int?       @map("duration_minutes") @db.SmallInt
+  durationMinutes Int?               @map("duration_minutes") @db.SmallInt
   /// > 0 (CHECK in SQL); locked once a result exists (service rule).
-  maxScore        Decimal    @map("max_score") @db.Decimal(6, 2)
+  maxScore        Decimal            @map("max_score") @db.Decimal(6, 2)
   /// 0..max_score (CHECK in SQL); informational — passing the course comes from the grade scheme.
-  passScore       Decimal?   @map("pass_score") @db.Decimal(6, 2)
+  passScore       Decimal?           @map("pass_score") @db.Decimal(6, 2)
   /// Weight in the final grade (D-R43); NULL = informational; >= 0 (CHECK in SQL).
-  weight          Decimal?   @db.Decimal(5, 2)
+  weight          Decimal?           @db.Decimal(5, 2)
   /// When the results were published; NOT NULL exactly for `published` (CHECK in SQL).
-  publishedAt     DateTime?  @map("published_at") @db.Timestamptz(6)
-  createdById     String?    @map("created_by") @db.Uuid
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  publishedAt     DateTime?          @map("published_at") @db.Timestamptz(6)
+  createdById     String?            @map("created_by") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// MOD-09 phase 2 (D-R150): `manual` = the teacher records the results (every exam before
+  /// the phase); `online` = the learners take it on the platform. Changes only in a draft.
+  delivery        ExamDelivery       @default(manual)
+  /// Online only (D-R152): the window is `scheduled_at` (opens) .. `closes_at`; NULL for a manual exam (CHECK in SQL).
+  closesAt        DateTime?          @map("closes_at") @db.Timestamptz(6)
+  /// Online only (D-R153): 1..20 attempts per student (CHECK in SQL); 1 for a manual exam.
+  attemptsAllowed Int                @default(1) @map("attempts_allowed") @db.SmallInt
+  /// Online only (D-R156): when a learner sees their own score; `on_publish` for a manual exam (CHECK in SQL).
+  resultsRelease  ExamResultsRelease @default(on_publish) @map("results_release")
+  /// Online only (D-R157): correct answers and explanations after the window closed, once the result is visible; false for a manual exam.
+  revealAnswers   Boolean            @default(false) @map("reveal_answers")
 
-  class     Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  lesson    Lesson?      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  createdBy User?        @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  class     Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lesson    Lesson?        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  createdBy User?          @relation("ExamCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   results   ExamResult[]
+  /// MOD-09 phase 2: the linked bank questions (frozen at `schedule`) and the learners' attempts.
+  questions ExamQuestion[]
+  attempts  ExamAttempt[]
 
   @@index([classId, scheduledAt])
   @@index([status, scheduledAt])
@@ -1121,6 +1141,9 @@ model ExamResult {
   recordedById  String?          @map("recorded_by") @db.Uuid
   recordedAt    DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(6)
   updatedAt     DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// MOD-09 phase 2 (D-R160): `manual` = recorded on the results sheet; `online` = the counted
+  /// result of the student's finished attempts, written by the grading engine (always `scored` — CHECK in SQL).
+  source        ExamResultSource @default(manual)
 
   exam       Exam  @relation(fields: [examId], references: [id], onDelete: Cascade)
   student    User  @relation("ExamResultStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
@@ -1675,4 +1698,251 @@ model LearningProgress {
   @@index([courseId])
   @@index([studentUserId, courseId, lastOpenedAt(sort: Desc)])
   @@map("learning_progress")
+}
+
+// ---------------------------------------------------------------------------
+// MOD-09 phase 2 — online exams and auto-grading (roadmap §4r; decisions
+// D-R150..D-R166; GitHub issue #210). Six tables beside the five of the first
+// phase, which keep their shape: an exam stays `draft → scheduled → published`
+// (D-R47) and gains a `delivery` — `manual` for every exam that existed before.
+// The teacher writes questions into banks, links them to an online exam with
+// an order and points, and `schedule` freezes a full copy of each one in
+// `exam_questions.snapshot`: attempts are served and graded from that copy
+// only, so editing a bank question later never changes an exam that is being
+// taken or a result already counted (D-R158). A finished attempt writes the
+// student's counted result into `exam_results` (D-R160) — the gradebook, «my
+// exams», «my grades», the reports and the certificates read an online exam
+// exactly like a manual one. The single-table CHECKs and the two partial
+// indexes of `exam_attempts` are hand-written SQL in the migration; rules that
+// span rows or tables (one correct option, points summing to the maximum
+// score, the attempt limit, the window) are service rules under a row lock.
+// ---------------------------------------------------------------------------
+
+/// How an exam's results come to be (D-R150).
+enum ExamDelivery {
+  manual
+  online
+
+  @@map("exam_delivery")
+}
+
+/// When a learner sees their own score in an online exam (D-R156).
+enum ExamResultsRelease {
+  on_publish
+  on_submit
+
+  @@map("exam_results_release")
+}
+
+/// Who wrote a counted result (D-R160).
+enum ExamResultSource {
+  manual
+  online
+
+  @@map("exam_result_source")
+}
+
+/// The auto-graded types of the first online version (D-R163). Later types
+/// are added by `ALTER TYPE … ADD VALUE`; answers are typed JSON, so they need
+/// no new column.
+enum QuestionType {
+  single_choice
+  true_false
+
+  @@map("question_type")
+}
+
+/// `draft` may be incomplete; `ready` passes every rule of its type and can be
+/// linked to an exam; `archived` is kept for the exams that used it (D-R164).
+enum QuestionStatus {
+  draft
+  ready
+  archived
+
+  @@map("question_status")
+}
+
+enum QuestionDifficulty {
+  easy
+  medium
+  hard
+
+  @@map("question_difficulty")
+}
+
+/// `submitted` by the student, `timed_out` by the server at the deadline —
+/// both are finished and graded (D-R154).
+enum ExamAttemptStatus {
+  in_progress
+  submitted
+  timed_out
+
+  @@map("exam_attempt_status")
+}
+
+/// A teacher's collection of questions, optionally filed under a course.
+/// Visible to its author, to the teachers of a class of its course and to the
+/// holders of `classes.manage` — always with `questions.manage` (D-R162).
+model QuestionBank {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courseId    String?  @map("course_id") @db.Uuid
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name        Json
+  /// Localized text `{ ar, en?, tr? }` or NULL (CHECK in SQL).
+  description Json?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course    Course?    @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy User?      @relation("QuestionBankCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// Deleted with the bank — which the service allows only while no exam links any of them.
+  questions Question[]
+
+  @@index([courseId])
+  @@index([createdById])
+  @@map("question_banks")
+}
+
+/// One question of a bank. A `single_choice` question has 2..10 options with
+/// exactly one correct (service rule); a `true_false` question has no options
+/// and its key in `correct_boolean`. The correct answer never leaves through a
+/// learner's route before the exam's release rules allow it.
+model Question {
+  id             String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  bankId         String              @map("bank_id") @db.Uuid
+  /// Fixed at creation.
+  type           QuestionType
+  status         QuestionStatus      @default(draft)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  prompt         Json
+  /// Localized explanation of the answer or NULL (CHECK in SQL).
+  explanation    Json?
+  /// Default points when the question is linked to an exam; > 0 (CHECK in SQL).
+  points         Decimal             @default(1) @db.Decimal(6, 2)
+  /// The key of a `true_false` question; NULL for any other type, NOT NULL once such a question is `ready` (CHECKs in SQL).
+  correctBoolean Boolean?            @map("correct_boolean")
+  difficulty     QuestionDifficulty?
+  /// Free topic labels, at most 10 (CHECK in SQL); trimmed and lower-cased by the service.
+  tags           String[]            @default([])
+  createdById    String?             @map("created_by") @db.Uuid
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bank          QuestionBank     @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  createdBy     User?            @relation("QuestionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  options       QuestionOption[]
+  /// Restrict: a question linked to an exam is archived, not deleted.
+  examQuestions ExamQuestion[]
+
+  @@index([bankId, status])
+  @@index([createdById])
+  @@index([tags], type: Gin)
+  @@map("questions")
+}
+
+/// One choice of a `single_choice` question. The service replaces a question's
+/// options as a whole, so their ids are not stable — nothing refers to them:
+/// an exam keeps its own frozen copy.
+model QuestionOption {
+  id         String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  text       Json
+  isCorrect  Boolean @map("is_correct")
+  /// Position inside the question (0 first).
+  sortOrder  Int     @map("sort_order") @db.SmallInt
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, sortOrder], map: "uq_question_options_order")
+  @@map("question_options")
+}
+
+/// A bank question linked to an online exam with its position and points.
+/// While the exam is a draft the content is the bank's; `schedule` writes the
+/// frozen copy the learners are served and graded from (D-R158), `unschedule`
+/// (only without attempts) clears it.
+model ExamQuestion {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  examId     String   @map("exam_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  /// Position inside the exam (0 first).
+  sortOrder  Int      @map("sort_order") @db.SmallInt
+  /// > 0 (CHECK in SQL); the points of every question of the exam sum to its `max_score` at `schedule` (D-R159).
+  points     Decimal  @db.Decimal(6, 2)
+  /// `{ type, prompt, explanation, options: [{ id, text, isCorrect }], correctBoolean }` once scheduled; NULL in a draft (CHECK in SQL).
+  snapshot   Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam     Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  question Question     @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  answers  ExamAnswer[]
+
+  @@unique([examId, questionId], map: "uq_exam_questions_question")
+  @@unique([examId, sortOrder], map: "uq_exam_questions_order")
+  @@index([questionId])
+  @@map("exam_questions")
+}
+
+/// One attempt of one student at an online exam. The server fixes its
+/// deadline at the start (`expires_at` = start + the exam's duration, never
+/// past the window's end) and closes it itself when the time is up (D-R152,
+/// D-R154). At most one attempt is in progress per student and exam (partial
+/// unique index in SQL). Finishing grades it once, under its row lock.
+model ExamAttempt {
+  id            String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  examId        String            @map("exam_id") @db.Uuid
+  studentUserId String            @map("student_user_id") @db.Uuid
+  /// 1..20 (CHECK in SQL); unique per student and exam.
+  attemptNo     Int               @map("attempt_no") @db.SmallInt
+  status        ExamAttemptStatus @default(in_progress)
+  /// Written by the application clock together with `expires_at`.
+  startedAt     DateTime          @map("started_at") @db.Timestamptz(6)
+  /// The server's deadline; after `started_at` (CHECK in SQL).
+  expiresAt     DateTime          @map("expires_at") @db.Timestamptz(6)
+  /// NOT NULL exactly once the attempt is finished (CHECK in SQL).
+  submittedAt   DateTime?         @map("submitted_at") @db.Timestamptz(6)
+  /// 0..max_score, NOT NULL exactly once finished (CHECKs in SQL).
+  score         Decimal?          @db.Decimal(6, 2)
+  /// The exam's maximum score when the attempt started; > 0 (CHECK in SQL).
+  maxScore      Decimal           @map("max_score") @db.Decimal(6, 2)
+  /// The exam's question count when the attempt started; >= 1 (CHECK in SQL).
+  questionCount Int               @map("question_count") @db.SmallInt
+  /// 0..question_count, NOT NULL exactly once finished (CHECKs in SQL).
+  correctCount  Int?              @map("correct_count") @db.SmallInt
+  /// The last grading (the first one at the finish, later ones after a key correction — D-R161); NOT NULL exactly once finished.
+  gradedAt      DateTime?         @map("graded_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student User         @relation("ExamAttemptStudent", fields: [studentUserId], references: [id], onDelete: Restrict)
+  answers ExamAnswer[]
+
+  @@unique([examId, studentUserId, attemptNo], map: "uq_exam_attempts_no")
+  @@index([studentUserId])
+  @@map("exam_attempts")
+}
+
+/// The student's answer to one question of an attempt. A row exists only while
+/// the question is answered (clearing an answer deletes it); the grading
+/// columns are filled when the attempt is finished.
+model ExamAnswer {
+  attemptId      String   @map("attempt_id") @db.Uuid
+  examQuestionId String   @map("exam_question_id") @db.Uuid
+  /// `{ optionId }` for `single_choice`, `{ value }` for `true_false` — an object (CHECK in SQL), checked against the frozen question by the service.
+  response       Json
+  /// NULL until the attempt is graded.
+  isCorrect      Boolean? @map("is_correct")
+  /// >= 0, present exactly with `is_correct` (CHECKs in SQL).
+  pointsAwarded  Decimal? @map("points_awarded") @db.Decimal(6, 2)
+  answeredAt     DateTime @map("answered_at") @db.Timestamptz(6)
+
+  attempt      ExamAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  examQuestion ExamQuestion @relation(fields: [examQuestionId], references: [id], onDelete: Cascade)
+
+  @@id([attemptId, examQuestionId])
+  @@index([examQuestionId])
+  @@map("exam_answers")
 }
