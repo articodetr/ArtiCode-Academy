@@ -15,8 +15,8 @@
 // The sections are a menu at the start side on a wide screen and a bar on a
 // phone; the chosen one stays in the URL (`?section=`). The summary strip
 // counts what the server answered, never a guess. Ownership, no permission key.
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { App, Button, Empty, Flex, Input, Menu, Segmented, Skeleton } from 'antd'
+import { CompassOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { App, Button, Empty, Flex, Input, Menu, Segmented, Skeleton, Steps } from 'antd'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
@@ -39,6 +39,11 @@ import {
   SECTION_PARAM,
   catalogCoursePath,
   continueItems,
+  featuredItemOf,
+  learnPath,
+  REQUEST_STEPS,
+  requestStepOf,
+  sectionHintKey,
   isCourseSection,
   itemsOfSection,
   mySchoolFailureKey,
@@ -169,6 +174,13 @@ export function MySchoolPage() {
   ) : null
 
   const menuItems: MenuProps['items'] = sections.map((key) => ({ key, label: sectionLabel(key) }))
+  // The line under the title, only over something to read (an empty or failed section says its own words).
+  const hintKey = sectionHintKey(section, viewer)
+  const sectionShown =
+    section === 'requests'
+      ? requests.items.length > 0
+      : isCourseSection(section) && courses !== null && !learning.error && itemsOfSection(section, courses).length > 0
+  const sectionHint = hintKey && sectionShown ? hintKey : null
 
   const navigation = phone ? (
     <nav className="ms-side" aria-label={t('mySchool.sectionsLabel')} data-testid="my-school-sections">
@@ -186,10 +198,16 @@ export function MySchoolPage() {
 
   function coursesContent(): ReactNode {
     if (learning.loading) {
+      // Card-shaped placeholders while API-229 answers (PORTAL-04).
       return (
-        <div className="ms-grid">
+        <div className="ms-courses" aria-busy="true">
           {[0, 1, 2].map((index) => (
-            <Skeleton key={index} active />
+            <div key={index} className="ms-skeleton-card">
+              <div className="ms-skeleton-card__media" />
+              <div className="ms-skeleton-card__body">
+                <Skeleton active title={{ width: '70%' }} paragraph={{ rows: 3 }} />
+              </div>
+            </div>
           ))}
         </div>
       )
@@ -201,50 +219,86 @@ export function MySchoolPage() {
     if (listed.length === 0) return emptyCourses(courses)
     const shown = searchItems(listed, query)
     if (shown.length === 0) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('mySchool.search.noMatch', { query: query.trim() })} />
+    // «قيد التعلم»: the course the student was last on comes first and wide — «تابع من حيث توقفت» (PORTAL-04).
+    const featured = section === 'continue' ? featuredItemOf(shown, query) : null
     return (
-      <div className="ms-grid" data-testid="my-school-courses">
+      <div className="ms-courses" data-testid="my-school-courses">
         {shown.map((item) => (
-          <MySchoolCourseCard key={item.enrollmentId} item={item} />
+          <MySchoolCourseCard key={item.enrollmentId} item={item} featured={item === featured} />
         ))}
       </div>
     )
   }
 
+  /** A designed empty panel (PORTAL-04): what is missing, why, and — for a student — the way to the catalog. */
+  function emptyPanel(testId: string, titleKey: string, textKey: string, withCatalog: boolean): ReactNode {
+    return (
+      <div className="ms-empty" data-testid={testId}>
+        <span className="ms-empty__icon" aria-hidden="true">
+          <CompassOutlined />
+        </span>
+        <h3 className="ms-empty__title">{t(titleKey)}</h3>
+        <p className="ms-empty__text">{t(textKey)}</p>
+        {withCatalog ? (
+          <Button type="primary" onClick={() => navigate(CATALOG_PATH)}>
+            {t('mySchool.exploreMore')}
+          </Button>
+        ) : null}
+      </div>
+    )
+  }
+
   function emptyCourses(all: readonly MyLearningCourse[]): ReactNode {
-    const explore = viewer.student ? (
-      <Button type="primary" onClick={() => navigate(CATALOG_PATH)}>
-        {t('mySchool.explore')}
-      </Button>
-    ) : null
     const ownCourses = all.filter((item) => item.relation === 'self')
-    if (section === 'completed') return <Empty description={t('mySchool.courses.completedEmpty')} />
-    if (section === 'continue' && ownCourses.length > 0) return <Empty description={t('mySchool.courses.continueEmpty')}>{explore}</Empty>
-    return <Empty description={t(viewer.student ? 'mySchool.courses.empty' : 'mySchool.courses.emptyGuardian')}>{explore}</Empty>
+    if (section === 'completed') return emptyPanel('completed-empty', 'mySchool.courses.completedEmptyTitle', 'mySchool.courses.completedEmptyText', false)
+    if (section === 'continue') {
+      // Finished everything, or nothing joined yet.
+      const done = ownCourses.length > 0
+      return emptyPanel('continue-empty', done ? 'mySchool.courses.continueDoneTitle' : 'mySchool.courses.noneTitle', done ? 'mySchool.courses.continueDoneText' : 'mySchool.courses.noneText', true)
+    }
+    if (!viewer.student) return emptyPanel('courses-empty', 'mySchool.courses.noneTitleGuardian', 'mySchool.courses.emptyGuardian', false)
+    return emptyPanel('courses-empty', 'mySchool.courses.noneTitle', 'mySchool.courses.noneText', true)
   }
 
   function requestsContent(): ReactNode {
     const alert = requests.error ? <SourceAlert title={t('mySchool.requests.loadError')} description={t(catalogFailureKey(requests.error))} onRetry={requests.reload} /> : null
     if (requests.loading && requests.items.length === 0) return <Skeleton active />
-    if (requests.items.length === 0) {
-      return (
-        alert ?? (
-          <Empty description={t('mySchool.requests.empty')}>
-            <Button type="primary" onClick={() => navigate(CATALOG_PATH)}>
-              {t('mySchool.explore')}
-            </Button>
-          </Empty>
-        )
-      )
-    }
+    if (requests.items.length === 0) return alert ?? emptyPanel('requests-empty', 'mySchool.requests.emptyTitle', 'mySchool.requests.emptyText', true)
     return (
       <>
         {alert}
-        <div className="ms-grid" data-testid="my-school-requests">
+        <div className="ms-grid ms-grid--requests" data-testid="my-school-requests">
           {requests.items.map((request) => (
-            <RequestCard key={request.id} request={request} busy={cancellingId === request.id} onCancel={cancel} action={requestAction(request)} />
+            <RequestCard
+              key={request.id}
+              request={request}
+              busy={cancellingId === request.id}
+              onCancel={cancel}
+              action={requestAction(request)}
+              tracker={requestTracker(request)}
+            />
           ))}
         </div>
       </>
+    )
+  }
+
+  /** Where a paid request stands — sent, paid, approved, active — from the server's state only (PORTAL-04). */
+  function requestTracker(request: MyEnrollmentRequest): ReactNode {
+    const step = requestStepOf(request)
+    if (!step) return null
+    return (
+      <div className="ms-rsteps" role="group" aria-label={t('mySchool.requests.steps.label')} data-testid={`request-steps-${request.id}`} data-current={step.current} data-finished={step.finished}>
+        <Steps
+          size="small"
+          type="dot"
+          titlePlacement="vertical"
+          responsive={false}
+          current={step.current}
+          status={step.finished ? 'finish' : 'process'}
+          items={REQUEST_STEPS.map((key) => ({ title: t(`mySchool.requests.steps.${key}`) }))}
+        />
+      </div>
     )
   }
 
@@ -257,7 +311,16 @@ export function MySchoolPage() {
         </Button>
       )
     }
-    if (action === 'awaitingApproval') return <Button disabled>{t('mySchool.requests.awaitingApproval')}</Button>
+    // Waiting for the office is said by the card's own hint and state: a disabled button would be a button for show.
+    if (action === 'awaitingApproval') return null
+    // Active (or done) per the server: the way into the course — never offered before the activation.
+    if (action === 'learn') {
+      return (
+        <Button type="primary" onClick={() => navigate(learnPath(request.course.id))}>
+          {t('mySchool.requests.learn')}
+        </Button>
+      )
+    }
     if (action === 'requestAgain') {
       return (
         <Button type="primary" onClick={() => navigate(catalogCoursePath(request.course.id))}>
@@ -282,7 +345,9 @@ export function MySchoolPage() {
         subtitle={t(viewer.student ? 'mySchool.subtitle' : 'mySchool.subtitleGuardian')}
         extra={
           <Flex gap={8} wrap>
-            <Button onClick={() => navigate(CATALOG_PATH)}>{t('mySchool.explore')}</Button>
+            <Button type="primary" icon={<CompassOutlined />} onClick={() => navigate(CATALOG_PATH)}>
+              {t('mySchool.exploreMore')}
+            </Button>
             <Button icon={<ReloadOutlined />} onClick={reloadAll} aria-label={t('mySchool.refresh')} />
           </Flex>
         }
@@ -313,6 +378,7 @@ export function MySchoolPage() {
           <h2 className="ms-content__title" id="my-school-section-title">
             {t(`mySchool.sections.${section}`)}
           </h2>
+          {sectionHint ? <p className="ms-content__hint">{t(sectionHint)}</p> : null}
           {content()}
         </section>
       </div>

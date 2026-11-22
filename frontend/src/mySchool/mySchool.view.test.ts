@@ -12,6 +12,9 @@ import {
   completedItems,
   continueItems,
   courseStateOf,
+  featuredItemOf,
+  requestStepOf,
+  sectionHintKey,
   defaultSection,
   isCourseDone,
   isCourseSection,
@@ -97,6 +100,10 @@ describe('the card', () => {
     expect(cardActionOf(makeCompletedCourse())).toBe('review')
     expect(cardActionOf(makeChildCourse({ action: 'continue' }))).toBeNull()
     expect(cardActionOf(makeLearningCourse({ canLearn: false }))).toBeNull()
+    // PORTAL-04 stage 5: an enrollment the office completed before the lessons were done is reviewed, never «started».
+    const officeDone = makeLearningCourse({ action: 'start', lastActivityAt: null, enrollment: { ...makeLearningCourse().enrollment, status: 'completed', completedAt: '2026-11-22T10:00:00.000Z' }, progress: makeProgress({ completed: 0, completedRequired: 0, percent: 0 }) })
+    expect(cardActionOf(officeDone)).toBe('review')
+    expect(courseStateOf(officeDone)).toBe('complete')
     expect(learnPath('a b')).toBe('/learn/a%20b')
     expect(catalogCoursePath('c1')).toBe('/catalog/c1')
   })
@@ -113,7 +120,9 @@ describe('requests', () => {
     expect(requestActionOf(makeMyRequest({ state: 'pending_payment' }))).toBe('pay')
     expect(requestActionOf(makeMyRequest({ state: 'pending_approval' }))).toBe('awaitingApproval')
     expect(requestActionOf(makeMyRequest({ state: 'rejected', status: 'cancelled' }))).toBe('requestAgain')
-    expect(requestActionOf(makeMyRequest({ state: 'enrolled', status: 'active' }))).toBeNull()
+    // PORTAL-04: once active (or done) per the server, the way into the course; never before.
+    expect(requestActionOf(makeMyRequest({ state: 'enrolled', status: 'active' }))).toBe('learn')
+    expect(requestActionOf(makeMyRequest({ state: 'completed', status: 'completed' }))).toBe('learn')
     expect(requestActionOf(makeMyRequest({ state: 'cancelled', status: 'cancelled' }))).toBeNull()
   })
 })
@@ -139,5 +148,41 @@ describe('failures', () => {
     expect(mySchoolFailureKey(new ApiError(403, 'no'))).toBe('mySchool.errors.permission')
     expect(mySchoolFailureKey(new ApiError(429, 'slow down'))).toBe('mySchool.errors.rateLimited')
     expect(mySchoolFailureKey(new ApiError(500, 'boom'))).toBe('mySchool.errors.server')
+  })
+})
+
+describe('featuredItemOf (PORTAL-04)', () => {
+  it('puts forward the first course when the student has been in it, never one not started, a child’s, or during a search', () => {
+    const started = makeLearningCourse()
+    const fresh = makeLearningCourse({ enrollmentId: 'fresh', action: 'start', lastActivityAt: null, lastLesson: null })
+    const openedOnly = makeLearningCourse({ enrollmentId: 'opened', lastActivityAt: null })
+    expect(featuredItemOf([started, fresh], '')).toBe(started)
+    expect(featuredItemOf([openedOnly], '  ')).toBe(openedOnly)
+    expect(featuredItemOf([fresh, started], '')).toBeNull()
+    expect(featuredItemOf([started], 'بايثون')).toBeNull()
+    expect(featuredItemOf([makeChildCourse()], '')).toBeNull()
+    expect(featuredItemOf([makeLearningCourse({ canLearn: false })], '')).toBeNull()
+    expect(featuredItemOf([], '')).toBeNull()
+  })
+})
+
+describe('requestStepOf and sectionHintKey (PORTAL-04)', () => {
+  it('places a request on its steps from the server state only, and a closed one nowhere', () => {
+    expect(requestStepOf(makeMyRequest({ state: 'pending_payment' }))).toEqual({ current: 1, finished: false })
+    expect(requestStepOf(makeMyRequest({ state: 'pending_approval' }))).toEqual({ current: 2, finished: false })
+    expect(requestStepOf(makeMyRequest({ state: 'enrolled', status: 'active' }))).toEqual({ current: 3, finished: true })
+    expect(requestStepOf(makeMyRequest({ state: 'completed', status: 'completed' }))).toEqual({ current: 3, finished: true })
+    for (const state of ['rejected', 'cancelled', 'withdrawn'] as const) expect(requestStepOf(makeMyRequest({ state, status: 'cancelled' }))).toBeNull()
+  })
+
+  it('gives each section its line, a guardian’s courses their own, and none to the assessments or certificates', () => {
+    const student = { student: true }
+    expect(sectionHintKey('continue', student)).toBe('mySchool.courses.continueHint')
+    expect(sectionHintKey('courses', student)).toBe('mySchool.courses.allHint')
+    expect(sectionHintKey('courses', { student: false })).toBe('mySchool.courses.allHintGuardian')
+    expect(sectionHintKey('completed', student)).toBe('mySchool.courses.completedHint')
+    expect(sectionHintKey('requests', student)).toBe('mySchool.requests.hint')
+    expect(sectionHintKey('assessments', student)).toBeNull()
+    expect(sectionHintKey('certificates', student)).toBeNull()
   })
 })

@@ -20,9 +20,11 @@ interface RequestCardProps {
   onCancel: (request: MyEnrollmentRequest) => void
   /** The context action of the state (MOD-20), shown beside «cancel the request». */
   action?: ReactNode
+  /** Where the request stands on its steps («My School», PORTAL-04), shown under the title. */
+  tracker?: ReactNode
 }
 
-export function RequestCard({ request, busy, onCancel, action }: RequestCardProps) {
+export function RequestCard({ request, busy, onCancel, action, tracker }: RequestCardProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const payment = request.payment
@@ -73,11 +75,14 @@ export function RequestCard({ request, busy, onCancel, action }: RequestCardProp
   return (
     <Card
       size="small"
+      className="ms-rcard"
       data-testid={`request-${request.id}`}
+      data-state={request.state}
       title={localizedLabel(request.course.name, language)}
       extra={<Tag color={REQUEST_STATE_COLORS[request.state]}>{t(`catalog.states.${request.state}`)}</Tag>}
       styles={{ body: { display: 'flex', flexDirection: 'column', gap: 12 } }}
     >
+      {tracker}
       <Descriptions size="small" column={1} items={items} />
       {request.state === 'pending_payment' ? <Typography.Text type="secondary">{t('myCourses.requests.payHint')}</Typography.Text> : null}
       {request.state === 'pending_approval' ? <Typography.Text type="secondary">{t('myCourses.requests.approvalHint')}</Typography.Text> : null}
