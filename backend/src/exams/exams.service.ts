@@ -17,6 +17,7 @@ import { formatNumber } from '../notifications/notifications.templates.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
+import { ExamGradingService } from './exam-grading.service.js';
 import { ExamQuestionsService } from './exam-questions.service.js';
 import { EXAMS_ENTITY_TYPE } from './exams.audit.js';
 import { isEmptyExamPatch, passScoreProblem, planExamUpdate } from './exams.changes.js';
@@ -201,6 +202,7 @@ export class ExamsService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     private readonly examQuestions: ExamQuestionsService,
+    private readonly grading: ExamGradingService,
   ) {}
 
   async list(query: ListExamsQueryDto, caller: AuthPrincipal): Promise<ExamListDto> {
@@ -436,7 +438,10 @@ export class ExamsService {
    *     exam_has_attempts`); otherwise the copies are dropped and the exam
    *     follows its bank questions again;
    *   - `publish`: the results are released after the window has closed
-   *     (`409 exam_window_open`), so nobody is still answering (D-R157);
+   *     (`409 exam_window_open`), so nobody is still answering (D-R157); an
+   *     attempt the server has not closed yet is closed and graded here with
+   *     what was saved (D-R154), so the released results are complete and the
+   *     `exam.results_published` notification below sees them;
    *   - `unpublish`: nothing more.
    */
   private async moveOnlineExam(tx: Tx, action: ExamStatusAction, row: ExamRow): Promise<void> {
@@ -451,8 +456,9 @@ export class ExamsService {
       await this.examQuestions.thaw(tx, row.id);
       return;
     }
-    if (action === 'publish' && windowStateOf(row.scheduledAt, row.closesAt, now) !== 'closed') {
-      throw gradesError.examWindowOpen(row.closesAt ? toIso(row.closesAt) : null);
+    if (action === 'publish') {
+      if (windowStateOf(row.scheduledAt, row.closesAt, now) !== 'closed') throw gradesError.examWindowOpen(row.closesAt ? toIso(row.closesAt) : null);
+      await this.grading.closeAllOpenOfExam(tx, row.id, now);
     }
   }
 

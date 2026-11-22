@@ -25,6 +25,7 @@ import { readLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { ExamStatus } from '../generated/prisma/client.js';
+import type { KeyProblem } from '../grades/grades.errors.js';
 import type { QuestionStatusValue, QuestionTypeValue } from '../questions/questions.rules.js';
 
 export const EXAM_DELIVERIES = ['manual', 'online'] as const;
@@ -261,6 +262,17 @@ export interface SnapshotOption {
   isCorrect: boolean;
 }
 
+/** One correction of the key of a frozen question (D-R161): what the key was before it, who changed it, when and why. */
+export interface KeyCorrection {
+  /** ISO 8601. */
+  at: string;
+  byUserId: string;
+  /** The key before the correction: the option id of a `single_choice` question, or the boolean of a `true_false` one. */
+  previousOptionId: string | null;
+  previousBoolean: boolean | null;
+  reason: string;
+}
+
 /** What `exam_questions.snapshot` holds once the exam is scheduled. */
 export interface QuestionSnapshot {
   type: QuestionTypeValue;
@@ -270,6 +282,8 @@ export interface QuestionSnapshot {
   options: SnapshotOption[];
   /** The key of a `true_false` question; null for `single_choice`. */
   correctBoolean: boolean | null;
+  /** The history of the key, oldest first — kept with the copy itself, never in the audit log and never served to a learner. Absent until a first correction. */
+  corrections?: KeyCorrection[];
 }
 
 /** The bank question as the snapshot builder reads it. */
@@ -308,5 +322,73 @@ export function readSnapshot(value: unknown): QuestionSnapshot | null {
     options.push({ id: option['id'], text, isCorrect: option['isCorrect'] });
   }
   const correctBoolean = typeof record['correctBoolean'] === 'boolean' ? record['correctBoolean'] : null;
-  return { type: record['type'], prompt, explanation: readLocalizedText(record['explanation']), options, correctBoolean };
+  const snapshot: QuestionSnapshot = { type: record['type'], prompt, explanation: readLocalizedText(record['explanation']), options, correctBoolean };
+  const corrections = readCorrections(record['corrections']);
+  if (corrections.length > 0) snapshot.corrections = corrections;
+  return snapshot;
+}
+
+function readCorrections(value: unknown): KeyCorrection[] {
+  if (!Array.isArray(value)) return [];
+  const corrections: KeyCorrection[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const entry = raw as Record<string, unknown>;
+    if (typeof entry['at'] !== 'string' || typeof entry['byUserId'] !== 'string' || typeof entry['reason'] !== 'string') continue;
+    corrections.push({
+      at: entry['at'],
+      byUserId: entry['byUserId'],
+      previousOptionId: typeof entry['previousOptionId'] === 'string' ? entry['previousOptionId'] : null,
+      previousBoolean: typeof entry['previousBoolean'] === 'boolean' ? entry['previousBoolean'] : null,
+      reason: entry['reason'],
+    });
+  }
+  return corrections;
+}
+
+export interface KeyRequest {
+  correctOptionId?: string | null;
+  correctAnswer?: boolean | null;
+}
+
+export type KeyCorrectionPlan = { ok: false; problem: KeyProblem } | { ok: true; changed: false } | { ok: true; changed: true; next: QuestionSnapshot };
+
+/**
+ * D-R161 — the frozen question with its key corrected. The request names the
+ * field of the question's type: the id of one of its own options for a
+ * `single_choice` question, a boolean for a `true_false` one. The same key
+ * again changes nothing; otherwise the previous key joins the copy's history.
+ */
+export function planKeyCorrection(snapshot: QuestionSnapshot, request: KeyRequest, by: { userId: string; at: string; reason: string }): KeyCorrectionPlan {
+  const hasOption = typeof request.correctOptionId === 'string';
+  const hasBoolean = typeof request.correctAnswer === 'boolean';
+  const history = snapshot.corrections ?? [];
+  if (snapshot.type === 'single_choice') {
+    if (hasBoolean) return { ok: false, problem: 'not_allowed_for_type' };
+    if (!hasOption) return { ok: false, problem: 'option_required' };
+    if (!snapshot.options.some((option) => option.id === request.correctOptionId)) return { ok: false, problem: 'option_unknown' };
+    const previous = snapshot.options.find((option) => option.isCorrect)?.id ?? null;
+    if (previous === request.correctOptionId) return { ok: true, changed: false };
+    return {
+      ok: true,
+      changed: true,
+      next: {
+        ...snapshot,
+        options: snapshot.options.map((option) => ({ ...option, isCorrect: option.id === request.correctOptionId })),
+        corrections: [...history, { at: by.at, byUserId: by.userId, previousOptionId: previous, previousBoolean: null, reason: by.reason }],
+      },
+    };
+  }
+  if (hasOption) return { ok: false, problem: 'not_allowed_for_type' };
+  if (!hasBoolean) return { ok: false, problem: 'answer_required' };
+  if (snapshot.correctBoolean === request.correctAnswer) return { ok: true, changed: false };
+  return {
+    ok: true,
+    changed: true,
+    next: {
+      ...snapshot,
+      correctBoolean: request.correctAnswer as boolean,
+      corrections: [...history, { at: by.at, byUserId: by.userId, previousOptionId: null, previousBoolean: snapshot.correctBoolean, reason: by.reason }],
+    },
+  };
 }

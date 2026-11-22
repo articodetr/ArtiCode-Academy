@@ -82,6 +82,18 @@ export class ExamQuestionBankDto {
   name: LocalizedText;
 }
 
+/** One correction of a frozen question's key (D-R161): who, when and why — the previous key stays in the stored copy and is not served. */
+export class ExamKeyCorrectionDto {
+  @ApiProperty({ description: 'ISO 8601' })
+  at: string;
+
+  @ApiProperty({ format: 'uuid', description: 'Who corrected the key' })
+  byUserId: string;
+
+  @ApiProperty({ description: 'The reason given' })
+  reason: string;
+}
+
 export class ExamQuestionItemDto {
   @ApiProperty({ format: 'uuid', description: 'The id of the link — what an answer of an attempt names' })
   id: string;
@@ -100,6 +112,9 @@ export class ExamQuestionItemDto {
 
   @ApiProperty({ type: () => ExamQuestionContentDto })
   question: ExamQuestionContentDto;
+
+  @ApiProperty({ type: [ExamKeyCorrectionDto], description: 'The corrections of this question’s key since the exam was made available, oldest first (API-272); empty for a question never corrected' })
+  corrections: ExamKeyCorrectionDto[];
 }
 
 export class ExamQuestionsDto {

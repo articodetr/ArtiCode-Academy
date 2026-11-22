@@ -19,7 +19,7 @@ import { isClassFrozenForExams, visibleExamsWhere } from './exams.policy.js';
 /** The one audit event of the question set (12.4): recorded on the exam when a replacement changes something. */
 export const EXAM_QUESTIONS_AUDIT_ACTION = 'exams.questions.changed';
 
-const LINK_SELECT = {
+export const EXAM_QUESTION_LINK_SELECT = {
   id: true,
   examId: true,
   sortOrder: true,
@@ -51,7 +51,9 @@ const QUESTIONS_EXAM_SELECT = {
   class: { select: { code: true, status: true } },
 } satisfies Prisma.ExamSelect;
 
-type LinkRow = Prisma.ExamQuestionGetPayload<{ select: typeof LINK_SELECT }>;
+const LINK_SELECT = EXAM_QUESTION_LINK_SELECT;
+export type ExamQuestionLinkRow = Prisma.ExamQuestionGetPayload<{ select: typeof EXAM_QUESTION_LINK_SELECT }>;
+type LinkRow = ExamQuestionLinkRow;
 type QuestionsExam = Prisma.ExamGetPayload<{ select: typeof QUESTIONS_EXAM_SELECT }>;
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaService['db'];
@@ -98,7 +100,8 @@ function readinessOf(exam: OnlineExamState, links: readonly LinkRow[], now: Date
   });
 }
 
-function toItem(link: LinkRow): ExamQuestionItemDto {
+/** A linked question as the teacher sees it, with its key: the frozen copy once the exam is scheduled, the bank's content before. */
+export function toExamQuestionItem(link: ExamQuestionLinkRow): ExamQuestionItemDto {
   const frozen = readSnapshot(link.snapshot);
   const content: QuestionSnapshot = frozen ?? buildSnapshot(link.question);
   return {
@@ -115,6 +118,8 @@ function toItem(link: LinkRow): ExamQuestionItemDto {
       correctAnswer: content.correctBoolean,
       status: frozen ? null : link.question.status,
     },
+    // Who, when and why — the previous keys stay in the stored copy.
+    corrections: (frozen?.corrections ?? []).map((correction) => ({ at: correction.at, byUserId: correction.byUserId, reason: correction.reason })),
   };
 }
 
@@ -293,7 +298,7 @@ export class ExamQuestionsService {
       maxScore: Number(exam.maxScore),
       totalPoints: Number(readiness.totalPoints),
       problems: draft && exam.delivery === 'online' ? readiness.problems : [],
-      items: links.map(toItem),
+      items: links.map(toExamQuestionItem),
     };
   }
 }

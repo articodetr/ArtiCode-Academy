@@ -28,7 +28,8 @@ const USER_AGENT = 'TEST-130 supertest';
 const CLASSES = '/api/classes';
 const EXAMS = '/api/exams';
 const MY_EXAMS = '/api/me/exams';
-const ITEM_KEYS = ['class', 'description', 'durationMinutes', 'id', 'lesson', 'maxScore', 'passScore', 'publishedAt', 'relation', 'result', 'scheduledAt', 'status', 'student', 'timeZone', 'title', 'type'];
+// `delivery` and `online` since MOD-09 phase 2 (roadmap §4r): additive, and `manual` / null for every exam of the first phase.
+const ITEM_KEYS = ['class', 'delivery', 'description', 'durationMinutes', 'id', 'lesson', 'maxScore', 'online', 'passScore', 'publishedAt', 'relation', 'result', 'scheduledAt', 'status', 'student', 'timeZone', 'title', 'type'];
 
 interface ItemBody {
   id: string;
@@ -180,6 +181,8 @@ describe.skipIf(!available)('MOD-09 «my exams» (e2e, TEST-130)', () => {
     expect(names(items)).toEqual(['A1', 'A2', 'C1']); // by date, undated last; A3 is a draft, B1 another class
     expect(Object.keys(items[0]!).sort()).toEqual(ITEM_KEYS);
     expect(items.every((entry) => entry.relation === 'self' && entry.student.id === id('s1'))).toBe(true);
+    // A manual exam says so and carries no online side.
+    for (const entry of items) expect(entry, entry.id).toMatchObject({ delivery: 'manual', online: null });
     expect(items[0]).toMatchObject({ status: 'scheduled', result: null }); // recorded, not published
     expect(items[1]).toMatchObject({ status: 'published', result: { status: 'scored', score: 18, feedback: 'ممتاز' } });
     expect(items[2]).toMatchObject({ status: 'scheduled', scheduledAt: null, result: null });

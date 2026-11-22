@@ -129,7 +129,7 @@ export class ExamsController {
       '`schedule`: draft → scheduled (the learners see the exam) · `unschedule`: scheduled → draft (`exam_has_results` when results exist) · `publish`: scheduled → published (sets `publishedAt`; the learners see their results) · `unpublish`: published → scheduled. ' +
       'Anything else is `invalid_transition { from, action, allowed }`; `schedule` and `publish` are refused for a cancelled class (`class_closed`). One audit event `exams.status.changed`. ' +
       'For an online exam (MOD-09 phase 2) the same four actions mean: `schedule` makes it available — it must be ready (`exam_not_ready { problems, totalPoints, maxScore, questionIds }`: questions, every one ready, points summing to `maxScore`, its window and time limit) and a copy of its questions is frozen; ' +
-      '`unschedule` is refused once somebody has started (`exam_has_attempts`); `publish` releases the results after the window has closed (`exam_window_open`).',
+      '`unschedule` is refused once somebody has started (`exam_has_attempts`); `publish` releases the results after the window has closed (`exam_window_open`) — an attempt the server has not closed yet is closed and graded first, with what was saved, so the released results are complete.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: ExamDto })
