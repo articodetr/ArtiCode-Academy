@@ -108,7 +108,7 @@ describe('PublicHomePage', () => {
 
     const third = renderPage()
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('button')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('a')!)
     expect(await path()).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
     third.unmount()
 
@@ -179,7 +179,7 @@ describe('PublicHomePage', () => {
 
     const second = renderPage(auth)
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('button')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('a')!)
     expect(await path()).toBe(`/catalog/${PUBLIC_COURSE_IDS[0]}`)
     second.unmount()
 
@@ -228,8 +228,25 @@ describe('PublicHomePage', () => {
     expect(screen.queryByText(pc.header.signIn)).not.toBeInTheDocument()
     expect(screen.queryByText(pc.header.mySchool)).not.toBeInTheDocument()
     expect(screen.queryByTestId('home-cta')).not.toBeInTheDocument()
-    // The programs are already known to be public, so browsing is offered.
-    expect(hero().getByText(ph.hero.browse)).toBeInTheDocument()
+    // Not even «استعرض البرامج»: a staff session would withdraw it once restored.
+    expect(hero().queryByText(ph.hero.browse)).not.toBeInTheDocument()
+  })
+
+  it('leads staff to the courses page only with courses.read — otherwise the cards are a plain preview, never a 403', async () => {
+    mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])))
+    const reader = makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['courses.read'] }) })
+    const first = renderPage(reader)
+    await programs().findByText('أساسيات بايثون')
+    expect(screen.getByText('أساسيات بايثون').closest('a')).toHaveAttribute('href', '/courses')
+    fireEvent.click(button(programs(), ph.programs.all))
+    expect(await path()).toBe('/courses')
+    first.unmount()
+
+    renderPage(makeAuth({ user: makeUser({ role: null, roles: ['accountant'], permissions: ['invoices.read_all'] }) }))
+    await programs().findByText('أساسيات بايثون')
+    expect(screen.getByText('أساسيات بايثون').closest('a')).toBeNull()
+    expect(programs().queryByText(pc.list.details)).not.toBeInTheDocument()
+    expect(programs().queryByText(ph.programs.all)).not.toBeInTheDocument()
   })
 
   it('speaks English with the academy’s English name', async () => {

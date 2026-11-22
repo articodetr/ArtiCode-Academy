@@ -4,7 +4,8 @@
 // to open its catalog (`catalogOpen` true — never flashed and withdrawn) and
 // «تسجيل الدخول» with the line that accounts come from the academy (there is no
 // self-registration — no «أنشئ حسابًا» button); a learner gets «مدرستي» and the
-// signed-in catalog; staff the dashboard; nothing while the session is restored.
+// signed-in catalog; staff the dashboard; nothing while the session is restored
+// (not even «استعرض البرامج», which a staff session would then withdraw).
 import { AppstoreOutlined, CompassOutlined, DashboardOutlined, LoginOutlined } from '@ant-design/icons'
 import { Button, Flex, Skeleton, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -15,10 +16,11 @@ import type { PublicViewer } from '../publicCatalog/publicViewer'
 export function HomeHero({ name, nameLoading, viewer, catalogOpen }: { name: string; nameLoading: boolean; viewer: PublicViewer; catalogOpen: boolean | null }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const browseToo = viewer === 'learner' || ((viewer === 'visitor' || viewer === 'pending') && catalogOpen === true)
+  const browseToo = viewer === 'learner' || (viewer === 'visitor' && catalogOpen === true)
 
   return (
-    <section className="public-home__hero" aria-labelledby="public-home-title">
+    // Labelled by the heading only once it is there (a skeleton stands in while the name loads).
+    <section className="public-home__hero" aria-labelledby={nameLoading ? undefined : 'public-home-title'} aria-busy={nameLoading || undefined}>
       <div className="public-home__hero-text">
         {nameLoading ? (
           <Skeleton active title={{ width: '60%' }} paragraph={false} />

@@ -109,6 +109,51 @@
   box-sizing: border-box;
 }
 
+/* A course card opens its page from anywhere on it (PORTAL-04 PR-2): the name's link stretches over the card, and
+   «التفاصيل» stays above it. The keyboard focus ring is drawn on the stretched area itself, so it surrounds the whole
+   card without `:has()`. The card is a column whose body grows, so the footers of a row line up at the bottom. */
+.public-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-card .public-card__link {
+  color: inherit;
+}
+
+.public-card .public-card__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.public-card .public-card__link:focus-visible {
+  outline: none;
+}
+
+.public-card .public-card__link:focus-visible::after {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.public-card:hover .public-card__link {
+  color: #0f6cbd;
+}
+
+.public-card .public-card__action {
+  position: relative;
+  z-index: 2;
+}
+
+/* «التفاصيل» keeps the link colour antd gives its card actions a grey over. */
+.public-card .ant-card-actions > li > span > a.public-card__action {
+  color: #0f6cbd;
+}
+
 .public-catalog__footer {
   background: #fff;
   border-top: 1px solid #e6e9ef;
@@ -195,5 +240,11 @@
   .public-catalog__main,
   .public-catalog__footer-inner {
     padding-inline: 16px;
+  }
+
+  /* The accounts line under «تسجيل الدخول» would leave the academy's name a few letters on a phone; the pages say it
+     where it matters (the hero of /home, the list subtitle of /explore, the course page's enroll note). */
+  .public-catalog__note {
+    display: none;
   }
 }

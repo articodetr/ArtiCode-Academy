@@ -1,7 +1,7 @@
 // MOD-20 (D-R138) — one course of the public catalog (/explore/:courseId, API-237): the course and its outline by level
 // (titles only), the price, «سجّل في هذه الدورة» → the sign-in page with the enroll intent, the closed catalog, a missing
 // course, a failure, and that a signed-in user goes to the signed-in course page instead.
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ACADEMY_PUBLIC_PATH } from '../api/academy'
@@ -83,6 +83,38 @@ describe('PublicCoursePage', () => {
 
     expect(api.reads).toBe(1)
     expect(api.headers[0]!.get('Authorization')).toBeNull()
+    // PORTAL-04: the tab reads «course — academy».
+    await waitFor(() => expect(document.title).toBe('أساسيات بايثون — أكاديمية آرتي كود'))
+  })
+
+  it('replaces the enroll button with the reason when no class takes a learner now, keeping the details (PORTAL-04)', async () => {
+    const cases: [Partial<PublicCourseDetail>, string][] = [
+      [{ openClasses: 0, hasFreeSeat: false }, pc.course.notEnrollable.not_open],
+      [{ hasFreeSeat: false }, pc.course.notEnrollable.class_full],
+      // The server's real shape: a paid course whose plan cannot price is sent with hasFreeSeat false (courseOfferOf()).
+      [{ pricing: 'paid', price: null, hasFreeSeat: false }, pc.course.notEnrollable.price_unavailable],
+    ]
+    for (const [overrides, reason] of cases) {
+      mockCourseApi(serve(makePublicDetail(overrides)))
+      const { unmount } = renderPage()
+      const notice = within(await screen.findByTestId('public-not-enrollable'))
+      expect(notice.getByText(pc.course.notEnrollableTitle)).toBeInTheDocument()
+      expect(notice.getByText(reason)).toBeInTheDocument()
+      expect(screen.queryByTestId('public-enroll')).not.toBeInTheDocument()
+      expect(screen.queryByText(pc.course.enroll)).not.toBeInTheDocument()
+      // The details stay readable, and an unusable price is never called «full».
+      expect(screen.getByTestId('public-outline')).toBeInTheDocument()
+      if (reason === pc.course.notEnrollable.price_unavailable) expect(screen.queryByText(pc.card.full)).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('tells a visitor that a paid course becomes a request with an invoice, activated after payment and approval (PORTAL-04)', async () => {
+    mockCourseApi(serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
+    renderPage()
+    const enroll = within(await screen.findByTestId('public-enroll'))
+    expect(enroll.getByText(pc.course.enroll)).toBeInTheDocument()
+    expect(enroll.getByText(pc.course.paidNote)).toBeInTheDocument()
   })
 
   it('shows the amount of a paid course, and «السعر غير متاح حالياً» — never «مجانية» — when its plan cannot price now', async () => {
@@ -104,6 +136,8 @@ describe('PublicCoursePage', () => {
 
     const enroll = within(screen.getByTestId('public-enroll'))
     expect(enroll.getByText(pc.course.enrollNote)).toBeInTheDocument()
+    // A free course says nothing about a request or an invoice.
+    expect(enroll.queryByText(pc.course.paidNote)).not.toBeInTheDocument()
     fireEvent.click(enroll.getByText(pc.course.enroll).closest('button')!)
 
     const probe = await screen.findByTestId('path')

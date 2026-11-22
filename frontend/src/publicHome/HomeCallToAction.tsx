@@ -1,6 +1,8 @@
 // The closing call of the public home page: a visitor is invited to the
 // programs (once the catalog is known to be open) or to sign in; a learner back
-// to «مدرستي». Staff and a session still being restored get none.
+// to «مدرستي». Staff and a session still being restored get none, and neither
+// does a visitor while it is not known yet whether the catalog is open (its
+// button would otherwise flip from «تسجيل الدخول» to «استعرض البرامج»).
 import { AppstoreOutlined, CompassOutlined, LoginOutlined } from '@ant-design/icons'
 import { Button, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +14,7 @@ export function HomeCallToAction({ viewer, catalogOpen }: { viewer: PublicViewer
   const { t } = useTranslation()
   const navigate = useNavigate()
   if (viewer !== 'visitor' && viewer !== 'learner') return null
+  if (viewer === 'visitor' && catalogOpen === null) return null
   const learner = viewer === 'learner'
 
   return (

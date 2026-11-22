@@ -5,6 +5,9 @@
 // academy keeps its catalog closed, the rest of the page stays. A closed catalog
 // tells a visitor to sign in, a learner where the signed-in catalog is, and
 // staff why visitors see nothing (with the settings for whoever may change it).
+// Staff open a course on /courses, which needs `courses.read` (the nav entry
+// `courses`): without it the cards are a plain preview, with no link and no
+// «كل البرامج», so nobody lands on the 403 page (PORTAL-04 review).
 import { CompassOutlined, LoginOutlined, SettingOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Col, Empty, Flex, Result, Row, Skeleton, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +24,9 @@ const SKELETON_CARDS = 3
 export function HomePrograms({ programs, viewer }: { programs: HomeProgramsReading; viewer: PublicViewer }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const open = (courseId: string) => navigate(coursePathFor(viewer, courseId))
+  const { hasPermission } = useAuth()
+  const canOpen = viewer !== 'staff' || hasPermission('courses.read')
+  const hrefOf = (courseId: string) => (canOpen ? coursePathFor(viewer, courseId) : null)
 
   return (
     <section className="public-home__section" aria-labelledby="public-home-programs" data-testid="home-programs">
@@ -36,18 +41,18 @@ export function HomePrograms({ programs, viewer }: { programs: HomeProgramsReadi
             </Typography.Paragraph>
           )}
         </div>
-        {programs.state === 'ready' ? (
+        {programs.state === 'ready' && canOpen ? (
           <Button icon={<CompassOutlined />} onClick={() => navigate(programsPathFor(viewer))}>
             {t('publicHome.programs.all')}
           </Button>
         ) : null}
       </Flex>
-      <ProgramsBody programs={programs} viewer={viewer} onOpen={open} />
+      <ProgramsBody programs={programs} viewer={viewer} hrefOf={hrefOf} />
     </section>
   )
 }
 
-function ProgramsBody({ programs, viewer, onOpen }: { programs: HomeProgramsReading; viewer: PublicViewer; onOpen: (courseId: string) => void }) {
+function ProgramsBody({ programs, viewer, hrefOf }: { programs: HomeProgramsReading; viewer: PublicViewer; hrefOf: (courseId: string) => string | null }) {
   const { t } = useTranslation()
 
   if (programs.state === 'loading') {
@@ -90,7 +95,7 @@ function ProgramsBody({ programs, viewer, onOpen }: { programs: HomeProgramsRead
     <Row gutter={[16, 16]}>
       {programs.items.map((card) => (
         <Col key={card.id} xs={24} sm={12} lg={8}>
-          <PublicCourseCard card={card} onOpen={onOpen} />
+          <PublicCourseCard card={card} href={hrefOf(card.id)} />
         </Col>
       ))}
     </Row>

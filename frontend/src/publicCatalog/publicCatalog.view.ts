@@ -29,18 +29,44 @@ export function appendCards(current: readonly PublicCourseCard[], page: PublicCo
   return [...current, ...page.filter((card) => !shown.has(card.id))]
 }
 
-export type PublicAvailability = 'available' | 'full' | 'closed'
+/** `priceUnavailable`: open classes, but none takes a request — the price tag already says why, so no tag is shown. */
+export type PublicAvailability = 'available' | 'full' | 'closed' | 'priceUnavailable'
 
-/** Whether a class of the course takes a learner now — from the server's counts only. */
-export function availabilityOf(card: Pick<PublicCourseCard, 'openClasses' | 'hasFreeSeat'>): PublicAvailability {
+/**
+ * Whether a class of the course takes a learner now — from the server's counts only. The server's `hasFreeSeat`
+ * already folds the price in (`courseOfferOf()` in backend/src/catalog/catalog.service.ts: a class counts only with a
+ * free seat AND, for a paid course, a usable plan), so a paid course without a price is never «full» (PORTAL-04 review);
+ * the signed-in catalog's `cardAvailability()` reads its counts the same way.
+ */
+export function availabilityOf(card: Pick<PublicCourseCard, 'openClasses' | 'hasFreeSeat' | 'pricing' | 'price'>): PublicAvailability {
   if (card.openClasses === 0) return 'closed'
-  return card.hasFreeSeat ? 'available' : 'full'
+  if (card.hasFreeSeat) return 'available'
+  return card.pricing === 'paid' && card.price === null ? 'priceUnavailable' : 'full'
 }
 
-export const AVAILABILITY_COLORS: Record<PublicAvailability, string> = {
+export const AVAILABILITY_COLORS: Record<Exclude<PublicAvailability, 'priceUnavailable'>, string> = {
   available: 'green',
   full: 'orange',
   closed: 'default',
+}
+
+/**
+ * Whether a visitor can go on to enroll in a public course now (PORTAL-04 PR-2), from the server's numbers only:
+ * no class open to self-service → `not_open`; a paid course whose plan cannot price a request now →
+ * `price_unavailable`; no open class with a free seat → `class_full`. The server refuses a class in the order
+ * not_open → class_full → price_unavailable (`classBlocker()` of backend/src/catalog/catalog.policy.ts), but the
+ * public course only says `hasFreeSeat`, which the server computes as «a free seat AND a usable price»
+ * (`courseOfferOf()`), so an unusable price is checked before the seats here: either way nobody can enroll, and only
+ * the price message is sure to be true. The learner-specific refusals (a pending request, already enrolled) are the
+ * signed-in catalog's to say, after the sign-in.
+ */
+export type PublicEnrollState = 'enrollable' | 'not_open' | 'class_full' | 'price_unavailable'
+
+export function publicEnrollStateOf(course: Pick<PublicCourseCard, 'openClasses' | 'hasFreeSeat' | 'pricing' | 'price'>): PublicEnrollState {
+  if (course.openClasses === 0) return 'not_open'
+  if (course.pricing === 'paid' && !course.price) return 'price_unavailable'
+  if (!course.hasFreeSeat) return 'class_full'
+  return 'enrollable'
 }
 
 type Translate = (key: string, options?: Record<string, unknown>) => string

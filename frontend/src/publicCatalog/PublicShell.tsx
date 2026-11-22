@@ -22,6 +22,7 @@ import type { PublicAcademyReading } from '../academy/usePublicAcademy'
 import { isCatalogPublic } from '../api/academy'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { PublicAcademyNameContext } from './pageTitle'
 import { isLearner, programsPathFor, showsProgramsLink, viewerOf } from './publicViewer'
 import { useBrandName } from './useBrandName'
 import type { PublicViewer } from './publicViewer'
@@ -41,7 +42,11 @@ export function PublicOnly({ signedInTo, children }: { signedInTo: string; child
   return children
 }
 
-export function PublicShell({ children, academy }: { children: ReactNode; academy?: PublicAcademyReading }) {
+/**
+ * `catalogOpen`: a page that knows better than API-205 whether the catalog answers (the home page reads API-236
+ * itself) hands its answer in; null or absent = API-205's `catalogPublic`.
+ */
+export function PublicShell({ children, academy, catalogOpen }: { children: ReactNode; academy?: PublicAcademyReading; catalogOpen?: boolean | null }) {
   const { t } = useTranslation()
   const { status, user } = useAuth()
   const own = usePublicAcademy(academy === undefined)
@@ -54,7 +59,7 @@ export function PublicShell({ children, academy }: { children: ReactNode; academ
   // The year of the footer's notice, taken once per mount.
   const [year] = useState(() => new Date().getFullYear())
   const viewer = viewerOf(status, user)
-  const programs = showsProgramsLink(viewer, isCatalogPublic(reading.academy))
+  const programs = showsProgramsLink(viewer, catalogOpen ?? isCatalogPublic(reading.academy))
 
   return (
     <div className="public-catalog">
@@ -82,7 +87,9 @@ export function PublicShell({ children, academy }: { children: ReactNode; academ
           <ViewerAction viewer={viewer} />
         </div>
       </header>
-      <main className="public-catalog__main">{children}</main>
+      <main className="public-catalog__main">
+        <PublicAcademyNameContext value={reading.academy ? name : ''}>{children}</PublicAcademyNameContext>
+      </main>
       <footer className="public-catalog__footer" data-testid="public-footer">
         <div className="public-catalog__footer-inner">
           <nav className="public-catalog__footer-links" aria-label={t('publicCatalog.footer.navLabel')}>

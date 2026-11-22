@@ -8,7 +8,12 @@
 // page with `from` = the course in the signed-in catalog plus the enroll intent
 // (`/catalog/<id>?intent=enroll`), which scrolls to its classes once signed in —
 // nothing enrolls by itself, and no account is created here (accounts come from
-// the academy). `404 catalog_not_public` shows the calm «closed» page; a signed-in
+// the academy). Since PORTAL-04 PR-2 the button shows only while a visitor can go
+// on to enroll (`publicEnrollStateOf()`: a class open, a free seat, a usable price);
+// otherwise «التسجيل غير متاح حالياً» says why and the details stay readable. A
+// paid course says that it becomes a request with an invoice, activated after
+// payment and approval (MOD-19). The tab reads «course — academy».
+// `404 catalog_not_public` shows the calm «closed» page; a signed-in
 // user goes (replace) to /catalog/<id>.
 import { ArrowLeftOutlined, ArrowRightOutlined, LoginOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Flex, List, Skeleton, Space, Tag, Typography } from 'antd'
@@ -21,8 +26,18 @@ import { CourseCover } from '../catalog/CourseCover'
 import { useLocalized } from '../i18n/useLocalized'
 import { CatalogClosed } from '../publicCatalog/CatalogClosed'
 import { PublicPriceTag } from '../publicCatalog/PublicPriceTag'
-import { AVAILABILITY_COLORS, availabilityOf, durationMinutes, enrollIntentPath, isPublicCourseGone, levelNameOf, publicFailureKey } from '../publicCatalog/publicCatalog.view'
+import {
+  AVAILABILITY_COLORS,
+  availabilityOf,
+  durationMinutes,
+  enrollIntentPath,
+  isPublicCourseGone,
+  levelNameOf,
+  publicEnrollStateOf,
+  publicFailureKey,
+} from '../publicCatalog/publicCatalog.view'
 import { PublicOnly, PublicShell } from '../publicCatalog/PublicShell'
+import { PublicTitle } from '../publicCatalog/PublicTitle'
 import { usePublicCourse } from '../publicCatalog/usePublicCourse'
 import { localizedLabel } from '../users/users.format'
 
@@ -49,11 +64,19 @@ function PublicCourse({ courseId }: { courseId: string }) {
     </Button>
   )
 
-  if (error && isCatalogNotPublic(error)) return <CatalogClosed />
+  if (error && isCatalogNotPublic(error)) {
+    return (
+      <>
+        <PublicTitle />
+        <CatalogClosed />
+      </>
+    )
+  }
 
   if (!course) {
     return (
       <>
+        <PublicTitle />
         {back}
         {error && isPublicCourseGone(error) ? (
           <Alert type="warning" showIcon title={t('publicCatalog.course.notFound')} />
@@ -82,6 +105,7 @@ function PublicCourse({ courseId }: { courseId: string }) {
 
   return (
     <>
+      <PublicTitle page={localizedLabel(course.name, language)} />
       {back}
       <CourseSummary course={course} onEnroll={() => navigate('/login', { state: { from: enrollIntentPath(course.id) } })} />
       <Card title={t('publicCatalog.course.overview')} style={{ marginBottom: 16 }}>
@@ -99,6 +123,7 @@ function CourseSummary({ course, onEnroll }: { course: PublicCourseDetail; onEnr
   const { t } = useTranslation()
   const { language } = useLocalized()
   const availability = availabilityOf(course)
+  const enrollState = publicEnrollStateOf(course)
 
   const facts: DescriptionsProps['items'] = []
   if (course.level) facts.push({ key: 'level', label: t('publicCatalog.course.level'), children: localizedLabel(course.level.name, language) })
@@ -135,15 +160,28 @@ function CourseSummary({ course, onEnroll }: { course: PublicCourseDetail; onEnr
           </Typography.Text>
         </div>
         <Space size={[4, 4]} wrap>
-          <Tag color={AVAILABILITY_COLORS[availability]}>{t(`publicCatalog.card.${availability}`)}</Tag>
+          {/* A paid course without a usable price: the price row and the notice below say why. */}
+          {availability !== 'priceUnavailable' ? <Tag color={AVAILABILITY_COLORS[availability]}>{t(`publicCatalog.card.${availability}`)}</Tag> : null}
         </Space>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} items={facts} />
-        <Flex vertical gap={6} align="flex-start" data-testid="public-enroll">
-          <Button type="primary" size="large" icon={<LoginOutlined />} onClick={onEnroll}>
-            {t('publicCatalog.course.enroll')}
-          </Button>
-          <Typography.Text type="secondary">{t('publicCatalog.course.enrollNote')}</Typography.Text>
-        </Flex>
+        {enrollState === 'enrollable' ? (
+          <Flex vertical gap={6} align="flex-start" data-testid="public-enroll">
+            <Button type="primary" size="large" icon={<LoginOutlined />} onClick={onEnroll}>
+              {t('publicCatalog.course.enroll')}
+            </Button>
+            <Typography.Text type="secondary">{t('publicCatalog.course.enrollNote')}</Typography.Text>
+            {course.pricing === 'paid' ? <Typography.Text type="secondary">{t('publicCatalog.course.paidNote')}</Typography.Text> : null}
+          </Flex>
+        ) : (
+          // PORTAL-04 PR-2: no way to enroll now — said plainly, and the details stay readable.
+          <Alert
+            data-testid="public-not-enrollable"
+            type="info"
+            showIcon
+            title={t('publicCatalog.course.notEnrollableTitle')}
+            description={t(`publicCatalog.course.notEnrollable.${enrollState}`)}
+          />
+        )}
       </Flex>
     </Card>
   )

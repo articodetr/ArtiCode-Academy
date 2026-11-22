@@ -343,6 +343,15 @@ export const publicCatalog = {
     enrollTitle: 'التسجيل في الدورة',
     enroll: 'سجّل في هذه الدورة',
     enrollNote: 'سجّل الدخول بحسابك لتختار الفصل وتؤكد التسجيل. لا يُنشأ حساب جديد من هنا: الحسابات تُنشأ من إدارة الأكاديمية.',
+    // PORTAL-04 PR-2 (MOD-19): a paid course becomes a request with an invoice, activated after payment and approval.
+    paidNote: 'دورة مدفوعة: بعد اختيار الفصل يُنشأ طلب التحاق وفاتورة، ويُفعَّل التحاقك بعد الدفع وموافقة الأكاديمية.',
+    // PORTAL-04 PR-2: no way to enroll now, in the order of the server's refusals (publicEnrollStateOf()).
+    notEnrollableTitle: 'التسجيل غير متاح حالياً',
+    notEnrollable: {
+      not_open: 'لا يوجد فصل مفتوح للتسجيل في هذه الدورة الآن. يمكنك قراءة تفاصيلها ومحتواها والعودة حين يُفتح فصل.',
+      class_full: 'الفصول المفتوحة لهذه الدورة ممتلئة الآن. يمكنك قراءة تفاصيلها ومحتواها والعودة حين يتوفر مقعد.',
+      price_unavailable: 'سعر هذه الدورة غير متاح حالياً، فلا يمكن طلب التسجيل فيها الآن.',
+    },
   },
   kinds: {
     text: 'نص',

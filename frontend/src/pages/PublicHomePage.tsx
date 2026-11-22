@@ -7,10 +7,10 @@
 // no figure, testimonial, teacher name or contact detail the server does not
 // send (the hero text, «about», contact details and featured programs are
 // backend requirements — master doc PORTAL-04). `/` stays the protected dashboard.
-import { useEffect } from 'react'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
 import { useAuth } from '../auth/auth-context'
 import { PublicShell } from '../publicCatalog/PublicShell'
+import { PublicTitle } from '../publicCatalog/PublicTitle'
 import { useBrandName } from '../publicCatalog/useBrandName'
 import { viewerOf } from '../publicCatalog/publicViewer'
 import { HomeCallToAction } from '../publicHome/HomeCallToAction'
@@ -30,18 +30,10 @@ export function PublicHomePage() {
   const knownName = academy.academy ? name : ''
   const catalogOpen = catalogOpenOf(programs.state, academy.academy)
 
-  // The tab shows the academy's name while the page is open.
-  useEffect(() => {
-    if (!knownName) return
-    const previous = document.title
-    document.title = knownName
-    return () => {
-      document.title = previous
-    }
-  }, [knownName])
-
   return (
-    <PublicShell academy={academy}>
+    <PublicShell academy={academy} catalogOpen={catalogOpen}>
+      {/* The tab shows the academy's name while the page is open. */}
+      <PublicTitle />
       <div className="public-home">
         <HomeHero name={knownName} nameLoading={academy.loading} viewer={viewer} catalogOpen={catalogOpen} />
         <HomePrograms programs={programs} viewer={viewer} />

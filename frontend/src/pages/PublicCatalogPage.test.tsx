@@ -113,7 +113,19 @@ describe('PublicCatalogPage', () => {
     mockPublicApi(() => jsonResponse(200, makePublicList()))
     renderPage()
     await screen.findByText('أساسيات بايثون')
-    fireEvent.click(card(PUBLIC_COURSE_IDS[0]).getByText(pc.list.details).closest('button')!)
+    fireEvent.click(card(PUBLIC_COURSE_IDS[0]).getByText(pc.list.details).closest('a')!)
+    expect((await screen.findByTestId('path')).textContent).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
+  })
+
+  it('makes the whole card a real link to its course page, and names the tab after the page and the academy (PORTAL-04)', async () => {
+    mockPublicApi(() => jsonResponse(200, makePublicList()))
+    renderPage()
+    const link = (await screen.findByText('أساسيات بايثون')).closest('a')!
+    expect(link).toHaveAttribute('href', `/explore/${PUBLIC_COURSE_IDS[0]}`)
+    // The link is stretched over the card (publicCatalog.css), so a click anywhere on it opens the course.
+    expect(link).toHaveClass('public-card__link')
+    await waitFor(() => expect(document.title).toBe(`${pc.list.title} — أكاديمية النور`))
+    fireEvent.click(link)
     expect((await screen.findByTestId('path')).textContent).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
   })
 

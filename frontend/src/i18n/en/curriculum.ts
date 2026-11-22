@@ -332,6 +332,13 @@ export const publicCatalog = {
     enrollTitle: 'Enroll in the course',
     enroll: 'Enroll in this course',
     enrollNote: 'Sign in with your account to choose a class and confirm the enrollment. No new account is created here: accounts are created by the academy.',
+    paidNote: 'A paid course: once you choose a class, an enrollment request and an invoice are created, and your enrollment is activated after payment and the academy’s approval.',
+    notEnrollableTitle: 'Enrollment is not available now',
+    notEnrollable: {
+      not_open: 'No class of this course is open for enrollment now. You can read its details and content, and come back when a class opens.',
+      class_full: 'The open classes of this course are full now. You can read its details and content, and come back when a seat frees up.',
+      price_unavailable: 'The price of this course is not available now, so an enrollment cannot be requested yet.',
+    },
   },
   kinds: {
     text: 'Text',

@@ -9,12 +9,12 @@
 import { Alert, Button, Card, Col, Empty, Flex, Input, Row, Skeleton, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import { CatalogClosed } from '../publicCatalog/CatalogClosed'
 import { PublicCourseCard } from '../publicCatalog/PublicCourseCard'
 import { PUBLIC_SEARCH_DELAY_MS, PUBLIC_SEARCH_MAX_LENGTH, publicFailureKey } from '../publicCatalog/publicCatalog.view'
 import { PublicOnly, PublicShell } from '../publicCatalog/PublicShell'
+import { PublicTitle } from '../publicCatalog/PublicTitle'
 import { usePublicCatalogList } from '../publicCatalog/usePublicCatalogList'
 
 const SKELETON_CARDS = 4
@@ -31,7 +31,6 @@ export function PublicCatalogPage() {
 
 function PublicCatalogList() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const list = usePublicCatalogList()
   const { query, setQuery } = list
   const [search, setSearch] = useState('')
@@ -44,9 +43,16 @@ function PublicCatalogList() {
     return () => window.clearTimeout(timer)
   }, [search, query, setQuery])
 
-  if (list.error && isCatalogNotPublic(list.error)) return <CatalogClosed />
+  if (list.error && isCatalogNotPublic(list.error)) {
+    return (
+      <>
+        <PublicTitle page={t('publicCatalog.list.title')} />
+        <CatalogClosed />
+      </>
+    )
+  }
 
-  const open = (courseId: string) => navigate(`/explore/${encodeURIComponent(courseId)}`)
+  const pathOf = (courseId: string) => `/explore/${encodeURIComponent(courseId)}`
   const firstLoad = list.loading && list.items.length === 0 && !list.error
   const pageError = list.error && !list.failedMore ? list.error : null
   const clearSearch = () => {
@@ -56,6 +62,7 @@ function PublicCatalogList() {
 
   return (
     <>
+      <PublicTitle page={t('publicCatalog.list.title')} />
       <div style={{ marginBottom: 16 }}>
         <Typography.Title level={2} style={{ marginBottom: 4 }}>
           {t('publicCatalog.list.title')}
@@ -116,7 +123,7 @@ function PublicCatalogList() {
         <Row gutter={[16, 16]} aria-busy={list.loading}>
           {list.items.map((card) => (
             <Col key={card.id} xs={24} sm={12} lg={8} xl={6}>
-              <PublicCourseCard card={card} onOpen={open} />
+              <PublicCourseCard card={card} href={pathOf(card.id)} />
             </Col>
           ))}
         </Row>
