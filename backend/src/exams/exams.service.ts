@@ -17,11 +17,15 @@ import { formatNumber } from '../notifications/notifications.templates.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
+import { ExamQuestionsService } from './exam-questions.service.js';
+import { EXAMS_ENTITY_TYPE } from './exams.audit.js';
 import { isEmptyExamPatch, passScoreProblem, planExamUpdate } from './exams.changes.js';
 import type { ExamPatch, ExamValues } from './exams.changes.js';
 import { EXAMS_PAGE_DEFAULT } from './exams.dto.js';
-import type { ChangeExamStatusDto, CreateExamDto, ExamDto, ExamListDto, ExamResultCountsDto, ListExamsQueryDto, UpdateExamDto } from './exams.dto.js';
+import type { ChangeExamStatusDto, CreateExamDto, ExamDto, ExamListDto, ExamOnlineSummaryDto, ExamResultCountsDto, ListExamsQueryDto, UpdateExamDto } from './exams.dto.js';
 import { EXAM_SORT_FIELD, afterExamCursor, examCursorKey, examOrderBy } from './exams.keyset.js';
+import { MANUAL_SETTINGS, changedOnlineFields, isEmptyOnlinePatch, isWindowInverted, lockedOnlineFields, mergeOnline, onlineFieldsOnManual, windowStateOf } from './exams.online.js';
+import type { OnlinePatch, OnlineValues } from './exams.online.js';
 import { isClassFrozenForExams, isClassOpenForNewExam, seesEveryClass, visibleExamsWhere } from './exams.policy.js';
 import { actionNeedsLiveClass, allowedExamActions, isExamDeletable, lockedExamFields, nextExamStatus } from './exams.status.js';
 import type { ExamStatusAction } from './exams.status.js';
@@ -33,8 +37,7 @@ export const EXAMS_AUDIT_ACTIONS = {
   deleted: 'exams.deleted',
 } as const;
 
-/** Audit `entity_type` of every exam event. */
-export const EXAMS_ENTITY_TYPE = 'exams';
+export { EXAMS_ENTITY_TYPE };
 
 /** The academy's time zone for `ExamDto.timeZone` (D-R41), or UTC while the academy row is missing. */
 const FALLBACK_TIME_ZONE = 'UTC';
@@ -53,6 +56,11 @@ export const EXAM_SELECT = {
   passScore: true,
   weight: true,
   publishedAt: true,
+  delivery: true,
+  closesAt: true,
+  attemptsAllowed: true,
+  resultsRelease: true,
+  revealAnswers: true,
   createdAt: true,
   updatedAt: true,
   class: { select: { id: true, code: true, name: true, status: true, course: { select: { id: true, code: true, name: true } } } },
@@ -69,7 +77,7 @@ function decimalOrNull(value: Prisma.Decimal | null): number | null {
   return value === null ? null : Number(value);
 }
 
-function toExamDto(row: ExamRow, counts: ExamResultCountsDto, activeStudents: number, academyTimeZone: string): ExamDto {
+function toExamDto(row: ExamRow, counts: ExamResultCountsDto, activeStudents: number, academyTimeZone: string, online: ExamOnlineSummaryDto | null): ExamDto {
   return {
     id: row.id,
     class: {
@@ -92,6 +100,12 @@ function toExamDto(row: ExamRow, counts: ExamResultCountsDto, activeStudents: nu
     passScore: decimalOrNull(row.passScore),
     weight: decimalOrNull(row.weight),
     publishedAt: row.publishedAt ? toIso(row.publishedAt) : null,
+    delivery: row.delivery,
+    closesAt: row.closesAt ? toIso(row.closesAt) : null,
+    attemptsAllowed: row.attemptsAllowed,
+    resultsRelease: row.resultsRelease,
+    revealAnswers: row.revealAnswers,
+    online,
     results: counts,
     activeStudents,
     createdAt: toIso(row.createdAt),
@@ -111,6 +125,28 @@ function valuesOf(row: ExamRow): ExamValues {
     passScore: toDecimalText(row.passScore === null ? null : row.passScore.toString()),
     weight: toDecimalText(row.weight === null ? null : row.weight.toString()),
   };
+}
+
+/** The online settings of the exam as stored (D-R150); a manual exam carries the defaults. */
+function onlineValuesOf(row: ExamRow): OnlineValues {
+  return {
+    delivery: row.delivery,
+    closesAt: row.closesAt ? toIso(row.closesAt) : null,
+    attemptsAllowed: row.attemptsAllowed,
+    resultsRelease: row.resultsRelease,
+    revealAnswers: row.revealAnswers,
+  };
+}
+
+/** The online fields a body names (PATCH and create share the shape). */
+function onlinePatchOf(input: Pick<UpdateExamDto, 'delivery' | 'closesAt' | 'attemptsAllowed' | 'resultsRelease' | 'revealAnswers'>): OnlinePatch {
+  const patch: OnlinePatch = {};
+  if (input.delivery !== undefined) patch.delivery = input.delivery;
+  if (input.closesAt !== undefined) patch.closesAt = input.closesAt === null ? null : toIso(toInstant(input.closesAt));
+  if (input.attemptsAllowed !== undefined) patch.attemptsAllowed = input.attemptsAllowed;
+  if (input.resultsRelease !== undefined) patch.resultsRelease = input.resultsRelease;
+  if (input.revealAnswers !== undefined) patch.revealAnswers = input.revealAnswers;
+  return patch;
 }
 
 function jsonOrDbNull(value: unknown): Prisma.InputJsonValue | typeof Prisma.DbNull {
@@ -147,6 +183,16 @@ function toUpdateInput(data: ExamPatch): Prisma.ExamUncheckedUpdateInput {
  * Since MOD-12-T03 (roadmap §4j.5) two status actions also notify the
  * learners inside that transaction: `schedule` (`exam.scheduled`) and
  * `publish` (`exam.results_published`) — nothing else does.
+ *
+ * Since MOD-09 phase 2 (roadmap §4r, D-R150..D-R159) an exam also has a
+ * `delivery`. A `manual` exam — every exam that existed before — goes through
+ * exactly the statements above. An `online` exam adds: its settings in the
+ * same PATCH (`delivery` changes in a draft only; once the learners see it its
+ * `maxScore` is frozen with its questions, and once somebody has started the
+ * window only moves later and the attempts only rise); `schedule` checks that
+ * it is ready and freezes a copy of its questions (`ExamQuestionsService`);
+ * `unschedule` is refused once somebody has started; `publish` waits for the
+ * window to close. No status was added (D-R151).
  */
 @Injectable()
 export class ExamsService {
@@ -154,6 +200,7 @@ export class ExamsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly examQuestions: ExamQuestionsService,
   ) {}
 
   async list(query: ListExamsQueryDto, caller: AuthPrincipal): Promise<ExamListDto> {
@@ -164,6 +211,7 @@ export class ExamsService {
     if (query.lessonId) filters.push({ lessonId: query.lessonId });
     if (query.status) filters.push({ status: query.status });
     if (query.type) filters.push({ type: query.type });
+    if (query.delivery) filters.push({ delivery: query.delivery });
     if (query.from) filters.push({ scheduledAt: { gte: toInstant(query.from) } });
     if (query.to) filters.push({ scheduledAt: { lte: toInstant(query.to) } });
     if (query.q) filters.push(titleSearchWhere(query.q));
@@ -191,6 +239,14 @@ export class ExamsService {
   async create(classId: string, input: CreateExamDto, caller: AuthPrincipal, ctx: RequestContext): Promise<ExamDto> {
     const passScore = input.passScore ?? null;
     if (passScore !== null && passScore > input.maxScore) throw gradesError.passScoreInvalid(passScore, input.maxScore);
+    // D-R150: a manual exam carries no online setting; an online one starts from the defaults.
+    const onlinePatch = onlinePatchOf(input);
+    const delivery = input.delivery ?? 'manual';
+    const notAllowed = onlineFieldsOnManual(delivery, onlinePatch);
+    if (notAllowed.length > 0) throw gradesError.onlineSettingsNotAllowed(notAllowed);
+    const online = mergeOnline({ delivery, ...MANUAL_SETTINGS }, onlinePatch);
+    const opensAt = input.scheduledAt === undefined || input.scheduledAt === null ? null : toIso(toInstant(input.scheduledAt));
+    if (isWindowInverted(opensAt, online.closesAt)) throw gradesError.windowInvalid(opensAt, online.closesAt);
     return this.prisma.db.$transaction(async (tx) => {
       const klass = await this.lockClass(tx, classId, caller);
       if (!isClassOpenForNewExam(klass.status)) throw gradesError.classClosed(classId, klass.status);
@@ -209,11 +265,24 @@ export class ExamsService {
           maxScore: toDecimalText(input.maxScore)!,
           passScore: toDecimalText(passScore),
           weight: toDecimalText(input.weight ?? null),
+          delivery: online.delivery,
+          closesAt: online.closesAt === null ? null : toInstant(online.closesAt),
+          attemptsAllowed: online.attemptsAllowed,
+          resultsRelease: online.resultsRelease,
+          revealAnswers: online.revealAnswers,
         },
         select: { id: true },
       });
       await this.audit.record(
-        { action: EXAMS_AUDIT_ACTIONS.created, actorUserId: caller.id, entityType: EXAMS_ENTITY_TYPE, entityId: created.id, metadata: { classId, code: klass.code, type: input.type }, ...ctx },
+        {
+          action: EXAMS_AUDIT_ACTIONS.created,
+          actorUserId: caller.id,
+          entityType: EXAMS_ENTITY_TYPE,
+          entityId: created.id,
+          // A manual exam records what it always did; an online one says so.
+          metadata: { classId, code: klass.code, type: input.type, ...(online.delivery === 'online' ? { delivery: online.delivery } : {}) },
+          ...ctx,
+        },
         tx,
       );
       return this.read(tx, created.id);
@@ -221,7 +290,8 @@ export class ExamsService {
   }
 
   async update(id: string, input: UpdateExamDto, caller: AuthPrincipal, ctx: RequestContext): Promise<ExamDto> {
-    if (isEmptyExamPatch(input)) throw gradesError.nothingToUpdate();
+    if (isEmptyExamPatch(input) && isEmptyOnlinePatch(input)) throw gradesError.nothingToUpdate();
+    const onlinePatch = onlinePatchOf(input);
     const patch: ExamPatch = {};
     if (input.title !== undefined) patch.title = toLocalizedText(input.title);
     if (input.description !== undefined) patch.description = input.description === null ? null : toInstructionsText(input.description);
@@ -237,17 +307,57 @@ export class ExamsService {
       const row = await this.lockExam(tx, id, caller, 'NO KEY UPDATE');
       const current = valuesOf(row);
       const plan = planExamUpdate(current, patch);
-      if (plan.fields.length === 0) return this.read(tx, id);
+      // The online settings (D-R150): what the exam would carry, and which of them really change.
+      const currentOnline = onlineValuesOf(row);
+      const nextOnline = mergeOnline(currentOnline, onlinePatch);
+      const notAllowed = onlineFieldsOnManual(nextOnline.delivery, onlinePatch);
+      if (notAllowed.length > 0) throw gradesError.onlineSettingsNotAllowed(notAllowed);
+      const onlineFields = changedOnlineFields(currentOnline, nextOnline);
+      if (plan.fields.length === 0 && onlineFields.length === 0) return this.read(tx, id);
       if (isClassFrozenForExams(row.class.status)) throw gradesError.classClosed(row.classId, row.class.status);
       const resultCount = await tx.examResult.count({ where: { examId: id } });
-      const locked = lockedExamFields(resultCount, plan.fields);
-      if (locked.length > 0) throw gradesError.examLocked(row.status, locked, resultCount);
+      const attemptCount = row.delivery === 'online' ? await tx.examAttempt.count({ where: { examId: id } }) : 0;
+      const locked = [
+        ...new Set([
+          ...lockedExamFields(resultCount, plan.fields),
+          ...lockedOnlineFields(
+            { status: row.status, delivery: row.delivery, attemptCount },
+            { scheduledAt: current.scheduledAt, closesAt: currentOnline.closesAt, durationMinutes: current.durationMinutes, attemptsAllowed: currentOnline.attemptsAllowed },
+            {
+              ...(onlineFields.includes('delivery') ? { delivery: nextOnline.delivery } : {}),
+              ...(plan.data.maxScore !== undefined ? { maxScore: plan.data.maxScore } : {}),
+              ...(plan.data.scheduledAt !== undefined ? { scheduledAt: plan.data.scheduledAt } : {}),
+              ...(plan.data.durationMinutes !== undefined ? { durationMinutes: plan.data.durationMinutes } : {}),
+              ...(onlineFields.includes('closesAt') ? { closesAt: nextOnline.closesAt } : {}),
+              ...(onlineFields.includes('attemptsAllowed') ? { attemptsAllowed: nextOnline.attemptsAllowed } : {}),
+            },
+          ),
+        ]),
+      ];
+      if (locked.length > 0) throw gradesError.examLocked(row.status, locked, resultCount, row.delivery === 'online' ? attemptCount : undefined);
       const pass = passScoreProblem(current, plan.data);
       if (pass !== null) throw gradesError.passScoreInvalid(pass.passScore, pass.maxScore);
+      const opensAt = plan.data.scheduledAt !== undefined ? plan.data.scheduledAt : current.scheduledAt;
+      if (isWindowInverted(opensAt, nextOnline.closesAt)) throw gradesError.windowInvalid(opensAt, nextOnline.closesAt);
       if (typeof plan.data.lessonId === 'string') await this.assertLessonOfClass(tx, plan.data.lessonId, row.classId);
-      await tx.exam.update({ where: { id }, data: toUpdateInput(plan.data), select: { id: true } });
+      const data = toUpdateInput(plan.data);
+      if (onlineFields.includes('delivery')) data.delivery = nextOnline.delivery;
+      if (onlineFields.includes('closesAt')) data.closesAt = nextOnline.closesAt === null ? null : toInstant(nextOnline.closesAt);
+      if (onlineFields.includes('attemptsAllowed')) data.attemptsAllowed = nextOnline.attemptsAllowed;
+      if (onlineFields.includes('resultsRelease')) data.resultsRelease = nextOnline.resultsRelease;
+      if (onlineFields.includes('revealAnswers')) data.revealAnswers = nextOnline.revealAnswers;
+      await tx.exam.update({ where: { id }, data, select: { id: true } });
+      // An online draft turned manual keeps no linked question (a manual exam asks none).
+      const unlinked = row.delivery === 'online' && nextOnline.delivery === 'manual' ? await this.examQuestions.unlinkAll(tx, id) : 0;
       await this.audit.record(
-        { action: EXAMS_AUDIT_ACTIONS.updated, actorUserId: caller.id, entityType: EXAMS_ENTITY_TYPE, entityId: id, metadata: { classId: row.classId, code: row.class.code, fields: plan.fields }, ...ctx },
+        {
+          action: EXAMS_AUDIT_ACTIONS.updated,
+          actorUserId: caller.id,
+          entityType: EXAMS_ENTITY_TYPE,
+          entityId: id,
+          metadata: { classId: row.classId, code: row.class.code, fields: [...plan.fields, ...onlineFields], ...(unlinked > 0 ? { unlinkedQuestions: unlinked } : {}) },
+          ...ctx,
+        },
         tx,
       );
       return this.read(tx, id);
@@ -270,6 +380,7 @@ export class ExamsService {
         const resultCount = await tx.examResult.count({ where: { examId: id } });
         if (resultCount > 0) throw gradesError.examHasResults(input.action, resultCount);
       }
+      if (row.delivery === 'online') await this.moveOnlineExam(tx, input.action, row);
       const data: Prisma.ExamUncheckedUpdateInput = { status: to };
       if (input.action === 'publish') data.publishedAt = new Date();
       if (input.action === 'unpublish') data.publishedAt = null;
@@ -300,6 +411,9 @@ export class ExamsService {
       const row = await this.lockExam(tx, id, caller, 'UPDATE');
       const resultCount = await tx.examResult.count({ where: { examId: id } });
       if (!isExamDeletable(row.status, resultCount)) throw gradesError.examNotDeletable(row.status, resultCount);
+      // An online exam somebody has started holds no result yet, but it is no longer deletable either.
+      const attemptCount = row.delivery === 'online' ? await tx.examAttempt.count({ where: { examId: id } }) : 0;
+      if (attemptCount > 0) throw gradesError.examNotDeletable(row.status, resultCount, attemptCount);
       await tx.exam.delete({ where: { id }, select: { id: true } });
       await this.audit.record(
         { action: EXAMS_AUDIT_ACTIONS.deleted, actorUserId: caller.id, entityType: EXAMS_ENTITY_TYPE, entityId: id, metadata: { classId: row.classId, code: row.class.code }, ...ctx },
@@ -309,6 +423,38 @@ export class ExamsService {
   }
 
   // ---------------------------------------------------------------------------
+
+  /**
+   * MOD-09 phase 2 — what a status action means for an ONLINE exam, inside the
+   * action's transaction and under the exam-row lock (a manual exam never gets
+   * here):
+   *   - `schedule`: the exam must be ready — at least one linked question,
+   *     every one of them ready, points summing to `maxScore`, its window and
+   *     its time limit (`409 exam_not_ready`) — and a copy of each question is
+   *     frozen (D-R158/D-R159);
+   *   - `unschedule`: refused once somebody has started (`409
+   *     exam_has_attempts`); otherwise the copies are dropped and the exam
+   *     follows its bank questions again;
+   *   - `publish`: the results are released after the window has closed
+   *     (`409 exam_window_open`), so nobody is still answering (D-R157);
+   *   - `unpublish`: nothing more.
+   */
+  private async moveOnlineExam(tx: Tx, action: ExamStatusAction, row: ExamRow): Promise<void> {
+    const now = new Date();
+    if (action === 'schedule') {
+      await this.examQuestions.freeze(tx, row, now);
+      return;
+    }
+    if (action === 'unschedule') {
+      const attemptCount = await tx.examAttempt.count({ where: { examId: row.id } });
+      if (attemptCount > 0) throw gradesError.examHasAttempts(action, attemptCount);
+      await this.examQuestions.thaw(tx, row.id);
+      return;
+    }
+    if (action === 'publish' && windowStateOf(row.scheduledAt, row.closesAt, now) !== 'closed') {
+      throw gradesError.examWindowOpen(row.closesAt ? toIso(row.closesAt) : null);
+    }
+  }
 
   /**
    * MOD-12-T03 — what a status action that really moved the exam tells the
@@ -410,6 +556,8 @@ export class ExamsService {
     const active = Object.fromEntries(actives.map((group) => [group.classId, group._count._all]));
     const academy = await db.academy.findFirst({ select: { timezone: true } });
     const timeZone = academy?.timezone ?? FALLBACK_TIME_ZONE;
-    return rows.map((row) => toExamDto(row, counts[row.id] ?? EMPTY_COUNTS, active[row.classId] ?? 0, timeZone));
+    // Nothing is read here for a page of manual exams.
+    const online = await this.examQuestions.summaries(db, rows, new Date());
+    return rows.map((row) => toExamDto(row, counts[row.id] ?? EMPTY_COUNTS, active[row.classId] ?? 0, timeZone, online.get(row.id) ?? null));
   }
 }

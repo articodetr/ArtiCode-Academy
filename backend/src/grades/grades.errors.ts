@@ -56,6 +56,47 @@
 //   grades_certified         409 — the class has an issued certificate: its final grades
 //                                  are neither fixed again nor withdrawn until the
 //                                  certificates are revoked ({ classId, certificateCount })
+//   -- online exams (MOD-09 phase 2 — roadmap §4r, D-R150..D-R166; the whole
+//      vocabulary of the phase is here from OEX-T03 on, the attempt codes are
+//      used from OEX-T04) --
+//   online_settings_not_allowed 400 — an online-only setting on an exam that is (or
+//                                  becomes) manual ({ fields })
+//   window_invalid           400 — the window would close at or before it opens
+//                                  ({ opensAt, closesAt })
+//   exam_not_online          409 — the route is for an online exam ({ examId })
+//   exam_questions_locked    409 — the linked questions change in a draft only: they
+//                                  are frozen once the learners see the exam ({ status })
+//   exam_questions_invalid   400 — the same question twice in the list ({ duplicates })
+//   question_not_found       404 — a question that does not exist or sits in a bank the
+//                                  caller may not see ({ questionIds })
+//   question_not_ready       422 — only `ready` questions are linked ({ questionIds })
+//   exam_not_ready           409 — `schedule` of an online exam that lacks questions,
+//                                  links a question that is not ready, whose points do
+//                                  not sum to the maximum score, or without its window
+//                                  or time limit ({ problems, totalPoints, maxScore, questionIds })
+//   exam_has_attempts        409 — `unschedule` of an exam somebody has started
+//                                  ({ action, attemptCount })
+//   exam_window_open         409 — `publish` before the window closed ({ closesAt })
+//   exam_not_frozen          409 — a key correction or a regrade needs an online exam
+//                                  that was made available ({ status })
+//   key_invalid              400 — the corrected key does not fit the question: an
+//                                  option that is not one of its own, or the wrong
+//                                  field for its type ({ problem })
+//   enrollment_required      403 — taking the exam needs an active enrollment in its
+//                                  class ({ enrollmentStatus })
+//   exam_not_open            409 — outside the window, or the results are already out
+//                                  ({ reason: not_open_yet|closed|results_published, opensAt, closesAt })
+//   attempts_exhausted       409 — no attempt left ({ attemptsAllowed, attempts })
+//   attempt_conflict         409 — the attempt number the client meant is not the next
+//                                  one ({ expected, next })
+//   attempt_not_found        404 — no attempt with this id, or somebody else's
+//   attempt_closed           409 — the attempt is finished or its time is up: no more
+//                                  answers ({ status })
+//   answers_invalid          400 — an answer names a question the exam does not ask,
+//                                  names one twice, or does not fit its type
+//                                  ({ unknown, duplicates, malformed })
+//   result_from_attempt      409 — the results sheet refuses a student who has an
+//                                  attempt: their result is their attempts' ({ studentIds })
 //   -- shared --
 //   nothing_to_update        400 — PATCH body without any field (as API-018)
 //   cursor_invalid           400 — the list cursor does not belong to this order
@@ -85,6 +126,26 @@ export const GRADES_ERROR_CODES = [
   'grade_scheme_missing',
   'grades_not_ready',
   'grades_certified',
+  'online_settings_not_allowed',
+  'window_invalid',
+  'exam_not_online',
+  'exam_questions_locked',
+  'exam_questions_invalid',
+  'question_not_found',
+  'question_not_ready',
+  'exam_not_ready',
+  'exam_has_attempts',
+  'exam_window_open',
+  'exam_not_frozen',
+  'key_invalid',
+  'enrollment_required',
+  'exam_not_open',
+  'attempts_exhausted',
+  'attempt_conflict',
+  'attempt_not_found',
+  'attempt_closed',
+  'answers_invalid',
+  'result_from_attempt',
   'nothing_to_update',
   'cursor_invalid',
 ] as const;
@@ -130,6 +191,12 @@ const IS_DEFAULT_MESSAGES: Record<DefaultSchemeAction, string> = {
 
 export type ExamNotRecordableReason = 'not_scheduled';
 
+/** Why an online exam cannot be taken now (`exam_not_open`). */
+export type ExamNotOpenReason = 'not_open_yet' | 'closed' | 'results_published';
+
+/** Why a corrected key is refused (`key_invalid`). */
+export type KeyProblem = 'option_required' | 'option_unknown' | 'answer_required' | 'not_allowed_for_type';
+
 export interface GradesReadiness {
   openAssignments: number;
   awaitingReview: number;
@@ -157,12 +224,22 @@ export const gradesError = {
     new GradesHttpException(HttpStatus.CONFLICT, 'class_closed', 'This class takes no such exam write in its current status', { classId, status }),
   passScoreInvalid: (passScore: number, maxScore: number) =>
     new GradesHttpException(HttpStatus.BAD_REQUEST, 'pass_score_invalid', 'The pass score cannot exceed the maximum score', { passScore, maxScore }),
-  examLocked: (status: string, fields: readonly string[], resultCount: number) =>
-    new GradesHttpException(HttpStatus.CONFLICT, 'exam_locked', 'These fields cannot change for this exam', { status, fields: [...fields], resultCount }),
+  examLocked: (status: string, fields: readonly string[], resultCount: number, attemptCount?: number) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'exam_locked', 'These fields cannot change for this exam', {
+      status,
+      fields: [...fields],
+      resultCount,
+      ...(attemptCount === undefined ? {} : { attemptCount }),
+    }),
   examHasResults: (action: string, resultCount: number) =>
     new GradesHttpException(HttpStatus.CONFLICT, 'exam_has_results', 'The exam holds results', { action, resultCount }),
-  examNotDeletable: (status: string, resultCount: number) =>
-    new GradesHttpException(HttpStatus.CONFLICT, 'exam_not_deletable', 'Only a draft or scheduled exam without results can be deleted', { status, resultCount }),
+  examNotDeletable: (status: string, resultCount: number, attemptCount?: number) =>
+    new GradesHttpException(
+      HttpStatus.CONFLICT,
+      'exam_not_deletable',
+      attemptCount === undefined ? 'Only a draft or scheduled exam without results can be deleted' : 'An online exam somebody has started cannot be deleted',
+      { status, resultCount, ...(attemptCount === undefined ? {} : { attemptCount }) },
+    ),
   examNotRecordable: (reason: ExamNotRecordableReason) =>
     new GradesHttpException(HttpStatus.CONFLICT, 'exam_not_recordable', 'Results are recorded for a scheduled or published exam only', { reason }),
   invalidTransition: (from: string, action: string, allowed: readonly string[]) =>
@@ -185,6 +262,51 @@ export const gradesError = {
       classId,
       certificateCount,
     }),
+  onlineSettingsNotAllowed: (fields: readonly string[]) =>
+    new GradesHttpException(HttpStatus.BAD_REQUEST, 'online_settings_not_allowed', 'These settings belong to an online exam', { fields: [...fields] }),
+  windowInvalid: (opensAt: string | null, closesAt: string | null) =>
+    new GradesHttpException(HttpStatus.BAD_REQUEST, 'window_invalid', 'The exam must close after it opens', { opensAt, closesAt }),
+  examNotOnline: (examId: string) => new GradesHttpException(HttpStatus.CONFLICT, 'exam_not_online', 'This exam is not taken online', { examId }),
+  examQuestionsLocked: (status: string) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'exam_questions_locked', 'The questions of an exam change while it is a draft only', { status }),
+  examQuestionsInvalid: (duplicates: readonly string[]) =>
+    new GradesHttpException(HttpStatus.BAD_REQUEST, 'exam_questions_invalid', 'A question appears more than once in the list', { duplicates: [...duplicates] }),
+  questionNotFound: (questionIds: readonly string[]) =>
+    new GradesHttpException(HttpStatus.NOT_FOUND, 'question_not_found', 'No such question in a bank you may use', { questionIds: [...questionIds] }),
+  questionNotReady: (questionIds: readonly string[]) =>
+    new GradesHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'question_not_ready', 'Only ready questions can be linked to an exam', { questionIds: [...questionIds] }),
+  examNotReady: (problems: readonly string[], totalPoints: number, maxScore: number, questionIds: readonly string[]) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'exam_not_ready', 'The online exam cannot be made available yet', {
+      problems: [...problems],
+      totalPoints,
+      maxScore,
+      questionIds: [...questionIds],
+    }),
+  examHasAttempts: (action: string, attemptCount: number) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'exam_has_attempts', 'Somebody has already started this exam', { action, attemptCount }),
+  examWindowOpen: (closesAt: string | null) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'exam_window_open', 'The results are published after the exam window has closed', { closesAt }),
+  examNotFrozen: (status: string) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'exam_not_frozen', 'This needs an online exam that was made available', { status }),
+  keyInvalid: (problem: KeyProblem) => new GradesHttpException(HttpStatus.BAD_REQUEST, 'key_invalid', 'The corrected key does not fit this question', { problem }),
+  enrollmentRequired: (enrollmentStatus: string | null) =>
+    new GradesHttpException(HttpStatus.FORBIDDEN, 'enrollment_required', 'Taking this exam needs an active enrollment in its class', { enrollmentStatus }),
+  examNotOpen: (reason: ExamNotOpenReason, opensAt: string | null, closesAt: string | null) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'exam_not_open', 'The exam cannot be taken now', { reason, opensAt, closesAt }),
+  attemptsExhausted: (attemptsAllowed: number, attempts: number) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'attempts_exhausted', 'No attempt is left for this exam', { attemptsAllowed, attempts }),
+  attemptConflict: (expected: number, next: number) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'attempt_conflict', 'The server already holds another attempt number', { expected, next }),
+  attemptNotFound: (attemptId: string) => new GradesHttpException(HttpStatus.NOT_FOUND, 'attempt_not_found', 'No attempt with this id', { attemptId }),
+  attemptClosed: (status: string) => new GradesHttpException(HttpStatus.CONFLICT, 'attempt_closed', 'This attempt takes no more answers', { status }),
+  answersInvalid: (unknown: readonly string[], duplicates: readonly string[], malformed: readonly string[]) =>
+    new GradesHttpException(HttpStatus.BAD_REQUEST, 'answers_invalid', 'Some answers do not fit the questions of this exam', {
+      unknown: [...unknown],
+      duplicates: [...duplicates],
+      malformed: [...malformed],
+    }),
+  resultFromAttempt: (studentIds: readonly string[]) =>
+    new GradesHttpException(HttpStatus.CONFLICT, 'result_from_attempt', 'The result of these students comes from their attempts', { studentIds: [...studentIds] }),
   nothingToUpdate: () => new GradesHttpException(HttpStatus.BAD_REQUEST, 'nothing_to_update', 'The request body contains no field to update'),
   cursorInvalid: () =>
     new GradesHttpException(HttpStatus.BAD_REQUEST, 'cursor_invalid', 'The cursor is invalid or belongs to a different order; restart from the first page'),
