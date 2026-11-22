@@ -32,9 +32,10 @@ export class PublicCatalogController {
     summary: 'Browse the published courses without signing in (API-236)',
     description:
       'Only while the academy opened its catalog to visitors (`settings.catalog.publicBrowsing` true — else 404 catalog_not_public). Published courses by code, ' +
-      'keyset-paginated (`limit` 1–48, default 24; `cursor`), `q` on the code or the Arabic/English name (literal). Each card: cover, catalog level, duration, sessions, ' +
-      'the price (the course plan total in the academy currency — null for a free course or a price unavailable now), how many classes are open to self-service and ' +
-      'whether one has a free seat, and the published lessons and curriculum levels a learner sees. Never a teacher name, a class code or schedule, or anything about ' +
+      'keyset-paginated (`limit` 1–48, default 24; `cursor`), `q` on the code or the Arabic/English name (literal), `pricing` free|paid and `available` true|false as ' +
+      'in API-219. Each card: cover, catalog level, duration, sessions, the price (the course plan total in the academy currency and its number of installments — ' +
+      'null for a free course or a price unavailable now), how many classes are open to self-service, whether one has a free seat and the earliest start day of ' +
+      'those (`nextStartsOn`), and the published lessons and curriculum levels a learner sees. Never a teacher name, a class code or schedule, or anything about ' +
       'the caller. No sign-in, 60 requests per minute per IP, no audit event.',
   })
   @ApiOkResponse({ type: PublicCatalogListDto })

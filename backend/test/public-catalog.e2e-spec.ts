@@ -45,6 +45,7 @@ const CARD_KEYS = [
   'lessonCount',
   'levelCount',
   'name',
+  'nextStartsOn',
   'openClasses',
   'price',
   'pricing',
@@ -91,6 +92,7 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
   let prisma: PrismaClient;
   let academyId: string;
   let currency: string;
+  let academyTimeZone: string;
   /** The `catalog` domain of the settings as the suite found it (undefined = absent). */
   let originalCatalog: unknown;
   let hadCatalog = false;
@@ -127,9 +129,10 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL! }) });
     markId = (await prisma.auditLog.findFirst({ orderBy: { id: 'desc' }, select: { id: true } }))?.id ?? NIL_ID;
 
-    const academy = await prisma.academy.findFirstOrThrow({ select: { id: true, settings: true, currency: true } });
+    const academy = await prisma.academy.findFirstOrThrow({ select: { id: true, settings: true, currency: true, timezone: true } });
     academyId = academy.id;
     currency = academy.currency;
+    academyTimeZone = academy.timezone;
     hadCatalog = isObject(academy.settings) && Object.hasOwn(academy.settings, 'catalog');
     originalCatalog = hadCatalog ? structuredClone((academy.settings as JsonObject)['catalog']) : undefined;
 
@@ -249,14 +252,16 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
       durationHours: 12.5,
       sessionsCount: 8,
       pricing: 'paid',
-      price: { amount: 750, currency },
+      price: { amount: 750, currency, installments: 1 },
       openClasses: 1,
       hasFreeSeat: true,
+      // Its only available class has no start day (AC8 sets one).
+      nextStartsOn: null,
       // Published lessons: l1, l2, l5, l6; levels a learner sees: «الأساسيات», the untitled level, the loose group.
       lessonCount: 4,
       levelCount: 3,
     });
-    expect(items[1]).toMatchObject({ id: ids['b'], pricing: 'free', price: null, openClasses: 0, hasFreeSeat: false, lessonCount: 0, levelCount: 0 });
+    expect(items[1]).toMatchObject({ id: ids['b'], pricing: 'free', price: null, openClasses: 0, hasFreeSeat: false, nextStartsOn: null, lessonCount: 0, levelCount: 0 });
 
     const text = JSON.stringify(res.body);
     for (const hidden of [TEACHER_NAME, `${PREFIX}-A-OPEN`, `${PREFIX}-A-OFFICE`, `${PREFIX}-D`, 'secret', 'نص الدرس السري']) expect(text).not.toContain(hidden);
@@ -400,6 +405,99 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
       if (studentId) {
         await prisma.enrollment.deleteMany({ where: { studentUserId: studentId } });
         await prisma.user.deleteMany({ where: { id: studentId } });
+      }
+    }
+  });
+
+  it('AC8 — `pricing` and `available` filter as in API-219, the price carries its installments, and `nextStartsOn` is the earliest coming start of an available class (PORTAL-01)', async () => {
+    await setPublicBrowsing(true);
+    const codes = async (query: string) => ((await list(query).expect(200)).body.items as JsonObject[]).map((item) => item['code']);
+    // After AC7: A paid with an available class; B and C free without one; D a draft and E archived, never listed.
+    expect(await codes('&pricing=paid')).toEqual([`${PREFIX}-A`]);
+    expect(await codes('&pricing=free')).toEqual([`${PREFIX}-B`, `${PREFIX}-C`]);
+    expect(await codes('&available=true')).toEqual([`${PREFIX}-A`]);
+    expect(await codes('&available=false')).toEqual([`${PREFIX}-B`, `${PREFIX}-C`]);
+    expect(await codes('&pricing=free&available=true')).toEqual([]);
+    // The cursor keeps the filters.
+    const first = await list('&available=false&limit=1').expect(200);
+    expect((first.body.items as JsonObject[]).map((item) => item['code'])).toEqual([`${PREFIX}-B`]);
+    expect(await codes(`&available=false&limit=1&cursor=${encodeURIComponent(first.body.nextCursor as string)}`)).toEqual([`${PREFIX}-C`]);
+    for (const query of ['&pricing=gratis', '&available=yes', '&available=1', '&levelId=0192f0b0-0000-7000-8000-0000000000ee']) await list(query).expect(400);
+
+    // nextStartsOn: a start day 30 days ahead shows on the card and the detail; one already past (the class started) gives null.
+    const openClass = await prisma.class.findFirstOrThrow({ where: { code: `${PREFIX}-A-OPEN` }, select: { id: true } });
+    const dayFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    try {
+      const coming = dayFromNow(30);
+      await prisma.class.update({ where: { id: openClass.id }, data: { startsOn: new Date(`${coming}T00:00:00.000Z`) }, select: { id: true } });
+      const card = ((await list('&pricing=paid').expect(200)).body.items as JsonObject[])[0];
+      expect(card).toMatchObject({ code: `${PREFIX}-A`, hasFreeSeat: true, nextStartsOn: coming, price: { amount: 750, currency, installments: 1 } });
+      expect((await anonymous(`${LIST}/${ids['a']}`).expect(200)).body).toMatchObject({ nextStartsOn: coming, price: { installments: 1 } });
+
+      await prisma.class.update({ where: { id: openClass.id }, data: { startsOn: new Date(`${dayFromNow(-10)}T00:00:00.000Z`) }, select: { id: true } });
+      expect(((await list('&pricing=paid').expect(200)).body.items as JsonObject[])[0]).toMatchObject({ hasFreeSeat: true, nextStartsOn: null });
+      // The class itself never shows: neither its code nor its start day as a field of its own.
+      const text = JSON.stringify((await anonymous(`${LIST}/${ids['a']}`).expect(200)).body);
+      expect(text).not.toContain(`${PREFIX}-A-OPEN`);
+      expect(keysOf(JSON.parse(text)).has('startsOn')).toBe(false);
+    } finally {
+      await prisma.class.update({ where: { id: openClass.id }, data: { startsOn: null }, select: { id: true } });
+    }
+  });
+
+  it('AC9 — nextStartsOn skips a full class, a deactivated plan hides the price and the seat, installments > 1, and «today» is the academy’s day (PORTAL-01, review of #220)', async () => {
+    await setPublicBrowsing(true);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: academyTimeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const dayAfter = (days: number) => new Date(Date.parse(`${today}T00:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10);
+    const asDate = (day: string) => new Date(`${day}T00:00:00.000Z`);
+    let learnerId: string | undefined;
+    try {
+      // Course F — paid on two installments, an early class already full and a later one with a seat.
+      const f = await prisma.course.create({ data: { code: `${PREFIX}-F`, name: { ar: 'دورة بقسطين' }, status: 'published' }, select: { id: true } });
+      const plan = await prisma.feePlan.create({
+        data: {
+          name: { ar: `${PREFIX} قسطان` },
+          courseId: f.id,
+          lines: [{ description: { ar: 'رسوم' }, amount: 1000 }],
+          installments: [{ percent: 50, dueOffsetDays: 0 }, { percent: 50, dueOffsetDays: 30 }],
+        },
+        select: { id: true },
+      });
+      await prisma.course.update({ where: { id: f.id }, data: { enrollmentFeePlanId: plan.id }, select: { id: true } });
+      const early = await prisma.class.create({
+        data: { courseId: f.id, code: `${PREFIX}-F-EARLY`, name: { ar: 'مبكر' }, capacity: 1, status: 'open', selfEnrollment: true, startsOn: asDate(dayAfter(5)) },
+        select: { id: true },
+      });
+      await prisma.class.create({
+        data: { courseId: f.id, code: `${PREFIX}-F-LATE`, name: { ar: 'لاحق' }, capacity: 3, status: 'open', selfEnrollment: true, startsOn: asDate(dayAfter(20)) },
+        select: { id: true },
+      });
+      learnerId = (await prisma.user.create({ data: { email: `pc-full-${RUN.toLowerCase()}@example.test`, fullName: `Full ${RUN}`, status: 'active' }, select: { id: true } })).id;
+      await prisma.enrollment.create({ data: { classId: early.id, studentUserId: learnerId, status: 'active', activatedAt: new Date() }, select: { id: true } });
+
+      const cardOf = async (code: string, query = '') => ((await list(query).expect(200)).body.items as JsonObject[]).find((item) => item['code'] === code);
+      expect(await cardOf(`${PREFIX}-F`)).toMatchObject({ openClasses: 2, hasFreeSeat: true, nextStartsOn: dayAfter(20), price: { amount: 1000, currency, installments: 2 } });
+      expect((await anonymous(`${LIST}/${f.id}`).expect(200)).body).toMatchObject({ nextStartsOn: dayAfter(20), price: { installments: 2 } });
+
+      // A deactivated plan cannot price a request: no price, no free seat, and the course counts as not available.
+      await prisma.feePlan.update({ where: { id: plan.id }, data: { isActive: false }, select: { id: true } });
+      expect(await cardOf(`${PREFIX}-F`)).toMatchObject({ pricing: 'paid', price: null, hasFreeSeat: false, nextStartsOn: null });
+      expect(await cardOf(`${PREFIX}-F`, '&available=false')).toBeDefined();
+      expect(await cardOf(`${PREFIX}-F`, '&available=true')).toBeUndefined();
+
+      // Course G — free, its only class starts today in the academy's zone: today counts as coming.
+      const g = await prisma.course.create({ data: { code: `${PREFIX}-G`, name: { ar: 'تبدأ اليوم' }, status: 'published' }, select: { id: true } });
+      await prisma.class.create({
+        data: { courseId: g.id, code: `${PREFIX}-G-TODAY`, name: { ar: 'اليوم' }, capacity: 2, status: 'open', selfEnrollment: true, startsOn: asDate(today) },
+        select: { id: true },
+      });
+      expect(await cardOf(`${PREFIX}-G`)).toMatchObject({ pricing: 'free', hasFreeSeat: true, nextStartsOn: today });
+      await prisma.class.updateMany({ where: { code: `${PREFIX}-G-TODAY` }, data: { startsOn: asDate(dayAfter(-1)) } });
+      expect(await cardOf(`${PREFIX}-G`)).toMatchObject({ hasFreeSeat: true, nextStartsOn: null });
+    } finally {
+      if (learnerId) {
+        await prisma.enrollment.deleteMany({ where: { studentUserId: learnerId } });
+        await prisma.user.deleteMany({ where: { id: learnerId } });
       }
     }
   });

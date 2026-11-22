@@ -3,7 +3,7 @@
 // order of API-221) and the pricing rules of a course plan.
 import { describe, expect, it } from 'vitest';
 import type { ClassBlockerInput } from './catalog.policy.js';
-import { classBlocker, isSelfServiceOpen, seatsLeft, selfServiceReason } from './catalog.policy.js';
+import { classBlocker, isSelfServiceOpen, nextStartsOn, seatsLeft, selfServiceReason } from './catalog.policy.js';
 import { coursePlanFits, coursePlanTotal, coursePlanUsable } from './course-pricing.js';
 
 const open: ClassBlockerInput = {
@@ -77,5 +77,14 @@ describe('course pricing (D-R122)', () => {
   it('totals the plan lines with two decimals', () => {
     expect(coursePlanTotal({ lines: [{ description: { ar: 'رسوم' }, amount: 1000 }, { description: { ar: 'كتب' }, amount: 199.5 }] })).toBe('1199.50');
     expect(coursePlanTotal({ lines: [] })).toBe('0.00');
+  });
+
+  it('nextStartsOn — the earliest start day today or later, ignoring classes without one or already started (PORTAL-01)', () => {
+    const today = '2026-11-22';
+    expect(nextStartsOn(['2026-12-10', '2026-12-01', null, '2027-01-05'], today)).toBe('2026-12-01');
+    expect(nextStartsOn(['2026-11-22', '2026-12-01'], today)).toBe('2026-11-22');
+    expect(nextStartsOn(['2026-11-01', '2026-11-21'], today)).toBeNull();
+    expect(nextStartsOn([null, null], today)).toBeNull();
+    expect(nextStartsOn([], today)).toBeNull();
   });
 });
