@@ -1619,4 +1619,216 @@ describe.skipIf(!available)('MOD-03-T10 audit coverage and audit-log filters (e2
       }
     });
   });
+  // MOD-09 phase 2 (OEX-T08, roadmap §4r): question banks, the questions of an online exam, its attempts and the audited
+  // corrections. The class and the enrollment come from Prisma (their routes are walked above); everything of the phase
+  // goes through the API. `admin` writes as the teacher would (it holds every key and sees every class), `enrolled` takes
+  // the exam with the seeded student role.
+  describe('MOD-09 phase 2 — online exams (OEX-T08)', () => {
+    const BANKS = '/api/question-banks';
+    const QUESTIONS = '/api/questions';
+    const EXAMS = '/api/exams';
+    const ME = '/api/me';
+    const oex = { courseId: '', classId: '', bankId: '', choiceId: '', booleanId: '', examId: '', attemptId: '' };
+    /** Option ids and the like that the routes handed out: no event may carry one. */
+    const keys: string[] = [];
+    let oexMark = NIL_ID;
+
+    const openWindow = () => ({ scheduledAt: new Date(Date.now() - 60 * 60_000).toISOString(), closesAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(), durationMinutes: 30 });
+    const choice = (prompt: string, correct: number, over: Record<string, unknown> = {}) => ({
+      type: 'single_choice',
+      status: 'ready',
+      prompt: { ar: prompt },
+      points: 5,
+      options: ['أ', 'ب', 'ج'].map((text, index) => ({ text: { ar: text }, isCorrect: index === correct })),
+      ...over,
+    });
+
+    beforeAll(async () => {
+      oex.courseId = (await prisma.course.create({ data: { code: `${COURSE_PREFIX}-OEX`, name: { ar: 'دورة تدقيق الاختبارات الإلكترونية' }, status: 'published' }, select: { id: true } })).id;
+      oex.classId = (await prisma.class.create({ data: { courseId: oex.courseId, code: `${CLASS_PREFIX}-OEX`, name: { ar: 'فصل تدقيق الاختبارات الإلكترونية' }, capacity: 5, status: 'open' }, select: { id: true } })).id;
+      await prisma.enrollment.create({ data: { classId: oex.classId, studentUserId: fx['enrolled']!, status: 'active' }, select: { id: true } });
+      tokens['enrolled'] = await login(email('enrolled'));
+      oexMark = await mark();
+    }, 60_000);
+
+    afterAll(async () => {
+      // The class first (its exam cascades with its questions and attempts — a linked question is Restrict), then the banks.
+      if (oex.classId) {
+        await prisma.enrollment.deleteMany({ where: { classId: oex.classId } });
+        await prisma.class.deleteMany({ where: { id: oex.classId } });
+      }
+      await prisma.questionBank.deleteMany({ where: { createdById: { in: createdUserIds } } });
+    });
+
+    it('MOD-09 phase 2 — bank and question writes, the question set of an exam, making it available, an attempt from start to submit, a key correction and the publication record one event each', async () => {
+      const admin = fx['admin']!;
+      const learner = fx['enrolled']!;
+
+      // Banks and questions (API-261, API-263, API-266, API-268).
+      let m = await mark();
+      const bank = await api().post(BANKS).set(bearer('admin')).send({ name: { ar: 'بنك التدقيق' }, courseId: oex.courseId }).expect(201);
+      oex.bankId = bank.body.id as string;
+      await expectEvents(m, [{ action: 'question_banks.created', actorUserId: admin, entityType: 'question_banks', entityId: oex.bankId, metadata: { courseId: oex.courseId } }]);
+
+      m = await mark();
+      await api().patch(`${BANKS}/${oex.bankId}`).set(bearer('admin')).send({ description: { ar: 'أسئلة لاختبار التدقيق' } }).expect(200);
+      await expectEvents(m, [{ action: 'question_banks.updated', actorUserId: admin, entityType: 'question_banks', entityId: oex.bankId, metadata: { fields: ['description'] } }]);
+
+      m = await mark();
+      const first = await api().post(`${BANKS}/${oex.bankId}/questions`).set(bearer('admin')).send(choice('سؤال الاختيار', 0)).expect(201);
+      const second = await api().post(`${BANKS}/${oex.bankId}/questions`).set(bearer('admin')).send({ type: 'true_false', status: 'ready', prompt: { ar: 'سؤال صح أو خطأ' }, points: 4, correctAnswer: true }).expect(201);
+      oex.choiceId = first.body.id as string;
+      oex.booleanId = second.body.id as string;
+      for (const option of first.body.options as { id: string }[]) keys.push(option.id);
+      await expectEvents(m, [
+        { action: 'questions.created', actorUserId: admin, entityType: 'questions', entityId: oex.choiceId, metadata: { bankId: oex.bankId, type: 'single_choice', status: 'ready' } },
+        { action: 'questions.created', actorUserId: admin, entityType: 'questions', entityId: oex.booleanId, metadata: { bankId: oex.bankId, type: 'true_false', status: 'ready' } },
+      ]);
+
+      m = await mark();
+      await api().patch(`${QUESTIONS}/${oex.booleanId}`).set(bearer('admin')).send({ points: 5, difficulty: 'easy' }).expect(200);
+      await expectEvents(m, [{ action: 'questions.updated', actorUserId: admin, entityType: 'questions', entityId: oex.booleanId, metadata: { bankId: oex.bankId, fields: ['points', 'difficulty'] } }]);
+
+      // The exam: created online, its questions linked, made available (API-115, API-271, API-117).
+      m = await mark();
+      const exam = await api()
+        .post(`${CLASSES}/${oex.classId}/exams`)
+        .set(bearer('admin'))
+        .send({ title: { ar: 'اختبار تدقيق إلكتروني' }, type: 'quiz', maxScore: 10, delivery: 'online', resultsRelease: 'on_submit', ...openWindow() })
+        .expect(201);
+      oex.examId = exam.body.id as string;
+      await expectEvents(m, [{ action: 'exams.created', actorUserId: admin, entityType: 'exams', entityId: oex.examId, metadata: { classId: oex.classId, type: 'quiz', delivery: 'online' } }]);
+
+      m = await mark();
+      const linked = await api().put(`${EXAMS}/${oex.examId}/questions`).set(bearer('admin')).send({ questions: [{ questionId: oex.choiceId }, { questionId: oex.booleanId }] }).expect(200);
+      await expectEvents(m, [{ action: 'exams.questions.changed', actorUserId: admin, entityType: 'exams', entityId: oex.examId, metadata: { classId: oex.classId, added: 2, removed: 0, count: 2, totalPoints: 10 } }]);
+      const choiceLink = (linked.body.items as { id: string; questionId: string }[]).find((item) => item.questionId === oex.choiceId)!.id;
+
+      m = await mark();
+      await api().post(`${EXAMS}/${oex.examId}/status`).set(bearer('admin')).send({ action: 'schedule' }).expect(200);
+      await expectEvents(m, [{ action: 'exams.status.changed', actorUserId: admin, entityType: 'exams', entityId: oex.examId, metadata: { action: 'schedule', from: 'draft', to: 'scheduled' } }]);
+
+      // The attempt: started by the learner, answers saved without an event, submitted (API-276, API-278, API-279).
+      m = await mark();
+      const started = await api().post(`${ME}/exams/${oex.examId}/attempts`).set(bearer('enrolled')).send({}).expect(201);
+      oex.attemptId = started.body.id as string;
+      await expectEvents(m, [{ action: 'exams.attempt.started', actorUserId: learner, entityType: 'exam_attempts', entityId: oex.attemptId, metadata: { examId: oex.examId, classId: oex.classId, attemptNo: 1 } }]);
+
+      m = await mark();
+      const asked = started.body.questions as { id: string; type: string; options: { id: string }[] }[];
+      const picked = asked.map((question) => (question.type === 'true_false' ? { examQuestionId: question.id, value: true } : { examQuestionId: question.id, optionId: question.options[0]!.id }));
+      await api().put(`${ME}/exam-attempts/${oex.attemptId}/answers`).set(bearer('enrolled')).send({ answers: picked }).expect(200);
+      await api().put(`${ME}/exam-attempts/${oex.attemptId}/answers`).set(bearer('enrolled')).send({ answers: [picked[0]] }).expect(200);
+      await expectEvents(m, []);
+
+      m = await mark();
+      await api().post(`${ME}/exam-attempts/${oex.attemptId}/submit`).set(bearer('enrolled')).expect(200);
+      await expectEvents(m, [
+        {
+          action: 'exams.attempt.submitted',
+          actorUserId: learner,
+          entityType: 'exam_attempts',
+          entityId: oex.attemptId,
+          metadata: { examId: oex.examId, classId: oex.classId, studentId: learner, attemptNo: 1, score: 10, maxScore: 10, correctCount: 2, questionCount: 2, counted: true },
+        },
+      ]);
+
+      // The audited correction (API-272): the reason and the counts — never the key.
+      m = await mark();
+      const wrongOption = (first.body.options as { id: string }[])[2]!.id;
+      const corrected = await api().post(`${EXAMS}/${oex.examId}/questions/${choiceLink}/key`).set(bearer('admin')).send({ correctOptionId: wrongOption, reason: 'TEST-030 key fix' }).expect(200);
+      expect(corrected.body).toMatchObject({ changed: true, regrade: { attempts: 1, changedAttempts: 1, changedResults: 1 } });
+      await expectEvents(m, [
+        {
+          action: 'exams.questions.key_corrected',
+          actorUserId: admin,
+          entityType: 'exams',
+          entityId: oex.examId,
+          metadata: { classId: oex.classId, examQuestionId: choiceLink, position: 0, attempts: 1, changedAttempts: 1, changedResults: 1, reason: 'TEST-030 key fix' },
+        },
+      ]);
+
+      // The results are published once the window has closed (the clock is moved behind the API's back).
+      await prisma.exam.update({ where: { id: oex.examId }, data: { scheduledAt: new Date(Date.now() - 3 * 60 * 60_000), closesAt: new Date(Date.now() - 60_000) }, select: { id: true } });
+      m = await mark();
+      await api().post(`${EXAMS}/${oex.examId}/status`).set(bearer('admin')).send({ action: 'publish' }).expect(200);
+      await expectEvents(m, [{ action: 'exams.status.changed', actorUserId: admin, entityType: 'exams', entityId: oex.examId, metadata: { action: 'publish', from: 'scheduled', to: 'published' } }]);
+
+      // A question no exam links and a bank without one are deleted (API-269, API-264).
+      const spare = await api().post(`${BANKS}/${oex.bankId}/questions`).set(bearer('admin')).send(choice('سؤال زائد', 1)).expect(201);
+      const spareBank = await api().post(BANKS).set(bearer('admin')).send({ name: { ar: 'بنك زائد' } }).expect(201);
+      m = await mark();
+      await api().delete(`${QUESTIONS}/${spare.body.id}`).set(bearer('admin')).expect(204);
+      await api().delete(`${BANKS}/${spareBank.body.id}`).set(bearer('admin')).expect(204);
+      await expectEvents(m, [
+        { action: 'questions.deleted', actorUserId: admin, entityType: 'questions', entityId: spare.body.id as string, metadata: { bankId: oex.bankId } },
+        { action: 'question_banks.deleted', actorUserId: admin, entityType: 'question_banks', entityId: spareBank.body.id as string },
+      ]);
+    });
+
+    it('MOD-09 phase 2 — refusals, writes without a difference, answer saves on a closed attempt and every read record nothing', async () => {
+      const m = await mark();
+      // Refused or empty writes on banks and questions.
+      await api().patch(`${BANKS}/${oex.bankId}`).set(bearer('admin')).send({}).expect(400);
+      await api().patch(`${BANKS}/${oex.bankId}`).set(bearer('admin')).send({ description: { ar: 'أسئلة لاختبار التدقيق' } }).expect(200);
+      expect((await api().post(`${BANKS}/${oex.bankId}/questions`).set(bearer('admin')).send(choice('بلا صحيح', -1))).body.code).toBe('question_invalid');
+      expect((await api().delete(`${QUESTIONS}/${oex.choiceId}`).set(bearer('admin'))).body.code).toBe('question_in_use');
+      expect((await api().delete(`${BANKS}/${oex.bankId}`).set(bearer('admin'))).body.code).toBe('question_bank_in_use');
+      expect((await api().post(BANKS).set(bearer('plain')).send({ name: { ar: 'ممنوع' } })).body.code).toBe('permission_denied');
+      // The exam: its set is locked once it left the draft; a second start, a save and a submit of the finished attempt.
+      expect((await api().put(`${EXAMS}/${oex.examId}/questions`).set(bearer('admin')).send({ questions: [] })).body.code).toBe('exam_questions_locked');
+      expect((await api().post(`${ME}/exams/${oex.examId}/attempts`).set(bearer('enrolled')).send({})).body.code).toBe('exam_not_open');
+      expect((await api().post(`${ME}/exams/${oex.examId}/attempts`).set(bearer('admin')).send({})).body.code).toBe('exam_not_found');
+      expect((await api().put(`${ME}/exam-attempts/${oex.attemptId}/answers`).set(bearer('enrolled')).send({ answers: [{ examQuestionId: NIL_ID, value: true }] })).body.code).toBe('attempt_closed');
+      await api().post(`${ME}/exam-attempts/${oex.attemptId}/submit`).set(bearer('enrolled')).expect(200);
+      expect((await api().post(`${ME}/exam-attempts/${oex.attemptId}/submit`).set(bearer('admin'))).body.code).toBe('attempt_not_found');
+      // Corrections that change nothing or are refused.
+      expect((await api().post(`${EXAMS}/${oex.examId}/regrade`).set(bearer('admin')).send({ reason: 'TEST-030 no change' }).expect(200)).body).toEqual({ attempts: 1, changedAttempts: 0, changedResults: 0 });
+      expect((await api().post(`${EXAMS}/${oex.examId}/regrade`).set(bearer('admin')).send({})).status).toBe(400);
+      expect((await api().post(`${EXAMS}/${oex.examId}/questions/${NIL_ID}/key`).set(bearer('admin')).send({ correctAnswer: true, reason: 'TEST-030' })).body.code).toBe('question_not_found');
+      expect((await api().post(`${EXAMS}/${oex.examId}/regrade`).set(bearer('enrolled')).send({ reason: 'TEST-030' })).body.code).toBe('permission_denied');
+      // Reads: the banks and questions, the exam's questions, the attempts as the teacher and as the learner, «my exams».
+      await api().get(BANKS).set(bearer('admin')).expect(200);
+      await api().get(`${BANKS}/${oex.bankId}`).set(bearer('admin')).expect(200);
+      await api().get(`${QUESTIONS}?bankId=${oex.bankId}`).set(bearer('admin')).expect(200);
+      await api().get(`${QUESTIONS}/${oex.choiceId}`).set(bearer('admin')).expect(200);
+      await api().get(`${EXAMS}/${oex.examId}/questions`).set(bearer('admin')).expect(200);
+      await api().get(`${EXAMS}/${oex.examId}/attempts`).set(bearer('admin')).expect(200);
+      await api().get(`/api/exam-attempts/${oex.attemptId}`).set(bearer('admin')).expect(200);
+      await api().get(`${ME}/exam-attempts/${oex.attemptId}`).set(bearer('enrolled')).expect(200);
+      await api().get(`${ME}/exams?classId=${oex.classId}`).set(bearer('enrolled')).expect(200);
+      await expectEvents(m, []);
+    });
+
+    it('MOD-09 phase 2 — no event of this block carries an option id, and every one passes assertNoSecrets', async () => {
+      const rows = await prisma.auditLog.findMany({ where: { id: { gt: oexMark }, actorUserId: { in: actors() } }, orderBy: { id: 'asc' }, select: { action: true, metadata: true } });
+      // Bank ×2 (+ the spare one and its deletion), question ×3 created + 1 updated + 1 deleted, the exam's five, the attempt's two.
+      expect(rows.map((row) => row.action).sort()).toEqual(
+        [
+          'exams.attempt.started',
+          'exams.attempt.submitted',
+          'exams.created',
+          'exams.questions.changed',
+          'exams.questions.key_corrected',
+          'exams.status.changed',
+          'exams.status.changed',
+          'question_banks.created',
+          'question_banks.created',
+          'question_banks.deleted',
+          'question_banks.updated',
+          'questions.created',
+          'questions.created',
+          'questions.created',
+          'questions.deleted',
+          'questions.updated',
+        ].sort(),
+      );
+      expect(keys.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(() => assertNoSecrets(row.metadata as Record<string, unknown> | null)).not.toThrow();
+        const serialized = JSON.stringify(row.metadata);
+        for (const key of keys) expect(serialized, row.action).not.toContain(key);
+      }
+    });
+  });
 });
