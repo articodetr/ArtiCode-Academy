@@ -162,3 +162,154 @@ describe('CreateExamModal', () => {
     expect(onCreated).not.toHaveBeenCalled()
   })
 })
+
+// --- MOD-09 phase 2: «طريقة الأداء» ---------------------------------------------
+
+const online = ar.examOnline
+
+/** Class, type, title and maximum score — what every new exam needs. */
+async function fillBasics(dialog: HTMLElement) {
+  await chooseClass(dialog)
+  await chooseType(dialog, ar.exams.types.quiz)
+  await userEvent.type(within(dialog).getByLabelText(ar.exams.fields.titleAr), 'اختبار قصير إلكتروني')
+  await userEvent.type(within(dialog).getByLabelText(ar.exams.fields.maxScore), '10')
+}
+
+/** Switches the form to an online exam and waits for its fields. */
+async function chooseOnline(dialog: HTMLElement) {
+  fireEvent.click(within(dialog).getByLabelText(online.delivery.online))
+  return within(dialog).findByLabelText(online.fields.closesDate)
+}
+
+const setValue = (dialog: HTMLElement, label: string, value: string) => fireEvent.change(within(dialog).getByLabelText(label), { target: { value } })
+
+describe('CreateExamModal — an online exam (MOD-09 phase 2)', () => {
+  it('starts as a manual exam with none of the online fields, and says the delivery may change while the exam is a draft', async () => {
+    mockCreateApi()
+    const { dialog } = await renderOpen()
+    expect(within(dialog).getByLabelText(online.delivery.manual)).toBeChecked()
+    expect(within(dialog).getByLabelText(online.delivery.online)).not.toBeChecked()
+    expect(within(dialog).getByRole('radiogroup', { name: online.delivery.label })).toBeInTheDocument()
+    expect(within(dialog).getByText(online.delivery.hint)).toBeInTheDocument()
+    for (const label of [online.fields.closesDate, online.fields.closesTime, online.fields.attemptsAllowed, online.fields.resultsRelease, online.fields.revealAnswers, online.fields.opensDate]) {
+      expect(within(dialog).queryByLabelText(label)).not.toBeInTheDocument()
+    }
+    expect(within(dialog).queryByTestId('exam-window-hint')).not.toBeInTheDocument()
+    // The first-phase words of the date and the duration.
+    expect(within(dialog).getByLabelText(ar.exams.fields.scheduledDate)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(ar.exams.fields.durationMinutes)).toBeInTheDocument()
+  })
+
+  it('creates an online exam: the window in the academy zone, one attempt’s limit and its settings — attempts as a JSON number, the reveal as a JSON boolean', async () => {
+    const { posts } = mockCreateApi()
+    const { dialog } = await renderOpen()
+    await fillBasics(dialog)
+    await chooseOnline(dialog)
+
+    // The date is now when the window opens and the duration one attempt's time limit; one line says how the three fit.
+    expect(within(dialog).queryByLabelText(ar.exams.fields.scheduledDate)).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(ar.exams.fields.durationMinutes)).not.toBeInTheDocument()
+    expect(within(dialog).getByTestId('exam-window-hint')).toHaveTextContent(online.hints.window)
+    // The closing is typed in the same zone as the opening, and says so.
+    expect(within(dialog).getByTestId('exam-closes-zone')).toHaveTextContent('Pacific/Kiritimati')
+    // The server's defaults, ready to change.
+    expect(within(dialog).getByLabelText(online.fields.attemptsAllowed)).toHaveValue('1')
+    expect(within(dialog).getByLabelText(online.fields.revealAnswers)).not.toBeChecked()
+    expect(within(dialog).getByText(online.release.on_publish)).toBeInTheDocument()
+
+    setValue(dialog, online.fields.opensDate, '2026-11-20')
+    setValue(dialog, online.fields.opensTime, '10:00')
+    setValue(dialog, online.fields.closesDate, '2026-11-20')
+    setValue(dialog, online.fields.closesTime, '12:00')
+    await userEvent.type(within(dialog).getByLabelText(online.fields.attemptDuration), '30')
+    const attempts = within(dialog).getByLabelText(online.fields.attemptsAllowed)
+    await userEvent.clear(attempts)
+    await userEvent.type(attempts, '3')
+    fireEvent.mouseDown(within(dialog).getByLabelText(online.fields.resultsRelease))
+    fireEvent.click(await screen.findByText(online.release.on_submit, { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(within(dialog).getByLabelText(online.fields.revealAnswers))
+    submit(dialog)
+
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0]).toEqual({
+      title: { ar: 'اختبار قصير إلكتروني' },
+      type: 'quiz',
+      maxScore: 10,
+      scheduledAt: instantIn('2026-11-20', '10:00', 'Pacific/Kiritimati'),
+      durationMinutes: 30,
+      delivery: 'online',
+      closesAt: instantIn('2026-11-20', '12:00', 'Pacific/Kiritimati'),
+      attemptsAllowed: 3,
+      resultsRelease: 'on_submit',
+      revealAnswers: true,
+    })
+    // Kiritimati is UTC+14: 10:00–12:00 there is 20:00–22:00 UTC the day before.
+    expect(posts[0]!.scheduledAt).toBe('2026-11-19T20:00:00.000Z')
+    expect(posts[0]!.closesAt).toBe('2026-11-19T22:00:00.000Z')
+    expect(typeof posts[0]!.attemptsAllowed).toBe('number')
+    expect(typeof posts[0]!.revealAnswers).toBe('boolean')
+  })
+
+  it('creates an online draft without its window yet, with the defaults the form showed', async () => {
+    const { posts } = mockCreateApi()
+    const { dialog } = await renderOpen()
+    await fillBasics(dialog)
+    await chooseOnline(dialog)
+    submit(dialog)
+    await waitFor(() => expect(posts).toEqual([{ title: { ar: 'اختبار قصير إلكتروني' }, type: 'quiz', maxScore: 10, delivery: 'online', attemptsAllowed: 1, resultsRelease: 'on_publish', revealAnswers: false }]))
+  })
+
+  it('sends a manual exam’s body exactly as before after a switch to online and back — no delivery, no online setting', async () => {
+    const { posts } = mockCreateApi()
+    const { dialog } = await renderOpen()
+    await fillBasics(dialog)
+    await chooseOnline(dialog)
+    setValue(dialog, online.fields.closesDate, '2026-11-20')
+    setValue(dialog, online.fields.closesTime, '12:00')
+    fireEvent.click(within(dialog).getByLabelText(online.fields.revealAnswers))
+    fireEvent.click(within(dialog).getByLabelText(online.delivery.manual))
+    await waitFor(() => expect(within(dialog).queryByLabelText(online.fields.closesDate)).not.toBeInTheDocument())
+    expect(within(dialog).getByLabelText(ar.exams.fields.scheduledDate)).toBeInTheDocument()
+    submit(dialog)
+    await waitFor(() => expect(posts).toEqual([{ title: { ar: 'اختبار قصير إلكتروني' }, type: 'quiz', maxScore: 10 }]))
+  })
+
+  it('refuses locally, in Arabic and before any request: a window that closes before it opens, half a closing, attempts out of range or emptied', async () => {
+    const { posts } = mockCreateApi()
+    const { dialog } = await renderOpen()
+    await fillBasics(dialog)
+    await chooseOnline(dialog)
+    setValue(dialog, online.fields.opensDate, '2026-11-20')
+    setValue(dialog, online.fields.opensTime, '10:00')
+    setValue(dialog, online.fields.closesDate, '2026-11-20')
+    setValue(dialog, online.fields.closesTime, '10:00')
+    const attempts = within(dialog).getByLabelText(online.fields.attemptsAllowed)
+    await userEvent.clear(attempts)
+    await userEvent.type(attempts, '21')
+    submit(dialog)
+    // Closing at the opening is no window either (window_invalid: at or before).
+    expect(await within(dialog).findByText(online.validation.windowInvalid)).toBeInTheDocument()
+    expect(await within(dialog).findByText(online.validation.attemptsAllowed.replace('{{max}}', '20'))).toBeInTheDocument()
+
+    setValue(dialog, online.fields.closesTime, '')
+    await userEvent.clear(attempts)
+    submit(dialog)
+    expect(await within(dialog).findByText(online.validation.closesTimeRequired)).toBeInTheDocument()
+    expect(await within(dialog).findByText(online.validation.attemptsRequired)).toBeInTheDocument()
+    expect(posts).toEqual([])
+  })
+
+  it('shows the server’s window_invalid on the closing', async () => {
+    const { posts } = mockCreateApi(() => jsonResponse(400, { statusCode: 400, code: 'window_invalid', opensAt: '2026-11-19T20:00:00.000Z', closesAt: '2026-11-19T19:00:00.000Z', message: 'window' }))
+    const { dialog, onCreated } = await renderOpen()
+    await fillBasics(dialog)
+    await chooseOnline(dialog)
+    setValue(dialog, online.fields.closesDate, '2026-11-20')
+    setValue(dialog, online.fields.closesTime, '12:00')
+    submit(dialog)
+    const closing = within(dialog).getByLabelText(online.fields.closesDate).closest('.ant-form-item') as HTMLElement
+    expect(await within(closing).findByText(online.errors.window_invalid)).toBeInTheDocument()
+    expect(posts).toHaveLength(1)
+    expect(onCreated).not.toHaveBeenCalled()
+  })
+})

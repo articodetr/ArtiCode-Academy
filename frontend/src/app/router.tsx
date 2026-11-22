@@ -34,9 +34,11 @@ import { NotFoundPage } from '../pages/NotFoundPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
 import { PaymentsPage } from '../pages/PaymentsPage'
 import { ProfilePage } from '../pages/ProfilePage'
+import { QuestionBanksPage } from '../pages/QuestionBanksPage'
 import { ReportsPage } from '../pages/ReportsPage'
 import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { TakeExamPage } from '../pages/TakeExamPage'
 import { UsersPage } from '../pages/UsersPage'
 import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
 
@@ -69,6 +71,9 @@ const router = createBrowserRouter([
   { path: '/learn/:courseId/preview', element: <RequireAuth><LearnPreviewPage /></RequireAuth> },
   { path: '/learn/:courseId/preview/:itemId', element: <RequireAuth><LearnPreviewPage /></RequireAuth> },
   { path: '/learn/:courseId/:itemId', element: <RequireAuth><LearnPage /></RequireAuth> },
+  // MOD-09 phase 2 (roadmap §4r): taking an online exam, outside the layout (a focused page with the server's clock).
+  // Signed in; the server answers an attempt to its owner alone (API-277 — anybody else's is 404).
+  { path: '/take-exam/:attemptId', element: <RequireAuth><TakeExamPage /></RequireAuth> },
   // Certificate print pages (J-F51 — D-R50): signed in, outside the layout so neither the screen nor the paper has the
   // menu; API-131 for `certificates.read_all`/`certificates.issue`, API-135 for a student's or a guardian's own.
   { path: '/certificates/:id/print', element: <RequireAuth>{guarded('certificates', <CertificatePrintPage source="academy" />)}</RequireAuth> },
@@ -101,6 +106,7 @@ const router = createBrowserRouter([
       { path: 'my-grades', element: guarded('myGrades', <MyGradesPage />) }, // `student`/`guardian` role keys (J-F50, API-129 — ownership + grades.read_own/read_linked)
       { path: 'my-certificates', element: guarded('myCertificates', <MyCertificatesPage />) }, // `student`/`guardian` role keys (J-F51, API-135 — ownership + read_own/read_linked)
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
+      { path: 'question-banks', element: guarded('questionBanks', <QuestionBanksPage />) }, // MOD-09 phase 2: `questions.manage` (API-260..API-269)
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },
       { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },

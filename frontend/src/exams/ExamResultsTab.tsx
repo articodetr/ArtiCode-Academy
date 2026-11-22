@@ -16,10 +16,21 @@
 // back/forward and a reload (the KI-058 guard); a row changed back holds
 // nothing, a read-only sheet never holds, and the saved answer starts a clean
 // session.
+// Since MOD-09 phase 2 (D-R160) the same sheet serves an ONLINE exam
+// (`sheet.delivery`): the result of a student who took it is their counted
+// attempt, written by the server, and is not typed over — a note says so, every
+// result names its source, and a row whose student has an attempt
+// (`attemptCount > 0`) is read-only with the reason and never part of the PUT;
+// the sheet records the students who have no attempt (absent, excused, a
+// make-up on paper). A student who starts an attempt after the sheet was read
+// makes the server refuse the whole batch (409 `result_from_attempt`): the
+// sheet names and marks those rows, drops their changes, keeps the others and
+// reads itself again in the same session, so the rows lock. A manual exam
+// shows none of this: its sheet is as it was.
 import { ReloadOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Flex, Input, InputNumber, Popconfirm, Radio, Skeleton, Space, Table, Tag, Typography, theme } from 'antd'
 import type { TableProps } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EXAM_RESULT_STATUSES, RESULTS_BATCH_MAX, RESULT_FEEDBACK_MAX_LENGTH, recordExamResults } from '../api/examResults'
 import type { ExamResultItem, ExamResultStatus, ExamResultsSheet } from '../api/examResults'
@@ -27,7 +38,9 @@ import type { Exam, ExamStatus } from '../api/exams'
 import { formatZonedDateTime } from '../assignments/assignments.format'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
-import { changedItems, currentDraft, draftProblem, isBatchTooLarge, isRecordableItem, planResultsSave, withStatus } from './examResults.changes'
+import { describeSheetFailure } from './examAttempts.errors'
+import { ResultSourceTag } from './examAttempts.parts'
+import { changedItems, currentDraft, draftProblem, hasAttempt, isBatchTooLarge, isEditableItem, isRecordableItem, planResultsSave, withStatus, withoutDrafts } from './examResults.changes'
 import type { ResultDraft } from './examResults.changes'
 import { describeResultsFailure, failureMessage } from './exams.errors'
 import { RESULT_STATUS_COLORS } from './exams.format'
@@ -42,19 +55,33 @@ interface ExamResultsTabProps {
   onExamStale: () => void
   /** Whether a row holds a change the save would send: reported on every change, false once saved or left. */
   onUnsavedChange?: (unsaved: boolean) => void
+  /**
+   * Bumped by the drawer when the results changed outside this sheet (an online exam's attempt finished, its key was
+   * corrected, it was regraded): the sheet is read again in the same session, so its unsaved rows stay.
+   */
+  refreshSignal?: number
 }
 
-export function ExamResultsTab({ exam, onSaved, onExamStale, onUnsavedChange }: ExamResultsTabProps) {
+export function ExamResultsTab({ exam, onSaved, onExamStale, onUnsavedChange, refreshSignal = 0 }: ExamResultsTabProps) {
   const { t } = useTranslation()
   const canGrade = useAuth().hasPermission('exams.grade')
-  const { sheet, error, loading, version, reload, replace } = useExamResults(exam.id)
+  const { sheet, error, loading, version, revision, reload, refresh, replace } = useExamResults(exam.id)
   const failure = error ? describeResultsFailure(error) : null
+
+  // The signal of the first render is the one the first read already answers; only a later bump reads again.
+  const seenSignal = useRef(refreshSignal)
+  useEffect(() => {
+    if (seenSignal.current === refreshSignal) return
+    seenSignal.current = refreshSignal
+    refresh()
+  }, [refreshSignal, refresh])
 
   // The exam's status from the newest fact (V2 D1): publish and unpublish in the drawer keep this tab, its sheet and
   // its unsaved rows, so after one the sheet's `examStatus` is older than the drawer's status; a sheet read or saved
-  // later is the newer one again. Kept per sheet version — React's "adjust state when an input changes".
-  const [statusAtRead, setStatusAtRead] = useState({ version, status: exam.status })
-  if (statusAtRead.version !== version) setStatusAtRead({ version, status: exam.status })
+  // later is the newer one again. Kept per sheet the server answered (`revision`: read, saved, or refreshed in the
+  // same session) — React's "adjust state when an input changes".
+  const [statusAtRead, setStatusAtRead] = useState({ revision, status: exam.status })
+  if (statusAtRead.revision !== revision) setStatusAtRead({ revision, status: exam.status })
   const examStatus: ExamStatus = sheet && statusAtRead.status === exam.status ? sheet.examStatus : exam.status
 
   return (
@@ -92,6 +119,7 @@ export function ExamResultsTab({ exam, onSaved, onExamStale, onUnsavedChange }: 
           }}
           onGone={onExamStale}
           onReload={reload}
+          onRefresh={refresh}
           onUnsavedChange={onUnsavedChange}
         />
       ) : null}
@@ -110,11 +138,14 @@ interface ResultsEditorProps {
   onSaved: (sheet: ExamResultsSheet) => void
   onStale: () => void
   onGone: () => void
+  /** Reads the sheet again in a NEW session: the unsaved rows go. */
   onReload: () => void
+  /** Reads the sheet again in THIS session: the unsaved rows stay (after `result_from_attempt`). */
+  onRefresh: () => void
   onUnsavedChange?: (unsaved: boolean) => void
 }
 
-function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved, onStale, onGone, onReload, onUnsavedChange }: ResultsEditorProps) {
+function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved, onStale, onGone, onReload, onRefresh, onUnsavedChange }: ResultsEditorProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -126,6 +157,8 @@ function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved
   const [saving, setSaving] = useState(false)
 
   const editable = canGrade && sheet.recordable
+  // An online exam: the results of those who took it are their attempts' (D-R160); a manual sheet shows none of that.
+  const online = sheet.delivery === 'online'
   const changed = changedItems(sheet.items, drafts)
   const changedIds = new Set(changed.map((item) => item.student.id))
   const problems = new Map(
@@ -177,11 +210,17 @@ function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved
       onSaved(saved)
     } catch (caught) {
       setSaving(false)
-      const failure = describeResultsFailure(caught)
+      const failure = describeSheetFailure(caught)
       if (failure.next === 'refused') {
         const ids = failure.studentIds ?? []
         setRefused(new Set(ids))
         setError(failureMessage(t, { ...failure, params: { ...failure.params, names: ids.map(nameOf).join(t('exams.errors.listSeparator')) } }))
+        if (failure.fromAttempt) {
+          // These students started an attempt after the sheet was read: no retry can record them here, so their
+          // changes go, the other rows stay as typed, and the sheet is read again in this session — their rows lock.
+          setDrafts((previous) => withoutDrafts(previous, ids))
+          onRefresh()
+        }
         return
       }
       const text = failureMessage(t, failure)
@@ -212,13 +251,23 @@ function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved
           <Space size={4} wrap>
             <Tag color={isRecordableItem(item) ? undefined : 'default'}>{t(`exams.results.enrollment.${item.enrollmentStatus ?? 'none'}`)}</Tag>
             {item.student.deletedAt ? <Tag color="volcano">{t('exams.results.deleted')}</Tag> : null}
+            {/* An online exam: where the result came from — the student's counted attempt, or this sheet. */}
+            {online && item.result ? <ResultSourceTag source={item.result.source} /> : null}
             {canGrade && sheet.recordable && !isRecordableItem(item) ? <Tag>{t('exams.results.readOnlyRow')}</Tag> : null}
             {refused.has(item.student.id) ? <Tag color="red">{t('exams.results.refusedRow')}</Tag> : null}
           </Space>
+          {hasAttempt(item) ? (
+            // Why the row takes no entry: the server refuses one for a student who has an attempt (D-R160). It wraps
+            // within the name's width — the table sizes its columns to their content, and a long line would push
+            // the other columns out of the drawer.
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', maxWidth: 200 }}>
+              {t('examAttempts.sheet.lockedRow')}
+            </Typography.Text>
+          ) : null}
           {item.result ? (
             // Who wrote the result last, and when — under the name, so the table fits the drawer.
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t('exams.results.recordedBy', { name: item.result.recordedBy?.fullName ?? '—' })}
+              {item.result.source === 'online' ? t('examAttempts.sheet.recordedByServer') : t('exams.results.recordedBy', { name: item.result.recordedBy?.fullName ?? '—' })}
               <br />
               {formatZonedDateTime(item.result.updatedAt, timeZone, language)}
             </Typography.Text>
@@ -231,7 +280,7 @@ function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved
       key: 'status',
       render: (_, item) => {
         const draft = currentDraft(item, drafts)
-        if (!editable || !isRecordableItem(item)) return item.result ? statusTag(item.result.status) : <Typography.Text type="secondary">{t('exams.results.notRecorded')}</Typography.Text>
+        if (!editable || !isEditableItem(item)) return item.result ? statusTag(item.result.status) : <Typography.Text type="secondary">{t('exams.results.notRecorded')}</Typography.Text>
         return (
           <Radio.Group
             // One radio group per student: a shared generated name would make the whole table one group.
@@ -253,7 +302,7 @@ function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved
       key: 'score',
       render: (_, item) => {
         const draft = currentDraft(item, drafts)
-        if (!editable || !isRecordableItem(item)) return item.result?.score !== null && item.result?.score !== undefined ? <span dir="ltr">{item.result.score}</span> : '—'
+        if (!editable || !isEditableItem(item)) return item.result?.score !== null && item.result?.score !== undefined ? <span dir="ltr">{item.result.score}</span> : '—'
         const problem = showProblems ? problems.get(item.student.id) : undefined
         const invalid = problem === 'score_required' || problem === 'score_invalid'
         return (
@@ -282,7 +331,7 @@ function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved
       key: 'feedback',
       render: (_, item) => {
         const draft = currentDraft(item, drafts)
-        if (!editable || !isRecordableItem(item)) return item.result?.feedback ? <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{item.result.feedback}</Typography.Text> : '—'
+        if (!editable || !isEditableItem(item)) return item.result?.feedback ? <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{item.result.feedback}</Typography.Text> : '—'
         const invalid = showProblems && problems.get(item.student.id) === 'feedback_too_long'
         return (
           <Space orientation="vertical" size={0}>
@@ -334,6 +383,7 @@ function ResultsEditor({ sheet, examStatus, timeZone, canGrade, loading, onSaved
         </Typography.Text>
       </Flex>
 
+      {online ? <Alert type="info" showIcon title={t('examAttempts.sheet.note')} style={{ marginBottom: 12 }} data-testid="online-sheet-note" /> : null}
       {!sheet.recordable && sheet.closedReason ? <Alert type="warning" showIcon title={t(`exams.results.closed.${sheet.closedReason}`)} style={{ marginBottom: 12 }} /> : null}
       {sheet.recordable && !canGrade ? <Alert type="info" showIcon title={t('exams.results.readOnly')} style={{ marginBottom: 12 }} /> : null}
       {editable && examStatus === 'published' ? <Alert type="info" showIcon title={t('exams.results.publishedNote')} style={{ marginBottom: 12 }} /> : null}

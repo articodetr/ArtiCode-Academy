@@ -1,0 +1,26 @@
+/* A learner's attempts at one online exam (AttemptsList): one wrapping line per attempt — in a table cell of
+   «my exams» and on the exam page alike. */
+
+.take-attempts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.take-attempts__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.take-attempts__item .ant-tag {
+  margin: 0;
+}
+
+.take-attempts__name {
+  white-space: nowrap;
+}

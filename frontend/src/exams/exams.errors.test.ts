@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
-import { describeExamsFailure, describeResultsFailure, failureMessage, isExamsFailure } from './exams.errors'
+import { describeExamsFailure, describeResultsFailure, failureMessage, isExamsFailure, lockedFieldMessageKey } from './exams.errors'
 
 const t = (key: string, options?: Record<string, unknown>) => i18n.t(key, options)
 const apiError = (status: number, body: Record<string, unknown>) => new ApiError(status, String(body.message ?? 'x'), body)
@@ -32,6 +32,102 @@ describe('describeExamsFailure (the exams part of grades.errors.ts)', () => {
     expect(describeExamsFailure(apiError(500, { message: 'boom' }))).toEqual({ key: 'login.errors.server' })
     expect(describeExamsFailure(apiError(418, { message: 'teapot' }))).toEqual({ key: 'login.errors.generic' })
     expect(describeExamsFailure(new TypeError('Failed to fetch'))).toEqual({ key: 'login.errors.network' })
+  })
+})
+
+/** A translated text with its placeholders filled: the expectations read the texts from the dictionary instead of retyping them. */
+const fill = (template: string, values: Record<string, string | number>) => Object.entries(values).reduce((text, [name, value]) => text.replace(`{{${name}}}`, String(value)), template)
+
+describe('describeExamsFailure — the refusals of an online exam (MOD-09 phase 2)', () => {
+  const words = ar.examOnline.errors
+  const problems = ar.examOnline.readiness.problems
+  const notReady = (...list: string[]) => fill(words.exam_not_ready, { list: list.join(words.problemSeparator) })
+
+  it('words exam_not_ready with its problems and the server’s numbers', () => {
+    const failure = describeExamsFailure(apiError(409, { code: 'exam_not_ready', problems: ['no_questions', 'window_missing', 'duration_missing'], totalPoints: 0, maxScore: 10, questionIds: [] }))
+    expect(failure).toEqual({ key: 'examOnline.errors.exam_not_ready', readiness: { problems: ['no_questions', 'window_missing', 'duration_missing'], totalPoints: 0, maxScore: 10, questionIds: [] } })
+    expect(isExamsFailure(failure, 'exam_not_ready')).toBe(true)
+    expect(failureMessage(t, failure)).toBe(notReady(problems.no_questions, problems.window_missing, problems.duration_missing))
+
+    const mismatch = describeExamsFailure(apiError(409, { code: 'exam_not_ready', problems: ['questions_not_ready', 'points_mismatch', 'window_closed'], totalPoints: 8.5, maxScore: 10, questionIds: ['q-1'] }))
+    expect(mismatch.readiness?.questionIds).toEqual(['q-1'])
+    expect(failureMessage(t, mismatch)).toBe(notReady(problems.questions_not_ready, fill(problems.points_mismatch, { total: 8.5, max: 10 }), problems.window_closed))
+    expect(failureMessage(t, mismatch)).toContain('(8.5)')
+    // A problem of a newer server shows as it came; numbers the server did not send are not invented.
+    expect(failureMessage(t, describeExamsFailure(apiError(409, { code: 'exam_not_ready', problems: ['points_mismatch', 'something_new'] })))).toBe(notReady(problems.points_mismatch_plain, 'something_new'))
+  })
+
+  it('says how many attempts keep an exam from going back to a draft, and that a started online exam is not deleted', () => {
+    const attempts = describeExamsFailure(apiError(409, { code: 'exam_has_attempts', action: 'unschedule', attemptCount: 3 }))
+    expect(attempts).toEqual({ key: 'examOnline.errors.exam_has_attempts', params: { attempts: '3' } })
+    expect(failureMessage(t, attempts)).toBe(fill(words.exam_has_attempts, { attempts: 3 }))
+    expect(failureMessage(t, attempts)).toContain('3')
+
+    const started = describeExamsFailure(apiError(409, { code: 'exam_not_deletable', status: 'scheduled', resultCount: 0, attemptCount: 2 }))
+    expect(started).toEqual({ key: 'examOnline.errors.exam_not_deletable', params: { attempts: '2' } })
+    expect(isExamsFailure(started, 'exam_not_deletable')).toBe(true)
+    expect(failureMessage(t, started)).toBe(fill(words.exam_not_deletable, { attempts: 2 }))
+    // Without an attempt count it is the first phase's refusal, worded as before.
+    expect(describeExamsFailure(apiError(409, { code: 'exam_not_deletable', status: 'published', resultCount: 4 }))).toEqual({ key: 'exams.errors.exam_not_deletable' })
+    expect(describeExamsFailure(apiError(409, { code: 'exam_not_deletable', status: 'published', resultCount: 4, attemptCount: 0 }))).toEqual({ key: 'exams.errors.exam_not_deletable' })
+  })
+
+  it('says when the window closes for exam_window_open — formatted by the screen — or that it must close first', () => {
+    const open = describeExamsFailure(apiError(409, { code: 'exam_window_open', closesAt: '2026-11-20T09:00:00.000Z' }))
+    expect(open).toEqual({ key: 'examOnline.errors.exam_window_open', windowClosesAt: '2026-11-20T09:00:00.000Z' })
+    expect(failureMessage(t, open, { instant: (iso) => `<${iso}>` })).toBe(fill(words.exam_window_open, { when: '<2026-11-20T09:00:00.000Z>' }))
+    expect(failureMessage(t, open)).toBe(words.exam_window_open_undated)
+    const undated = describeExamsFailure(apiError(409, { code: 'exam_window_open', closesAt: null }))
+    expect(undated).toEqual({ key: 'examOnline.errors.exam_window_open', windowClosesAt: null })
+    expect(failureMessage(t, undated, { instant: (iso) => iso })).toBe(words.exam_window_open_undated)
+  })
+
+  it('points window_invalid at the closing, lists the settings refused on a manual exam, and words exam_not_online', () => {
+    expect(describeExamsFailure(apiError(400, { code: 'window_invalid', opensAt: 'a', closesAt: 'b' }))).toEqual({ key: 'examOnline.errors.window_invalid', field: ['closesDate'] })
+    expect(failureMessage(t, describeExamsFailure(apiError(400, { code: 'window_invalid' })))).toBe(words.window_invalid)
+    const refused = describeExamsFailure(apiError(400, { code: 'online_settings_not_allowed', fields: ['closesAt', 'attemptsAllowed'] }))
+    expect(refused).toEqual({ key: 'examOnline.errors.online_settings_not_allowed', refusedSettings: ['closesAt', 'attemptsAllowed'] })
+    const labels = ar.examOnline.patchFields
+    expect(failureMessage(t, refused)).toBe(fill(words.online_settings_not_allowed, { list: `(${[labels.closesAt, labels.attemptsAllowed].join(ar.exams.errors.listSeparator)})` }))
+    expect(failureMessage(t, describeExamsFailure(apiError(409, { code: 'exam_not_online', examId: 'e' })))).toBe(words.exam_not_online)
+  })
+
+  it('names the online fields of exam_locked by their labels and keeps the counts that tell why', () => {
+    const locked = describeExamsFailure(apiError(409, { code: 'exam_locked', status: 'scheduled', fields: ['scheduledAt', 'closesAt', 'durationMinutes', 'maxScore', 'attemptsAllowed'], resultCount: 0, attemptCount: 2 }))
+    expect(locked).toEqual({
+      key: 'exams.errors.exam_locked',
+      lockedFields: ['scheduledAt', 'closesAt', 'durationMinutes', 'maxScore', 'attemptsAllowed'],
+      lockedStatus: 'scheduled',
+      lockedResultCount: 0,
+      lockedAttemptCount: 2,
+    })
+    const first = ar.exams.patchFields
+    const online = ar.examOnline.patchFields
+    const lockedList = (...names: string[]) => fill(ar.exams.errors.exam_locked, { list: `(${names.join(ar.exams.errors.listSeparator)})` })
+    expect(failureMessage(t, locked)).toBe(lockedList(first.scheduledAt, online.closesAt, first.durationMinutes, first.maxScore, online.attemptsAllowed))
+    expect(failureMessage(t, describeExamsFailure(apiError(409, { code: 'exam_locked', status: 'scheduled', fields: ['delivery'], resultCount: 0 })))).toBe(lockedList(online.delivery))
+  })
+})
+
+describe('lockedFieldMessageKey (why exam_locked refused each field)', () => {
+  it('keeps the first phase’s reason for a manual exam: the maximum score after a first result', () => {
+    expect(lockedFieldMessageKey('maxScore', { lockedResultCount: 1 })).toBe('exams.validation.lockedAfterResult')
+    expect(lockedFieldMessageKey('maxScore', {})).toBe('exams.validation.lockedAfterResult')
+    expect(lockedFieldMessageKey('title', {})).toBe('exams.validation.lockedAfterResult')
+  })
+
+  it('tells an online exam’s cases apart by the counts of the refusal', () => {
+    const visible = { lockedResultCount: 0, lockedAttemptCount: 0 }
+    const started = { lockedResultCount: 0, lockedAttemptCount: 3 }
+    expect(lockedFieldMessageKey('delivery', visible)).toBe('examOnline.locked.delivery')
+    expect(lockedFieldMessageKey('maxScore', visible)).toBe('examOnline.locked.maxScore')
+    expect(['scheduledAt', 'closesAt', 'durationMinutes'].map((field) => lockedFieldMessageKey(field, visible))).toEqual(Array(3).fill('examOnline.locked.clearedOnceVisible'))
+    expect(lockedFieldMessageKey('scheduledAt', started)).toBe('examOnline.locked.fixedOnceStarted')
+    expect(lockedFieldMessageKey('durationMinutes', started)).toBe('examOnline.locked.fixedOnceStarted')
+    expect(lockedFieldMessageKey('closesAt', started)).toBe('examOnline.locked.closesOnlyLater')
+    expect(lockedFieldMessageKey('attemptsAllowed', started)).toBe('examOnline.locked.attemptsOnlyRise')
+    // Every key is a real text.
+    for (const key of Object.keys(ar.examOnline.locked)) expect(t(`examOnline.locked.${key}`)).toBe(ar.examOnline.locked[key as keyof typeof ar.examOnline.locked])
   })
 })
 

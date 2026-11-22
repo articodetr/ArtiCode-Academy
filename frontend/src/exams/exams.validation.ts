@@ -2,8 +2,10 @@
 // (backend/src/exams/exams.dto.ts), of the pass-score rule of exams.changes.ts
 // and of a result's score (exam-results.dto.ts + scoreAboveMax()) — J-F45. The
 // forms word every refusal themselves; the server stays the boundary. Pure;
-// unit-tested in exams.validation.test.ts.
-import { EXAM_DURATION_MAX, EXAM_MAX_SCORE_MIN, EXAM_SCORE_LIMIT, EXAM_WEIGHT_LIMIT } from '../api/exams'
+// unit-tested in exams.validation.test.ts. Since MOD-09 phase 2 also the two
+// rules of an online exam's settings: the attempts allowed and the window
+// (isWindowInverted() of backend/src/exams/exams.online.ts — keep in sync).
+import { EXAM_ATTEMPTS_MAX, EXAM_DURATION_MAX, EXAM_MAX_SCORE_MIN, EXAM_SCORE_LIMIT, EXAM_WEIGHT_LIMIT } from '../api/exams'
 import { isTwoDecimalNumber } from '../assignments/assignments.validation'
 
 const blank = (value: unknown) => value === null || value === undefined
@@ -43,4 +45,14 @@ export function missingSchedulePart(date: string | undefined, time: string | und
   if (date && !time) return 'time'
   if (time && !date) return 'date'
   return null
+}
+
+/** `attemptsAllowed` of an online exam: a whole number 1..20 (`EXAM_ATTEMPTS_MAX`); never blank. */
+export function isAttemptsAllowedValid(value: unknown): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= EXAM_ATTEMPTS_MAX
+}
+
+/** The server's `window_invalid`: the window would close at or before it opens (both instants known). */
+export function isWindowInverted(opensAt: string | null | undefined, closesAt: string | null | undefined): boolean {
+  return typeof opensAt === 'string' && typeof closesAt === 'string' && Date.parse(closesAt) <= Date.parse(opensAt)
 }

@@ -7,7 +7,7 @@ import { dayEndIn, dayStartIn } from '../assignments/assignments.zone'
 import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
 import { CLASS_ID, makeClass, makeClassList } from '../test/classes'
-import { EXAM_ADMIN_PERMISSIONS, EXAM_ID_2, EXAM_LESSON, EXAM_READER_PERMISSIONS, EXAM_TEACHER_PERMISSIONS, EXAM_TIME_ZONE, makeExam, makeExamList } from '../test/exams'
+import { EXAM_ADMIN_PERMISSIONS, EXAM_ID_2, EXAM_LESSON, EXAM_READER_PERMISSIONS, EXAM_TEACHER_PERMISSIONS, EXAM_TIME_ZONE, makeExam, makeExamList, makeOnlineExam } from '../test/exams'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeLessonList } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -206,5 +206,46 @@ describe('ExamsPage', () => {
     await waitFor(() => expect(api.queries.length).toBeGreaterThan(before))
     // The drawer opens on the created exam.
     expect(await screen.findByTestId('exam-results-summary')).toBeInTheDocument()
+  })
+})
+
+describe('ExamsPage — online exams (MOD-09 phase 2)', () => {
+  const delivery = ar.examOnline.delivery
+
+  it('marks an online exam beside its title — a manual one shows nothing new — and asks for no delivery until the filter is used', async () => {
+    const api = mockExamsApi(makeExamList([midterm, makeOnlineExam({ id: EXAM_ID_2, status: 'scheduled' })]))
+    renderPage(EXAM_TEACHER_PERMISSIONS)
+    await screen.findByText('اختبار منتصف الفصل')
+    const rows = bodyRows()
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]!).queryByTestId('exam-online-tag')).not.toBeInTheDocument()
+    expect(within(rows[1]!).getByText('اختبار قصير إلكتروني')).toBeInTheDocument()
+    expect(within(rows[1]!).getByTestId('exam-online-tag')).toHaveTextContent(delivery.tag)
+    expect(api.queries[0]!.get('delivery')).toBeNull()
+  })
+
+  it('filters by delivery on the server, from the first page: only online exams, only manual ones, both again', async () => {
+    const api = mockExamsApi(makeExamList([], null))
+    renderPage(EXAM_ADMIN_PERMISSIONS)
+    expect(await screen.findByText(ar.exams.empty)).toBeInTheDocument()
+
+    fireEvent.mouseDown(screen.getByLabelText(delivery.label))
+    const options = await screen.findAllByText(new RegExp(`^(${delivery.short.manual}|${delivery.short.online})$`), { selector: '.ant-select-item-option-content' })
+    expect(options.map((option) => option.textContent)).toEqual([delivery.short.manual, delivery.short.online])
+    fireEvent.click(options[1]!)
+    await waitFor(() => expect(api.queries.at(-1)?.get('delivery')).toBe('online'))
+    expect(api.queries.at(-1)?.get('cursor')).toBeNull()
+    // A narrowed list that is empty says «nothing matches», not «no exams yet».
+    expect(await screen.findByText(ar.exams.emptyFiltered)).toBeInTheDocument()
+
+    fireEvent.mouseDown(screen.getByLabelText(delivery.label))
+    fireEvent.click(await screen.findByText(delivery.short.manual, { selector: '.ant-select-item-option-content' }))
+    await waitFor(() => expect(api.queries.at(-1)?.get('delivery')).toBe('manual'))
+
+    // Cleared: both again, and the parameter is gone.
+    const select = screen.getByLabelText(delivery.label).closest('.ant-select') as HTMLElement
+    fireEvent.click(select.querySelector('.ant-select-clear')!)
+    await waitFor(() => expect(api.queries.at(-1)?.get('delivery')).toBeNull())
+    expect(await screen.findByText(ar.exams.empty)).toBeInTheDocument()
   })
 })

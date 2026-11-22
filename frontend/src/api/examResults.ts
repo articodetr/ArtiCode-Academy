@@ -11,7 +11,7 @@
 import { apiRequest } from './client'
 import type { EnrollmentStatus, EnrollmentStudent } from './enrollments'
 import { EXAMS_PATH } from './exams'
-import type { ExamResultCounts, ExamStatus } from './exams'
+import type { ExamDelivery, ExamResultCounts, ExamStatus } from './exams'
 
 /** In the order of the Prisma enum `exam_result_status`: `absent` counts 0 in the final grade, `excused` is left out of it (D-R45). */
 export const EXAM_RESULT_STATUSES = ['scored', 'absent', 'excused'] as const
@@ -28,6 +28,10 @@ export type ResultsBlocker = (typeof RESULTS_BLOCKERS)[number]
 export const RESULTS_BATCH_MAX = 500
 export const RESULT_FEEDBACK_MAX_LENGTH = 500
 
+/** Where a result came from: `manual` — recorded on this sheet; `online` — the student's counted attempt, written by the server (D-R160). */
+export const EXAM_RESULT_SOURCES = ['manual', 'online'] as const
+export type ExamResultSource = (typeof EXAM_RESULT_SOURCES)[number]
+
 /** `ResultRecorderDto`: who last wrote the result (null when that account was deleted). */
 export interface ExamResultRecorder {
   userId: string
@@ -41,6 +45,9 @@ export interface ExamResult {
   score: number | null
   /** Shown to the student once the results are published. */
   feedback: string | null
+  /** An `online` result is not edited here: it follows the student's attempts. */
+  source: ExamResultSource
+  /** Null for an `online` result. */
   recordedBy: ExamResultRecorder | null
   /** When the result was first recorded. */
   recordedAt: string
@@ -53,6 +60,8 @@ export interface ExamResultItem {
   /** A withdrawn student stays listed while they hold a result but can no longer be recorded. */
   enrollmentStatus: EnrollmentStatus | null
   result: ExamResult | null
+  /** The student's attempts at an online exam, of any state; with one the sheet refuses an entry for them (`result_from_attempt`). Always 0 for a manual exam. */
+  attemptCount: number
 }
 
 /** `ExamResultsSheetDto` (API-119), also the answer of every successful PUT (API-120). */
@@ -60,6 +69,8 @@ export interface ExamResultsSheet {
   examId: string
   classId: string
   examStatus: ExamStatus
+  /** For an `online` exam the sheet takes the students who have no attempt (absent, excused, a make-up on paper). */
+  delivery: ExamDelivery
   maxScore: number
   /** True when a PUT would be accepted right now (a scheduled or published exam of a class that is not cancelled). */
   recordable: boolean
@@ -93,7 +104,10 @@ export function getExamResults(examId: string, signal?: AbortSignal): Promise<Ex
   return apiRequest<ExamResultsSheet>(examResultsPath(examId), { signal })
 }
 
-/** API-120 — records or corrects a batch; answers with the sheet after the write (an identical batch writes nothing). */
+/**
+ * API-120 — records or corrects a batch; answers with the sheet after the write (an identical batch writes nothing).
+ * For an online exam a batch naming a student who has an attempt is refused whole: 409 `result_from_attempt { studentIds }`.
+ */
 export function recordExamResults(examId: string, input: RecordExamResultsInput): Promise<ExamResultsSheet> {
   return apiRequest<ExamResultsSheet>(examResultsPath(examId), { method: 'PUT', body: input })
 }
