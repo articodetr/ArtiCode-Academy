@@ -190,6 +190,7 @@ export const dashboard = {
     now: 'الآن',
     next: 'التالي',
     join: 'الانضمام',
+    openLink: 'فتح الرابط',
     waiting: 'ينتظرك',
     nothingWaiting: 'لا شيء ينتظرك الآن.',
     kind: { assignment: 'واجب', exam: 'اختبار', invoice: 'دفعة', notifications: 'إشعارات', final: 'نهائية' },
