@@ -1,7 +1,7 @@
 // Why the course player cannot open a course (MOD-20 — D-R132), worded for
 // the learner with the one way forward: an own enrollment waiting for payment
 // or approval → «my enrollment requests»; no own enrollment → the course in
-// the catalog; an unknown course → back to «مدرستي».
+// the catalog; an unknown course → back to «فصولي».
 import { Button, Result } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
@@ -18,7 +18,7 @@ export function LearnAccessNotice({ failure, courseId }: { failure: AccessFailur
     status = 'info'
     title = t('learn.access.pendingTitle')
     text = t('learn.access.pendingText')
-    action = { label: t('learn.access.pendingLink'), to: '/my-school?section=requests' }
+    action = { label: t('learn.access.pendingLink'), to: '/my-classes?section=requests' }
   } else if (failure.kind === 'not_enrolled') {
     title = t('learn.access.notEnrolledTitle')
     text = t('learn.access.notEnrolledText')
@@ -26,7 +26,7 @@ export function LearnAccessNotice({ failure, courseId }: { failure: AccessFailur
   } else {
     title = t('learn.access.notFoundTitle')
     text = t('learn.access.notFoundText')
-    action = { label: t('learn.header.backToMySchool'), to: '/my-school' }
+    action = { label: t('learn.header.backToMySchool'), to: '/my-classes' }
   }
   return (
     <Result

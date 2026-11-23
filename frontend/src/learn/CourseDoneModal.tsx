@@ -19,7 +19,7 @@ export function CourseDoneModal({ open, onClose }: { open: boolean; onClose: () 
         <Button key="review" onClick={onClose}>
           {t('learn.done.keepReviewing')}
         </Button>,
-        <Button key="school" type="primary" onClick={() => navigate('/my-school')}>
+        <Button key="school" type="primary" onClick={() => navigate('/my-classes')}>
           {t('learn.done.backToMySchool')}
         </Button>,
       ]}

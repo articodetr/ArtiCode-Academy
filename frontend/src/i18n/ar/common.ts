@@ -111,7 +111,6 @@ export const nav = {
   // MOD-19: the learner's catalog and courses, the office's requests.
   catalog: 'استكشف الدورات',
   myCourses: 'دوراتي',
-  mySchool: 'مدرستي',
   enrollmentRequests: 'طلبات الاشتراك',
   schedule: 'الجدول الزمني',
   lessons: 'الدروس',

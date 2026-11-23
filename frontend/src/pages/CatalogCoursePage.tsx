@@ -299,7 +299,7 @@ export function CatalogCoursePage() {
                 {course.selfService.allowed ? null : <Alert type="info" showIcon title={t(`catalog.selfService.${course.selfService.reason ?? 'no_permission'}`)} />}
                 {shownOutcome ? (
                   shownOutcome.result.outcome === 'enrolled' ? (
-                    // PORTAL-04: the server answered an active enrollment — the way on is to learn, or to «My School».
+                    // PORTAL-04: the server answered an active enrollment — the way on is to learn, or to «فصولي».
                     <Alert
                       type="success"
                       showIcon
@@ -312,7 +312,7 @@ export function CatalogCoursePage() {
                             <Button type="primary" size="small" onClick={() => navigate(`/learn/${encodeURIComponent(course.id)}`)}>
                               {t('catalog.result.startLearning')}
                             </Button>
-                            <Button size="small" onClick={() => navigate('/my-school')}>
+                            <Button size="small" onClick={() => navigate('/my-classes')}>
                               {t('catalog.result.goToMySchool')}
                             </Button>
                           </Space>
@@ -342,7 +342,7 @@ export function CatalogCoursePage() {
                             })}
                           </span>
                           <Space wrap>
-                            <Button type="primary" size="small" onClick={() => navigate('/my-school?section=requests')}>
+                            <Button type="primary" size="small" onClick={() => navigate('/my-classes?section=requests')}>
                               {t('catalog.result.myRequests')}
                             </Button>
                             <Button size="small" onClick={() => navigate('/payments')}>
@@ -405,7 +405,7 @@ export function CatalogCoursePage() {
 
 /**
  * The reader's own place in the course (PORTAL-04): studying it → «واصل التعلم» to the learning workspace, which
- * resumes where the server says; completed → its review there; a request → its state and «طلباتي» in «مدرستي».
+ * resumes where the server says; completed → its review there; a request → its state and «طلباتي» in «فصولي».
  * The workspace itself still checks the enrollment (API-229..234) — this only shows the way.
  */
 function StandingNotice({ standing, courseId }: { standing: CourseStanding; courseId: string }) {
@@ -430,7 +430,7 @@ function StandingNotice({ standing, courseId }: { standing: CourseStanding; cour
               <Tag color={REQUEST_STATE_COLORS[standing.state]}>{t(`catalog.states.${standing.state}`)}</Tag>
             </Space>
             <Space wrap>
-              <Button size="small" onClick={() => navigate('/my-school?section=requests')}>
+              <Button size="small" onClick={() => navigate('/my-classes?section=requests')}>
                 {t('catalog.detail.mine.requests')}
               </Button>
               {/* The invoice is paid at the academy and recorded by its staff: «my invoices» shows it — no checkout here. */}
@@ -461,7 +461,7 @@ function StandingNotice({ standing, courseId }: { standing: CourseStanding; cour
             <Button type="primary" size="small" onClick={() => navigate(learnPath)}>
               {t(studying ? 'catalog.detail.mine.continue' : 'catalog.detail.mine.review')}
             </Button>
-            <Button size="small" onClick={() => navigate('/my-school')}>
+            <Button size="small" onClick={() => navigate('/my-classes')}>
               {t('catalog.detail.mine.mySchool')}
             </Button>
           </Space>

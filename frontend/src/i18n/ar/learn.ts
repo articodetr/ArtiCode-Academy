@@ -5,8 +5,8 @@
 
 export const learn = {
   header: {
-    backToMySchool: 'العودة إلى مدرستي',
-    mySchool: 'مدرستي',
+    backToMySchool: 'العودة إلى فصولي',
+    mySchool: 'فصولي',
     breadcrumb: 'مسار التنقل',
     openContents: 'محتوى الدورة',
   },
@@ -209,7 +209,7 @@ export const learn = {
   done: {
     title: 'أتممت جميع دروس الدورة المطلوبة',
     text: 'أحسنت! يمكنك العودة إلى الدروس ومراجعتها متى شئت.',
-    backToMySchool: 'العودة إلى مدرستي',
+    backToMySchool: 'العودة إلى فصولي',
     keepReviewing: 'متابعة المراجعة',
   },
   errors: {
