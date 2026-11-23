@@ -58,13 +58,6 @@ export function cardAvailability(card: Pick<CatalogCourseCard, 'pricing' | 'pric
   return card.pricing === 'paid' && card.price === null ? 'priceUnavailable' : 'full'
 }
 
-export const AVAILABILITY_COLORS: Record<CardAvailability, string> = {
-  available: 'green',
-  priceUnavailable: 'orange',
-  full: 'red',
-  closed: 'default',
-}
-
 /** The classes the details page offers a button for: the server's `enrollable` ones, in its order. */
 export function enrollableClasses(detail: Pick<CatalogCourseDetail, 'classes' | 'selfService'>): CatalogClass[] {
   if (!detail.selfService.allowed) return []

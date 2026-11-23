@@ -74,7 +74,7 @@ function ProgramsBody({ programs, viewer, hrefOf }: { programs: HomeProgramsRead
     return (
       <div className="public-home__courses" aria-busy="true">
         {Array.from({ length: SKELETON_CARDS }, (_, index) => (
-          <div key={index} className="public-card public-card--home public-card--skeleton">
+          <div key={index} className="public-card public-card--skeleton">
             <div className="public-card__media public-home__skeleton-media" />
             <div className="public-card__body">
               <Skeleton active title={{ width: '70%' }} paragraph={{ rows: 2 }} />

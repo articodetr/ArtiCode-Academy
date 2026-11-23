@@ -1,82 +1,108 @@
-// One course of «explore courses» (MOD-19, API-219): what the server says of
-// it — cover, name, summary, level, duration, sessions, price, the classes
-// open to self-service and how many have a seat, the lead teachers by name,
-// and the reader's own enrollment or pending request. Both buttons lead to the
-// course page: «التفاصيل» only opens it, while the enroll button carries the
+// One course of «explore courses» (MOD-19, API-219), in the look of the public course card (the same classes and
+// CardMedia; `public-card--app` carries the tokens inside the signed-in layout and keeps the app's font). What the
+// server says of it: cover, name, summary, the badges (difficulty = `course.level`, duration), sessions, the syllabus,
+// the classes open with a seat, the lead teachers by name, the price, and the reader's own enrollment or pending
+// request. Both actions lead to the course page: «عرض الدورة» only opens it, while the enroll action carries the
 // intent, so the page asks for the confirmation when one class takes the reader.
-import { Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
-import type { DescriptionsProps } from 'antd'
+import { CalendarOutlined, ReadOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
+import { Typography } from 'antd'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import type { CatalogCourseCard } from '../api/catalog'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatMoney } from '../payments/payments.format'
+import { CardArrow } from '../publicCatalog/PublicCardActions'
+import { CardMedia, Fact } from '../publicCatalog/PublicCourseCard'
+import { courseBadgesOf } from '../publicCatalog/publicCatalog.view'
+import '../publicCatalog/publicCatalog.css'
 import { displayNameOf, localizedLabel } from '../users/users.format'
-import { AVAILABILITY_COLORS, cardAvailability, coverSrc } from './catalog.view'
-import { CourseCover } from './CourseCover'
+import { cardAvailability } from './catalog.view'
+
+function LabelledFact({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+  return (
+    <Fact icon={icon}>
+      <span>{label}</span>
+      <span className="public-card__fact-value">{children}</span>
+    </Fact>
+  )
+}
 
 export function CourseCard({ card, onOpen, onEnroll }: { card: CatalogCourseCard; onOpen: (courseId: string) => void; onEnroll: (courseId: string) => void }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const availability = cardAvailability(card)
-  const cover = coverSrc(card.coverImageUrl)
   const name = localizedLabel(card.name, language)
   const offersEnroll = availability === 'available' && !card.mine.enrolled && !card.mine.pending
-
-  const facts: DescriptionsProps['items'] = []
-  if (card.durationHours !== null) facts.push({ key: 'duration', label: t('catalog.card.duration'), children: <bdi dir="ltr">{card.durationHours}</bdi> })
-  if (card.sessionsCount !== null) facts.push({ key: 'sessions', label: t('catalog.card.sessions'), children: <bdi dir="ltr">{card.sessionsCount}</bdi> })
-  facts.push({ key: 'syllabus', label: t('catalog.card.syllabus'), children: <bdi dir="ltr">{card.syllabusCount}</bdi> })
-  facts.push({ key: 'classes', label: t('catalog.card.availableClasses'), children: <bdi dir="ltr">{card.availableClasses}</bdi> })
-  if (card.teachers.length > 0) facts.push({ key: 'teachers', label: t('catalog.card.teachers'), children: card.teachers.map(displayNameOf).join('، ') })
+  const viewLabel = t('publicCatalog.card.viewCourse')
+  const enrollLabel = t(card.pricing === 'paid' ? 'catalog.card.request' : 'catalog.card.enroll')
+  const priceKind = card.pricing === 'free' ? 'free' : card.price ? 'amount' : 'unavailable'
+  // The pill's colours: a course whose price is unavailable reads like a full one, in its own words.
+  const availabilityTone = availability === 'priceUnavailable' ? 'full' : availability
 
   return (
-    <Card
-      data-testid={`catalog-card-${card.id}`}
-      style={{ height: '100%' }}
-      styles={{ body: { display: 'flex', flexDirection: 'column', gap: 12 } }}
-      cover={cover ? <CourseCover key={cover} url={card.coverImageUrl} /> : undefined}
-      actions={[
-        <Button key="details" type="link" onClick={() => onOpen(card.id)}>
-          {t('catalog.card.details')}
-        </Button>,
-        ...(offersEnroll
-          ? [
-              <Button key="enroll" type="primary" onClick={() => onEnroll(card.id)}>
-                {t(card.pricing === 'paid' ? 'catalog.card.request' : 'catalog.card.enroll')}
-              </Button>,
-            ]
-          : []),
-      ]}
-    >
-      <div>
-        <Typography.Title level={5} style={{ margin: 0 }}>
-          {name}
+    <article data-testid={`catalog-card-${card.id}`} className="public-card public-card--app public-card--link">
+      <CardMedia id={card.id} url={card.coverImageUrl} badges={courseBadgesOf(card, t, language)} />
+      <div className="public-card__body">
+        <Typography.Title level={5} className="public-card__title">
+          {/* As on the public card: the name is the real link, stretched over the card, and the card's tab stop. */}
+          <Link to={`/catalog/${encodeURIComponent(card.id)}`} className="public-card__link" title={name}>
+            {name}
+          </Link>
         </Typography.Title>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          <bdi dir="ltr">{card.code}</bdi>
-        </Typography.Text>
+        {card.summary ? (
+          <Typography.Paragraph ellipsis={{ rows: 2 }} className="public-card__summary">
+            {localizedLabel(card.summary, language)}
+          </Typography.Paragraph>
+        ) : null}
+        <ul className="public-card__facts">
+          {card.sessionsCount !== null ? (
+            <LabelledFact icon={<CalendarOutlined />} label={t('catalog.card.sessions')}>
+              <bdi dir="ltr">{card.sessionsCount}</bdi>
+            </LabelledFact>
+          ) : null}
+          <LabelledFact icon={<ReadOutlined />} label={t('catalog.card.syllabus')}>
+            <bdi dir="ltr">{card.syllabusCount}</bdi>
+          </LabelledFact>
+          <LabelledFact icon={<TeamOutlined />} label={t('catalog.card.availableClasses')}>
+            <bdi dir="ltr">{card.availableClasses}</bdi>
+          </LabelledFact>
+          {card.teachers.length > 0 ? (
+            <LabelledFact icon={<UserOutlined />} label={t('catalog.card.teachers')}>
+              {card.teachers.map(displayNameOf).join('، ')}
+            </LabelledFact>
+          ) : null}
+        </ul>
+        {card.mine.enrolled || card.mine.pending ? (
+          <div className="public-card__mine">
+            {card.mine.enrolled ? <span className="public-card__availability public-card__availability--available">{t('catalog.card.enrolled')}</span> : null}
+            {card.mine.pending ? <span className="public-card__availability public-card__availability--full">{t('catalog.card.pending')}</span> : null}
+          </div>
+        ) : null}
+        <div className="public-card__status">
+          <span className={`public-price public-price--${priceKind}`}>
+            {card.pricing === 'free' ? t('catalog.free') : card.price ? <bdi dir="ltr">{formatMoney(card.price.amount, card.price.currency, language)}</bdi> : t('catalog.paid')}
+          </span>
+          <span className={`public-card__availability public-card__availability--${availabilityTone}`}>
+            <span className="public-card__dot" aria-hidden="true" />
+            {t(`catalog.card.${availability}`)}
+          </span>
+        </div>
       </div>
-      {card.summary ? (
-        <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} style={{ margin: 0 }}>
-          {localizedLabel(card.summary, language)}
-        </Typography.Paragraph>
-      ) : null}
-      <Space size={[4, 4]} wrap>
-        {card.level ? <Tag color="blue">{localizedLabel(card.level.name, language)}</Tag> : null}
-        {card.pricing === 'free' ? (
-          <Tag color="green">{t('catalog.free')}</Tag>
-        ) : card.price ? (
-          <Tag color="gold">
-            <bdi dir="ltr">{formatMoney(card.price.amount, card.price.currency, language)}</bdi>
-          </Tag>
-        ) : (
-          <Tag color="gold">{t('catalog.paid')}</Tag>
-        )}
-        <Tag color={AVAILABILITY_COLORS[availability]}>{t(`catalog.card.${availability}`)}</Tag>
-        {card.mine.enrolled ? <Tag color="green">{t('catalog.card.enrolled')}</Tag> : null}
-        {card.mine.pending ? <Tag color="gold">{t('catalog.card.pending')}</Tag> : null}
-      </Space>
-      <Descriptions size="small" column={1} items={facts} />
-    </Card>
+      <div className="public-card__foot">
+        <div className="public-card__subscribe-line">
+          {offersEnroll ? (
+            <button type="button" className="public-card__subscribe" aria-label={`${enrollLabel}: ${name}`} onClick={() => onEnroll(card.id)}>
+              {enrollLabel}
+            </button>
+          ) : null}
+        </div>
+        {/* The same destination as the name's link, for the pointer: out of the tab order and the accessibility tree. */}
+        <button type="button" className="public-card__action" tabIndex={-1} aria-hidden="true" onClick={() => onOpen(card.id)}>
+          {viewLabel}
+          <CardArrow />
+        </button>
+      </div>
+    </article>
   )
 }
