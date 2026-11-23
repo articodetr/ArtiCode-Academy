@@ -26,6 +26,7 @@ import { LessonsPage } from '../pages/LessonsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { MyAssignmentsPage } from '../pages/MyAssignmentsPage'
 import { MyCertificatesPage } from '../pages/MyCertificatesPage'
+import { MyClassLessonsPage } from '../pages/MyClassLessonsPage'
 import { MyClassesPage } from '../pages/MyClassesPage'
 import { MyExamsPage } from '../pages/MyExamsPage'
 import { MyGradesPage } from '../pages/MyGradesPage'
@@ -99,6 +100,7 @@ const router = createBrowserRouter([
       { path: 'courses', element: guarded('courses', <CoursesPage />) },
       { path: 'classes', element: guarded('classes', <ClassesPage />) },
       { path: 'my-classes', element: guarded('myClasses', <MyClassesPage />) }, // `student`/`guardian` role keys (J-F04, API-060 — ownership)
+      { path: 'my-classes/:classId', element: guarded('myClasses', <MyClassLessonsPage />) }, // J-F62: one class's lessons (API-101 with classId)
       { path: 'catalog', element: guarded('catalog', <CatalogPage />) }, // MOD-19: `student`/`guardian` role keys (API-219 reads with courses.read)
       { path: 'catalog/:courseId', element: guarded('catalog', <CatalogCoursePage />) }, // MOD-19: API-220/221
       // J-F61: «مدرستي» was folded into «فصولي». The notifications already stored link to these two addresses.

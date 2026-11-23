@@ -258,6 +258,13 @@ export const myClasses = {
     classes: 'الفصول',
     requests: 'طلبات الاشتراك',
   },
+  // J-F62: the lessons of one class (/my-classes/:classId).
+  classLessons: {
+    title: 'دروس الفصل',
+    open: 'عرض دروس هذا الفصل',
+    back: 'العودة إلى فصولي',
+    notFound: 'هذا الفصل ليس ضمن فصولك النشطة أو المكتملة',
+  },
   columns: {
     class: 'الفصل',
     student: 'الطالب',

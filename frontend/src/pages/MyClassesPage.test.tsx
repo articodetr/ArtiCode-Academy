@@ -79,6 +79,21 @@ describe('MyClassesPage', () => {
     await i18n.changeLanguage('ar')
   })
 
+  it('J-F62: the class name opens its lessons page, only for an enrollment with lessons', async () => {
+    const withdrawn = makeMyClassItem({
+      enrollmentId: ENROLLMENT_IDS[1],
+      enrollmentStatus: 'withdrawn',
+      withdrawnAt: '2026-10-01T12:00:00.000Z',
+      class: { ...own.class, id: 'c-3', code: 'OLD-1', name: { ar: 'فصل منسحب منه' } },
+    })
+    mockMyClassesApi(makeMyClassList([own, withdrawn]))
+    renderPage(['student'])
+
+    const link = await screen.findByRole('link', { name: 'بايثون — الفصل أ' })
+    expect(link).toHaveAttribute('href', `/my-classes/${own.class.id}`)
+    expect(screen.getByText('فصل منسحب منه').closest('a')).toBeNull()
+  })
+
   it('shows a student their own classes from GET /api/me/classes with no student column and no contact details', async () => {
     const api = mockMyClassesApi(makeMyClassList([own, completed]))
     renderPage(['student'])
