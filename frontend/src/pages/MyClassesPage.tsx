@@ -14,7 +14,7 @@ import { Alert, Badge, Button, Card, Flex, Select, Skeleton, Space, Table, Tabs,
 import type { TableProps } from 'antd'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { ENROLLMENT_STATUSES } from '../api/enrollments'
 import type { EnrollmentStatus, MyClassItem } from '../api/enrollments'
 import type { MyLearningCourse } from '../api/learning'
@@ -27,6 +27,7 @@ import { ClassLearnButton, ClassLearningProgress } from '../enrollments/MyClassL
 import { MyEnrollmentRequests } from '../enrollments/MyEnrollmentRequests'
 import { useMyClasses } from '../enrollments/useMyClasses'
 import { useLocalized } from '../i18n/useLocalized'
+import { classLessonsPath, hasClassLessons } from '../lessons/myLessons.view'
 import { SECTION_PARAM, isPendingRequest, mySchoolFailureKey } from '../mySchool/mySchool.view'
 import { SourceAlert } from '../mySchool/SourceAlert'
 import { useIsPhone, useMyLearning } from '../mySchool/useMyLearning'
@@ -77,7 +78,14 @@ export function MyClassesPage() {
       key: 'class',
       render: (_, row) => (
         <Space orientation="vertical" size={phone ? 6 : 0}>
-          <Typography.Text strong>{localizedLabel(row.class.name, language)}</Typography.Text>
+          {/* J-F62: the name opens the class's own lessons; API-101 has none for a withdrawn, cancelled or pending enrollment. */}
+          {hasClassLessons(row.enrollmentStatus) ? (
+            <Link to={classLessonsPath(row, my.items)} title={t('myClasses.classLessons.open')} style={{ fontWeight: 600 }}>
+              {localizedLabel(row.class.name, language)}
+            </Link>
+          ) : (
+            <Typography.Text strong>{localizedLabel(row.class.name, language)}</Typography.Text>
+          )}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             <bdi dir="ltr">{row.class.code}</bdi>
           </Typography.Text>

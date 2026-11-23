@@ -271,6 +271,7 @@ export const myLessons = {
   refresh: 'تحديث',
   views: {
     label: 'الفترة',
+    all: 'كل الدروس',
     upcoming: 'اليوم والقادمة',
     past: 'السابقة',
     range: 'مدى مخصّص',

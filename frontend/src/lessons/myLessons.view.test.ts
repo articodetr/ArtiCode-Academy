@@ -3,8 +3,11 @@ import { LESSON_TIME_ZONE } from '../test/lessons'
 import { CHILD_ONE, CHILD_TWO, SELF_STUDENT, makeMyLesson } from '../test/myLessons'
 import {
   attendanceCellOf,
+  classLessonsFilters,
+  classLessonsPath,
   classOptionsOf,
   defaultMyLessonsFilters,
+  hasClassLessons,
   isNarrowed,
   myLessonKey,
   myLessonsQuery,
@@ -19,6 +22,25 @@ const ZONE = LESSON_TIME_ZONE
 
 const classA = { id: 'class-a', code: 'PY-101-A', name: { ar: 'بايثون أ' } }
 const classB = { id: 'class-b', code: 'AR-201', name: { ar: 'عربي متقدم' } }
+
+describe('one class’s lessons (J-F62)', () => {
+  it('opens on every lesson of the class, oldest first, with no time window', () => {
+    expect(myLessonsQuery(classLessonsFilters('c-1'), ZONE, NOW)).toEqual({ classId: 'c-1', studentId: undefined, status: undefined, limit: 20, order: 'asc' })
+    expect(classLessonsFilters('c-1', 's-2').studentId).toBe('s-2')
+  })
+
+  it('opens only for the enrollments API-101 lists', () => {
+    expect(['pending', 'active', 'completed', 'withdrawn', 'cancelled'].filter((status) => hasClassLessons(status as never))).toEqual(['active', 'completed'])
+  })
+
+  it('names the student in the path only when the caller owns the class through more than one', () => {
+    const one = { class: classA, student: { id: 's-1', fullName: 'أ', displayName: null } }
+    const two = { class: classA, student: { id: 's-2', fullName: 'ب', displayName: null } }
+    const other = { class: classB, student: { id: 's-2', fullName: 'ب', displayName: null } }
+    expect(classLessonsPath(other as never, [one, two, other] as never)).toBe('/my-classes/class-b')
+    expect(classLessonsPath(two as never, [one, two, other] as never)).toBe('/my-classes/class-a?student=s-2')
+  })
+})
 
 describe('my lessons — views and parameters', () => {
   it('upcoming = from the start of the academy’s today, oldest first; the other filters pass through', () => {

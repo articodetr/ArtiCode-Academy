@@ -3435,6 +3435,12 @@ export const en: Translation = {
       classes: 'Classes',
       requests: 'Enrollment requests',
     },
+    classLessons: {
+      title: 'Class lessons',
+      open: 'View this class’s lessons',
+      back: 'Back to my classes',
+      notFound: 'This class is not among your active or completed classes',
+    },
     columns: {
       class: 'Class',
       student: 'Student',
@@ -3766,6 +3772,7 @@ export const en: Translation = {
     refresh: 'Refresh',
     views: {
       label: 'Period',
+      all: 'All lessons',
       upcoming: 'Today and upcoming',
       past: 'Past',
       range: 'Custom range',
