@@ -5,7 +5,7 @@ import { makeMyExam, makeMyExamResult, makePublishedMyExam } from '../test/myExa
 import { makeFinalGrade, makeMyGradeItem } from '../test/myGrades'
 import { CHILD_ONE, CHILD_TWO, SELF_STUDENT, makeMyLesson } from '../test/myLessons'
 import { makeMyInvoice } from '../test/payments'
-import { agendaOf, daysUntil, formatScore, isLearnerOnly, learnersOf, nextLessonOf, resultsOf, todoOf } from './learner.data'
+import { agendaOf, daysUntil, formatScore, isLearnerOnly, learnersOf, lessonLinkOf, nextLessonOf, resultsOf, todoOf } from './learner.data'
 
 describe('learner home rules (redesign)', () => {
   it('gives the home to students and guardians with no other role', () => {
@@ -34,6 +34,23 @@ describe('learner home rules (redesign)', () => {
       ['2026-11-15', ['l2']],
     ])
     expect(nextLessonOf([late, cancelled, early], Date.parse('2026-11-14T08:00:00Z'))?.id).toBe('l2')
+  })
+
+  it('keeps a lesson link before, during and after the lesson (KI-062)', () => {
+    const url = 'https://meet.example.com/room'
+    const lesson = makeMyLesson({ meetingUrl: url, deliveryMode: 'live_online', status: 'scheduled', startsAt: '2026-11-23T08:00:00Z', endsAt: '2026-11-23T09:00:00Z' })
+    expect(lessonLinkOf(lesson, Date.parse('2026-11-23T07:00:00Z'))).toEqual({ url, action: 'join' })
+    expect(lessonLinkOf(lesson, Date.parse('2026-11-23T08:30:00Z'))).toEqual({ url, action: 'join' })
+    expect(lessonLinkOf(lesson, Date.parse('2026-11-23T09:00:00Z'))).toEqual({ url, action: 'open' })
+    expect(lessonLinkOf({ ...lesson, status: 'completed' }, Date.parse('2026-11-23T08:30:00Z'))).toEqual({ url, action: 'open' })
+    expect(lessonLinkOf({ ...lesson, deliveryMode: 'recorded' }, Date.parse('2026-11-23T07:00:00Z'))).toEqual({ url, action: 'open' })
+  })
+
+  it('offers no link for a cancelled lesson or a lesson without one', () => {
+    const now = Date.parse('2026-11-23T07:00:00Z')
+    const lesson = makeMyLesson({ meetingUrl: 'https://meet.example.com/room', endsAt: '2026-11-23T09:00:00Z' })
+    expect(lessonLinkOf({ ...lesson, status: 'cancelled' }, now)).toBeNull()
+    expect(lessonLinkOf({ ...lesson, meetingUrl: null }, now)).toBeNull()
   })
 
   it('counts whole days between two calendar days', () => {

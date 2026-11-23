@@ -43,6 +43,17 @@ export function nextLessonOf(lessons: readonly MyLessonItem[], now: number): MyL
   return [...lessons].filter((lesson) => lesson.status !== 'cancelled' && Date.parse(lesson.endsAt) > now).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0] ?? null
 }
 
+/**
+ * The link a lesson offers on the learner home (KI-062): every lesson with a stored link that is not cancelled, as
+ * on «my lessons» — also while it runs and after it ended, when a recording may sit behind the link. «Join» only
+ * fits a lesson that can still be joined; a recorded, finished or past one offers «open the link».
+ */
+export function lessonLinkOf(lesson: Pick<MyLessonItem, 'status' | 'meetingUrl' | 'deliveryMode' | 'endsAt'>, now: number): { url: string; action: 'join' | 'open' } | null {
+  if (lesson.status === 'cancelled' || !lesson.meetingUrl) return null
+  const joinable = lesson.deliveryMode !== 'recorded' && lesson.status === 'scheduled' && Date.parse(lesson.endsAt) > now
+  return { url: lesson.meetingUrl, action: joinable ? 'join' : 'open' }
+}
+
 /** Whole days from `today` to `day` (both `YYYY-MM-DD`); negative when the day has passed. */
 export function daysUntil(day: string, today: string): number {
   return Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000)

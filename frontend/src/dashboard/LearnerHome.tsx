@@ -27,7 +27,7 @@ import { formatClock, formatLessonTimes } from '../lessons/lessons.format'
 import { useUnreadCount } from '../notifications/useUnreadCount'
 import { addDays } from '../timetable/timetable.dates'
 import { formatMoney, labelIn, wallDate } from './dashboard.data'
-import { agendaOf, daysUntil, formatScore, learnersOf, nextLessonOf, resultsOf, todoOf } from './learner.data'
+import { agendaOf, daysUntil, formatScore, learnersOf, lessonLinkOf, nextLessonOf, resultsOf, todoOf } from './learner.data'
 import type { ResultRow, TodoItem } from './learner.data'
 import type { Loaded } from './useLoad'
 import { useLoad } from './useLoad'
@@ -164,6 +164,7 @@ export function LearnerHome({ day, greeting, dateLine }: { day: DayContext; gree
                           const started = Date.parse(lesson.startsAt) <= day.now
                           const live = started && Date.parse(lesson.endsAt) > day.now && lesson.status === 'scheduled'
                           const where = lesson.room ? (lesson.room.name ? localized(lesson.room.name) : lesson.room.code) : t('dashboard.online')
+                          const link = lessonLinkOf(lesson, day.now)
                           const classes = ['lh-lesson']
                           if (isNext) classes.push('lh-lesson--next')
                           if (lesson.status === 'cancelled') classes.push('lh-lesson--cancelled')
@@ -189,9 +190,9 @@ export function LearnerHome({ day, greeting, dateLine }: { day: DayContext; gree
                                 ) : isNext ? (
                                   <span className="lh-pill">{t('dashboard.learner.next')}</span>
                                 ) : null}
-                                {lesson.meetingUrl && !started && lesson.status !== 'cancelled' ? (
-                                  <a href={lesson.meetingUrl} target="_blank" rel="noreferrer">
-                                    {t('dashboard.learner.join')}
+                                {link ? (
+                                  <a href={link.url} target="_blank" rel="noreferrer">
+                                    {t(link.action === 'join' ? 'dashboard.learner.join' : 'dashboard.learner.openLink')}
                                   </a>
                                 ) : null}
                               </span>
