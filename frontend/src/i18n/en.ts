@@ -4,6 +4,10 @@ import { mySchool } from './en/mySchool'
 import { learn } from './en/learn'
 import { curriculum, learningProgress, publicCatalog } from './en/curriculum'
 import { enrollmentRequests } from './en/enrollmentRequests'
+import { questionBanks } from './en/questionBanks'
+import { examOnline } from './en/examOnline'
+import { examAttempts } from './en/examAttempts'
+import { takeExam } from './en/takeExam'
 import { publicHome } from './en/publicHome'
 
 export const en: Translation = {
@@ -71,6 +75,7 @@ export const en: Translation = {
     myExams: 'My exams',
     myGrades: 'My grades',
     exams: 'Exams & grades',
+    questionBanks: 'Question bank',
     certificates: 'Certificates',
     myCertificates: 'My certificates',
     payments: 'Payments',
@@ -4186,6 +4191,10 @@ export const en: Translation = {
   curriculum,
   learningProgress,
   publicCatalog,
+  questionBanks,
+  examOnline,
+  examAttempts,
+  takeExam,
   // PORTAL-04 (#208): the academy's public home page (/home).
   publicHome,
 }

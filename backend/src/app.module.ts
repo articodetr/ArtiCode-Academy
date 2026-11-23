@@ -27,6 +27,7 @@ import { LearningReportsModule } from './learning/learning-reports.module.js';
 import { MyLearningModule } from './learning/my-learning.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { QuestionsModule } from './questions/questions.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { RolesModule } from './roles/roles.module.js';
 import { ScheduleModule } from './schedule/schedule.module.js';
@@ -81,6 +82,8 @@ import { UsersModule } from './users/users.module.js';
     GradesModule,
     // MOD-09-T03/T04: exams whose results a teacher records, their results sheet and «my exams».
     ExamsModule,
+    // MOD-09 phase 2 (§4r): question banks and their questions; the online side of an exam (its questions, attempts and grading) lives in ExamsModule.
+    QuestionsModule,
     // MOD-10 (§4h.10): certificates — issuing and the class preview (T02); reading, revoking, verifying and «my certificates» follow in T03/T04.
     CertificatesModule,
     // MOD-11 (§4i): fee plans (T02); invoices, payments and «my invoices» follow in T03..T05.

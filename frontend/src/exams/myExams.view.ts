@@ -9,9 +9,16 @@
 // student and class filter options, and the student column rule, are those of
 // «my lessons» (lessons/myLessons.view.ts — the same API-060 ownership). No
 // React, no i18next instance; unit-tested in myExams.view.test.ts.
+//
+// Since MOD-09 phase 2 (roadmap §4r) an item of an ONLINE exam carries its
+// `online` side, and the row offers to take it: takeStateOf() reads what the
+// SERVER computed at its own clock (`inProgress`, `canStart`, `blocker` — the
+// rule the start route enforces) and never this device's; onlineResultCellOf()
+// words the wait for a result that is released on submit. A manual exam's row
+// uses none of this and is what it was.
 import type { ExamResultStatus } from '../api/examResults'
 import type { ExamSortOrder } from '../api/exams'
-import type { ListMyExamsParams, MyExamItem, MyExamStatus } from '../api/myExams'
+import type { ListMyExamsParams, MyExamInProgress, MyExamItem, MyExamOnline, MyExamStatus, TakeBlocker } from '../api/myExams'
 import { dayEndIn, dayStartIn } from '../assignments/assignments.zone'
 
 /** Exams per page (`limit` counts exams — a page can hold more rows). */
@@ -73,4 +80,46 @@ export type MyExamResultCell =
 export function resultCellOf(item: Pick<MyExamItem, 'status' | 'result'>): MyExamResultCell {
   if (item.result) return { kind: 'result', status: item.result.status, score: item.result.status === 'scored' ? item.result.score : null }
   return item.status === 'published' ? { kind: 'none' } : { kind: 'awaiting' }
+}
+
+// --- The online side of a row (MOD-09 phase 2) ---------------------------------------------------------------
+
+/** An item of an online exam: its `online` side is there. */
+export type OnlineMyExamItem = MyExamItem & { online: MyExamOnline }
+
+/** True for an item of an online exam (a manual exam has no `online` side). */
+export function isOnlineItem(item: MyExamItem): item is OnlineMyExamItem {
+  return item.delivery === 'online' && item.online !== null
+}
+
+/** What the row of an online exam offers — from the server's state alone, never from this device's clock. */
+export type MyExamTakeState =
+  /** An attempt is in progress and its deadline has not passed: «متابعة الاختبار». */
+  | { kind: 'resume'; attempt: MyExamInProgress }
+  /** A new attempt can start now: «ابدأ الاختبار». `attemptNo` is the number it gets; `last` when no attempt is left after it. */
+  | { kind: 'start'; attemptNo: number; last: boolean }
+  /** It cannot be taken now, and the server said why. */
+  | { kind: 'blocked'; blocker: TakeBlocker }
+  /** It cannot be taken now and the server named no reason (not expected). */
+  | { kind: 'unavailable' }
+
+export function takeStateOf(online: Pick<MyExamOnline, 'inProgress' | 'canStart' | 'blocker' | 'attemptsUsed' | 'attemptsAllowed'>): MyExamTakeState {
+  if (online.inProgress) return { kind: 'resume', attempt: online.inProgress }
+  if (online.canStart) {
+    // The number the server gives the next attempt (`takeState()` of attempts.policy.ts): every attempt started counts.
+    const attemptNo = online.attemptsUsed + 1
+    return { kind: 'start', attemptNo, last: attemptNo >= online.attemptsAllowed }
+  }
+  return online.blocker ? { kind: 'blocked', blocker: online.blocker } : { kind: 'unavailable' }
+}
+
+export type MyOnlineResultCell =
+  | MyExamResultCell
+  /** No result yet, and the exam releases it as soon as an attempt is submitted (D-R156). */
+  | { kind: 'afterSubmit' }
+
+/** What the result column shows for an online exam: as a manual one, except that «on submit» is not «after the publication». */
+export function onlineResultCellOf(item: Pick<OnlineMyExamItem, 'status' | 'result' | 'online'>): MyOnlineResultCell {
+  const cell = resultCellOf(item)
+  return cell.kind === 'awaiting' && item.online.resultsRelease === 'on_submit' ? { kind: 'afterSubmit' } : cell
 }

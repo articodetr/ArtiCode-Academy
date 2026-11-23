@@ -15,10 +15,20 @@
 // my-exams.policy.ts: the server does not even read an unpublished result) —
 // never the weight (the final grade explains it in «my grades», API-129), the
 // recorder or anyone else's result. Every number is the server's.
+//
+// Since MOD-09 phase 2 (roadmap §4r) each item names the exam's `delivery`
+// and, for an online exam, its `online` side for that student at the server
+// clock: whether an attempt can be started or resumed now (`canStart` — the
+// same rule the start route enforces) and why not (`blocker`), the attempt in
+// progress and the student's attempts. A result shows once it is RELEASED:
+// the exam is published, or it is online and releases on submit (D-R156).
+// Never a question or a key — the questions are served by the attempt alone
+// (api/myAttempts.ts).
 import { apiRequest } from './client'
 import type { MyClassRelation, MyClassStudent } from './enrollments'
 import type { ExamResultStatus } from './examResults'
-import type { ExamLesson, ExamSortOrder, ExamType } from './exams'
+import type { ExamDelivery, ExamLesson, ExamResultsRelease, ExamSortOrder, ExamType } from './exams'
+import type { AttemptSummary } from './myAttempts'
 import type { ScheduleClass } from './timetable'
 import type { LocalizedLabel } from './users'
 
@@ -35,6 +45,45 @@ export interface MyExamResult {
   feedback: string | null
 }
 
+/**
+ * Why the exam cannot be taken now, in the server's order (`TAKE_BLOCKERS` of attempts.policy.ts — keep in sync):
+ * a guardian's item · no `exams.take` · the results are out · the enrollment is not `active` · a cancelled class ·
+ * before the window · after it · no attempt left.
+ */
+export const TAKE_BLOCKERS = ['not_self', 'not_permitted', 'results_published', 'not_enrolled', 'class_closed', 'not_open_yet', 'closed', 'attempts_exhausted'] as const
+export type TakeBlocker = (typeof TAKE_BLOCKERS)[number]
+
+/** `MyExamInProgressDto`: the attempt to resume. */
+export interface MyExamInProgress {
+  id: string
+  attemptNo: number
+  /** The server's deadline. */
+  expiresAt: string
+  /** Whole seconds left at `serverNow`. */
+  remainingSeconds: number
+}
+
+/** `MyExamOnlineDto`: the online side of an exam for one student, computed at the server clock. */
+export interface MyExamOnline {
+  /** When the window closes (`scheduledAt` of the item is when it opens). */
+  closesAt: string | null
+  attemptsAllowed: number
+  /** Attempts the student has started, whatever their state. */
+  attemptsUsed: number
+  questionCount: number
+  resultsRelease: ExamResultsRelease
+  revealAnswers: boolean
+  /** True when the student may start a new attempt or resume the one in progress now; always false on a `child` item. */
+  canStart: boolean
+  blocker: TakeBlocker | null
+  /** The attempt in progress whose deadline has not passed. */
+  inProgress: MyExamInProgress | null
+  /** The student's attempts in order; a score only once the result is released. */
+  attempts: AttemptSummary[]
+  /** The server clock this state was computed at. */
+  serverNow: string
+}
+
 /** `MyExamItemDto`: one exam the caller owns through one student. */
 export interface MyExamItem {
   /** The exam (repeated when the caller owns it through several students — key rows by exam AND student). */
@@ -42,8 +91,9 @@ export interface MyExamItem {
   title: LocalizedLabel
   description: LocalizedLabel | null
   type: ExamType
-  /** `scheduled`: announced; `published`: the results are out. */
+  /** `scheduled`: announced — an online exam is taken inside its window; `published`: the results are out. */
   status: MyExamStatus
+  delivery: ExamDelivery
   /** ISO 8601 (UTC); null = not dated yet. */
   scheduledAt: string | null
   durationMinutes: number | null
@@ -60,8 +110,10 @@ export interface MyExamItem {
   relation: MyClassRelation
   /** The enrolled student the item is about (identity only). */
   student: MyClassStudent
-  /** That student's own result once the results are published; null before, or without a result. */
+  /** That student's own result once it is released (published, or online and released on submit); null before, or without a result. */
   result: MyExamResult | null
+  /** The online side of the exam for this student; null for a manual exam. */
+  online: MyExamOnline | null
 }
 
 export interface MyExamList {

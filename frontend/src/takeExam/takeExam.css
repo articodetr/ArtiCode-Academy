@@ -1,0 +1,761 @@
+/* The page a learner takes an online exam on (MOD-09 phase 2 — /take-exam/:attemptId), outside the app layout.
+   Logical properties only, so every edge follows the document's direction (Arabic RTL, English LTR). One column up
+   to 992 px — the questions' navigator moves under the question — and nothing wider than a 390 px phone: long texts
+   break inside their boxes. Light borders, no gradients. The palette is the course player's (learn/learn.css). */
+
+.take-page {
+  min-block-size: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f6f8;
+  color: #1f1f1f;
+}
+
+.take-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.take-muted {
+  margin: 0;
+  color: #5f6368;
+}
+
+/* --- The way back and the language (scrolls away) ---------------------------------------------------------- */
+
+.take-topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-block: 8px;
+  padding-inline: 24px;
+  background: #fff;
+  border-block-end: 1px solid #eef0f2;
+}
+
+.take-topbar__spacer {
+  flex: 1 1 0;
+}
+
+.take-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 32px;
+  color: #0f6cbd;
+  text-decoration: none;
+}
+
+.take-back-link:hover {
+  text-decoration: underline;
+}
+
+.take-back-link:focus-visible,
+.take-link-button:focus-visible,
+.take-attempts a:focus-visible {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* --- The sticky header: title, class and attempt, the saving, the timer ------------------------------------ */
+
+.take-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-block: 10px;
+  padding-inline: 24px;
+  background: #fff;
+  border-block-end: 1px solid #e6e8eb;
+}
+
+.take-header__titles {
+  flex: 1 1 220px;
+  min-inline-size: 0;
+}
+
+.take-header__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.take-header__meta {
+  margin: 0;
+  color: #5f6368;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.take-header__side {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 16px;
+  margin-inline-start: auto;
+}
+
+.take-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding-block: 6px;
+  padding-inline: 12px;
+  color: #1f1f1f;
+  background: #f7f8fa;
+  border: 2px solid #d5d9de;
+  border-radius: 8px;
+}
+
+.take-timer__label {
+  color: #5f6368;
+  font-size: 13px;
+}
+
+.take-timer__value {
+  min-inline-size: 5ch;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* Under five minutes: calm. The digits say it too — colour is never the only sign. */
+.take-timer--warning {
+  color: #874d00;
+  background: #fff7e6;
+  border-color: #ffc069;
+}
+
+/* Under one minute, and at zero: stronger. */
+.take-timer--critical,
+.take-timer--over {
+  color: #a8071a;
+  background: #fff1f0;
+  border-color: #cf1322;
+}
+
+.take-timer--warning .take-timer__label,
+.take-timer--critical .take-timer__label,
+.take-timer--over .take-timer__label {
+  color: inherit;
+}
+
+.take-save {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #5f6368;
+  font-size: 13px;
+}
+
+.take-save--saved {
+  color: #237804;
+}
+
+.take-save--retrying,
+.take-save--held {
+  color: #ad4e00;
+}
+
+.take-link-button {
+  min-block-size: 32px;
+  padding: 0;
+  color: #0f6cbd;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.take-link-button:disabled,
+.take-link-button[aria-disabled='true'] {
+  color: #8a9097;
+  text-decoration: none;
+  cursor: not-allowed;
+}
+
+/* --- The content ------------------------------------------------------------------------------------------- */
+
+.take-main {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  padding: 24px;
+}
+
+.take-main__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-inline-size: 1100px;
+  margin-inline: auto;
+}
+
+.take-card {
+  box-sizing: border-box;
+  min-inline-size: 0;
+  padding-block: 20px;
+  padding-inline: 24px;
+  background: #fff;
+  border: 1px solid #e6e8eb;
+  border-radius: 8px;
+}
+
+.take-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 16px;
+}
+
+.take-layout__question {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-inline-size: 0;
+}
+
+/* A line that says what is going on now (a spinner and its text). */
+.take-status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.take-instructions summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.take-instructions[open] summary {
+  margin-block-end: 8px;
+}
+
+.take-leave-note {
+  margin: 0;
+  color: #5f6368;
+  font-size: 13px;
+}
+
+/* --- One question ------------------------------------------------------------------------------------------ */
+
+.take-question {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.take-question__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+/* The heading takes the focus when the learner moves to the question: it must not hide under the sticky header. */
+.take-question__heading,
+.take-review__heading,
+.take-notice__title,
+.take-finished__heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  scroll-margin-block-start: 150px;
+}
+
+.take-question__heading:focus,
+.take-review__heading:focus,
+.take-notice__title:focus,
+.take-finished__heading:focus {
+  outline: none;
+}
+
+.take-question__points {
+  color: #5f6368;
+  font-size: 13px;
+}
+
+.take-prompt {
+  font-size: 16px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.take-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* A whole row is the target of its radio button: at least 48 px tall. */
+.take-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-sizing: border-box;
+  min-block-size: 48px;
+  padding-block: 11px;
+  padding-inline: 14px;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #c9ced4;
+  border-radius: 8px;
+}
+
+.take-option:hover {
+  border-color: #6ea8de;
+}
+
+.take-option--selected {
+  background: #f0f6fd;
+  border-color: #0f6cbd;
+  box-shadow: inset 0 0 0 1px #0f6cbd;
+}
+
+.take-option--disabled {
+  color: #5f6368;
+  cursor: not-allowed;
+  background: #f7f8fa;
+}
+
+.take-option--disabled:hover {
+  border-color: #c9ced4;
+}
+
+.take-option--selected.take-option--disabled:hover {
+  border-color: #0f6cbd;
+}
+
+.take-option__input {
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  margin-block: 3px 0;
+  margin-inline: 0;
+  accent-color: #0f6cbd;
+  cursor: inherit;
+}
+
+.take-option__input:focus-visible {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 2px;
+}
+
+.take-option:has(.take-option__input:focus-visible) {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 2px;
+}
+
+.take-option__text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.take-question__foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.take-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.take-steps__spacer {
+  flex: 1 1 0;
+}
+
+/* --- The navigator ----------------------------------------------------------------------------------------- */
+
+.take-navigator {
+  position: sticky;
+  inset-block-start: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.take-navigator__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.take-navigator__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.take-navigator__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-block-size: 46vh;
+  margin: 0;
+  /* Room for the ring of the open question and the focus outline inside the scrolling box. */
+  padding: 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.take-navigator__button {
+  box-sizing: border-box;
+  inline-size: 44px;
+  block-size: 44px;
+  padding: 0;
+  color: #1f1f1f;
+  font: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  background: #fff;
+  border: 2px dashed #8a9097;
+  border-radius: 8px;
+}
+
+/* Answered: filled. Unanswered: a dashed outline. The difference is the fill, not the colour alone. */
+.take-navigator__button--answered {
+  color: #fff;
+  background: #0f6cbd;
+  border: 2px solid #0f6cbd;
+}
+
+.take-navigator__button[aria-current='true'] {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px #1f1f1f;
+}
+
+.take-navigator__button:focus-visible {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 5px;
+}
+
+.take-navigator__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  color: #5f6368;
+  font-size: 12px;
+  list-style: none;
+}
+
+.take-navigator__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.take-navigator__swatch {
+  box-sizing: border-box;
+  inline-size: 14px;
+  block-size: 14px;
+  border: 2px dashed #8a9097;
+  border-radius: 4px;
+}
+
+.take-navigator__swatch--answered {
+  background: #0f6cbd;
+  border: 2px solid #0f6cbd;
+}
+
+.take-navigator__swatch--current {
+  border: 3px solid #1f1f1f;
+}
+
+/* --- Review and submit ------------------------------------------------------------------------------------- */
+
+.take-review,
+.take-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.take-review p,
+.take-notice p {
+  margin: 0;
+}
+
+.take-review__complete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #237804;
+}
+
+.take-review__unanswered {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.take-review__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.take-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+/* --- A finished attempt ------------------------------------------------------------------------------------ */
+
+.take-finished {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.take-finished .take-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.take-finished p {
+  margin: 0;
+}
+
+.take-finished__status {
+  color: #5f6368;
+}
+
+.take-zone {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.take-section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.take-result__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+  margin: 0;
+}
+
+.take-result__facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.take-result__facts dt {
+  color: #5f6368;
+  font-size: 13px;
+}
+
+.take-result__facts dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.take-result__facts dd.take-result__score {
+  font-size: 28px;
+}
+
+.take-result .ant-tag {
+  align-self: flex-start;
+  margin: 0;
+}
+
+.take-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.take-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block-end: 16px;
+  border-block-end: 1px solid #eef0f2;
+}
+
+.take-answer:last-child {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.take-answer__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.take-answer__head .ant-tag,
+.take-answer__option .ant-tag {
+  margin: 0;
+}
+
+.take-answer__number {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.take-answer__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.take-answer__option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border: 1px solid #e6e8eb;
+  border-radius: 6px;
+}
+
+.take-answer__option--chosen {
+  background: #f0f6fd;
+  border-color: #0f6cbd;
+}
+
+.take-answer__dot {
+  flex: none;
+  box-sizing: border-box;
+  inline-size: 12px;
+  block-size: 12px;
+  border: 2px solid #8a9097;
+  border-radius: 50%;
+}
+
+.take-answer__option--chosen .take-answer__dot {
+  background: #0f6cbd;
+  border-color: #0f6cbd;
+}
+
+.take-answer__text {
+  flex: 1 1 180px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.take-answer__explanation .take-prompt {
+  font-size: 15px;
+}
+
+/* --- Narrow screens ---------------------------------------------------------------------------------------- */
+
+@media (max-width: 991.98px) {
+  .take-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .take-navigator {
+    position: static;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .take-topbar,
+  .take-header {
+    padding-inline: 12px;
+  }
+
+  .take-main {
+    padding: 12px;
+  }
+
+  .take-card {
+    padding-block: 16px;
+    padding-inline: 14px;
+  }
+
+  .take-header__title {
+    font-size: 16px;
+  }
+
+  /* The label stays for a screen reader (it names the timer); the digits and the clock icon are enough on screen. */
+  .take-timer__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .take-timer__value {
+    font-size: 18px;
+  }
+
+  .take-header__side {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .take-steps .ant-btn {
+    flex: 1 1 auto;
+  }
+
+  .take-steps__spacer {
+    display: none;
+  }
+
+  .take-actions .ant-btn {
+    flex: 1 1 auto;
+  }
+}

@@ -34,16 +34,22 @@ const EXAMS = '/api/exams';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 const EXAM_KEYS = [
   'activeStudents',
+  'attemptsAllowed',
   'class',
+  'closesAt',
   'createdAt',
+  'delivery',
   'description',
   'durationMinutes',
   'id',
   'lesson',
   'maxScore',
+  'online',
   'passScore',
   'publishedAt',
   'results',
+  'resultsRelease',
+  'revealAnswers',
   'scheduledAt',
   'status',
   'timeZone',
@@ -219,6 +225,8 @@ describe.skipIf(!available)('MOD-09 exams (e2e, TEST-129)', () => {
       lesson: { id: id('lessonA') },
     });
     expect(res.body).toMatchObject({ timeZone: academyTimeZone, description: { ar: 'الفصول 1–4' }, durationMinutes: 60 });
+    // MOD-09 phase 2: an exam created the old way is manual and carries no online setting.
+    expect(res.body).toMatchObject({ delivery: 'manual', closesAt: null, attemptsAllowed: 1, resultsRelease: 'on_publish', revealAnswers: false, online: null });
     exams['A1'] = body.id;
     const events = await eventsSince(m);
     expect(events.map((event) => [event.action, event.entityType, event.entityId, event.actorUserId])).toEqual([['exams.created', 'exams', body.id, id('teacher')]]);

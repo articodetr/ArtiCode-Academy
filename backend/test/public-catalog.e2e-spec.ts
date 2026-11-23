@@ -335,6 +335,75 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
     20_000, // the OpenAPI document is slow under a parallel e2e run (KI-040)
   );
 
+  it('AC7 — leaks nothing sensitive: no lesson resource, live note or media URL (also in a level not open yet), no enrolled student, no fee plan, no archived or draft course', async () => {
+    await setPublicBrowsing(true);
+    const STUDENT_NAME = `Hidden Student ${RUN}`;
+    const STUDENT_EMAIL = `pc-student-${RUN.toLowerCase()}@example.test`;
+    const SECRET_URL = 'https://cdn.example.org/r/secret-resource.zip';
+    const SECRET_NOTE = 'رابط الاجتماع السري';
+    let studentId: string | undefined;
+    try {
+      // An active learner in the open class of course A: their identity must never reach a visitor.
+      studentId = (await prisma.user.create({ data: { email: STUDENT_EMAIL, fullName: STUDENT_NAME, status: 'active' }, select: { id: true } })).id;
+      const openClass = await prisma.class.findFirstOrThrow({ where: { code: `${PREFIX}-A-OPEN` }, select: { id: true } });
+      await prisma.enrollment.create({ data: { classId: openClass.id, studentUserId: studentId, status: 'active', activatedAt: new Date() }, select: { id: true } });
+
+      // Course C — published, with a level released 30 days after a class starts, holding lessons with resources, a live note and an image URL.
+      const c = await prisma.course.create({ data: { code: `${PREFIX}-C`, name: { ar: 'دورة بمستوى مقفل' }, status: 'published' }, select: { id: true } });
+      const locked = await prisma.courseSection.create({ data: { courseId: c.id, sortOrder: 0, title: { ar: 'مستوى لاحق' }, releaseAfterDays: 30 }, select: { id: true } });
+      const lesson = (sortOrder: number, data: Omit<Prisma.CourseSyllabusItemUncheckedCreateInput, 'courseId' | 'sortOrder'>) =>
+        prisma.courseSyllabusItem.create({ data: { courseId: c.id, sortOrder, sectionId: locked.id, ...data }, select: { id: true } });
+      const withResources = await lesson(0, {
+        title: { ar: 'درس بمرفقات' },
+        kind: 'text',
+        content: { body: { ar: 'نص الدرس السري' } },
+        resources: [{ title: { ar: 'ملف إضافي' }, url: SECRET_URL }],
+      });
+      await lesson(1, { title: { ar: 'حصة مباشرة' }, kind: 'live', content: { note: { ar: SECRET_NOTE } } });
+      await lesson(2, { title: { ar: 'صورة' }, kind: 'image', content: { url: 'https://cdn.example.org/i/secret.png' } });
+
+      // Course E — archived: never listed, never readable.
+      const e = await prisma.course.create({ data: { code: `${PREFIX}-E`, name: { ar: 'مؤرشفة' }, status: 'archived' }, select: { id: true } });
+
+      const listed = await list().expect(200);
+      expect((listed.body.items as JsonObject[]).map((item) => item['code'])).toEqual([`${PREFIX}-A`, `${PREFIX}-B`, `${PREFIX}-C`]);
+      const detailA = await anonymous(`${LIST}/${ids['a']}`).expect(200);
+      const detailC = await anonymous(`${LIST}/${c.id}`).expect(200);
+      // The locked level's lessons are listed by title (the outline is a syllabus), never with what they hold.
+      expect(detailC.body.outline).toEqual([
+        {
+          number: 1,
+          title: { ar: 'مستوى لاحق' },
+          lessons: [
+            { title: { ar: 'درس بمرفقات' }, kind: 'text', durationSeconds: null },
+            { title: { ar: 'حصة مباشرة' }, kind: 'live', durationSeconds: null },
+            { title: { ar: 'صورة' }, kind: 'image', durationSeconds: null },
+          ],
+        },
+      ]);
+
+      const text = JSON.stringify([listed.body, detailA.body, detailC.body]);
+      const hidden = [STUDENT_NAME, STUDENT_EMAIL, studentId, `${PREFIX} رسوم`, ids['plan']!, SECRET_URL, SECRET_NOTE, 'secret', 'نص الدرس السري', 'ملف إضافي', withResources.id, `${PREFIX}-E`, 'مؤرشفة'];
+      for (const value of hidden) expect(text, value).not.toContain(value);
+      const keys = keysOf([listed.body, detailA.body, detailC.body]);
+      for (const key of ['resources', 'content', 'url', 'note', 'enrollments', 'students', 'enrolledCount', 'capacity', 'feePlan', 'enrollmentFeePlan', 'isPublished', 'releaseAfterDays', 'opensOn']) {
+        expect(keys.has(key), key).toBe(false);
+      }
+
+      // Neither the archived course nor the draft answers, by its id or by a search for it.
+      for (const id of [e.id, ids['d']!]) expect((await anonymous(`${LIST}/${id}`).expect(404)).body.code).toBe('course_not_found');
+      for (const q of [`${PREFIX}-E`, `${PREFIX}-D`, 'مؤرشفة']) {
+        const found = await anonymous(`${LIST}?q=${encodeURIComponent(q)}`).expect(200);
+        expect((found.body.items as JsonObject[]).map((item) => item['code'])).not.toEqual(expect.arrayContaining([`${PREFIX}-E`, `${PREFIX}-D`]));
+      }
+    } finally {
+      if (studentId) {
+        await prisma.enrollment.deleteMany({ where: { studentUserId: studentId } });
+        await prisma.user.deleteMany({ where: { id: studentId } });
+      }
+    }
+  });
+
   // Last: from here on this app instance answers 429 on the list for a minute.
   it('AC6 — is rate limited per IP: at most 60 requests a minute, then 429 rate_limited', async () => {
     await setPublicBrowsing(true);

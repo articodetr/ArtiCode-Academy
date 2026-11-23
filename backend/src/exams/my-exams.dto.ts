@@ -9,7 +9,12 @@ import { ExamResultStatus, ExamType } from '../generated/prisma/client.js';
 import { IsInstant } from '../lessons/lessons.time.js';
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
+import { TAKE_BLOCKERS } from './attempts.policy.js';
+import type { TakeBlocker } from './attempts.policy.js';
 import { EXAMS_PAGE_DEFAULT, EXAMS_PAGE_MAX } from './exams.dto.js';
+import { EXAM_DELIVERIES, EXAM_RESULTS_RELEASES } from './exams.online.js';
+import type { ExamDeliveryValue, ExamResultsReleaseValue } from './exams.online.js';
+import { AttemptSummaryDto } from './my-attempts.dto.js';
 import { MY_EXAM_STATUSES } from './my-exams.policy.js';
 import type { MyExamStatus } from './my-exams.policy.js';
 
@@ -74,6 +79,62 @@ export class MyExamResultDto {
   feedback: string | null;
 }
 
+export class MyExamInProgressDto {
+  @ApiProperty({ format: 'uuid', description: 'The attempt to resume (`GET /api/me/exam-attempts/:id`)' })
+  id: string;
+
+  @ApiProperty({ example: 1 })
+  attemptNo: number;
+
+  @ApiProperty({ description: 'ISO 8601 — the server’s deadline' })
+  expiresAt: string;
+
+  @ApiProperty({ example: 1260, description: 'Whole seconds left at `serverNow`' })
+  remainingSeconds: number;
+}
+
+/** The online side of an exam for one student, computed at the server clock. */
+export class MyExamOnlineDto {
+  @ApiProperty({ type: String, nullable: true, description: 'ISO 8601 (UTC) — when the window closes (`scheduledAt` is when it opens)' })
+  closesAt: string | null;
+
+  @ApiProperty({ example: 2 })
+  attemptsAllowed: number;
+
+  @ApiProperty({ example: 1, description: 'Attempts the student has started, whatever their state' })
+  attemptsUsed: number;
+
+  @ApiProperty({ example: 5 })
+  questionCount: number;
+
+  @ApiProperty({ enum: EXAM_RESULTS_RELEASES, description: '`on_submit`: the score shows as soon as an attempt is finished; `on_publish`: once the teacher publishes the results' })
+  resultsRelease: ExamResultsReleaseValue;
+
+  @ApiProperty({ description: 'Whether the correct answers are shown with the released result once the window has closed' })
+  revealAnswers: boolean;
+
+  @ApiProperty({ description: 'True when the student may start a new attempt or resume the one in progress now (`POST /api/me/exams/:id/attempts`); always false on a `child` item' })
+  canStart: boolean;
+
+  @ApiProperty({
+    type: String,
+    enum: TAKE_BLOCKERS,
+    nullable: true,
+    description:
+      'Why not, in this order: `not_self` (a guardian’s item) · `not_permitted` (no `exams.take`) · `results_published` · `not_enrolled` (the enrollment is not `active`) · `class_closed` · `not_open_yet` · `closed` · `attempts_exhausted`',
+  })
+  blocker: TakeBlocker | null;
+
+  @ApiProperty({ type: () => MyExamInProgressDto, nullable: true, description: 'The attempt in progress whose deadline has not passed' })
+  inProgress: MyExamInProgressDto | null;
+
+  @ApiProperty({ type: [AttemptSummaryDto], description: 'The student’s attempts in order; a score only once the result is released (D-R156)' })
+  attempts: AttemptSummaryDto[];
+
+  @ApiProperty({ description: 'ISO 8601 — the server clock this state was computed at' })
+  serverNow: string;
+}
+
 export class MyExamItemDto {
   @ApiProperty({ format: 'uuid', description: 'The exam (repeated when the caller owns it through several students)' })
   id: string;
@@ -87,8 +148,11 @@ export class MyExamItemDto {
   @ApiProperty({ enum: EXAM_TYPES })
   type: ExamType;
 
-  @ApiProperty({ enum: MY_EXAM_STATUSES, description: '`scheduled`: announced; `published`: the results are out' })
+  @ApiProperty({ enum: MY_EXAM_STATUSES, description: '`scheduled`: announced — an online exam is taken inside its window; `published`: the results are out' })
   status: MyExamStatus;
+
+  @ApiProperty({ enum: EXAM_DELIVERIES, description: '`manual`: the teacher records the results; `online`: taken on the platform and graded by the server' })
+  delivery: ExamDeliveryValue;
 
   @ApiProperty({ type: String, nullable: true, description: 'ISO 8601 (UTC)' })
   scheduledAt: string | null;
@@ -120,8 +184,15 @@ export class MyExamItemDto {
   @ApiProperty({ type: MyClassStudentDto, description: 'The enrolled student the item is about (identity only)' })
   student: MyClassStudentDto;
 
-  @ApiProperty({ type: MyExamResultDto, nullable: true, description: 'That student’s own result once the results are published; null before, or without a result' })
+  @ApiProperty({
+    type: MyExamResultDto,
+    nullable: true,
+    description: 'That student’s own result once it is released — the results are published, or the exam is online and releases on submit (D-R156); null before, or without a result',
+  })
   result: MyExamResultDto | null;
+
+  @ApiProperty({ type: () => MyExamOnlineDto, nullable: true, description: 'The online side of the exam for this student; null for a manual exam' })
+  online: MyExamOnlineDto | null;
 }
 
 export class MyExamListDto {

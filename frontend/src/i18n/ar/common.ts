@@ -121,6 +121,7 @@ export const nav = {
   myExams: 'اختباراتي',
   myGrades: 'درجاتي',
   exams: 'الاختبارات والدرجات',
+  questionBanks: 'بنك الأسئلة',
   certificates: 'الشهادات',
   myCertificates: 'شهاداتي',
   payments: 'المدفوعات',

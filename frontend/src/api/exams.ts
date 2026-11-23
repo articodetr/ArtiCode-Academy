@@ -10,6 +10,15 @@
 // their sheet is api/examResults.ts. Instants are ISO 8601 in UTC; `timeZone`
 // is the zone to show them in (D-R41). Every number is the server's (no grade
 // is computed here).
+//
+// Since MOD-09 phase 2 (roadmap §4r) an exam is `manual` (the default: the
+// teacher records the results) or `online` (taken on the platform and graded by
+// the server). There is no new status: `schedule` makes an online exam
+// available to its learners inside its window (`scheduledAt` opens it,
+// `closesAt` closes it, `durationMinutes` is one attempt's time limit) and
+// `publish` releases the results, as before. `delivery` changes in a draft
+// only; a manual exam carries no online setting (`online_settings_not_allowed`).
+// Its questions are api/examQuestions.ts, its attempts api/examAttempts.ts.
 import type { AssignmentLesson } from './assignments'
 import { CLASSES_PATH } from './classes'
 import { apiRequest } from './client'
@@ -30,6 +39,17 @@ export type ExamStatusAction = (typeof EXAM_STATUS_ACTIONS)[number]
 
 /** By exam date (undated exams last in both orders), then id. */
 export type ExamSortOrder = 'asc' | 'desc'
+
+/** `manual`: the teacher records the results; `online`: taken on the platform and graded by the server (D-R150). */
+export const EXAM_DELIVERIES = ['manual', 'online'] as const
+export type ExamDelivery = (typeof EXAM_DELIVERIES)[number]
+
+/** When a learner sees their own score: once the teacher publishes, or as soon as their attempt is finished (D-R156). */
+export const EXAM_RESULTS_RELEASES = ['on_publish', 'on_submit'] as const
+export type ExamResultsRelease = (typeof EXAM_RESULTS_RELEASES)[number]
+
+/** `attemptsAllowed`: a whole number 1..20 (`EXAM_ATTEMPTS_MAX`). */
+export const EXAM_ATTEMPTS_MAX = 20
 
 /** Mirrors of the DTO limits (backend/src/exams/exams.dto.ts, roles.dto.ts, assignments.dto.ts). */
 export const EXAMS_PAGE_MAX = 100
@@ -60,6 +80,27 @@ export interface ExamResultCounts {
   excused: number
 }
 
+/** `ExamAttemptCountsDto`: who has taken an online exam. */
+export interface ExamAttemptCounts {
+  /** Students with at least one attempt. */
+  students: number
+  inProgress: number
+  /** Students with a finished attempt. */
+  finished: number
+}
+
+/** `ExamOnlineSummaryDto`: the online side of an exam (null for a manual one). */
+export interface ExamOnlineSummary {
+  questionCount: number
+  /** The sum of the linked questions' points; it must equal `maxScore` to make the exam available (D-R159). */
+  totalPoints: number
+  /** True once the exam is scheduled or published: its questions are frozen copies (D-R158). */
+  frozen: boolean
+  /** For a draft: what keeps `schedule` from making it available (`EXAM_READINESS_PROBLEMS` in api/examQuestions.ts). Empty otherwise. */
+  problems: string[]
+  attempts: ExamAttemptCounts
+}
+
 /** `ExamDto` (API-113..API-117). */
 export interface Exam {
   id: string
@@ -82,6 +123,16 @@ export interface Exam {
   weight: number | null
   /** ISO 8601; set by `publish`, cleared by `unpublish`. */
   publishedAt: string | null
+  delivery: ExamDelivery
+  /** ISO 8601 (UTC) — when an online exam's window closes; null for a manual exam and an undated draft. */
+  closesAt: string | null
+  /** 1..20; always 1 for a manual exam. */
+  attemptsAllowed: number
+  resultsRelease: ExamResultsRelease
+  /** Whether the correct answers are shown with the released result once the window has closed (D-R157). */
+  revealAnswers: boolean
+  /** Null for a manual exam. */
+  online: ExamOnlineSummary | null
   results: ExamResultCounts
   /** Active enrollments of the class — the «total» of «recorded / total». */
   activeStudents: number
@@ -101,6 +152,7 @@ export interface ListExamsParams {
   lessonId?: string
   status?: ExamStatus
   type?: ExamType
+  delivery?: ExamDelivery
   /** ISO 8601 instants with an offset or `Z`: exams taking place in `[from, to]` — an undated exam never matches. */
   from?: string
   to?: string
@@ -126,6 +178,15 @@ export interface CreateExamInput {
   /** At most maxScore (`pass_score_invalid`). */
   passScore?: number | null
   weight?: number | null
+  /** `manual` by default. The four settings below belong to an online exam only (`online_settings_not_allowed { fields }` otherwise). */
+  delivery?: ExamDelivery
+  /** ISO 8601 instant with an offset, after `scheduledAt` (`window_invalid`). */
+  closesAt?: string | null
+  /** A JSON whole number 1..20. */
+  attemptsAllowed?: number
+  resultsRelease?: ExamResultsRelease
+  /** A JSON boolean. */
+  revealAnswers?: boolean
 }
 
 /**
@@ -133,6 +194,12 @@ export interface CreateExamInput {
  * `description`, `lessonId`, `scheduledAt`, `durationMinutes`, `passScore` and
  * `weight`; `title`, `type` and `maxScore` are never null (`maxScore` is locked
  * once a result exists — `exam_locked`). The status moves through API-117.
+ * The online fields: `delivery` changes in a draft only; once the learners see
+ * an online exam `maxScore` is frozen and its opening, closing and time limit
+ * cannot be cleared; once somebody has started, the opening and the time limit
+ * are fixed, the closing only moves later and the attempts only rise — all
+ * `409 exam_locked { status, fields, resultCount, attemptCount? }`. Turning an
+ * online draft manual unlinks its questions.
  */
 export interface UpdateExamInput {
   title?: LocalizedLabel
@@ -144,6 +211,12 @@ export interface UpdateExamInput {
   maxScore?: number
   passScore?: number | null
   weight?: number | null
+  delivery?: ExamDelivery
+  /** Null clears it (a draft only). */
+  closesAt?: string | null
+  attemptsAllowed?: number
+  resultsRelease?: ExamResultsRelease
+  revealAnswers?: boolean
 }
 
 /** Body of API-117: `reason` (1–500 after trimming) is recorded in the audit event only. */
@@ -162,6 +235,7 @@ export function examsListPath(params: ListExamsParams = {}): string {
   if (params.lessonId) query.set('lessonId', params.lessonId)
   if (params.status) query.set('status', params.status)
   if (params.type) query.set('type', params.type)
+  if (params.delivery) query.set('delivery', params.delivery)
   if (params.from) query.set('from', params.from)
   if (params.to) query.set('to', params.to)
   if (params.order) query.set('order', params.order)
@@ -196,7 +270,11 @@ export function updateExam(id: string, input: UpdateExamInput): Promise<Exam> {
   return apiRequest<Exam>(examPath(id), { method: 'PATCH', body: input })
 }
 
-/** API-117. */
+/**
+ * API-117. For an online exam: `schedule` needs it ready (409 `exam_not_ready { problems, totalPoints, maxScore, questionIds }`)
+ * and freezes its questions; `unschedule` is refused once somebody has started (409 `exam_has_attempts`);
+ * `publish` waits for the window to close (409 `exam_window_open { closesAt }`) and first closes any attempt still open.
+ */
 export function changeExamStatus(id: string, input: ChangeExamStatusInput): Promise<Exam> {
   return apiRequest<Exam>(`${examPath(id)}/status`, { method: 'POST', body: input })
 }

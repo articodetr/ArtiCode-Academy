@@ -14,6 +14,8 @@ export const RESULT_FEEDBACK_MAX_LENGTH = 500;
 const RESULT_STATUSES = Object.values(ExamResultStatus) as ExamResultStatus[];
 const ENROLLMENT_STATUSES = Object.values(EnrollmentStatus) as EnrollmentStatus[];
 const EXAM_STATUSES = Object.values(ExamStatus) as ExamStatus[];
+const RESULT_SOURCES = ['manual', 'online'] as const;
+const DELIVERIES = ['manual', 'online'] as const;
 
 /** Body numbers must be JSON numbers: no implicit "12" → 12. */
 function rawValue({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
@@ -94,7 +96,10 @@ export class ExamResultDto {
   @ApiProperty({ type: String, nullable: true })
   feedback: string | null;
 
-  @ApiProperty({ type: ResultRecorderDto, nullable: true, description: 'The last writer (null when that account was deleted)' })
+  @ApiProperty({ enum: RESULT_SOURCES, description: '`manual`: recorded on this sheet; `online`: the student’s counted attempt at an online exam, written by the server (D-R160) — not editable here' })
+  source: (typeof RESULT_SOURCES)[number];
+
+  @ApiProperty({ type: ResultRecorderDto, nullable: true, description: 'The last writer (null when that account was deleted, and for an `online` result)' })
   recordedBy: ResultRecorderDto | null;
 
   @ApiProperty({ description: 'ISO 8601 — first recorded' })
@@ -113,6 +118,9 @@ export class ExamResultItemDto {
 
   @ApiProperty({ type: ExamResultDto, nullable: true })
   result: ExamResultDto | null;
+
+  @ApiProperty({ example: 0, description: 'The student’s attempts at an online exam, of any state; a student with one is refused here (`result_from_attempt`). Always 0 for a manual exam' })
+  attemptCount: number;
 }
 
 export class ExamResultCountsSheetDto {
@@ -138,6 +146,9 @@ export class ExamResultsSheetDto {
 
   @ApiProperty({ enum: EXAM_STATUSES })
   examStatus: ExamStatus;
+
+  @ApiProperty({ enum: DELIVERIES, description: 'For an `online` exam the sheet only takes the students who have no attempt (absent, excused, a make-up taken on paper)' })
+  delivery: (typeof DELIVERIES)[number];
 
   @ApiProperty({ example: 50 })
   maxScore: number;

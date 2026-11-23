@@ -2,7 +2,7 @@
 // as the backend returns them, plus the permission sets of the seeded roles
 // (backend/src/authorization/system-roles.ts).
 import type { ExamResult, ExamResultItem, ExamResultsSheet } from '../api/examResults'
-import type { Exam, ExamList, ExamResultCounts } from '../api/exams'
+import type { Exam, ExamAttemptCounts, ExamList, ExamOnlineSummary, ExamResultCounts } from '../api/exams'
 import { makeAttendanceStudent } from './attendance'
 import { CLASS_COURSE_ID, CLASS_ID, TEACHER_IDS } from './classes'
 import { LESSON_ID } from './lessons'
@@ -51,12 +51,56 @@ export function makeExam(overrides: Partial<Exam> = {}): Exam {
     passScore: 25,
     weight: 30,
     publishedAt: null,
+    // A manual exam (MOD-09 phase 2 defaults): no online setting, no online side.
+    delivery: 'manual',
+    closesAt: null,
+    attemptsAllowed: 1,
+    resultsRelease: 'on_publish',
+    revealAnswers: false,
+    online: null,
     results: { ...NO_RESULTS },
     activeStudents: 18,
     createdAt: '2026-11-09T08:00:00.000Z',
     updatedAt: '2026-11-09T08:00:00.000Z',
     ...overrides,
   }
+}
+
+// --- MOD-09 phase 2: an online exam (makeExam() above stays the manual exam it always was) ---
+
+/** An academy admin on the online side too: composing the question set needs `questions.manage` beside `exams.manage`; correcting a key `exams.grade`. */
+export const ONLINE_EXAM_ADMIN_PERMISSIONS = [...EXAM_ADMIN_PERMISSIONS, 'questions.manage']
+
+export const NO_ATTEMPTS: ExamAttemptCounts = { students: 0, inProgress: 0, finished: 0 }
+
+/** The online side of makeOnlineExam(): five ready questions whose points add up to its maximum score, nothing in the way, nobody started. */
+export function makeOnlineSummary(overrides: Partial<ExamOnlineSummary> = {}): ExamOnlineSummary {
+  return { questionCount: 5, totalPoints: 10, frozen: false, problems: [], attempts: { ...NO_ATTEMPTS }, ...overrides }
+}
+
+/**
+ * An online quiz of PY-101-A — a draft that is ready to be made available unless overridden: its window opens on
+ * 2026-11-20 at 10:00 and closes at 12:00 in Asia/Riyadh (07:00–09:00 UTC), 30 minutes per attempt, 2 attempts,
+ * results on publish, no revealed answers, out of 10 (pass 5) with five questions adding up to 10. `online.frozen`
+ * follows the status unless `online` is given.
+ */
+export function makeOnlineExam(overrides: Partial<Exam> = {}): Exam {
+  const status = overrides.status ?? 'draft'
+  return makeExam({
+    title: { ar: 'اختبار قصير إلكتروني', en: 'Online quiz' },
+    type: 'quiz',
+    durationMinutes: 30,
+    maxScore: 10,
+    passScore: 5,
+    weight: 10,
+    delivery: 'online',
+    closesAt: '2026-11-20T09:00:00.000Z',
+    attemptsAllowed: 2,
+    resultsRelease: 'on_publish',
+    revealAnswers: false,
+    online: makeOnlineSummary({ frozen: status !== 'draft' }),
+    ...overrides,
+  })
 }
 
 /** The lesson of test/lessons.ts as an exam links it (`AssignmentLessonDto`). */
@@ -78,6 +122,7 @@ export function makeExamResult(overrides: Partial<ExamResult> = {}): ExamResult 
     status: 'scored',
     score: 41.5,
     feedback: null,
+    source: 'manual',
     recordedBy: { userId: TEACHER_IDS[0], fullName: 'خالد المعلم' },
     recordedAt: '2026-11-20T09:00:00.000Z',
     updatedAt: '2026-11-20T09:00:00.000Z',
@@ -86,7 +131,7 @@ export function makeExamResult(overrides: Partial<ExamResult> = {}): ExamResult 
 }
 
 export function makeResultItem(overrides: Partial<ExamResultItem> = {}): ExamResultItem {
-  return { student: makeAttendanceStudent({ id: RESULT_STUDENT_IDS[0] }), enrollmentStatus: 'active', result: null, ...overrides }
+  return { student: makeAttendanceStudent({ id: RESULT_STUDENT_IDS[0] }), enrollmentStatus: 'active', result: null, attemptCount: 0, ...overrides }
 }
 
 /**
@@ -114,6 +159,7 @@ export function makeResultsSheet(overrides: Partial<ExamResultsSheet> = {}): Exa
     examId: EXAM_ID,
     classId: CLASS_ID,
     examStatus: 'scheduled',
+    delivery: 'manual',
     maxScore: 50,
     recordable: true,
     closedReason: null,

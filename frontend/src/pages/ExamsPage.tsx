@@ -10,24 +10,31 @@
 // shown in the exam's own zone (D-R41), named when it is not this device's;
 // the date filter reads its days in the academy's zone. Every number is the
 // server's — the page computes no grade (MOD-09-T08).
+// MOD-09 phase 2: an online exam carries an «إلكتروني» tag beside its title,
+// and the list filters by delivery (API-113 `delivery`). The filter's state and
+// its request live here (loadExamsPage) rather than in exams/useExamsList.ts,
+// which this task may not edit — it reuses that module's filters, defaults and
+// page sizes, and the two can be folded together later.
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Flex, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAcademy } from '../academy/useAcademy'
-import { EXAM_STATUSES, EXAM_TYPES } from '../api/exams'
-import type { Exam } from '../api/exams'
+import { EXAM_DELIVERIES, EXAM_STATUSES, EXAM_TYPES, listExams } from '../api/exams'
+import type { Exam, ExamDelivery } from '../api/exams'
 import { formatZonedDateTime } from '../assignments/assignments.format'
-import { academyZoneOf, differsFromDevice } from '../assignments/assignments.zone'
+import { academyZoneOf, dayEndIn, dayStartIn, differsFromDevice } from '../assignments/assignments.zone'
 import { useAuth } from '../auth/auth-context'
+import { useKeysetList } from '../common/useKeysetList'
+import type { KeysetLoader } from '../common/useKeysetList'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
 import { CreateExamModal } from '../exams/CreateExamModal'
 import { ExamDrawer } from '../exams/ExamDrawer'
 import { describeExamsFailure, failureMessage, isExamsFailure } from '../exams/exams.errors'
 import { examTitle, resultsRatio } from '../exams/exams.format'
-import { EXAM_PAGE_SIZES, defaultExamFilters, hasActiveExamFilters, useExamsList } from '../exams/useExamsList'
+import { EXAM_PAGE_SIZES, defaultExamFilters, hasActiveExamFilters } from '../exams/useExamsList'
 import type { ExamsListFilters } from '../exams/useExamsList'
 import { useLocalized } from '../i18n/useLocalized'
 import { ClassPicker } from '../timetable/TimetablePickers'
@@ -35,6 +42,29 @@ import { isCalendarDate } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { localizedLabel } from '../users/users.format'
 import { useOpenFromSearch } from '../common/useOpenFromSearch'
+
+/** The list's filters (useExamsList.ts) plus the delivery: only manual exams, only online ones, or both. */
+interface ExamsPageFilters extends ExamsListFilters {
+  delivery: ExamDelivery | undefined
+}
+
+/** One page of API-113 for the filters — the request of useExamsList.ts with `delivery` added. At module level: a new function on every render would reload in a loop. */
+const loadExamsPage: KeysetLoader<Exam, ExamsPageFilters> = (filters, cursor, signal) =>
+  listExams(
+    {
+      q: filters.q,
+      classId: filters.classId,
+      status: filters.status,
+      type: filters.type,
+      delivery: filters.delivery,
+      from: dayStartIn(filters.from, filters.timeZone),
+      to: dayEndIn(filters.to, filters.timeZone),
+      order: filters.order,
+      limit: filters.limit,
+      cursor,
+    },
+    signal,
+  )
 
 function DateFilter({ value, onChange, label }: { value: string | undefined; onChange: (value: string | undefined) => void; label: string }) {
   return <input type="date" aria-label={label} className="ant-input" value={value ?? ''} onChange={(event) => onChange(isCalendarDate(event.target.value) ? event.target.value : undefined)} style={{ width: 170 }} />
@@ -53,8 +83,8 @@ export function ExamsPage() {
   const canPickClass = hasPermission('classes.read')
   // The date filter reads its days in the academy's zone, this device's until it is known.
   const filterZone = academyZoneOf(academy) ?? deviceTimeZone()
-  const [defaults] = useState(() => defaultExamFilters(filterZone))
-  const list = useExamsList(defaults)
+  const [defaults] = useState<ExamsPageFilters>(() => ({ ...defaultExamFilters(filterZone), delivery: undefined }))
+  const list = useKeysetList(loadExamsPage, defaults)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // The global search opens a record here through `?open=<id>`.
   useOpenFromSearch(setSelectedId)
@@ -95,6 +125,12 @@ export function ExamsPage() {
       render: (_, row) => (
         <span>
           <Typography.Text strong>{examTitle(row, language)}</Typography.Text>
+          {/* MOD-09 phase 2: an exam taken on the platform says so; a manual one shows nothing new. */}
+          {row.delivery === 'online' ? (
+            <Tag color="geekblue" style={{ marginInlineStart: 8 }} data-testid="exam-online-tag">
+              {t('examOnline.delivery.tag')}
+            </Tag>
+          ) : null}
           {row.lesson ? (
             <>
               <br />
@@ -155,7 +191,8 @@ export function ExamsPage() {
   ]
 
   const failure = list.error ? describeExamsFailure(list.error) : null
-  const emptyText = hasActiveExamFilters(list.filters) ? t('exams.emptyFiltered') : seesEveryClass ? t('exams.empty') : t('exams.emptyAssigned')
+  const filtered = hasActiveExamFilters(list.filters) || Boolean(list.filters.delivery)
+  const emptyText = filtered ? t('exams.emptyFiltered') : seesEveryClass ? t('exams.empty') : t('exams.emptyAssigned')
 
   return (
     <>
@@ -217,6 +254,15 @@ export function ExamsPage() {
             onChange={(value) => list.setFilters({ type: value })}
             options={EXAM_TYPES.map((type) => ({ value: type, label: t(`exams.types.${type}`) }))}
             style={{ minWidth: 170 }}
+          />
+          <Select<ExamsPageFilters['delivery']>
+            allowClear
+            placeholder={t('examOnline.delivery.filter')}
+            aria-label={t('examOnline.delivery.label')}
+            value={list.filters.delivery}
+            onChange={(value) => list.setFilters({ delivery: value })}
+            options={EXAM_DELIVERIES.map((delivery) => ({ value: delivery, label: t(`examOnline.delivery.short.${delivery}`) }))}
+            style={{ minWidth: 160 }}
           />
           <DateFilter label={t('exams.filters.from')} value={list.filters.from} onChange={(value) => list.setFilters({ from: value, timeZone: filterZone })} />
           <DateFilter label={t('exams.filters.to')} value={list.filters.to} onChange={(value) => list.setFilters({ to: value, timeZone: filterZone })} />
