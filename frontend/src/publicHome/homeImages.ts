@@ -2,7 +2,7 @@
 // and the visitor's privacy: no third-party request). They are general stock
 // pictures of people learning — never presented as this academy's students,
 // teachers or classes. Sources (free licences; no attribution required):
-// - hero-student: https://www.pexels.com/photo/4458554/ (Pexels License)
+// - hero-student: https://www.pexels.com/photo/3756679/ (Pexels License; cropped, background removed)
 // - about-learners: https://images.unsplash.com/photo-1522202176988-66273c2fd55f (Unsplash License)
 // - promo-training: https://images.unsplash.com/photo-1552664730-d307ca884978 (Unsplash License)
 // - why-classroom: https://images.unsplash.com/photo-1571260899304-425eee4c7efc (Unsplash License)

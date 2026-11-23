@@ -41,7 +41,7 @@ describe('publicCatalog.css', () => {
   })
 
   it('draws the keyboard focus ring on the stretched area itself — no :has() needed', () => {
-    expect(declarations('.public-card .public-card__link:focus-visible::after').get('outline')).toBe('2px solid #00828a')
+    expect(declarations('.public-card .public-card__link:focus-visible::after').get('outline')).toBe('2px solid #039092')
     expect(css).not.toContain(':has(')
   })
 
@@ -54,7 +54,7 @@ describe('publicCatalog.css', () => {
   it('from a tablet down moves the links and the language switch behind the menu button', () => {
     expect(declarations('.public-catalog__menu-button.ant-btn').get('display')).toBe('none')
     const small = css.slice(css.indexOf('@media (max-width: 991px)'))
-    expect(small).toMatch(/\.public-catalog__nav,\s*\.public-catalog__language\s*\{\s*display:\s*none;/)
+    expect(small).toMatch(/\.public-catalog__nav,\s*\.public-catalog__language,\s*\.public-catalog__search-link\s*\{\s*display:\s*none;/)
     expect(small).toMatch(/\.public-catalog__menu-button\.ant-btn\s*\{\s*display:\s*inline-flex;/)
   })
 

@@ -123,9 +123,9 @@ describe('PublicHomePage', () => {
     expect(screen.queryByTestId('home-stats')).not.toBeInTheDocument()
     expect(screen.queryByTestId('home-testimonials')).not.toBeInTheDocument()
     expect(screen.queryByTestId('home-articles')).not.toBeInTheDocument()
-    // The hero's cards fall back to plain words.
-    expect(hero().getByText(ph.hero.badges.programs)).toBeInTheDocument()
-    expect(hero().getByText(ph.hero.badges.lessons)).toBeInTheDocument()
+    // The hero's facts fall back to plain words.
+    expect(hero().getByText(ph.hero.indicators.media)).toBeInTheDocument()
+    expect(hero().queryByText(ph.stats.programs)).not.toBeInTheDocument()
   })
 
   it('sends a visitor’s search to /explore in the address', async () => {

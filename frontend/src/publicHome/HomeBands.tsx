@@ -206,21 +206,25 @@ export function HomeCertificate() {
         </div>
         {/* A drawing of a certificate: no name, serial or grade — it can never pass for a real one. */}
         <div className="public-home__cert-stage" aria-hidden="true">
-          <div className="public-home__cert">
-            <span className="public-home__cert-ribbon">{t('publicHome.certificate.sample')}</span>
-            <span className="public-home__cert-seal">
-              <SafetyCertificateOutlined />
-            </span>
-            <strong>{t('publicHome.certificate.sampleTitle')}</strong>
-            <i className="public-home__cert-line public-home__cert-line--name" />
-            <i className="public-home__cert-line" />
-            <i className="public-home__cert-line public-home__cert-line--short" />
-            <span className="public-home__cert-foot">
-              <i />
-              <CheckOutlined />
-              <i />
-            </span>
+          <div className="public-home__cert-screen">
+            <div className="public-home__cert">
+              <span className="public-home__cert-ribbon">{t('publicHome.certificate.sample')}</span>
+              <span className="public-home__cert-seal">
+                <SafetyCertificateOutlined />
+              </span>
+              <strong>{t('publicHome.certificate.sampleTitle')}</strong>
+              <i className="public-home__cert-line public-home__cert-line--name" />
+              <i className="public-home__cert-line" />
+              <i className="public-home__cert-line public-home__cert-line--short" />
+              <span className="public-home__cert-foot">
+                <i />
+                <CheckOutlined />
+                <i />
+              </span>
+            </div>
           </div>
+          <span className="public-home__cert-stand" />
+          <span className="public-home__cert-base" />
         </div>
       </div>
     </section>

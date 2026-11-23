@@ -3,33 +3,40 @@
    LoginPage.css).
 
    The design tokens live here as custom properties, so an academy's own colours can replace them in one place once
-   the server offers them (no such field exists yet — nothing here is read from the academy). The turquoise identity of
-   the public pages: `--pub-primary` is the one Ant Design gets too (PUBLIC_THEME in PublicShell.tsx) and keeps 4.5:1
-   with white, like the lightest stop of `--pub-gradient`; the accent is decoration only, never text. The menu of a
-   phone opens in a portal outside `.public-catalog`, so it carries the same tokens. */
+   the server offers them (no such field exists yet — nothing here is read from the academy). The colours are sampled from
+   the owner's reference picture: `--pub-primary` is the one Ant Design gets too (PUBLIC_THEME in PublicShell.tsx). The
+   menu of a phone opens in a portal outside `.public-catalog`, so it carries the same tokens. */
 .public-catalog,
 .public-menu {
-  --pub-primary: #00828a;
-  --pub-primary-strong: #005f65;
-  --pub-primary-soft: #e0f4f4;
-  --pub-primary-softer: #f3fafa;
-  --pub-gradient: linear-gradient(120deg, #00828a 0%, #00686e 100%);
-  --pub-accent: #11b4b7;
+  --pub-primary: #039092;
+  --pub-primary-strong: #047c83;
+  --pub-primary-soft: #dfeff4;
+  --pub-primary-softer: #f0f9fa;
+  --pub-highlight: #02a0a5;
+  --pub-gradient: linear-gradient(100deg, #00b3ba 0%, #049298 55%, #058c98 100%);
+  --pub-accent: #00b3ba;
   --pub-accent-soft: #dff5f5;
-  --pub-ink: #202b30;
-  --pub-text: #36464b;
-  --pub-muted: #5a6b70;
+  --pub-ink: #1d2a30;
+  --pub-text: #33454b;
+  --pub-muted: #62757b;
   /* The details of a card (summary, facts, status): darker than --pub-muted, for small text on white. */
-  --pub-detail: #44545a;
-  --pub-line: #e1eaea;
+  --pub-detail: #4a5c62;
+  --pub-line: #e3ecee;
+  --pub-card-line: #e6e4f0;
   --pub-surface: #ffffff;
-  --pub-page: #f6fafa;
-  --pub-radius: 12px;
-  --pub-shadow: 0 1px 2px rgba(8, 87, 92, 0.05), 0 4px 16px rgba(8, 87, 92, 0.07);
-  --pub-shadow-hover: 0 2px 6px rgba(8, 87, 92, 0.08), 0 14px 32px rgba(8, 87, 92, 0.15);
+  --pub-page: #ffffff;
+  --pub-footer: #047c83;
+  --pub-radius: 8px;
+  --pub-shadow: 0 3px 12px rgba(58, 52, 110, 0.08);
+  --pub-shadow-hover: 0 8px 24px rgba(4, 124, 131, 0.18);
   --pub-content: 1200px;
   --pub-gutter: 24px;
   font-family: 'Public Poppins', 'Public Cairo', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+}
+
+/* The gradient starts on the reading side. */
+[dir='rtl'] .public-catalog {
+  --pub-gradient: linear-gradient(260deg, #00b3ba 0%, #049298 55%, #058c98 100%);
 }
 
 .public-catalog {
@@ -58,7 +65,7 @@
   gap: 8px 16px;
   width: 100%;
   max-width: var(--pub-content);
-  min-height: 72px;
+  min-height: 68px;
   margin: 0 auto;
   padding: 0 var(--pub-gutter);
   box-sizing: border-box;
@@ -178,6 +185,35 @@
   align-items: center;
 }
 
+.public-catalog__actions .ant-btn {
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* The header's search: a plain icon that opens the programs. */
+.public-catalog__search-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--pub-ink);
+  font-size: 17px;
+}
+
+.public-catalog__search-link:hover,
+.public-catalog__search-link:focus-visible {
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary);
+}
+
+.public-catalog__search-link:focus-visible {
+  outline: 2px solid var(--pub-primary);
+  outline-offset: 2px;
+}
+
 /* The menu button shows from a tablet down, where the links move into the menu. */
 .public-catalog__menu-button.ant-btn {
   display: none;
@@ -246,8 +282,10 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  padding: 9px;
+  box-sizing: border-box;
   background: var(--pub-surface);
-  border: 1px solid var(--pub-line);
+  border: 1px solid var(--pub-card-line);
   border-radius: var(--pub-radius);
   box-shadow: var(--pub-shadow);
   transition:
@@ -258,15 +296,15 @@
 
 .public-card--link:hover {
   transform: translateY(-3px);
-  border-color: #d3dceb;
+  border-color: #b9e0e2;
   box-shadow: var(--pub-shadow-hover);
 }
 
 .public-card__media {
   position: relative;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10.4;
   overflow: hidden;
-  border-radius: calc(var(--pub-radius) - 1px) calc(var(--pub-radius) - 1px) 0 0;
+  border-radius: 5px;
   background: var(--pub-primary-soft);
 }
 
@@ -311,8 +349,8 @@
 .public-card__placeholder--t0 {
   --tint-bg: #e0f4f4;
   --tint-shape: #caecec;
-  --tint-dot: rgba(0, 130, 138, 0.16);
-  --tint-fg: #00828a;
+  --tint-dot: rgba(3, 144, 146, 0.16);
+  --tint-fg: #039092;
 }
 
 .public-card__placeholder--t1 {
@@ -366,16 +404,16 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px 14px;
+  gap: 9px;
+  padding: 13px 3px 11px;
 }
 
 .public-card .public-card__title {
   margin: 0;
   color: var(--pub-ink);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -396,7 +434,7 @@
 }
 
 .public-card .public-card__link:focus-visible::after {
-  outline: 2px solid #00828a;
+  outline: 2px solid #039092;
   outline-offset: 3px;
   border-radius: var(--pub-radius);
 }
@@ -426,11 +464,9 @@
 .public-card__facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
+  gap: 4px 14px;
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--pub-page);
+  padding: 0;
   list-style: none;
 }
 
@@ -439,7 +475,7 @@
   align-items: center;
   gap: 6px;
   color: var(--pub-detail);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -454,10 +490,10 @@
   align-items: center;
   gap: 7px;
   margin-top: auto;
-  padding: 4px 12px;
+  padding: 2px 10px;
   border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
 }
@@ -492,14 +528,14 @@
   background: #8a94a6;
 }
 
-/* The foot: the price on one side, «التفاصيل» on the other. */
+/* The foot: the price, then «التفاصيل» as a full-width button. */
 .public-card__foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--pub-line);
+  gap: 9px 12px;
+  padding: 0 3px;
 }
 
 .public-price {
@@ -525,12 +561,24 @@
   position: relative;
   z-index: 2;
   display: inline-flex;
+  flex: 1 1 100%;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  color: var(--pub-primary);
+  height: 38px;
+  margin-inline: -3px;
+  border-radius: 4px;
+  background: var(--pub-primary);
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.public-card--link:hover .public-card__action {
+  background: var(--pub-primary-strong);
+  color: #fff;
 }
 
 .public-card__action .anticon {
@@ -568,7 +616,7 @@
 /* ---------- Footer ---------- */
 
 .public-catalog__footer {
-  background: var(--pub-gradient);
+  background: var(--pub-footer);
   color: #fff;
 }
 
@@ -678,7 +726,8 @@
    button, which holds the main links and the language switch. */
 @media (max-width: 991px) {
   .public-catalog__nav,
-  .public-catalog__language {
+  .public-catalog__language,
+  .public-catalog__search-link {
     display: none;
   }
 

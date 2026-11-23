@@ -262,6 +262,7 @@ export const publicCatalog = {
     certificatesLink: 'الشهادات',
     aboutLink: 'من نحن',
     openMenu: 'فتح القائمة',
+    searchLink: 'البحث عن برنامج',
     mySchool: 'مدرستي',
     dashboard: 'لوحة التحكم',
   },
