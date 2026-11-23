@@ -3,10 +3,11 @@
 import type { MyClassItem, MyClassStudent } from '../api/enrollments'
 import type { MyInvoice } from '../api/invoices'
 import type { MyAssignmentItem } from '../api/myAssignments'
-import type { MyExamItem } from '../api/myExams'
+import type { MyExamItem, MyExamOnline } from '../api/myExams'
 import type { MyGradeItem } from '../api/myGrades'
 import type { MyLessonItem } from '../api/myLessons'
 import type { LocalizedLabel } from '../api/users'
+import { isOnlineItem } from '../exams/myExams.view'
 import { wallDate } from './dashboard.data'
 
 const LEARNER_ROLES = new Set(['student', 'guardian'])
@@ -61,15 +62,14 @@ export function daysUntil(day: string, today: string): number {
 
 export type TodoItem =
   | { kind: 'assignment'; key: string; item: MyAssignmentItem; dueDays: number | null; tier: number; sortAt: number }
-  | { kind: 'exam'; key: string; item: MyExamItem; inDays: number; tier: number; sortAt: number }
   | { kind: 'invoice'; key: string; item: MyInvoice; tier: number; sortAt: number }
 
 /**
  * What waits for the student: work they can still hand in (the server's `pending` list — never a row whose
- * submission is closed for good), the exams scheduled from today on, and the invoices with a balance (overdue
- * ones first). Sorted by urgency: overdue money, then by date.
+ * submission is closed for good) and the invoices with a balance (overdue ones first). Sorted by urgency: overdue
+ * money, then by date. The exams have their own panel (examBoardOf).
  */
-export function todoOf(input: { assignments: readonly MyAssignmentItem[]; exams: readonly MyExamItem[]; invoices: readonly MyInvoice[]; zone: string; today: string }): TodoItem[] {
+export function todoOf(input: { assignments: readonly MyAssignmentItem[]; invoices: readonly MyInvoice[]; zone: string; today: string }): TodoItem[] {
   const items: TodoItem[] = []
   for (const item of input.assignments) {
     if (item.submitBlocker !== null && item.submitBlocker !== 'past_due') continue
@@ -77,18 +77,83 @@ export function todoOf(input: { assignments: readonly MyAssignmentItem[]; exams:
     const due = item.dueAt ? wallDate(item.dueAt, input.zone) : null
     items.push({ kind: 'assignment', key: `a:${item.id}:${item.student.id}`, item, dueDays: due ? daysUntil(due, input.today) : null, tier: 1, sortAt: item.dueAt ? Date.parse(item.dueAt) : Number.MAX_SAFE_INTEGER })
   }
-  for (const item of input.exams) {
-    if (item.status !== 'scheduled' || !item.scheduledAt) continue
-    const inDays = daysUntil(wallDate(item.scheduledAt, input.zone), input.today)
-    if (inDays < 0) continue
-    items.push({ kind: 'exam', key: `e:${item.id}:${item.student.id}`, item, inDays, tier: 1, sortAt: Date.parse(item.scheduledAt) })
-  }
   for (const item of input.invoices) {
     if (item.status !== 'issued' || item.balance <= 0) continue
     const due = item.nextDue?.dueOn ? Date.parse(`${item.nextDue.dueOn}T00:00:00Z`) : Number.MAX_SAFE_INTEGER
     items.push({ kind: 'invoice', key: `i:${item.id}`, item, tier: item.overdue ? 0 : 1, sortAt: due })
   }
   return items.sort((a, b) => a.tier - b.tier || a.sortAt - b.sortAt)
+}
+
+/** How many lessons the list under the featured one shows; the rest are on «my lessons». */
+export const LESSON_ROWS_MAX = 5
+/** On a phone the list stays short, so the exams are not a long scroll away. */
+export const LESSON_ROWS_PHONE = 2
+
+export interface LessonBoard {
+  /** The lessons running now, else the next one (every row of it: a guardian's two children share a lesson). */
+  featured: MyLessonItem[]
+  /** True when `featured` are running now. */
+  live: boolean
+  /** The other lessons by day: within a day the ones still to come first, then the ones that ended. */
+  days: AgendaDay[]
+  /** Lessons left out of `days` by the cap. */
+  hidden: number
+}
+
+/** The lessons panel: what runs now (or comes next) on top, then a short list of the rest. */
+export function lessonBoardOf(lessons: readonly MyLessonItem[], now: number, zone: string, maxRows = LESSON_ROWS_MAX): LessonBoard {
+  const running = lessons.filter((lesson) => lesson.status === 'scheduled' && Date.parse(lesson.startsAt) <= now && Date.parse(lesson.endsAt) > now)
+  const next = running.length ? null : nextLessonOf(lessons, now)
+  const featured = running.length ? running : next ? lessons.filter((lesson) => lesson.id === next.id) : []
+  const shown = new Set(featured)
+  const others = lessons.filter((lesson) => !shown.has(lesson))
+  const ended = (lesson: MyLessonItem) => Date.parse(lesson.endsAt) <= now
+  const byStart = (a: MyLessonItem, b: MyLessonItem) => Date.parse(a.startsAt) - Date.parse(b.startsAt)
+  // The cap keeps what is still to come before a lesson that is over.
+  const kept = new Set([...others.filter((lesson) => !ended(lesson)).sort(byStart), ...others.filter(ended).sort(byStart)].slice(0, maxRows))
+  const days = agendaOf([...kept], zone).map((day) => ({ date: day.date, lessons: [...day.lessons.filter((lesson) => !ended(lesson)), ...day.lessons.filter(ended)] }))
+  return { featured, live: running.length > 0, days, hidden: others.length - kept.size }
+}
+
+export interface ExamBoard {
+  /** Can be taken or continued now (for a guardian: the window of a child's exam is open). In progress first. */
+  now: Array<MyExamItem & { online: MyExamOnline }>
+  /** Announced and still to come, soonest first. */
+  upcoming: MyExamItem[]
+}
+
+/**
+ * The exams panel, from the server's state of each item: an online exam by `inProgress`/`canStart`/`blocker` (the
+ * rule the start route enforces — its window may have opened days ago), a manual one by its date. An exam that can no
+ * longer be taken (closed window, no attempt left, results out) is not listed here.
+ */
+export function examBoardOf(exams: readonly MyExamItem[], zone: string, today: string): ExamBoard {
+  const now: ExamBoard['now'] = []
+  const upcoming: MyExamItem[] = []
+  for (const item of exams) {
+    if (item.status !== 'scheduled') continue
+    if (isOnlineItem(item)) {
+      const { online } = item
+      if (online.inProgress || online.canStart) now.push(item)
+      else if (online.blocker === 'not_open_yet') upcoming.push(item)
+      else if (online.blocker === 'not_self') {
+        // A guardian's item is never startable, so its place comes from the window at the server's clock.
+        const serverNow = Date.parse(online.serverNow)
+        if (online.closesAt && Date.parse(online.closesAt) <= serverNow) continue
+        // The child has used every attempt and none is running: nothing is left to take.
+        if (online.attemptsUsed >= online.attemptsAllowed && !online.attempts.some((attempt) => attempt.status === 'in_progress')) continue
+        if (item.scheduledAt && Date.parse(item.scheduledAt) > serverNow) upcoming.push(item)
+        else now.push(item)
+      }
+      continue
+    }
+    if (item.scheduledAt && daysUntil(wallDate(item.scheduledAt, zone), today) >= 0) upcoming.push(item)
+  }
+  const closing = (item: ExamBoard['now'][number]) => (item.online.closesAt ? Date.parse(item.online.closesAt) : Number.MAX_SAFE_INTEGER)
+  now.sort((a, b) => Number(Boolean(b.online.inProgress)) - Number(Boolean(a.online.inProgress)) || closing(a) - closing(b))
+  upcoming.sort((a, b) => Date.parse(a.scheduledAt ?? '') - Date.parse(b.scheduledAt ?? ''))
+  return { now, upcoming }
 }
 
 export interface ResultRow {

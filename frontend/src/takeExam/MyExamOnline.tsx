@@ -139,10 +139,12 @@ interface OnlineTakeProps {
   onStart: (item: OnlineMyExamItem) => void
   /** The row's state is out of date: read the list again. */
   onStale: () => void
+  /** The start button's words where the page has its own (the learner home); «ابدأ الاختبار» otherwise. */
+  startLabel?: string
 }
 
 /** Under the exam's title: the questions, the attempts used, and the action or the reason. */
-export function OnlineTake({ item, onStart, onStale }: OnlineTakeProps) {
+export function OnlineTake({ item, onStart, onStale, startLabel }: OnlineTakeProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { online } = item
@@ -153,7 +155,7 @@ export function OnlineTake({ item, onStart, onStale }: OnlineTakeProps) {
   else if (state.kind === 'start') {
     action = (
       <Button type="primary" onClick={() => onStart(item)}>
-        {t('takeExam.list.start')}
+        {startLabel ?? t('takeExam.list.start')}
       </Button>
     )
   } else {
