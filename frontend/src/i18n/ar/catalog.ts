@@ -81,7 +81,7 @@ export const catalog = {
       pendingTitle: 'لديك طلب التحاق بهذه الدورة',
       pendingText: 'فصل «{{className}}»:',
       requests: 'طلباتي',
-      mySchool: 'مدرستي',
+      mySchool: 'فصولي',
     },
   },
   class: {
@@ -118,7 +118,7 @@ export const catalog = {
   },
   confirm: {
     freeTitle: 'تأكيد الالتحاق بالدورة',
-    freeContent: 'سيُفعَّل التحاقك بفصل «{{className}}» فور تأكيدك، وتظهر الدورة في «مدرستي».',
+    freeContent: 'سيُفعَّل التحاقك بفصل «{{className}}» فور تأكيدك، وتظهر الدورة في «فصولي».',
     freeOk: 'تأكيد الالتحاق',
     paidTitle: 'تأكيد طلب الالتحاق',
     paidContent: 'ستصدر لك فاتورة بمبلغ {{price}} تسدّدها لدى الأكاديمية. إرسال الطلب لا يفعّل الدراسة: لا يُفعَّل الالتحاق ولا تُفتح الدروس إلا بعد تأكيد الدفع وموافقة إدارة الأكاديمية معاً.',
@@ -134,11 +134,11 @@ export const catalog = {
     requestState: 'حالة الطلب:',
     myRequests: 'طلباتي',
     requestedContent: 'صدرت الفاتورة {{number}} بمبلغ {{total}}. سدّد الرسوم لدى الأكاديمية، ثم يُفعَّل الاشتراك بعد تأكيد الدفع وموافقة الإدارة.',
-    myCourses: 'مدرستي',
+    myCourses: 'فصولي',
     myLessons: 'دروسي',
     // PORTAL-04: after an active enrollment.
     startLearning: 'ابدأ التعلم',
-    goToMySchool: 'اذهب إلى مدرستي',
+    goToMySchool: 'اذهب إلى فصولي',
     invoices: 'فواتيري',
   },
   states: {

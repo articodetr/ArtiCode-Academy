@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
+import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'react-router'
 import { VerifyEmailPage } from '../account/VerifyEmailPage'
 import { ForgotPasswordPage } from '../account/ForgotPasswordPage'
 import { InvitationPage } from '../account/InvitationPage'
@@ -11,7 +11,6 @@ import { AuditLogPage } from '../pages/AuditLogPage'
 import { CatalogCoursePage } from '../pages/CatalogCoursePage'
 import { CatalogPage } from '../pages/CatalogPage'
 import { EnrollmentRequestsPage } from '../pages/EnrollmentRequestsPage'
-import { MySchoolPage } from '../pages/MySchoolPage'
 import { LearnPage } from '../pages/LearnPage'
 import { LearnPreviewPage } from '../pages/LearnPreviewPage'
 import { PublicCatalogPage } from '../pages/PublicCatalogPage'
@@ -27,6 +26,7 @@ import { LessonsPage } from '../pages/LessonsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { MyAssignmentsPage } from '../pages/MyAssignmentsPage'
 import { MyCertificatesPage } from '../pages/MyCertificatesPage'
+import { MyClassLessonsPage } from '../pages/MyClassLessonsPage'
 import { MyClassesPage } from '../pages/MyClassesPage'
 import { MyExamsPage } from '../pages/MyExamsPage'
 import { MyGradesPage } from '../pages/MyGradesPage'
@@ -46,6 +46,12 @@ import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
 /** The entry of NAV_ITEMS decides: permission keys where the module has an API, the role matrix elsewhere. */
 function guarded(navKey: string, page: ReactNode) {
   return <RequireAccess navKey={navKey}>{page}</RequireAccess>
+}
+
+/** An old address of «مدرستي»: «فصولي», keeping the query so `?section=requests` still opens the requests. */
+function ToMyClasses() {
+  const { search } = useLocation()
+  return <Navigate to={{ pathname: '/my-classes', search }} replace />
 }
 
 // Paths mirror NAV_ITEMS in ../layout/navigation.ts.
@@ -94,11 +100,12 @@ const router = createBrowserRouter([
       { path: 'courses', element: guarded('courses', <CoursesPage />) },
       { path: 'classes', element: guarded('classes', <ClassesPage />) },
       { path: 'my-classes', element: guarded('myClasses', <MyClassesPage />) }, // `student`/`guardian` role keys (J-F04, API-060 — ownership)
+      { path: 'my-classes/:classId', element: guarded('myClasses', <MyClassLessonsPage />) }, // J-F62: one class's lessons (API-101 with classId)
       { path: 'catalog', element: guarded('catalog', <CatalogPage />) }, // MOD-19: `student`/`guardian` role keys (API-219 reads with courses.read)
       { path: 'catalog/:courseId', element: guarded('catalog', <CatalogCoursePage />) }, // MOD-19: API-220/221
-      { path: 'my-school', element: guarded('mySchool', <MySchoolPage />) }, // MOD-20: `student`/`guardian` role keys (API-229 + API-222 — ownership)
-      // MOD-19's «my courses» became «My School» (MOD-20): old links and notifications keep working.
-      { path: 'my-courses', element: <Navigate to="/my-school" replace /> },
+      // J-F61: «مدرستي» was folded into «فصولي». The notifications already stored link to these two addresses.
+      { path: 'my-school', element: <ToMyClasses /> },
+      { path: 'my-courses', element: <ToMyClasses /> },
       { path: 'enrollment-requests', element: guarded('enrollmentRequests', <EnrollmentRequestsPage />) }, // MOD-19: `enrollments.manage` (API-224/225)
       { path: 'schedule', element: guarded('schedule', <SchedulePage />) },
       { path: 'lessons', element: guarded('lessons', <LessonsPage />) },

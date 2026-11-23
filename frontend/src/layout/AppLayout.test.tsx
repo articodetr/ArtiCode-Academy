@@ -543,13 +543,13 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     const menu = siderMenu()
     expect(headings(menu)).toEqual([ar.nav.groups.academy, ar.nav.groups.mine, ar.nav.groups.academics, ar.nav.groups.followUp])
     const mine = sections(menu).find(([heading]) => heading === ar.nav.groups.mine)!
-    expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.mySchool, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
+    expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
   })
 
   it('keeps a learner-only viewer’s flat menu in the order of NAV_ITEMS, with no heading — expanded or on the rail', async () => {
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'schedule.read', 'lessons.read', 'assignments.read', 'exams.read'] })
     renderShell(student)
-    const flat = [ar.nav.dashboard, ar.nav.myClasses, ar.nav.catalog, ar.nav.mySchool, ar.nav.schedule, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates, ar.nav.notifications]
+    const flat = [ar.nav.dashboard, ar.nav.myClasses, ar.nav.catalog, ar.nav.schedule, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates, ar.nav.notifications]
     expect(labelsIn(siderMenu())).toEqual(flat)
     expect(siderMenu().querySelector('.ant-menu-item-group')).toBeNull()
 

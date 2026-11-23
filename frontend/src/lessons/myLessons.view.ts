@@ -6,14 +6,16 @@
 // the academy's zone (D-R41 — J-F28), as on /lessons. No React, no i18next
 // instance.
 import type { AttendanceStatus } from '../api/attendance'
-import type { MyClassItem, MyClassRelation, MyClassStudent } from '../api/enrollments'
+import type { EnrollmentStatus, MyClassItem, MyClassRelation, MyClassStudent } from '../api/enrollments'
 import type { LessonSortOrder, LessonStatus } from '../api/lessons'
 import type { ListMyLessonsParams, MyLessonItem } from '../api/myLessons'
 import type { LocalizedLabel } from '../api/users'
 import { dayEndInstant, dayStartInstant, todayIn } from './lessons.format'
 
 export const MY_LESSON_VIEWS = ['upcoming', 'past', 'range'] as const
-export type MyLessonView = (typeof MY_LESSON_VIEWS)[number]
+/** One class's page (J-F62) opens on all of its lessons, so a class with nothing left to come is never an empty page. */
+export const CLASS_LESSON_VIEWS = ['all', ...MY_LESSON_VIEWS] as const
+export type MyLessonView = (typeof CLASS_LESSON_VIEWS)[number]
 
 /** Lessons per page (`limit` counts lessons — a page can hold more rows). */
 export const MY_LESSON_PAGE_SIZES = [20, 50, 100] as const
@@ -51,6 +53,7 @@ export function todayStartInstant(dayZone: string, now: Date = new Date()): stri
  */
 export function myLessonsQuery(filters: MyLessonsFilters, dayZone: string, now: Date = new Date()): ListMyLessonsParams {
   const base: ListMyLessonsParams = { classId: filters.classId, studentId: filters.studentId, status: filters.status, limit: filters.limit }
+  if (filters.view === 'all') return { ...base, order: 'asc' }
   if (filters.view === 'upcoming') return { ...base, from: todayStartInstant(dayZone, now), order: 'asc' }
   if (filters.view === 'past') return { ...base, to: new Date(new Date(todayStartInstant(dayZone, now)).getTime() - 1).toISOString(), order: 'desc' }
   return { ...base, from: dayStartInstant(filters.from, dayZone), to: dayEndInstant(filters.to, dayZone), order: filters.order }
@@ -59,6 +62,26 @@ export function myLessonsQuery(filters: MyLessonsFilters, dayZone: string, now: 
 /** True when a filter beyond the view narrows the list (the empty text then says so). */
 export function isNarrowed(filters: MyLessonsFilters): boolean {
   return Boolean(filters.studentId || filters.classId || filters.status || (filters.view === 'range' && (filters.from || filters.to)))
+}
+
+/** The query parameter naming the student whose row of «فصولي» opened a class's lessons (J-F62). */
+export const CLASS_LESSONS_STUDENT_PARAM = 'student'
+
+/** The first filters of one class's page: every lesson of the class, oldest first, for one student when given. */
+export function classLessonsFilters(classId: string, studentId?: string): MyLessonsFilters {
+  return { ...defaultMyLessonsFilters(), view: 'all', classId, studentId }
+}
+
+/** API-101 lists the lessons of `active` and `completed` enrollments only, so no other row opens a lessons page. */
+export function hasClassLessons(status: EnrollmentStatus): boolean {
+  return status === 'active' || status === 'completed'
+}
+
+/** A class's page; it names the student only when the caller owns this class through more than one. */
+export function classLessonsPath(row: Pick<MyClassItem, 'class' | 'student'>, items: readonly Pick<MyClassItem, 'class'>[]): string {
+  const path = `/my-classes/${encodeURIComponent(row.class.id)}`
+  const owners = items.filter((item) => item.class.id === row.class.id).length
+  return owners > 1 ? `${path}?${CLASS_LESSONS_STUDENT_PARAM}=${encodeURIComponent(row.student.id)}` : path
 }
 
 /** A row is a lesson × a student: the lesson id alone repeats for a guardian with two children in the class. */

@@ -14,7 +14,6 @@ import {
   FileDoneOutlined,
   FileTextOutlined,
   FormOutlined,
-  FundProjectionScreenOutlined,
   HomeOutlined,
   PercentageOutlined,
   PlayCircleOutlined,
@@ -119,9 +118,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // (API-060 + API-222, ownership) for the learners — the server role keys, like «my classes»; enrolling oneself needs
   // `enrollments.self_enroll` and the `student` role, which the page reads from the server's `selfService`.
   { key: 'catalog', path: '/catalog', labelKey: 'nav.catalog', icon: createElement(CompassOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-19' },
-  // MOD-20 (roadmap §4q): «My School» replaces MOD-19's «my courses» (/my-courses redirects here) — the learner's
-  // dashboard: continue learning, my courses, completed courses, requests, assessments and certificates (API-229 + API-222).
-  { key: 'mySchool', path: '/my-school', labelKey: 'nav.mySchool', icon: createElement(FundProjectionScreenOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-20' },
   // MOD-19: the office's requests (API-224/225) — the one key every read requires; teachers hold it not (seed).
   { key: 'enrollmentRequests', path: '/enrollment-requests', labelKey: 'nav.enrollmentRequests', icon: createElement(SolutionOutlined), permissions: ['enrollments.manage'], module: 'MOD-19' },
   // MOD-07 (J-F05): the schedule API is real — «my schedule» needs `schedule.read` (every seeded role holds it) and the
@@ -254,7 +250,7 @@ interface NavGroupDefinition {
 export const NAV_GROUPS: readonly NavGroupDefinition[] = [
   { key: 'home', labelKey: null, items: ['dashboard'] },
   { key: 'academy', labelKey: 'nav.groups.academy', items: ['users', 'enrollmentRequests'] },
-  { key: 'mine', labelKey: 'nav.groups.mine', items: ['myClasses', 'catalog', 'mySchool', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates'] },
+  { key: 'mine', labelKey: 'nav.groups.mine', items: ['myClasses', 'catalog', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates'] },
   { key: 'academics', labelKey: 'nav.groups.academics', items: ['courses', 'classes', 'lessons', 'schedule'] },
   { key: 'assessment', labelKey: 'nav.groups.assessment', items: ['assignments', 'exams', 'questionBanks', 'certificates'] },
   { key: 'finance', labelKey: 'nav.groups.finance', items: ['payments'] },

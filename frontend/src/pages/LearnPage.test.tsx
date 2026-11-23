@@ -84,7 +84,7 @@ function renderLearn(route: string) {
     path: deep ? '/learn/:courseId/:itemId' : '/learn/:courseId',
     routes: {
       [deep ? '/learn/:courseId' : '/learn/:courseId/:itemId']: <LearnPage />,
-      '/my-school': <LocationProbe />,
+      '/my-classes': <LocationProbe />,
     },
   })
 }
@@ -129,7 +129,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
     renderLearn('/learn/c1')
 
     expect(await screen.findByRole('heading', { name: 'اشتراكك بانتظار الدفع أو الموافقة' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'عرض طلبات اشتراكي' })).toHaveAttribute('href', '/my-school?section=requests')
+    expect(screen.getByRole('link', { name: 'عرض طلبات اشتراكي' })).toHaveAttribute('href', '/my-classes?section=requests')
   })
 
   it('explains a missing enrollment with a link to the course in the catalog', async () => {
@@ -148,8 +148,8 @@ describe('LearnPage — the course player (TEST-251)', () => {
     renderLearn('/learn/c1')
 
     expect(await screen.findByRole('heading', { name: 'الدورة غير موجودة أو لم تعد متاحة' })).toBeInTheDocument()
-    const back = screen.getAllByRole('link', { name: /العودة إلى مدرستي/ })
-    expect(back.every((link) => link.getAttribute('href') === '/my-school')).toBe(true)
+    const back = screen.getAllByRole('link', { name: /العودة إلى فصولي/ })
+    expect(back.every((link) => link.getAttribute('href') === '/my-classes')).toBe(true)
   })
 
   it('lists the levels with their counts and opens the level of the current lesson', async () => {
@@ -303,8 +303,8 @@ describe('LearnPage — the course player (TEST-251)', () => {
 
     const dialog = (await screen.findByText('أتممت جميع دروس الدورة المطلوبة')).closest('[role="dialog"]') as HTMLElement
     expect(dialog).not.toBeNull()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'العودة إلى مدرستي' }))
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/my-school'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'العودة إلى فصولي' }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/my-classes'))
   })
 
   it('renders a text lesson as text — markup shows literally, nothing runs', async () => {

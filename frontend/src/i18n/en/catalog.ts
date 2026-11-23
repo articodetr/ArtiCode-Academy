@@ -79,7 +79,7 @@ export const catalog: typeof arCatalog = {
       pendingTitle: 'You have an enrollment request for this course',
       pendingText: 'Class “{{className}}”:',
       requests: 'My requests',
-      mySchool: 'My School',
+      mySchool: 'My classes',
     },
   },
   class: {
@@ -116,7 +116,7 @@ export const catalog: typeof arCatalog = {
   },
   confirm: {
     freeTitle: 'Confirm joining the course',
-    freeContent: 'Your enrollment in the class “{{className}}” becomes active as soon as you confirm, and the course shows in “My School”.',
+    freeContent: 'Your enrollment in the class “{{className}}” becomes active as soon as you confirm, and the course shows in “My classes”.',
     freeOk: 'Confirm and join',
     paidTitle: 'Confirm the request to join',
     paidContent: 'An invoice of {{price}} will be issued to you, to pay at the academy. Sending the request does not start your studies: the enrollment becomes active and the lessons open only once the payment is confirmed and the academy approves it.',
@@ -132,11 +132,11 @@ export const catalog: typeof arCatalog = {
     requestState: 'Request state:',
     myRequests: 'My requests',
     requestedContent: 'Invoice {{number}} was issued for {{total}}. Pay the fees at the academy; the enrollment becomes active once the payment is confirmed and the office approves it.',
-    myCourses: 'My School',
+    myCourses: 'My classes',
     myLessons: 'My lessons',
     // PORTAL-04: after an active enrollment.
     startLearning: 'Start learning',
-    goToMySchool: 'Go to My School',
+    goToMySchool: 'Go to My classes',
     invoices: 'My invoices',
   },
   states: {

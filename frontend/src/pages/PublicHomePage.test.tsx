@@ -39,7 +39,7 @@ function mockHomeApi(list: (query: URLSearchParams, read: number) => Response, a
   return { requests, fetchMock }
 }
 
-const PROBES = ['/explore', '/explore/:courseId', '/login', '/catalog', '/catalog/:courseId', '/my-school', '/', '/courses', '/settings', '/verify']
+const PROBES = ['/explore', '/explore/:courseId', '/login', '/catalog', '/catalog/:courseId', '/my-classes', '/', '/courses', '/settings', '/verify']
 
 function renderPage(auth = makeAuth()) {
   return renderWithProviders(<PublicHomePage />, {
@@ -293,7 +293,7 @@ describe('PublicHomePage', () => {
     expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute('content', ph.meta.description)
   })
 
-  it('offers a signed-in learner «مدرستي» and the signed-in catalog — never the sign-in page', async () => {
+  it('offers a signed-in learner «فصولي» and the signed-in catalog — never the sign-in page', async () => {
     mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])), { catalogPublic: false })
     const auth = makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) })
     const first = renderPage(auth)
@@ -302,7 +302,7 @@ describe('PublicHomePage', () => {
     expect(screen.queryByText(pc.header.signIn)).not.toBeInTheDocument()
     expect(header().getByText(pc.header.programsLink).closest('a')).toHaveAttribute('href', '/catalog')
     fireEvent.click(button(header(), pc.header.mySchool))
-    expect(await path()).toBe('/my-school')
+    expect(await path()).toBe('/my-classes')
     first.unmount()
 
     const second = renderPage(auth)
@@ -350,7 +350,7 @@ describe('PublicHomePage', () => {
     expect(await path()).toBe('/')
   })
 
-  it('shows neither sign-in nor «مدرستي» while the session is still being restored', async () => {
+  it('shows neither sign-in nor «فصولي» while the session is still being restored', async () => {
     mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])))
     renderPage(makeAuth({ status: 'loading' }))
 

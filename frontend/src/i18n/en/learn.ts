@@ -4,8 +4,8 @@ import type { learn as arLearn } from '../ar/learn'
 
 export const learn: typeof arLearn = {
   header: {
-    backToMySchool: 'Back to My School',
-    mySchool: 'My School',
+    backToMySchool: 'Back to My classes',
+    mySchool: 'My classes',
     breadcrumb: 'Breadcrumb',
     openContents: 'Course content',
   },
@@ -201,7 +201,7 @@ export const learn: typeof arLearn = {
   done: {
     title: 'You completed every required lesson of the course',
     text: 'Well done! You can come back and review the lessons whenever you like.',
-    backToMySchool: 'Back to My School',
+    backToMySchool: 'Back to My classes',
     keepReviewing: 'Keep reviewing',
   },
   errors: {
