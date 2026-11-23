@@ -30,7 +30,7 @@ export const settings = {
   },
   // MOD-20 (D-R134): when a lesson of an uploaded video or audio counts as completed in «مدرستي».
   learning: {
-    title: 'التعلّم في «مدرستي»',
+    title: 'التعلّم في «فصولي»',
     intro: 'يكتمل درس الفيديو أو الصوت المرفوع ملفاً حين يشاهد الطالب هذه النسبة من مدته؛ دروس يوتيوب وفيميو والنصوص والملفات يُكملها الطالب بنفسه.',
     videoCompletionPercent: 'نسبة المشاهدة اللازمة لاكتمال الدرس',
     videoCompletionHint: 'عدد صحيح من {{min}} إلى {{max}}. اتركه فارغاً لاعتماد {{default}}٪.',

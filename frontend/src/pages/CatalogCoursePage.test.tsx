@@ -43,7 +43,7 @@ function renderPage(roles: string[] = ['student']) {
     auth: makeAuth({ user: makeUser({ id: 'st-1', role: 'student', roles, permissions: ['courses.read', 'enrollments.self_enroll'] }) }),
     route: `/catalog/${CATALOG_COURSE_IDS[0]}`,
     path: '/catalog/:courseId',
-    routes: { '/my-school': <LocationProbe />, '/payments': <LocationProbe />, '/catalog': <LocationProbe />, '/my-lessons': <LocationProbe />, '/learn/:courseId': <LocationProbe /> },
+    routes: { '/my-classes': <LocationProbe />, '/payments': <LocationProbe />, '/catalog': <LocationProbe />, '/my-lessons': <LocationProbe />, '/learn/:courseId': <LocationProbe /> },
   })
 }
 
@@ -91,7 +91,7 @@ describe('CatalogCoursePage', () => {
 
     fireEvent.click(within(classCard()).getByText(ar.catalog.class.enroll).closest('button')!)
     const dialog = await confirmDialog(ar.catalog.confirm.freeTitle)
-    expect(within(dialog).getByText('سيُفعَّل التحاقك بفصل «بايثون — الفصل أ» فور تأكيدك، وتظهر الدورة في «مدرستي».')).toBeInTheDocument()
+    expect(within(dialog).getByText('سيُفعَّل التحاقك بفصل «بايثون — الفصل أ» فور تأكيدك، وتظهر الدورة في «فصولي».')).toBeInTheDocument()
     expect(api.posts).toHaveLength(0)
     fireEvent.click(within(dialog).getByText(ar.catalog.confirm.freeOk).closest('button')!)
 
@@ -111,7 +111,7 @@ describe('CatalogCoursePage', () => {
     fireEvent.click(within(classCard()).getByText(ar.catalog.class.enroll).closest('button')!)
     fireEvent.click(within(await confirmDialog(ar.catalog.confirm.freeTitle)).getByText(ar.catalog.confirm.freeOk).closest('button')!)
     fireEvent.click(within(await screen.findByTestId('catalog-enrolled')).getByText(ar.catalog.result.goToMySchool).closest('button')!)
-    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/my-school')
+    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/my-classes')
   })
 
   it('opens one confirmation and sends one request however often the button is pressed (PORTAL-04)', async () => {
@@ -226,7 +226,7 @@ describe('CatalogCoursePage', () => {
     fireEvent.click(within(await confirmDialog(ar.catalog.confirm.paidTitle)).getByText(ar.catalog.confirm.paidOk).closest('button')!)
     fireEvent.click(within(await screen.findByTestId('catalog-requested')).getByText(ar.catalog.result.myRequests).closest('button')!)
     const location = await screen.findByTestId('location')
-    expect(location.getAttribute('data-pathname')).toBe('/my-school')
+    expect(location.getAttribute('data-pathname')).toBe('/my-classes')
   })
 
   it('claims no request for an answer that is not a pending request', async () => {
@@ -329,7 +329,7 @@ describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R
         auth: makeAuth({ user: makeUser({ id: 'st-1', role: 'student', roles, permissions: ['courses.read', 'enrollments.self_enroll'] }) }),
         route: `/catalog/${CATALOG_COURSE_IDS[0]}${search}`,
         path: '/catalog/:courseId',
-        routes: { '/learn/:courseId': <PathProbe />, '/my-school': <PathProbe /> },
+        routes: { '/learn/:courseId': <PathProbe />, '/my-classes': <PathProbe /> },
       },
     )
   }
@@ -436,6 +436,6 @@ describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R
     // Awaiting the approval: nothing to pay, so no «my invoices» here.
     expect(within(pending).queryByText(ar.catalog.result.invoices)).not.toBeInTheDocument()
     fireEvent.click(within(pending).getByText(ar.catalog.detail.mine.requests).closest('button')!)
-    expect((await screen.findByTestId('path')).textContent).toBe('/my-school?section=requests')
+    expect((await screen.findByTestId('path')).textContent).toBe('/my-classes?section=requests')
   })
 })
