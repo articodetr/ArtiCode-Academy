@@ -4,6 +4,8 @@
 // course's tone, the course, the class and time, the room and teacher, and a
 // "now" badge while the slot is running; a click opens the details. These are
 // projections of the weekly schedule, not confirmed lessons — the hint says so.
+// In «my schedule» the list also holds the learner's real lessons (J-F65), each
+// under its own title, and the screen hands it the matching hint.
 import { CalendarOutlined } from '@ant-design/icons'
 import { Skeleton } from 'antd'
 import { useId } from 'react'
@@ -23,10 +25,12 @@ interface UpcomingPanelProps {
   loading: boolean
   failed: boolean
   language: Language
+  /** The line under the title: what the list is drawn from. */
+  hint: string
   onOpen: (entry: TimetableEntry, date: CalendarDate) => void
 }
 
-export function UpcomingPanel({ occurrences, now, loading, failed, language, onOpen }: UpcomingPanelProps) {
+export function UpcomingPanel({ occurrences, now, loading, failed, language, hint, onOpen }: UpcomingPanelProps) {
   const { t } = useTranslation()
   const headingId = useId()
 
@@ -50,6 +54,7 @@ export function UpcomingPanel({ occurrences, now, loading, failed, language, onO
           const teacher = entry.teacher ? personName(entry.teacher) : t('schedule.noTeacher')
           const room = entry.room ? roomLabel(entry.room, language) : null
           const live = startsAt <= now
+          const lessonTitle = entry.lesson ? localizedLabel(entry.lesson.title, language) : null
           const label = slotLabel(t, language, {
             courseName: course,
             classCode: entry.class.code,
@@ -58,7 +63,7 @@ export function UpcomingPanel({ occurrences, now, loading, failed, language, onO
             endTime: entry.endTime,
             room,
             teacher: entry.teacher ? teacher : null,
-            relations: [...entry.relations.map((relation) => relationLabel(t, relation)), ...(live ? [t('schedule.upcoming.inProgress')] : [])],
+            relations: [...(lessonTitle ? [lessonTitle] : []), ...entry.relations.map((relation) => relationLabel(t, relation)), ...(live ? [t('schedule.upcoming.inProgress')] : [])],
           })
           return (
             <li key={`${entry.id}|${date}`} className="tt-upcoming__item">
@@ -69,6 +74,11 @@ export function UpcomingPanel({ occurrences, now, loading, failed, language, onO
                 </span>
                 <span className="tt-upcoming__body">
                   <span className="tt-upcoming__name">{course}</span>
+                  {lessonTitle ? (
+                    <span className="tt-upcoming__meta">
+                      <bdi>{lessonTitle}</bdi>
+                    </span>
+                  ) : null}
                   <span className="tt-upcoming__meta">
                     <bdi>{entry.class.code}</bdi>
                     {' · '}
@@ -94,7 +104,7 @@ export function UpcomingPanel({ occurrences, now, loading, failed, language, onO
       <h3 id={headingId} className="tt-upcoming__title">
         {t('schedule.upcoming.title')}
       </h3>
-      <p className="tt-upcoming__hint">{t('schedule.upcoming.hint')}</p>
+      <p className="tt-upcoming__hint">{hint}</p>
       {body}
     </section>
   )

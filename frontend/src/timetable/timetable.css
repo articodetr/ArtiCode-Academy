@@ -396,6 +396,28 @@
   outline-offset: 2px;
 }
 
+/* A real lesson (J-F65) carries a side bar; a weekly slot has none. */
+.tt-event.is-lesson {
+  border-inline-start: 3px solid var(--tt-tone-ink);
+}
+
+.tt-event.is-cancelled {
+  opacity: 0.72;
+}
+
+.tt-event.is-cancelled .tt-event__title {
+  text-decoration: line-through;
+}
+
+/* A lesson's title can be long: as a block its isolate ends in an ellipsis inside the card, on the
+   side the card's own direction puts the line. */
+.tt-event.is-lesson .tt-event__sub > bdi {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: match-parent;
+}
+
 .tt-event__title {
   font-size: 13.5px;
   font-weight: 700;
@@ -457,6 +479,10 @@
    leave. Lines give way from the last (the teacher) to the first (the class code). */
 .tt-event > .tt-event__extras {
   flex: 1 1 0;
+  /* Held to the card's width: a long line ends in an ellipsis instead of widening the column past the edge. */
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   margin-top: -2px;
   display: flex;

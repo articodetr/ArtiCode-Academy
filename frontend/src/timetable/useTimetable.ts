@@ -12,24 +12,41 @@
 // happened under — when the shown requests change, every failure is forgotten
 // and a failed date still shown is asked again (once per change, never in a
 // loop). A disabled reading never calls the server. Access stays with the
-// server: nothing here filters by permission or ownership.
+// server: nothing here filters by permission or ownership. Since J-F65
+// (KI-064) a date of «my schedule» also reads the caller's lessons (API-101);
+// either reading failing fails the date, so an empty day is never a guess.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { listMyLessons } from '../api/myLessons'
+import type { MyLessonItem } from '../api/myLessons'
 import { academySchedulePath, getAcademySchedule, getMySchedule, mySchedulePath } from '../api/timetable'
 import type { AcademyScheduleParams } from '../api/timetable'
 import { weekdayOf } from './timetable.dates'
 import type { CalendarDate } from './timetable.dates'
+import { lessonDayWindow, lessonEntriesOn, mergeLessons } from './timetable.lessons'
 import { entriesOfMine, entriesOn, entryOfSlot } from './timetable.model'
 import type { TimetableEntry, TimetableMode } from './timetable.model'
 
 /** The academy schedule's filters (API-090) besides the date. */
 export type AcademyFilters = Omit<AcademyScheduleParams, 'on'>
 
-/** The entries of one date: API-090 with `on` + that date's `weekday` + the filters, or API-091 with `on`. */
+/** Every lesson of the caller around `date`, through all the pages of API-101. */
+async function readLessonsAround(date: CalendarDate, signal: AbortSignal): Promise<MyLessonItem[]> {
+  const items: MyLessonItem[] = []
+  let cursor: string | undefined
+  do {
+    const page = await listMyLessons({ ...lessonDayWindow(date), order: 'asc', limit: 100, cursor }, signal)
+    items.push(...page.items)
+    cursor = page.nextCursor ?? undefined
+  } while (cursor)
+  return items
+}
+
+/** The entries of one date: API-090 with `on` + that date's `weekday` + the filters, or API-091 with `on` + the lessons of API-101. */
 export async function loadDate(mode: TimetableMode, filters: AcademyFilters, date: CalendarDate, signal: AbortSignal): Promise<TimetableEntry[]> {
   const weekday = weekdayOf(date)
   if (mode === 'mine') {
-    const answer = await getMySchedule({ on: date }, signal)
-    return entriesOn(entriesOfMine(answer.items), date)
+    const [answer, lessons] = await Promise.all([getMySchedule({ on: date }, signal), readLessonsAround(date, signal)])
+    return mergeLessons(entriesOn(entriesOfMine(answer.items), date), lessonEntriesOn(lessons, date), date)
   }
   // The weekday filter names another day: the server would answer nothing.
   if (filters.weekday !== undefined && filters.weekday !== weekday) return []
