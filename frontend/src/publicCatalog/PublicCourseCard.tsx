@@ -30,7 +30,7 @@ import { localizedLabel } from '../users/users.format'
 import { PublicPriceText } from './PublicPriceTag'
 import { availabilityOf, placeholderTintOf } from './publicCatalog.view'
 
-function Fact({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+export function Fact({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <li className="public-card__fact">
       <span className="public-card__fact-icon" aria-hidden="true">
@@ -42,7 +42,7 @@ function Fact({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 }
 
 /** The cover (decorative, `alt=""`) over the placeholder: a cover that fails to load leaves the placeholder showing. */
-function CardMedia({ id, url, badge }: { id: string; url: string | null; badge: string | null }) {
+export function CardMedia({ id, url, badge }: { id: string; url: string | null; badge: string | null }) {
   const [broken, setBroken] = useState<string | null>(null)
   const src = coverSrc(url)
   return (

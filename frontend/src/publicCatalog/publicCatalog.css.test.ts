@@ -41,7 +41,7 @@ describe('publicCatalog.css', () => {
   })
 
   it('draws the keyboard focus ring on the stretched area itself — no :has() needed', () => {
-    expect(declarations('.public-card .public-card__link:focus-visible::after').get('outline')).toBe('2px solid #0f6cbd')
+    expect(declarations('.public-card .public-card__link:focus-visible::after').get('outline')).toBe('2px solid #039092')
     expect(css).not.toContain(':has(')
   })
 
@@ -51,16 +51,16 @@ describe('publicCatalog.css', () => {
     expect(card.get('flex-direction')).toBe('column')
   })
 
-  it('on a phone keeps the brand and the action on one row and the links on the next', () => {
-    const phone = css.slice(css.indexOf('@media (max-width: 767px)'))
-    expect(phone).toMatch(/\.public-catalog__header-inner::after\s*\{[^}]*flex-basis:\s*100%/)
-    expect(phone).toMatch(/\.public-catalog__header-inner\s*\{[^}]*flex-wrap:\s*wrap/)
+  it('from a tablet down moves the links and the language switch behind the menu button', () => {
+    expect(declarations('.public-catalog__menu-button.ant-btn').get('display')).toBe('none')
+    const small = css.slice(css.indexOf('@media (max-width: 991px)'))
+    expect(small).toMatch(/\.public-catalog__nav,\s*\.public-catalog__language,\s*\.public-catalog__search-link\s*\{\s*display:\s*none;/)
+    expect(small).toMatch(/\.public-catalog__menu-button\.ant-btn\s*\{\s*display:\s*inline-flex;/)
   })
 
-  it('keeps the header in view from a tablet up, and lets it scroll away on a phone', () => {
+  it('keeps the one-row header in view at every width', () => {
     expect(declarations('.public-catalog__header').get('position')).toBe('sticky')
-    const phone = css.slice(css.indexOf('@media (max-width: 767px)'))
-    expect(phone).toMatch(/\.public-catalog__header\s*\{\s*position:\s*static;/)
+    expect(css).not.toMatch(/\.public-catalog__header\s*\{\s*position:\s*static;/)
   })
 
   it('marks the current page’s link with a bar, and never hides a focus ring', () => {

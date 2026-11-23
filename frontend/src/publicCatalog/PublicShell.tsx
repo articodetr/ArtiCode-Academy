@@ -2,23 +2,25 @@
 // a header with the academy's logo and name (API-205 — a neutral «الأكاديمية»
 // after a failed read, nothing while it runs; a plain book badge stands in for a
 // logo the academy has not set, never a product mark) leading to the public home
-// page (/home), the main links («الرئيسية», «البرامج»), the language switch and
-// one action that follows the session — «تسجيل الدخول» for a visitor, «مدرستي»
-// for a learner, «لوحة التحكم» for staff, nothing while the session is still
-// being restored — then the page and a footer with the academy's name, the same
-// links, the certificate check and the copyright in the academy's name. A page
-// that reads API-205 itself hands its reading in (`academy`), so the header never
-// asks twice. `bleed` lets a page lay out full-width bands of its own (/home);
-// the other pages sit in the centred column. `PublicOnly` keeps a page for
-// visitors: a signed-in user goes (replace) to the signed-in catalog, and a
+// page (/home), the main links («الرئيسية», «البرامج», «الشهادات», «من نحن»), the
+// language switch and one action that follows the session — «تسجيل الدخول» for a
+// visitor, «مدرستي» for a learner, «لوحة التحكم» for staff, nothing while the
+// session is still being restored — then the page and a turquoise footer with the
+// academy's name, a line about it, the same links and the copyright in the
+// academy's name. There is no blog, contact or social link: the server holds none.
+// A page that reads API-205 itself hands its reading in (`academy`), so the
+// header never asks twice. `bleed` lets a page lay out full-width bands of its own
+// (/home); the other pages sit in the centred column. `PublicOnly` keeps a page
+// for visitors: a signed-in user goes (replace) to the signed-in catalog, and a
 // spinner shows while the session is still being restored.
 //
-// The header is sticky from a tablet up; on a phone it is two rows — the brand
-// and the action, then the links and the language switch. The colours are CSS
-// custom properties on `.public-catalog` (publicCatalog.css), ready for an
-// academy's own colours once the server offers them.
-import { AppstoreOutlined, DashboardOutlined, LoginOutlined, ReadOutlined } from '@ant-design/icons'
-import { Button, Spin } from 'antd'
+// The header is sticky; from a tablet down the links and the language switch move
+// into a menu behind one button. The colours are CSS custom properties on
+// `.public-catalog` (publicCatalog.css), ready for an academy's own colours once
+// the server offers them; the same colour and the public typefaces reach Ant
+// Design's controls through the nested ConfigProvider.
+import { AppstoreOutlined, DashboardOutlined, LoginOutlined, MenuOutlined, ReadOutlined, SearchOutlined } from '@ant-design/icons'
+import { Button, ConfigProvider, Drawer, Spin } from 'antd'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -29,11 +31,21 @@ import type { PublicAcademyReading } from '../academy/usePublicAcademy'
 import { isCatalogPublic } from '../api/academy'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { useLocalized } from '../i18n/useLocalized'
 import { PublicAcademyNameContext } from './pageTitle'
 import { isLearner, programsPathFor, showsProgramsLink, viewerOf } from './publicViewer'
 import { useBrandName } from './useBrandName'
 import type { PublicViewer } from './publicViewer'
+import './publicFonts.css'
 import './publicCatalog.css'
+
+const PUBLIC_THEME = {
+  token: {
+    colorPrimary: '#039092',
+    borderRadius: 8,
+    fontFamily: "'Public Poppins', 'Public Cairo', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif",
+  },
+}
 
 export function PublicOnly({ signedInTo, children }: { signedInTo: string; children: ReactNode }) {
   const { status, user } = useAuth()
@@ -47,6 +59,29 @@ export function PublicOnly({ signedInTo, children }: { signedInTo: string; child
   // The signed-in catalog is the learners' screen (nav entry `catalog`: the `student`/`guardian` role keys); anyone else goes home rather than to a 403.
   if (status === 'authenticated') return <Navigate to={isLearner(user) ? signedInTo : '/'} replace />
   return children
+}
+
+/** The main links, in the header and in the phone menu. */
+function MainLinks({ viewer, programs, onNavigate }: { viewer: PublicViewer; programs: boolean; onNavigate?: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <>
+      <NavLink to="/home" end className="public-catalog__nav-link" onClick={onNavigate}>
+        {t('publicCatalog.header.homeLink')}
+      </NavLink>
+      {programs ? (
+        <NavLink to={programsPathFor(viewer)} className="public-catalog__nav-link" onClick={onNavigate}>
+          {t('publicCatalog.header.programsLink')}
+        </NavLink>
+      ) : null}
+      <NavLink to="/verify" className="public-catalog__nav-link" onClick={onNavigate}>
+        {t('publicCatalog.header.certificatesLink')}
+      </NavLink>
+      <Link to="/home#about" className="public-catalog__nav-link" onClick={onNavigate}>
+        {t('publicCatalog.header.aboutLink')}
+      </Link>
+    </>
+  )
 }
 
 /**
@@ -65,6 +100,7 @@ export function PublicShell({
   bleed?: boolean
 }) {
   const { t } = useTranslation()
+  const { language } = useLocalized()
   const { status, user } = useAuth()
   const own = usePublicAcademy(academy === undefined)
   const reading = academy ?? own
@@ -75,67 +111,99 @@ export function PublicShell({
   const logo = logoSrc !== null && logoSrc !== brokenLogo ? logoSrc : null
   // The year of the footer's notice, taken once per mount.
   const [year] = useState(() => new Date().getFullYear())
+  const [menuOpen, setMenuOpen] = useState(false)
   const viewer = viewerOf(status, user)
   const programs = showsProgramsLink(viewer, catalogOpen ?? isCatalogPublic(reading.academy))
 
   return (
-    <div className="public-catalog">
-      <header className="public-catalog__header">
-        <div className="public-catalog__header-inner">
-          <Link to="/home" className="public-catalog__brand" title={name || undefined}>
-            {logo ? (
-              <img className="public-catalog__logo" src={logo} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => setBrokenLogo(logo)} />
-            ) : name ? (
-              <span className="public-catalog__mark" aria-hidden="true">
-                <ReadOutlined />
-              </span>
-            ) : null}
-            <bdi dir="auto" className="public-catalog__name" data-testid="public-academy-name">
-              {name}
-            </bdi>
-          </Link>
-          <nav className="public-catalog__nav" aria-label={t('publicCatalog.header.navLabel')}>
-            <NavLink to="/home" end className="public-catalog__nav-link">
-              {t('publicCatalog.header.homeLink')}
-            </NavLink>
-            {programs ? (
-              <NavLink to={programsPathFor(viewer)} className="public-catalog__nav-link">
-                {t('publicCatalog.header.programsLink')}
-              </NavLink>
-            ) : null}
-          </nav>
-          <div className="public-catalog__language">
-            <LanguageSwitcher />
-          </div>
-          <div className="public-catalog__actions">
-            <ViewerAction viewer={viewer} />
-          </div>
-        </div>
-      </header>
-      <main className={bleed ? 'public-catalog__main public-catalog__main--bleed' : 'public-catalog__main'}>
-        <PublicAcademyNameContext value={name}>{children}</PublicAcademyNameContext>
-      </main>
-      <footer className="public-catalog__footer" data-testid="public-footer">
-        <div className="public-catalog__footer-inner">
-          <div className="public-catalog__footer-top">
-            {/* The academy's own name only — never a fallback or the product's name (the site is the academy's). */}
-            {reading.academy && name ? (
-              <bdi dir="auto" className="public-catalog__footer-name">
+    <ConfigProvider theme={PUBLIC_THEME}>
+      <div className="public-catalog">
+        <header className="public-catalog__header">
+          <div className="public-catalog__header-inner">
+            <Link to="/home" className="public-catalog__brand" title={name || undefined}>
+              {logo ? (
+                <img className="public-catalog__logo" src={logo} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => setBrokenLogo(logo)} />
+              ) : name ? (
+                <span className="public-catalog__mark" aria-hidden="true">
+                  <ReadOutlined />
+                </span>
+              ) : null}
+              <bdi dir="auto" className="public-catalog__name" data-testid="public-academy-name">
                 {name}
               </bdi>
-            ) : (
-              <span />
-            )}
-            <nav className="public-catalog__footer-links" aria-label={t('publicCatalog.footer.navLabel')}>
-              <Link to="/home">{t('publicCatalog.header.homeLink')}</Link>
-              {programs ? <Link to={programsPathFor(viewer)}>{t('publicCatalog.header.programsLink')}</Link> : null}
-              <Link to="/verify">{t('publicCatalog.footer.verifyCertificate')}</Link>
+            </Link>
+            <nav className="public-catalog__nav" aria-label={t('publicCatalog.header.navLabel')}>
+              <MainLinks viewer={viewer} programs={programs} />
             </nav>
+            {programs ? (
+              <Link to={programsPathFor(viewer)} className="public-catalog__search-link" aria-label={t('publicCatalog.header.searchLink')}>
+                <SearchOutlined aria-hidden="true" />
+              </Link>
+            ) : null}
+            <div className="public-catalog__language">
+              <LanguageSwitcher />
+            </div>
+            <div className="public-catalog__actions">
+              <ViewerAction viewer={viewer} />
+            </div>
+            <Button
+              className="public-catalog__menu-button"
+              icon={<MenuOutlined />}
+              aria-label={t('publicCatalog.header.openMenu')}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(true)}
+            />
           </div>
-          {reading.academy && name ? <div className="public-catalog__copyright">{t('publicCatalog.footer.copyright', { year, name })}</div> : null}
-        </div>
-      </footer>
-    </div>
+        </header>
+        <Drawer
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          placement={language === 'ar' ? 'right' : 'left'}
+          size="min(300px, 86vw)"
+          title={name || t('publicCatalog.header.navLabel')}
+          rootClassName="public-menu"
+          destroyOnHidden
+        >
+          <nav className="public-menu__nav" aria-label={t('publicCatalog.header.navLabel')}>
+            <MainLinks viewer={viewer} programs={programs} onNavigate={() => setMenuOpen(false)} />
+          </nav>
+          <div className="public-menu__language">
+            <LanguageSwitcher />
+          </div>
+        </Drawer>
+        <main className={bleed ? 'public-catalog__main public-catalog__main--bleed' : 'public-catalog__main'}>
+          <PublicAcademyNameContext value={name}>{children}</PublicAcademyNameContext>
+        </main>
+        <footer className="public-catalog__footer" data-testid="public-footer">
+          <div className="public-catalog__footer-inner">
+            <div className="public-catalog__footer-top">
+              <div className="public-catalog__footer-about">
+                {/* The academy's own name only — never a fallback or the product's name (the site is the academy's). */}
+                {reading.academy && name ? (
+                  <bdi dir="auto" className="public-catalog__footer-name">
+                    {name}
+                  </bdi>
+                ) : null}
+                <p>{t('publicCatalog.footer.tagline')}</p>
+              </div>
+              <nav className="public-catalog__footer-links" aria-label={t('publicCatalog.footer.navLabel')}>
+                <div>
+                  <strong>{t('publicCatalog.footer.quickLinks')}</strong>
+                  <Link to="/home">{t('publicCatalog.header.homeLink')}</Link>
+                  {programs ? <Link to={programsPathFor(viewer)}>{t('publicCatalog.header.programsLink')}</Link> : null}
+                  <Link to="/home#about">{t('publicCatalog.header.aboutLink')}</Link>
+                </div>
+                <div>
+                  <strong>{t('publicCatalog.footer.services')}</strong>
+                  <Link to="/verify">{t('publicCatalog.footer.verifyCertificate')}</Link>
+                </div>
+              </nav>
+            </div>
+            {reading.academy && name ? <div className="public-catalog__copyright">{t('publicCatalog.footer.copyright', { year, name })}</div> : null}
+          </div>
+        </footer>
+      </div>
+    </ConfigProvider>
   )
 }
 
