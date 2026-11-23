@@ -4,7 +4,7 @@
 // logo the academy has not set, never a product mark) leading to the public home
 // page (/home), the main links («الرئيسية», «البرامج», «الشهادات», «من نحن»), the
 // language switch and one action that follows the session — «تسجيل الدخول» for a
-// visitor, «مدرستي» for a learner, «لوحة التحكم» for staff, nothing while the
+// visitor, «فصولي» for a learner, «لوحة التحكم» for staff, nothing while the
 // session is still being restored — then the page and a turquoise footer with the
 // academy's name, a line about it, the same links and the copyright in the
 // academy's name. There is no blog, contact or social link: the server holds none.
@@ -207,14 +207,14 @@ export function PublicShell({
   )
 }
 
-/** The header's one action: sign in (visitor), «مدرستي» (learner), the dashboard (staff), nothing while pending. */
+/** The header's one action: sign in (visitor), «فصولي» (learner), the dashboard (staff), nothing while pending. */
 function ViewerAction({ viewer }: { viewer: PublicViewer }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   if (viewer === 'pending') return null
   if (viewer === 'learner') {
     return (
-      <Button type="primary" icon={<AppstoreOutlined />} onClick={() => navigate('/my-school')}>
+      <Button type="primary" icon={<AppstoreOutlined />} onClick={() => navigate('/my-classes')}>
         {t('publicCatalog.header.mySchool')}
       </Button>
     )

@@ -254,7 +254,7 @@ export const publicCatalog = {
     aboutLink: 'About us',
     openMenu: 'Open the menu',
     searchLink: 'Find a program',
-    mySchool: 'My School',
+    mySchool: 'My classes',
     dashboard: 'Dashboard',
   },
   footer: {
