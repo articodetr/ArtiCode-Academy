@@ -73,7 +73,7 @@ describe('PublicHomePage', () => {
     expect(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.card.free)).toBeInTheDocument()
 
     // One h1: the heading of the welcome band; the academy’s name is in the welcome line above it.
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(ph.hero.title)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(`${ph.hero.titleStart} ${ph.hero.titleHighlight}`)
 
     // The header: the name, the main links and the sign-in; never a «register» button. The line that accounts come
     // from the academy is said once, in the welcome band.
@@ -94,8 +94,60 @@ describe('PublicHomePage', () => {
     expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute('content', `أكاديمية النور — ${ph.meta.description}`)
 
     expect(api.requests).toHaveLength(1)
-    expect(api.requests[0]!.query.get('limit')).toBe('6')
+    expect(api.requests[0]!.query.get('limit')).toBe('48')
     expect(api.requests[0]!.headers.get('Authorization')).toBeNull()
+  })
+
+  it('shows six cards and states only figures summed from the server’s answer, a lower bound with «+» when more exist', async () => {
+    const cards = Array.from({ length: 8 }, (_, index) =>
+      makePublicCard({ id: `00000000-0000-7000-8000-00000000000${index}`, code: `C-${index}`, name: { ar: `برنامج ${index}` }, lessonCount: 5, durationHours: 2.5, openClasses: index === 0 ? 1 : 0 }),
+    )
+    mockHomeApi(() => jsonResponse(200, makePublicList(cards, 'next-page')))
+    renderPage()
+
+    await programs().findByText('برنامج 0')
+    expect(programs().getByText('برنامج 5')).toBeInTheDocument()
+    expect(programs().queryByText('برنامج 6')).not.toBeInTheDocument()
+    const stats = within(screen.getByTestId('home-stats'))
+    expect(stats.getByText(ph.stats.programs).closest('div')).toHaveTextContent('8+')
+    expect(stats.getByText(ph.stats.lessons).closest('div')).toHaveTextContent('40+')
+    expect(stats.getByText(ph.stats.hours).closest('div')).toHaveTextContent('20+')
+    expect(stats.getByText(ph.stats.openClasses).closest('div')).toHaveTextContent('1+')
+  })
+
+  it('invents nothing: no figures without programs, and no testimonials or articles section', async () => {
+    mockHomeApi(() => jsonResponse(404, CATALOG_NOT_PUBLIC), { catalogPublic: false })
+    renderPage()
+
+    await screen.findByTestId('home-programs-closed')
+    expect(screen.queryByTestId('home-stats')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('home-testimonials')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('home-articles')).not.toBeInTheDocument()
+    // The hero's cards fall back to plain words.
+    expect(hero().getByText(ph.hero.badges.programs)).toBeInTheDocument()
+    expect(hero().getByText(ph.hero.badges.lessons)).toBeInTheDocument()
+  })
+
+  it('sends a visitor’s search to /explore in the address', async () => {
+    mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])))
+    renderPage()
+    await programs().findByText('أساسيات بايثون')
+
+    fireEvent.change(hero().getByRole('textbox', { name: pc.list.searchLabel }), { target: { value: '  بايثون  ' } })
+    fireEvent.click(button(hero(), ph.hero.browse))
+    expect(await path()).toBe(`/explore?q=${encodeURIComponent('بايثون')}`)
+  })
+
+  it('opens the phone menu with the main links', async () => {
+    mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])))
+    renderPage()
+    await programs().findByText('أساسيات بايثون')
+
+    fireEvent.click(header().getByRole('button', { name: new RegExp(pc.header.openMenu) }))
+    const menu = await screen.findByRole('dialog')
+    expect(within(menu).getByText(pc.header.programsLink).closest('a')).toHaveAttribute('href', '/explore')
+    expect(within(menu).getByText(pc.header.certificatesLink).closest('a')).toHaveAttribute('href', '/verify')
+    expect(within(menu).getByText(pc.header.aboutLink).closest('a')).toHaveAttribute('href', '/home#about')
   })
 
   it('leads a visitor to the public catalog, a course page and the sign-in page — signing in from the header only', async () => {
@@ -114,7 +166,7 @@ describe('PublicHomePage', () => {
 
     const third = renderPage()
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('a')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(ph.programs.open).closest('a')!)
     expect(await path()).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
     third.unmount()
 
@@ -206,7 +258,7 @@ describe('PublicHomePage', () => {
 
     const second = renderPage(auth)
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('a')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(ph.programs.open).closest('a')!)
     expect(await path()).toBe(`/catalog/${PUBLIC_COURSE_IDS[0]}`)
     second.unmount()
 
@@ -276,7 +328,7 @@ describe('PublicHomePage', () => {
     renderPage(makeAuth({ user: makeUser({ role: null, roles: ['accountant'], permissions: ['invoices.read_all'] }) }))
     await programs().findByText('أساسيات بايثون')
     expect(screen.getByText('أساسيات بايثون').closest('a')).toBeNull()
-    expect(programs().queryByText(pc.list.details)).not.toBeInTheDocument()
+    expect(programs().queryByText(ph.programs.open)).not.toBeInTheDocument()
     expect(programs().queryByText(ph.programs.all)).not.toBeInTheDocument()
   })
 

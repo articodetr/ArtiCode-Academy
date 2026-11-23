@@ -3,30 +3,36 @@
    LoginPage.css).
 
    The design tokens live here as custom properties, so an academy's own colours can replace them in one place once
-   the server offers them (no such field exists yet — nothing here is read from the academy). The primary colour is the
-   app's own (`colorPrimary` in app/App.tsx); the warm accent is decoration only, never text. */
-.public-catalog {
-  --pub-primary: #0f6cbd;
-  --pub-primary-strong: #0b4f8a;
-  --pub-primary-soft: #e8f1fb;
-  --pub-primary-softer: #f3f8fd;
-  --pub-accent: #e8a33d;
-  --pub-accent-soft: #fcf1de;
-  --pub-ink: #142033;
-  --pub-text: #2b3648;
-  --pub-muted: #5d6879;
+   the server offers them (no such field exists yet — nothing here is read from the academy). The turquoise identity of
+   the public pages: `--pub-primary` is the one Ant Design gets too (PUBLIC_THEME in PublicShell.tsx) and keeps 4.5:1
+   with white, like the lightest stop of `--pub-gradient`; the accent is decoration only, never text. The menu of a
+   phone opens in a portal outside `.public-catalog`, so it carries the same tokens. */
+.public-catalog,
+.public-menu {
+  --pub-primary: #00828a;
+  --pub-primary-strong: #005f65;
+  --pub-primary-soft: #e0f4f4;
+  --pub-primary-softer: #f3fafa;
+  --pub-gradient: linear-gradient(120deg, #00828a 0%, #00686e 100%);
+  --pub-accent: #11b4b7;
+  --pub-accent-soft: #dff5f5;
+  --pub-ink: #202b30;
+  --pub-text: #36464b;
+  --pub-muted: #5a6b70;
   /* The details of a card (summary, facts, status): darker than --pub-muted, for small text on white. */
-  --pub-detail: #44505f;
-  --pub-line: #e3e8ef;
+  --pub-detail: #44545a;
+  --pub-line: #e1eaea;
   --pub-surface: #ffffff;
-  --pub-page: #f6f8fb;
-  --pub-footer: #13223b;
-  --pub-radius: 14px;
-  --pub-shadow: 0 1px 2px rgba(20, 32, 51, 0.04), 0 4px 16px rgba(20, 32, 51, 0.06);
-  --pub-shadow-hover: 0 2px 6px rgba(20, 32, 51, 0.06), 0 14px 32px rgba(20, 32, 51, 0.12);
+  --pub-page: #f6fafa;
+  --pub-radius: 12px;
+  --pub-shadow: 0 1px 2px rgba(8, 87, 92, 0.05), 0 4px 16px rgba(8, 87, 92, 0.07);
+  --pub-shadow-hover: 0 2px 6px rgba(8, 87, 92, 0.08), 0 14px 32px rgba(8, 87, 92, 0.15);
   --pub-content: 1200px;
   --pub-gutter: 24px;
+  font-family: 'Public Poppins', 'Public Cairo', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+}
 
+.public-catalog {
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -115,10 +121,11 @@
   display: flex;
   align-items: stretch;
   align-self: stretch;
-  gap: 4px;
+  justify-content: center;
+  gap: 2px;
   flex: 1 1 auto;
   min-width: 0;
-  margin-inline-start: 24px;
+  margin-inline-start: 16px;
 }
 
 .public-catalog__nav-link {
@@ -169,6 +176,46 @@
   display: flex;
   flex: none;
   align-items: center;
+}
+
+/* The menu button shows from a tablet down, where the links move into the menu. */
+.public-catalog__menu-button.ant-btn {
+  display: none;
+  flex: none;
+}
+
+.public-menu__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.public-menu__nav .public-catalog__nav-link {
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--pub-text);
+  font-size: 16px;
+}
+
+.public-menu__nav .public-catalog__nav-link::after {
+  content: none;
+}
+
+.public-menu__nav .public-catalog__nav-link:hover,
+.public-menu__nav .public-catalog__nav-link.active {
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary-strong);
+}
+
+.public-menu__nav .public-catalog__nav-link:focus-visible {
+  outline-offset: 0;
+}
+
+.public-menu__language {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--pub-line);
 }
 
 /* ---------- Main ---------- */
@@ -262,10 +309,10 @@
 }
 
 .public-card__placeholder--t0 {
-  --tint-bg: #e8f1fb;
-  --tint-shape: #d6e6f8;
-  --tint-dot: rgba(15, 108, 189, 0.16);
-  --tint-fg: #0f6cbd;
+  --tint-bg: #e0f4f4;
+  --tint-shape: #caecec;
+  --tint-dot: rgba(0, 130, 138, 0.16);
+  --tint-fg: #00828a;
 }
 
 .public-card__placeholder--t1 {
@@ -349,7 +396,7 @@
 }
 
 .public-card .public-card__link:focus-visible::after {
-  outline: 2px solid #0f6cbd;
+  outline: 2px solid #00828a;
   outline-offset: 3px;
   border-radius: var(--pub-radius);
 }
@@ -521,41 +568,67 @@
 /* ---------- Footer ---------- */
 
 .public-catalog__footer {
-  background: var(--pub-footer);
-  color: rgba(255, 255, 255, 0.74);
+  background: var(--pub-gradient);
+  color: #fff;
 }
 
 .public-catalog__footer-inner {
   width: 100%;
   max-width: var(--pub-content);
   margin: 0 auto;
-  padding: 32px var(--pub-gutter) 24px;
+  padding: 44px var(--pub-gutter) 22px;
   box-sizing: border-box;
 }
 
 .public-catalog__footer-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px 32px;
-  padding-bottom: 20px;
+  gap: 24px 48px;
+  padding-bottom: 28px;
+}
+
+.public-catalog__footer-about {
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.public-catalog__footer-about p {
+  margin: 8px 0 0;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.8;
 }
 
 .public-catalog__footer-name {
   color: #fff;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
 }
 
 .public-catalog__footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: 20px 64px;
+}
+
+.public-catalog__footer-links > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.public-catalog__footer-links strong {
+  margin-bottom: 2px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .public-catalog__footer-links a {
-  color: rgba(255, 255, 255, 0.82);
+  color: #fff;
   font-size: 14px;
 }
 
@@ -574,7 +647,7 @@
 
 .public-catalog__copyright {
   padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
   font-size: 13px;
 }
 
@@ -601,60 +674,37 @@
   }
 }
 
-/* A phone: the brand and the action on the first row (the name ends in an ellipsis, never vanishes), the main links and
-   the language switch on the second, under a thin line. The header scrolls away with the page here. */
-@media (max-width: 767px) {
-  .public-catalog {
-    --pub-gutter: 16px;
-  }
-
-  .public-catalog__header {
-    position: static;
-  }
-
-  .public-catalog__header-inner {
-    flex-wrap: wrap;
-    row-gap: 0;
-    min-height: 0;
-    padding-top: 10px;
-  }
-
-  /* A full-width line break between the two rows, whatever the widths of the action and the links. */
-  .public-catalog__header-inner::after {
-    content: '';
-    order: 3;
-    flex-basis: 100%;
-    height: 0;
+/* A tablet and a phone: one row — the brand (its name ends in an ellipsis, never vanishes), the action and the menu
+   button, which holds the main links and the language switch. */
+@media (max-width: 991px) {
+  .public-catalog__nav,
+  .public-catalog__language {
+    display: none;
   }
 
   .public-catalog__brand {
-    order: 1;
     flex: 1 1 0;
-    min-width: 96px;
+    min-width: 80px;
   }
 
-  .public-catalog__actions {
-    order: 2;
+  .public-catalog__menu-button.ant-btn {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 767px) {
+  .public-catalog,
+  .public-menu {
+    --pub-gutter: 16px;
   }
 
-  .public-catalog__nav {
-    order: 4;
-    align-self: auto;
-    margin: 10px 0 0;
-    height: 44px;
+  .public-catalog__header-inner {
+    min-height: 62px;
   }
 
-  .public-catalog__nav-link {
-    padding: 0 12px;
-  }
-
-  .public-catalog__nav-link::after {
-    inset-inline: 12px;
-  }
-
-  .public-catalog__language {
-    order: 5;
-    margin-top: 10px;
+  /* The action without its icon: the academy's name keeps the room. */
+  .public-catalog__actions .ant-btn-icon {
+    display: none;
   }
 
   .public-catalog__mark {
