@@ -322,6 +322,67 @@ describe('ProfilePage (J-F36)', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent(ar.profile.mustChangePassword)
     })
+
+    // PORTAL-04, the learner journey: the sign-in sent the user here with where they were going (`from`).
+    function renderForced(from: unknown, mustChangePassword = true) {
+      const auth = makeAuth({ user: makeUser({ mustChangePassword }) })
+      renderWithProviders(<ProfilePage />, {
+        auth,
+        route: { pathname: '/profile', state: { from } },
+        routes: { '*': <LocationProbe /> },
+      })
+      return auth
+    }
+
+    it('continues to the chosen course once the forced change succeeds, and says so beforehand', async () => {
+      record((url) => (url === '/api/auth/password' ? jsonResponse(204) : jsonResponse(404)))
+      const auth = renderForced('/catalog/c-1?intent=enroll')
+      expect(screen.getByTestId('profile-must-change')).toHaveTextContent(ar.profile.returnAfterChange.course)
+
+      const { user, fields } = await fillPasswords('OldSecret123', 'NewSecret4567')
+      await user.click(fields.save)
+
+      await waitFor(() => expect(auth.reloadUser).toHaveBeenCalledTimes(1))
+      const location = await screen.findByTestId('location')
+      expect(location).toHaveAttribute('data-pathname', '/catalog/c-1')
+    })
+
+    it('stays when the change fails, when it was not forced, or when the return path leaves the site', async () => {
+      // A refused change: nothing to continue to yet.
+      record(() => jsonResponse(400, { statusCode: 400, code: 'password_invalid', message: 'no' }))
+      const { unmount } = renderWithProviders(<ProfilePage />, {
+        auth: makeAuth({ user: makeUser({ mustChangePassword: true }) }),
+        route: { pathname: '/profile', state: { from: '/users' } },
+        routes: { '*': <LocationProbe /> },
+      })
+      expect(screen.getByTestId('profile-must-change')).toHaveTextContent(ar.profile.returnAfterChange.page)
+      let { user, fields } = await fillPasswords('OldSecret123', 'NewSecret4567')
+      await user.click(fields.save)
+      expect(await within(fields.form).findByRole('alert')).toHaveTextContent(ar.profile.errors.password_invalid)
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+      unmount()
+
+      // A voluntary change (the state outlived a reload of the page): the page stays.
+      record((url) => (url === '/api/auth/password' ? jsonResponse(204) : jsonResponse(404)))
+      const voluntary = renderWithProviders(<ProfilePage />, {
+        auth: makeAuth({ user: makeUser() }),
+        route: { pathname: '/profile', state: { from: '/users' } },
+        routes: { '*': <LocationProbe /> },
+      })
+      ;({ user, fields } = await fillPasswords('OldSecret123', 'NewSecret4567'))
+      await user.click(fields.save)
+      expect(await screen.findByText(ar.profile.passwordChanged)).toBeInTheDocument()
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+      voluntary.unmount()
+
+      // A forced change whose return path leaves the site: no promise, and the page stays.
+      const auth = renderForced('https://evil.example/x')
+      expect(screen.getByTestId('profile-must-change')).not.toHaveTextContent(ar.profile.returnAfterChange.page)
+      ;({ user, fields } = await fillPasswords('OldSecret123', 'NewSecret4567'))
+      await user.click(fields.save)
+      await waitFor(() => expect(auth.reloadUser).toHaveBeenCalledTimes(1))
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+    })
   })
 
   describe('signing out', () => {

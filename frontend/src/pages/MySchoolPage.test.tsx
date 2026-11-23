@@ -169,7 +169,8 @@ describe('MySchoolPage', () => {
   })
 
   it('opens the section the URL names and lists every course in «my courses», a course without required lessons too', async () => {
-    const fresh = makeLearningCourse({ action: 'start', lastActivityAt: null, lastLesson: null, leadTeacher: null, progress: makeProgress({ total: 0, required: 0, completed: 0, completedRequired: 0, percent: null }) })
+    // Two published lessons, none of them required.
+    const fresh = makeLearningCourse({ action: 'start', lastActivityAt: null, lastLesson: null, leadTeacher: null, progress: makeProgress({ total: 2, required: 0, completed: 0, completedRequired: 0, percent: null }) })
     mockSchoolApi({ learning: [fresh, makeCompletedCourse()] })
     renderPage({ route: '/my-school?section=courses' })
     expect(await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[1]}`)).toBeInTheDocument()
@@ -181,6 +182,19 @@ describe('MySchoolPage', () => {
     expect(first.queryByText(/^آخر درس:/)).not.toBeInTheDocument()
     expect(first.getByTestId('course-cover-placeholder')).toBeInTheDocument()
     fireEvent.click(first.getByText(ar.mySchool.card.actions.start).closest('button')!)
+    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe(`/learn/${LEARNING_COURSE_IDS[0]}`)
+  })
+
+  it('says a course has no published lesson yet and only opens it, promising no lessons (PORTAL-04)', async () => {
+    const empty = makeLearningCourse({ action: 'start', lastActivityAt: null, lastLesson: null, progress: makeProgress({ total: 0, required: 0, completed: 0, completedRequired: 0, percent: null }) })
+    mockSchoolApi({ learning: [empty] })
+    renderPage({ route: '/my-school?section=courses' })
+    expect(await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[0]}`)).toBeInTheDocument()
+    const first = card(LEARNING_ENROLLMENT_IDS[0])
+    expect(first.getByTestId('course-no-lessons')).toHaveTextContent(ar.mySchool.card.noLessons)
+    expect(first.queryByText(ar.mySchool.card.noRequired)).not.toBeInTheDocument()
+    expect(first.queryByText(ar.mySchool.card.actions.start)).not.toBeInTheDocument()
+    fireEvent.click(first.getByText(ar.mySchool.card.actions.open).closest('button')!)
     expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe(`/learn/${LEARNING_COURSE_IDS[0]}`)
   })
 
@@ -212,7 +226,12 @@ describe('MySchoolPage', () => {
     renderPage({ route: '/my-school?section=requests' })
 
     const approval = within(await screen.findByTestId(`request-${REQUEST_IDS[1]}`))
-    expect(approval.getByRole('button', { name: ar.mySchool.requests.awaitingApproval })).toBeDisabled()
+    // Waiting for the office is said in words, never by a disabled button (PORTAL-04).
+    expect(approval.queryByRole('button', { name: ar.mySchool.requests.awaitingApproval })).not.toBeInTheDocument()
+    expect(approval.getByText(ar.myCourses.requests.approvalHint)).toBeInTheDocument()
+    // Awaiting the payment: the invoice is shown, never paid here (no payment gateway).
+    expect(ar.mySchool.requests.pay).toBe('عرض الفاتورة')
+    expect(within(screen.getByTestId(`request-${REQUEST_IDS[0]}`)).getByText(ar.myCourses.requests.payHint)).toBeInTheDocument()
     const rejected = within(screen.getByTestId(`request-${REQUEST_IDS[2]}`))
     expect(rejected.getByText('يلزم اختبار تحديد المستوى أولاً')).toBeInTheDocument()
     expect(rejected.queryByText(ar.myCourses.requests.cancel)).not.toBeInTheDocument()
@@ -282,12 +301,51 @@ describe('MySchoolPage', () => {
     expect(api.count('/api/me/learning')).toBe(1)
   })
 
-  it('offers the catalog when nothing is enrolled yet', async () => {
+  it('offers the catalog when nothing is enrolled yet — and when every course is finished (PORTAL-04)', async () => {
     mockSchoolApi({ learning: [] })
-    renderPage()
-    const empty = await screen.findByText(ar.mySchool.courses.empty)
-    fireEvent.click(within(empty.closest('.ant-empty') as HTMLElement).getByText(ar.mySchool.explore).closest('button')!)
+    const { unmount } = renderPage()
+    const none = await screen.findByTestId('continue-empty')
+    expect(none).toHaveTextContent(ar.mySchool.courses.noneTitle)
+    expect(none).toHaveTextContent(ar.mySchool.courses.noneText)
+    // No hint about «most recent first» over an empty list.
+    expect(screen.queryByText(ar.mySchool.courses.continueHint)).not.toBeInTheDocument()
+    fireEvent.click(within(none).getByText(ar.mySchool.exploreMore).closest('button')!)
     expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/catalog')
+    unmount()
+
+    mockSchoolApi({ learning: [makeCompletedCourse()] })
+    renderPage()
+    const done = await screen.findByTestId('continue-empty')
+    expect(done).toHaveTextContent(ar.mySchool.courses.continueDoneTitle)
+    expect(done).toHaveTextContent(ar.mySchool.courses.continueDoneText)
+  })
+
+  it('puts the course the student was last on first and wide — «تابع من حيث توقفت» — never one not started, nor during a search (PORTAL-04)', async () => {
+    const fresh = makeLearningCourse({ enrollmentId: 'fresh', action: 'start', lastActivityAt: null, lastLesson: null, enrollment: { ...makeLearningCourse().enrollment, enrolledAt: '2026-11-20T09:00:00.000Z' }, course: { ...makeLearningCourse().course, id: 'course-fresh', code: 'NEW-1', name: { ar: 'دورة جديدة' } } })
+    mockSchoolApi({ learning: [fresh, makeLearningCourse()] })
+    const { unmount } = renderPage()
+    const python = await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[0]}`)
+    expect(screen.getByText(ar.mySchool.courses.continueHint)).toBeInTheDocument()
+    // Most recent activity first: the course with history leads, wide, with its server action.
+    expect(python).toHaveClass('ms-ccard--featured')
+    expect(within(python).getByText(ar.mySchool.card.resume)).toBeInTheDocument()
+    expect(within(python).getByText(ar.mySchool.card.actions.continue)).toBeInTheDocument()
+    const newer = screen.getByTestId('course-card-fresh')
+    expect(newer).not.toHaveClass('ms-ccard--featured')
+    expect(within(newer).getByText(ar.mySchool.card.actions.start)).toBeInTheDocument()
+    expect(within(newer).queryByText(ar.mySchool.card.resume)).not.toBeInTheDocument()
+
+    // A search narrows the list: no card is put forward.
+    fireEvent.change(sectionsNav().getByLabelText(ar.mySchool.search.label), { target: { value: 'بايثون' } })
+    expect(screen.getByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[0]}`)).not.toHaveClass('ms-ccard--featured')
+    unmount()
+
+    // Only courses not started yet: none is put forward.
+    mockSchoolApi({ learning: [fresh] })
+    renderPage()
+    const only = await screen.findByTestId('course-card-fresh')
+    expect(only).not.toHaveClass('ms-ccard--featured')
+    expect(screen.queryByText(ar.mySchool.card.resume)).not.toBeInTheDocument()
   })
 
   it('reads the assessments only when their section opens and links to the full pages', async () => {
@@ -410,5 +468,85 @@ describe('MySchoolPage', () => {
     const own = card(LEARNING_ENROLLMENT_IDS[0])
     expect(own.getByText('الحصة القادمة: حصة بلا رابط آمن')).toBeInTheDocument()
     expect(own.queryByText(ar.mySchool.card.meetingLink)).not.toBeInTheDocument()
+  })
+})
+
+describe('MySchoolPage — «جميع دوراتي», «المكتملة» and «طلبات الاشتراك» (PORTAL-04)', () => {
+  it('names the sections, offers «استكشف برامج أخرى» above them, and lists every course with its state', async () => {
+    const fresh = makeLearningCourse({ enrollmentId: 'fresh', action: 'start', lastActivityAt: null, lastLesson: null, course: { ...makeLearningCourse().course, id: 'course-fresh', code: 'NEW-1', name: { ar: 'دورة جديدة' } } })
+    mockSchoolApi({ learning: [makeLearningCourse(), fresh, makeCompletedCourse()] })
+    renderPage({ route: '/my-school?section=courses' })
+    expect(await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[1]}`)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'جميع دوراتي' })).toBeInTheDocument()
+    expect(screen.getByText(ar.mySchool.courses.allHint)).toBeInTheDocument()
+    expect(sectionsNav().getByText('قيد التعلم')).toBeInTheDocument()
+    expect(sectionsNav().getByText('المكتملة')).toBeInTheDocument()
+    // Every enrolled course, each with its own state.
+    expect(card(LEARNING_ENROLLMENT_IDS[0]).getByText(ar.mySchool.card.states.inProgress)).toBeInTheDocument()
+    expect(card('fresh').getByText(ar.mySchool.card.states.notStarted)).toBeInTheDocument()
+    expect(card(LEARNING_ENROLLMENT_IDS[1]).getByText(ar.mySchool.card.states.complete)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText(ar.mySchool.exploreMore).closest('button')!)
+    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/catalog')
+  })
+
+  it('shows a completed course with the day it was done and its review, and a designed panel when none is done', async () => {
+    mockSchoolApi({ learning: [makeLearningCourse(), makeCompletedCourse()] })
+    const { unmount } = renderPage({ route: '/my-school?section=completed' })
+    const done = await screen.findByTestId(`course-card-${LEARNING_ENROLLMENT_IDS[1]}`)
+    expect(screen.getByText(ar.mySchool.courses.completedHint)).toBeInTheDocument()
+    expect(within(done).getByTestId('course-done-on').textContent).toMatch(/^أُنجزت في /)
+    expect(within(done).getByText(ar.mySchool.card.actions.review)).toBeInTheDocument()
+    unmount()
+
+    mockSchoolApi({ learning: [makeLearningCourse()] })
+    renderPage({ route: '/my-school?section=completed' })
+    const empty = await screen.findByTestId('completed-empty')
+    expect(empty).toHaveTextContent(ar.mySchool.courses.completedEmptyTitle)
+    expect(screen.queryByText(ar.mySchool.courses.completedHint)).not.toBeInTheDocument()
+  })
+
+  it('places each request on its steps, opens the course only once the server says it is active', async () => {
+    mockSchoolApi({
+      learning: [],
+      requests: [
+        makeMyRequest(),
+        makeMyRequest({ id: REQUEST_IDS[1], state: 'pending_approval', payment: { state: 'paid', required: true, total: 1200, paid: 1200, balance: 0, currency: 'SAR', invoices: [] } }),
+        makeMyRequest({ id: REQUEST_IDS[2], status: 'active', state: 'enrolled', decidedAt: '2026-11-20T10:00:00.000Z', payment: { state: 'paid', required: true, total: 1200, paid: 1200, balance: 0, currency: 'SAR', invoices: [] } }),
+      ],
+    })
+    renderPage({ route: '/my-school?section=requests' })
+    await screen.findByTestId(`request-${REQUEST_IDS[0]}`)
+    expect(screen.getByText(ar.mySchool.requests.hint)).toBeInTheDocument()
+
+    const unpaid = within(screen.getByTestId(`request-${REQUEST_IDS[0]}`))
+    expect(unpaid.getByTestId(`request-steps-${REQUEST_IDS[0]}`)).toHaveAttribute('data-current', '1')
+    expect(unpaid.getByText(ar.mySchool.requests.steps.payment)).toBeInTheDocument()
+    expect(unpaid.queryByText(ar.mySchool.requests.learn)).not.toBeInTheDocument()
+    const waiting = within(screen.getByTestId(`request-${REQUEST_IDS[1]}`))
+    expect(waiting.getByTestId(`request-steps-${REQUEST_IDS[1]}`)).toHaveAttribute('data-current', '2')
+    expect(waiting.queryByText(ar.mySchool.requests.learn)).not.toBeInTheDocument()
+
+    const active = within(screen.getByTestId(`request-${REQUEST_IDS[2]}`))
+    expect(active.getByTestId(`request-steps-${REQUEST_IDS[2]}`)).toHaveAttribute('data-finished', 'true')
+    fireEvent.click(active.getByText(ar.mySchool.requests.learn).closest('button')!)
+    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe(`/learn/${CATALOG_COURSE_IDS[1]}`)
+  })
+
+  it('says there is no request yet in a designed panel with the way to the catalog', async () => {
+    mockSchoolApi({ learning: [], requests: [] })
+    renderPage({ route: '/my-school?section=requests' })
+    const empty = await screen.findByTestId('requests-empty')
+    expect(empty).toHaveTextContent(ar.mySchool.requests.emptyTitle)
+    fireEvent.click(within(empty).getByText(ar.mySchool.exploreMore).closest('button')!)
+    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe('/catalog')
+  })
+
+  it('tells a guardian with no child course so, without the way to enroll', async () => {
+    mockSchoolApi({ learning: [] })
+    renderPage({ roles: ['guardian'], route: '/my-school?section=courses' })
+    const empty = await screen.findByTestId('courses-empty')
+    expect(empty).toHaveTextContent(ar.mySchool.courses.noneTitleGuardian)
+    expect(within(empty).queryByText(ar.mySchool.exploreMore)).not.toBeInTheDocument()
   })
 })

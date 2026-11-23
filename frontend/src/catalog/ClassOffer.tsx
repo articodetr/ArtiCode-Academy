@@ -114,7 +114,7 @@ export function ClassOffer({ klass, pricing, canEnroll, recommended, busy, disab
 
       {canEnroll && klass.enrollable ? (
         <Button type={recommended ? 'primary' : 'default'} loading={busy} disabled={disabled && !busy} onClick={() => onEnroll(klass)} block>
-          {t(pricing === 'paid' ? 'catalog.card.request' : 'catalog.card.enroll')}
+          {t(pricing === 'paid' ? 'catalog.class.request' : 'catalog.class.enroll')}
         </Button>
       ) : null}
     </Card>

@@ -22,6 +22,7 @@ import { questionBanks } from './ar/questionBanks'
 import { examOnline } from './ar/examOnline'
 import { examAttempts } from './ar/examAttempts'
 import { takeExam } from './ar/takeExam'
+import { publicHome } from './ar/publicHome'
 
 export const ar = {
   common,
@@ -78,6 +79,8 @@ export const ar = {
   examOnline,
   examAttempts,
   takeExam,
+  // PORTAL-04 (#208): the academy's public home page (/home).
+  publicHome,
 }
 
 export type Translation = typeof ar

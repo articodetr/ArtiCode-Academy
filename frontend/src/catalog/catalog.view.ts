@@ -82,6 +82,31 @@ export function enrollmentUnavailable(detail: Pick<CatalogCourseDetail, 'classes
   return !detail.classes.some((klass) => klass.myEnrollment !== null)
 }
 
+/** The reader's own place in a course, from their enrollments in its classes (the server's request states). */
+export type CourseStanding =
+  | { kind: 'studying'; klass: CatalogClass }
+  | { kind: 'completed'; klass: CatalogClass }
+  | { kind: 'pending'; klass: CatalogClass; state: Extract<RequestState, 'pending_payment' | 'pending_approval'> }
+
+/**
+ * Whether the reader studies this course now, has completed it, or waits on a request for it — in that order, so an
+ * active enrollment wins over an older completed one or a request in another class. Null when none: a rejected,
+ * cancelled or withdrawn row opens nothing (the page then offers the classes as usual). PORTAL-04: a student who
+ * already studies the course is offered «واصل التعلم» instead of a second request.
+ */
+export function courseStandingOf(detail: Pick<CatalogCourseDetail, 'classes'>): CourseStanding | null {
+  const withState = (state: RequestState) => detail.classes.find((klass) => klass.myEnrollment?.state === state)
+  const studying = withState('enrolled')
+  if (studying) return { kind: 'studying', klass: studying }
+  const completed = withState('completed')
+  if (completed) return { kind: 'completed', klass: completed }
+  for (const state of ['pending_approval', 'pending_payment'] as const) {
+    const pending = withState(state)
+    if (pending) return { kind: 'pending', klass: pending, state }
+  }
+  return null
+}
+
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 
 /** `0` (Sunday) … `6` → the key of the `days` section. */

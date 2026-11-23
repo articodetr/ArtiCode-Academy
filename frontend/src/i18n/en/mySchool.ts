@@ -7,13 +7,15 @@ export const mySchool: typeof arMySchool = {
   subtitle: 'Pick up your learning where you left off, and follow your enrollment requests, exams, assignments and certificates in one place.',
   subtitleGuardian: "Follow your children's progress in their courses, exams, assignments and certificates.",
   explore: 'Explore courses',
+  // PORTAL-04: the way to the catalog from an empty “In progress”.
+  exploreMore: 'Explore more programs',
   refresh: 'Refresh',
   retry: 'Try again',
   sectionsLabel: 'My School sections',
   sections: {
-    continue: 'Continue learning',
-    courses: 'My courses',
-    completed: 'Completed courses',
+    continue: 'In progress',
+    courses: 'All my courses',
+    completed: 'Completed',
     requests: 'Enrollment requests',
     assessments: 'Exams and assignments',
     certificates: 'Certificates',
@@ -36,13 +38,32 @@ export const mySchool: typeof arMySchool = {
     empty: 'You have not enrolled in any course yet.',
     emptyGuardian: 'Your children have no courses yet.',
     continueEmpty: 'No course in progress right now: you have finished all your current courses.',
+    // PORTAL-04: “In progress”.
+    continueHint: 'The courses you are studying now, most recent first.',
+    continueDoneTitle: 'You have finished all your current courses',
+    continueDoneText: 'No course is in progress right now. Choose a new program from the catalog to keep learning.',
+    noneTitle: 'You have not joined a course yet',
+    noneText: 'Explore the programs on offer and join one; your courses show here with your real progress.',
+    // PORTAL-04: “All my courses” and “Completed”.
+    allHint: 'Every course you joined, each with its state: new, in progress or done.',
+    allHintGuardian: 'Your children’s courses and their progress.',
+    noneTitleGuardian: 'No courses for your children yet',
+    completedHint: 'The courses you finished; review their lessons whenever you like.',
+    completedEmptyTitle: 'No completed courses yet',
+    completedEmptyText: 'Once you finish the lessons of a course it shows here, ready to review.',
     completedEmpty: 'No completed courses yet.',
   },
   card: {
     teacher: 'Teacher: {{name}}',
     student: 'Student: {{name}}',
     progress: 'Progress',
+    // PORTAL-04: over the course the student was last on, first and wide in “In progress”.
+    resume: 'Pick up where you left off',
+    // PORTAL-04: the day a finished course was done.
+    completedOn: 'Completed on {{date}}',
     noRequired: 'No required lessons yet',
+    // PORTAL-04: the course has no published lesson yet (API-229 `progress.total` = 0).
+    noLessons: 'No lesson of this course is published yet.',
     lastLesson: 'Last lesson: {{title}}',
     nextSession: 'Next session: {{title}}',
     nextSessionLive: 'Session in progress: {{title}}',
@@ -74,14 +95,29 @@ export const mySchool: typeof arMySchool = {
       start: 'Start learning',
       continue: 'Continue learning',
       review: 'Review the course',
+      // PORTAL-04: a course without a published lesson — its page, not a promise of lessons.
+      open: 'Open the course',
     },
   },
   requests: {
     loadError: 'Your enrollment requests could not be loaded.',
     empty: 'No enrollment requests.',
-    pay: 'Complete the payment',
+    // No payment gateway: the invoice is paid at the academy and recorded by its staff — the button only shows it.
+    pay: 'View the invoice',
     awaitingApproval: 'Awaiting approval',
     requestAgain: 'Request again',
+    // PORTAL-04: once the server says the enrollment is active — never before.
+    learn: 'Go to the course',
+    hint: 'Requests for paid courses: the state of each, its invoice and what is expected of you.',
+    emptyTitle: 'No enrollment requests',
+    emptyText: 'When you ask to join a paid course, your request shows here with its invoice and state until it is active.',
+    steps: {
+      label: 'Request steps',
+      sent: 'Request',
+      payment: 'Payment',
+      approval: 'Approval',
+      active: 'Active',
+    },
     cancelled: 'The enrollment request was cancelled.',
   },
   assessments: {

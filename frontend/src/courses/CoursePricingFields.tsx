@@ -21,7 +21,9 @@ interface CoursePricingFieldsProps {
   course: Course
 }
 
-type PlansState = { status: 'loading' } | { status: 'ready'; plans: FeePlan[] } | { status: 'failed' }
+// `classPlans`: the active plans of ONE class — never a course fee (the server answers 422 fee_plan_mismatch); named
+// when nothing fits, so a plan made for the class instead of the course is recognised (PORTAL-04).
+type PlansState = { status: 'loading' } | { status: 'ready'; plans: FeePlan[]; classPlans: FeePlan[] } | { status: 'failed' }
 
 export function CoursePricingFields({ course }: CoursePricingFieldsProps) {
   const { t } = useTranslation()
@@ -32,7 +34,9 @@ export function CoursePricingFields({ course }: CoursePricingFieldsProps) {
     const controller = new AbortController()
     listFeePlans({}, controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setState({ status: 'ready', plans: plansFittingCourse(result.items, course.id) })
+        if (!controller.signal.aborted) {
+          setState({ status: 'ready', plans: plansFittingCourse(result.items, course.id), classPlans: result.items.filter((plan) => plan.isActive && plan.class !== null) })
+        }
       })
       .catch(() => {
         if (!controller.signal.aborted) setState({ status: 'failed' })
@@ -82,7 +86,20 @@ export function CoursePricingFields({ course }: CoursePricingFieldsProps) {
             <>
               {state.status === 'failed' ? <Alert type="error" showIcon title={t('courses.hints.feePlansFailed')} style={{ marginBottom: 12 }} /> : null}
               {state.status === 'ready' && options.length === 0 ? (
-                <Alert type="warning" showIcon title={t('courses.hints.noFeePlans')} style={{ marginBottom: 12 }} />
+                <Alert
+                  type="warning"
+                  showIcon
+                  data-testid="course-no-fee-plans"
+                  title={t('courses.hints.noFeePlans')}
+                  description={
+                    state.classPlans.length > 0
+                      ? t('courses.hints.classPlans', {
+                          plans: state.classPlans.map((plan) => `«${localizedLabel(plan.name, language)}» (${plan.class!.code})`).join('، '),
+                        })
+                      : undefined
+                  }
+                  style={{ marginBottom: 12 }}
+                />
               ) : null}
               <Form.Item
                 name="enrollmentFeePlanId"

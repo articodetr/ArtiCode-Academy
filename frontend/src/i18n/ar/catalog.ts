@@ -63,8 +63,29 @@ export const catalog = {
     noClasses: 'لا يوجد فصل مفتوح للتسجيل في هذه الدورة.',
     // MOD-20 (D-R138): the visitor chose «سجّل في هذه الدورة» on the public page and signed in.
     intentNotice: 'اختر الفصل الذي تريد التسجيل فيه',
+    // PORTAL-04: no answer or a server error while enrolling — the outcome is unknown until the course is read again.
+    enrollUnknown: 'لم يصلنا ردّ مؤكَّد، فقد يكون الالتحاق تمّ أو لم يتمّ. أعد تحميل الدورة لترى حالتك الحقيقية قبل أن تحاول مرة أخرى.',
+    reloadCourse: 'إعادة تحميل الدورة',
+    intentHint: 'راجع مواعيد الفصل ومقاعده ثم اضغط زرّه؛ يُطلب منك التأكيد قبل أي تسجيل.',
+    // PORTAL-04: the reader's own place in the course (an enrollment or a request in one of its classes).
+    mine: {
+      studyingTitle: 'أنت ملتحق بهذه الدورة',
+      studyingText: 'فصلك: «{{className}}». تابع دروسك في مساحة التعلم.',
+      continue: 'واصل التعلم',
+      completedTitle: 'أكملت هذه الدورة',
+      completedText: 'فصلك: «{{className}}». يمكنك مراجعة دروسها في مساحة التعلم.',
+      review: 'راجع الدورة',
+      pendingTitle: 'لديك طلب التحاق بهذه الدورة',
+      pendingText: 'فصل «{{className}}»:',
+      requests: 'طلباتي',
+      mySchool: 'مدرستي',
+    },
   },
   class: {
+    // PORTAL-04: the button of a free class (a paid one keeps «اطلب الاشتراك» — catalog.card.request).
+    enroll: 'التحق بالدورة',
+    // …and of a paid one: a request, not an enrollment.
+    request: 'طلب الالتحاق',
     status: 'حالة الفصل',
     period: 'فترة الفصل',
     teacher: 'المعلم',
@@ -93,20 +114,28 @@ export const catalog = {
     not_a_student: 'التسجيل الذاتي متاح للطلاب فقط. يمكنك تصفّح الدورات، ويسجّل الطالب نفسه أو تسجّله الإدارة.',
   },
   confirm: {
-    freeTitle: 'تأكيد التسجيل',
-    freeContent: 'سيُفعَّل تسجيلك في فصل «{{className}}» فوراً، وتظهر دروسه في صفحاتك.',
-    paidTitle: 'تأكيد طلب الاشتراك',
-    paidContent: 'ستصدر لك فاتورة بمبلغ {{price}}. لا يُفعَّل الاشتراك إلا بعد تأكيد الدفع وموافقة إدارة الأكاديمية معاً.',
+    freeTitle: 'تأكيد الالتحاق بالدورة',
+    freeContent: 'سيُفعَّل التحاقك بفصل «{{className}}» فور تأكيدك، وتظهر الدورة في «مدرستي».',
+    freeOk: 'تأكيد الالتحاق',
+    paidTitle: 'تأكيد طلب الالتحاق',
+    paidContent: 'ستصدر لك فاتورة بمبلغ {{price}} تسدّدها لدى الأكاديمية. إرسال الطلب لا يفعّل الدراسة: لا يُفعَّل الالتحاق ولا تُفتح الدروس إلا بعد تأكيد الدفع وموافقة إدارة الأكاديمية معاً.',
+    paidOk: 'إرسال الطلب',
     ok: 'تأكيد',
     cancel: 'تراجع',
   },
   result: {
     enrolledTitle: 'تم تسجيلك',
     enrolledContent: 'صار تسجيلك في فصل «{{className}}» مفعّلاً.',
-    requestedTitle: 'أُرسل طلب الاشتراك',
+    requestedTitle: 'أُرسل طلب الالتحاق',
+    // PORTAL-04: the state of the request the server answered, and where to follow it.
+    requestState: 'حالة الطلب:',
+    myRequests: 'طلباتي',
     requestedContent: 'صدرت الفاتورة {{number}} بمبلغ {{total}}. سدّد الرسوم لدى الأكاديمية، ثم يُفعَّل الاشتراك بعد تأكيد الدفع وموافقة الإدارة.',
     myCourses: 'مدرستي',
     myLessons: 'دروسي',
+    // PORTAL-04: after an active enrollment.
+    startLearning: 'ابدأ التعلم',
+    goToMySchool: 'اذهب إلى مدرستي',
     invoices: 'فواتيري',
   },
   states: {
