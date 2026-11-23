@@ -253,6 +253,7 @@ export const publicCatalog = {
     certificatesLink: 'Certificates',
     aboutLink: 'About us',
     openMenu: 'Open the menu',
+    searchLink: 'Find a program',
     mySchool: 'My School',
     dashboard: 'Dashboard',
   },

@@ -19,7 +19,7 @@
 // `.public-catalog` (publicCatalog.css), ready for an academy's own colours once
 // the server offers them; the same colour and the public typefaces reach Ant
 // Design's controls through the nested ConfigProvider.
-import { AppstoreOutlined, DashboardOutlined, LoginOutlined, MenuOutlined, ReadOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, DashboardOutlined, LoginOutlined, MenuOutlined, ReadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, ConfigProvider, Drawer, Spin } from 'antd'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -41,7 +41,7 @@ import './publicCatalog.css'
 
 const PUBLIC_THEME = {
   token: {
-    colorPrimary: '#00828a',
+    colorPrimary: '#039092',
     borderRadius: 8,
     fontFamily: "'Public Poppins', 'Public Cairo', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif",
   },
@@ -135,6 +135,11 @@ export function PublicShell({
             <nav className="public-catalog__nav" aria-label={t('publicCatalog.header.navLabel')}>
               <MainLinks viewer={viewer} programs={programs} />
             </nav>
+            {programs ? (
+              <Link to={programsPathFor(viewer)} className="public-catalog__search-link" aria-label={t('publicCatalog.header.searchLink')}>
+                <SearchOutlined aria-hidden="true" />
+              </Link>
+            ) : null}
             <div className="public-catalog__language">
               <LanguageSwitcher />
             </div>

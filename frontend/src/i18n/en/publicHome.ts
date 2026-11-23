@@ -25,8 +25,11 @@ export const publicHome: typeof arPublicHome = {
     },
     badges: {
       online: 'Online learning',
-      programs: 'Structured programs',
-      lessons: 'Varied lessons',
+      onlineText: 'From anywhere',
+      certificate: 'Certificate',
+      certificateText: 'Verifiable',
+      programs: 'Structured',
+      programsText: 'Levels and lessons',
     },
   },
   features: {
@@ -40,7 +43,7 @@ export const publicHome: typeof arPublicHome = {
     label: 'Our programs',
     title: 'Explore Our Learning Programs',
     subtitle: 'From the academy’s published programs: their content, length and fees.',
-    open: 'View program',
+    open: 'Start Learning',
     all: 'All programs',
     emptyTitle: 'No programs yet',
     empty: 'No program is published yet.',

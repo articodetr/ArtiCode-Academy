@@ -10,11 +10,15 @@
 // flips); a learner gets «مدرستي» and the signed-in catalog; staff the dashboard;
 // nothing while the session is restored. The visitor's line that accounts come
 // from the academy (there is no self-registration — no «أنشئ حسابًا») stays here.
-// The floating cards state the server's figures once they are read, plain words
-// before and without them: never a number of its own.
+// Under the search, four small facts: the server's figures once they are read,
+// plain words before and without them — never a number of its own. The picture
+// follows the reference: a pale disc, the student rising out of it (a stock photo
+// with its background removed), a drawn laptop in front and three small cards
+// that state what the platform offers.
 import {
   AppstoreOutlined,
   BookOutlined,
+  ClockCircleOutlined,
   CompassOutlined,
   DashboardOutlined,
   DesktopOutlined,
@@ -23,7 +27,9 @@ import {
   LoginOutlined,
   PlayCircleOutlined,
   ReadOutlined,
+  SafetyCertificateOutlined,
   SearchOutlined,
+  TeamOutlined,
   WifiOutlined,
 } from '@ant-design/icons'
 import { Button, Input, Skeleton, Typography } from 'antd'
@@ -43,6 +49,13 @@ const INDICATORS: { key: 'media' | 'devices' | 'languages' | 'progress'; icon: R
   { key: 'devices', icon: <DesktopOutlined /> },
   { key: 'languages', icon: <GlobalOutlined /> },
   { key: 'progress', icon: <LineChartOutlined /> },
+]
+
+const FIGURES: { key: 'programs' | 'lessons' | 'hours' | 'openClasses'; icon: ReactNode }[] = [
+  { key: 'programs', icon: <BookOutlined /> },
+  { key: 'lessons', icon: <ReadOutlined /> },
+  { key: 'hours', icon: <ClockCircleOutlined /> },
+  { key: 'openClasses', icon: <TeamOutlined /> },
 ]
 
 export function HomeHero({
@@ -107,54 +120,78 @@ export function HomeHero({
           </div>
           {viewer === 'visitor' ? <p className="public-home__hero-note">{t('publicHome.hero.accountsNote')}</p> : null}
           <ul className="public-home__indicators">
-            {INDICATORS.map((item) => (
-              <li key={item.key} className="public-home__indicator">
-                <span className="public-home__indicator-icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-                {t(`publicHome.hero.indicators.${item.key}`)}
-              </li>
-            ))}
+            {stats
+              ? FIGURES.filter((item) => stats[item.key] > 0).map((item) => (
+                  <li key={item.key} className="public-home__indicator">
+                    <span className="public-home__indicator-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <span className="public-home__indicator-text">
+                      <strong>
+                        <bdi dir="ltr">{formatHomeStat(stats[item.key], stats.partial)}</bdi>
+                      </strong>
+                      {t(`publicHome.stats.${item.key}`)}
+                    </span>
+                  </li>
+                ))
+              : INDICATORS.map((item) => (
+                  <li key={item.key} className="public-home__indicator">
+                    <span className="public-home__indicator-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    <span className="public-home__indicator-text public-home__indicator-text--words">{t(`publicHome.hero.indicators.${item.key}`)}</span>
+                  </li>
+                ))}
           </ul>
         </div>
         <div className="public-home__hero-visual">
-          <div className="public-home__hero-photo">
-            <img src={HOME_IMAGES.heroStudent} alt="" width={1000} height={667} decoding="async" fetchPriority="high" />
+          <span className="public-home__hero-disc" aria-hidden="true" />
+          <div className="public-home__hero-figure">
+            <img src={HOME_IMAGES.heroStudent} alt="" width={760} height={981} decoding="async" fetchPriority="high" />
           </div>
-          <HeroBadge
-            place="top"
-            icon={<BookOutlined />}
-            value={stats ? formatHomeStat(stats.programs, stats.partial) : null}
-            label={stats ? t('publicHome.stats.programs') : t('publicHome.hero.badges.programs')}
-          />
-          <HeroBadge place="middle" icon={<WifiOutlined />} value={null} label={t('publicHome.hero.badges.online')} />
-          <HeroBadge
-            place="bottom"
-            icon={<ReadOutlined />}
-            value={stats && stats.lessons > 0 ? formatHomeStat(stats.lessons, stats.partial) : null}
-            label={stats && stats.lessons > 0 ? t('publicHome.stats.lessons') : t('publicHome.hero.badges.lessons')}
-          />
+          <HeroLaptop />
+          <HeroBadge place="top" icon={<WifiOutlined />} title={t('publicHome.hero.badges.online')} text={t('publicHome.hero.badges.onlineText')} />
+          <HeroBadge place="middle" icon={<SafetyCertificateOutlined />} title={t('publicHome.hero.badges.certificate')} text={t('publicHome.hero.badges.certificateText')} />
+          <HeroBadge place="bottom" icon={<BookOutlined />} title={t('publicHome.hero.badges.programs')} text={t('publicHome.hero.badges.programsText')} />
         </div>
       </div>
     </section>
   )
 }
 
-function HeroBadge({ place, icon, value, label }: { place: 'top' | 'middle' | 'bottom'; icon: ReactNode; value: string | null; label: string }) {
+function HeroBadge({ place, icon, title, text }: { place: 'top' | 'middle' | 'bottom'; icon: ReactNode; title: string; text: string }) {
   return (
     <div className={`public-home__badge public-home__badge--${place}`}>
       <span className="public-home__badge-icon" aria-hidden="true">
         {icon}
       </span>
       <span className="public-home__badge-text">
-        {value ? (
-          <strong>
-            <bdi dir="ltr">{value}</bdi>
-          </strong>
-        ) : null}
-        <span>{label}</span>
+        <strong>{title}</strong>
+        <span>{text}</span>
       </span>
     </div>
+  )
+}
+
+/** A drawn laptop in front of the student — decoration only. */
+function HeroLaptop() {
+  return (
+    <svg className="public-home__hero-laptop" viewBox="0 0 320 210" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="public-home-laptop-lid" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f4f7f8" />
+          <stop offset="1" stopColor="#b7c5cb" />
+        </linearGradient>
+        <linearGradient id="public-home-laptop-base" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#c4d0d5" />
+          <stop offset="1" stopColor="#e6ecee" />
+        </linearGradient>
+      </defs>
+      <path d="M46 12 L262 5 Q273 5 275 16 L301 150 L60 165 L35 25 Q33 13 46 12 Z" fill="url(#public-home-laptop-lid)" stroke="#a3b3b9" strokeWidth="1.5" />
+      <path d="M60 165 L301 150 L317 177 Q320 185 309 186 L38 202 Q26 202 30 191 Z" fill="url(#public-home-laptop-base)" stroke="#a3b3b9" strokeWidth="1.5" />
+      <path d="M140 179 L212 175 L216 182 L138 187 Z" fill="#aebcc2" />
+      <circle cx="168" cy="84" r="14" fill="#ffffff" opacity="0.7" />
+    </svg>
   )
 }
 

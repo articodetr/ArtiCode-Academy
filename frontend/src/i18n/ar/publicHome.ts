@@ -11,7 +11,7 @@ export const publicHome = {
   hero: {
     welcomeNamed: 'مرحبًا بك في {{name}}',
     welcome: 'مرحبًا بك',
-    titleStart: 'طوّر مستقبلك من خلال',
+    titleStart: 'طوّر مستقبلك عبر',
     titleHighlight: 'التعلّم الاحترافي',
     subtitle: 'برامج تعليمية منظّمة في مستويات ودروس، تتابعها خطوة بخطوة وترى تقدّمك فيها في «مدرستي».',
     browse: 'استعرض البرامج',
@@ -27,8 +27,11 @@ export const publicHome = {
     },
     badges: {
       online: 'تعلّم عبر الإنترنت',
+      onlineText: 'من أي مكان',
+      certificate: 'شهادة إتمام',
+      certificateText: 'قابلة للتحقق',
       programs: 'برامج منظّمة',
-      lessons: 'دروس متنوعة',
+      programsText: 'مستويات ودروس',
     },
   },
   features: {
@@ -42,7 +45,7 @@ export const publicHome = {
     label: 'برامجنا',
     title: 'استكشف برامجنا التعليمية',
     subtitle: 'من برامج الأكاديمية المنشورة: محتواها ومدتها ورسومها.',
-    open: 'عرض البرنامج',
+    open: 'ابدأ التعلّم',
     all: 'كل البرامج',
     emptyTitle: 'لا توجد برامج بعد',
     empty: 'لا توجد برامج منشورة بعد.',
