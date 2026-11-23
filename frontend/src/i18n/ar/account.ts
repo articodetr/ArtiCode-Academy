@@ -24,6 +24,12 @@ export const login = {
   passwordRequired: 'أدخل كلمة المرور',
   // MOD-20 (D-R138): shown only while the academy opens its catalog to visitors (API-205 `catalogPublic`).
   browseCourses: 'تصفّح الدورات',
+  // PORTAL-04, the learner journey: the visitor chose «سجّل في هذه الدورة» on the public course page.
+  enrollIntent: {
+    title: 'سجّل الدخول لمتابعة الالتحاق بالدورة التي اخترتها',
+    text: 'بعد الدخول نعيدك إلى الدورة نفسها لتختار فصلها وتؤكّد التحاقك؛ لا يُسجَّل أي اشتراك قبل تأكيدك. لا يُنشأ حساب جديد من هنا: الحسابات تُنشئها إدارة الأكاديمية.',
+    back: 'العودة إلى الدورة',
+  },
   sessionSwitched:
     'سُجّل الدخول بحساب آخر في تبويب آخر من هذا المتصفح، فصار هذا التبويب يعمل بحساب {{name}}. لم يُنفَّذ الطلب الأخير. لاستخدام حسابين معاً افتح الثاني في نافذة خاصة أو متصفح آخر.',
   // The start-up session check could not tell after its retries (AuthProvider, CH-0296): never the sign-in form.
@@ -367,6 +373,11 @@ export const profile = {
   passwordChanged: 'تم تغيير كلمة المرور، وأُنهيت الجلسات الأخرى.',
   passwordHint: 'عند تغيير كلمة المرور تُنهى جلساتك على الأجهزة الأخرى وتبقى هذه الجلسة.',
   mustChangePassword: 'يجب تغيير كلمة المرور قبل متابعة العمل.',
+  // PORTAL-04: where the forced change continues to (the return path the sign-in carried here).
+  returnAfterChange: {
+    course: 'بعد تغيير كلمة المرور نعيدك إلى الدورة التي اخترتها لتختار فصلها وتؤكّد التحاقك.',
+    page: 'بعد تغيير كلمة المرور نعيدك إلى الصفحة التي كنت تقصدها.',
+  },
   errors: {
     password_invalid: 'كلمة المرور الحالية غير صحيحة.',
     password_weak: 'كلمة المرور الجديدة يجب ألا تقل عن {{min}} أحرف وأن تختلف عن الحالية.',

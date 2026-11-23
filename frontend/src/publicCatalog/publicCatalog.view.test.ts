@@ -5,13 +5,17 @@ import { ApiError } from '../api/client'
 import i18n from '../i18n'
 import { CATALOG_NOT_PUBLIC, PUBLIC_COURSE_IDS, makePublicCard } from '../test/publicCatalog'
 import {
+  publicCoursePathFor,
   appendCards,
   availabilityOf,
   durationMinutes,
   enrollIntentPath,
+  explorePathFor,
+  exploreSearchOf,
   isPublicCourseGone,
   levelNameOf,
   publicCatalogParams,
+  publicEnrollStateOf,
   publicFailureKey,
 } from './publicCatalog.view'
 
@@ -33,9 +37,10 @@ describe('publicCatalog.view', () => {
   })
 
   it('words availability from the server counts only', () => {
-    expect(availabilityOf({ openClasses: 2, hasFreeSeat: true })).toBe('available')
-    expect(availabilityOf({ openClasses: 1, hasFreeSeat: false })).toBe('full')
-    expect(availabilityOf({ openClasses: 0, hasFreeSeat: false })).toBe('closed')
+    const free = { pricing: 'free', price: null } as const
+    expect(availabilityOf({ openClasses: 2, hasFreeSeat: true, ...free })).toBe('available')
+    expect(availabilityOf({ openClasses: 1, hasFreeSeat: false, ...free })).toBe('full')
+    expect(availabilityOf({ openClasses: 0, hasFreeSeat: false, ...free })).toBe('closed')
   })
 
   it('names a level by its ordinal, with its title when it has one; past the tenth by its number (D-R130)', () => {
@@ -66,8 +71,46 @@ describe('publicCatalog.view', () => {
     expect(publicFailureKey(new TypeError('Failed to fetch'))).toBe('publicCatalog.errors.network')
   })
 
+  it('carries the search of /explore in the address — to a course page and back — and never anywhere else (PORTAL-04)', () => {
+    expect(exploreSearchOf(new URLSearchParams('q=%20%D8%A8%D8%A7%D9%8A%D8%AB%D9%88%D9%86%20'))).toBe('بايثون')
+    expect(exploreSearchOf(new URLSearchParams(''))).toBe('')
+    expect(exploreSearchOf(new URLSearchParams({ q: 'x'.repeat(150) }))).toHaveLength(100)
+
+    expect(explorePathFor('')).toBe('/explore')
+    expect(explorePathFor('   ')).toBe('/explore')
+    expect(explorePathFor(' بايثون ')).toBe(`/explore?q=${encodeURIComponent('بايثون')}`)
+    expect(publicCoursePathFor('c 1', 'بايثون')).toBe(`/explore/c%201?q=${encodeURIComponent('بايثون')}`)
+    expect(publicCoursePathFor('c1', '')).toBe('/explore/c1')
+
+    // A search that looks like an address stays a value of q on this site's own /explore.
+    for (const hostile of ['//evil.example', 'https://evil.example/x', '/\\evil.example', 'javascript:alert(1)']) {
+      const path = explorePathFor(hostile)
+      expect(path.startsWith('/explore?q=')).toBe(true)
+      expect(new URL(path, 'https://academy.example').origin).toBe('https://academy.example')
+      expect(new URLSearchParams(path.slice('/explore?'.length)).get('q')).toBe(hostile)
+    }
+  })
+
   it('leads the enroll button to the signed-in course page with the enroll intent', () => {
     expect(enrollIntentPath(PUBLIC_COURSE_IDS[0])).toBe(`/catalog/${PUBLIC_COURSE_IDS[0]}?intent=enroll`)
     expect(enrollIntentPath('a/b')).toBe('/catalog/a%2Fb?intent=enroll')
+  })
+
+  it('says whether a visitor can go on to enroll, from the server’s numbers as it sends them (PORTAL-04)', () => {
+    expect(publicEnrollStateOf(makePublicCard())).toBe('enrollable')
+    expect(publicEnrollStateOf(makePublicCard({ pricing: 'paid', price: { amount: 100, currency: 'SAR' } }))).toBe('enrollable')
+    // No class open wins over everything.
+    expect(publicEnrollStateOf(makePublicCard({ openClasses: 0, hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('not_open')
+    // The server sends `hasFreeSeat: false` for every paid course whose price is unusable (courseOfferOf()): the price
+    // is the reason to give, never «full».
+    expect(publicEnrollStateOf(makePublicCard({ hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('price_unavailable')
+    expect(publicEnrollStateOf(makePublicCard({ hasFreeSeat: false }))).toBe('class_full')
+    expect(publicEnrollStateOf(makePublicCard({ hasFreeSeat: false, pricing: 'paid', price: { amount: 100, currency: 'SAR' } }))).toBe('class_full')
+  })
+
+  it('never calls a paid course without a price «full» (the server’s hasFreeSeat folds the price in)', () => {
+    expect(availabilityOf(makePublicCard({ hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('priceUnavailable')
+    expect(availabilityOf(makePublicCard({ hasFreeSeat: false }))).toBe('full')
+    expect(availabilityOf(makePublicCard({ openClasses: 0, hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('closed')
   })
 })

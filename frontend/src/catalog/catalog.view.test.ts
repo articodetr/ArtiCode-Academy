@@ -12,6 +12,7 @@ import {
   isCatalogNarrowed,
   priceAmount,
   weekdayKey,
+  courseStandingOf,
 } from './catalog.view'
 
 describe('catalog filters', () => {
@@ -75,5 +76,29 @@ describe('small formatters', () => {
     expect(catalogFailureKey(new ApiError(500, 'x', {}))).toBe('catalog.errors.server')
     expect(isCourseGone(new ApiError(404, 'x', { code: 'course_not_found' }))).toBe(true)
     expect(isCourseGone(new ApiError(500, 'x', {}))).toBe(false)
+  })
+})
+
+describe('the reader’s own place in a course (PORTAL-04)', () => {
+  const own = (id: string, status: 'active' | 'completed' | 'pending' | 'withdrawn' | 'cancelled', state: 'enrolled' | 'completed' | 'pending_payment' | 'pending_approval' | 'withdrawn' | 'rejected' | 'cancelled') =>
+    makeCatalogClass({ id, enrollable: false, myEnrollment: { id: `e-${id}`, status, state } })
+
+  it('says nothing without an enrollment or request of the reader, nor for a closed one', () => {
+    expect(courseStandingOf(makeCatalogDetail())).toBeNull()
+    expect(courseStandingOf(makeCatalogDetail({ classes: [own('a', 'withdrawn', 'withdrawn'), own('b', 'cancelled', 'rejected'), own('c', 'cancelled', 'cancelled')] }))).toBeNull()
+  })
+
+  it('puts studying before completed, and completed before a pending request in another class', () => {
+    const studying = own('a', 'active', 'enrolled')
+    const completed = own('b', 'completed', 'completed')
+    const pending = own('c', 'pending', 'pending_payment')
+    expect(courseStandingOf(makeCatalogDetail({ classes: [pending, completed, studying] }))).toEqual({ kind: 'studying', klass: studying })
+    expect(courseStandingOf(makeCatalogDetail({ classes: [pending, completed] }))).toEqual({ kind: 'completed', klass: completed })
+    expect(courseStandingOf(makeCatalogDetail({ classes: [pending] }))).toEqual({ kind: 'pending', klass: pending, state: 'pending_payment' })
+  })
+
+  it('names the request state the server sent', () => {
+    const waiting = own('a', 'pending', 'pending_approval')
+    expect(courseStandingOf(makeCatalogDetail({ classes: [waiting] }))).toEqual({ kind: 'pending', klass: waiting, state: 'pending_approval' })
   })
 })

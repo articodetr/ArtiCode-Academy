@@ -1,0 +1,594 @@
+/* The academy's public home page (/home — PORTAL-04, #208) inside the public shell (publicCatalog.css, whose custom
+   properties — --pub-* — it uses). The page is a stack of full-width bands; each band centres its own content in
+   `.public-home__container` (the shell's main runs in `bleed` mode here). */
+
+.public-home__container {
+  width: 100%;
+  max-width: var(--pub-content);
+  margin: 0 auto;
+  padding: 0 var(--pub-gutter);
+  box-sizing: border-box;
+}
+
+/* ---------- Welcome band ---------- */
+
+.public-home__hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(15, 108, 189, 0.07) 0, transparent 42%),
+    linear-gradient(180deg, var(--pub-primary-softer) 0%, var(--pub-page) 100%);
+  border-bottom: 1px solid var(--pub-line);
+}
+
+.public-home__hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  align-items: center;
+  gap: 40px;
+  padding-top: 40px;
+  padding-bottom: 44px;
+}
+
+.public-home__hero-text {
+  min-width: 0;
+}
+
+/* The welcome line in the academy's name; the slot keeps its height while the name loads. */
+.public-home__eyebrow-slot {
+  min-height: 32px;
+  margin-bottom: 14px;
+}
+
+.public-home__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0;
+  padding: 5px 14px 5px 12px;
+  border: 1px solid #d5e3f3;
+  border-radius: 999px;
+  background: var(--pub-surface);
+  color: var(--pub-primary-strong);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.public-home__eyebrow-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pub-accent);
+}
+
+.public-home__eyebrow-skeleton.ant-skeleton-element .ant-skeleton-input {
+  width: 220px;
+  min-width: 0;
+  border-radius: 999px;
+}
+
+.public-home .public-home__hero-title {
+  margin: 0 0 12px;
+  color: var(--pub-ink);
+  font-size: clamp(28px, 3.2vw, 42px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  /* Lines of even length: no lone word on the last one (ignored by a browser that lacks it). */
+  text-wrap: balance;
+}
+
+.public-home .public-home__hero-subtitle {
+  max-width: 560px;
+  margin: 0 0 22px;
+  color: var(--pub-muted);
+  font-size: 17px;
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+
+/* The actions keep their height while the session or the catalog state is still unknown: nothing moves when they appear. */
+.public-home__hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 40px;
+}
+
+.public-home__hero-actions .ant-btn-lg {
+  height: 48px;
+  padding-inline: 24px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.public-home__hero-note {
+  margin: 10px 0 0;
+  color: var(--pub-muted);
+  font-size: 13px;
+}
+
+.public-home__hero-visual {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* The decorative picture (HomeHeroArt): its shapes take the page's colours. */
+.public-home__art {
+  display: block;
+  width: 100%;
+  max-width: 380px;
+  height: auto;
+}
+
+.public-home__art .art-halo {
+  fill: var(--pub-primary-soft);
+}
+
+.public-home__art .art-dot {
+  fill: rgba(15, 108, 189, 0.28);
+}
+
+.public-home__art .art-accent-soft,
+.public-home__art .art-card-back {
+  fill: var(--pub-accent-soft);
+}
+
+.public-home__art .art-step--1 {
+  fill: #b8d4f1;
+}
+
+.public-home__art .art-step--2 {
+  fill: #7fb1e3;
+}
+
+.public-home__art .art-step--3 {
+  fill: var(--pub-primary);
+}
+
+.public-home__art .art-card,
+.public-home__art .art-badge {
+  fill: var(--pub-surface);
+}
+
+.public-home__art .art-card-head,
+.public-home__art .art-primary,
+.public-home__art .art-done {
+  fill: var(--pub-primary);
+}
+
+.public-home__art .art-primary-light {
+  fill: #7fb1e3;
+}
+
+.public-home__art .art-on-primary {
+  fill: #fff;
+}
+
+.public-home__art .art-on-primary-soft {
+  fill: rgba(255, 255, 255, 0.55);
+}
+
+.public-home__art .art-check {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.public-home__art .art-todo {
+  fill: none;
+  stroke: #b7c3d4;
+  stroke-width: 2;
+}
+
+.public-home__art .art-line {
+  fill: #dfe6ef;
+}
+
+.public-home__art .art-line--soft {
+  fill: #edf1f6;
+}
+
+.public-home__art .art-track {
+  fill: #e8edf4;
+}
+
+.public-home__art .art-progress,
+.public-home__art .art-accent {
+  fill: var(--pub-accent);
+}
+
+.public-home__art .art-float {
+  animation: public-home-float 6s ease-in-out infinite;
+}
+
+@keyframes public-home-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* ---------- Sections ---------- */
+
+.public-home__section {
+  padding: 56px 0;
+}
+
+/* The programs follow the welcome band closely: they are what the first screen should reach. */
+.public-home__section--programs {
+  padding-top: 40px;
+}
+
+.public-home__section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 22px;
+}
+
+.public-home__section-head--center {
+  justify-content: center;
+  text-align: center;
+}
+
+.public-home .public-home__section-title {
+  margin: 0;
+  color: var(--pub-ink);
+  font-size: clamp(24px, 2.4vw, 30px);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.public-home__section-subtitle {
+  margin: 8px 0 0;
+  color: var(--pub-muted);
+  font-size: 16px;
+}
+
+.public-home__all.ant-btn {
+  height: 40px;
+  padding-inline: 18px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* The loading cards: the media box shimmers. */
+.public-home__skeleton-media {
+  background: linear-gradient(90deg, #edf1f6 25%, #f6f8fb 50%, #edf1f6 75%);
+  background-size: 300% 100%;
+  animation: public-home-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes public-home-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* A section state without cards (HomeNotice): closed, failed, empty. */
+.public-home__notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius);
+  background: var(--pub-surface);
+  box-shadow: var(--pub-shadow);
+  text-align: center;
+}
+
+.public-home__notice-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary);
+  font-size: 28px;
+}
+
+.public-home__notice--error .public-home__notice-icon {
+  background: #fdecec;
+  color: #c0392b;
+}
+
+.public-home__notice--neutral .public-home__notice-icon {
+  background: #eef1f5;
+  color: var(--pub-muted);
+}
+
+.public-home__notice-title {
+  margin: 0 0 8px;
+  color: var(--pub-ink);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.public-home__notice-text {
+  max-width: 520px;
+  margin: 0;
+  color: var(--pub-muted);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.public-home__notice-action {
+  margin-top: 22px;
+}
+
+/* ---------- How to start ---------- */
+
+.public-home__section--steps {
+  background: var(--pub-surface);
+  border-top: 1px solid var(--pub-line);
+  border-bottom: 1px solid var(--pub-line);
+}
+
+.public-home__steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A dashed line joining the three badges (computer). */
+.public-home__steps::before {
+  content: '';
+  position: absolute;
+  top: 32px;
+  inset-inline: calc(100% / 6);
+  border-top: 2px dashed #cfdcec;
+}
+
+.public-home__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.public-home__step-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 18px;
+  border-radius: 18px;
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary);
+  font-size: 26px;
+  box-shadow: 0 0 0 8px var(--pub-surface);
+}
+
+.public-home__step-number {
+  position: absolute;
+  top: -8px;
+  inset-inline-end: -8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--pub-surface);
+  border-radius: 50%;
+  background: var(--pub-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.public-home .public-home__step-title {
+  margin: 0 0 8px;
+  color: var(--pub-ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.public-home__step-text {
+  max-width: 320px;
+  margin: 0 auto;
+  color: var(--pub-muted);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+/* ---------- Closing band ---------- */
+
+.public-home__cta {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+  padding: 40px 48px;
+  border-radius: 20px;
+  background: linear-gradient(120deg, var(--pub-primary-strong) 0%, var(--pub-primary) 100%);
+  color: #fff;
+}
+
+/* Two soft circles for depth — decoration only. */
+.public-home__cta::before,
+.public-home__cta::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+}
+
+.public-home__cta::before {
+  width: 240px;
+  height: 240px;
+  inset-inline-end: -60px;
+  top: -110px;
+}
+
+.public-home__cta::after {
+  width: 140px;
+  height: 140px;
+  inset-inline-end: 160px;
+  bottom: -90px;
+}
+
+.public-home__cta-text {
+  position: relative;
+  min-width: 0;
+}
+
+.public-home .public-home__cta-title {
+  margin: 0 0 6px;
+  color: #fff;
+  font-size: clamp(22px, 2.2vw, 28px);
+  font-weight: 700;
+}
+
+.public-home__cta-line {
+  max-width: 560px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 16px;
+}
+
+.public-home__cta-button.ant-btn {
+  position: relative;
+  height: 48px;
+  padding-inline: 24px;
+  border: none;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--pub-primary-strong);
+  font-weight: 700;
+}
+
+.public-home__cta-button.ant-btn:not(:disabled):hover {
+  background: var(--pub-accent-soft);
+  color: var(--pub-primary-strong);
+}
+
+.public-home__cta-button.ant-btn:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-home__art .art-float,
+  .public-home__skeleton-media {
+    animation: none;
+  }
+}
+
+/* A tablet: the two columns stay, closer together. */
+@media (max-width: 991px) {
+  .public-home__hero-grid {
+    gap: 24px;
+    padding-top: 36px;
+    padding-bottom: 40px;
+  }
+}
+
+/* A phone: one column for the welcome (the picture under the words, smaller), tighter bands, the steps one under the other with the line along the badges. */
+@media (max-width: 767px) {
+  .public-home__hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding-top: 24px;
+    padding-bottom: 28px;
+  }
+
+  .public-home .public-home__hero-subtitle {
+    font-size: 16px;
+  }
+
+  .public-home__art {
+    max-width: 200px;
+  }
+
+  .public-home__section {
+    padding: 44px 0;
+  }
+
+  .public-home__section--programs {
+    padding-top: 28px;
+  }
+
+  .public-home__section-head {
+    margin-bottom: 20px;
+  }
+
+  .public-home__steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  /* One dashed piece from each badge down to the next one — never past the last step. */
+  .public-home__steps::before {
+    content: none;
+  }
+
+  .public-home__step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 72px;
+    bottom: -16px;
+    inset-inline-start: 31px;
+    border-inline-start: 2px dashed #cfdcec;
+  }
+
+  .public-home__step {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 18px;
+    text-align: start;
+  }
+
+  .public-home__step-badge {
+    flex: none;
+    margin-bottom: 0;
+  }
+
+  .public-home__step-text {
+    margin: 0;
+  }
+
+  .public-home__notice {
+    padding: 36px 20px;
+  }
+
+  .public-home__cta {
+    padding: 32px 24px;
+  }
+
+  .public-home__hero-actions .ant-btn-lg,
+  .public-home__cta-button.ant-btn {
+    flex: 1 1 auto;
+  }
+}

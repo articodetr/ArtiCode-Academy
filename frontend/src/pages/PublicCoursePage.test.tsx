@@ -1,7 +1,7 @@
 // MOD-20 (D-R138) — one course of the public catalog (/explore/:courseId, API-237): the course and its outline by level
 // (titles only), the price, «سجّل في هذه الدورة» → the sign-in page with the enroll intent, the closed catalog, a missing
 // course, a failure, and that a signed-in user goes to the signed-in course page instead.
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ACADEMY_PUBLIC_PATH } from '../api/academy'
@@ -46,10 +46,10 @@ function mockCourseApi(detail: (read: number) => Response) {
 
 const serve = (detail: PublicCourseDetail) => () => jsonResponse(200, detail)
 
-function renderPage(auth = makeAuth()) {
+function renderPage(auth = makeAuth(), search = '') {
   return renderWithProviders(<PublicCoursePage />, {
     auth,
-    route: `/explore/${COURSE_ID}`,
+    route: { pathname: `/explore/${COURSE_ID}`, search },
     path: '/explore/:courseId',
     routes: { '/explore': <PathProbe />, '/login': <PathProbe />, '/catalog/:courseId': <PathProbe /> },
   })
@@ -80,9 +80,46 @@ describe('PublicCoursePage', () => {
     expect(outline.getByText(pc.kinds.live)).toBeInTheDocument()
     expect(outline.getByText('10 دقائق')).toBeInTheDocument()
     expect(outline.getByText('60 دقيقة')).toBeInTheDocument()
+    // The course name is the page's h1, each level an h2, and the lessons a plain ordered list (antd List is deprecated).
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('أساسيات بايثون')
+    expect(outline.getByRole('heading', { level: 2, name: 'المستوى الأول — البداية' })).toBeInTheDocument()
+    expect(outline.getAllByRole('list')).toHaveLength(2)
+    expect(outline.getAllByRole('listitem')).toHaveLength(4)
 
     expect(api.reads).toBe(1)
     expect(api.headers[0]!.get('Authorization')).toBeNull()
+    // PORTAL-04: the tab reads «course — academy».
+    await waitFor(() => expect(document.title).toBe('أساسيات بايثون — أكاديمية آرتي كود'))
+  })
+
+  it('replaces the enroll button with the reason when no class takes a learner now, keeping the details (PORTAL-04)', async () => {
+    const cases: [Partial<PublicCourseDetail>, string][] = [
+      [{ openClasses: 0, hasFreeSeat: false }, pc.course.notEnrollable.not_open],
+      [{ hasFreeSeat: false }, pc.course.notEnrollable.class_full],
+      // The server's real shape: a paid course whose plan cannot price is sent with hasFreeSeat false (courseOfferOf()).
+      [{ pricing: 'paid', price: null, hasFreeSeat: false }, pc.course.notEnrollable.price_unavailable],
+    ]
+    for (const [overrides, reason] of cases) {
+      mockCourseApi(serve(makePublicDetail(overrides)))
+      const { unmount } = renderPage()
+      const notice = within(await screen.findByTestId('public-not-enrollable'))
+      expect(notice.getByText(pc.course.notEnrollableTitle)).toBeInTheDocument()
+      expect(notice.getByText(reason)).toBeInTheDocument()
+      expect(screen.queryByTestId('public-enroll')).not.toBeInTheDocument()
+      expect(screen.queryByText(pc.course.enroll)).not.toBeInTheDocument()
+      // The details stay readable, and an unusable price is never called «full».
+      expect(screen.getByTestId('public-outline')).toBeInTheDocument()
+      if (reason === pc.course.notEnrollable.price_unavailable) expect(screen.queryByText(pc.card.full)).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('tells a visitor that a paid course becomes a request with an invoice, activated after payment and approval (PORTAL-04)', async () => {
+    mockCourseApi(serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
+    renderPage()
+    const enroll = within(await screen.findByTestId('public-enroll'))
+    expect(enroll.getByText(pc.course.enroll)).toBeInTheDocument()
+    expect(enroll.getByText(pc.course.paidNote)).toBeInTheDocument()
   })
 
   it('shows the amount of a paid course, and «السعر غير متاح حالياً» — never «مجانية» — when its plan cannot price now', async () => {
@@ -104,6 +141,8 @@ describe('PublicCoursePage', () => {
 
     const enroll = within(screen.getByTestId('public-enroll'))
     expect(enroll.getByText(pc.course.enrollNote)).toBeInTheDocument()
+    // A free course says nothing about a request or an invoice.
+    expect(enroll.queryByText(pc.course.paidNote)).not.toBeInTheDocument()
     fireEvent.click(enroll.getByText(pc.course.enroll).closest('button')!)
 
     const probe = await screen.findByTestId('path')
@@ -129,6 +168,31 @@ describe('PublicCoursePage', () => {
     expect(await screen.findByText(pc.course.notFound)).toBeInTheDocument()
     fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/explore')
+  })
+
+  it('leads «العودة إلى الدورات» back to the search the course was opened from — kept in its own address (PORTAL-04)', async () => {
+    mockCourseApi(serve(makePublicDetail()))
+    const opened = renderPage(makeAuth(), `?q=${encodeURIComponent('بايثون')}`)
+    await screen.findByText(pc.course.overview)
+    fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
+    expect(decodeURIComponent((await screen.findByTestId('path')).textContent!)).toBe('/explore?q=بايثون')
+    opened.unmount()
+
+    // Opened from a direct link (no search): back to all programs.
+    renderPage()
+    await screen.findByText(pc.course.overview)
+    fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
+    expect((await screen.findByTestId('path')).textContent).toBe('/explore')
+  })
+
+  it('never leaves the site from «العودة إلى الدورات», whatever the address carries', async () => {
+    mockCourseApi(serve(makePublicDetail()))
+    renderPage(makeAuth(), `?q=${encodeURIComponent('https://evil.example')}`)
+    await screen.findByText(pc.course.overview)
+    fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
+    const path = (await screen.findByTestId('path')).textContent!
+    expect(path.startsWith('/explore?q=')).toBe(true)
+    expect(decodeURIComponent(path)).toBe('/explore?q=https://evil.example')
   })
 
   it('reports another failure with a retry that reads the course again', async () => {

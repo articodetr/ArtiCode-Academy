@@ -7,13 +7,15 @@ export const mySchool = {
   subtitle: 'واصل تعلّمك من حيث توقفت، وتابع طلبات اشتراكك واختباراتك وواجباتك وشهاداتك في مكان واحد.',
   subtitleGuardian: 'تابع تقدّم أبنائك في دوراتهم واختباراتهم وواجباتهم وشهاداتهم.',
   explore: 'استكشف الدورات',
+  // PORTAL-04: the way to the catalog from an empty «قيد التعلم».
+  exploreMore: 'استكشف برامج أخرى',
   refresh: 'تحديث',
   retry: 'إعادة المحاولة',
   sectionsLabel: 'أقسام مدرستي',
   sections: {
-    continue: 'واصل التعلم',
-    courses: 'دوراتي',
-    completed: 'الدورات المنجزة',
+    continue: 'قيد التعلم',
+    courses: 'جميع دوراتي',
+    completed: 'المكتملة',
     requests: 'طلبات الاشتراك',
     assessments: 'الاختبارات والواجبات',
     certificates: 'الشهادات',
@@ -36,13 +38,32 @@ export const mySchool = {
     empty: 'لم تسجّل في أي دورة بعد.',
     emptyGuardian: 'لا دورات لأبنائك بعد.',
     continueEmpty: 'لا دورة قيد التعلم الآن: أنهيت كل دوراتك الحالية.',
+    // PORTAL-04: «قيد التعلم».
+    continueHint: 'دوراتك التي تدرسها الآن، والأحدث نشاطاً أولاً.',
+    continueDoneTitle: 'أنهيت كل دوراتك الحالية',
+    continueDoneText: 'لا دورة قيد التعلم الآن. اختر برنامجاً جديداً من الكتالوج لتواصل التعلم.',
+    noneTitle: 'لم تلتحق بأي دورة بعد',
+    noneText: 'استكشف البرامج المتاحة والتحق بما يناسبك؛ تظهر دوراتك هنا مع تقدّمك الحقيقي.',
+    // PORTAL-04: «جميع دوراتي» and «المكتملة».
+    allHint: 'كل الدورات التي التحقت بها، وحالة كلٍّ منها: جديدة أو قيد التعلم أو منجزة.',
+    allHintGuardian: 'دورات أبنائك وتقدّمهم فيها.',
+    noneTitleGuardian: 'لا دورات لأبنائك بعد',
+    completedHint: 'الدورات التي أنهيتها؛ يمكنك مراجعة دروسها متى شئت.',
+    completedEmptyTitle: 'لا دورات مكتملة بعد',
+    completedEmptyText: 'حين تنجز دروس دورة تظهر هنا، مع إمكانية مراجعتها.',
     completedEmpty: 'لا دورات منجزة بعد.',
   },
   card: {
     teacher: 'المعلم: {{name}}',
     student: 'الطالب: {{name}}',
     progress: 'نسبة الإنجاز',
+    // PORTAL-04: over the course the student was last on, first and wide in «قيد التعلم».
+    resume: 'تابع من حيث توقفت',
+    // PORTAL-04: the day a finished course was done.
+    completedOn: 'أُنجزت في {{date}}',
     noRequired: 'لا دروس مطلوبة بعد',
+    // PORTAL-04: the course has no published lesson yet (API-229 `progress.total` = 0).
+    noLessons: 'لم تُنشر دروس هذه الدورة بعد.',
     lastLesson: 'آخر درس: {{title}}',
     // D-R143: the class's next session (API-229 `nextSession`), on the wall clock of its own zone.
     nextSession: 'الحصة القادمة: {{title}}',
@@ -75,14 +96,29 @@ export const mySchool = {
       start: 'ابدأ التعلم',
       continue: 'واصل التعلم',
       review: 'مراجعة الدورة',
+      // PORTAL-04: a course without a published lesson — its page, not a promise of lessons.
+      open: 'افتح الدورة',
     },
   },
   requests: {
     loadError: 'تعذّر تحميل طلبات الاشتراك.',
     empty: 'لا توجد طلبات اشتراك.',
-    pay: 'إتمام الدفع',
+    // No payment gateway: the invoice is paid at the academy and recorded by its staff — the button only shows it.
+    pay: 'عرض الفاتورة',
     awaitingApproval: 'بانتظار الموافقة',
     requestAgain: 'اطلب من جديد',
+    // PORTAL-04: once the server says the enrollment is active — never before.
+    learn: 'اذهب إلى الدورة',
+    hint: 'طلبات الدورات المدفوعة: حالة كل طلب وفاتورته وما المطلوب منك.',
+    emptyTitle: 'لا طلبات اشتراك',
+    emptyText: 'حين تطلب الالتحاق بدورة مدفوعة يظهر طلبك هنا مع فاتورته وحالته حتى يُفعَّل.',
+    steps: {
+      label: 'مراحل الطلب',
+      sent: 'الطلب',
+      payment: 'الدفع',
+      approval: 'الموافقة',
+      active: 'التفعيل',
+    },
     cancelled: 'أُلغي طلب الاشتراك.',
   },
   assessments: {

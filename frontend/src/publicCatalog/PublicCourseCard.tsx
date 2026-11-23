@@ -1,70 +1,124 @@
 // One course of the public catalog (API-236): cover, name, summary, level,
 // price («مجانية», the amount in its currency, or «السعر غير متاح حالياً»), duration, sessions, the
 // lesson and level counts and whether a class is open now — the server's
-// numbers only, never a teacher or a schedule (D-R138). «التفاصيل» opens the
-// course page.
-import { ApartmentOutlined, CalendarOutlined, ClockCircleOutlined, ReadOutlined } from '@ant-design/icons'
-import { Button, Card, Flex, Space, Tag, Typography } from 'antd'
+// numbers only, never a teacher or a schedule (D-R138). The whole card opens the
+// course page (PORTAL-04 PR-2): the name is a real link (`href` — a new tab, the
+// keyboard, a copied address all work) stretched over the card, which is the
+// card's only tab stop; «التفاصيل» is the same link for the pointer, kept out of
+// the tab order and of the accessibility tree so nothing is announced twice.
+// Without `href` (a viewer who may open no course page — PORTAL-04 review) the
+// card is a plain preview: no link and no «التفاصيل». The name is a heading one
+// level under the place the card sits in (`headingLevel`): h2 under the /explore
+// h1, h3 (the default) under a /home section h2.
+//
+// The look (PORTAL-04 PR-1 redesign): a 16:9 media box on top — the course's
+// cover, or a plain patterned placeholder with a book icon when it has none or
+// the image fails (never a picture that could pass for the course's own), with
+// the level as a badge on it — then the name, the code, two lines of summary, the
+// facts in one wrapping row, whether a class is open, and a foot with the price
+// and «التفاصيل». The body grows, so the feet of a row line up.
+import { ApartmentOutlined, ArrowLeftOutlined, ArrowRightOutlined, CalendarOutlined, ClockCircleOutlined, ReadOutlined } from '@ant-design/icons'
+import { Typography } from 'antd'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import type { PublicCourseCard as PublicCourseCardData } from '../api/publicCatalog'
 import { coverSrc } from '../catalog/catalog.view'
-import { CourseCover } from '../catalog/CourseCover'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
-import { PublicPriceTag } from './PublicPriceTag'
-import { AVAILABILITY_COLORS, availabilityOf } from './publicCatalog.view'
+import { PublicPriceText } from './PublicPriceTag'
+import { availabilityOf, placeholderTintOf } from './publicCatalog.view'
 
 function Fact({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-      {icon} {children}
-    </Typography.Text>
+    <li className="public-card__fact">
+      <span className="public-card__fact-icon" aria-hidden="true">
+        {icon}
+      </span>
+      {children}
+    </li>
   )
 }
 
-export function PublicCourseCard({ card, onOpen }: { card: PublicCourseCardData; onOpen: (courseId: string) => void }) {
+/** The cover (decorative, `alt=""`) over the placeholder: a cover that fails to load leaves the placeholder showing. */
+function CardMedia({ id, url, badge }: { id: string; url: string | null; badge: string | null }) {
+  const [broken, setBroken] = useState<string | null>(null)
+  const src = coverSrc(url)
+  return (
+    <div className="public-card__media">
+      <div className={`public-card__placeholder public-card__placeholder--t${placeholderTintOf(id)}`} aria-hidden="true">
+        <ReadOutlined className="public-card__placeholder-icon" />
+      </div>
+      {src && src !== broken ? (
+        <img
+          className="public-card__cover"
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setBroken(src)}
+          data-testid="course-cover"
+        />
+      ) : null}
+      {badge ? <span className="public-card__badge">{badge}</span> : null}
+    </div>
+  )
+}
+
+export function PublicCourseCard({ card, href, headingLevel = 3 }: { card: PublicCourseCardData; href: string | null; headingLevel?: 2 | 3 }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const availability = availabilityOf(card)
-  const cover = coverSrc(card.coverImageUrl)
+  const name = localizedLabel(card.name, language)
 
   return (
-    <Card
-      data-testid={`public-card-${card.id}`}
-      style={{ height: '100%' }}
-      styles={{ body: { display: 'flex', flexDirection: 'column', gap: 12 } }}
-      cover={cover ? <CourseCover key={cover} url={card.coverImageUrl} /> : undefined}
-      actions={[
-        <Button key="details" type="link" onClick={() => onOpen(card.id)}>
-          {t('publicCatalog.list.details')}
-        </Button>,
-      ]}
-    >
-      <div>
-        <Typography.Title level={5} style={{ margin: 0 }}>
-          {localizedLabel(card.name, language)}
-        </Typography.Title>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          <bdi dir="ltr">{card.code}</bdi>
-        </Typography.Text>
+    <article data-testid={`public-card-${card.id}`} className={href !== null ? 'public-card public-card--link' : 'public-card'}>
+      <CardMedia id={card.id} url={card.coverImageUrl} badge={card.level ? localizedLabel(card.level.name, language) : null} />
+      <div className="public-card__body">
+        <div>
+          <Typography.Title level={headingLevel} className="public-card__title">
+            {href !== null ? (
+              <Link to={href} className="public-card__link">
+                {name}
+              </Link>
+            ) : (
+              name
+            )}
+          </Typography.Title>
+          <div className="public-card__code">
+            <bdi dir="ltr">{card.code}</bdi>
+          </div>
+        </div>
+        {card.summary ? (
+          <Typography.Paragraph ellipsis={{ rows: 2 }} className="public-card__summary">
+            {localizedLabel(card.summary, language)}
+          </Typography.Paragraph>
+        ) : null}
+        <ul className="public-card__facts">
+          {card.durationHours !== null ? <Fact icon={<ClockCircleOutlined />}>{t('publicCatalog.card.hours', { count: card.durationHours })}</Fact> : null}
+          {card.sessionsCount !== null ? <Fact icon={<CalendarOutlined />}>{t('publicCatalog.card.sessionsCount', { count: card.sessionsCount })}</Fact> : null}
+          <Fact icon={<ReadOutlined />}>{t('publicCatalog.card.lessons', { count: card.lessonCount })}</Fact>
+          {card.levelCount > 0 ? <Fact icon={<ApartmentOutlined />}>{t('publicCatalog.card.levels', { count: card.levelCount })}</Fact> : null}
+        </ul>
+        {/* A paid course without a usable price: the price already says why nobody can enroll. */}
+        {availability !== 'priceUnavailable' ? (
+          <div className={`public-card__availability public-card__availability--${availability}`}>
+            <span className="public-card__dot" aria-hidden="true" />
+            {t(`publicCatalog.card.${availability}`)}
+          </div>
+        ) : null}
       </div>
-      {card.summary ? (
-        <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} style={{ margin: 0 }}>
-          {localizedLabel(card.summary, language)}
-        </Typography.Paragraph>
-      ) : null}
-      <Space size={[4, 4]} wrap>
-        {card.level ? <Tag color="blue">{localizedLabel(card.level.name, language)}</Tag> : null}
-        <PublicPriceTag course={card} />
-        <Tag color={AVAILABILITY_COLORS[availability]}>{t(`publicCatalog.card.${availability}`)}</Tag>
-      </Space>
-      <Flex vertical gap={4}>
-        {card.durationHours !== null ? <Fact icon={<ClockCircleOutlined />}>{t('publicCatalog.card.hours', { count: card.durationHours })}</Fact> : null}
-        {card.sessionsCount !== null ? <Fact icon={<CalendarOutlined />}>{t('publicCatalog.card.sessionsCount', { count: card.sessionsCount })}</Fact> : null}
-        <Fact icon={<ReadOutlined />}>{t('publicCatalog.card.lessons', { count: card.lessonCount })}</Fact>
-        {card.levelCount > 0 ? <Fact icon={<ApartmentOutlined />}>{t('publicCatalog.card.levels', { count: card.levelCount })}</Fact> : null}
-      </Flex>
-    </Card>
+      <div className="public-card__foot">
+        <PublicPriceText course={card} />
+        {href !== null ? (
+          <Link to={href} className="public-card__action" tabIndex={-1} aria-hidden="true">
+            {t('publicCatalog.list.details')}
+            {language === 'ar' ? <ArrowLeftOutlined /> : <ArrowRightOutlined />}
+          </Link>
+        ) : null}
+      </div>
+    </article>
   )
 }

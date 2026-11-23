@@ -75,6 +75,18 @@ export function continueItems(items: readonly MyLearningCourse[]): MyLearningCou
   return items.filter((item) => item.relation === 'self' && item.canLearn && !isCourseDone(item)).sort(byRecentActivity)
 }
 
+/**
+ * The course «قيد التعلم» puts first and wide («تابع من حيث توقفت», PORTAL-04): the most recent one of the list as
+ * shown, when the student has already been in it (an activity or a lesson opened, per the server) — never a course
+ * not started yet, and nothing while a search narrows the list. Presentation only: the card's action is the server's.
+ */
+export function featuredItemOf(items: readonly MyLearningCourse[], query: string): MyLearningCourse | null {
+  if (query.trim() !== '') return null
+  const first = items[0]
+  if (!first || first.relation !== 'self' || !first.canLearn) return null
+  return first.lastActivityAt !== null || first.lastLesson !== null ? first : null
+}
+
 /** «Completed courses»: the done ones, in the server's order (own first). */
 export function completedItems(items: readonly MyLearningCourse[]): MyLearningCourse[] {
   return items.filter(isCourseDone)
@@ -105,10 +117,14 @@ export function searchItems(items: readonly MyLearningCourse[], query: string): 
   return items.filter((item) => matchesSearch(item, query))
 }
 
-/** The one action of a card: only on the caller's own course the server lets them open (a guardian never studies). */
-export function cardActionOf(item: Pick<MyLearningCourse, 'relation' | 'canLearn' | 'action'>): LearningAction | null {
-  if (item.relation !== 'self' || !item.canLearn) return null
-  return item.action
+/**
+ * The one action of a card: only on the caller's own course the server lets them open (a guardian never studies). A
+ * course whose enrollment the server reports completed (the office completed it, lessons done or not) is reviewed, not
+ * started: PORTAL-04 stage 5 found «المكتملة» offering «ابدأ التعلم» for one — the workspace opens it the same way.
+ */
+export function cardActionOf(item: Pick<MyLearningCourse, 'relation' | 'canLearn' | 'action' | 'enrollment'>): LearningAction | null {
+  if (item.relation !== 'self' || !item.canLearn || item.action === null) return null
+  return item.enrollment.status === 'completed' ? 'review' : item.action
 }
 
 /** The learning workspace of a course; it resumes by itself (API-230 `resume`). */
@@ -124,8 +140,9 @@ export function catalogCoursePath(courseId: string): string {
 /** The badge on a card's cover, from the server's counts. */
 export type CourseState = 'complete' | 'inProgress' | 'notStarted'
 
-export function courseStateOf(item: Pick<MyLearningCourse, 'progress' | 'lastActivityAt' | 'action'>): CourseState {
-  if (item.progress.isComplete) return 'complete'
+export function courseStateOf(item: Pick<MyLearningCourse, 'progress' | 'lastActivityAt' | 'action' | 'enrollment'>): CourseState {
+  // Done by the lessons or by the enrollment (the same rule as «المكتملة» — isCourseDone): never «جديدة» there.
+  if (isCourseDone(item)) return 'complete'
   if (item.action === 'start' || (item.lastActivityAt === null && item.progress.completed === 0)) return 'notStarted'
   return 'inProgress'
 }
@@ -141,13 +158,41 @@ export function isPendingRequest(request: Pick<MyEnrollmentRequest, 'status'>): 
   return request.status === 'pending'
 }
 
-/** The context action of a request card: pay the invoice, wait for the office, or ask again after a refusal. */
-export type RequestAction = 'pay' | 'awaitingApproval' | 'requestAgain'
+/**
+ * The context action of a request card: pay the invoice, wait for the office, ask again after a refusal — or, once the
+ * server says the enrollment is active (or done), go to the course (PORTAL-04: never before; the workspace checks it).
+ */
+export type RequestAction = 'pay' | 'awaitingApproval' | 'requestAgain' | 'learn'
 
 export function requestActionOf(request: Pick<MyEnrollmentRequest, 'state'>): RequestAction | null {
   if (request.state === 'pending_payment') return 'pay'
   if (request.state === 'pending_approval') return 'awaitingApproval'
   if (request.state === 'rejected') return 'requestAgain'
+  if (request.state === 'enrolled' || request.state === 'completed') return 'learn'
+  return null
+}
+
+/** The four steps of a paid request, in order: sent, paid, approved by the office, active. */
+export const REQUEST_STEPS = ['sent', 'payment', 'approval', 'active'] as const
+
+/**
+ * Where a request stands on those steps, from the server's state only (PORTAL-04): awaiting the payment = step 1,
+ * awaiting the approval = step 2, active or done = every step finished. A rejected, cancelled or withdrawn request has
+ * no place on them (null — its state and reason say it).
+ */
+export function requestStepOf(request: Pick<MyEnrollmentRequest, 'state'>): { current: number; finished: boolean } | null {
+  if (request.state === 'pending_payment') return { current: 1, finished: false }
+  if (request.state === 'pending_approval') return { current: 2, finished: false }
+  if (request.state === 'enrolled' || request.state === 'completed') return { current: REQUEST_STEPS.length - 1, finished: true }
+  return null
+}
+
+/** The line under a section's title, when it has one (PORTAL-04); a guardian's courses are their children's. */
+export function sectionHintKey(section: MySchoolSection, viewer: MySchoolViewer): string | null {
+  if (section === 'continue') return 'mySchool.courses.continueHint'
+  if (section === 'courses') return viewer.student ? 'mySchool.courses.allHint' : 'mySchool.courses.allHintGuardian'
+  if (section === 'completed') return 'mySchool.courses.completedHint'
+  if (section === 'requests') return 'mySchool.requests.hint'
   return null
 }
 

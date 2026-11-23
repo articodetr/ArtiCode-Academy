@@ -8,21 +8,42 @@
 // page with `from` = the course in the signed-in catalog plus the enroll intent
 // (`/catalog/<id>?intent=enroll`), which scrolls to its classes once signed in —
 // nothing enrolls by itself, and no account is created here (accounts come from
-// the academy). `404 catalog_not_public` shows the calm «closed» page; a signed-in
-// user goes (replace) to /catalog/<id>.
+// the academy). Since PORTAL-04 PR-2 the button shows only while a visitor can go
+// on to enroll (`publicEnrollStateOf()`: a class open, a free seat, a usable price);
+// otherwise «التسجيل غير متاح حالياً» says why and the details stay readable. A
+// paid course says that it becomes a request with an invoice, activated after
+// payment and approval (MOD-19). The tab reads «course — academy».
+// `404 catalog_not_public` shows the calm «closed» page; a signed-in
+// user goes (replace) to /catalog/<id>. «العودة إلى الدورات» returns to the
+// search the course was opened from — its own address carries it
+// (`/explore/:id?q=`, PORTAL-04 PR-2) — so a refresh, a new tab and a shared link
+// keep it; without one it leads to /explore. Only ever /explore: the search is a
+// value of `q`, never an address.
 import { ArrowLeftOutlined, ArrowRightOutlined, LoginOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Descriptions, Flex, List, Skeleton, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Flex, Skeleton, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { PublicCourseDetail } from '../api/publicCatalog'
 import { CourseCover } from '../catalog/CourseCover'
 import { useLocalized } from '../i18n/useLocalized'
 import { CatalogClosed } from '../publicCatalog/CatalogClosed'
 import { PublicPriceTag } from '../publicCatalog/PublicPriceTag'
-import { AVAILABILITY_COLORS, availabilityOf, durationMinutes, enrollIntentPath, isPublicCourseGone, levelNameOf, publicFailureKey } from '../publicCatalog/publicCatalog.view'
+import {
+  AVAILABILITY_COLORS,
+  availabilityOf,
+  durationMinutes,
+  enrollIntentPath,
+  explorePathFor,
+  exploreSearchOf,
+  isPublicCourseGone,
+  levelNameOf,
+  publicEnrollStateOf,
+  publicFailureKey,
+} from '../publicCatalog/publicCatalog.view'
 import { PublicOnly, PublicShell } from '../publicCatalog/PublicShell'
+import { PublicTitle } from '../publicCatalog/PublicTitle'
 import { usePublicCourse } from '../publicCatalog/usePublicCourse'
 import { localizedLabel } from '../users/users.format'
 
@@ -41,19 +62,30 @@ function PublicCourse({ courseId }: { courseId: string }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const { course, error, reload } = usePublicCourse(courseId)
+  // Back to the results the course was opened from (`?q=` of this page), else to all programs.
+  const backPath = explorePathFor(exploreSearchOf(params))
 
   const back = (
-    <Button icon={language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />} onClick={() => navigate('/explore')} style={{ marginBottom: 16 }}>
+    <Button icon={language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />} onClick={() => navigate(backPath)} style={{ marginBottom: 16 }}>
       {t('publicCatalog.course.back')}
     </Button>
   )
 
-  if (error && isCatalogNotPublic(error)) return <CatalogClosed />
+  if (error && isCatalogNotPublic(error)) {
+    return (
+      <>
+        <PublicTitle />
+        <CatalogClosed />
+      </>
+    )
+  }
 
   if (!course) {
     return (
       <>
+        <PublicTitle />
         {back}
         {error && isPublicCourseGone(error) ? (
           <Alert type="warning" showIcon title={t('publicCatalog.course.notFound')} />
@@ -82,6 +114,7 @@ function PublicCourse({ courseId }: { courseId: string }) {
 
   return (
     <>
+      <PublicTitle page={localizedLabel(course.name, language)} />
       {back}
       <CourseSummary course={course} onEnroll={() => navigate('/login', { state: { from: enrollIntentPath(course.id) } })} />
       <Card title={t('publicCatalog.course.overview')} style={{ marginBottom: 16 }}>
@@ -99,6 +132,7 @@ function CourseSummary({ course, onEnroll }: { course: PublicCourseDetail; onEnr
   const { t } = useTranslation()
   const { language } = useLocalized()
   const availability = availabilityOf(course)
+  const enrollState = publicEnrollStateOf(course)
 
   const facts: DescriptionsProps['items'] = []
   if (course.level) facts.push({ key: 'level', label: t('publicCatalog.course.level'), children: localizedLabel(course.level.name, language) })
@@ -127,7 +161,7 @@ function CourseSummary({ course, onEnroll }: { course: PublicCourseDetail; onEnr
     <Card style={{ marginBottom: 16 }} cover={course.coverImageUrl ? <CourseCover key={course.coverImageUrl} url={course.coverImageUrl} height={220} /> : undefined}>
       <Flex vertical gap={12}>
         <div>
-          <Typography.Title level={2} style={{ margin: 0 }}>
+          <Typography.Title level={1} style={{ margin: 0, fontSize: 30 }}>
             {localizedLabel(course.name, language)}
           </Typography.Title>
           <Typography.Text type="secondary">
@@ -135,15 +169,28 @@ function CourseSummary({ course, onEnroll }: { course: PublicCourseDetail; onEnr
           </Typography.Text>
         </div>
         <Space size={[4, 4]} wrap>
-          <Tag color={AVAILABILITY_COLORS[availability]}>{t(`publicCatalog.card.${availability}`)}</Tag>
+          {/* A paid course without a usable price: the price row and the notice below say why. */}
+          {availability !== 'priceUnavailable' ? <Tag color={AVAILABILITY_COLORS[availability]}>{t(`publicCatalog.card.${availability}`)}</Tag> : null}
         </Space>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} items={facts} />
-        <Flex vertical gap={6} align="flex-start" data-testid="public-enroll">
-          <Button type="primary" size="large" icon={<LoginOutlined />} onClick={onEnroll}>
-            {t('publicCatalog.course.enroll')}
-          </Button>
-          <Typography.Text type="secondary">{t('publicCatalog.course.enrollNote')}</Typography.Text>
-        </Flex>
+        {enrollState === 'enrollable' ? (
+          <Flex vertical gap={6} align="flex-start" data-testid="public-enroll">
+            <Button type="primary" size="large" icon={<LoginOutlined />} onClick={onEnroll}>
+              {t('publicCatalog.course.enroll')}
+            </Button>
+            <Typography.Text type="secondary">{t('publicCatalog.course.enrollNote')}</Typography.Text>
+            {course.pricing === 'paid' ? <Typography.Text type="secondary">{t('publicCatalog.course.paidNote')}</Typography.Text> : null}
+          </Flex>
+        ) : (
+          // PORTAL-04 PR-2: no way to enroll now — said plainly, and the details stay readable.
+          <Alert
+            data-testid="public-not-enrollable"
+            type="info"
+            showIcon
+            title={t('publicCatalog.course.notEnrollableTitle')}
+            description={t(`publicCatalog.course.notEnrollable.${enrollState}`)}
+          />
+        )}
       </Flex>
     </Card>
   )
@@ -163,17 +210,15 @@ function CourseOutline({ course }: { course: PublicCourseDetail }) {
         <Flex vertical gap={16}>
           {levels.map((level) => (
             <section key={level.number} aria-label={levelNameOf(level, t, language)}>
-              <Typography.Title level={5} style={{ marginTop: 0 }}>
+              <Typography.Title level={2} style={{ marginTop: 0, fontSize: 16 }}>
                 {levelNameOf(level, t, language)}
               </Typography.Title>
-              <List
-                size="small"
-                bordered
-                dataSource={level.lessons}
-                renderItem={(lesson, index) => {
+              {/* A plain ordered list (antd 6.6 deprecates `List`): the lessons in order, the number kept as it was shown. */}
+              <ol className="public-outline__lessons">
+                {level.lessons.map((lesson, index) => {
                   const minutes = durationMinutes(lesson.durationSeconds)
                   return (
-                    <List.Item>
+                    <li key={index} className="public-outline__lesson">
                       <Flex justify="space-between" align="center" gap={8} wrap style={{ width: '100%' }}>
                         <Typography.Text>
                           <bdi dir="ltr">{index + 1}.</bdi> {localizedLabel(lesson.title, language)}
@@ -183,10 +228,10 @@ function CourseOutline({ course }: { course: PublicCourseDetail }) {
                           {minutes !== null ? <Typography.Text type="secondary">{t('publicCatalog.course.minutes', { count: minutes })}</Typography.Text> : null}
                         </Space>
                       </Flex>
-                    </List.Item>
+                    </li>
                   )
-                }}
-              />
+                })}
+              </ol>
             </section>
           ))}
         </Flex>
