@@ -222,6 +222,8 @@ export const learn = {
     text: 'أحسنت! يمكنك العودة إلى الدروس ومراجعتها متى شئت.',
     backToMySchool: 'العودة إلى فصولي',
     keepReviewing: 'متابعة المراجعة',
+    certificateText: 'أحسنت! صدرت شهادتك بالرقم {{serial}}.',
+    viewCertificate: 'عرض شهادتي',
   },
   errors: {
     completion_by_playback: 'يكتمل هذا الدرس بمشاهدته، لا بالزر.',

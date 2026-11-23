@@ -2,9 +2,16 @@
 // eligibility order, the serial format and year, the verification code and
 // its normalisation, and the read keys.
 import { describe, expect, it } from 'vitest';
-import { certificatesReadMissing, formatSerial, ineligibilityOf, myCertificatesAccess, myCertificatesMissing, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
+import { certificatesReadMissing, earnsAutomaticCertificate, formatSerial, ineligibilityOf, myCertificatesAccess, myCertificatesMissing, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
 
 describe('certificate rules (TEST-135)', () => {
+  it('TEST-323 — earns the automatic certificate only when enrolled, complete and without one for the course', () => {
+    expect(earnsAutomaticCertificate({ hasCertificateForCourse: false, enrolled: true, courseComplete: true })).toBe(true);
+    expect(earnsAutomaticCertificate({ hasCertificateForCourse: true, enrolled: true, courseComplete: true })).toBe(false);
+    expect(earnsAutomaticCertificate({ hasCertificateForCourse: false, enrolled: false, courseComplete: true })).toBe(false);
+    expect(earnsAutomaticCertificate({ hasCertificateForCourse: false, enrolled: true, courseComplete: false })).toBe(false);
+  });
+
   it('gives the first reason in order: already issued, not completed, no final grade, not passed, stale; null when eligible', () => {
     const pass = { isPass: true, stale: false };
     expect(ineligibilityOf({ issued: true, enrollmentStatus: 'active', final: null })).toBe('already_issued');

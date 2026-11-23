@@ -158,6 +158,7 @@ describe.skipIf(!available)('MOD-20 level release by date (e2e, TEST-262)', () =
   afterAll(async () => {
     try {
       if (prisma) {
+        if (createdUserIds.length > 0) await prisma.certificate.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         if (createdUserIds.length > 0) await prisma.learningProgress.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         if (Object.keys(classes).length > 0) await prisma.enrollment.deleteMany({ where: { classId: { in: Object.values(classes) } } });
         await prisma.class.deleteMany({ where: { code: { startsWith: PREFIX } } });

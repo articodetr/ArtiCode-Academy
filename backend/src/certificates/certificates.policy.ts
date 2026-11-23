@@ -57,6 +57,16 @@ export function ineligibilityOf(input: EligibilityInput): IneligibleReason | nul
   return null;
 }
 
+/**
+ * CH-0363: the automatic course-completion certificate. A student receives one
+ * per course: every required published lesson completed, an active or completed
+ * enrollment, and no certificate for the course yet — a revoked one counts, so
+ * a revocation is never undone automatically.
+ */
+export function earnsAutomaticCertificate(input: { hasCertificateForCourse: boolean; enrolled: boolean; courseComplete: boolean }): boolean {
+  return !input.hasCertificateForCourse && input.enrolled && input.courseComplete;
+}
+
 /** The `number_sequences` key of the certificate serials; the period is the year. */
 export const CERTIFICATE_SEQUENCE_KEY = 'certificate';
 
