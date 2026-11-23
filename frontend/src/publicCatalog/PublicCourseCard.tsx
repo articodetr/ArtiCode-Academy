@@ -15,9 +15,10 @@
 // cover, or a plain patterned placeholder with a book icon when it has none or
 // the image fails (never a picture that could pass for the course's own), with
 // the level as a badge on it — then the name, the code, two lines of summary, the
-// facts in one wrapping row, whether a class is open, and a foot with the price
-// and «التفاصيل». The body grows, so the feet of a row line up.
-import { ApartmentOutlined, ArrowLeftOutlined, ArrowRightOutlined, CalendarOutlined, ClockCircleOutlined, ReadOutlined } from '@ant-design/icons'
+// facts in one wrapping row, whether a class is open, and a foot with the price, the
+// subscribe button when the course takes an enrollment (PublicCardActions) and
+// «التفاصيل». The body grows, so the feet of a row line up.
+import { ApartmentOutlined, CalendarOutlined, ClockCircleOutlined, ReadOutlined } from '@ant-design/icons'
 import { Typography } from 'antd'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -27,6 +28,7 @@ import type { PublicCourseCard as PublicCourseCardData } from '../api/publicCata
 import { coverSrc } from '../catalog/catalog.view'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
+import { PublicCardActions } from './PublicCardActions'
 import { PublicPriceText } from './PublicPriceTag'
 import { availabilityOf, placeholderTintOf } from './publicCatalog.view'
 
@@ -112,12 +114,7 @@ export function PublicCourseCard({ card, href, headingLevel = 3 }: { card: Publi
       </div>
       <div className="public-card__foot">
         <PublicPriceText course={card} />
-        {href !== null ? (
-          <Link to={href} className="public-card__action" tabIndex={-1} aria-hidden="true">
-            {t('publicCatalog.list.details')}
-            {language === 'ar' ? <ArrowLeftOutlined /> : <ArrowRightOutlined />}
-          </Link>
-        ) : null}
+        <PublicCardActions card={card} name={name} href={href} />
       </div>
     </article>
   )

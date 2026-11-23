@@ -16,8 +16,7 @@ import {
   levelNameOf,
   publicCatalogParams,
   publicEnrollStateOf,
-  publicFailureKey,
-} from './publicCatalog.view'
+  publicFailureKey, cardSubscribeTarget } from './publicCatalog.view'
 
 const t = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('ar')(key, options)
 const tEn = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('en')(key, options)
@@ -112,5 +111,22 @@ describe('publicCatalog.view', () => {
     expect(availabilityOf(makePublicCard({ hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('priceUnavailable')
     expect(availabilityOf(makePublicCard({ hasFreeSeat: false }))).toBe('full')
     expect(availabilityOf(makePublicCard({ openClasses: 0, hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('closed')
+  })
+
+  it('offers the subscribe button only to whoever can enroll, in a course that takes an enrollment now', () => {
+    const open = { id: 'c-1', openClasses: 1, hasFreeSeat: true, pricing: 'free', price: null } as const
+    const paid = { ...open, pricing: 'paid', price: { amount: 150, currency: 'USD', installments: 1 } } as const
+    const path = '/catalog/c-1?intent=enroll'
+    expect(cardSubscribeTarget(open, 'visitor', false)).toEqual({ to: '/login', state: { from: path } })
+    expect(cardSubscribeTarget(paid, 'visitor', false)).toEqual({ to: '/login', state: { from: path } })
+    expect(cardSubscribeTarget(open, 'learner', true)).toEqual({ to: path })
+    // A guardian holds no student role; staff never enroll; an unknown session shows nothing yet.
+    expect(cardSubscribeTarget(open, 'learner', false)).toBeNull()
+    expect(cardSubscribeTarget(open, 'staff', false)).toBeNull()
+    expect(cardSubscribeTarget(open, 'pending', false)).toBeNull()
+    // No open class, every seat taken, or a paid course without a usable price.
+    expect(cardSubscribeTarget({ ...open, openClasses: 0, hasFreeSeat: false }, 'visitor', false)).toBeNull()
+    expect(cardSubscribeTarget({ ...open, hasFreeSeat: false }, 'visitor', false)).toBeNull()
+    expect(cardSubscribeTarget({ ...paid, price: null, hasFreeSeat: false }, 'visitor', false)).toBeNull()
   })
 })

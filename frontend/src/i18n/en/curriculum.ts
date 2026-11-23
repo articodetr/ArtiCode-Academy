@@ -295,6 +295,8 @@ export const publicCatalog = {
   },
   card: {
     free: 'Free',
+    subscribeFree: 'Enroll for free',
+    subscribePaid: 'Request to enroll',
     priceUnavailable: 'Price not available right now',
     price: 'Fees',
     duration: 'Duration',

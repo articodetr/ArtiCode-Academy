@@ -561,24 +561,77 @@
   position: relative;
   z-index: 2;
   display: inline-flex;
-  flex: 1 1 100%;
+  flex: 1 1 0;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-width: 0;
   height: 38px;
-  margin-inline: -3px;
+  padding-inline: 8px;
   border-radius: 4px;
   background: var(--pub-primary);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background-color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .public-card--link:hover .public-card__action {
   background: var(--pub-primary-strong);
   color: #fff;
+}
+
+/* The subscribe button beside «التفاصيل»: the main action is filled, the details are outlined. */
+.public-card__buttons {
+  display: flex;
+  flex: 1 1 100%;
+  gap: 8px;
+  min-width: 0;
+  margin-inline: -3px;
+}
+
+.public-card .public-card__subscribe {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 38px;
+  padding-inline: 8px;
+  border-radius: 4px;
+  background: var(--pub-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.public-card .public-card__subscribe:hover,
+.public-card .public-card__subscribe:focus-visible {
+  background: var(--pub-primary-strong);
+  color: #fff;
+}
+
+.public-card .public-card__subscribe:focus-visible {
+  outline: 2px solid var(--pub-primary-strong);
+  outline-offset: 2px;
+}
+
+.public-card .public-card__buttons--two .public-card__action {
+  background: var(--pub-surface);
+  box-shadow: inset 0 0 0 1px var(--pub-primary);
+  color: var(--pub-primary-strong);
+}
+
+.public-card--link:hover .public-card__buttons--two .public-card__action {
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary-strong);
 }
 
 .public-card__action .anticon {
@@ -710,6 +763,8 @@
 @media (prefers-reduced-motion: reduce) {
   .public-card,
   .public-card__cover,
+  .public-card .public-card__action,
+  .public-card .public-card__subscribe,
   .public-card__action .anticon {
     transition: none;
   }
