@@ -15,6 +15,17 @@ describe('dashboard formats', () => {
     expect(formatMoney(7, 'NOT-A-CURRENCY', 'en')).toBe('7.00 NOT-A-CURRENCY')
   })
 
+  it('keeps an Arabic amount whole inside a right-to-left sentence («150.00 US$», never «$US 150.00»)', () => {
+    for (const money of [formatMoney(150, 'USD', 'ar'), formatMoney(7, 'NOT-A-CURRENCY', 'ar')]) {
+      expect(money.startsWith('⁦')).toBe(true)
+      expect(money.endsWith('⁩')).toBe(true)
+      expect(money).not.toContain('‏')
+    }
+    expect(formatMoney(150, 'USD', 'ar')).toMatch(/^⁦150\.00\sUS\$⁩$/)
+    // Other languages read left to right already: no control character is added.
+    expect(formatMoney(150, 'USD', 'en')).toBe('$150.00')
+  })
+
   it('reads a server label in the UI language, the Arabic text when that language is missing', () => {
     expect(labelIn({ ar: 'عربي', en: 'English' }, 'en')).toBe('English')
     expect(labelIn({ ar: 'عربي' }, 'en')).toBe('عربي')
