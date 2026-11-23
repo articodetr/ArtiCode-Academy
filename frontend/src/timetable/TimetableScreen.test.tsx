@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
 import { renderWithProviders } from '../test/render'
-import { makeMyItem, makeMySchedule, makeTimetableAcademy } from '../test/timetable'
+import { makeCalendarLesson, makeCalendarLessons, makeMyItem, makeMySchedule, makeTimetableAcademy } from '../test/timetable'
 import { TimetableScreen } from './TimetableScreen'
 
 // Thursday 2026-11-12, 10:30 in Riyadh (07:30Z): the shown week is Sunday 8 – Saturday 14 (the
@@ -25,9 +25,25 @@ function mockApi(failingOn: string) {
       if (on === failingOn) return jsonResponse(500, { statusCode: 500, message: 'Internal server error' })
       return jsonResponse(200, makeMySchedule([makeMyItem()], on))
     }
+    if (url.pathname === '/api/me/lessons') return jsonResponse(200, makeCalendarLessons())
     return jsonResponse(404, { statusCode: 404, code: 'not_found', message: 'nope' })
   })
   return asked
+}
+
+/** A student whose class has no weekly slot: only the lessons of API-101, on the dates they start. */
+function mockLessonsOnly(lessons: ReturnType<typeof makeCalendarLesson>[]) {
+  mockFetch((raw) => {
+    const url = new URL(raw, 'http://localhost')
+    if (url.pathname === '/api/academy') return jsonResponse(200, makeTimetableAcademy({ weekStartsOn: 0, workingDays: [0, 1, 2, 3, 4] }))
+    if (url.pathname === '/api/me/schedule') return jsonResponse(200, makeMySchedule([], url.searchParams.get('on')!))
+    if (url.pathname === '/api/me/lessons') {
+      const from = Date.parse(url.searchParams.get('from')!)
+      const to = Date.parse(url.searchParams.get('to')!)
+      return jsonResponse(200, makeCalendarLessons(lessons.filter((lesson) => Date.parse(lesson.startsAt) >= from && Date.parse(lesson.startsAt) <= to)))
+    }
+    return jsonResponse(404, { statusCode: 404, code: 'not_found', message: 'nope' })
+  })
 }
 
 function renderScreen() {
@@ -87,5 +103,39 @@ describe('TimetableScreen — the «upcoming» panel and the grid’s alert repo
     for (let step = 0; step < 3; step += 1) fireEvent.click(screen.getByLabelText(ar.schedule.calendar.previousDay))
     expect(screen.getByRole('alert')).toHaveTextContent(ar.schedule.calendar.failed)
     expect(screen.queryByText(ar.schedule.calendar.emptyDay)).not.toBeInTheDocument()
+  })
+})
+
+describe('TimetableScreen — a student whose lessons were added by hand (J-F65, KI-064)', () => {
+  it('shows the lesson on the grid without any weekly slot, and its details with the link and no «recurring» notice', async () => {
+    mockLessonsOnly([makeCalendarLesson()])
+    renderScreen()
+
+    const grid = await screen.findByRole('region', { name: ar.schedule.calendar.grid })
+    const card = await within(grid).findByRole('button', { name: /من 12:00 إلى 13:00/ })
+    expect(card).toHaveClass('is-lesson')
+    expect(card).toHaveTextContent('درس المتغيرات')
+    expect(screen.getByText(ar.schedule.calendar.recurringMine)).toBeInTheDocument()
+
+    fireEvent.click(card)
+    const drawer = await screen.findByRole('dialog')
+    expect(within(drawer).getByText(ar.schedule.details.lessonTitle)).toBeInTheDocument()
+    expect(within(drawer).getByRole('link')).toHaveAttribute('href', 'https://meet.example.com/variables')
+    expect(within(drawer).queryByText(ar.schedule.details.recurring)).not.toBeInTheDocument()
+  })
+
+  it('marks a cancelled lesson on the grid, offers no link and keeps it out of «upcoming»', async () => {
+    // Friday 13, after «now»: it would be upcoming if it were not cancelled.
+    mockLessonsOnly([makeCalendarLesson({ status: 'cancelled', startsAt: '2026-11-13T09:00:00.000Z', endsAt: '2026-11-13T10:00:00.000Z' })])
+    renderScreen()
+
+    const grid = await screen.findByRole('region', { name: ar.schedule.calendar.grid })
+    const card = await within(grid).findByRole('button', { name: /من 12:00 إلى 13:00/ })
+    expect(card).toHaveClass('is-cancelled')
+    expect(card).toHaveTextContent(ar.labels.cancelled)
+    expect(await within(upcomingPanel()).findByText(ar.schedule.upcoming.empty)).toBeInTheDocument()
+
+    fireEvent.click(card)
+    expect(within(await screen.findByRole('dialog')).queryByRole('link')).not.toBeInTheDocument()
   })
 })

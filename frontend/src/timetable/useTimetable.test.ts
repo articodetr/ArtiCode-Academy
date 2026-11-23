@@ -2,12 +2,17 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { jsonResponse, mockFetch } from '../test/http'
-import { SLOT_ID, makeAcademySchedule, makeMyItem, makeMySchedule, makeSlot } from '../test/timetable'
+import { LESSON_ID, SLOT_ID, makeAcademySchedule, makeCalendarLesson, makeCalendarLessons, makeMyItem, makeMySchedule, makeSlot } from '../test/timetable'
 import { requestKey, useTimetable } from './useTimetable'
 
+const isLessons = (raw: string) => new URL(raw, 'http://localhost').pathname === '/api/me/lessons'
+const noLessons = () => jsonResponse(200, makeCalendarLessons())
+
+/** Records the timetable readings; «my lessons» (J-F65) answers nothing unless a test says otherwise. */
 function record(handler: (url: URL) => Response | Promise<Response>) {
   const calls: string[] = []
   mockFetch((raw) => {
+    if (isLessons(raw)) return noLessons()
     const url = new URL(raw, 'http://localhost')
     calls.push(`${url.pathname}${url.search}`)
     return handler(url)
@@ -151,6 +156,7 @@ describe('useTimetable', () => {
     const answers = new Map<string, ReturnType<typeof deferred>>()
     const signals = new Map<string, AbortSignal | null | undefined>()
     mockFetch((raw, init) => {
+      if (isLessons(raw)) return noLessons()
       const on = new URL(raw, 'http://localhost').searchParams.get('on')!
       calls.push(on)
       signals.set(on, init?.signal)
@@ -198,6 +204,52 @@ describe('useTimetable', () => {
     await waitFor(() => expect(result.current.pending.size).toBe(0))
     expect(result.current.byDate.get(SUNDAY)).toHaveLength(1)
     expect(calls).toEqual([minePath(SUNDAY), minePath(SUNDAY), minePath(MONDAY)])
+  })
+
+  // ---- J-F65 (KI-064): the learner's real lessons -----------------------------
+
+  it('adds the caller’s lessons to a date of «my schedule», through every page of API-101', async () => {
+    const TUESDAY_LESSON = makeCalendarLesson()
+    const second = makeCalendarLesson({ id: 'second', startsAt: '2026-11-10T11:00:00.000Z', endsAt: '2026-11-10T12:00:00.000Z' })
+    const lessonCalls: URL[] = []
+    mockFetch((raw) => {
+      const url = new URL(raw, 'http://localhost')
+      if (url.pathname === '/api/me/schedule') return jsonResponse(200, makeMySchedule([], url.searchParams.get('on')!))
+      lessonCalls.push(url)
+      return jsonResponse(200, url.searchParams.get('cursor') ? makeCalendarLessons([second]) : makeCalendarLessons([TUESDAY_LESSON], 'next-page'))
+    })
+    const dates = [TUESDAY]
+    const { result } = renderHook(() => useTimetable('mine', {}, dates, true))
+    await waitFor(() => expect(result.current.pending.size).toBe(0))
+    expect(result.current.byDate.get(TUESDAY)!.map((entry) => entry.id)).toEqual([LESSON_ID, 'second'])
+    expect(lessonCalls.map((url) => url.searchParams.get('cursor'))).toEqual([null, 'next-page'])
+    expect(lessonCalls[0]!.searchParams.get('from')).toBe('2026-11-09T10:00:00.000Z')
+    expect(lessonCalls[0]!.searchParams.get('to')).toBe('2026-11-11T12:00:00.000Z')
+  })
+
+  it('fails the date when the lessons cannot be read: an empty day is never a guess', async () => {
+    mockFetch((raw) => {
+      const url = new URL(raw, 'http://localhost')
+      if (url.pathname === '/api/me/schedule') return jsonResponse(200, makeMySchedule([], url.searchParams.get('on')!))
+      return jsonResponse(500, { statusCode: 500, message: 'Internal server error' })
+    })
+    const dates = [TUESDAY]
+    const { result } = renderHook(() => useTimetable('mine', {}, dates, true))
+    await waitFor(() => expect(result.current.failed).toBe(true))
+    expect(result.current.byDate.has(TUESDAY)).toBe(false)
+  })
+
+  it('never reads the lessons for the academy schedule', async () => {
+    const paths: string[] = []
+    mockFetch((raw) => {
+      const url = new URL(raw, 'http://localhost')
+      paths.push(url.pathname)
+      return jsonResponse(200, makeAcademySchedule([], url.searchParams.get('on')!))
+    })
+    const dates = [TUESDAY]
+    const { result } = renderHook(() => useTimetable('academy', {}, dates, true))
+    await waitFor(() => expect(result.current.pending.size).toBe(0))
+    expect(paths).toEqual(['/api/schedule'])
   })
 
   // ---- J-F22: the owner's note 1 on PR #65 ------------------------------------
@@ -258,6 +310,7 @@ describe('useTimetable', () => {
     const answers: Array<ReturnType<typeof deferred>> = []
     const signals: Array<AbortSignal | null | undefined> = []
     mockFetch((raw, init) => {
+      if (isLessons(raw)) return noLessons()
       calls.push(new URL(raw, 'http://localhost').searchParams.get('on')!)
       signals.push(init?.signal)
       const answer = deferred()

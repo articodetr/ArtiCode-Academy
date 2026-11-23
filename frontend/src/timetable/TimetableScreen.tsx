@@ -288,7 +288,7 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
 
   const note = (
     <div className="tt-note">
-      <span>{t('schedule.calendar.recurring')}</span>
+      <span>{mode === 'mine' ? t('schedule.calendar.recurringMine') : t('schedule.calendar.recurring')}</span>
       <span>{t('schedule.calendar.zone', { zone: settings.timeZone })}</span>
     </div>
   )
@@ -309,7 +309,17 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
     />
   )
 
-  const upcomingPanel = <UpcomingPanel occurrences={upcoming} now={now} loading={upcomingLoading} failed={upcomingFailed} language={language} onOpen={open} />
+  const upcomingPanel = (
+    <UpcomingPanel
+      occurrences={upcoming}
+      now={now}
+      loading={upcomingLoading}
+      failed={upcomingFailed}
+      language={language}
+      hint={mode === 'mine' ? t('schedule.upcoming.hintMine') : t('schedule.upcoming.hint')}
+      onOpen={open}
+    />
+  )
 
   const errorAlert = failure ? (
     <Alert
@@ -396,7 +406,7 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
           {errorAlert}
           {phone ? phoneBody : desktopBody}
         </div>
-        <SlotDrawer opened={opened} onClose={() => setOpened(null)} language={language} academyTimeZone={settings.timeZone} mobile={phone} />
+        <SlotDrawer opened={opened} onClose={() => setOpened(null)} language={language} academyTimeZone={settings.timeZone} mobile={phone} now={now} />
       </div>
     </ConfigProvider>
   )
