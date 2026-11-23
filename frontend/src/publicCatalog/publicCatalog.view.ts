@@ -8,6 +8,7 @@ import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { ListPublicCatalogParams, PublicCourseCard, PublicCourseList, PublicOutlineLevel } from '../api/publicCatalog'
 import type { Language } from '../i18n/language'
 import { localizedLabel } from '../users/users.format'
+import type { PublicViewer } from './publicViewer'
 
 export const PUBLIC_CATALOG_PAGE_SIZE = 24
 /** Upper bound of `q` (1–100 characters after trim), as on API-219. */
@@ -135,4 +136,27 @@ export function publicFailureKey(error: unknown): string {
  */
 export function enrollIntentPath(courseId: string): string {
   return `/catalog/${encodeURIComponent(courseId)}?intent=enroll`
+}
+
+export interface CardSubscribeTarget {
+  to: string
+  /** The sign-in page's return path. */
+  state?: { from: string }
+}
+
+/**
+ * Where a public card's subscribe button leads, or null when it shows no button: only while the server says the course
+ * takes an enrollment now, for a visitor (through the sign-in, keeping the course) or a student (to the course's
+ * classes). Staff and guardians cannot enroll themselves (API-221 needs the `student` role), and nothing is offered
+ * while the session is still being restored. Nothing enrolls here: the learner chooses a class and confirms.
+ */
+export function cardSubscribeTarget(
+  course: Pick<PublicCourseCard, 'id' | 'openClasses' | 'hasFreeSeat' | 'pricing' | 'price'>,
+  viewer: PublicViewer,
+  isStudent: boolean,
+): CardSubscribeTarget | null {
+  if (publicEnrollStateOf(course) !== 'enrollable') return null
+  if (viewer === 'visitor') return { to: '/login', state: { from: enrollIntentPath(course.id) } }
+  if (viewer === 'learner' && isStudent) return { to: enrollIntentPath(course.id) }
+  return null
 }
