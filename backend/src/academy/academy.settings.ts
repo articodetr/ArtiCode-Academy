@@ -49,6 +49,13 @@ export const videoCompletionPercentSchema = z.number().int().min(50).max(100);
 export const publicBrowsingSchema = z.boolean();
 
 /**
+ * PORTAL-03 (#207): whether the academy lets visitors create their own student
+ * account — a JSON boolean; `null` = off. It alone opens nothing: see
+ * `isSelfRegistrationOpen()`.
+ */
+export const selfRegistrationEnabledSchema = z.boolean();
+
+/**
  * Every known key with its dotted name (used in the audit `fields`) and its
  * path in the stored object, in the fixed order of the audit metadata.
  */
@@ -58,6 +65,7 @@ export const SETTINGS_FIELDS = [
   { field: 'settings.certificates.serialPrefix', domain: 'certificates', key: 'serialPrefix', schema: serialPrefixSchema },
   { field: 'settings.learning.videoCompletionPercent', domain: 'learning', key: 'videoCompletionPercent', schema: videoCompletionPercentSchema },
   { field: 'settings.catalog.publicBrowsing', domain: 'catalog', key: 'publicBrowsing', schema: publicBrowsingSchema },
+  { field: 'settings.selfRegistration.enabled', domain: 'selfRegistration', key: 'enabled', schema: selfRegistrationEnabledSchema },
 ] as const;
 
 export type SettingsField = (typeof SETTINGS_FIELDS)[number]['field'];
@@ -82,12 +90,18 @@ export interface CatalogSettings {
   publicBrowsing: boolean | null;
 }
 
+export interface SelfRegistrationSettings {
+  /** null = off (only `true` can open self-registration). */
+  enabled: boolean | null;
+}
+
 /** The settings as the API returns them: every known key, `null` when not set. */
 export interface AcademySettings {
   scheduling: SchedulingSettings;
   certificates: CertificatesSettings;
   learning: LearningSettings;
   catalog: CatalogSettings;
+  selfRegistration: SelfRegistrationSettings;
 }
 
 /** A validated PATCH of the settings: absent = unchanged, `null` = clear, a value = replace. */
@@ -105,6 +119,9 @@ export interface SettingsPatch {
   catalog?: {
     publicBrowsing?: boolean | null;
   };
+  selfRegistration?: {
+    enabled?: boolean | null;
+  };
 }
 
 type JsonObject = Record<string, unknown>;
@@ -116,12 +133,21 @@ function asObject(value: unknown): JsonObject {
 /** The stored jsonb → every known key (lenient: anything that fails its schema reads as null). */
 export function readSettings(stored: unknown): AcademySettings {
   const root = asObject(stored);
-  const out: Record<string, Record<string, unknown>> = { scheduling: {}, certificates: {}, learning: {}, catalog: {} };
+  const out: Record<string, Record<string, unknown>> = { scheduling: {}, certificates: {}, learning: {}, catalog: {}, selfRegistration: {} };
   for (const { domain, key, schema } of SETTINGS_FIELDS) {
     const parsed = schema.safeParse(asObject(root[domain])[key]);
     (out[domain] ??= {})[key] = parsed.success ? parsed.data : null;
   }
   return out as unknown as AcademySettings;
+}
+
+/**
+ * PORTAL-03 (#207): visitors may register only when the academy switched it on
+ * AND a confirmation e-mail can leave the server — an account is never activated
+ * without proof of the address, so the `none` transport keeps it closed.
+ */
+export function isSelfRegistrationOpen(settings: AcademySettings, mailTransport: string): boolean {
+  return settings.selfRegistration.enabled === true && mailTransport !== 'none';
 }
 
 /** True when the stored object carries the key at all, valid or not (so `null` can clear a corrupt value). */

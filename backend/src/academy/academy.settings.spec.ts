@@ -3,12 +3,15 @@
 // flattening of a PATCH and the merge that keeps unknown keys — pure functions.
 // TEST-248 (unit part) — MOD-20 adds `learning.videoCompletionPercent` (D-R134)
 // and `catalog.publicBrowsing` (D-R138).
+// TEST-320 (unit part) — PORTAL-03 adds `selfRegistration.enabled`.
 import {
   applySettingsChanges,
   hasStoredKey,
+  isSelfRegistrationOpen,
   publicBrowsingSchema,
   readSettings,
   sameSettingValue,
+  selfRegistrationEnabledSchema,
   SETTINGS_FIELDS,
   settingsPatchEntries,
   videoCompletionPercentSchema,
@@ -22,16 +25,18 @@ const EMPTY = {
   certificates: { serialPrefix: null },
   learning: { videoCompletionPercent: null },
   catalog: { publicBrowsing: null },
+  selfRegistration: { enabled: null },
 };
 
 describe('academy settings (TEST-068)', () => {
-  it('knows exactly the five keys, in a fixed order', () => {
+  it('knows exactly the six keys, in a fixed order', () => {
     expect(SETTINGS_FIELDS.map((entry) => entry.field)).toEqual([
       'settings.scheduling.weekStartsOn',
       'settings.scheduling.workingDays',
       'settings.certificates.serialPrefix',
       'settings.learning.videoCompletionPercent',
       'settings.catalog.publicBrowsing',
+      'settings.selfRegistration.enabled',
     ]);
   });
 
@@ -50,7 +55,7 @@ describe('academy settings (TEST-068)', () => {
 
   it('reads every known key, null when unset or unreadable, and never throws on a corrupt column', () => {
     expect(readSettings({})).toEqual(EMPTY);
-    expect(Object.keys(readSettings({}))).toEqual(['scheduling', 'certificates', 'learning', 'catalog']);
+    expect(Object.keys(readSettings({}))).toEqual(['scheduling', 'certificates', 'learning', 'catalog', 'selfRegistration']);
     expect(readSettings({ scheduling: { weekStartsOn: 6, workingDays: [4, 0] } })).toEqual({ ...EMPTY, scheduling: { weekStartsOn: 6, workingDays: [0, 4] } });
     expect(readSettings({ scheduling: { weekStartsOn: 'sat', workingDays: [] } })).toEqual(EMPTY);
     for (const stored of [null, 'text', 42, [], { scheduling: 'x' }, { scheduling: [1] }, { learning: 'x', catalog: [true] }]) {
@@ -115,6 +120,20 @@ describe('academy settings (TEST-068)', () => {
       ]),
     ).toEqual({ scheduling: { weekStartsOn: 6 }, learning: { videoCompletionPercent: 75 } });
     expect(applySettingsChanges({}, [['settings.catalog.publicBrowsing', false]])).toEqual({ catalog: { publicBrowsing: false } });
+  });
+
+  it('PORTAL-03 (TEST-320) — the switch is a JSON boolean, off unless stored, cleared by null, and opens nothing without a mail transport', () => {
+    for (const value of [true, false]) expect(selfRegistrationEnabledSchema.safeParse(value).success, String(value)).toBe(true);
+    for (const value of ['true', 1, 0, null, [], {}]) expect(selfRegistrationEnabledSchema.safeParse(value).success, JSON.stringify(value)).toBe(false);
+    expect(readSettings({}).selfRegistration.enabled).toBeNull();
+    expect(readSettings({ selfRegistration: { enabled: 'yes' } }).selfRegistration.enabled).toBeNull();
+    expect(settingsPatchEntries({ selfRegistration: { enabled: true } })).toEqual([['settings.selfRegistration.enabled', true]]);
+    expect(applySettingsChanges({ selfRegistration: { enabled: true } }, [['settings.selfRegistration.enabled', null]])).toEqual({});
+    const on = readSettings({ selfRegistration: { enabled: true } });
+    expect(isSelfRegistrationOpen(on, 'resend')).toBe(true);
+    expect(isSelfRegistrationOpen(on, 'none')).toBe(false);
+    expect(isSelfRegistrationOpen(readSettings({}), 'resend')).toBe(false);
+    expect(isSelfRegistrationOpen(readSettings({ selfRegistration: { enabled: false } }), 'resend')).toBe(false);
   });
 
   it('compares values by content', () => {
