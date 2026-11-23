@@ -22,6 +22,8 @@ import { questionBanks } from './ar/questionBanks'
 import { examOnline } from './ar/examOnline'
 import { examAttempts } from './ar/examAttempts'
 import { takeExam } from './ar/takeExam'
+import { courseCover } from './ar/courseCover'
+import { courseEnrollmentPanel } from './ar/courseEnrollmentPanel'
 import { publicHome } from './ar/publicHome'
 
 export const ar = {
@@ -81,6 +83,8 @@ export const ar = {
   takeExam,
   // PORTAL-04 (#208): the academy's public home page (/home).
   publicHome,
+  courseCover,
+  courseEnrollmentPanel,
 }
 
 export type Translation = typeof ar

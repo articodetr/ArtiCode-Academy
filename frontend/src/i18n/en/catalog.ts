@@ -61,6 +61,9 @@ export const catalog: typeof arCatalog = {
     noClasses: 'No class of this course is open for enrollment.',
     // MOD-20 (D-R138): the visitor chose “Enroll in this course” on the public page and signed in.
     intentNotice: 'Choose the class you want to enroll in',
+    // One class takes the learner: nothing to choose, only to confirm.
+    intentNoticeOne: 'This is the class open to you in this course',
+    intentHintOne: 'Nothing is sent until you confirm. Check its times and seats, then press its button when you are ready.',
     // PORTAL-04: no answer or a server error while enrolling — the outcome is unknown until the course is read again.
     enrollUnknown: 'No sure answer came back, so the enrollment may or may not have gone through. Reload the course to see where you stand before trying again.',
     reloadCourse: 'Reload the course',

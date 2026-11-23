@@ -36,11 +36,13 @@ import { formatMoney } from '../payments/payments.format'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CourseFormFields } from './CourseFormFields'
 import { CoursePricingFields } from './CoursePricingFields'
+import { OpenEnrollmentPanel } from './OpenEnrollmentPanel'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { courseFormHasChanges, courseFormValuesOf, planCoursePatch } from './courses.form'
 import type { CourseFormValues } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction } from './courses.status'
 import type { CourseMenuAction } from './courses.status'
+import './courseDrawer.css'
 
 const ICONS: Readonly<Record<CourseMenuAction, ReactNode>> = {
   publish: <RocketOutlined />,
@@ -242,6 +244,7 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
       keyboard={!unsaved}
       mask={{ closable: !unsaved }}
       title={name}
+      rootClassName="course-drawer"
       size="large"
       destroyOnHidden
       extra={
@@ -295,7 +298,8 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
           activeKey={tab}
           onChange={(key) => setTab(key as DrawerTab)}
           items={[
-            { key: 'details', label: t('courses.drawer.tabs.details'), children: details },
+            // PORTAL-04: the «فتح الاشتراك» panel gates itself on classes.manage + classes.read.
+            { key: 'details', label: t('courses.drawer.tabs.details'), children: <>{editing ? null : <OpenEnrollmentPanel course={course} />}{details}</> },
             // MOD-20: the server decides who reads (courses.manage or a teacher of the course) and who edits (`canManage`).
             { key: 'curriculum', label: t('curriculum.tab'), children: <CurriculumTab courseId={course.id} onUnsavedChange={reportUnsaved.curriculum} />, disabled: editing },
           ]}

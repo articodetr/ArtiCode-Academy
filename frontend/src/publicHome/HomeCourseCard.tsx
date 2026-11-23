@@ -14,7 +14,7 @@ import { useLocalized } from '../i18n/useLocalized'
 import { PublicCardActions } from '../publicCatalog/PublicCardActions'
 import { CardMedia, Fact } from '../publicCatalog/PublicCourseCard'
 import { PublicPriceText } from '../publicCatalog/PublicPriceTag'
-import { availabilityOf } from '../publicCatalog/publicCatalog.view'
+import { availabilityOf, availabilityPillKey } from '../publicCatalog/publicCatalog.view'
 import { localizedLabel } from '../users/users.format'
 
 export function HomeCourseCard({ card, href }: { card: PublicCourseCard; href: string | null }) {
@@ -41,7 +41,7 @@ export function HomeCourseCard({ card, href }: { card: PublicCourseCard; href: s
           {availability !== 'priceUnavailable' ? (
             <span className={`public-card__availability public-card__availability--${availability}`}>
               <span className="public-card__dot" aria-hidden="true" />
-              {t(`publicCatalog.card.${availability}`)}
+              {t(availabilityPillKey(availability))}
             </span>
           ) : (
             <span />

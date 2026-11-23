@@ -12,17 +12,20 @@
 // «سجّل في هذه الدورة» on the public course page arrives here after the sign-in
 // with `?intent=enroll` — the page scrolls to the classes, highlights them with
 // «اختر الفصل الذي تريد التسجيل فيه» and drops the parameter from the URL
-// (replace); it never enrolls by itself, the learner confirms as always.
+// (replace); it never enrolls by itself, the learner confirms as always. When
+// exactly one class takes the learner there is nothing to choose: its usual
+// confirmation opens by itself, once per arrival, and nothing is sent until the
+// learner presses confirm. Cancelling leaves the class and its button.
 import { ArrowRightOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Col, Descriptions, Flex, List, Row, Skeleton, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { enrollInClass } from '../api/catalog'
 import type { CatalogClass, CatalogCourseDetail, CatalogEnrollResult } from '../api/catalog'
 import { catalogFailureKey, isCourseGone } from '../catalog/catalog.errors'
-import { REQUEST_STATE_COLORS, courseStandingOf, enrollableClasses, enrollmentUnavailable } from '../catalog/catalog.view'
+import { REQUEST_STATE_COLORS, autoConfirmClass, courseStandingOf, enrollableClasses, enrollmentUnavailable } from '../catalog/catalog.view'
 import type { CourseStanding } from '../catalog/catalog.view'
 import { ClassOffer } from '../catalog/ClassOffer'
 import { CourseCover } from '../catalog/CourseCover'
@@ -63,7 +66,10 @@ export function CatalogCoursePage() {
   const enrollIntent = intentFor === courseId
   const classesRef = useRef<HTMLDivElement>(null)
   const scrolledFor = useRef<string | null>(null)
-  const confirming = useRef(false)
+  // The confirmation on screen, if any: one at a time, and it never outlives this course's page.
+  const confirmation = useRef<{ destroy: () => void } | null>(null)
+  // The course whose arrival was already answered: a re-read or a language change never asks again.
+  const autoConfirmedFor = useRef<string | null>(null)
 
   // A reload or a copied link does not repeat the intent.
   useEffect(() => {
@@ -86,6 +92,72 @@ export function CatalogCoursePage() {
     const node = classesRef.current
     if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [enrollIntent, courseShown, courseId])
+
+  async function enroll(klass: CatalogClass) {
+    const className = localizedLabel(klass.name, language)
+    setIntentFor(null)
+    setBusyClassId(klass.id)
+    setOutcome(null)
+    setFailureKey(null)
+    setFailedClassId(null)
+    try {
+      const result = await enrollInClass(klass.id)
+      setOutcome({ result, className })
+    } catch (caught: unknown) {
+      setFailureKey(catalogFailureKey(caught))
+      setFailedClassId(klass.id)
+    } finally {
+      setBusyClassId(null)
+      // What shows next is always the server's: the course is read again, and its classes card — where the answer is
+      // said — comes into view (on a phone the pressed button sits below it).
+      reload()
+      const node = classesRef.current
+      if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
+  function confirmEnroll(detail: CatalogCourseDetail, klass: CatalogClass, autoFocusButton: 'ok' | 'cancel' = 'ok') {
+    // PORTAL-04: one confirmation at a time — a second press while it is open, or while a request runs, sends nothing.
+    if (confirmation.current !== null || busyClassId !== null) return
+    const className = localizedLabel(klass.name, language)
+    const paid = detail.pricing === 'paid'
+    const release = () => {
+      if (confirmation.current === handle) confirmation.current = null
+    }
+    const handle: { destroy: () => void } = modal.confirm({
+      title: t(paid ? 'catalog.confirm.paidTitle' : 'catalog.confirm.freeTitle'),
+      content: paid ? t('catalog.confirm.paidContent', { price: priceText(detail, language) ?? '' }) : t('catalog.confirm.freeContent', { className }),
+      okText: t(paid ? 'catalog.confirm.paidOk' : 'catalog.confirm.freeOk'),
+      cancelText: t('catalog.confirm.cancel'),
+      focusable: { autoFocusButton },
+      onOk: () => enroll(klass),
+      onCancel: release,
+      afterClose: release,
+    })
+    confirmation.current = handle
+  }
+
+  // One class takes the learner who pressed subscribe: ask them to confirm it. Decided once per arrival, on the first
+  // read of the course — a later read never brings the question back, and only the learner's own press sends anything.
+  const offerOnlyClass = useEffectEvent((detail: CatalogCourseDetail) => {
+    const only = autoConfirmClass(detail)
+    // The focus starts on «تراجع»: an Enter held or repeated from the subscribe button must not confirm an unread dialog.
+    if (only) confirmEnroll(detail, only, 'cancel')
+  })
+  useEffect(() => {
+    if (!enrollIntent || !course || autoConfirmedFor.current === courseId) return
+    autoConfirmedFor.current = courseId
+    offerOnlyClass(course)
+  }, [enrollIntent, course, courseId])
+
+  // Leaving the course closes its question: a confirmation must not stay open over another page.
+  useEffect(
+    () => () => {
+      confirmation.current?.destroy()
+      confirmation.current = null
+    },
+    [courseId],
+  )
 
   const back = (
     <Button icon={<ArrowRightOutlined />} onClick={() => navigate('/catalog')}>
@@ -150,47 +222,7 @@ export function CatalogCoursePage() {
   const outcomeResolved = outcomeUnknown && !loading && course.classes.some((klass) => klass.id === failedClassId && klass.myEnrollment !== null)
   // «اختر الفصل…» only when there is a class to choose: with none, the reason shows instead (unavailable / self-service).
   const chooseNotice = highlightClasses && standing === null && enrollable.length > 0
-
-  async function enroll(klass: CatalogClass) {
-    const className = localizedLabel(klass.name, language)
-    setIntentFor(null)
-    setBusyClassId(klass.id)
-    setOutcome(null)
-    setFailureKey(null)
-    setFailedClassId(null)
-    try {
-      const result = await enrollInClass(klass.id)
-      setOutcome({ result, className })
-    } catch (caught: unknown) {
-      setFailureKey(catalogFailureKey(caught))
-      setFailedClassId(klass.id)
-    } finally {
-      setBusyClassId(null)
-      // What shows next is always the server's: the course is read again, and its classes card — where the answer is
-      // said — comes into view (on a phone the pressed button sits below it).
-      reload()
-      const node = classesRef.current
-      if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
-
-  function confirmEnroll(klass: CatalogClass) {
-    // PORTAL-04: one confirmation at a time — a second press while it is open, or while a request runs, sends nothing.
-    if (confirming.current || busyClassId !== null) return
-    confirming.current = true
-    const className = localizedLabel(klass.name, language)
-    const paid = course!.pricing === 'paid'
-    modal.confirm({
-      title: t(paid ? 'catalog.confirm.paidTitle' : 'catalog.confirm.freeTitle'),
-      content: paid ? t('catalog.confirm.paidContent', { price: price ?? '' }) : t('catalog.confirm.freeContent', { className }),
-      okText: t(paid ? 'catalog.confirm.paidOk' : 'catalog.confirm.freeOk'),
-      cancelText: t('catalog.confirm.cancel'),
-      onOk: () => enroll(klass),
-      afterClose: () => {
-        confirming.current = false
-      },
-    })
-  }
+  const oneClass = enrollable.length === 1
 
   const facts: DescriptionsProps['items'] = []
   if (course.level) facts.push({ key: 'level', label: t('catalog.card.level'), children: localizedLabel(course.level.name, language) })
@@ -290,8 +322,8 @@ export function CatalogCoursePage() {
                     type="info"
                     showIcon
                     data-testid="catalog-intent-notice"
-                    title={t('catalog.detail.intentNotice')}
-                    description={t('catalog.detail.intentHint')}
+                    title={t(oneClass ? 'catalog.detail.intentNoticeOne' : 'catalog.detail.intentNotice')}
+                    description={t(oneClass ? 'catalog.detail.intentHintOne' : 'catalog.detail.intentHint')}
                     closable
                     onClose={() => setIntentFor(null)}
                   />
@@ -391,7 +423,7 @@ export function CatalogCoursePage() {
                     recommended={klass.id === recommendedId}
                     busy={busyClassId === klass.id}
                     disabled={busyClassId !== null}
-                    onEnroll={confirmEnroll}
+                    onEnroll={(picked) => confirmEnroll(course, picked)}
                   />
                 ))}
               </Flex>

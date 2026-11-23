@@ -19,6 +19,7 @@ import { useCatalogList } from '../catalog/useCatalogList'
 import { PageHeader } from '../components/PageHeader'
 import { useLevels } from '../courses/useLevels'
 import { useLocalized } from '../i18n/useLocalized'
+import { enrollIntentPath } from '../publicCatalog/publicCatalog.view'
 import { localizedLabel } from '../users/users.format'
 
 const SKELETON_CARDS = 4
@@ -46,6 +47,7 @@ export function CatalogPage() {
     setFilters({ q: undefined, pricing: undefined, levelId: undefined, available: undefined })
   }
   const open = (courseId: string) => navigate(`/catalog/${courseId}`)
+  const enroll = (courseId: string) => navigate(enrollIntentPath(courseId))
   const firstLoad = list.loading && list.items.length === 0 && !list.error
 
   return (
@@ -134,7 +136,7 @@ export function CatalogPage() {
         <Row gutter={[16, 16]} aria-busy={list.loading}>
           {list.items.map((card) => (
             <Col key={card.id} xs={24} sm={12} lg={8} xl={6}>
-              <CourseCard card={card} onOpen={open} />
+              <CourseCard card={card} onOpen={open} onEnroll={enroll} />
             </Col>
           ))}
         </Row>

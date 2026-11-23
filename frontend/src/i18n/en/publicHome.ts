@@ -43,6 +43,7 @@ export const publicHome: typeof arPublicHome = {
     label: 'Our programs',
     title: 'Explore Our Learning Programs',
     subtitle: 'From the academy’s published programs: their content, length and fees.',
+    noneJoinable: 'None of these programs is taking new enrollments right now; you can still read about their content, length and fees.',
     all: 'All programs',
     emptyTitle: 'No programs yet',
     empty: 'No program is published yet.',

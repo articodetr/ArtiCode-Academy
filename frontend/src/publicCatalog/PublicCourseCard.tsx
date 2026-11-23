@@ -30,7 +30,7 @@ import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { PublicCardActions } from './PublicCardActions'
 import { PublicPriceText } from './PublicPriceTag'
-import { availabilityOf, placeholderTintOf } from './publicCatalog.view'
+import { availabilityOf, availabilityPillKey, placeholderTintOf } from './publicCatalog.view'
 
 export function Fact({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
@@ -108,7 +108,7 @@ export function PublicCourseCard({ card, href, headingLevel = 3 }: { card: Publi
         {availability !== 'priceUnavailable' ? (
           <div className={`public-card__availability public-card__availability--${availability}`}>
             <span className="public-card__dot" aria-hidden="true" />
-            {t(`publicCatalog.card.${availability}`)}
+            {t(availabilityPillKey(availability))}
           </div>
         ) : null}
       </div>

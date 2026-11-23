@@ -2,8 +2,10 @@
 // fails), the level badge on it, and the price at its foot. The link behaviour is covered by the catalog and home pages.
 import { fireEvent, screen, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
+import { en } from '../i18n/en'
 import { makePublicCard } from '../test/publicCatalog'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { PublicCourseCard } from './PublicCourseCard'
@@ -62,6 +64,34 @@ describe('PublicCourseCard', () => {
     const preview = renderCard({}, null)
     expect(preview.queryByRole('link')).not.toBeInTheDocument()
     expect(preview.queryByText(pc.list.details)).not.toBeInTheDocument()
+  })
+
+  describe('a course with no class open', () => {
+    afterEach(async () => {
+      await i18n.changeLanguage('ar')
+    })
+    const soon = { openClasses: 0, hasFreeSeat: false }
+
+    it('reads «قريبًا» with no subscribe button, and can still be opened', () => {
+      const card = renderCard(soon)
+      expect(card.getByText('قريبًا')).toHaveClass('public-card__availability--closed')
+      expect(card.queryByText(pc.card.closed)).not.toBeInTheDocument()
+      expect(screen.queryByTestId(`public-subscribe-${makePublicCard().id}`)).not.toBeInTheDocument()
+      expect(card.getByText(pc.list.details)).toBeInTheDocument()
+    })
+
+    it('reads "Coming soon" in English', async () => {
+      await i18n.changeLanguage('en')
+      const card = renderCard(soon)
+      expect(card.getByText('Coming soon')).toBeInTheDocument()
+      expect(card.queryByText(en.publicCatalog.card.closed)).not.toBeInTheDocument()
+    })
+
+    it('leaves «full» with its own words', () => {
+      const card = renderCard({ hasFreeSeat: false })
+      expect(card.getByText(pc.card.full)).toBeInTheDocument()
+      expect(card.queryByText(pc.card.comingSoon)).not.toBeInTheDocument()
+    })
   })
 
   describe('the subscribe button beside «التفاصيل»', () => {

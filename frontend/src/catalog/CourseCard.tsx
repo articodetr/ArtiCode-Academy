@@ -2,7 +2,8 @@
 // it — cover, name, summary, level, duration, sessions, price, the classes
 // open to self-service and how many have a seat, the lead teachers by name,
 // and the reader's own enrollment or pending request. Both buttons lead to the
-// course page: a class is chosen there.
+// course page: «التفاصيل» only opens it, while the enroll button carries the
+// intent, so the page asks for the confirmation when one class takes the reader.
 import { Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -13,7 +14,7 @@ import { displayNameOf, localizedLabel } from '../users/users.format'
 import { AVAILABILITY_COLORS, cardAvailability, coverSrc } from './catalog.view'
 import { CourseCover } from './CourseCover'
 
-export function CourseCard({ card, onOpen }: { card: CatalogCourseCard; onOpen: (courseId: string) => void }) {
+export function CourseCard({ card, onOpen, onEnroll }: { card: CatalogCourseCard; onOpen: (courseId: string) => void; onEnroll: (courseId: string) => void }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const availability = cardAvailability(card)
@@ -40,7 +41,7 @@ export function CourseCard({ card, onOpen }: { card: CatalogCourseCard; onOpen: 
         </Button>,
         ...(offersEnroll
           ? [
-              <Button key="enroll" type="primary" onClick={() => onOpen(card.id)}>
+              <Button key="enroll" type="primary" onClick={() => onEnroll(card.id)}>
                 {t(card.pricing === 'paid' ? 'catalog.card.request' : 'catalog.card.enroll')}
               </Button>,
             ]
