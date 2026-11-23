@@ -17,7 +17,7 @@ import { REPORT_KEYS, getReportsOverview } from '../../api/reports'
 import type { ReportsOverview } from '../../api/reports'
 import { useAuth } from '../../auth/auth-context'
 import { academyTimeZoneOf } from '../../common/timeZone'
-import { ServerStatusCard } from '../../components/ServerStatusCard'
+import { SERVER_STATUS_PERMISSION, ServerStatusCard } from '../../components/ServerStatusCard'
 import { useLocalized } from '../../i18n/useLocalized'
 import { canAccess } from '../../layout/navigation'
 import { addDays, calendarDateIn } from '../../timetable/timetable.dates'
@@ -112,7 +112,7 @@ export function AdminDashboardHome() {
         <AdminRecentNotifications loaded={notifications} canOpenAll={user !== null && canAccess(user, 'notifications')} />
       </div>
 
-      <ServerStatusCard />
+      {hasPermission(SERVER_STATUS_PERMISSION) ? <ServerStatusCard /> : null}
     </div>
   )
 }

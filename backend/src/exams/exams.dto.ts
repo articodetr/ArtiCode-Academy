@@ -463,7 +463,7 @@ export class ExamDto {
   @ApiProperty({ type: ExamResultCountsDto })
   results: ExamResultCountsDto;
 
-  @ApiProperty({ example: 18, description: 'Active enrollments of the class' })
+  @ApiProperty({ example: 18, description: 'Active and completed enrollments of the class' })
   activeStudents: number;
 
   @ApiProperty({ description: 'ISO 8601' })
