@@ -27,6 +27,7 @@ import { fileNameOf, isHttpsUrl, vimeoEmbedUrl, youtubeEmbedUrl } from './learn.
 import { LiveSessions } from './LiveSessions'
 import { MediaPlayer } from './MediaPlayer'
 import { PlainText } from './PlainText'
+import { YouTubeLesson } from './YouTubeLesson'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -46,9 +47,11 @@ export interface LessonContentProps {
   onPlayback: (result: PlaybackResult) => void
   /** False in the author's preview: a medium plays, nothing is saved (D-R144). */
   trackPlayback?: boolean
+  /** Completes a lesson on the server (API-234): a YouTube video calls it once the learner has watched the academy's share (J-F64). Absent in the preview. */
+  onComplete?: (itemId: string) => Promise<void>
 }
 
-export function LessonContent({ item, onPlayback, trackPlayback = true }: LessonContentProps) {
+export function LessonContent({ item, onPlayback, trackPlayback = true, onComplete }: LessonContentProps) {
   const tracked = trackPlayback && item.completionMode === 'playback'
   const { language } = useLocalized()
   const content: unknown = item.content
@@ -68,7 +71,16 @@ export function LessonContent({ item, onPlayback, trackPlayback = true }: Lesson
       return text.trim() ? <PlainText text={text} className="learn-text--lesson" /> : <Unavailable />
     }
     case 'video':
-      return <VideoView item={item} content={content as unknown as VideoContent} title={title} tracked={tracked} onPlayback={onPlayback} />
+      return (
+        <VideoView
+          item={item}
+          content={content as unknown as VideoContent}
+          title={title}
+          tracked={tracked}
+          onPlayback={onPlayback}
+          onComplete={trackPlayback ? onComplete : undefined}
+        />
+      )
     case 'audio': {
       const audio = content as unknown as AudioContent
       if (!isHttpsUrl(audio.url)) return <Unavailable />
@@ -101,12 +113,14 @@ function VideoView({
   title,
   tracked,
   onPlayback,
+  onComplete,
 }: {
   item: LearningItem
   content: VideoContent
   title: string
   tracked: boolean
   onPlayback: (result: PlaybackResult) => void
+  onComplete?: (itemId: string) => Promise<void>
 }) {
   const { t } = useTranslation()
   if (content.provider === 'file') {
@@ -126,6 +140,9 @@ function VideoView({
   }
   const videoId = typeof content.videoId === 'string' ? content.videoId : ''
   if ((content.provider !== 'youtube' && content.provider !== 'vimeo') || !videoId) return <Unavailable />
+  if (content.provider === 'youtube' && onComplete && item.completionMode === 'manual') {
+    return <YouTubeLesson item={item} videoId={videoId} watchUrl={content.url} title={title} onComplete={onComplete} />
+  }
   const src = content.provider === 'youtube' ? youtubeEmbedUrl(videoId) : vimeoEmbedUrl(videoId)
   return (
     <div className="learn-media">

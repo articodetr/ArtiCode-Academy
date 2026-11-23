@@ -87,6 +87,17 @@ export const learn = {
     imageError: 'تعذّر عرض الصورة حالياً.',
     speed: 'سرعة التشغيل',
     embedNote: 'لا تُقاس مشاهدة هذا الفيديو: بعد مشاهدته اضغط «تحديد كمكتمل».',
+    // J-F64: how much of a YouTube lesson the learner has watched (kept on this device; completion is the server's).
+    watch: {
+      label: 'نسبة المشاهدة',
+      notStarted: 'شغّل الفيديو ليظهر كم شاهدت منه.',
+      percent: 'شاهدت {{percent}}٪',
+      of: 'من',
+      done: 'اكتمل هذا الدرس',
+      rule: 'يكتمل الدرس تلقائياً بعد مشاهدة {{percent}}٪ منه. تُحفظ نسبة المشاهدة على هذا الجهاز.',
+      blocked: 'تعذّر تشغيل هذا الفيديو داخل المنصة.',
+      openOnYouTube: 'مشاهدة على YouTube',
+    },
     documentTitle: 'مستند الدرس',
     documentHint: 'يفتح المستند في نافذة جديدة.',
     openDocument: 'فتح المستند',

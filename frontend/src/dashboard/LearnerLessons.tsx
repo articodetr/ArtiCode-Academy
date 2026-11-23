@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import type { MyLessonItem } from '../api/myLessons'
 import { ATTENDANCE_STATUS_COLORS } from '../attendance/attendance.format'
 import { useLocalized } from '../i18n/useLocalized'
+import { SESSIONS_PATH } from '../learn/hub/hub.view'
 import { formatLessonTimes } from '../lessons/lessons.format'
 import { useIsPhone } from '../mySchool/useMyLearning'
 import { labelIn, wallDate } from './dashboard.data'
@@ -65,7 +66,7 @@ export function LessonsPanel({ lessons, day, showStudent, studentName }: Lessons
   const { t, language, localized, dayLabel, meta } = useLessonText(day, showStudent, studentName)
   const phone = useIsPhone()
   return (
-    <Panel title={t('dashboard.learner.lessons')} extra={<Link to="/my-lessons">{t('dashboard.learner.allLessons')}</Link>}>
+    <Panel title={t('dashboard.learner.lessons')} extra={<Link to={SESSIONS_PATH}>{t('dashboard.learner.allLessons')}</Link>}>
       <Loading loaded={lessons}>
         {(items) => {
           const board = lessonBoardOf(items, day.now, day.zone, phone ? LESSON_ROWS_PHONE : LESSON_ROWS_MAX)
@@ -122,7 +123,7 @@ export function LessonsPanel({ lessons, day, showStudent, studentName }: Lessons
                 </ol>
               ) : null}
               {board.hidden > 0 ? (
-                <Link className="lh-more-link" to="/my-lessons">
+                <Link className="lh-more-link" to={SESSIONS_PATH}>
                   {t('dashboard.learner.more', { count: board.hidden })}
                 </Link>
               ) : null}
