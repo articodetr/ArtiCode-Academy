@@ -253,20 +253,48 @@ export const publicCatalog = {
   header: {
     home: 'دورات الأكاديمية',
     signIn: 'تسجيل الدخول',
-    // No self-registration exists (accounts come by invitation): this line stands where a «register» button would.
-    accountsNote: 'الحسابات تُنشأ من إدارة الأكاديمية',
+    // PORTAL-04 (#208): the main links of the public pages and the action of a signed-in viewer.
+    navLabel: 'التنقل الرئيسي',
+    // After a failed read of API-205: a neutral name — never the product's (the public pages are the academy's site).
+    academyFallback: 'الأكاديمية',
+    homeLink: 'الرئيسية',
+    programsLink: 'البرامج',
+    mySchool: 'مدرستي',
+    dashboard: 'لوحة التحكم',
   },
+  footer: {
+    navLabel: 'روابط الأكاديمية',
+    verifyCertificate: 'التحقق من شهادة',
+    copyright: '© {{year}} {{name}}',
+  },
+  // PORTAL-04 PR-2: /explore speaks of «البرامج» like the header and /home.
   list: {
-    title: 'الدورات',
-    subtitle: 'تصفّح الدورات المنشورة في الأكاديمية: نبذتها ومحتواها ورسومها. للتسجيل في دورة سجّل الدخول بحسابك.',
-    searchLabel: 'بحث في الدورات',
-    searchPlaceholder: 'ابحث باسم الدورة أو رمزها',
-    empty: 'لا توجد دورات منشورة بعد.',
-    emptyFiltered: 'لا توجد دورة تطابق البحث.',
+    title: 'استكشف البرامج التعليمية',
+    // The tab: «البرامج — {academy}».
+    tabTitle: 'البرامج',
+    subtitle: 'تصفّح البرامج المنشورة في الأكاديمية: نبذة كل برنامج ومحتواه ورسومه. للتسجيل في برنامج سجّل الدخول بحسابك.',
+    metaDescriptionNamed: '{{name}} — البرامج التعليمية المنشورة: نبذة كل برنامج ومحتواه ورسومه.',
+    metaDescription: 'البرامج التعليمية المنشورة: نبذة كل برنامج ومحتواه ورسومه.',
+    breadcrumbLabel: 'مسار التنقل',
+    searchLabel: 'ابحث في البرامج',
+    searchPlaceholder: 'ابحث باسم البرنامج أو رمزه',
+    allResults: 'جميع البرامج',
+    resultsFor: 'نتائج البحث عن «{{q}}»',
+    // How many programs the complete list holds (shown once the last page is on screen).
+    count: 'لا برامج',
+    count_one: 'برنامج واحد',
+    count_two: 'برنامجان',
+    count_few: '{{count}} برامج',
+    count_many: '{{count}} برنامجاً',
+    count_other: '{{count}} برنامج',
+    emptyTitle: 'لا توجد برامج بعد',
+    empty: 'لا توجد برامج منشورة بعد.',
+    emptyFilteredTitle: 'لا نتائج مطابقة',
+    emptyFiltered: 'لا يوجد برنامج يطابق البحث. جرّب كلمة أخرى أو امسح البحث.',
     clearSearch: 'مسح البحث',
-    more: 'المزيد',
-    loadError: 'تعذّر تحميل الدورات.',
-    moreError: 'تعذّر تحميل المزيد من الدورات.',
+    more: 'عرض المزيد',
+    loadError: 'تعذّر تحميل البرامج.',
+    moreError: 'تعذّر تحميل المزيد من البرامج.',
     retry: 'إعادة المحاولة',
     details: 'التفاصيل',
   },
@@ -332,6 +360,15 @@ export const publicCatalog = {
     enrollTitle: 'التسجيل في الدورة',
     enroll: 'سجّل في هذه الدورة',
     enrollNote: 'سجّل الدخول بحسابك لتختار الفصل وتؤكد التسجيل. لا يُنشأ حساب جديد من هنا: الحسابات تُنشأ من إدارة الأكاديمية.',
+    // PORTAL-04 PR-2 (MOD-19): a paid course becomes a request with an invoice, activated after payment and approval.
+    paidNote: 'دورة مدفوعة: بعد اختيار الفصل يُنشأ طلب التحاق وفاتورة، ويُفعَّل التحاقك بعد الدفع وموافقة الأكاديمية.',
+    // PORTAL-04 PR-2: no way to enroll now, in the order of the server's refusals (publicEnrollStateOf()).
+    notEnrollableTitle: 'التسجيل غير متاح حالياً',
+    notEnrollable: {
+      not_open: 'لا يوجد فصل مفتوح للتسجيل في هذه الدورة الآن. يمكنك قراءة تفاصيلها ومحتواها والعودة حين يُفتح فصل.',
+      class_full: 'الفصول المفتوحة لهذه الدورة ممتلئة الآن. يمكنك قراءة تفاصيلها ومحتواها والعودة حين يتوفر مقعد.',
+      price_unavailable: 'سعر هذه الدورة غير متاح حالياً، فلا يمكن طلب التسجيل فيها الآن.',
+    },
   },
   kinds: {
     text: 'نص',

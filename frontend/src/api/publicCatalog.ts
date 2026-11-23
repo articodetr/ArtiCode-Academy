@@ -38,7 +38,7 @@ export interface PublicCourseCard {
   price: PublicCatalogPrice | null
   /** Classes open to self-service now. */
   openClasses: number
-  /** One of them still has a seat. */
+  /** One of them still has a seat AND, for a paid course, the plan can price a request (`courseOfferOf()` on the server) — false for every paid course whose `price` is null. */
   hasFreeSeat: boolean
   /** Published lessons. */
   lessonCount: number

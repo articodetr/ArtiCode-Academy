@@ -61,8 +61,29 @@ export const catalog: typeof arCatalog = {
     noClasses: 'No class of this course is open for enrollment.',
     // MOD-20 (D-R138): the visitor chose “Enroll in this course” on the public page and signed in.
     intentNotice: 'Choose the class you want to enroll in',
+    // PORTAL-04: no answer or a server error while enrolling — the outcome is unknown until the course is read again.
+    enrollUnknown: 'No sure answer came back, so the enrollment may or may not have gone through. Reload the course to see where you stand before trying again.',
+    reloadCourse: 'Reload the course',
+    intentHint: 'Check the class times and seats, then press its button; you are asked to confirm before anything is enrolled.',
+    // PORTAL-04: the reader's own place in the course (an enrollment or a request in one of its classes).
+    mine: {
+      studyingTitle: 'You are enrolled in this course',
+      studyingText: 'Your class: “{{className}}”. Go on with your lessons in the learning space.',
+      continue: 'Continue learning',
+      completedTitle: 'You completed this course',
+      completedText: 'Your class: “{{className}}”. You can review its lessons in the learning space.',
+      review: 'Review the course',
+      pendingTitle: 'You have an enrollment request for this course',
+      pendingText: 'Class “{{className}}”:',
+      requests: 'My requests',
+      mySchool: 'My School',
+    },
   },
   class: {
+    // PORTAL-04: the button of a free class (a paid one keeps “Request enrollment” — catalog.card.request).
+    enroll: 'Join the course',
+    // …and of a paid one: a request, not an enrollment.
+    request: 'Request to join',
     status: 'Class status',
     period: 'Class period',
     teacher: 'Teacher',
@@ -91,20 +112,28 @@ export const catalog: typeof arCatalog = {
     not_a_student: 'Self-service enrollment is for students. You can browse the courses; the student or the office enrolls.',
   },
   confirm: {
-    freeTitle: 'Confirm the enrollment',
-    freeContent: 'Your enrollment in the class “{{className}}” becomes active at once and its lessons show on your pages.',
-    paidTitle: 'Confirm the enrollment request',
-    paidContent: 'An invoice of {{price}} will be issued to you. The enrollment becomes active only once the payment is confirmed and the academy approves it.',
+    freeTitle: 'Confirm joining the course',
+    freeContent: 'Your enrollment in the class “{{className}}” becomes active as soon as you confirm, and the course shows in “My School”.',
+    freeOk: 'Confirm and join',
+    paidTitle: 'Confirm the request to join',
+    paidContent: 'An invoice of {{price}} will be issued to you, to pay at the academy. Sending the request does not start your studies: the enrollment becomes active and the lessons open only once the payment is confirmed and the academy approves it.',
+    paidOk: 'Send the request',
     ok: 'Confirm',
     cancel: 'Go back',
   },
   result: {
     enrolledTitle: 'You are enrolled',
     enrolledContent: 'Your enrollment in the class “{{className}}” is active.',
-    requestedTitle: 'Enrollment request sent',
+    requestedTitle: 'Request to join sent',
+    // PORTAL-04: the state of the request the server answered, and where to follow it.
+    requestState: 'Request state:',
+    myRequests: 'My requests',
     requestedContent: 'Invoice {{number}} was issued for {{total}}. Pay the fees at the academy; the enrollment becomes active once the payment is confirmed and the office approves it.',
     myCourses: 'My School',
     myLessons: 'My lessons',
+    // PORTAL-04: after an active enrollment.
+    startLearning: 'Start learning',
+    goToMySchool: 'Go to My School',
     invoices: 'My invoices',
   },
   states: {

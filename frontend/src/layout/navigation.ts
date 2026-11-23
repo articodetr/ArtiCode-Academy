@@ -19,6 +19,7 @@ import {
   PercentageOutlined,
   PlayCircleOutlined,
   PlaySquareOutlined,
+  QuestionCircleOutlined,
   ReadOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
@@ -178,6 +179,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
     exceptRoleKeysOnly: ['student', 'guardian'],
     module: 'MOD-09',
   },
+  // MOD-09 phase 2 (roadmap §4r): the question banks (API-260..API-269) — every route needs `questions.manage`, which the
+  // seed gives teachers and admins and no learner; the server decides which banks each of them sees (D-R162).
+  { key: 'questionBanks', path: '/question-banks', labelKey: 'nav.questionBanks', icon: createElement(QuestionCircleOutlined), permissions: ['questions.manage'], module: 'MOD-09' },
   // MOD-10 (J-F51): the certificates API is real — the list, the details and a class's preview open with
   // `certificates.read_all` OR `certificates.issue` (D-R57: staff issue without read_all), so either key shows the entry.
   // No learner holds either by seed (they read theirs in «my certificates»), so nobody is excepted; teachers hold none.
@@ -252,7 +256,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
   { key: 'academy', labelKey: 'nav.groups.academy', items: ['users', 'enrollmentRequests'] },
   { key: 'mine', labelKey: 'nav.groups.mine', items: ['myClasses', 'catalog', 'mySchool', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates'] },
   { key: 'academics', labelKey: 'nav.groups.academics', items: ['courses', 'classes', 'lessons', 'schedule'] },
-  { key: 'assessment', labelKey: 'nav.groups.assessment', items: ['assignments', 'exams', 'certificates'] },
+  { key: 'assessment', labelKey: 'nav.groups.assessment', items: ['assignments', 'exams', 'questionBanks', 'certificates'] },
   { key: 'finance', labelKey: 'nav.groups.finance', items: ['payments'] },
   { key: 'followUp', labelKey: 'nav.groups.followUp', items: ['reports', 'notifications'] },
   { key: 'system', labelKey: 'nav.groups.system', items: ['settings', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit'] },

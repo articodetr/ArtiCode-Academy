@@ -6,8 +6,11 @@
 // the zone the server will give the new exam (exams.zone.ts — the chosen
 // lesson's, else the academy's), named in the hint when it is not this
 // device's. A server error that names a field (closed class, lesson of another
-// class, pass score above the maximum) is shown on that field; anything else
-// above the form.
+// class, pass score above the maximum, a window that closes before it opens)
+// is shown on that field; anything else above the form.
+// MOD-09 phase 2: the form starts as a manual exam (NEW_EXAM_FORM_VALUES) and
+// may be switched to an online one, whose body then carries `delivery` and its
+// settings; a manual exam's body is what it always was (exams.form.ts).
 import { Alert, Form, Modal } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,7 +18,7 @@ import { createExam } from '../api/exams'
 import type { Exam } from '../api/exams'
 import { ExamFormFields } from './ExamFormFields'
 import { describeExamsFailure, failureMessage } from './exams.errors'
-import { buildCreateExamInput } from './exams.form'
+import { NEW_EXAM_FORM_VALUES, buildCreateExamInput } from './exams.form'
 import type { ExamFormValues } from './exams.form'
 import { useExamFormContext } from './useExamFormContext'
 
@@ -94,7 +97,7 @@ function CreateExamBody({ onSaving, onReady, onCreated }: CreateExamBodyProps) {
   return (
     <>
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
-      <Form form={form} layout="vertical" requiredMark={false} onFinish={(values) => void submit(values as ExamFormValues)} disabled={saving}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={NEW_EXAM_FORM_VALUES} onFinish={(values) => void submit(values as ExamFormValues)} disabled={saving}>
         <ExamFormFields
           form={form}
           mode="create"

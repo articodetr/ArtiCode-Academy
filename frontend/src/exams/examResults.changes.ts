@@ -8,6 +8,12 @@
 // its `numeric(6,2)` text (planResultsBatch()). Local rules mirror
 // backend/src/exams/exam-results.{dto,changes}.ts; the server decides. Every
 // count on screen is the server's answer — nothing is added up here.
+// Since MOD-09 phase 2 (D-R160) the sheet serves an online exam too: a student
+// who has an attempt (`attemptCount > 0`, of any state) is never recorded here
+// — their result is their attempts', written by the server — so their row is
+// read-only and never part of the PUT, whatever draft it holds (the server
+// refuses the whole batch with `result_from_attempt`). A manual exam's
+// `attemptCount` is always 0, so nothing changes for it.
 import { RESULTS_BATCH_MAX, RESULT_ENROLLMENT_STATUSES, RESULT_FEEDBACK_MAX_LENGTH } from '../api/examResults'
 import type { ExamResultInput, ExamResultItem, ExamResultStatus, RecordExamResultsInput } from '../api/examResults'
 import { isResultScoreValid } from './exams.validation'
@@ -29,6 +35,16 @@ export type ResultDraftProblem = 'score_required' | 'score_invalid' | 'feedback_
 /** True when the student may be recorded: an active or completed enrollment (anyone else is refused with `not_enrolled`). */
 export function isRecordableItem(item: Pick<ExamResultItem, 'enrollmentStatus'>): boolean {
   return item.enrollmentStatus !== null && RESULT_ENROLLMENT_STATUSES.includes(item.enrollmentStatus)
+}
+
+/** True when the student has an attempt at an online exam: their result comes from their attempts (`result_from_attempt` otherwise). */
+export function hasAttempt(item: Pick<ExamResultItem, 'attemptCount'>): boolean {
+  return item.attemptCount > 0
+}
+
+/** True when the sheet may record the student: an active or completed enrollment and no attempt. */
+export function isEditableItem(item: Pick<ExamResultItem, 'enrollmentStatus' | 'attemptCount'>): boolean {
+  return isRecordableItem(item) && !hasAttempt(item)
 }
 
 /** The draft of an untouched row: the server's result, or nothing chosen. */
@@ -68,9 +84,16 @@ export function draftProblem(draft: ResultDraft, maxScore: number): ResultDraftP
   return null
 }
 
-/** The recordable rows whose draft differs from the server's result, in sheet order. */
+/** The rows the sheet may record whose draft differs from the server's result, in sheet order (a row with an attempt never is one). */
 export function changedItems(items: readonly ExamResultItem[], drafts: ResultDrafts): ExamResultItem[] {
-  return items.filter((item) => isRecordableItem(item) && drafts.has(item.student.id) && isDraftChanged(item, drafts.get(item.student.id)!))
+  return items.filter((item) => isEditableItem(item) && drafts.has(item.student.id) && isDraftChanged(item, drafts.get(item.student.id)!))
+}
+
+/** The drafts without those of `studentIds`: rows the server refused for good (`result_from_attempt`), the other changes kept. */
+export function withoutDrafts(drafts: ResultDrafts, studentIds: readonly string[]): Map<string, ResultDraft> {
+  const next = new Map(drafts)
+  for (const studentId of studentIds) next.delete(studentId)
+  return next
 }
 
 /** The whole new state of one student's result: the score with `scored`, the feedback when not blank. */

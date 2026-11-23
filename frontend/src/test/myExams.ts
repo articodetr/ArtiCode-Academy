@@ -2,7 +2,7 @@
 // backend returns them (my-exams.dto.ts). The exam part reuses the J-F45
 // fixture and the students those of J-F11, so the class, course, zone and
 // people are the same everywhere.
-import type { MyExamItem, MyExamList, MyExamResult } from '../api/myExams'
+import type { MyExamItem, MyExamList, MyExamOnline, MyExamResult } from '../api/myExams'
 import { EXAM_LESSON, makeExam } from './exams'
 import { SELF_STUDENT } from './myLessons'
 
@@ -32,6 +32,9 @@ export function makeMyExam(overrides: Partial<MyExamItem> = {}): MyExamItem {
     relation: 'self',
     student: SELF_STUDENT,
     result: null,
+    // A manual exam: no online side (MOD-09 phase 2).
+    delivery: 'manual',
+    online: null,
     ...overrides,
   }
 }
@@ -48,4 +51,34 @@ export function makePublishedMyExam(overrides: Partial<MyExamItem> = {}): MyExam
 
 export function makeMyExamList(items: MyExamItem[], nextCursor: string | null = null): MyExamList {
   return { items, nextCursor }
+}
+
+/**
+ * The online side of an exam for its student at the server's 10:30 (MOD-09 phase 2 — `MyExamOnlineDto`): the window
+ * closes at 12:00 (Asia/Riyadh), three questions, two attempts allowed and none used — so one can start now.
+ */
+export function makeMyExamOnline(overrides: Partial<MyExamOnline> = {}): MyExamOnline {
+  return {
+    closesAt: '2026-11-20T09:00:00.000Z',
+    attemptsAllowed: 2,
+    attemptsUsed: 0,
+    questionCount: 3,
+    resultsRelease: 'on_publish',
+    revealAnswers: false,
+    canStart: true,
+    blocker: null,
+    inProgress: null,
+    attempts: [],
+    serverNow: '2026-11-20T07:30:00.000Z',
+    ...overrides,
+  }
+}
+
+/** An online quiz of PY-101-A as its student sees it: open 10:00–12:00 on 2026-11-20, 30 minutes an attempt, out of 10 (pass 5). */
+export function makeOnlineMyExam(overrides: Partial<MyExamItem> = {}, online: Partial<MyExamOnline> = {}): MyExamItem & { online: MyExamOnline } {
+  return {
+    ...makeMyExam({ title: { ar: 'اختبار قصير: أساسيات بايثون', en: 'Quiz: Python basics' }, type: 'quiz', durationMinutes: 30, maxScore: 10, passScore: 5, ...overrides }),
+    delivery: 'online',
+    online: makeMyExamOnline(online),
+  }
 }

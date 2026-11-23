@@ -12,6 +12,7 @@ import { useAuth } from '../auth/auth-context'
 import type { AuthUser } from '../auth/auth-context'
 import { MfaChallengeStep } from '../auth/MfaChallengeStep'
 import { signInNotice, signInNoticeOf } from '../auth/mfa.signIn'
+import { enrollIntentCourseOf, returnPathOf, signInDestination } from '../auth/returnPath'
 import type { MfaRestartLock, MfaRestartReason, ShownSignInNotice } from '../auth/mfa.signIn'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import './LoginPage.css'
@@ -57,7 +58,11 @@ export function LoginPage() {
   const { status, user, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? '/'
+  // Where the visitor was going (RequireAuth, or «سجّل في هذه الدورة» on the public course page): a path of this site
+  // only — anything else in the router state is ignored (returnPath.ts).
+  const from = returnPathOf(location.state)
+  // The course a visitor chose to enroll in: the page says they come back to it, and nothing enrolls before they confirm.
+  const intentCourse = enrollIntentCourseOf(from)
   const [submitting, setSubmitting] = useState(false)
   const [failure, setFailure] = useState<LoginFailure | null>(null)
   // Two-step verification: the password was right and the second step is still to come. Only the
@@ -76,15 +81,22 @@ export function LoginPage() {
       </div>
     )
   }
-  /** Where a signed-in user belongs: the profile page while the password must be changed, else where they were going. */
-  const destinationOf = (signedIn: AuthUser) => (signedIn.mustChangePassword ? '/profile' : from)
+  /**
+   * Where a signed-in user belongs: the profile page while the password must be changed — carrying where they were
+   * going, so the chosen course survives that step too — else where they were going.
+   */
+  const destinationOf = (signedIn: AuthUser) => signInDestination(signedIn, from)
 
   // Signed in already — or just now: the provider's new state reaches this render before the navigation
   // of `enter()` lands, and whichever redirect comes last wins, so the two must name the same destination.
-  if (status === 'authenticated') return <Navigate to={user ? destinationOf(user) : from} replace />
+  if (status === 'authenticated') {
+    const destination = user ? destinationOf(user) : { path: from ?? '/' }
+    return <Navigate to={destination.path} state={destination.state} replace />
+  }
 
   const enter = (signedIn: AuthUser) => {
-    navigate(destinationOf(signedIn), { replace: true })
+    const destination = destinationOf(signedIn)
+    navigate(destination.path, { replace: true, state: destination.state })
   }
 
   const onFinish = async (values: LoginFormValues) => {
@@ -119,6 +131,26 @@ export function LoginPage() {
           </Typography.Title>
           <Typography.Text type="secondary">{t(challenge ? 'login.mfa.subtitle' : 'login.subtitle')}</Typography.Text>
         </div>
+
+        {/* PORTAL-04, the learner journey: the course chosen on the public page waits behind the sign-in. Its way back
+            leads to the public course page, offered only while the academy opens its catalog to visitors (API-205). */}
+        {intentCourse ? (
+          <Alert
+            type="info"
+            showIcon
+            data-testid="login-enroll-intent"
+            style={{ marginBottom: 16 }}
+            title={t('login.enrollIntent.title')}
+            description={
+              <>
+                <div>{t('login.enrollIntent.text')}</div>
+                {isCatalogPublic(publicAcademy.academy) ? (
+                  <Link to={`/explore/${encodeURIComponent(intentCourse)}`}>{t('login.enrollIntent.back')}</Link>
+                ) : null}
+              </>
+            }
+          />
+        ) : null}
 
         {challenge ? (
           <MfaChallengeStep challenge={challenge} onSuccess={enter} onRestart={restart} />

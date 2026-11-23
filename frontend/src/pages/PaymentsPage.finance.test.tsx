@@ -96,6 +96,13 @@ describe('PaymentsPage — fee plans', () => {
     fireEvent.change(percent, { target: { value: '60' } })
     fireEvent.blur(percent)
 
+    // PORTAL-04: «one class» says such a plan is never the fee of a paid course; the other scopes say nothing.
+    expect(within(dialog).queryByText(ar.payments.feePlans.classScopeHint)).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByText(ar.payments.feePlans.scopes.class))
+    expect(await within(dialog).findByText(ar.payments.feePlans.classScopeHint)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByText(ar.payments.feePlans.scopes.any))
+    await waitFor(() => expect(within(dialog).queryByText(ar.payments.feePlans.classScopeHint)).not.toBeInTheDocument())
+
     fireEvent.click(button(dialog, ar.payments.feePlans.create))
     expect(await within(dialog).findByText('مجموع النسب 60٪ ولا يساوي 100٪.')).toBeInTheDocument()
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(0)

@@ -361,12 +361,19 @@ describe.skipIf(!available)('database schema — MOD-09 exams and grades (e2e, T
         ORDER BY conrelid::regclass::text COLLATE "C", conname::text COLLATE "C"`,
       [[...TABLES]],
     );
+    // Since the seventeenth migration (MOD-09 phase 2, TEST-280) `exams` and
+    // `exam_results` also carry the CHECKs of the online settings: four and one.
     expect(constraints.rows).toEqual([
+      { table_name: 'exam_results', conname: 'ck_exam_results_online_scored', contype: 'c' },
       { table_name: 'exam_results', conname: 'ck_exam_results_score_non_negative', contype: 'c' },
       { table_name: 'exam_results', conname: 'ck_exam_results_score_only_scored', contype: 'c' },
+      { table_name: 'exams', conname: 'ck_exams_attempts_allowed_range', contype: 'c' },
+      { table_name: 'exams', conname: 'ck_exams_closes_after_opens', contype: 'c' },
       { table_name: 'exams', conname: 'ck_exams_description_localized', contype: 'c' },
       { table_name: 'exams', conname: 'ck_exams_duration_range', contype: 'c' },
+      { table_name: 'exams', conname: 'ck_exams_manual_settings', contype: 'c' },
       { table_name: 'exams', conname: 'ck_exams_max_score_positive', contype: 'c' },
+      { table_name: 'exams', conname: 'ck_exams_online_window', contype: 'c' },
       { table_name: 'exams', conname: 'ck_exams_pass_score_range', contype: 'c' },
       { table_name: 'exams', conname: 'ck_exams_published_at', contype: 'c' },
       { table_name: 'exams', conname: 'ck_exams_title_localized', contype: 'c' },

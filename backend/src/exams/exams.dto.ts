@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { IsBoolean, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { IsDecimalNumber } from '../common/decimal-number.js';
 import { AssignmentInstructionsDto, AssignmentLessonDto } from '../assignments/assignments.dto.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
@@ -11,6 +11,8 @@ import { TITLE_QUERY_DESCRIPTION, TITLE_QUERY_MAX_LENGTH } from '../lessons/titl
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { textParam } from '../users/users.validation.js';
+import { EXAM_ATTEMPTS_MAX, EXAM_DELIVERIES, EXAM_READINESS_PROBLEMS, EXAM_RESULTS_RELEASES } from './exams.online.js';
+import type { ExamDeliveryValue, ExamResultsReleaseValue } from './exams.online.js';
 import { EXAM_STATUS_ACTIONS } from './exams.status.js';
 import type { ExamStatusAction } from './exams.status.js';
 
@@ -58,6 +60,11 @@ export class ListExamsQueryDto {
   @IsOptional()
   @IsIn(EXAM_TYPES)
   type?: ExamType;
+
+  @ApiPropertyOptional({ enum: EXAM_DELIVERIES, description: 'Only the exams whose results the teacher records (`manual`) or the ones taken on the platform (`online`)' })
+  @IsOptional()
+  @IsIn(EXAM_DELIVERIES)
+  delivery?: ExamDeliveryValue;
 
   @ApiPropertyOptional({ example: '2026-11-01T00:00:00+03:00', description: 'Exams taking place at or after this instant (ISO 8601 with an offset); undated exams never match' })
   @IsOptional()
@@ -153,6 +160,54 @@ export class CreateExamDto {
   @Min(0)
   @Max(EXAM_WEIGHT_LIMIT)
   weight?: number | null;
+
+  @ApiPropertyOptional({
+    enum: EXAM_DELIVERIES,
+    default: 'manual',
+    description: '`manual` (default): the teacher records the results, as every exam before the online phase · `online`: the learners take it on the platform (D-R150). Changes in a draft only',
+  })
+  // Absent, never null (as the other three settings below): `IsOptional` would let a null through to the database.
+  @ValidateIf((dto: CreateExamDto) => dto.delivery !== undefined)
+  @IsIn(EXAM_DELIVERIES)
+  delivery?: ExamDeliveryValue;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    example: '2026-11-20T12:00:00+03:00',
+    description: 'Online only: when the window closes (ISO 8601 instant with an offset), after `scheduledAt` which opens it (`window_invalid`); `durationMinutes` is the time limit of one attempt (D-R152)',
+  })
+  @IsOptional()
+  @ValidateIf((_dto, value) => value !== null)
+  @IsInstant()
+  closesAt?: string | null;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: EXAM_ATTEMPTS_MAX, default: 1, description: 'Online only: attempts per student (a JSON integer); the highest finished attempt counts (D-R153)' })
+  @ValidateIf((dto: CreateExamDto) => dto.attemptsAllowed !== undefined)
+  @Transform(rawValue)
+  @IsInt()
+  @Min(1)
+  @Max(EXAM_ATTEMPTS_MAX)
+  attemptsAllowed?: number;
+
+  @ApiPropertyOptional({
+    enum: EXAM_RESULTS_RELEASES,
+    default: 'on_publish',
+    description: 'Online only: when a learner sees their own score — `on_publish` (when the teacher publishes the results) or `on_submit` (as soon as their attempt is finished) — D-R156',
+  })
+  @ValidateIf((dto: CreateExamDto) => dto.resultsRelease !== undefined)
+  @IsIn(EXAM_RESULTS_RELEASES)
+  resultsRelease?: ExamResultsReleaseValue;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    default: false,
+    description: 'Online only: a learner may review the correct answers and explanations of their own attempt once their result is visible and the window has closed (a JSON boolean) — D-R157',
+  })
+  @ValidateIf((dto: CreateExamDto) => dto.revealAnswers !== undefined)
+  @Transform(rawValue)
+  @IsBoolean()
+  revealAnswers?: boolean;
 }
 
 /**
@@ -229,6 +284,43 @@ export class UpdateExamDto {
   @Min(0)
   @Max(EXAM_WEIGHT_LIMIT)
   weight?: number | null;
+
+  @ApiPropertyOptional({
+    enum: EXAM_DELIVERIES,
+    description: 'In a draft only (`exam_locked` otherwise). Turning an online draft back to `manual` resets its online settings and unlinks its questions; not nullable',
+  })
+  @ValidateIf((dto: UpdateExamDto) => dto.delivery !== undefined)
+  @IsIn(EXAM_DELIVERIES)
+  delivery?: ExamDeliveryValue;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Online only: ISO 8601 instant with an offset, after `scheduledAt`; null clears it (a draft only). Once somebody has started it only moves later',
+  })
+  @IsOptional()
+  @ValidateIf((_dto, value) => value !== null)
+  @IsInstant()
+  closesAt?: string | null;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: EXAM_ATTEMPTS_MAX, description: 'Online only; once somebody has started it only rises; not nullable' })
+  @Transform(rawValue)
+  @ValidateIf((dto: UpdateExamDto) => dto.attemptsAllowed !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(EXAM_ATTEMPTS_MAX)
+  attemptsAllowed?: number;
+
+  @ApiPropertyOptional({ enum: EXAM_RESULTS_RELEASES, description: 'Online only; not nullable' })
+  @ValidateIf((dto: UpdateExamDto) => dto.resultsRelease !== undefined)
+  @IsIn(EXAM_RESULTS_RELEASES)
+  resultsRelease?: ExamResultsReleaseValue;
+
+  @ApiPropertyOptional({ type: Boolean, description: 'Online only (a JSON boolean); not nullable' })
+  @Transform(rawValue)
+  @ValidateIf((dto: UpdateExamDto) => dto.revealAnswers !== undefined)
+  @IsBoolean()
+  revealAnswers?: boolean;
 }
 
 export class ChangeExamStatusDto {
@@ -267,6 +359,40 @@ export class ExamResultCountsDto {
 
   @ApiProperty({ example: 1 })
   excused: number;
+}
+
+/** The attempts of an online exam by state (computed, never stored). */
+export class ExamAttemptCountsDto {
+  @ApiProperty({ example: 12, description: 'Students with at least one attempt' })
+  students: number;
+
+  @ApiProperty({ example: 2, description: 'Attempts in progress' })
+  inProgress: number;
+
+  @ApiProperty({ example: 11, description: 'Finished attempts (submitted or timed out)' })
+  finished: number;
+}
+
+/** What an online exam adds to the DTO; null for a manual exam. */
+export class ExamOnlineSummaryDto {
+  @ApiProperty({ example: 5, description: 'Linked questions' })
+  questionCount: number;
+
+  @ApiProperty({ example: 10, description: 'The sum of their points — it must equal `maxScore` to make the exam available (D-R159)' })
+  totalPoints: number;
+
+  @ApiProperty({ description: 'True once the questions are frozen: the exam is scheduled or published (D-R158)' })
+  frozen: boolean;
+
+  @ApiProperty({
+    enum: EXAM_READINESS_PROBLEMS,
+    isArray: true,
+    description: 'What would keep `schedule` from making a draft available now; empty when it is ready, and always empty once it is scheduled (computed at the server clock)',
+  })
+  problems: string[];
+
+  @ApiProperty({ type: ExamAttemptCountsDto })
+  attempts: ExamAttemptCountsDto;
 }
 
 export class ExamDto {
@@ -311,6 +437,28 @@ export class ExamDto {
 
   @ApiProperty({ type: String, nullable: true, description: 'ISO 8601; set by `publish`, cleared by `unpublish`' })
   publishedAt: string | null;
+
+  @ApiProperty({ enum: EXAM_DELIVERIES, description: '`manual`: the teacher records the results · `online`: the learners take it on the platform (D-R150)' })
+  delivery: ExamDeliveryValue;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Online only: ISO 8601 (UTC) — when the window closes; `scheduledAt` opens it and `durationMinutes` limits one attempt. Null for a manual exam',
+  })
+  closesAt: string | null;
+
+  @ApiProperty({ example: 1, description: 'Online only: attempts per student; 1 for a manual exam' })
+  attemptsAllowed: number;
+
+  @ApiProperty({ enum: EXAM_RESULTS_RELEASES, description: 'Online only: when a learner sees their own score; `on_publish` for a manual exam' })
+  resultsRelease: ExamResultsReleaseValue;
+
+  @ApiProperty({ description: 'Online only: correct answers and explanations after the window closed, once the result is visible; false for a manual exam' })
+  revealAnswers: boolean;
+
+  @ApiProperty({ type: () => ExamOnlineSummaryDto, nullable: true, description: 'The questions and attempts of an online exam; null for a manual exam' })
+  online: ExamOnlineSummaryDto | null;
 
   @ApiProperty({ type: ExamResultCountsDto })
   results: ExamResultCountsDto;

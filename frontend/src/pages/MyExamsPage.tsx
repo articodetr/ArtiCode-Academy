@@ -16,6 +16,19 @@
 // is the server's. The route opens to the holders of the `student` or
 // `guardian` server role key only (nav entry `myExams`, like «my
 // assignments»).
+//
+// Since MOD-09 phase 2 (roadmap §4r) the row of an ONLINE exam
+// (`delivery: online`, with its `online` side) also shows, inside the same
+// cells: an «إلكتروني» tag; when the exam opens and closes and how long one
+// attempt may take; the number of questions and the attempts used; the action
+// the SERVER's state allows — «متابعة الاختبار» with its time left for the
+// attempt in progress, «ابدأ الاختبار» behind a confirmation of the rules
+// (StartAttemptModal — API-276), or the reason in words (`online.blocker`) —
+// and the student's attempts, each with a link to /take-exam/<id> for the
+// student themselves (a guardian sees the list without links and never
+// starts). Nothing of it is computed from this device's clock, and a result
+// released on submit shows as soon as the server sends it. The row of a manual
+// exam is exactly what it was.
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Descriptions, Flex, Select, Space, Table, Tag, Typography } from 'antd'
 import type { DescriptionsProps, TableProps } from 'antd'
@@ -33,11 +46,13 @@ import { StatusTag } from '../components/StatusTag'
 import { useMyClasses } from '../enrollments/useMyClasses'
 import { describeExamsFailure, failureMessage, isExamsFailure } from '../exams/exams.errors'
 import { RESULT_STATUS_COLORS, examTitle } from '../exams/exams.format'
-import { MY_EXAM_PAGE_SIZES, defaultMyExamsFilters, isNarrowed, myExamKey, resultCellOf } from '../exams/myExams.view'
-import type { MyExamsFilters } from '../exams/myExams.view'
+import { MY_EXAM_PAGE_SIZES, defaultMyExamsFilters, isNarrowed, isOnlineItem, myExamKey, resultCellOf } from '../exams/myExams.view'
+import type { MyExamsFilters, OnlineMyExamItem } from '../exams/myExams.view'
 import { useMyExams } from '../exams/useMyExams'
 import { useLocalized } from '../i18n/useLocalized'
 import { classOptionsOf, showsStudents, studentOptionsOf } from '../lessons/myLessons.view'
+import { OnlineResult, OnlineTake, OnlineWhenCell } from '../takeExam/MyExamOnline'
+import { StartAttemptModal } from '../takeExam/StartAttemptModal'
 import { isCalendarDate } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { displayNameOf, localizedLabel } from '../users/users.format'
@@ -184,9 +199,11 @@ export function MyExamsPage() {
   const showStudent = showsStudents(roleKeys, list.items)
   // The student filter helps whoever owns exams through more than one student (a guardian, or a student who is also one).
   const canPickStudent = students.length > 1 || students.some((student) => student.relation === 'child')
+  // The online exam whose start is being confirmed (MOD-09 phase 2); the row as it was when «ابدأ الاختبار» was pressed.
+  const [starting, setStarting] = useState<OnlineMyExamItem | null>(null)
 
   const columns: TableProps<MyExamItem>['columns'] = [
-    { title: t('myExams.columns.when'), key: 'when', render: (_, row) => <WhenCell item={row} /> },
+    { title: t('myExams.columns.when'), key: 'when', render: (_, row) => (isOnlineItem(row) ? <OnlineWhenCell item={row} /> : <WhenCell item={row} />) },
     {
       title: t('myExams.columns.exam'),
       key: 'exam',
@@ -195,6 +212,11 @@ export function MyExamsPage() {
           <Typography.Text strong>{examTitle(row, language)}</Typography.Text>
           <br />
           <Tag style={{ marginTop: 4 }}>{t(`exams.types.${row.type}`)}</Tag>
+          {isOnlineItem(row) ? (
+            <Tag color="geekblue" style={{ marginTop: 4 }}>
+              {t('takeExam.list.onlineTag')}
+            </Tag>
+          ) : null}
           {row.lesson ? (
             <>
               <br />
@@ -203,6 +225,8 @@ export function MyExamsPage() {
               </Typography.Text>
             </>
           ) : null}
+          {/* The online side: what the server's state allows now — never this device's clock. */}
+          {isOnlineItem(row) ? <OnlineTake item={row} onStart={setStarting} onStale={list.reload} /> : null}
         </span>
       ),
     },
@@ -220,7 +244,11 @@ export function MyExamsPage() {
       ),
     },
     { title: t('myExams.columns.status'), key: 'status', render: (_, row) => <StatusTag value={row.status} /> },
-    { title: t('myExams.columns.result'), key: 'result', render: (_, row) => <ResultCell item={row} /> },
+    {
+      title: t('myExams.columns.result'),
+      key: 'result',
+      render: (_, row) => (isOnlineItem(row) ? <OnlineResult item={row} released={<ResultCell item={row} />} /> : <ResultCell item={row} />),
+    },
   ]
   if (showStudent) {
     columns.splice(1, 0, {
@@ -370,6 +398,9 @@ export function MyExamsPage() {
           </Space>
         </Flex>
       </Card>
+
+      {/* Any refusal of the start means the row is out of date: the list is read again (the dialog words the refusal). */}
+      <StartAttemptModal item={starting} onClose={() => setStarting(null)} onRefused={list.reload} />
     </>
   )
 }

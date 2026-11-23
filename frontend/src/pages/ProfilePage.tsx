@@ -2,11 +2,12 @@ import { LogoutOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Row, Space, Tag, Typography } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { ProfileSessions } from '../profile/ProfileSessions'
 import { changePassword } from '../api/auth'
 import { useAuth } from '../auth/auth-context'
 import { EmailVerificationAction } from '../account/EmailVerificationAction'
+import { enrollIntentCourseOf, returnPathOf } from '../auth/returnPath'
 import { uiRoleFor } from '../auth/roles'
 import { PageHeader } from '../components/PageHeader'
 import { ProfileMfa } from '../profile/ProfileMfa'
@@ -27,6 +28,10 @@ export function ProfilePage() {
   const { message } = App.useApp()
   const { user, logout, logoutAll, reloadUser } = useAuth()
   const navigate = useNavigate()
+  // Where a user sent here to change the password was going (LoginPage — PORTAL-04): a path of this site only. It is
+  // followed once the forced change succeeds, so a course chosen on the public page survives this step too.
+  const location = useLocation()
+  const returnTo = returnPathOf(location.state)
   const [form] = Form.useForm<PasswordFormValues>()
   const [saving, setSaving] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -41,6 +46,8 @@ export function ProfilePage() {
   if (!user) return null
 
   const onChangePassword = async (values: PasswordFormValues) => {
+    // Only the change this page asked for continues to the return path: a voluntary change stays here.
+    const continueTo = user.mustChangePassword ? returnTo : null
     setSaving(true)
     setPasswordError(null)
     try {
@@ -48,6 +55,7 @@ export function ProfilePage() {
       form.resetFields()
       message.success(t('profile.passwordChanged'))
       await reloadUser()
+      if (continueTo) navigate(continueTo, { replace: true })
     } catch (error) {
       const failure = passwordChangeFailure(error)
       setPasswordError(t(failure.key, failure.values))
@@ -88,7 +96,14 @@ export function ProfilePage() {
       />
 
       {user.mustChangePassword ? (
-        <Alert type="warning" showIcon title={t('profile.mustChangePassword')} style={{ marginBottom: 16 }} />
+        <Alert
+          type="warning"
+          showIcon
+          title={t('profile.mustChangePassword')}
+          description={returnTo ? t(enrollIntentCourseOf(returnTo) ? 'profile.returnAfterChange.course' : 'profile.returnAfterChange.page') : undefined}
+          data-testid="profile-must-change"
+          style={{ marginBottom: 16 }}
+        />
       ) : null}
 
       <Row gutter={[16, 16]}>

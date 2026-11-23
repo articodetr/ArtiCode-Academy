@@ -4,6 +4,11 @@ import { mySchool } from './en/mySchool'
 import { learn } from './en/learn'
 import { curriculum, learningProgress, publicCatalog } from './en/curriculum'
 import { enrollmentRequests } from './en/enrollmentRequests'
+import { questionBanks } from './en/questionBanks'
+import { examOnline } from './en/examOnline'
+import { examAttempts } from './en/examAttempts'
+import { takeExam } from './en/takeExam'
+import { publicHome } from './en/publicHome'
 
 export const en: Translation = {
   common: {
@@ -83,6 +88,7 @@ export const en: Translation = {
     myExams: 'My exams',
     myGrades: 'My grades',
     exams: 'Exams & grades',
+    questionBanks: 'Question bank',
     certificates: 'Certificates',
     myCertificates: 'My certificates',
     payments: 'Payments',
@@ -164,6 +170,12 @@ export const en: Translation = {
     passwordRequired: 'Enter your password',
     // MOD-20 (D-R138): shown only while the academy opens its catalog to visitors (API-205 `catalogPublic`).
     browseCourses: 'Browse courses',
+    // PORTAL-04, the learner journey: the visitor chose “Enroll in this course” on the public course page.
+    enrollIntent: {
+      title: 'Sign in to go on enrolling in the course you chose',
+      text: 'After you sign in we take you back to the same course to choose its class and confirm; nothing is enrolled before you confirm. No account is created here: the academy creates the accounts.',
+      back: 'Back to the course',
+    },
     sessionSwitched:
       'Another account signed in from another tab of this browser, so this tab now runs as {{name}}. The last request was not sent. To use two accounts at once, open the second one in a private window or another browser.',
     // The start-up session check could not tell after its retries (AuthProvider, CH-0296): never the sign-in form.
@@ -387,6 +399,11 @@ export const en: Translation = {
     passwordChanged: 'Password changed; your other sessions were signed out.',
     passwordHint: 'Changing the password signs you out on other devices; this session stays.',
     mustChangePassword: 'You must change your password before continuing.',
+    // PORTAL-04: where the forced change continues to (the return path the sign-in carried here).
+    returnAfterChange: {
+      course: 'Once the password is changed we take you back to the course you chose, to choose its class and confirm.',
+      page: 'Once the password is changed we take you back to the page you were going to.',
+    },
     errors: {
       password_invalid: 'The current password is incorrect.',
       password_weak: 'The new password needs at least {{min}} characters and must differ from the current one.',
@@ -942,7 +959,9 @@ export const en: Translation = {
       coverImageUrl: 'A full URL starting with https:// (or http://) of an image published online; no upload. Leave it empty to remove the cover.',
       feePlan: 'An active fee plan of this course, or a general one; the student pays its total, and the enrollment becomes active only once the invoice is paid and the request approved.',
       pricingReadOnly: 'Changing the course type and fees needs the “Manage fee plans” permission.',
-      noFeePlans: 'No active fee plan fits this course; create one on the payments page first.',
+      noFeePlans: 'No active fee plan fits this course. The course fee needs a plan that prices “The classes of a course” for this very course, or “Any class”; a plan for “One class” is not used here. Create a plan, or change what your plan prices, under Payments → Fee plans.',
+      // PORTAL-04: the active plans of one class, named so a plan made for the class instead of the course is recognised.
+      classPlans: 'Plans tied to one class, not usable as the course fee: {{plans}}.',
       feePlansFailed: 'The fee plans could not be loaded.',
     },
     pricing: {
@@ -2830,6 +2849,8 @@ export const en: Translation = {
       nameEn: 'Name in English (optional)',
       nameRequired: 'Write the plan name in Arabic.',
       scope: 'The plan prices',
+      // PORTAL-04: shown while “One class” is chosen.
+      classScopeHint: 'A plan for one class prices that class’s invoices only and cannot be the fee of a paid course; for a course fee choose “The classes of a course” or “Any class”.',
       scopes: {
         any: 'Any class',
         course: 'The classes of a course',
@@ -4233,4 +4254,10 @@ export const en: Translation = {
   curriculum,
   learningProgress,
   publicCatalog,
+  questionBanks,
+  examOnline,
+  examAttempts,
+  takeExam,
+  // PORTAL-04 (#208): the academy's public home page (/home).
+  publicHome,
 }

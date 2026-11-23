@@ -15,6 +15,7 @@ import { MySchoolPage } from '../pages/MySchoolPage'
 import { LearnPage } from '../pages/LearnPage'
 import { LearnPreviewPage } from '../pages/LearnPreviewPage'
 import { PublicCatalogPage } from '../pages/PublicCatalogPage'
+import { PublicHomePage } from '../pages/PublicHomePage'
 import { PublicCoursePage } from '../pages/PublicCoursePage'
 import { CertificatePrintPage } from '../pages/CertificatePrintPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
@@ -34,9 +35,11 @@ import { NotFoundPage } from '../pages/NotFoundPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
 import { PaymentsPage } from '../pages/PaymentsPage'
 import { ProfilePage } from '../pages/ProfilePage'
+import { QuestionBanksPage } from '../pages/QuestionBanksPage'
 import { ReportsPage } from '../pages/ReportsPage'
 import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { TakeExamPage } from '../pages/TakeExamPage'
 import { UsersPage } from '../pages/UsersPage'
 import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
 
@@ -59,6 +62,8 @@ const router = createBrowserRouter([
   { path: '/verify', element: <VerifyCertificatePage /> },
   { path: '/verify/:code', element: <VerifyCertificatePage /> },
   // MOD-20 (D-R138): the public catalog for visitors — the server answers 404 catalog_not_public unless the academy offers it.
+  // PORTAL-04 (#208): the academy's public home page — for visitors and signed-in users alike; `/` stays the dashboard.
+  { path: '/home', element: <PublicHomePage /> },
   { path: '/explore', element: <PublicCatalogPage /> },
   { path: '/explore/:courseId', element: <PublicCoursePage /> },
   // MOD-20: the learning workspace, outside the layout (a focused course player). Signed in; the server opens a course's
@@ -69,6 +74,9 @@ const router = createBrowserRouter([
   { path: '/learn/:courseId/preview', element: <RequireAuth><LearnPreviewPage /></RequireAuth> },
   { path: '/learn/:courseId/preview/:itemId', element: <RequireAuth><LearnPreviewPage /></RequireAuth> },
   { path: '/learn/:courseId/:itemId', element: <RequireAuth><LearnPage /></RequireAuth> },
+  // MOD-09 phase 2 (roadmap §4r): taking an online exam, outside the layout (a focused page with the server's clock).
+  // Signed in; the server answers an attempt to its owner alone (API-277 — anybody else's is 404).
+  { path: '/take-exam/:attemptId', element: <RequireAuth><TakeExamPage /></RequireAuth> },
   // Certificate print pages (J-F51 — D-R50): signed in, outside the layout so neither the screen nor the paper has the
   // menu; API-131 for `certificates.read_all`/`certificates.issue`, API-135 for a student's or a guardian's own.
   { path: '/certificates/:id/print', element: <RequireAuth>{guarded('certificates', <CertificatePrintPage source="academy" />)}</RequireAuth> },
@@ -101,6 +109,7 @@ const router = createBrowserRouter([
       { path: 'my-grades', element: guarded('myGrades', <MyGradesPage />) }, // `student`/`guardian` role keys (J-F50, API-129 — ownership + grades.read_own/read_linked)
       { path: 'my-certificates', element: guarded('myCertificates', <MyCertificatesPage />) }, // `student`/`guardian` role keys (J-F51, API-135 — ownership + read_own/read_linked)
       { path: 'exams', element: guarded('exams', <ExamsPage />) },
+      { path: 'question-banks', element: guarded('questionBanks', <QuestionBanksPage />) }, // MOD-09 phase 2: `questions.manage` (API-260..API-269)
       { path: 'certificates', element: guarded('certificates', <CertificatesPage />) },
       { path: 'payments', element: guarded('payments', <PaymentsPage />) },
       { path: 'notifications', element: guarded('notifications', <NotificationsPage />) },

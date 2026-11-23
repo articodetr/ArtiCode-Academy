@@ -46,11 +46,13 @@ export class ClassExamsController {
     description:
       'A draft exam whose results the teacher records (D-R42): a planned, open or running class (`class_closed` otherwise), a localized title and optional description (4,000 characters per locale), a type, ' +
       'an optional date, duration and lesson of the same class (`lesson_mismatch`), a maximum score, an optional pass score within it (`pass_score_invalid`) and weight. One audit event `exams.created`. ' +
-      'Needs `exams.manage`; the class must be assigned to the caller unless they hold `classes.manage` (404 otherwise).',
+      'Needs `exams.manage`; the class must be assigned to the caller unless they hold `classes.manage` (404 otherwise). ' +
+      'With `delivery: online` the exam is taken on the platform (MOD-09 phase 2): `scheduledAt` opens its window, `closesAt` closes it, `durationMinutes` limits one attempt, and `attemptsAllowed`, `resultsRelease` and `revealAnswers` may come with it; ' +
+      'those four settings are refused on a manual exam (`online_settings_not_allowed`) and the window must close after it opens (`window_invalid`).',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'The class' })
   @ApiCreatedResponse({ type: ExamDto })
-  @ApiBadRequestResponse({ description: 'Validation failed or `pass_score_invalid` — `{ passScore, maxScore }`' })
+  @ApiBadRequestResponse({ description: 'Validation failed | pass_score_invalid — `{ passScore, maxScore }` | online_settings_not_allowed — `{ fields }` | window_invalid — `{ opensAt, closesAt }`' })
   @ApiForbiddenResponse({ type: AuthErrorDto, description: 'permission_denied — `exams.manage`; origin_forbidden' })
   @ApiNotFoundResponse({ description: 'class_not_found | lesson_not_found' })
   @ApiUnprocessableEntityResponse({ description: 'lesson_mismatch — `{ lessonId, classId }`' })
@@ -104,14 +106,16 @@ export class ExamsController {
     summary: 'Update an exam',
     description:
       'PATCH semantics: absent = unchanged, null clears `description`, `lessonId`, `scheduledAt`, `durationMinutes`, `passScore` and `weight`. Only changed fields are written, with one `exams.updated` event; an identical body writes nothing. ' +
-      '`maxScore` is locked once a result exists (`exam_locked`); an exam of a cancelled class is frozen (`class_closed`) — a completed class keeps its exams open. The merged pass score stays within the maximum (`pass_score_invalid`) and a new lesson must belong to the class.',
+      '`maxScore` is locked once a result exists (`exam_locked`); an exam of a cancelled class is frozen (`class_closed`) — a completed class keeps its exams open. The merged pass score stays within the maximum (`pass_score_invalid`) and a new lesson must belong to the class. ' +
+      'Online exams (MOD-09 phase 2): `delivery` changes in a draft only, and turning an online draft manual resets its settings and unlinks its questions; once the learners see an online exam its `maxScore` is frozen and its window and time limit cannot be cleared; ' +
+      'once somebody has started, the opening and the time limit are fixed, `closesAt` only moves later and `attemptsAllowed` only rises — all `exam_locked { status, fields, resultCount, attemptCount }`.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: ExamDto })
-  @ApiBadRequestResponse({ description: 'Validation failed | nothing_to_update | pass_score_invalid' })
+  @ApiBadRequestResponse({ description: 'Validation failed | nothing_to_update | pass_score_invalid | online_settings_not_allowed — `{ fields }` | window_invalid — `{ opensAt, closesAt }`' })
   @ApiNotFoundResponse({ description: 'exam_not_found | lesson_not_found' })
   @ApiUnprocessableEntityResponse({ description: 'lesson_mismatch' })
-  @ApiConflictResponse({ description: 'exam_locked — `{ status, fields, resultCount }` | class_closed — `{ classId, status }`' })
+  @ApiConflictResponse({ description: 'exam_locked — `{ status, fields, resultCount, attemptCount? }` | class_closed — `{ classId, status }`' })
   update(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: UpdateExamDto, @CurrentUser() caller: AuthPrincipal, @Req() req: Request): Promise<ExamDto> {
     return this.exams.update(id, body, caller, requestContext(req));
   }
@@ -123,13 +127,18 @@ export class ExamsController {
     summary: 'Change the exam status',
     description:
       '`schedule`: draft → scheduled (the learners see the exam) · `unschedule`: scheduled → draft (`exam_has_results` when results exist) · `publish`: scheduled → published (sets `publishedAt`; the learners see their results) · `unpublish`: published → scheduled. ' +
-      'Anything else is `invalid_transition { from, action, allowed }`; `schedule` and `publish` are refused for a cancelled class (`class_closed`). One audit event `exams.status.changed`.',
+      'Anything else is `invalid_transition { from, action, allowed }`; `schedule` and `publish` are refused for a cancelled class (`class_closed`). One audit event `exams.status.changed`. ' +
+      'For an online exam (MOD-09 phase 2) the same four actions mean: `schedule` makes it available — it must be ready (`exam_not_ready { problems, totalPoints, maxScore, questionIds }`: questions, every one ready, points summing to `maxScore`, its window and time limit) and a copy of its questions is frozen; ' +
+      '`unschedule` is refused once somebody has started (`exam_has_attempts`); `publish` releases the results after the window has closed (`exam_window_open`) — an attempt the server has not closed yet is closed and graded first, with what was saved, so the released results are complete.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: ExamDto })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiNotFoundResponse({ description: 'exam_not_found' })
-  @ApiConflictResponse({ description: 'invalid_transition — `{ from, action, allowed }` | exam_has_results — `{ action, resultCount }` | class_closed' })
+  @ApiConflictResponse({
+    description:
+      'invalid_transition — `{ from, action, allowed }` | exam_has_results — `{ action, resultCount }` | class_closed | exam_not_ready — `{ problems, totalPoints, maxScore, questionIds }` | exam_has_attempts — `{ action, attemptCount }` | exam_window_open — `{ closesAt }`',
+  })
   changeStatus(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: ChangeExamStatusDto, @CurrentUser() caller: AuthPrincipal, @Req() req: Request): Promise<ExamDto> {
     return this.exams.changeStatus(id, body, caller, requestContext(req));
   }
@@ -139,12 +148,13 @@ export class ExamsController {
   @RequirePermissions(MANAGE_EXAMS_PERMISSION)
   @ApiOperation({
     summary: 'Delete an exam',
-    description: 'Only a draft or scheduled exam without any result (whatever the class status); anything else is `exam_not_deletable`. One audit event `exams.deleted`.',
+    description:
+      'Only a draft or scheduled exam without any result (whatever the class status); anything else is `exam_not_deletable`. An online exam somebody has started is not deletable either (`attemptCount` in the refusal). One audit event `exams.deleted`.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiNoContentResponse({ description: 'Deleted' })
   @ApiNotFoundResponse({ description: 'exam_not_found' })
-  @ApiConflictResponse({ description: 'exam_not_deletable — `{ status, resultCount }`' })
+  @ApiConflictResponse({ description: 'exam_not_deletable — `{ status, resultCount, attemptCount? }`' })
   remove(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() caller: AuthPrincipal, @Req() req: Request): Promise<void> {
     return this.exams.remove(id, caller, requestContext(req));
   }
