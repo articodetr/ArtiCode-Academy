@@ -674,6 +674,8 @@ export class AuthService {
         },
         data: { revokedAt: now },
       });
+      // KI-159: a reset link issued before this change no longer applies.
+      await tx.verificationToken.updateMany({ where: { userId, purpose: 'password_reset', consumedAt: null }, data: { consumedAt: now } });
       await this.audit.record(
         { action: AUDIT_ACTIONS.passwordChanged, actorUserId: userId, entityType: 'users', entityId: userId, metadata: { revokedOtherSessions: result.count }, ...ctx },
         tx,

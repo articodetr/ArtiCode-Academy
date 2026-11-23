@@ -582,6 +582,13 @@ export class UsersService {
           },
           select: { id: true },
         });
+        // KI-159: a link was sent to the previous address, so it stops working with the change.
+        const retired = plan.fields.includes('email')
+          ? await tx.verificationToken.updateMany({
+              where: { userId: id, purpose: { in: ['invitation', 'password_reset'] }, consumedAt: null },
+              data: { consumedAt: new Date() },
+            })
+          : { count: 0 };
         // Field names only — never the old or new values.
         await this.audit.record(
           {
@@ -589,7 +596,7 @@ export class UsersService {
             actorUserId: caller.id,
             entityType: 'users',
             entityId: id,
-            metadata: { fields: plan.fields },
+            metadata: { fields: plan.fields, ...(retired.count > 0 ? { retiredLinks: retired.count } : {}) },
             ...ctx,
           },
           tx,

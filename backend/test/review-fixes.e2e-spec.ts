@@ -1,4 +1,4 @@
-// TEST-326 — KI-155..KI-158: a refund leaves no free reactivation; an unchanged final grade can be re-confirmed, also
+// TEST-326/TEST-327 — KI-155..KI-159: a refund leaves no free reactivation; an unchanged final grade can be re-confirmed, also
 // behind an issued certificate; a removed exam marks the final grade out of date; completing a class frees its future
 // lessons. Fixtures carry a unique prefix and are deleted at the end. Skipped when no database is reachable.
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -37,7 +37,7 @@ async function canConnect(url: string): Promise<boolean> {
 
 const available = DATABASE_URL ? await canConnect(DATABASE_URL) : false;
 
-describe.skipIf(!available)('review fixes KI-155..KI-158 (e2e, TEST-326)', () => {
+describe.skipIf(!available)('review fixes KI-155..KI-159 (e2e, TEST-326, TEST-327)', () => {
   let app: NestExpressApplication;
   let prisma: PrismaClient;
   let token: string;
@@ -172,6 +172,39 @@ describe.skipIf(!available)('review fixes KI-155..KI-158 (e2e, TEST-326)', () =>
     expect(await finalOf(classId)).toMatchObject({ percent: 45, stale: true });
     await finalize(classId).expect(200);
     expect(await finalOf(classId)).toMatchObject({ percent: 90, stale: false });
+  });
+
+  it('KI-159 — an e-mail change retires the open invitation and reset links; a password change retires the reset links', async () => {
+    const role = await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } });
+    const hash = await new PasswordService().hash(PASSWORD);
+    const account = async (status: 'invited' | 'active') => {
+      const email = `link${++seq}-${RUN}@example.test`.toLowerCase();
+      const row = await prisma.user.create({ data: { email, fullName: `${PREFIX} ${seq}`, status, passwordHash: status === 'active' ? hash : null, roles: { create: [{ roleId: role.id }] } }, select: { id: true } });
+      userIds.push(row.id);
+      return { id: row.id, email };
+    };
+    const newEmail = () => `moved${++seq}-${RUN}@example.test`.toLowerCase();
+
+    const invited = await account('invited');
+    const invitation = await api().post(`/api/users/${invited.id}/invitations`).set(auth()).send({}).expect(201);
+    await api().patch(`/api/users/${invited.id}`).set(auth()).send({ fullName: `${PREFIX} renamed` }).expect(200);
+    await api().get(`/api/account/invitations/${invitation.body.token}`).expect(200); // another field keeps the link
+    await api().patch(`/api/users/${invited.id}`).set(auth()).send({ email: newEmail() }).expect(200);
+    await api().post(`/api/account/invitations/${invitation.body.token}/accept`).send({ password: 'Another-Good-Pass-77' }).expect(409);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: invited.id }, select: { status: true, passwordHash: true } }))).toEqual({ status: 'invited', passwordHash: null });
+    const fresh = await api().post(`/api/users/${invited.id}/invitations`).set(auth()).send({}).expect(201);
+    await api().get(`/api/account/invitations/${fresh.body.token}`).expect(200);
+
+    const moved = await account('active');
+    const reset = await api().post(`/api/users/${moved.id}/password-reset`).set(auth()).send({}).expect(201);
+    await api().patch(`/api/users/${moved.id}`).set(auth()).send({ email: newEmail() }).expect(200);
+    await api().post(`/api/account/password-reset/${reset.body.token}/confirm`).send({ newPassword: 'Another-Good-Pass-77' }).expect(404);
+
+    const self = await account('active');
+    const selfReset = await api().post(`/api/users/${self.id}/password-reset`).set(auth()).send({}).expect(201);
+    const login = await api().post('/api/auth/login').send({ identifier: self.email, password: PASSWORD }).expect(200);
+    await api().post('/api/auth/password').set('Authorization', `Bearer ${login.body.accessToken}`).send({ currentPassword: PASSWORD, newPassword: 'Changed-Good-Pass-88' }).expect((res) => expect([200, 204]).toContain(res.status));
+    await api().post(`/api/account/password-reset/${selfReset.body.token}/confirm`).send({ newPassword: 'Another-Good-Pass-77' }).expect(404);
   });
 
   it('KI-158 — completing a class cancels only its future scheduled lessons and frees their room', async () => {
