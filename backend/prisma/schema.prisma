@@ -1262,10 +1262,10 @@ model Certificate {
   courseId         String            @map("course_id") @db.Uuid
   studentUserId    String            @map("student_user_id") @db.Uuid
   status           CertificateStatus @default(issued)
-  /// The final grade at issuance: 0..100 (CHECK in SQL).
-  percent          Decimal           @db.Decimal(5, 2)
-  /// The band's label at issuance; `ar` is required (CHECK in SQL).
-  bandLabel        Json              @map("band_label")
+  /// The final grade at issuance: 0..100 (CHECK in SQL); null for an automatic course-completion certificate (CH-0363).
+  percent          Decimal?          @db.Decimal(5, 2)
+  /// The band's label at issuance; `ar` is required (CHECK in SQL); null exactly when `percent` is.
+  bandLabel        Json?             @map("band_label")
   bandLetter       String?           @map("band_letter") @db.VarChar(4)
   /// Student, course, class, academy and dates at issuance — what is printed (D-R50).
   snapshot         Json

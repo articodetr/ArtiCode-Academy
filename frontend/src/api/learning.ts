@@ -244,11 +244,19 @@ export interface LearningItem {
   exams: LessonExam[]
 }
 
+/** The certificate a completion issued automatically. */
+export interface LearningCertificate {
+  id: string
+  serial: string
+}
+
 export interface PlaybackResult {
   progress: ItemProgress
   course: ProgressCounts
   completedNow: boolean
   capped: boolean
+  /** The certificate this save earned, else null. */
+  certificate: LearningCertificate | null
 }
 
 export interface CompletionResult {
@@ -256,6 +264,8 @@ export interface CompletionResult {
   section: ProgressCounts
   course: ProgressCounts
   completedNow: boolean
+  /** The certificate this completion earned, else null. */
+  certificate: LearningCertificate | null
 }
 
 /** A played interval in seconds: [start, end). */

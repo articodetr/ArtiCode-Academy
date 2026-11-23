@@ -89,15 +89,18 @@ export function MyCertificatesPage() {
     {
       title: t('certificates.columns.grade'),
       key: 'grade',
-      render: (_, row) => (
-        <span>
-          <bdi dir="ltr">{formatPercent(row.grade.percent)}</bdi>
-          <br />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {bandOf(row.grade, language)}
-          </Typography.Text>
-        </span>
-      ),
+      render: (_, row) =>
+        row.grade ? (
+          <span>
+            <bdi dir="ltr">{formatPercent(row.grade.percent)}</bdi>
+            <br />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {bandOf(row.grade, language)}
+            </Typography.Text>
+          </span>
+        ) : (
+          '—'
+        ),
     },
     { title: t('certificates.columns.issuedAt'), key: 'issuedAt', render: (_, row) => formatDateTime(row.issuedAt, language) },
     {

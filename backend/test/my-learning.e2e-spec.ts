@@ -261,6 +261,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
     try {
       if (prisma) {
         if (createdUserIds.length > 0) {
+          await prisma.certificate.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
           await prisma.learningProgress.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
           await prisma.attendanceRecord.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         }

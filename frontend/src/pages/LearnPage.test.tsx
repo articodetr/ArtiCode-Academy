@@ -255,6 +255,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
         section: after.sections[1]!.progress,
         course: after.progress,
         completedNow: true,
+        certificate: null,
       }),
     })
     renderLearn('/learn/c1/i3')
@@ -290,6 +291,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
         section: makeCounts({ total: 2, required: 1, completed: 1, completedRequired: 1, percent: 100, isComplete: true }),
         course: done,
         completedNow: true,
+        certificate: null,
       }),
     })
     // Opening the last lesson of the course confirms nothing.

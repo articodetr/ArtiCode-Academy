@@ -14,6 +14,7 @@ function answer(watchedPercent: number): PlaybackResult {
     course: makeCounts({ total: 4, required: 3 }),
     completedNow: false,
     capped: false,
+    certificate: null,
   }
 }
 

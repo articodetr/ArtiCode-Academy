@@ -213,6 +213,8 @@ export const learn: typeof arLearn = {
     text: 'Well done! You can come back and review the lessons whenever you like.',
     backToMySchool: 'Back to My classes',
     keepReviewing: 'Keep reviewing',
+    certificateText: 'Well done! Your certificate was issued with the number {{serial}}.',
+    viewCertificate: 'View my certificate',
   },
   errors: {
     completion_by_playback: 'This lesson completes by watching it, not by the button.',

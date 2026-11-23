@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AutoCertificatesModule } from '../certificates/auto-certificates.module.js';
 import { MyLearningController } from './my-learning.controller.js';
 import { MyLearningService } from './my-learning.service.js';
 
@@ -10,6 +11,7 @@ import { MyLearningService } from './my-learning.service.js';
  * (learning.content/progress/curriculum/read.ts). No audit event (D-R139).
  */
 @Module({
+  imports: [AutoCertificatesModule],
   controllers: [MyLearningController],
   providers: [MyLearningService],
 })

@@ -658,6 +658,15 @@ export class LearningVisitResultDto {
   progress: MyLearningItemProgressDto;
 }
 
+/** The certificate this answer's completion issued automatically (CH-0363). */
+export class LearningCertificateDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ example: 'CERT-2026-00001' })
+  serial: string;
+}
+
 export class LearningPlaybackResultDto {
   @ApiProperty({ type: () => MyLearningItemProgressDto })
   progress: MyLearningItemProgressDto;
@@ -670,6 +679,9 @@ export class LearningPlaybackResultDto {
 
   @ApiProperty({ description: 'True when the server clock trimmed what the save claimed (more new seconds than could have played since the previous save)' })
   capped: boolean;
+
+  @ApiProperty({ type: () => LearningCertificateDto, nullable: true, description: 'The certificate this request earned, else null' })
+  certificate: LearningCertificateDto | null;
 }
 
 export class LearningCompleteResultDto {
@@ -684,4 +696,7 @@ export class LearningCompleteResultDto {
 
   @ApiProperty({ description: 'True when this request completed the lesson; false when it already was (nothing written)' })
   completedNow: boolean;
+
+  @ApiProperty({ type: () => LearningCertificateDto, nullable: true, description: 'The certificate this request earned, else null' })
+  certificate: LearningCertificateDto | null;
 }

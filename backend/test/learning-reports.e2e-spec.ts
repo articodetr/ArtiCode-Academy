@@ -189,6 +189,7 @@ describe.skipIf(!available)('MOD-20 class learning progress (e2e, TEST-248 part 
   afterAll(async () => {
     try {
       if (prisma && createdUserIds.length > 0) {
+        await prisma.certificate.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         await prisma.learningProgress.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         await prisma.enrollment.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         await prisma.classTeacher.deleteMany({ where: { class: { code: { startsWith: PREFIX } } } });

@@ -28,7 +28,8 @@ export function bandOf(grade: { label: LocalizedLabel; letter: string | null }, 
 }
 
 /** The grade on one line: `86.4% — جيد جداً (B)`. */
-export function gradeLine(grade: CertificateGrade, language: Language): string {
+export function gradeLine(grade: CertificateGrade | null, language: Language): string {
+  if (grade === null) return DASH
   const band = bandOf(grade, language)
   return band === DASH ? formatPercent(grade.percent) : `${formatPercent(grade.percent)} — ${band}`
 }
