@@ -13,7 +13,7 @@ import type { NotificationBatch } from '../notifications/notifications.service.j
 import { PrismaService } from '../prisma/prisma.service.js';
 import { READ_CONTACT_PERMISSION } from '../users/users.policy.js';
 import type { UsersProjection } from '../users/users.service.js';
-import { paymentSettled, requestPayment } from './enrollment-requests.policy.js';
+import { paymentSettled, refundLeftNothingPaid, requestPayment } from './enrollment-requests.policy.js';
 import type { RequestPaymentState } from './enrollment-requests.policy.js';
 import { assertEnrollableStudent, EnrollmentRequestsWriter, lockJoinClass } from './enrollment-requests.writer.js';
 import { ENROLLMENTS_PAGE_DEFAULT } from './enrollments.dto.js';
@@ -248,20 +248,24 @@ export class EnrollmentsService {
 
       const coursePaid = klass.feePlanId !== null;
       const neverActive = current.activatedAt === null;
-      const readsInvoices = input.action === 'approve' || input.action === 'reject' || (input.action === 'reactivate' && neverActive);
+      const readsInvoices = input.action === 'approve' || input.action === 'reject' || (input.action === 'reactivate' && (neverActive || coursePaid));
       const invoices = readsInvoices ? await this.invoices.lockEnrollmentInvoices(tx, id) : [];
       const now = new Date();
       const extra: Record<string, unknown> = {};
 
+      const unpaidInvoices = () =>
+        invoices
+          .filter((invoice) => invoice.status === 'issued' && invoice.paidAmount.lt(invoice.totalAmount))
+          .map((invoice) => ({ id: invoice.id, number: invoice.number, balance: Number(invoice.totalAmount.minus(invoice.paidAmount).toFixed(2)) }));
       if (input.action === 'approve' || (input.action === 'reactivate' && neverActive && coursePaid)) {
         const payment = requestPayment(coursePaid, invoices);
-        if (!paymentSettled(payment.state)) {
-          const unpaid = invoices
-            .filter((invoice) => invoice.status === 'issued' && invoice.paidAmount.lt(invoice.totalAmount))
-            .map((invoice) => ({ id: invoice.id, number: invoice.number, balance: Number(invoice.totalAmount.minus(invoice.paidAmount).toFixed(2)) }));
-          throw catalogError.paymentRequired(id, payment.state, unpaid);
-        }
+        if (!paymentSettled(payment.state)) throw catalogError.paymentRequired(id, payment.state, unpaidInvoices());
         extra['paymentState'] = payment.state;
+      }
+      if (input.action === 'reactivate' && !neverActive && coursePaid) {
+        const payment = requestPayment(coursePaid, invoices);
+        const reversed = await this.invoices.reversedPaymentCount(tx, invoices.map((invoice) => invoice.id));
+        if (refundLeftNothingPaid(reversed, payment.state)) throw catalogError.paymentRequired(id, payment.state, unpaidInvoices());
       }
       if (input.action === 'reject') {
         const issuedIds = invoices.filter((invoice) => invoice.status === 'issued').map((invoice) => invoice.id);

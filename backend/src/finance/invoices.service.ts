@@ -654,6 +654,12 @@ export class InvoicesService {
     return tx.payment.count({ where: { invoiceId: { in: [...invoiceIds] }, status: 'completed' } });
   }
 
+  /** Reversed payments on these invoices (a refund — KI-155). */
+  async reversedPaymentCount(tx: Tx, invoiceIds: readonly string[]): Promise<number> {
+    if (invoiceIds.length === 0) return 0;
+    return tx.payment.count({ where: { invoiceId: { in: [...invoiceIds] }, status: 'reversed' } });
+  }
+
   /** Cancels the issued invoices of a closing request (no completed payment — the caller checked), with a fixed reason. */
   async cancelForRequest(tx: Tx, invoiceIds: readonly string[], callerId: string, reason: string, now: Date): Promise<void> {
     if (invoiceIds.length === 0) return;

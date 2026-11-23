@@ -117,6 +117,8 @@ describe.skipIf(!available)('KI-153 teacher user scope (e2e, TEST-325)', () => {
 
   it('answers 404 for anyone else, and hides another child of a visible guardian', async () => {
     await get('teacher', `/api/users/${u['mine']}`).expect(200);
+    const guardianDetail = await get('teacher', `/api/users/${u['guardian']}`).expect(200);
+    expect((guardianDetail.body.students as { userId: string }[]).map((link) => link.userId)).toEqual([u['mine']]);
     for (const name of ['other', 'otherteacher', 'otherguardian', 'admin']) await get('teacher', `/api/users/${u[name]}`).expect(404);
     await get('teacher', `/api/users/${u['other']}/guardians`).expect(404);
     const children = await get('teacher', `/api/users/${u['guardian']}/students`).expect(200);

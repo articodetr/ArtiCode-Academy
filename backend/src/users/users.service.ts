@@ -187,6 +187,17 @@ const MFA_RESET_TARGET_SELECT = {
 type SummaryRow = Prisma.UserGetPayload<{ select: typeof SUMMARY_SELECT }>;
 type ListRow = Prisma.UserGetPayload<{ select: typeof LIST_SELECT }>;
 type DetailRow = Prisma.UserGetPayload<{ select: typeof DETAIL_SELECT }>;
+
+/** KI-153: for a limited teacher the linked people of a detail obey the same scope as the detail itself. */
+function detailSelectFor(teacherScope: string | null): typeof DETAIL_SELECT {
+  if (!teacherScope) return DETAIL_SELECT;
+  const visible = { deletedAt: null, AND: [teacherVisibleUsersWhere(teacherScope)] };
+  return {
+    ...DETAIL_SELECT,
+    guardians: { ...DETAIL_SELECT.guardians, where: { guardian: visible } },
+    guardianOf: { ...DETAIL_SELECT.guardianOf, where: { student: visible } },
+  } as typeof DETAIL_SELECT;
+}
 type StateRow = Prisma.UserGetPayload<{ select: typeof STATE_SELECT }>;
 type RolesTargetRow = Prisma.UserGetPayload<{ select: typeof ROLES_TARGET_SELECT }>;
 type RoleRow = Prisma.RoleGetPayload<{ select: typeof ROLE_GRANT_SELECT }>;
@@ -371,7 +382,7 @@ export class UsersService {
   async getById(id: string, includeDeleted: boolean, view: UsersProjection, teacherScope: string | null = null): Promise<UserDetailDto> {
     const row = await this.prisma.db.user.findFirst({
       where: { ...(includeDeleted ? { id } : { id, deletedAt: null }), ...(teacherScope ? { AND: [teacherVisibleUsersWhere(teacherScope)] } : {}) },
-      select: DETAIL_SELECT,
+      select: detailSelectFor(teacherScope),
     });
     if (!row) throw usersError.userNotFound();
     return toDetail(row, view, isPendingSelfRegistration(row));

@@ -26,6 +26,9 @@ import { visibleClassesWhere } from './classes.policy.js';
 import { allowedClassActions, closesOpenSlots, enrollmentStatusAfter, isClassDeletable, nextClassStatus } from './classes.status.js';
 import { calendarDateIn } from '../schedule/schedule.time.js';
 
+/** The stored reason of a future lesson cancelled because its class was completed (KI-158). */
+const CLASS_COMPLETED_LESSON_REASON = 'اكتمل الفصل قبل موعد هذا الدرس';
+
 export const CLASSES_AUDIT_ACTIONS = {
   created: 'classes.created',
   updated: 'classes.updated',
@@ -342,6 +345,15 @@ export class ClassesService {
           WHERE class_id = ${id}::uuid
             AND (effective_to IS NULL OR effective_to > GREATEST(${today}::date, effective_from))`;
       }
+      // KI-158: a completed class is final, so its lessons still to come stop holding rooms and teachers.
+      let cancelledLessons = 0;
+      if (input.action === 'complete') {
+        const cancelled = await tx.lesson.updateMany({
+          where: { classId: id, status: 'scheduled', startsAt: { gt: new Date() } },
+          data: { status: 'cancelled', cancellationReason: CLASS_COMPLETED_LESSON_REASON },
+        });
+        cancelledLessons = cancelled.count;
+      }
       await this.audit.record(
         {
           action: CLASSES_AUDIT_ACTIONS.statusChanged,
@@ -356,6 +368,7 @@ export class ClassesService {
             ...(input.reason !== undefined ? { reason: input.reason } : {}),
             ...(affectedEnrollments !== null ? { affectedEnrollments } : {}),
             ...(closedSlots > 0 ? { closedSlots } : {}),
+            ...(cancelledLessons > 0 ? { cancelledLessons } : {}),
           },
           ...ctx,
         },
