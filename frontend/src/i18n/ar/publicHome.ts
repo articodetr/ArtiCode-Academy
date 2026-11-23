@@ -1,7 +1,7 @@
 // PORTAL-04 (#208): the academy's public home page (/home). Generic words around the academy's own name (API-205) — no
-// figure, testimonial or contact detail the server does not send, and no claim the product does not keep (the heading
-// and its line describe how learning works here: levels and lessons followed step by step, progress in «مدرستي»).
-// No self-registration exists yet, so no «أنشئ حسابًا».
+// figure, testimonial, partner or contact detail the server does not send, and no claim the product does not keep: every
+// line describes what the platform does today. No accreditation, «most popular» or «100%» wording. No self-registration
+// exists yet, so no «أنشئ حسابًا».
 export const publicHome = {
   // The page's <meta name="description"> (PublicTitle): the academy's own line, never the product's.
   meta: {
@@ -11,17 +11,38 @@ export const publicHome = {
   hero: {
     welcomeNamed: 'مرحبًا بك في {{name}}',
     welcome: 'مرحبًا بك',
-    title: 'تعلّم بخطوات واضحة، وتابع تقدّمك أولًا بأول',
+    titleStart: 'طوّر مستقبلك من خلال',
+    titleHighlight: 'التعلّم الاحترافي',
     subtitle: 'برامج تعليمية منظّمة في مستويات ودروس، تتابعها خطوة بخطوة وترى تقدّمك فيها في «مدرستي».',
     browse: 'استعرض البرامج',
     signIn: 'تسجيل الدخول',
     accountsNote: 'الحسابات تُنشأ من إدارة الأكاديمية.',
     mySchool: 'مدرستي',
     dashboard: 'لوحة التحكم',
+    indicators: {
+      media: 'فيديو وصوت وملفات',
+      devices: 'من الحاسوب والهاتف',
+      languages: 'واجهة عربية وإنجليزية',
+      progress: 'تقدّمك محفوظ',
+    },
+    badges: {
+      online: 'تعلّم عبر الإنترنت',
+      programs: 'برامج منظّمة',
+      lessons: 'دروس متنوعة',
+    },
+  },
+  features: {
+    label: 'ما تقدّمه المنصة',
+    online: { title: 'تعلّم عبر الإنترنت', text: 'ادرس من الحاسوب أو الهاتف' },
+    certificates: { title: 'شهادات قابلة للتحقق', text: 'شهادة إتمام برمز تحقّق عام' },
+    teachers: { title: 'معلّمون يتابعونك', text: 'واجبات تُصحَّح وملاحظات على عملك' },
+    pace: { title: 'تابع من حيث توقفت', text: 'ارجع إلى آخر درس في أي وقت' },
   },
   programs: {
-    title: 'البرامج التعليمية',
-    subtitle: 'من برامج الأكاديمية المنشورة: نبذتها ومحتواها ورسومها.',
+    label: 'برامجنا',
+    title: 'استكشف برامجنا التعليمية',
+    subtitle: 'من برامج الأكاديمية المنشورة: محتواها ومدتها ورسومها.',
+    open: 'عرض البرنامج',
     all: 'كل البرامج',
     emptyTitle: 'لا توجد برامج بعد',
     empty: 'لا توجد برامج منشورة بعد.',
@@ -42,7 +63,34 @@ export const publicHome = {
       action: 'الإعدادات',
     },
   },
+  trust: {
+    title: 'تعلّم على منصة واضحة وآمنة',
+    text: 'أدوات حقيقية تحمي حسابك وتوثّق إنجازك.',
+    items: {
+      verify: 'تحقّق عام من الشهادات',
+      security: 'تحقّق بخطوتين',
+      guardians: 'متابعة ولي الأمر',
+      grades: 'درجات ونتائج واضحة',
+      languages: 'العربية والإنجليزية',
+    },
+  },
+  about: {
+    label: 'من نحن',
+    title: 'نُمكّن المتعلّمين أينما كانوا',
+    text: 'نجمع رحلة التعلّم في مكان واحد: برامج منظّمة، ودروس بوسائط متعددة، ومتابعة من المعلّمين، وتقدّم تراه خطوة بخطوة.',
+    points: {
+      media: 'دروس بالفيديو والصوت والنصوص والملفات',
+      structure: 'محتوى مرتّب في مستويات ودروس',
+      live: 'حصص مع فصلك ومعلّميك',
+      practice: 'واجبات واختبارات ودرجات',
+      progress: 'تقدّمك محفوظ في «مدرستي»',
+      certificate: 'شهادة إتمام قابلة للتحقق',
+    },
+    action: 'تعرّف على البرامج',
+    badge: 'تعلّم مع فصلك',
+  },
   steps: {
+    label: 'خطوات البدء',
     title: 'كيف تبدأ الدراسة؟',
     subtitle: 'ثلاث خطوات من اختيار البرنامج إلى متابعة دروسك.',
     choose: {
@@ -58,8 +106,55 @@ export const publicHome = {
       text: 'التحق بفصل — فورًا في البرامج المجانية، وبعد الدفع وموافقة الأكاديمية في المدفوعة — ثم تابع دروسك في «مدرستي».',
     },
   },
+  stats: {
+    title: 'الأكاديمية بالأرقام',
+    programs: 'البرامج المنشورة',
+    lessons: 'الدروس المنشورة',
+    hours: 'ساعات الدراسة',
+    openClasses: 'الفصول المفتوحة الآن',
+  },
+  certificate: {
+    label: 'الشهادات',
+    titleStart: 'أثبت إنجازك',
+    titleHighlight: 'بشهادة قابلة للتحقق',
+    text: 'عند إتمام برنامجك بنجاح تُصدر لك الأكاديمية شهادة يمكن لأي جهة التأكد من صحتها.',
+    points: {
+      completion: 'تُصدر عند إتمام الفصل بدرجة ناجحة',
+      serial: 'رقم تسلسلي ورمز تحقّق لكل شهادة',
+      verify: 'صفحة تحقّق عامة بلا تسجيل دخول',
+      print: 'جاهزة للطباعة من حسابك',
+    },
+    action: 'تحقّق من شهادة',
+    sample: 'نموذج توضيحي',
+    sampleTitle: 'شهادة إتمام',
+  },
+  promo: {
+    title: 'رحلة تعلّم كاملة في منصة واحدة',
+    text: 'من اختيار البرنامج إلى الدروس والواجبات والاختبارات والشهادة: كل خطوة في مكان واحد، ومعها إشعارات تبقيك على اطلاع.',
+    action: 'ابدأ من البرامج',
+    badge: 'دروس وحصص مباشرة',
+  },
+  why: {
+    label: 'مزايا المنصة',
+    title: 'لماذا تتعلّم معنا؟',
+    items: {
+      structured: { title: 'محتوى منظّم', text: 'مستويات ودروس بترتيب واضح.' },
+      media: { title: 'وسائط متعددة', text: 'فيديو وصوت ونصوص وملفات.' },
+      feedback: { title: 'ملاحظات على عملك', text: 'واجبات يصحّحها معلّموك.' },
+      exams: { title: 'اختبارات ودرجات', text: 'نتائجك واضحة في حسابك.' },
+      alerts: { title: 'إشعارات مستمرة', text: 'تنبيهات بالدروس والواجبات والنتائج.' },
+      guardians: { title: 'متابعة ولي الأمر', text: 'يتابع ولي الأمر دروس أبنائه ونتائجهم.' },
+    },
+  },
+  testimonials: {
+    title: 'ماذا يقول طلابنا',
+  },
+  articles: {
+    title: 'أحدث المقالات',
+    readMore: 'اقرأ المزيد',
+  },
   cta: {
-    visitorTitle: 'جاهز للبدء؟',
+    visitorTitle: 'جاهز لتطوير مهاراتك؟',
     visitorText: 'اختر البرنامج الذي يناسبك، ثم ادخل بحسابك لتلتحق به.',
   },
 }
