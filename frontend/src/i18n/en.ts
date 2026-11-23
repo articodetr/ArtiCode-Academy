@@ -552,6 +552,7 @@ export const en: Translation = {
       now: 'Now',
       next: 'Next',
       join: 'Join',
+      openLink: 'Open link',
       waiting: 'Waiting for you',
       nothingWaiting: 'Nothing is waiting for you.',
       kind: { assignment: 'Homework', exam: 'Exam', invoice: 'Payment', notifications: 'Notices', final: 'Final' },
