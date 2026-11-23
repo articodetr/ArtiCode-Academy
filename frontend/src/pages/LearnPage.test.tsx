@@ -329,10 +329,15 @@ describe('LearnPage — the course player (TEST-251)', () => {
 
     const frame = container.querySelector('iframe')
     expect(frame).not.toBeNull()
-    expect(frame).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')
+    const src = new URL(frame!.getAttribute('src')!)
+    expect(`${src.origin}${src.pathname}`).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')
+    // J-F64: the player reports to this page, so the learner sees how much they have watched.
+    expect(src.searchParams.get('enablejsapi')).toBe('1')
+    expect(src.searchParams.get('origin')).toBe(window.location.origin)
     expect(frame).toHaveAttribute('title', 'فيديو الترحيب')
     expect(frame).toHaveAttribute('referrerpolicy', 'strict-origin-when-cross-origin')
-    expect(screen.getByText('لا تُقاس مشاهدة هذا الفيديو: بعد مشاهدته اضغط «تحديد كمكتمل».')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'نسبة المشاهدة' })).toHaveAttribute('aria-valuenow', '0')
+    expect(screen.queryByText('لا تُقاس مشاهدة هذا الفيديو: بعد مشاهدته اضغط «تحديد كمكتمل».')).not.toBeInTheDocument()
   })
 
   it('opens a PDF in a new tab instead of framing it', async () => {

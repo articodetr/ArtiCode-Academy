@@ -264,6 +264,52 @@ export const attendance = {
 
 // MOD-06 «my lessons» (J-F11, API-101); column, filter, pagination and attendance labels come from `lessons.*`.
 export const myLessons = {
+  // J-F64: the student's courses and their lessons, the video playing inside the page.
+  hub: {
+    tabs: { label: 'أقسام دروسي', programs: 'دروسي', sessions: 'مواعيد الحصص' },
+    title: 'دروسي',
+    description: 'تابع دوراتك، وشاهد دروسها داخل المنصة، واعرف كم أنجزت في كل درس.',
+    stats: { courses: 'الدورات المسجلة', lessons: 'إجمالي الدروس', completed: 'الدروس المكتملة' },
+    coursesTitle: 'الدورات المسجلة',
+    coursesHint: 'اضغط على بطاقة أي دورة لعرض دروسها في الأسفل.',
+    card: {
+      select: 'عرض دروس {{course}}',
+      active: 'الاشتراك مفعّل',
+      done: 'مكتملة',
+      lessons: 'الدروس: {{total}}',
+      progress: 'الدروس المكتملة',
+      browse: 'استعراض الدروس',
+    },
+    panel: {
+      label: 'دروس {{course}}',
+      title: 'دروس:',
+      hint: 'جميع الدروس المباشرة والمسجلة في هذه الدورة.',
+      resume: 'تابع من حيث توقفت',
+      start: 'ابدأ أول درس',
+    },
+    filters: { label: 'نوع الدرس', all: 'الكل', live: 'المباشرة', recorded: 'المسجلة' },
+    row: {
+      live: 'درس مباشر',
+      recorded: 'درس مسجل',
+      completed: 'مكتمل',
+      inProgress: 'قيد التعلّم',
+      attachment: 'يوجد مرفق',
+      locked: 'لم يُفتح بعد',
+      opensOn: 'يُفتح في {{date}}',
+      play: 'تشغيل الدرس',
+      attend: 'عرض الحصص',
+      open: 'فتح الدرس',
+      playing: 'مفتوح الآن',
+    },
+    player: { label: 'الدرس المفتوح', close: 'إغلاق الدرس' },
+    emptyCourse: 'لا توجد دروس في هذه الدورة حالياً.',
+    emptyFilter: 'لا توجد دروس من هذا النوع في هذه الدورة.',
+    empty: {
+      title: 'لا توجد دورات مسجلة حالياً',
+      text: 'عند تفعيل اشتراكك في أي دورة ستظهر هنا مع دروسها.',
+      action: 'استكشف الدورات',
+    },
+  },
   title: 'دروسي',
   subtitle: 'دروس الفصول المسجَّل فيها أنت أو الطلاب المرتبطون بك، مع حالة الحضور في كل درس',
   optionsFailed: 'تعذّر تحميل فصولك، فخيارات مرشّحَي الطالب والفصل غير متاحة الآن.',

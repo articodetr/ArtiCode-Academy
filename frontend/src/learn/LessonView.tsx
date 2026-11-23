@@ -79,7 +79,7 @@ export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToC
       </header>
 
       <section className="learn-card learn-lesson__content">
-        <LessonContent item={item} onPlayback={(result) => onPlayback(item.id, result)} trackPlayback={!preview} />
+        <LessonContent item={item} onPlayback={(result) => onPlayback(item.id, result)} trackPlayback={!preview} onComplete={preview ? undefined : onComplete} />
       </section>
 
       <CompletionPanel item={item} onComplete={onComplete} preview={preview} />

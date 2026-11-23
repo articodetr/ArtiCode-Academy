@@ -614,6 +614,60 @@ a.learn-csession__lesson {
   border: 0;
 }
 
+/* How much of a YouTube lesson the learner has watched (J-F64). */
+.learn-watch {
+  padding: 10px 14px;
+  color: #113464;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+}
+
+.learn-watch--done {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.learn-watch__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-block-end: 7px;
+  font-size: 13.5px;
+}
+
+.learn-watch__track {
+  block-size: 8px;
+  overflow: hidden;
+  background: rgb(17 52 100 / 12%);
+  border-radius: 5px;
+}
+
+.learn-watch__fill {
+  block-size: 100%;
+  background: linear-gradient(90deg, #c5a052 0%, #113464 100%);
+  border-radius: 5px;
+  transition: inline-size 0.4s ease;
+}
+
+.learn-watch--done .learn-watch__fill {
+  background: #16a34a;
+}
+
+.learn-watch__rule {
+  margin: 7px 0 0;
+  font-size: 12.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learn-watch__fill {
+    transition: none;
+  }
+}
+
 .learn-figure {
   margin: 0;
 }
