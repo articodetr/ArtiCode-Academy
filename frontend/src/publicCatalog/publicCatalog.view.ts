@@ -68,6 +68,27 @@ export function availabilityOf(card: Pick<PublicCourseCard, 'openClasses' | 'has
   return card.pricing === 'paid' && card.price === null ? 'priceUnavailable' : 'full'
 }
 
+/**
+ * The i18n key of a card's availability pill. A course with no class open reads «قريبًا» on a card; its own page keeps
+ * the plain explanation (`publicCatalog.card.closed`). `priceUnavailable` has no pill: the price already says why.
+ */
+export function availabilityPillKey(availability: Exclude<PublicAvailability, 'priceUnavailable'>): string {
+  return availability === 'closed' ? 'publicCatalog.card.comingSoon' : `publicCatalog.card.${availability}`
+}
+
+const AVAILABILITY_RANK: Record<PublicAvailability, number> = { available: 0, full: 1, priceUnavailable: 1, closed: 2 }
+
+/**
+ * One page of /explore as it is shown: what can be joined now, then what is full or has no usable price, then what is
+ * coming soon, keeping the server's order inside each group (`sort` is stable). It orders ONE page, when that page
+ * arrives: «عرض المزيد» only appends, so a card the visitor is looking at never jumps. The limit that follows: an
+ * available course on a later page comes after the coming-soon cards of the pages above it. Ordering the whole catalog
+ * needs the server to do it. No card is added or dropped, and the keyset cursor is the server's, untouched.
+ */
+export function orderPublicPage(page: readonly PublicCourseCard[]): PublicCourseCard[] {
+  return [...page].sort((a, b) => AVAILABILITY_RANK[availabilityOf(a)] - AVAILABILITY_RANK[availabilityOf(b)])
+}
+
 /** How many placeholder tints a card without a cover can take (publicCatalog.css `.public-card__placeholder--t0` … `--t4`). */
 export const PLACEHOLDER_TINTS = 5
 

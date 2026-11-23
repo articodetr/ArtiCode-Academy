@@ -826,3 +826,25 @@
     align-items: flex-start;
   }
 }
+
+/* A narrow phone: the name takes two lines (at its hyphen when it has one) instead of losing its end. */
+@media (max-width: 440px) {
+  .public-catalog__header-inner {
+    column-gap: 8px;
+  }
+
+  .public-catalog__brand {
+    gap: 6px;
+    min-width: 64px;
+  }
+
+  .public-catalog__name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 13px;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

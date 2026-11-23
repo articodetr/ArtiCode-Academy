@@ -107,6 +107,17 @@ export function courseStandingOf(detail: Pick<CatalogCourseDetail, 'classes'>): 
   return null
 }
 
+/**
+ * The class whose confirmation opens by itself for a learner who pressed subscribe: the one class that takes them,
+ * when they may enroll and have no place in the course yet. Null otherwise — with two or more classes the learner
+ * chooses. This only picks what to ask about; the enrollment still waits for the learner's own confirmation.
+ */
+export function autoConfirmClass(detail: Pick<CatalogCourseDetail, 'classes' | 'selfService'>): CatalogClass | null {
+  if (courseStandingOf(detail) !== null) return null
+  const enrollable = enrollableClasses(detail)
+  return enrollable.length === 1 ? enrollable[0]! : null
+}
+
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 
 /** `0` (Sunday) … `6` → the key of the `days` section. */

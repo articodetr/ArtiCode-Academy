@@ -8,6 +8,8 @@ import { questionBanks } from './en/questionBanks'
 import { examOnline } from './en/examOnline'
 import { examAttempts } from './en/examAttempts'
 import { takeExam } from './en/takeExam'
+import { courseCover } from './en/courseCover'
+import { courseEnrollmentPanel } from './en/courseEnrollmentPanel'
 import { publicHome } from './en/publicHome'
 
 export const en: Translation = {
@@ -4260,4 +4262,6 @@ export const en: Translation = {
   takeExam,
   // PORTAL-04 (#208): the academy's public home page (/home).
   publicHome,
+  courseCover,
+  courseEnrollmentPanel,
 }

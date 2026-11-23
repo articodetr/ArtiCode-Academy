@@ -318,7 +318,9 @@ export const publicCatalog = {
     content: 'المحتوى',
     available: 'فصول متاحة',
     full: 'الفصول المفتوحة ممتلئة',
+    // The course page's explanation; a card says `comingSoon` instead.
     closed: 'لا فصل مفتوح حالياً',
+    comingSoon: 'قريبًا',
     hours: '{{count}} ساعة',
     hours_one: 'ساعة واحدة',
     hours_two: 'ساعتان',
