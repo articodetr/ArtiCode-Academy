@@ -8,6 +8,7 @@ import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { ListPublicCatalogParams, PublicCourseCard, PublicCourseList, PublicOutlineLevel } from '../api/publicCatalog'
 import type { Language } from '../i18n/language'
 import { localizedLabel } from '../users/users.format'
+import type { PublicViewer } from './publicViewer'
 
 export const PUBLIC_CATALOG_PAGE_SIZE = 24
 /** Upper bound of `q` (1–100 characters after trim), as on API-219. */
@@ -65,6 +66,27 @@ export function availabilityOf(card: Pick<PublicCourseCard, 'openClasses' | 'has
   if (card.openClasses === 0) return 'closed'
   if (card.hasFreeSeat) return 'available'
   return card.pricing === 'paid' && card.price === null ? 'priceUnavailable' : 'full'
+}
+
+/**
+ * The i18n key of a card's availability pill. A course with no class open reads «قريبًا» on a card; its own page keeps
+ * the plain explanation (`publicCatalog.card.closed`). `priceUnavailable` has no pill: the price already says why.
+ */
+export function availabilityPillKey(availability: Exclude<PublicAvailability, 'priceUnavailable'>): string {
+  return availability === 'closed' ? 'publicCatalog.card.comingSoon' : `publicCatalog.card.${availability}`
+}
+
+const AVAILABILITY_RANK: Record<PublicAvailability, number> = { available: 0, full: 1, priceUnavailable: 1, closed: 2 }
+
+/**
+ * One page of /explore as it is shown: what can be joined now, then what is full or has no usable price, then what is
+ * coming soon, keeping the server's order inside each group (`sort` is stable). It orders ONE page, when that page
+ * arrives: «عرض المزيد» only appends, so a card the visitor is looking at never jumps. The limit that follows: an
+ * available course on a later page comes after the coming-soon cards of the pages above it. Ordering the whole catalog
+ * needs the server to do it. No card is added or dropped, and the keyset cursor is the server's, untouched.
+ */
+export function orderPublicPage(page: readonly PublicCourseCard[]): PublicCourseCard[] {
+  return [...page].sort((a, b) => AVAILABILITY_RANK[availabilityOf(a)] - AVAILABILITY_RANK[availabilityOf(b)])
 }
 
 /** How many placeholder tints a card without a cover can take (publicCatalog.css `.public-card__placeholder--t0` … `--t4`). */
@@ -135,4 +157,27 @@ export function publicFailureKey(error: unknown): string {
  */
 export function enrollIntentPath(courseId: string): string {
   return `/catalog/${encodeURIComponent(courseId)}?intent=enroll`
+}
+
+export interface CardSubscribeTarget {
+  to: string
+  /** The sign-in page's return path. */
+  state?: { from: string }
+}
+
+/**
+ * Where a public card's subscribe button leads, or null when it shows no button: only while the server says the course
+ * takes an enrollment now, for a visitor (through the sign-in, keeping the course) or a student (to the course's
+ * classes). Staff and guardians cannot enroll themselves (API-221 needs the `student` role), and nothing is offered
+ * while the session is still being restored. Nothing enrolls here: the learner chooses a class and confirms.
+ */
+export function cardSubscribeTarget(
+  course: Pick<PublicCourseCard, 'id' | 'openClasses' | 'hasFreeSeat' | 'pricing' | 'price'>,
+  viewer: PublicViewer,
+  isStudent: boolean,
+): CardSubscribeTarget | null {
+  if (publicEnrollStateOf(course) !== 'enrollable') return null
+  if (viewer === 'visitor') return { to: '/login', state: { from: enrollIntentPath(course.id) } }
+  if (viewer === 'learner' && isStudent) return { to: enrollIntentPath(course.id) }
+  return null
 }

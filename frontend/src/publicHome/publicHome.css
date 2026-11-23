@@ -588,24 +588,10 @@
   margin-top: 0;
 }
 
-.public-card .public-card__cta {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  border-radius: 4px;
-  background: var(--pub-primary);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.15s ease;
-}
-
-.public-card--link:hover .public-card__cta {
-  background: var(--pub-primary-strong);
-  color: #fff;
+/* The home card has no foot row: its buttons span the card's padding box as they are. */
+.public-card--home .public-card__buttons {
+  flex: none;
+  margin-inline: 0;
 }
 
 .public-home__all-row {
@@ -1293,10 +1279,6 @@
 @media (prefers-reduced-motion: reduce) {
   .public-home__skeleton-media {
     animation: none;
-  }
-
-  .public-card .public-card__cta {
-    transition: none;
   }
 }
 

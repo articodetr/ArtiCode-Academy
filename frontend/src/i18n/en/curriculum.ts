@@ -295,6 +295,8 @@ export const publicCatalog = {
   },
   card: {
     free: 'Free',
+    subscribeFree: 'Enroll for free',
+    subscribePaid: 'Request to enroll',
     priceUnavailable: 'Price not available right now',
     price: 'Fees',
     duration: 'Duration',
@@ -303,6 +305,7 @@ export const publicCatalog = {
     available: 'Classes available',
     full: 'The open classes are full',
     closed: 'No class open right now',
+    comingSoon: 'Coming soon',
     hours: '{{count}} hours',
     hours_one: '{{count}} hour',
     hours_two: '{{count}} hours',

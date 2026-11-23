@@ -20,13 +20,19 @@ interface CreateUserWizardProps {
   onClose: () => void
   /** Called with the created detail (full projection, status `invited`). */
   onCreated: (user: UserDetail) => void
+  /**
+   * The kind chosen when the wizard opens (J-F59: `/users?create=teacher` from the dashboard's quick actions); the
+   * first step still shows it and lets the user change it. Default `student`.
+   */
+  initialKind?: UserKind
 }
 
-export function CreateUserWizard({ open, onClose, onCreated }: CreateUserWizardProps) {
+export function CreateUserWizard({ open, onClose, onCreated, initialKind }: CreateUserWizardProps) {
   const { t } = useTranslation()
   return (
     <Modal open={open} onCancel={onClose} title={t('users.create.title')} footer={null} width={640} mask={{ closable: false }} destroyOnHidden>
-      <WizardBody onClose={onClose} onCreated={onCreated} />
+      {/* Mounted per opening (destroyOnHidden), so each opening starts from `initialKind`. */}
+      <WizardBody onClose={onClose} onCreated={onCreated} initialKind={initialKind} />
     </Modal>
   )
 }
@@ -42,13 +48,13 @@ const STEP_TITLES: Readonly<Record<StepKey, string>> = {
 /** Fields mounted on the identity step (validated before moving on). */
 const IDENTITY_FIELDS = ['fullName', 'fullNameLatin', 'displayName', 'email', 'username', 'phone', 'locale']
 
-function WizardBody({ onClose, onCreated }: Omit<CreateUserWizardProps, 'open'>) {
+function WizardBody({ onClose, onCreated, initialKind = 'student' }: Omit<CreateUserWizardProps, 'open'>) {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const contact = hasPermission('users.read_contact')
   const canAssignRoles = hasPermission('users.roles.assign')
   const [form] = Form.useForm()
-  const [kind, setKind] = useState<UserKind>('student')
+  const [kind, setKind] = useState<UserKind>(initialKind)
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)

@@ -4,6 +4,7 @@ import { ApiError } from '../api/client'
 import { makeCatalogCard, makeCatalogClass, makeCatalogDetail } from '../test/catalog'
 import { catalogFailureKey, isCourseGone } from './catalog.errors'
 import {
+  autoConfirmClass,
   cardAvailability,
   catalogParams,
   coverSrc,
@@ -60,6 +61,39 @@ describe('the classes the details page offers', () => {
     const mine = makeCatalogClass({ enrollable: false, blocker: 'request_pending', myEnrollment: { id: 'e', status: 'pending', state: 'pending_payment' } })
     expect(enrollmentUnavailable(makeCatalogDetail({ classes: [mine] }))).toBe(false)
     expect(enrollmentUnavailable(makeCatalogDetail({ classes: [full], selfService: { allowed: false, reason: 'not_a_student' } }))).toBe(false)
+  })
+})
+
+describe('the class whose confirmation opens by itself', () => {
+  const only = makeCatalogClass()
+  const second = makeCatalogClass({ id: 'second' })
+  const full = makeCatalogClass({ id: 'full', enrollable: false, blocker: 'class_full' })
+
+  it('is the one class that takes the reader, whatever else the course lists', () => {
+    expect(autoConfirmClass(makeCatalogDetail({ classes: [only] }))).toEqual(only)
+    expect(autoConfirmClass(makeCatalogDetail({ classes: [full, only] }))).toEqual(only)
+  })
+
+  it('is none with no class or with two: the learner chooses', () => {
+    expect(autoConfirmClass(makeCatalogDetail({ classes: [] }))).toBeNull()
+    expect(autoConfirmClass(makeCatalogDetail({ classes: [full] }))).toBeNull()
+    expect(autoConfirmClass(makeCatalogDetail({ classes: [only, second] }))).toBeNull()
+  })
+
+  it('is none for a reader who may not enroll themself', () => {
+    expect(autoConfirmClass(makeCatalogDetail({ classes: [only], selfService: { allowed: false, reason: 'not_a_student' } }))).toBeNull()
+  })
+
+  it('is none for a reader who studies, completed or waits on a request in another class', () => {
+    for (const [status, state] of [['active', 'enrolled'], ['completed', 'completed'], ['pending', 'pending_payment'], ['pending', 'pending_approval']] as const) {
+      const mine = makeCatalogClass({ id: 'mine', enrollable: false, blocker: 'already_enrolled', myEnrollment: { id: 'e', status, state } })
+      expect(autoConfirmClass(makeCatalogDetail({ classes: [mine, only] }))).toBeNull()
+    }
+  })
+
+  it('still asks a reader whose older row in another class opens nothing', () => {
+    const withdrawn = makeCatalogClass({ id: 'old', enrollable: false, blocker: 'already_enrolled', myEnrollment: { id: 'e', status: 'withdrawn', state: 'withdrawn' } })
+    expect(autoConfirmClass(makeCatalogDetail({ classes: [withdrawn, only] }))).toEqual(only)
   })
 })
 

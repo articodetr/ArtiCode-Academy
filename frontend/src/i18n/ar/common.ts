@@ -102,6 +102,21 @@ export const errors = {
 
 export const nav = {
   openMenu: 'فتح القائمة',
+  // The app shell (2026-11-22): the side menu's landmark, the phone drawer's close button and the rail's trigger.
+  closeMenu: 'إغلاق القائمة',
+  mainMenu: 'القائمة الرئيسية',
+  collapseMenu: 'طيّ القائمة',
+  expandMenu: 'توسيع القائمة',
+  // The headings of the grouped side menu (navigation.ts NAV_GROUPS).
+  groups: {
+    academy: 'إدارة الأكاديمية',
+    mine: 'صفحاتي',
+    academics: 'الشؤون التعليمية',
+    assessment: 'التقييم',
+    finance: 'الشؤون المالية',
+    followUp: 'المتابعة',
+    system: 'النظام',
+  },
   unreadNotifications: 'الإشعارات، {{count}} غير مقروءة',
   dashboard: 'لوحة التحكم',
   users: 'المستخدمون',

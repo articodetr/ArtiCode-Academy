@@ -45,7 +45,8 @@ export const publicHome = {
     label: 'برامجنا',
     title: 'استكشف برامجنا التعليمية',
     subtitle: 'من برامج الأكاديمية المنشورة: محتواها ومدتها ورسومها.',
-    open: 'ابدأ التعلّم',
+    // Replaces the subtitle when none of the cards shown takes a learner now.
+    noneJoinable: 'لا يقبل أيٌّ من هذه البرامج اشتراكًا جديدًا الآن، ويمكنك الاطلاع على محتواها ومدتها ورسومها.',
     all: 'كل البرامج',
     emptyTitle: 'لا توجد برامج بعد',
     empty: 'لا توجد برامج منشورة بعد.',

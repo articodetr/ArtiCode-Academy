@@ -63,6 +63,9 @@ export const catalog = {
     noClasses: 'لا يوجد فصل مفتوح للتسجيل في هذه الدورة.',
     // MOD-20 (D-R138): the visitor chose «سجّل في هذه الدورة» on the public page and signed in.
     intentNotice: 'اختر الفصل الذي تريد التسجيل فيه',
+    // One class takes the learner: nothing to choose, only to confirm.
+    intentNoticeOne: 'هذا هو الفصل المتاح لك في هذه الدورة',
+    intentHintOne: 'لا يُرسل شيء قبل تأكيدك. راجع مواعيده ومقاعده، ثم اضغط زرّه متى كنت جاهزاً.',
     // PORTAL-04: no answer or a server error while enrolling — the outcome is unknown until the course is read again.
     enrollUnknown: 'لم يصلنا ردّ مؤكَّد، فقد يكون الالتحاق تمّ أو لم يتمّ. أعد تحميل الدورة لترى حالتك الحقيقية قبل أن تحاول مرة أخرى.',
     reloadCourse: 'إعادة تحميل الدورة',

@@ -307,6 +307,9 @@ export const publicCatalog = {
   },
   card: {
     free: 'مجانية',
+    // The card's button beside «التفاصيل»: it leads to choosing a class, it enrolls nobody by itself.
+    subscribeFree: 'اشترك مجانًا',
+    subscribePaid: 'طلب الاشتراك',
     // A paid course whose plan cannot price a request now (API-236 `pricing: paid`, `price: null`) — never «مجانية».
     priceUnavailable: 'السعر غير متاح حالياً',
     price: 'الرسوم',
@@ -315,7 +318,9 @@ export const publicCatalog = {
     content: 'المحتوى',
     available: 'فصول متاحة',
     full: 'الفصول المفتوحة ممتلئة',
+    // The course page's explanation; a card says `comingSoon` instead.
     closed: 'لا فصل مفتوح حالياً',
+    comingSoon: 'قريبًا',
     hours: '{{count}} ساعة',
     hours_one: 'ساعة واحدة',
     hours_two: 'ساعتان',

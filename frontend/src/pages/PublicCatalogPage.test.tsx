@@ -5,6 +5,7 @@ import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ACADEMY_PUBLIC_PATH } from '../api/academy'
 import { PUBLIC_CATALOG_PATH } from '../api/publicCatalog'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { formatMoney } from '../payments/payments.format'
 import { makePublicAcademy } from '../test/academy'
@@ -107,7 +108,10 @@ describe('PublicCatalogPage', () => {
     const ai = card(PUBLIC_COURSE_IDS[2])
     expect(ai.getByText(pc.card.priceUnavailable)).toBeInTheDocument()
     expect(ai.queryByText(pc.card.free)).not.toBeInTheDocument()
-    expect(ai.getByText(pc.card.closed)).toBeInTheDocument()
+    // No class open: «قريبًا» on the card, with no subscribe button.
+    expect(ai.getByText(pc.card.comingSoon)).toBeInTheDocument()
+    expect(ai.queryByText(pc.card.closed)).not.toBeInTheDocument()
+    expect(screen.queryByTestId(`public-subscribe-${PUBLIC_COURSE_IDS[2]}`)).not.toBeInTheDocument()
     // No teacher, no class code, no schedule is ever shown — the server sends none.
     expect(document.body.textContent).not.toContain('PY-101-A')
 
@@ -160,6 +164,43 @@ describe('PublicCatalogPage', () => {
     expect(screen.getByText('أساسيات بايثون')).toBeInTheDocument()
     expect(api.requests.map((request) => request.query.get('cursor'))).toEqual([null, 'next-1'])
     await waitFor(() => expect(screen.queryByText(pc.list.more)).not.toBeInTheDocument())
+  })
+
+  describe('the order of the cards', () => {
+    const open = (id: string) => makePublicCard({ id, code: id, name: { ar: `برنامج ${id}` } })
+    const full = (id: string) => makePublicCard({ id, code: id, name: { ar: `برنامج ${id}` }, hasFreeSeat: false })
+    const soon = (id: string) => makePublicCard({ id, code: id, name: { ar: `برنامج ${id}` }, openClasses: 0, hasFreeSeat: false })
+    const shownIds = () => Array.from(document.querySelectorAll('[data-testid^="public-card-"]')).map((node) => node.getAttribute('data-testid')!.slice('public-card-'.length))
+
+    it('orders each page as it arrives and only appends the next one: no card jumps, is lost or repeats, and the cursor still works', async () => {
+      const api = mockPublicApi((query) =>
+        query.get('cursor') === 'next-1'
+          ? // `s1` again: a course the server moved between the two reads is not shown twice.
+            jsonResponse(200, makePublicList([soon('s2'), soon('s1'), open('o2')], null))
+          : jsonResponse(200, makePublicList([soon('s1'), full('f1'), open('o1')], 'next-1')),
+      )
+      renderPage()
+
+      await screen.findByText('برنامج o1')
+      expect(shownIds()).toEqual(['o1', 'f1', 's1'])
+
+      fireEvent.click(screen.getByText(pc.list.more).closest('button')!)
+      await screen.findByText('برنامج o2')
+      expect(shownIds()).toEqual(['o1', 'f1', 's1', 'o2', 's2'])
+      expect(api.requests.map((request) => request.query.get('cursor'))).toEqual([null, 'next-1'])
+
+      // The whole list is on screen: the count is every distinct course.
+      await waitFor(() => expect(screen.queryByText(pc.list.more)).not.toBeInTheDocument())
+      expect(screen.getByText(i18n.getFixedT('ar')('publicCatalog.list.count', { count: 5 }))).toBeInTheDocument()
+    })
+
+    it('orders the results of a search the same way', async () => {
+      mockPublicApi(() => jsonResponse(200, makePublicList([soon('s1'), open('o1')])))
+      renderPage(makeAuth(), '?q=برنامج')
+
+      await screen.findByText('برنامج o1')
+      expect(shownIds()).toEqual(['o1', 's1'])
+    })
   })
 
   it('searches once the typing pauses, from the first page, and offers to clear a search that finds nothing', async () => {

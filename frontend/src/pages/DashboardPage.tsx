@@ -1,7 +1,10 @@
-// The home page. A student or a guardian with no other role gets the learner home (LearnerHome, built from the
-// «my …» reads); everyone else gets the staff dashboard in the classic layout — the four number cards, today's
-// lessons beside the latest notifications, then the open and running classes. Every card reads the server and
-// shows only to a holder of the keys its read needs (the server stays the boundary):
+// The home page — three homes, kept apart (J-F59): a student or a guardian with no other role gets the learner home
+// (LearnerHome, built from the «my …» reads); a teacher (the UI role `teacher`: no admin or staff role) keeps the
+// teacher's dashboard below, unchanged — the four number cards, today's lessons beside the latest notifications, then
+// the open and running classes; everyone else — the academy's admins and staff, and custom-role holders — gets the
+// admin home (dashboard/admin/AdminDashboardHome.tsx: quick actions, the academy's figures, the coming lessons and the
+// latest notifications). On the teacher's dashboard every card reads the server and shows only to a holder of the
+// keys its read needs (the server stays the boundary):
 //   - the number cards: API-164 GET /api/reports/overview, for any of the three reports.* keys — its `general`
 //     section for everyone of them, `financial` (the money card) only for reports.financial.view;
 //   - today's lessons: API-093 GET /api/lessons, for lessons.read (a teacher gets the lessons of their classes);
@@ -9,24 +12,15 @@
 //   - the notifications: API-167 GET /api/me/notifications, by ownership (no key).
 // A card that cannot be read is left out, never filled with invented numbers; a failed card says so and offers
 // to try again without breaking the others.
-import {
-  AppstoreOutlined,
-  CalendarOutlined,
-  CreditCardOutlined,
-  ReloadOutlined,
-  UserOutlined,
-} from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Col, Empty, Row, Skeleton, Statistic, Table, Tag, Typography, theme } from 'antd'
+import { AppstoreOutlined, CalendarOutlined, CreditCardOutlined, UserOutlined } from '@ant-design/icons'
+import { Card, Col, Empty, Row, Statistic, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
-import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useAcademy } from '../academy/useAcademy'
 import type { AcademyClass } from '../api/classes'
 import type { Lesson } from '../api/lessons'
 import { listMyNotifications } from '../api/notifications'
-import type { MyNotification } from '../api/notifications'
 import { REPORT_KEYS, getReportsOverview } from '../api/reports'
 import type { ReportsOverview } from '../api/reports'
 import { useAuth } from '../auth/auth-context'
@@ -34,32 +28,21 @@ import { academyTimeZoneOf } from '../common/timeZone'
 import { PageHeader } from '../components/PageHeader'
 import { ServerStatusCard } from '../components/ServerStatusCard'
 import { StatusTag } from '../components/StatusTag'
+import { AdminDashboardHome } from '../dashboard/admin/AdminDashboardHome'
+import { CardContent, CardFailure, RECENT_NOTIFICATIONS, RecentNotifications } from '../dashboard/DashboardCards'
 import { formatMoney, labelIn } from '../dashboard/dashboard.data'
 import { loadActiveClasses, loadLessonsBetween } from '../dashboard/dashboard.load'
 import { LearnerHome } from '../dashboard/LearnerHome'
 import { isLearnerOnly } from '../dashboard/learner.data'
 import { useLoad } from '../dashboard/useLoad'
 import type { Reloadable } from '../dashboard/useLoad'
+import { useNow } from '../dashboard/useNow'
 import { useLocalized } from '../i18n/useLocalized'
 import { canAccess } from '../layout/navigation'
-import { formatLessonDateTime, formatLessonTimes } from '../lessons/lessons.format'
+import { formatLessonTimes } from '../lessons/lessons.format'
 import { LessonZoneNote } from '../lessons/LessonZone'
-import { notificationZone } from '../notifications/notifications.view'
 import { addDays, calendarDateIn, minutesNowIn } from '../timetable/timetable.dates'
 import { deviceTimeZone } from '../timetable/timetable.settings'
-
-/** How many of the latest notifications the card lists. */
-const RECENT_NOTIFICATIONS = 4
-
-/** Ticks once a minute so the homes follow the clock (the learner's day, the staff's «today»). */
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
-  }, [])
-  return now
-}
 
 /** A student or guardian with no other role gets their own home from the «my …» reads (ported from the redesign). */
 function LearnerDashboard() {
@@ -78,37 +61,12 @@ function LearnerDashboard() {
 
 export function DashboardPage() {
   const { user } = useAuth()
-  return isLearnerOnly(user?.roles ?? []) ? <LearnerDashboard /> : <StaffDashboard />
+  if (isLearnerOnly(user?.roles ?? [])) return <LearnerDashboard />
+  return user?.role === 'teacher' ? <TeacherDashboard /> : <AdminDashboardHome />
 }
 
-/** A card's failure: a short message and a way to ask again. */
-function CardFailure({ onRetry }: { onRetry: () => void }) {
-  const { t } = useTranslation()
-  return (
-    <Alert
-      type="warning"
-      showIcon
-      title={t('dashboard.cardFailed')}
-      action={
-        <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>
-          {t('dashboard.retry')}
-        </Button>
-      }
-    />
-  )
-}
-
-/**
- * The body of a list card: the failure with a retry, a skeleton while reading (also while the read still waits —
- * today's lessons wait for the academy's zone), or the server's answer.
- */
-function CardContent<T>({ loaded, children }: { loaded: Reloadable<T>; children: (data: T) => ReactNode }) {
-  if (loaded.error) return <CardFailure onRetry={loaded.retry} />
-  if (loaded.loading || loaded.data === null) return <Skeleton active paragraph={{ rows: 3 }} title={false} />
-  return <>{children(loaded.data)}</>
-}
-
-function StaffDashboard() {
+/** The teacher's home (the classic staff dashboard, unchanged by J-F59 — it served every staff member before). */
+function TeacherDashboard() {
   const { t } = useTranslation()
   const { user, hasPermission } = useAuth()
   const { academy, loading: academyLoading } = useAcademy()
@@ -283,45 +241,6 @@ function TodayLessonsTable({ lessons, dayZone }: { lessons: Lesson[]; dayZone: s
         scroll={{ x: 'max-content' }}
       />
     </>
-  )
-}
-
-/** The latest notifications of the caller, newest first, as the server worded them. */
-function RecentNotifications({ items }: { items: MyNotification[] }) {
-  const { t } = useTranslation()
-  const { language } = useLocalized()
-  const { academy } = useAcademy()
-  const { token } = theme.useToken()
-  if (items.length === 0) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('dashboard.noNotifications')} />
-  const zone = notificationZone(academy)
-  return (
-    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-      {items.map((item, index) => (
-        <li
-          key={item.id}
-          style={{ display: 'flex', gap: 12, alignItems: 'baseline', padding: '12px 0', borderTop: index > 0 ? `1px solid ${token.colorSplit}` : undefined }}
-        >
-          <Badge dot={item.readAt === null} />
-          <div style={{ minWidth: 0 }}>
-            <Typography.Text strong>
-              <bdi dir="auto">{item.title}</bdi>
-            </Typography.Text>
-            {item.body ? (
-              <>
-                <br />
-                <Typography.Text type="secondary">
-                  <bdi dir="auto">{item.body}</bdi>
-                </Typography.Text>
-              </>
-            ) : null}
-            <br />
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              <time dateTime={item.createdAt}>{formatLessonDateTime(item.createdAt, language, zone)}</time>
-            </Typography.Text>
-          </div>
-        </li>
-      ))}
-    </ul>
   )
 }
 

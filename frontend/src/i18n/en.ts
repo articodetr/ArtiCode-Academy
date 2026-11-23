@@ -8,6 +8,8 @@ import { questionBanks } from './en/questionBanks'
 import { examOnline } from './en/examOnline'
 import { examAttempts } from './en/examAttempts'
 import { takeExam } from './en/takeExam'
+import { courseCover } from './en/courseCover'
+import { courseEnrollmentPanel } from './en/courseEnrollmentPanel'
 import { publicHome } from './en/publicHome'
 
 export const en: Translation = {
@@ -57,6 +59,19 @@ export const en: Translation = {
   },
   nav: {
     openMenu: 'Open menu',
+    closeMenu: 'Close menu',
+    mainMenu: 'Main menu',
+    collapseMenu: 'Collapse menu',
+    expandMenu: 'Expand menu',
+    groups: {
+      academy: 'Academy',
+      mine: 'My pages',
+      academics: 'Teaching',
+      assessment: 'Assessment',
+      finance: 'Finance',
+      followUp: 'Follow-up',
+      system: 'System',
+    },
     unreadNotifications: 'Notifications, {{count}} unread',
     dashboard: 'Dashboard',
     users: 'Users',
@@ -537,6 +552,56 @@ export const en: Translation = {
     noTeacher: 'No teacher',
     cardFailed: 'This part could not be loaded.',
     retry: 'Try again',
+    // The admin home (J-F59 — dashboard/admin/).
+    admin: {
+      title: 'Welcome to the academy dashboard',
+      intro: 'Manage students, courses and lessons and follow the academy’s work from one place.',
+      refresh: 'Refresh',
+      quickActions: 'Quick actions',
+      noActions: 'No quick actions are available for your permissions.',
+      showMore: 'Show more ({{n}})',
+      showLess: 'Show less',
+      actions: {
+        addStudent: 'Add a student',
+        addTeacher: 'Add a teacher',
+        createCourse: 'Create a course',
+        classes: 'Manage classes',
+        assignTeacher: 'Assign a teacher',
+        lessons: 'Manage lessons',
+        schedule: 'Timetable',
+        enrollmentRequests: 'Enrollment requests',
+        assignments: 'Assignments',
+        exams: 'Exams',
+        payments: 'Payments',
+        certificates: 'Certificates',
+      },
+      statistics: 'Academy figures',
+      stats: {
+        activeStudents: 'Active students',
+        runningClasses: 'Running classes',
+        openClasses: 'Open classes',
+        lessonsToday: 'Lessons today',
+        attendanceRate: 'Attendance rate',
+        attendancePeriod: 'Last 30 days',
+        outstanding: 'Outstanding fees',
+        pendingRequests: 'Pending enrollment requests',
+        review: 'Review requests',
+      },
+      schedule: {
+        title: 'Timetable',
+        viewLabel: 'Range',
+        dayView: 'Today',
+        weekView: 'Week',
+        today: 'Today',
+        tomorrow: 'Tomorrow',
+        all: 'All lessons',
+        emptyDay: 'No lessons scheduled today.',
+        emptyWeek: 'No lessons in the next seven days.',
+        join: 'Lesson link',
+        details: 'Details',
+      },
+      allNotifications: 'Show all',
+    },
     // The learner home (LearnerHome) of a student or a guardian with no other role.
     greeting: { morning: 'Good morning, {{name}}', evening: 'Good evening, {{name}}' },
     learner: {
@@ -4230,4 +4295,6 @@ export const en: Translation = {
   takeExam,
   // PORTAL-04 (#208): the academy's public home page (/home).
   publicHome,
+  courseCover,
+  courseEnrollmentPanel,
 }

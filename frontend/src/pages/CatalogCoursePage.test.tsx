@@ -1,16 +1,33 @@
 // MOD-19 — a course of the catalog (API-220) and the self-service enrollment (API-221): what the page shows of the
 // server's answer, the confirmation before a request, the outcome, the refusals, and the re-read after every attempt.
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { StrictMode } from 'react'
 import { useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogCourseDetail, CatalogEnrollResult } from '../api/catalog'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
+import { en } from '../i18n/en'
 import { formatMoney } from '../payments/payments.format'
 import { CATALOG_CLASS_IDS, CATALOG_COURSE_IDS, makeCatalogClass, makeCatalogDetail, makeEnrollResult, makeMyRequest, makeRequestInvoice } from '../test/catalog'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CatalogCoursePage } from './CatalogCoursePage'
+
+// The real hook, with its `reload` in reach: a re-read that no button of the page offers while the intent is alive.
+const courseHook = vi.hoisted(() => ({ reload: () => {} }))
+vi.mock('../catalog/useCatalogCourse', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../catalog/useCatalogCourse')>()
+  return {
+    useCatalogCourse: (courseId: string) => {
+      const value = real.useCatalogCourse(courseId)
+      courseHook.reload = value.reload
+      return value
+    },
+  }
+})
 
 const COURSE_PATH = `/api/catalog/courses/${CATALOG_COURSE_IDS[0]}`
 const ENROLL_PATH = `/api/catalog/classes/${CATALOG_CLASS_IDS[0]}/enroll`
@@ -329,15 +346,205 @@ describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R
         auth: makeAuth({ user: makeUser({ id: 'st-1', role: 'student', roles, permissions: ['courses.read', 'enrollments.self_enroll'] }) }),
         route: `/catalog/${CATALOG_COURSE_IDS[0]}${search}`,
         path: '/catalog/:courseId',
-        routes: { '/learn/:courseId': <PathProbe />, '/my-classes': <PathProbe /> },
+        routes: { '/catalog': <PathProbe />, '/learn/:courseId': <PathProbe />, '/my-classes': <PathProbe /> },
       },
     )
   }
 
   const classes = () => screen.getByTestId('catalog-classes')
 
-  it('brings the classes into view with «اختر الفصل…», drops the intent from the URL, and enrolls nobody by itself', async () => {
+  const twoClasses = () => makeCatalogDetail({ classes: [makeCatalogClass(), makeCatalogClass({ id: CATALOG_CLASS_IDS[1], code: 'PY-101-B', name: { ar: 'بايثون — الفصل ب', en: 'Python — class B' } })] })
+
+  /** The confirmations still open: antd keeps a closed one in the DOM, hidden. */
+  const openConfirms = () =>
+    [...document.querySelectorAll<HTMLElement>('.ant-modal-confirm')].filter((node) => {
+      const wrap = node.closest<HTMLElement>('.ant-modal-wrap')
+      return wrap?.style.display !== 'none' && !node.className.includes('-leave') && !wrap?.className.includes('-leave')
+    })
+
+  async function cancelConfirm(title: string) {
+    fireEvent.click(within(await confirmDialog(title)).getByText(ar.catalog.confirm.cancel).closest('button')!)
+    await waitFor(() => expect(openConfirms()).toHaveLength(0))
+  }
+
+  it('asks the one class’s confirmation by itself, and sends nothing until the learner confirms', async () => {
+    const api = mockCourseApi(makeCatalogDetail(), makeEnrollResult())
+    renderWithIntent('?intent=enroll')
+
+    const dialog = await confirmDialog(ar.catalog.confirm.freeTitle)
+    expect(within(dialog).getByText('سيُفعَّل التحاقك بفصل «بايثون — الفصل أ» فور تأكيدك، وتظهر الدورة في «فصولي».')).toBeInTheDocument()
+    expect(openConfirms()).toHaveLength(1)
+    // The notice behind it has nothing to choose from.
+    const notice = within(classes()).getByTestId('catalog-intent-notice')
+    expect(notice).toHaveTextContent(ar.catalog.detail.intentNoticeOne)
+    expect(notice).not.toHaveTextContent(ar.catalog.detail.intentNotice)
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    expect(api.posts).toEqual([])
+
+    fireEvent.click(within(dialog).getByText(ar.catalog.confirm.freeOk).closest('button')!)
+    expect(await screen.findByTestId('catalog-enrolled')).toBeInTheDocument()
+    expect(api.posts).toEqual([{ url: ENROLL_PATH, body: {} }])
+  })
+
+  it('keeps the invoice and the two conditions in the question of a paid course', async () => {
+    const api = mockCourseApi(makeCatalogDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR', installments: 1 } }))
+    renderWithIntent('?intent=enroll')
+
+    const dialog = await confirmDialog(ar.catalog.confirm.paidTitle)
+    expect(dialog.textContent).toContain(formatMoney(1200, 'SAR', 'ar'))
+    expect(dialog.textContent).toContain('إرسال الطلب لا يفعّل الدراسة: لا يُفعَّل الالتحاق ولا تُفتح الدروس إلا بعد تأكيد الدفع وموافقة إدارة الأكاديمية معاً.')
+    expect(api.posts).toEqual([])
+  })
+
+  it('focuses «تراجع» in the question that opened by itself: Enter sends nothing and issues no invoice', async () => {
+    const user = userEvent.setup()
+    const api = mockCourseApi(makeCatalogDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR', installments: 1 } }))
+    renderWithIntent('?intent=enroll')
+
+    const dialog = await confirmDialog(ar.catalog.confirm.paidTitle)
+    const cancel = within(dialog).getByText(ar.catalog.confirm.cancel).closest('button')!
+    await waitFor(() => expect(document.activeElement).toBe(cancel))
+
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(openConfirms()).toHaveLength(0))
+    expect(api.posts).toEqual([])
+  })
+
+  it('keeps the focus on the confirm button when the learner opened the question from the class', async () => {
+    mockCourseApi(makeCatalogDetail())
+    renderWithIntent('')
+    await screen.findByText('أساسيات بايثون')
+
+    fireEvent.click(within(classCard()).getByText(ar.catalog.class.enroll).closest('button')!)
+    const dialog = await confirmDialog(ar.catalog.confirm.freeTitle)
+    const ok = within(dialog).getByText(ar.catalog.confirm.freeOk).closest('button')!
+    await waitFor(() => expect(document.activeElement).toBe(ok))
+  })
+
+  it('leaves the class and its button after a cancel, and does not ask again after a re-read', async () => {
     const api = mockCourseApi(makeCatalogDetail())
+    renderWithIntent('?intent=enroll')
+
+    await cancelConfirm(ar.catalog.confirm.freeTitle)
+    expect(api.posts).toEqual([])
+    const button = within(classCard()).getByText(ar.catalog.class.enroll).closest('button')!
+    expect(button).toBeEnabled()
+
+    // The course is read again while the intent is still alive: the question stays answered.
+    act(() => courseHook.reload())
+    await waitFor(() => expect(api.reads).toBe(2))
+    await waitFor(() => expect(screen.getByTestId('catalog-classes')).toHaveAttribute('aria-busy', 'false'))
+    expect(within(classes()).getByTestId('catalog-intent-notice')).toBeInTheDocument()
+    expect(openConfirms()).toHaveLength(0)
+
+    // The learner's own press still asks, and only their confirmation would send anything.
+    fireEvent.click(within(classCard()).getByText(ar.catalog.class.enroll).closest('button')!)
+    await waitFor(() => expect(openConfirms()).toHaveLength(1))
+    expect(api.posts).toEqual([])
+  })
+
+  it('closes the question when the learner leaves the page, and sends nothing', async () => {
+    const api = mockCourseApi(makeCatalogDetail())
+    renderWithIntent('?intent=enroll')
+    await confirmDialog(ar.catalog.confirm.freeTitle)
+    expect(openConfirms()).toHaveLength(1)
+
+    fireEvent.click(screen.getByText(ar.catalog.detail.back).closest('button')!)
+    expect((await screen.findByTestId('path')).textContent).toBe('/catalog')
+    await waitFor(() => expect(openConfirms()).toHaveLength(0))
+    expect(api.posts).toEqual([])
+  })
+
+  it('does not ask again after a language change', async () => {
+    const api = mockCourseApi(makeCatalogDetail())
+    renderWithIntent('?intent=enroll')
+    await cancelConfirm(ar.catalog.confirm.freeTitle)
+
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+    try {
+      expect(await screen.findByText(en.catalog.detail.classes)).toBeInTheDocument()
+      expect(openConfirms()).toHaveLength(0)
+      expect(api.posts).toEqual([])
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage('ar')
+      })
+    }
+  })
+
+  it('asks once under StrictMode', async () => {
+    const api = mockCourseApi(makeCatalogDetail())
+    renderWithProviders(
+      <StrictMode>
+        <CatalogCoursePage />
+      </StrictMode>,
+      {
+        auth: makeAuth({ user: makeUser({ id: 'st-1', role: 'student', roles: ['student'], permissions: ['courses.read', 'enrollments.self_enroll'] }) }),
+        route: `/catalog/${CATALOG_COURSE_IDS[0]}?intent=enroll`,
+        path: '/catalog/:courseId',
+      },
+    )
+    await confirmDialog(ar.catalog.confirm.freeTitle)
+    expect(document.querySelectorAll('.ant-modal-confirm')).toHaveLength(1)
+    expect(api.posts).toEqual([])
+  })
+
+  it('does not ask on a later visit of the page: the intent has left the URL', async () => {
+    const api = mockCourseApi(makeCatalogDetail())
+    const { unmount } = renderWithIntent('?intent=enroll')
+    await cancelConfirm(ar.catalog.confirm.freeTitle)
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    unmount()
+
+    renderWithIntent('')
+    await screen.findByText('أساسيات بايثون')
+    await waitFor(() => expect(screen.getByTestId('catalog-classes')).toHaveAttribute('aria-busy', 'false'))
+    expect(openConfirms()).toHaveLength(0)
+    expect(api.posts).toEqual([])
+  })
+
+  it('asks nothing without the intent', async () => {
+    const api = mockCourseApi(makeCatalogDetail())
+    renderWithIntent('')
+    await screen.findByText('أساسيات بايثون')
+    await waitFor(() => expect(screen.getByTestId('catalog-classes')).toHaveAttribute('aria-busy', 'false'))
+    expect(document.querySelectorAll('.ant-modal-confirm')).toHaveLength(0)
+    expect(api.posts).toEqual([])
+  })
+
+  it('asks nothing of a learner already enrolled, or with a pending request', async () => {
+    const enrolled = makeCatalogDetail({
+      mine: { enrolled: true, pending: false },
+      classes: [
+        makeCatalogClass({ enrollable: false, blocker: 'already_enrolled', myEnrollment: { id: 'e-1', status: 'active', state: 'enrolled' } }),
+        makeCatalogClass({ id: CATALOG_CLASS_IDS[1], code: 'PY-101-B' }),
+      ],
+    })
+    const first = mockCourseApi(enrolled)
+    const { unmount } = renderWithIntent('?intent=enroll')
+    expect(await screen.findByTestId('catalog-standing')).toHaveAttribute('data-standing', 'studying')
+    expect(document.querySelectorAll('.ant-modal-confirm')).toHaveLength(0)
+    expect(first.posts).toEqual([])
+    unmount()
+
+    const pending = makeCatalogDetail({
+      mine: { enrolled: false, pending: true },
+      classes: [
+        makeCatalogClass({ enrollable: false, blocker: 'request_pending', myEnrollment: { id: 'e-2', status: 'pending', state: 'pending_payment' } }),
+        makeCatalogClass({ id: CATALOG_CLASS_IDS[1], code: 'PY-101-B' }),
+      ],
+    })
+    const second = mockCourseApi(pending)
+    renderWithIntent('?intent=enroll')
+    expect(await screen.findByTestId('catalog-standing')).toHaveAttribute('data-standing', 'pending')
+    expect(document.querySelectorAll('.ant-modal-confirm')).toHaveLength(0)
+    expect(second.posts).toEqual([])
+  })
+
+  it('brings the classes into view with «اختر الفصل…», drops the intent from the URL, and enrolls nobody by itself', async () => {
+    const api = mockCourseApi(twoClasses())
     renderWithIntent('?intent=enroll')
 
     expect(await within(await screen.findByTestId('catalog-classes')).findByText(ar.catalog.detail.intentNotice)).toBeInTheDocument()

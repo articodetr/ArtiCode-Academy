@@ -1,10 +1,13 @@
 // PORTAL-04 PR-1 redesign: the public course card's media box (a cover, or a plain placeholder — also when the cover
 // fails), the level badge on it, and the price at its foot. The link behaviour is covered by the catalog and home pages.
 import { fireEvent, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { useLocation } from 'react-router'
+import { afterEach, describe, expect, it } from 'vitest'
+import i18n from '../i18n'
 import { ar } from '../i18n/ar'
+import { en } from '../i18n/en'
 import { makePublicCard } from '../test/publicCatalog'
-import { renderWithProviders } from '../test/render'
+import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { PublicCourseCard } from './PublicCourseCard'
 import { PLACEHOLDER_TINTS, placeholderTintOf } from './publicCatalog.view'
 
@@ -61,5 +64,81 @@ describe('PublicCourseCard', () => {
     const preview = renderCard({}, null)
     expect(preview.queryByRole('link')).not.toBeInTheDocument()
     expect(preview.queryByText(pc.list.details)).not.toBeInTheDocument()
+  })
+
+  describe('a course with no class open', () => {
+    afterEach(async () => {
+      await i18n.changeLanguage('ar')
+    })
+    const soon = { openClasses: 0, hasFreeSeat: false }
+
+    it('reads «قريبًا» with no subscribe button, and can still be opened', () => {
+      const card = renderCard(soon)
+      expect(card.getByText('قريبًا')).toHaveClass('public-card__availability--closed')
+      expect(card.queryByText(pc.card.closed)).not.toBeInTheDocument()
+      expect(screen.queryByTestId(`public-subscribe-${makePublicCard().id}`)).not.toBeInTheDocument()
+      expect(card.getByText(pc.list.details)).toBeInTheDocument()
+    })
+
+    it('reads "Coming soon" in English', async () => {
+      await i18n.changeLanguage('en')
+      const card = renderCard(soon)
+      expect(card.getByText('Coming soon')).toBeInTheDocument()
+      expect(card.queryByText(en.publicCatalog.card.closed)).not.toBeInTheDocument()
+    })
+
+    it('leaves «full» with its own words', () => {
+      const card = renderCard({ hasFreeSeat: false })
+      expect(card.getByText(pc.card.full)).toBeInTheDocument()
+      expect(card.queryByText(pc.card.comingSoon)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('the subscribe button beside «التفاصيل»', () => {
+    function Probe() {
+      const location = useLocation()
+      return <output data-testid="landed">{JSON.stringify({ path: location.pathname + location.search, from: (location.state as { from?: string } | null)?.from })}</output>
+    }
+    const visitor = () => makeAuth({ status: 'anonymous', user: null })
+    function renderFor(auth: ReturnType<typeof makeAuth>, overrides: Parameters<typeof makePublicCard>[0] = {}) {
+      const card = makePublicCard({ hasFreeSeat: true, openClasses: 1, ...overrides })
+      renderWithProviders(<PublicCourseCard card={card} href={`/explore/${card.id}`} />, {
+        auth,
+        route: '/explore',
+        path: '/explore',
+        routes: { '/login': <Probe />, '/catalog/:courseId': <Probe /> },
+      })
+      return card
+    }
+
+    it('says «اشترك مجانًا» for a free course and leads a visitor through the sign-in, keeping the course', async () => {
+      const card = renderFor(visitor())
+      const button = screen.getByTestId(`public-subscribe-${card.id}`)
+      expect(button).toHaveTextContent(pc.card.subscribeFree)
+      expect(button).toHaveAccessibleName(`${pc.card.subscribeFree}: أساسيات بايثون`)
+      fireEvent.click(button)
+      expect(JSON.parse((await screen.findByTestId('landed')).textContent!)).toEqual({ path: '/login', from: `/catalog/${card.id}?intent=enroll` })
+    })
+
+    it('says «طلب الاشتراك» for a paid course', () => {
+      const card = renderFor(visitor(), { pricing: 'paid', price: { amount: 150, currency: 'USD' } })
+      expect(screen.getByTestId(`public-subscribe-${card.id}`)).toHaveTextContent(pc.card.subscribePaid)
+      expect(within(screen.getByTestId(`public-card-${card.id}`)).getByText(pc.list.details)).toBeInTheDocument()
+    })
+
+    it('leads a signed-in student straight to the course’s classes', async () => {
+      const card = renderFor(makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) }))
+      fireEvent.click(screen.getByTestId(`public-subscribe-${card.id}`))
+      expect(JSON.parse((await screen.findByTestId('landed')).textContent!).path).toBe(`/catalog/${card.id}?intent=enroll`)
+    })
+
+    it('keeps only «التفاصيل» when nobody can enroll now, and for staff or a guardian', () => {
+      const full = renderFor(visitor(), { id: '00000000-0000-7000-8000-0000000000a1', hasFreeSeat: false })
+      expect(screen.queryByTestId(`public-subscribe-${full.id}`)).not.toBeInTheDocument()
+      const staff = renderFor(makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: [] }) }), { id: '00000000-0000-7000-8000-0000000000a2' })
+      expect(screen.queryByTestId(`public-subscribe-${staff.id}`)).not.toBeInTheDocument()
+      const guardian = renderFor(makeAuth({ user: makeUser({ role: 'guardian', roles: ['guardian'], permissions: [] }) }), { id: '00000000-0000-7000-8000-0000000000a3' })
+      expect(screen.queryByTestId(`public-subscribe-${guardian.id}`)).not.toBeInTheDocument()
+    })
   })
 })

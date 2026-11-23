@@ -8,16 +8,17 @@ import {
   publicCoursePathFor,
   appendCards,
   availabilityOf,
+  availabilityPillKey,
   durationMinutes,
   enrollIntentPath,
   explorePathFor,
   exploreSearchOf,
   isPublicCourseGone,
   levelNameOf,
+  orderPublicPage,
   publicCatalogParams,
   publicEnrollStateOf,
-  publicFailureKey,
-} from './publicCatalog.view'
+  publicFailureKey, cardSubscribeTarget } from './publicCatalog.view'
 
 const t = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('ar')(key, options)
 const tEn = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('en')(key, options)
@@ -41,6 +42,42 @@ describe('publicCatalog.view', () => {
     expect(availabilityOf({ openClasses: 2, hasFreeSeat: true, ...free })).toBe('available')
     expect(availabilityOf({ openClasses: 1, hasFreeSeat: false, ...free })).toBe('full')
     expect(availabilityOf({ openClasses: 0, hasFreeSeat: false, ...free })).toBe('closed')
+  })
+
+  it('words a card with no open class «قريبًا» and leaves the other pills as they were', () => {
+    expect(t(availabilityPillKey('closed'))).toBe('قريبًا')
+    expect(tEn(availabilityPillKey('closed'))).toBe('Coming soon')
+    expect(availabilityPillKey('available')).toBe('publicCatalog.card.available')
+    expect(availabilityPillKey('full')).toBe('publicCatalog.card.full')
+  })
+
+  describe('orderPublicPage', () => {
+    const open = (id: string) => makePublicCard({ id })
+    const full = (id: string) => makePublicCard({ id, hasFreeSeat: false })
+    const unpriced = (id: string) => makePublicCard({ id, hasFreeSeat: false, pricing: 'paid', price: null })
+    const soon = (id: string) => makePublicCard({ id, openClasses: 0, hasFreeSeat: false })
+    const ids = (cards: readonly { id: string }[]) => cards.map((card) => card.id)
+
+    it('puts what can be joined first and «قريبًا» last, the server’s order kept inside each group', () => {
+      const page = [soon('s1'), full('f1'), open('o1'), unpriced('p1'), soon('s2'), open('o2'), full('f2')]
+      expect(ids(orderPublicPage(page))).toEqual(['o1', 'o2', 'f1', 'p1', 'f2', 's1', 's2'])
+    })
+
+    it('loses no card, adds none, and leaves the server’s page untouched', () => {
+      const page = [soon('s1'), open('o1'), full('f1')]
+      const before = ids(page)
+      const ordered = orderPublicPage(page)
+      expect(ids(page)).toEqual(before)
+      expect(ordered).toHaveLength(page.length)
+      expect(new Set(ids(ordered))).toEqual(new Set(before))
+      expect(orderPublicPage([])).toEqual([])
+    })
+
+    it('only appends the next page: the cards on screen keep their places, even a coming-soon one above an available one', () => {
+      const shown = orderPublicPage([soon('s1'), open('o1')])
+      const next = appendCards(shown, orderPublicPage([soon('s2'), soon('s1'), open('o2')]))
+      expect(ids(next)).toEqual(['o1', 's1', 'o2', 's2'])
+    })
   })
 
   it('names a level by its ordinal, with its title when it has one; past the tenth by its number (D-R130)', () => {
@@ -112,5 +149,22 @@ describe('publicCatalog.view', () => {
     expect(availabilityOf(makePublicCard({ hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('priceUnavailable')
     expect(availabilityOf(makePublicCard({ hasFreeSeat: false }))).toBe('full')
     expect(availabilityOf(makePublicCard({ openClasses: 0, hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('closed')
+  })
+
+  it('offers the subscribe button only to whoever can enroll, in a course that takes an enrollment now', () => {
+    const open = { id: 'c-1', openClasses: 1, hasFreeSeat: true, pricing: 'free', price: null } as const
+    const paid = { ...open, pricing: 'paid', price: { amount: 150, currency: 'USD', installments: 1 } } as const
+    const path = '/catalog/c-1?intent=enroll'
+    expect(cardSubscribeTarget(open, 'visitor', false)).toEqual({ to: '/login', state: { from: path } })
+    expect(cardSubscribeTarget(paid, 'visitor', false)).toEqual({ to: '/login', state: { from: path } })
+    expect(cardSubscribeTarget(open, 'learner', true)).toEqual({ to: path })
+    // A guardian holds no student role; staff never enroll; an unknown session shows nothing yet.
+    expect(cardSubscribeTarget(open, 'learner', false)).toBeNull()
+    expect(cardSubscribeTarget(open, 'staff', false)).toBeNull()
+    expect(cardSubscribeTarget(open, 'pending', false)).toBeNull()
+    // No open class, every seat taken, or a paid course without a usable price.
+    expect(cardSubscribeTarget({ ...open, openClasses: 0, hasFreeSeat: false }, 'visitor', false)).toBeNull()
+    expect(cardSubscribeTarget({ ...open, hasFreeSeat: false }, 'visitor', false)).toBeNull()
+    expect(cardSubscribeTarget({ ...paid, price: null, hasFreeSeat: false }, 'visitor', false)).toBeNull()
   })
 })

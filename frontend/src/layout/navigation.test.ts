@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Role } from '../auth/roles'
-import { NAV_ITEMS, canAccess, navFor } from './navigation'
+import { NAV_GROUPS, NAV_ITEMS, canAccess, navFor, navGroupsFor } from './navigation'
 import type { NavViewer } from './navigation'
 
 /** The MOD-03/MOD-04/MOD-05/MOD-06/MOD-07/MOD-08/MOD-09/MOD-10/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
@@ -395,5 +395,70 @@ describe('canAccess', () => {
     expect(canAccess(viewer('staff'), 'settings')).toBe(false)
     expect(canAccess(viewer('admin'), 'settings')).toBe(true)
     expect(canAccess(viewer('admin'), 'nope')).toBe(false)
+  })
+})
+
+describe('NAV_GROUPS and navGroupsFor (the grouped side menu, 2026-11-22)', () => {
+  it('puts every NAV_ITEMS key in exactly one section and names no other key', () => {
+    const grouped = NAV_GROUPS.flatMap((group) => group.items)
+    expect(new Set(grouped).size).toBe(grouped.length)
+    expect([...grouped].sort()).toEqual(NAV_ITEMS.map((item) => item.key).sort())
+  })
+
+  it('lists the sections in the spec’s order, the landing page alone and without a heading', () => {
+    expect(NAV_GROUPS.map((group) => group.key)).toEqual(['home', 'academy', 'mine', 'academics', 'assessment', 'finance', 'followUp', 'system'])
+    expect(NAV_GROUPS[0]).toEqual({ key: 'home', labelKey: null, items: ['dashboard'] })
+    for (const group of NAV_GROUPS.slice(1)) expect(group.labelKey).toBe(`nav.groups.${group.key}`)
+  })
+
+  it('arranges exactly the entries of navFor — never one more or one fewer — for every seeded role, a custom role and a teacher who is also a guardian', () => {
+    const viewers = [
+      viewer('admin'),
+      viewer('staff'),
+      viewer('teacher'),
+      viewer('student'),
+      viewer('guardian'),
+      viewer(null, ['users.read', 'audit.read']),
+      viewer(null, []),
+      viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']),
+      viewer('admin', [...SEEDED.admin, 'enrollments.manage', 'branches.manage', 'academy.settings.manage'], ['academy_admin', 'student']),
+    ]
+    for (const user of viewers) {
+      const groups = navGroupsFor(user)
+      const arranged = groups.flatMap((group) => group.items.map((item) => item.key))
+      expect([...arranged].sort()).toEqual(keysFor(user).sort())
+      // A section the viewer sees nothing of is left out.
+      for (const group of groups) expect(group.items.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('orders an admin’s menu by section, the entries in the section’s order', () => {
+    const admin = viewer('admin', [...SEEDED.admin, 'enrollments.manage', 'branches.manage'])
+    expect(navGroupsFor(admin).map((group) => [group.key, group.items.map((item) => item.key)])).toEqual([
+      ['home', ['dashboard']],
+      ['academy', ['users', 'enrollmentRequests']],
+      ['academics', ['courses', 'classes', 'lessons', 'schedule']],
+      ['assessment', ['assignments', 'exams', 'certificates']],
+      ['finance', ['payments']],
+      ['followUp', ['reports', 'notifications']],
+      ['system', ['settings', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit']],
+    ])
+  })
+
+  it('shows a teacher who is also a guardian the ownership pages under «my pages», and a custom role only its own sections', () => {
+    const keysOf = (user: NavViewer) => navGroupsFor(user).map((group) => group.key)
+    const teacherGuardian = navGroupsFor(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']))
+    expect(teacherGuardian.find((group) => group.key === 'mine')?.items.map((item) => item.key)).toEqual([
+      'myClasses',
+      'catalog',
+      'myLessons',
+      'myAssignments',
+      'myExams',
+      'myGrades',
+      'myCertificates',
+    ])
+    expect(keysOf(viewer('teacher'))).not.toContain('mine')
+    expect(keysOf(viewer(null, ['audit.read']))).toEqual(['home', 'system'])
+    expect(keysOf(viewer(null, []))).toEqual(['home'])
   })
 })
