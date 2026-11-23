@@ -4,7 +4,7 @@ export const common = {
   searchByTitle: 'بحث في العناوين',
   pageSize: 'عدد العناصر في الصفحة',
   sortOrder: 'الترتيب',
-  appName: 'ArtiCode Academy',
+  appName: 'ArtiCode-Academy',
   academyName: 'أكاديمية تجريبية',
   profile: 'حسابي',
   logoutAll: 'تسجيل الخروج من كل الأجهزة',

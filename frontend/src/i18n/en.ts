@@ -15,7 +15,7 @@ export const en: Translation = {
     searchByTitle: 'Search titles',
     pageSize: 'Items per page',
     sortOrder: 'Sort order',
-    appName: 'ArtiCode Academy',
+    appName: 'ArtiCode-Academy',
     academyName: 'Demo Academy',
     profile: 'My account',
     logoutAll: 'Sign out everywhere',
