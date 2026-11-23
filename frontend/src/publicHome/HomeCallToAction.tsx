@@ -1,4 +1,4 @@
-// The closing band of the public home page — shown only where it adds a step the
+// The closing strip of the public home page — shown only where it adds a step the
 // page has not offered twice already (PORTAL-04 PR-1 redesign): a visitor of an
 // academy that opens its catalog is invited to the programs — once the section
 // above shows some (not after a failed read or an empty catalog). A visitor of a
@@ -19,7 +19,7 @@ export function HomeCallToAction({ viewer, catalogOpen, hasPrograms }: { viewer:
   if (viewer !== 'visitor' || catalogOpen !== true || !hasPrograms) return null
 
   return (
-    <section className="public-home__section public-home__section--cta" aria-labelledby="public-home-cta" data-testid="home-cta">
+    <section className="public-home__cta-band" aria-labelledby="public-home-cta" data-testid="home-cta">
       <div className="public-home__container">
         <div className="public-home__cta">
           <div className="public-home__cta-text">
@@ -28,7 +28,7 @@ export function HomeCallToAction({ viewer, catalogOpen, hasPrograms }: { viewer:
             </Typography.Title>
             <p className="public-home__cta-line">{t('publicHome.cta.visitorText')}</p>
           </div>
-          <Button size="large" className="public-home__cta-button" icon={<CompassOutlined />} onClick={() => navigate(programsPathFor(viewer))}>
+          <Button type="primary" size="large" className="public-home__pill-button" icon={<CompassOutlined />} onClick={() => navigate(programsPathFor(viewer))}>
             {t('publicHome.hero.browse')}
           </Button>
         </div>

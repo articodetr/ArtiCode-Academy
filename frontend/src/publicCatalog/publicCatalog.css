@@ -3,30 +3,43 @@
    LoginPage.css).
 
    The design tokens live here as custom properties, so an academy's own colours can replace them in one place once
-   the server offers them (no such field exists yet — nothing here is read from the academy). The primary colour is the
-   app's own (`colorPrimary` in app/App.tsx); the warm accent is decoration only, never text. */
-.public-catalog {
-  --pub-primary: #0f6cbd;
-  --pub-primary-strong: #0b4f8a;
-  --pub-primary-soft: #e8f1fb;
-  --pub-primary-softer: #f3f8fd;
-  --pub-accent: #e8a33d;
-  --pub-accent-soft: #fcf1de;
-  --pub-ink: #142033;
-  --pub-text: #2b3648;
-  --pub-muted: #5d6879;
+   the server offers them (no such field exists yet — nothing here is read from the academy). The colours are sampled from
+   the owner's reference picture: `--pub-primary` is the one Ant Design gets too (PUBLIC_THEME in PublicShell.tsx). The
+   menu of a phone opens in a portal outside `.public-catalog`, so it carries the same tokens. */
+.public-catalog,
+.public-menu {
+  --pub-primary: #039092;
+  --pub-primary-strong: #047c83;
+  --pub-primary-soft: #dfeff4;
+  --pub-primary-softer: #f0f9fa;
+  --pub-highlight: #02a0a5;
+  --pub-gradient: linear-gradient(100deg, #00b3ba 0%, #049298 55%, #058c98 100%);
+  --pub-accent: #00b3ba;
+  --pub-accent-soft: #dff5f5;
+  --pub-ink: #1d2a30;
+  --pub-text: #33454b;
+  --pub-muted: #62757b;
   /* The details of a card (summary, facts, status): darker than --pub-muted, for small text on white. */
-  --pub-detail: #44505f;
-  --pub-line: #e3e8ef;
+  --pub-detail: #4a5c62;
+  --pub-line: #e3ecee;
+  --pub-card-line: #e6e4f0;
   --pub-surface: #ffffff;
-  --pub-page: #f6f8fb;
-  --pub-footer: #13223b;
-  --pub-radius: 14px;
-  --pub-shadow: 0 1px 2px rgba(20, 32, 51, 0.04), 0 4px 16px rgba(20, 32, 51, 0.06);
-  --pub-shadow-hover: 0 2px 6px rgba(20, 32, 51, 0.06), 0 14px 32px rgba(20, 32, 51, 0.12);
+  --pub-page: #ffffff;
+  --pub-footer: #047c83;
+  --pub-radius: 8px;
+  --pub-shadow: 0 3px 12px rgba(58, 52, 110, 0.08);
+  --pub-shadow-hover: 0 8px 24px rgba(4, 124, 131, 0.18);
   --pub-content: 1200px;
   --pub-gutter: 24px;
+  font-family: 'Public Poppins', 'Public Cairo', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+}
 
+/* The gradient starts on the reading side. */
+[dir='rtl'] .public-catalog {
+  --pub-gradient: linear-gradient(260deg, #00b3ba 0%, #049298 55%, #058c98 100%);
+}
+
+.public-catalog {
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -52,7 +65,7 @@
   gap: 8px 16px;
   width: 100%;
   max-width: var(--pub-content);
-  min-height: 72px;
+  min-height: 68px;
   margin: 0 auto;
   padding: 0 var(--pub-gutter);
   box-sizing: border-box;
@@ -115,10 +128,11 @@
   display: flex;
   align-items: stretch;
   align-self: stretch;
-  gap: 4px;
+  justify-content: center;
+  gap: 2px;
   flex: 1 1 auto;
   min-width: 0;
-  margin-inline-start: 24px;
+  margin-inline-start: 16px;
 }
 
 .public-catalog__nav-link {
@@ -171,6 +185,75 @@
   align-items: center;
 }
 
+.public-catalog__actions .ant-btn {
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* The header's search: a plain icon that opens the programs. */
+.public-catalog__search-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--pub-ink);
+  font-size: 17px;
+}
+
+.public-catalog__search-link:hover,
+.public-catalog__search-link:focus-visible {
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary);
+}
+
+.public-catalog__search-link:focus-visible {
+  outline: 2px solid var(--pub-primary);
+  outline-offset: 2px;
+}
+
+/* The menu button shows from a tablet down, where the links move into the menu. */
+.public-catalog__menu-button.ant-btn {
+  display: none;
+  flex: none;
+}
+
+.public-menu__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.public-menu__nav .public-catalog__nav-link {
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--pub-text);
+  font-size: 16px;
+}
+
+.public-menu__nav .public-catalog__nav-link::after {
+  content: none;
+}
+
+.public-menu__nav .public-catalog__nav-link:hover,
+.public-menu__nav .public-catalog__nav-link.active {
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary-strong);
+}
+
+.public-menu__nav .public-catalog__nav-link:focus-visible {
+  outline-offset: 0;
+}
+
+.public-menu__language {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--pub-line);
+}
+
 /* ---------- Main ---------- */
 
 .public-catalog__main {
@@ -199,8 +282,10 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  padding: 9px;
+  box-sizing: border-box;
   background: var(--pub-surface);
-  border: 1px solid var(--pub-line);
+  border: 1px solid var(--pub-card-line);
   border-radius: var(--pub-radius);
   box-shadow: var(--pub-shadow);
   transition:
@@ -211,15 +296,15 @@
 
 .public-card--link:hover {
   transform: translateY(-3px);
-  border-color: #d3dceb;
+  border-color: #b9e0e2;
   box-shadow: var(--pub-shadow-hover);
 }
 
 .public-card__media {
   position: relative;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10.4;
   overflow: hidden;
-  border-radius: calc(var(--pub-radius) - 1px) calc(var(--pub-radius) - 1px) 0 0;
+  border-radius: 5px;
   background: var(--pub-primary-soft);
 }
 
@@ -262,10 +347,10 @@
 }
 
 .public-card__placeholder--t0 {
-  --tint-bg: #e8f1fb;
-  --tint-shape: #d6e6f8;
-  --tint-dot: rgba(15, 108, 189, 0.16);
-  --tint-fg: #0f6cbd;
+  --tint-bg: #e0f4f4;
+  --tint-shape: #caecec;
+  --tint-dot: rgba(3, 144, 146, 0.16);
+  --tint-fg: #039092;
 }
 
 .public-card__placeholder--t1 {
@@ -319,16 +404,16 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px 14px;
+  gap: 9px;
+  padding: 13px 3px 11px;
 }
 
 .public-card .public-card__title {
   margin: 0;
   color: var(--pub-ink);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -349,7 +434,7 @@
 }
 
 .public-card .public-card__link:focus-visible::after {
-  outline: 2px solid #0f6cbd;
+  outline: 2px solid #039092;
   outline-offset: 3px;
   border-radius: var(--pub-radius);
 }
@@ -379,11 +464,9 @@
 .public-card__facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
+  gap: 4px 14px;
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--pub-page);
+  padding: 0;
   list-style: none;
 }
 
@@ -392,7 +475,7 @@
   align-items: center;
   gap: 6px;
   color: var(--pub-detail);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -407,10 +490,10 @@
   align-items: center;
   gap: 7px;
   margin-top: auto;
-  padding: 4px 12px;
+  padding: 2px 10px;
   border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
 }
@@ -445,14 +528,14 @@
   background: #8a94a6;
 }
 
-/* The foot: the price on one side, «التفاصيل» on the other. */
+/* The foot: the price, then «التفاصيل» as a full-width button. */
 .public-card__foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--pub-line);
+  gap: 9px 12px;
+  padding: 0 3px;
 }
 
 .public-price {
@@ -478,12 +561,24 @@
   position: relative;
   z-index: 2;
   display: inline-flex;
+  flex: 1 1 100%;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  color: var(--pub-primary);
+  height: 38px;
+  margin-inline: -3px;
+  border-radius: 4px;
+  background: var(--pub-primary);
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.public-card--link:hover .public-card__action {
+  background: var(--pub-primary-strong);
+  color: #fff;
 }
 
 .public-card__action .anticon {
@@ -522,40 +617,66 @@
 
 .public-catalog__footer {
   background: var(--pub-footer);
-  color: rgba(255, 255, 255, 0.74);
+  color: #fff;
 }
 
 .public-catalog__footer-inner {
   width: 100%;
   max-width: var(--pub-content);
   margin: 0 auto;
-  padding: 32px var(--pub-gutter) 24px;
+  padding: 44px var(--pub-gutter) 22px;
   box-sizing: border-box;
 }
 
 .public-catalog__footer-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px 32px;
-  padding-bottom: 20px;
+  gap: 24px 48px;
+  padding-bottom: 28px;
+}
+
+.public-catalog__footer-about {
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.public-catalog__footer-about p {
+  margin: 8px 0 0;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.8;
 }
 
 .public-catalog__footer-name {
   color: #fff;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
 }
 
 .public-catalog__footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: 20px 64px;
+}
+
+.public-catalog__footer-links > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.public-catalog__footer-links strong {
+  margin-bottom: 2px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .public-catalog__footer-links a {
-  color: rgba(255, 255, 255, 0.82);
+  color: #fff;
   font-size: 14px;
 }
 
@@ -574,7 +695,7 @@
 
 .public-catalog__copyright {
   padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
   font-size: 13px;
 }
 
@@ -601,60 +722,38 @@
   }
 }
 
-/* A phone: the brand and the action on the first row (the name ends in an ellipsis, never vanishes), the main links and
-   the language switch on the second, under a thin line. The header scrolls away with the page here. */
-@media (max-width: 767px) {
-  .public-catalog {
-    --pub-gutter: 16px;
-  }
-
-  .public-catalog__header {
-    position: static;
-  }
-
-  .public-catalog__header-inner {
-    flex-wrap: wrap;
-    row-gap: 0;
-    min-height: 0;
-    padding-top: 10px;
-  }
-
-  /* A full-width line break between the two rows, whatever the widths of the action and the links. */
-  .public-catalog__header-inner::after {
-    content: '';
-    order: 3;
-    flex-basis: 100%;
-    height: 0;
+/* A tablet and a phone: one row — the brand (its name ends in an ellipsis, never vanishes), the action and the menu
+   button, which holds the main links and the language switch. */
+@media (max-width: 991px) {
+  .public-catalog__nav,
+  .public-catalog__language,
+  .public-catalog__search-link {
+    display: none;
   }
 
   .public-catalog__brand {
-    order: 1;
     flex: 1 1 0;
-    min-width: 96px;
+    min-width: 80px;
   }
 
-  .public-catalog__actions {
-    order: 2;
+  .public-catalog__menu-button.ant-btn {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 767px) {
+  .public-catalog,
+  .public-menu {
+    --pub-gutter: 16px;
   }
 
-  .public-catalog__nav {
-    order: 4;
-    align-self: auto;
-    margin: 10px 0 0;
-    height: 44px;
+  .public-catalog__header-inner {
+    min-height: 62px;
   }
 
-  .public-catalog__nav-link {
-    padding: 0 12px;
-  }
-
-  .public-catalog__nav-link::after {
-    inset-inline: 12px;
-  }
-
-  .public-catalog__language {
-    order: 5;
-    margin-top: 10px;
+  /* The action without its icon: the academy's name keeps the room. */
+  .public-catalog__actions .ant-btn-icon {
+    display: none;
   }
 
   .public-catalog__mark {
