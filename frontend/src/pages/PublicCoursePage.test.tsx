@@ -412,6 +412,116 @@ describe('PublicCoursePage', () => {
     renderPage()
     expect((await screen.findByText(pc.course.notFound)).closest('.course-page-state')).not.toBeNull()
   })
+
+  describe('creating an account (PORTAL-04, the contract of #207)', () => {
+    const entry = ar.studentRegistration.entry
+    const academyReads = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls.filter(([url]) => url === ACADEMY_PUBLIC_PATH).length
+
+    /** API-205 with `academy` (or the failure `status`) and API-237 with `detail`. */
+    function mockRegistrationApi(academy: unknown, detail: () => Response, status = 200) {
+      return mockFetch((url) => {
+        if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(status, academy)
+        if (url === COURSE_PATH) return detail()
+        return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
+      })
+    }
+
+    function renderForRegister() {
+      return renderWithProviders(<PublicCoursePage />, {
+        auth: makeAuth(),
+        route: `/explore/${COURSE_ID}`,
+        path: '/explore/:courseId',
+        routes: { '/register': <PathProbe />, '/login': <PathProbe /> },
+      })
+    }
+
+    const open = () => makePublicAcademy({ catalogPublic: true, selfRegistration: true })
+
+    it.each([
+      ['the field absent', makePublicAcademy({ catalogPublic: true }), 200],
+      ['false', makePublicAcademy({ catalogPublic: true, selfRegistration: false }), 200],
+      ['a failed read', { statusCode: 503, code: 'academy_not_configured', message: 'none' }, 503],
+    ])('keeps the original note and offers no account with %s, reading API-205 once', async (_case, academy, status) => {
+      const fetchMock = mockRegistrationApi(academy, serve(makePublicDetail()), status)
+      renderForRegister()
+      const enroll = within(await screen.findByTestId('public-enroll'))
+      await waitFor(() => expect(academyReads(fetchMock)).toBe(1))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(enroll.getByText(pc.course.enrollNote)).toBeInTheDocument()
+      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+      expect(document.querySelector('a[href="/register"]')).toBeNull()
+      expect(document.body.textContent).not.toContain(entry.courseNote)
+      expect(academyReads(fetchMock)).toBe(1)
+    })
+
+    it('replaces the note and leads to /register with the course as the way back, reading API-205 once', async () => {
+      const fetchMock = mockRegistrationApi(open(), serve(makePublicDetail()))
+      renderForRegister()
+      const link = await screen.findByTestId('public-course-register')
+      const enroll = within(screen.getByTestId('public-enroll'))
+      expect(enroll.getByText(new RegExp(entry.courseNote))).toBeInTheDocument()
+      expect(enroll.queryByText(pc.course.enrollNote)).not.toBeInTheDocument()
+      // The two existing actions stay.
+      expect(enroll.getByText(pc.course.enroll)).toBeInTheDocument()
+      expect(enroll.getByTestId(`public-subscribe-${COURSE_ID}`)).toBeInTheDocument()
+      expect(academyReads(fetchMock)).toBe(1)
+
+      expect(link).toHaveTextContent(entry.createAccountLink)
+      expect(link).toHaveAttribute('href', '/register')
+      fireEvent.click(link)
+      const probe = await screen.findByTestId('path')
+      expect(probe.textContent).toBe('/register')
+      expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: `/catalog/${COURSE_ID}?intent=enroll` })
+    })
+
+    it('keeps the paid note beside the new one', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
+      renderForRegister()
+      await screen.findByTestId('public-course-register')
+      expect(within(screen.getByTestId('public-enroll')).getByText(pc.course.paidNote)).toBeInTheDocument()
+    })
+
+    it('offers no course link for a course that takes nobody now', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail({ openClasses: 0, hasFreeSeat: false })))
+      renderForRegister()
+      await screen.findByTestId('public-not-enrollable')
+      await waitFor(() => expect(document.querySelector('.public-catalog__register')).not.toBeNull())
+      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+    })
+
+    it('words the closed catalog truthfully, with the way to register, only while registration is open', async () => {
+      const opened = mockRegistrationApi(open(), () => jsonResponse(404, CATALOG_NOT_PUBLIC))
+      const first = renderForRegister()
+      const closed = within(await screen.findByTestId('catalog-closed'))
+      expect(await closed.findByText(entry.accountsNote)).toBeInTheDocument()
+      expect(closed.queryByText(pc.closed.text)).not.toBeInTheDocument()
+      expect(closed.getByRole('link', { name: entry.createAccount })).toHaveAttribute('href', '/register')
+      expect(closed.getByText(pc.closed.signIn)).toBeInTheDocument()
+      expect(academyReads(opened)).toBe(1)
+      first.unmount()
+
+      mockRegistrationApi(makePublicAcademy({ catalogPublic: false }), () => jsonResponse(404, CATALOG_NOT_PUBLIC))
+      renderForRegister()
+      const shut = within(await screen.findByTestId('catalog-closed'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(shut.getByText(pc.closed.text)).toBeInTheDocument()
+      expect(shut.queryByText(entry.accountsNote)).not.toBeInTheDocument()
+      expect(shut.queryByRole('link', { name: entry.createAccount })).not.toBeInTheDocument()
+    })
+
+    it('reads nothing for a signed-in user, whatever the academy allows', async () => {
+      const fetchMock = mockRegistrationApi(open(), serve(makePublicDetail()))
+      renderWithProviders(<PublicCoursePage />, {
+        auth: makeAuth({ user: makeUser({ role: 'student', roles: ['student'] }) }),
+        route: `/explore/${COURSE_ID}`,
+        path: '/explore/:courseId',
+        routes: { '/catalog/:courseId': <PathProbe /> },
+      })
+      await screen.findByTestId('path')
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(document.querySelector('a[href="/register"]')).toBeNull()
+    })
+  })
 })
 
 function renderWithPaid(overrides: Partial<PublicCourseDetail>) {

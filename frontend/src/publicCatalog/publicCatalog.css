@@ -192,6 +192,42 @@
   font-weight: 600;
 }
 
+/* With «إنشاء حساب» in the row, a long academy name gives way (its ellipsis), never the main links. */
+.public-catalog__header-inner--register .public-catalog__nav {
+  flex-shrink: 0;
+}
+
+/* «إنشاء حساب» beside the sign-in: a plain link, so the sign-in stays the header's one button. */
+.public-catalog__register {
+  margin-inline-end: 14px;
+  color: var(--pub-primary-strong);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.public-catalog__register:hover {
+  color: var(--pub-primary-strong);
+  text-decoration: underline;
+}
+
+.public-catalog__register:focus-visible,
+.public-register-link:focus-visible {
+  outline: 2px solid var(--pub-primary-strong);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The same way in, inside a line of text or under a button: quiet, and still recognisably a link. */
+.public-register-link,
+.public-register-link:hover {
+  color: var(--pub-primary-strong);
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
 /* The header's search: a plain icon that opens the programs. */
 .public-catalog__search-link {
   display: inline-flex;
@@ -820,6 +856,11 @@
     display: none;
   }
 
+  /* The header stays as it is here: «إنشاء حساب» is in the menu. */
+  .public-catalog__register {
+    display: none;
+  }
+
   .public-catalog__brand {
     flex: 1 1 0;
     min-width: 80px;
@@ -827,6 +868,29 @@
 
   .public-catalog__menu-button.ant-btn {
     display: inline-flex;
+  }
+}
+
+/* A small desktop with «إنشاء حساب» in the row: the links sit closer, so the academy's name keeps its room. */
+@media (min-width: 992px) and (max-width: 1099px) {
+  .public-catalog__header-inner--register {
+    column-gap: 10px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__nav {
+    margin-inline-start: 8px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__nav-link {
+    padding: 0 8px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__nav-link::after {
+    inset-inline: 8px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__register {
+    margin-inline-end: 8px;
   }
 }
 

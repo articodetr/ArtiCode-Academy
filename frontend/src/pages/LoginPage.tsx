@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
-import { isCatalogPublic } from '../api/academy'
+import { isCatalogPublic, isSelfRegistrationOpen } from '../api/academy'
 import { isMfaChallenge } from '../api/auth'
 import type { MfaChallenge } from '../api/auth'
 import { ApiError } from '../api/client'
@@ -71,8 +71,12 @@ export function LoginPage() {
   // Why the visitor is (back) at the password form: the second step ended, or a password reset sent them here.
   // From the router state only a known notice id (and the whole minutes of a lock) is ever read — never text.
   const [notice, setNotice] = useState<ShownSignInNotice | null>(() => signInNoticeOf(location.state))
+  // Arrived from a finished registration: fixed on arrival, because the notice itself clears at the first sign-in attempt.
+  const [justRegistered] = useState(() => signInNoticeOf(location.state)?.id === 'registration_completed')
   // API-205, once the visitor is known to be signed out: whether the academy opens its catalog to visitors (D-R138).
   const publicAcademy = usePublicAcademy(status === 'anonymous')
+  // PORTAL-04, on the contract of #207: only the server's `true` opens the way to create an account.
+  const registrationOpen = isSelfRegistrationOpen(publicAcademy.academy)
 
   if (status === 'loading') {
     return (
@@ -143,7 +147,12 @@ export function LoginPage() {
             title={t('login.enrollIntent.title')}
             description={
               <>
-                <div>{t('login.enrollIntent.text')}</div>
+                {/* «الحسابات تُنشئها إدارة الأكاديمية» is untrue while a visitor may register; the second step speaks of neither. */}
+                {!registrationOpen && !justRegistered ? (
+                  <div>{t('login.enrollIntent.text')}</div>
+                ) : !challenge ? (
+                  <div>{t(justRegistered ? 'studentRegistration.entry.courseAfterRegister' : 'studentRegistration.entry.courseNote')}</div>
+                ) : null}
                 {isCatalogPublic(publicAcademy.academy) ? (
                   <Link to={`/explore/${encodeURIComponent(intentCourse)}`}>{t('login.enrollIntent.back')}</Link>
                 ) : null}
@@ -192,6 +201,17 @@ export function LoginPage() {
                 {submitting ? t('login.signingIn') : t('login.submit')}
               </Button>
             </Form>
+
+            {/* Creating an account, carrying the chosen course (a path `returnPathOf()` already checked). Not to someone
+                who has just finished creating one. */}
+            {registrationOpen && !justRegistered ? (
+              <div data-testid="login-register" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 4, marginTop: 16 }}>
+                <Typography.Text type="secondary">{t('studentRegistration.entry.noAccount')}</Typography.Text>
+                <Link to="/register" state={from ? { from } : undefined}>
+                  {t('studentRegistration.entry.createAccountLink')}
+                </Link>
+              </div>
+            ) : null}
 
             {/* The public catalog (/explore) — only while the academy offers it; a failed read shows no link. */}
             {isCatalogPublic(publicAcademy.academy) ? (

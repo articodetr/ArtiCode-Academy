@@ -8,7 +8,9 @@
 // page with `from` = the course in the signed-in catalog plus the enroll intent
 // (`/catalog/<id>?intent=enroll`), which scrolls to its classes once signed in —
 // nothing enrolls by itself, and no account is created here (accounts come from
-// the academy). Since PORTAL-04 PR-2 the button shows only while a visitor can go
+// the academy, or — only while API-205 says `selfRegistration: true` — from
+// «أنشئ حسابًا» → /register, carrying the same way back to the course; the page
+// reads API-205 once and hands it to the shell). Since PORTAL-04 PR-2 the button shows only while a visitor can go
 // on to enroll (`publicEnrollStateOf()`: a class open, a free seat, a usable price);
 // otherwise «التسجيل غير متاح حالياً» says why and the details stay readable. A
 // paid course says that it becomes a request with an invoice, activated after
@@ -39,6 +41,8 @@ import { Alert, Button, Card, Collapse, Skeleton } from 'antd'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { usePublicAcademy } from '../academy/usePublicAcademy'
+import { isSelfRegistrationOpen } from '../api/academy'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { PublicCourseDetail, PublicOutlineLevel } from '../api/publicCatalog'
 import { useLocalized } from '../i18n/useLocalized'
@@ -69,14 +73,22 @@ export function PublicCoursePage() {
   const { courseId = '' } = useParams()
   return (
     <PublicOnly signedInTo={`/catalog/${encodeURIComponent(courseId)}`}>
-      <PublicShell bleed>
-        <PublicCourse courseId={courseId} />
-      </PublicShell>
+      <PublicCourseFrame courseId={courseId} />
     </PublicOnly>
   )
 }
 
-function PublicCourse({ courseId }: { courseId: string }) {
+/** Inside `PublicOnly`, so a signed-in user reads nothing; the shell gets this one reading of API-205. */
+function PublicCourseFrame({ courseId }: { courseId: string }) {
+  const academy = usePublicAcademy()
+  return (
+    <PublicShell academy={academy} bleed>
+      <PublicCourse courseId={courseId} registrationOpen={isSelfRegistrationOpen(academy.academy)} />
+    </PublicShell>
+  )
+}
+
+function PublicCourse({ courseId, registrationOpen }: { courseId: string; registrationOpen: boolean }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const navigate = useNavigate()
@@ -90,7 +102,7 @@ function PublicCourse({ courseId }: { courseId: string }) {
     return (
       <div className="course-page-state">
         <PublicTitle />
-        <CatalogClosed />
+        <CatalogClosed registrationOpen={registrationOpen} />
       </div>
     )
   }
@@ -164,7 +176,14 @@ function PublicCourse({ courseId }: { courseId: string }) {
             </span>
           ) : null
         }
-        aside={<CourseEnrollment course={course} counts={counts} onEnroll={() => navigate('/login', { state: { from: enrollIntentPath(course.id) } })} />}
+        aside={
+          <CourseEnrollment
+            course={course}
+            counts={counts}
+            registrationOpen={registrationOpen}
+            onEnroll={() => navigate('/login', { state: { from: enrollIntentPath(course.id) } })}
+          />
+        }
         sections={sections}
         navLabel={t('publicCatalog.course.sectionsNav')}
       />
@@ -207,7 +226,17 @@ function ageTextOf(course: PublicCourseDetail, t: (key: string, options?: Record
   return null
 }
 
-function CourseEnrollment({ course, counts, onEnroll }: { course: PublicCourseDetail; counts: string; onEnroll: () => void }) {
+function CourseEnrollment({
+  course,
+  counts,
+  registrationOpen,
+  onEnroll,
+}: {
+  course: PublicCourseDetail
+  counts: string
+  registrationOpen: boolean
+  onEnroll: () => void
+}) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const enrollState = publicEnrollStateOf(course)
@@ -258,7 +287,16 @@ function CourseEnrollment({ course, counts, onEnroll }: { course: PublicCourseDe
               </Link>
             ) : null}
           </div>
-          <p className="course-enroll__note">{t('publicCatalog.course.enrollNote')}</p>
+          {registrationOpen ? (
+            <p className="course-enroll__note">
+              {t('studentRegistration.entry.courseNote')}{' '}
+              <Link to="/register" state={{ from: enrollIntentPath(course.id) }} className="public-register-link" data-testid="public-course-register">
+                {t('studentRegistration.entry.createAccountLink')}
+              </Link>
+            </p>
+          ) : (
+            <p className="course-enroll__note">{t('publicCatalog.course.enrollNote')}</p>
+          )}
           {course.pricing === 'paid' ? <p className="course-enroll__note">{t('publicCatalog.course.paidNote')}</p> : null}
         </div>
       ) : (

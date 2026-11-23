@@ -1,12 +1,14 @@
 // What a visitor sees while the academy keeps its catalog for signed-in users
 // (API-236/237 `404 catalog_not_public` — D-R138): a calm page, no error
-// colours, and the way to sign in.
+// colours, and the way to sign in. `registrationOpen` (API-205, read by the page
+// that mounts this panel): the academy lets a visitor create an account, so the
+// panel says that instead of «الحسابات تُنشأ من إدارة الأكاديمية» and links to it.
 import { LoginOutlined } from '@ant-design/icons'
 import { Button, Card, Result } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
-export function CatalogClosed() {
+export function CatalogClosed({ registrationOpen = false }: { registrationOpen?: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   return (
@@ -14,11 +16,18 @@ export function CatalogClosed() {
       <Result
         status="info"
         title={t('publicCatalog.closed.title')}
-        subTitle={t('publicCatalog.closed.text')}
+        subTitle={t(registrationOpen ? 'studentRegistration.entry.accountsNote' : 'publicCatalog.closed.text')}
         extra={
-          <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
-            {t('publicCatalog.closed.signIn')}
-          </Button>
+          <>
+            <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
+              {t('publicCatalog.closed.signIn')}
+            </Button>
+            {registrationOpen ? (
+              <Link to="/register" className="public-register-link">
+                {t('studentRegistration.entry.createAccount')}
+              </Link>
+            ) : null}
+          </>
         }
       />
     </Card>
