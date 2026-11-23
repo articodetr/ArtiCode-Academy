@@ -38,6 +38,7 @@ import {
   extraRoleKeys,
   extraRoleProfileProblem,
   profileKindFor,
+  teacherVisibleUsersWhere,
 } from './users.policy.js';
 import type { RoleGrants } from './users.policy.js';
 import { SELF_FORBIDDEN_ROLES_ACTION, diffRoleKeys, planProfiles, removesAcademyAdmin } from './users.roles.js';
@@ -336,13 +337,14 @@ export class UsersService {
     private readonly mfa: MfaCore,
   ) {}
 
-  async list(query: ListUsersQueryDto, view: UsersProjection): Promise<UserListDto> {
+  async list(query: ListUsersQueryDto, view: UsersProjection, teacherScope: string | null = null): Promise<UserListDto> {
     const sort: UserSortField = query.sort ?? 'createdAt';
     const order: SortOrder = query.order ?? (sort === 'createdAt' ? 'desc' : 'asc');
     const limit = query.limit ?? USERS_PAGE_DEFAULT;
     const cursor = query.cursor ? decodeUserCursor(query.cursor, sort, order) : null;
 
     const conditions: Prisma.UserWhereInput[] = [];
+    if (teacherScope) conditions.push(teacherVisibleUsersWhere(teacherScope));
     if (!query.includeDeleted) conditions.push({ deletedAt: null });
     if (query.status) conditions.push({ status: query.status });
     if (query.role) conditions.push({ roles: { some: { role: { key: query.role } } } });
@@ -366,9 +368,9 @@ export class UsersService {
   }
 
   /** Throws `user_not_found` (404) for unknown ids and, unless `includeDeleted`, for soft-deleted users. */
-  async getById(id: string, includeDeleted: boolean, view: UsersProjection): Promise<UserDetailDto> {
+  async getById(id: string, includeDeleted: boolean, view: UsersProjection, teacherScope: string | null = null): Promise<UserDetailDto> {
     const row = await this.prisma.db.user.findFirst({
-      where: includeDeleted ? { id } : { id, deletedAt: null },
+      where: { ...(includeDeleted ? { id } : { id, deletedAt: null }), ...(teacherScope ? { AND: [teacherVisibleUsersWhere(teacherScope)] } : {}) },
       select: DETAIL_SELECT,
     });
     if (!row) throw usersError.userNotFound();

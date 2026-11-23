@@ -7505,6 +7505,7 @@ npm install <package>
 | TEST-RG-4 (معرّف مؤقت) | الواجهة — جديدة: `frontend/src/auth/{AuthLayout,GoogleSignInButton}.test.tsx`، `auth/google.signIn.test.ts`، `api/{google,subjects}.test.ts`، `pages/{GoogleDonePage,LoginPage.google}.test.tsx`، `courses/{SubjectsManager.test.tsx,subjects.form.test.ts}`، `mySchool/MySchoolCourseCard.test.tsx`، و`users/UserDrawer.google.test.tsx` (منذ المراجعة: «مرتبط بحساب Google منذ …»، و«فك ربط حساب Google»، ولا «تفعيل» مع `awaitingRegistration`، و«حذف نهائي…»)؛ وموسَّعة: `users/users.status.test.ts` و`api/users.test.ts`، `auth/returnPath.test.ts`، `account/ForgotPasswordPage.test.tsx`، `pages/{LoginPage,StudentRegisterPage,StudentRegisterCompletePage,CatalogPage,CatalogCoursePage,PublicCatalogPage,PublicCoursePage,CoursesPage}.test.tsx`، `courses/{CourseDrawer,CourseDrawer.navigation,CourseDrawer.unsaved}.test.tsx` و`courses.form.test.ts`، `catalog/catalog.view.test.ts`، `publicCatalog/{PublicCourseCard.test.tsx,publicCatalog.view.test.ts}`، `api/{academy,catalog,courses,publicCatalog}.test.ts` | jsdom | صفحة الدخول الجديدة وزر Google (معطَّل بلا `googleSignIn`) ورسائل `?google=<code>` والجزء `#google-mfa` يُقرأ مرة ويُمسح؛ `/auth/google/done` ووجهة ما بعد الدخول (`returnTo` الآمن، ثم الدورة المحفوظة للطالب)؛ صفحتا التسجيل (الموافقة على الشروط، Google حين `googleSignUp`؛ **ومنذ v3:** كلمة المرور وتأكيدها وعدم التطابق والضعيفة محلياً و`password_weak` من الخادم، والإكمال بكلمة المرور وحدها والمحاولات الباقية لـ `registration_password_incorrect` وتبنّي الجلسة ثم التوجيه)؛ رسالة `email_not_verified` في الدخول (`LoginPage.test.tsx`)؛ «نسيت كلمة المرور»؛ صفحات الدورة بالمادة بدل الصعوبة وبلا عمر ولا جلسات وبترتيب الحقائق وحالات زر الاشتراك؛ تبويب «المواد»؛ بطاقة «مدرستي». **العدد:** `3418/3420 في 378 ملفاً؛ الاثنان: `ExamDrawer` «maps exam_locked…» حسّاس للحمل ونجح وحده 34/34، و`SchedulePage` «renders in English with the same data» يفشل على `main` نفسه دون هذا الفرع؛ وبعد إصلاحَي رحلة المتصفح الملفات المعدّلة 41/41؛ `tsc -b` و`lint` و`vite build` نظيفة`؛ **وبعد v3:** الملفات المعدّلة 245/245 (`registration.test.ts`، صفحتا التسجيل والإكمال، `studentRegistration/*`، `LoginPage*`) | IMPLEMENTED على الفرع |
 
 | TEST-324 | `backend/test/class-roster-totals.e2e-spec.ts` (1) + `frontend/src/dashboard/admin/AdminDashboardHome.test.tsx` (1) | الفصل المكتمل يعدّ طلابه المكتملين دون المنسحب؛ بطاقة الخادم للمدير فقط | CH-0364 |
+| TEST-325 | `backend/test/teacher-users-scope.e2e-spec.ts` (3) + `frontend/src/pages/MyAssignmentsPage.test.tsx` | نطاق المعلم في القراءة، وحالة «انتهى الموعد» | CH-0365 |
 
 ### 13.3 أوامر الاختبار
 
@@ -8622,6 +8623,8 @@ node deploy/tests/platform-compose.test.mjs      # TEST-211 (وفحوص account 
 
 | KI-151 | **إجمالي التسليمات والنتائج صفر في الفصل المكتمل** (`4 / 0`): كان يعدّ التسجيلات `active` فقط. | MOD-08 / MOD-09 (`assignments.service.ts`، `exams.service.ts`) | متوسطة | TEST-324 | عدّ `active` و`completed` | FIXED (CH-0364) |
 | KI-152 | **تفاصيل الخادم ظاهرة للمعلم والموظف** في لوحة التحكم: الخدمة والإصدار والبيئة ومدة التشغيل وسرعة قاعدة البيانات. | لوحة التحكم (`ServerStatusCard.tsx`) | منخفضة | TEST-324 | عرضها لحامل `academy.settings.manage` فقط | FIXED (CH-0364) |
+| KI-153 | **المعلم يقرأ قائمة كل المستخدمين** بالأسماء والأدوار، لا أشخاص فصوله فقط. | MOD-03 (`users.policy.ts`، `guardians.service.ts`) | متوسطة | TEST-325 | حصر القراءة في فصوله | FIXED (CH-0365 — بانتظار تأكيد المالك) |
+| KI-154 | **الواجب المنتهي يظهر «مفتوح»** للطالب مع أن التسليم يُرفض. | MOD-08 (`MyAssignmentsPage.tsx`) | منخفضة | TEST-325 | عرض «انتهى الموعد» من `submitBlocker` | FIXED (CH-0365) |
 
 > **KI-121 وKI-122** أخذهما PR #200 للمطوّر الثالث `mo-geabel` (CH-0269 — إصلاحات عرض، مدموج) من كتلة المالك KI-110..KI-129، فبدأت إصلاحات CH-0307 من KI-123.
 
@@ -15410,6 +15413,24 @@ node deploy/tests/platform-compose.test.mjs      # TEST-211 (وفحوص account 
 | الاختبارات | `tsc` و`lint` بلا أخطاء؛ وحدات الخادم **761/761**؛ e2e الأكاديمية على قاعدة مؤقتة نظيفة بدور التطبيق **825 ناجحاً و2 todo في 112 ملفاً** (بعد تحديث توقّع `activeStudents` في TEST-176 من 3 إلى 4 لأن الفصل فيه طالب مكتمل)؛ الواجهة **2887/2887 في 345 ملفاً**. حزم المنصة لم تُشغَّل محلياً. |
 | النتيجة | KI-151 وKI-152 `FIXED` |
 | تغييرات كاسرة | لا شيء |
+| المنفّذ | Claude Code (Opus 5.5) — جلسة Geabel (`mo-geabel`) |
+
+### CH-0365 — بقية ملاحظات مراجعة #19: الحصص، الموعد المنتهي، نطاق المعلم، والصفحة القديمة
+
+| البند | التفاصيل |
+|---|---|
+| التاريخ والوقت | 2026-11-23 23:40 (UTC+03:00؛ قراءة ساعة الجهاز) |
+| النوع | FIXED / MODIFIED / REMOVED / SECURITY |
+| الوحدة | MOD-03 / MOD-06 / MOD-08 / MOD-20 / التنقل |
+| الوصف | (1) «دروسي» صارت «حصصي» (`My sessions`)، فلا تختلط جلسات الفصل بدروس محتوى الدورة. (2) KI-154: الواجب المفتوح بعد موعده بلا تسليم متأخر يظهر «انتهى الموعد» بدل «مفتوح»، من `submitBlocker` في الخادم. (3) KI-153: المعلم بلا `users.read_contact` وبلا `classes.manage` يقرأ في API-012/013 وAPI-029/030 نفسه وطلاب فصوله ومعلميها وأولياء أولئك الطلاب فقط؛ وغيرهم غائب من القائمة و`404`. (4) حُذفت `MySchoolPage` ومكوّناتها الثلاثة التي لا يصل إليها مسار منذ J-F61، وبقيت الملفات المساعدة المستعملة. ورسالة بيانات الاتصال لم تعد تعرض اسم صلاحية خام. |
+| السبب | طلب Geabel في الجلسة (2026-11-23) إصلاح الملاحظات دون تغيير التصميم، فبقيت قائمة الطالب كما هي. **نطاق المعلم (KI-153) يغيّر سلوك المنتج وينتظر تأكيد المالك في مراجعة PR**، لأنه يعدّل قراراً موثقاً سابقاً بأن المعلم يقرأ قائمة المستخدمين بالإسقاط المختصر. |
+| الملفات | `backend/src/users/users.{policy,service,controller}.ts`، `backend/src/guardians/guardians.{service,controller}.ts`، `backend/test/teacher-users-scope.e2e-spec.ts`؛ `frontend/src/pages/MyAssignmentsPage.tsx` واختباره، i18n، `frontend/src/search/search.data.ts`؛ حذف `frontend/src/pages/MySchoolPage{,.test}.tsx` و`frontend/src/mySchool/MySchool{Assessments,Certificates,CourseCard}.tsx` |
+| أثر قاعدة البيانات | لا شيء |
+| أثر API | API-012/013 وAPI-029/030 أضيق للمعلم فقط (نفس الشكل)؛ لا تغيير لغيره |
+| أثر الصلاحيات | لا مفتاح جديد؛ قيد بالملكية على الدور `teacher` |
+| الاختبارات | `tsc` و`lint` بلا أخطاء؛ وحدات الخادم **761/761**؛ e2e الأكاديمية على قاعدة مؤقتة: 827 ناجحاً و2 todo، وفشل واحد متوقَّع في TEST-228 كان يقرأ مستخدماً خارج فصول المعلم، فصار يقرأ بدور `users.read` مخصص ونجح عند إعادة تشغيله مع TEST-325؛ الواجهة **2866/2866 في 344 ملفاً**. بعد إزالة تغيير القائمة: `tsc` و`lint` واختبارات التخطيط. فحص متصفح حقيقي للقراءة فقط: «انتهى الموعد»، «حصصي»، المعلم يرى 17 شخصاً من فصوله بلا مدير، والمدير يرى الجميع وبطاقة الخادم. حزم المنصة لم تُشغَّل محلياً. |
+| النتيجة | KI-153 وKI-154 `FIXED` في الكود، ونطاق المعلم بانتظار تأكيد المالك |
+| تغييرات كاسرة | المعلم لم يعد يرى مستخدمين خارج فصوله |
 | المنفّذ | Claude Code (Opus 5.5) — جلسة Geabel (`mo-geabel`) |
 
 ---

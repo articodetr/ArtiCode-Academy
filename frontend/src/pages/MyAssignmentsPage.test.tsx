@@ -222,6 +222,7 @@ describe('MyAssignmentsPage', () => {
     expect(buttonIn(first, ar.myAssignments.actions.submit)).toBeEnabled()
     expect(within(second).getByText(ar.myAssignments.submission.missed)).toBeInTheDocument()
     expect(within(second).getByText(ar.myAssignments.blocked.past_due)).toBeInTheDocument()
+    expect(within(second).queryByText('مفتوح')).not.toBeInTheDocument() // TEST-325: the status column says the deadline passed, not «open»
     expect(buttonIn(second, ar.myAssignments.actions.submit)).toBeNull()
   })
 

@@ -6,7 +6,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { UserListItemDto } from '../users/users.dto.js';
 import { usersError } from '../users/users.errors.js';
-import { activePermissionKeys, exceedingPermissions } from '../users/users.policy.js';
+import { activePermissionKeys, exceedingPermissions, teacherVisibleUsersWhere } from '../users/users.policy.js';
 import type { UsersProjection } from '../users/users.service.js';
 import type { GuardianLinkItemDto, GuardianLinkListDto, LinkGuardianDto, UpdateGuardianLinkDto } from './guardians.dto.js';
 import { guardiansError } from './guardians.errors.js';
@@ -167,10 +167,10 @@ export class GuardiansService {
   // ------------------------------------------------------------- reads
 
   /** Guardians of a student: primary first, then by link creation. Links to soft-deleted guardians are hidden. */
-  async listGuardians(studentId: string, view: UsersProjection): Promise<GuardianLinkListDto> {
-    await this.assertVisible(studentId, 'student');
+  async listGuardians(studentId: string, view: UsersProjection, teacherScope: string | null = null): Promise<GuardianLinkListDto> {
+    await this.assertVisible(studentId, 'student', teacherScope);
     const rows = await this.prisma.db.guardianStudent.findMany({
-      where: { studentUserId: studentId, guardian: { deletedAt: null } },
+      where: { studentUserId: studentId, guardian: { deletedAt: null, ...(teacherScope ? { AND: [teacherVisibleUsersWhere(teacherScope)] } : {}) } },
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
       select: GUARDIAN_LINK_SELECT,
     });
@@ -178,10 +178,10 @@ export class GuardiansService {
   }
 
   /** Students of a guardian, by link creation. Links to soft-deleted students are hidden. */
-  async listStudents(guardianId: string, view: UsersProjection): Promise<GuardianLinkListDto> {
-    await this.assertVisible(guardianId, 'guardian');
+  async listStudents(guardianId: string, view: UsersProjection, teacherScope: string | null = null): Promise<GuardianLinkListDto> {
+    await this.assertVisible(guardianId, 'guardian', teacherScope);
     const rows = await this.prisma.db.guardianStudent.findMany({
-      where: { guardianUserId: guardianId, student: { deletedAt: null } },
+      where: { guardianUserId: guardianId, student: { deletedAt: null, ...(teacherScope ? { AND: [teacherVisibleUsersWhere(teacherScope)] } : {}) } },
       orderBy: { createdAt: 'asc' },
       select: STUDENT_LINK_SELECT,
     });
@@ -343,8 +343,11 @@ export class GuardiansService {
   // ------------------------------------------------------------- helpers
 
   /** 404 for an unknown or soft-deleted user — reads do not require any role. */
-  private async assertVisible(userId: string, party: LinkParty): Promise<void> {
-    const user = await this.prisma.db.user.findFirst({ where: { id: userId, deletedAt: null }, select: { id: true } });
+  private async assertVisible(userId: string, party: LinkParty, teacherScope: string | null = null): Promise<void> {
+    const user = await this.prisma.db.user.findFirst({
+      where: { id: userId, deletedAt: null, ...(teacherScope ? { AND: [teacherVisibleUsersWhere(teacherScope)] } : {}) },
+      select: { id: true },
+    });
     if (!user) throw guardiansError.partyNotFound(party, userId);
   }
 

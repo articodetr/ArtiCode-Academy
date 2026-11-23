@@ -281,7 +281,9 @@ export function MyAssignmentsPage() {
       ),
     },
     { title: t('myAssignments.columns.teacher'), key: 'teacher', render: (_, row) => <TeacherCell item={row} enrollments={enrollments} /> },
-    { title: t('myAssignments.columns.status'), key: 'status', render: (_, row) => <StatusTag value={row.status} /> },
+    { title: t('myAssignments.columns.status'), key: 'status', render: (_, row) =>
+        row.status === 'open' && row.submitBlocker === 'past_due' ? <Tag>{t('myAssignments.blocked.past_due')}</Tag> : <StatusTag value={row.status} />,
+    },
     { title: t('myAssignments.columns.submission'), key: 'submission', render: (_, row) => <SubmissionCell item={row} /> },
     {
       title: t('myAssignments.columns.attempts'),
@@ -300,8 +302,8 @@ export function MyAssignmentsPage() {
         const offered = offersSubmit(row, holdsSubmitKey)
         // The server's verdict when the page was read (MOD-08-T07): the button and its reason never follow this device's clock.
         const takesAttempt = offered && row.submitBlocker === null
-        // A closed assignment says so in its status column; the other reasons are not visible elsewhere.
-        const blocker = offered && row.submitBlocker !== null && row.submitBlocker !== 'closed' ? row.submitBlocker : null
+        // A closed or past-due assignment says so in its status column; the other reasons are not visible elsewhere.
+        const blocker = offered && row.submitBlocker !== null && row.submitBlocker !== 'closed' && row.submitBlocker !== 'past_due' ? row.submitBlocker : null
         return (
           <Space orientation="vertical" size={4}>
             {takesAttempt ? (

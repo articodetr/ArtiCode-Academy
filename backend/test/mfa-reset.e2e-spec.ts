@@ -416,8 +416,9 @@ describe.skipIf(!available)('MFA-T04 administrative MFA reset and mfaEnabledAt i
     expect(full.body.mfaEnabledAt).toBe(mfa['privileged']!.enabledAt.toISOString());
     expectNoSecrets(full.body);
 
-    // The seeded teacher role: users.read without users.read_contact — the same key, null.
-    const reduced = await api().get(`${USERS}/${id}`).set(bearer('teacher')).expect(200);
+    // A role with users.read without users.read_contact — the same key, null. (A teacher no longer reads
+    // users outside their classes — KI-153.)
+    const reduced = await api().get(`${USERS}/${id}`).set(bearer('reader')).expect(200);
     expect(reduced.body).toHaveProperty('mfaEnabledAt', null);
     expect(reduced.body.lockedUntil).toBeNull();
     expectNoSecrets(reduced.body);
