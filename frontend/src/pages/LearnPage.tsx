@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { useAcademy } from '../academy/useAcademy'
 import { completeLearningItem } from '../api/learning'
-import type { ItemProgress, LearningWorkspace, PlaybackResult } from '../api/learning'
+import type { LearningCertificate, ItemProgress, LearningWorkspace, PlaybackResult } from '../api/learning'
 import { academyTimeZoneOf } from '../common/timeZone'
 import { useLocalized } from '../i18n/useLocalized'
 import { CourseDoneModal } from '../learn/CourseDoneModal'
@@ -92,6 +92,7 @@ export function LearnPage() {
   const [locked, setLocked] = useState<ReadonlyMap<string, string | null>>(() => new Map())
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [courseDone, setCourseDone] = useState(false)
+  const [courseCertificate, setCourseCertificate] = useState<LearningCertificate | null>(null)
 
   const itemReading = useLearningItem(itemId && !missing.has(itemId) && !locked.has(itemId) ? itemId : undefined, {
     onVisited: (id, progress) => updateWorkspace((current) => withItemProgress(current, id, progress)),
@@ -130,11 +131,14 @@ export function LearnPage() {
 
   /** One answer of the server about one lesson, carried into the lesson, its level, the course and the sidebar. */
   const applyAnswer = useCallback(
-    (id: string, progress: ItemProgress, counts: CountsUpdate, completedNow: boolean) => {
+    (id: string, progress: ItemProgress, counts: CountsUpdate, completedNow: boolean, certificate: LearningCertificate | null) => {
       const before = workspaceRef.current?.progress
       setProgress(id, progress)
       updateWorkspace((current) => withItemProgress(current, id, progress, counts))
-      if (before && completesCourse(before, counts.course, completedNow)) setCourseDone(true)
+      if (before && completesCourse(before, counts.course, completedNow)) {
+        setCourseCertificate(certificate)
+        setCourseDone(true)
+      }
       // Read the workspace again after a completion (the resume target, a playback level's counts).
       if (completedNow) reloadWorkspace()
     },
@@ -144,13 +148,13 @@ export function LearnPage() {
   const completeItem = useCallback(
     async (id: string) => {
       const result = await completeLearningItem(id)
-      applyAnswer(id, result.progress, { section: result.section, course: result.course }, result.completedNow)
+      applyAnswer(id, result.progress, { section: result.section, course: result.course }, result.completedNow, result.certificate)
     },
     [applyAnswer],
   )
 
   const playbackSaved = useCallback(
-    (id: string, result: PlaybackResult) => applyAnswer(id, result.progress, { course: result.course }, result.completedNow),
+    (id: string, result: PlaybackResult) => applyAnswer(id, result.progress, { course: result.course }, result.completedNow, result.certificate),
     [applyAnswer],
   )
 
@@ -316,7 +320,7 @@ export function LearnPage() {
           />
         </Drawer>
       ) : null}
-      <CourseDoneModal open={courseDone} onClose={() => setCourseDone(false)} />
+      <CourseDoneModal open={courseDone} certificate={courseCertificate} onClose={() => setCourseDone(false)} />
     </div>
   )
 }

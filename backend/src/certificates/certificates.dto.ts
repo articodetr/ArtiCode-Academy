@@ -162,8 +162,8 @@ export class CertificateSnapshotDto {
   @ApiProperty({ type: () => CertificateAcademySnapshotDto, description: '{ name } — the academy name at issuance' })
   academy: { name: LocalizedText };
 
-  @ApiProperty({ type: CertificateGradeDto })
-  grade: CertificateGradeDto;
+  @ApiProperty({ type: CertificateGradeDto, nullable: true, description: 'Null for an automatic course-completion certificate' })
+  grade: CertificateGradeDto | null;
 
   @ApiProperty({ type: String, nullable: true, description: 'When the enrollment was completed (ISO 8601)' })
   completedAt: string | null;
@@ -197,8 +197,8 @@ export class CertificateDto {
   @ApiProperty({ type: CertificateStudentDto, description: 'Identity only' })
   student: CertificateStudentDto;
 
-  @ApiProperty({ type: CertificateGradeDto })
-  grade: CertificateGradeDto;
+  @ApiProperty({ type: CertificateGradeDto, nullable: true, description: 'Null for an automatic course-completion certificate' })
+  grade: CertificateGradeDto | null;
 
   @ApiProperty({ type: CertificateSnapshotDto })
   snapshot: CertificateSnapshotDto;
@@ -339,8 +339,8 @@ export class CertificateVerificationDto {
   @ApiProperty({ type: () => CertificateSnapshotRefDto, description: '{ code, name }' })
   course: { code: string; name: LocalizedText };
 
-  @ApiProperty({ type: CertificateGradeDto })
-  grade: CertificateGradeDto;
+  @ApiProperty({ type: CertificateGradeDto, nullable: true, description: 'Null for an automatic course-completion certificate' })
+  grade: CertificateGradeDto | null;
 
   @ApiProperty({ type: () => CertificateAcademySnapshotDto, description: '{ name }' })
   academy: { name: LocalizedText };

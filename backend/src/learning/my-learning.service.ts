@@ -5,6 +5,7 @@ import type { LocalizedText } from '../authorization/localized-text.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { ownedEnrollmentsWhere } from '../lessons/my-lessons.policy.js';
 import { relationOf } from '../enrollments/my-classes.policy.js';
+import { AutoCertificatesService } from '../certificates/auto-certificates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { calendarDateIn } from '../schedule/schedule.time.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
@@ -185,7 +186,10 @@ function toNextSession(row: SessionRow, published: ReadonlySet<string>, academyT
  */
 @Injectable()
 export class MyLearningService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoCertificates: AutoCertificatesService,
+  ) {}
 
   // -------------------------------------------------------------------------
   // API-229 — «مدرستي»
@@ -586,9 +590,10 @@ export class MyLearningService {
       return planned;
     });
 
+    const certificate = plan.completes ? await this.autoCertificates.awardIfComplete(caller.id, item.courseId) : null;
     const view = await this.courseView(db, caller.id, item.courseId);
     const state = view.states.get(item.id) ?? (await this.itemState(db, caller.id, item));
-    return { progress: toItemProgress(state, item), course: toCounts(progressOf(view.published, view.states)), completedNow: plan.completes, capped: plan.capped };
+    return { progress: toItemProgress(state, item), course: toCounts(progressOf(view.published, view.states)), completedNow: plan.completes, capped: plan.capped, certificate };
   }
 
   // -------------------------------------------------------------------------
@@ -615,6 +620,7 @@ export class MyLearningService {
         SET status = 'completed'::learning_status, completion_source = 'manual'::learning_completion_source, completed_at = EXCLUDED.completed_at, updated_at = EXCLUDED.updated_at
         WHERE learning_progress.status <> 'completed'::learning_status`;
 
+    const certificate = written > 0 ? await this.autoCertificates.awardIfComplete(caller.id, item.courseId) : null;
     const view = await this.courseView(db, caller.id, item.courseId);
     const group = groupOf(view.groups, item.id);
     const state = view.states.get(item.id) ?? (await this.itemState(db, caller.id, item));
@@ -623,6 +629,7 @@ export class MyLearningService {
       section: toCounts(progressOf(group?.items ?? [], view.states)),
       course: toCounts(progressOf(view.published, view.states)),
       completedNow: written > 0,
+      certificate,
     };
   }
 

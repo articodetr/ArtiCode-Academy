@@ -6,6 +6,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { AttendanceStatus } from '../generated/prisma/client.js';
 import type { NotificationEventParams } from '../notifications/notifications.events.js';
 import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
+import { AutoCertificatesService } from '../certificates/auto-certificates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import type { UsersProjection } from '../users/users.service.js';
@@ -107,6 +108,15 @@ function newlyAbsent(plan: AttendancePlan, entries: readonly AttendanceEntry[]):
   return entries.map((entry) => entry.studentId).filter((studentId) => absent.has(studentId));
 }
 
+/** The students a batch newly marks as attending (CH-0363): a record created, or changed to, present or late. */
+function newlyAttending(plan: AttendancePlan): string[] {
+  const attending = (status: string | undefined) => status === 'present' || status === 'late';
+  return [
+    ...plan.created.filter((entry) => attending(entry.status)).map((entry) => entry.studentId),
+    ...plan.updated.filter((update) => update.fields.includes('status') && attending(update.data.status)).map((update) => update.studentId),
+  ];
+}
+
 /**
  * MOD-06-T03 — the attendance sheet of a lesson (roadmap §4f.5 T03, API-099
  * `GET` and API-100 `PUT /api/lessons/:id/attendance`). Reading needs
@@ -135,6 +145,7 @@ function newlyAbsent(plan: AttendancePlan, entries: readonly AttendanceEntry[]):
 @Injectable()
 export class AttendanceService {
   constructor(
+    private readonly autoCertificates: AutoCertificatesService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
@@ -149,7 +160,7 @@ export class AttendanceService {
   async record(lessonId: string, input: RecordAttendanceDto, caller: AuthPrincipal, ctx: RequestContext): Promise<AttendanceSheetDto> {
     const entries = input.records.map(toEntry);
     const view = rosterProjectionOf(caller);
-    const { sheet, batch } = await this.prisma.db.$transaction(async (tx) => {
+    const { sheet, batch, attending } = await this.prisma.db.$transaction(async (tx) => {
       const lesson = await this.lockLesson(tx, lessonId, caller);
       const blocker = attendanceBlocker(lesson.class.status, lesson.status, lesson.startsAt);
       if (blocker === 'class_cancelled') throw lessonsError.classClosed(lesson.classId, lesson.class.status);
@@ -166,7 +177,7 @@ export class AttendanceService {
 
       const existing = await tx.attendanceRecord.findMany({ where: { lessonId, studentUserId: { in: studentIds } }, select: RECORD_SELECT });
       const plan = planAttendanceBatch(new Map(existing.map((row) => [row.studentUserId, valuesOf(row)])), entries);
-      if (isEmptyAttendancePlan(plan)) return { sheet: await this.buildSheet(tx, lesson, view), batch: EMPTY_BATCH };
+      if (isEmptyAttendancePlan(plan)) return { sheet: await this.buildSheet(tx, lesson, view), batch: EMPTY_BATCH, attending: [] };
 
       if (plan.created.length > 0) {
         await tx.attendanceRecord.createMany({
@@ -204,18 +215,29 @@ export class AttendanceService {
       );
       // MOD-12: whoever this batch newly marks absent is told, with their guardians — one notification per (recipient × student).
       const absentees = newlyAbsent(plan, entries);
-      if (absentees.length === 0) return { sheet, batch: EMPTY_BATCH };
+      const attending = newlyAttending(plan);
+      if (absentees.length === 0) return { sheet, batch: EMPTY_BATCH, attending };
       const params = await this.absenceParams(tx, lesson);
       const batch = await this.notifications.notifyStudents(
         tx,
         'attendance.absent',
         absentees.map((studentId) => ({ studentId, params })),
       );
-      return { sheet, batch };
+      return { sheet, batch, attending };
     });
     // After the commit: the e-mail copies leave in the background.
     this.notifications.dispatch(batch);
+    await this.awardCertificates(lessonId, attending);
     return sheet;
+  }
+
+  /** CH-0363: attending a required live lesson can finish a course. Never fails the saved sheet. */
+  private async awardCertificates(lessonId: string, studentIds: readonly string[]): Promise<void> {
+    if (studentIds.length === 0) return;
+    const lesson = await this.prisma.db.lesson.findUnique({ where: { id: lessonId }, select: { syllabusItem: { select: { courseId: true, kind: true, isRequired: true, isPublished: true } } } });
+    const item = lesson?.syllabusItem;
+    if (!item || item.kind !== 'live' || !item.isRequired || !item.isPublished) return;
+    for (const studentId of studentIds) await this.autoCertificates.awardIfComplete(studentId, item.courseId);
   }
 
   // ---------------------------------------------------------------------------

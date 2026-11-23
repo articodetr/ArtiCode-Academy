@@ -276,6 +276,7 @@ describe.skipIf(!available)('database schema — MOD-10 certificates (e2e, TEST-
     expect(constraints.rows).toEqual([
       { table_name: 'certificates', conname: 'ck_certificates_band_label_localized', contype: 'c' },
       { table_name: 'certificates', conname: 'ck_certificates_band_letter_trimmed', contype: 'c' },
+      { table_name: 'certificates', conname: 'ck_certificates_grade_together', contype: 'c' },
       { table_name: 'certificates', conname: 'ck_certificates_percent_range', contype: 'c' },
       { table_name: 'certificates', conname: 'ck_certificates_revocation', contype: 'c' },
       { table_name: 'certificates', conname: 'ck_certificates_serial_trimmed', contype: 'c' },
@@ -319,7 +320,7 @@ describe.skipIf(!available)('database schema — MOD-10 certificates (e2e, TEST-
           include: { enrollment: true },
         });
         expect(row).toMatchObject({ status: 'issued', bandLetter: 'B', issuedById: null, revokedAt: null, revokeReason: null });
-        expect(row.percent.toString()).toBe('86.4');
+        expect(row.percent!.toString()).toBe('86.4');
         expect(row.enrollment.id).toBe(enrolled.id);
         throw marker;
       }),

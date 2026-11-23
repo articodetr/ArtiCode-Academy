@@ -6,8 +6,9 @@ import { CheckCircleFilled } from '@ant-design/icons'
 import { Button, Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
+import type { LearningCertificate } from '../api/learning'
 
-export function CourseDoneModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CourseDoneModal({ open, onClose, certificate = null }: { open: boolean; onClose: () => void; certificate?: LearningCertificate | null }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   return (
@@ -19,15 +20,21 @@ export function CourseDoneModal({ open, onClose }: { open: boolean; onClose: () 
         <Button key="review" onClick={onClose}>
           {t('learn.done.keepReviewing')}
         </Button>,
-        <Button key="school" type="primary" onClick={() => navigate('/my-classes')}>
-          {t('learn.done.backToMySchool')}
-        </Button>,
+        certificate ? (
+          <Button key="certificate" type="primary" onClick={() => navigate('/my-certificates')}>
+            {t('learn.done.viewCertificate')}
+          </Button>
+        ) : (
+          <Button key="school" type="primary" onClick={() => navigate('/my-classes')}>
+            {t('learn.done.backToMySchool')}
+          </Button>
+        ),
       ]}
       destroyOnHidden
     >
       <p className="learn-done">
         <CheckCircleFilled className="learn-done__icon" aria-hidden />
-        <span>{t('learn.done.text')}</span>
+        <span>{certificate ? t('learn.done.certificateText', { serial: certificate.serial }) : t('learn.done.text')}</span>
       </p>
     </Modal>
   )

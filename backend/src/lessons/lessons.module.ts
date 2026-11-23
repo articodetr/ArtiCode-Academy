@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AutoCertificatesModule } from '../certificates/auto-certificates.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { AttendanceController } from './attendance.controller.js';
 import { AttendanceService } from './attendance.service.js';
@@ -20,7 +21,7 @@ import { MyLessonsService } from './my-lessons.service.js';
  * concerned and their guardians from inside the writing transaction.
  */
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, AutoCertificatesModule],
   controllers: [ClassLessonsController, LessonsController, AttendanceController, MyLessonsController],
   providers: [LessonsService, AttendanceService, MyLessonsService],
   exports: [LessonsService],
