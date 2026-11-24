@@ -25,6 +25,8 @@ import { Breadcrumb, Button, Col, Input, Row, Skeleton, Typography } from 'antd'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { usePublicAcademy } from '../academy/usePublicAcademy'
+import { isSelfRegistrationOpen } from '../api/academy'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import { PublicCourseCard } from '../publicCatalog/PublicCourseCard'
 import { PUBLIC_SEARCH_DELAY_MS, PUBLIC_SEARCH_MAX_LENGTH, exploreSearchOf, publicCoursePathFor, publicFailureKey } from '../publicCatalog/publicCatalog.view'
@@ -42,14 +44,22 @@ const SKELETON_CARDS = 6
 export function PublicCatalogPage() {
   return (
     <PublicOnly signedInTo="/catalog">
-      <PublicShell bleed>
-        <PublicCatalogList />
-      </PublicShell>
+      <PublicCatalogFrame />
     </PublicOnly>
   )
 }
 
-function PublicCatalogList() {
+/** Reads API-205 once, for the shell and for whether the closed panel may offer a new account. */
+function PublicCatalogFrame() {
+  const academy = usePublicAcademy()
+  return (
+    <PublicShell academy={academy} bleed>
+      <PublicCatalogList registrationOpen={isSelfRegistrationOpen(academy.academy)} />
+    </PublicShell>
+  )
+}
+
+function PublicCatalogList({ registrationOpen }: { registrationOpen: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const academy = useContext(PublicAcademyNameContext)
@@ -152,11 +162,18 @@ function PublicCatalogList() {
               tone="info"
               icon={<LockOutlined />}
               title={t('publicCatalog.closed.title')}
-              text={t('publicCatalog.closed.text')}
+              text={t(registrationOpen ? 'studentRegistration.entry.accountsNote' : 'publicCatalog.closed.text')}
               action={
-                <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
-                  {t('publicCatalog.closed.signIn')}
-                </Button>
+                <>
+                  <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
+                    {t('publicCatalog.closed.signIn')}
+                  </Button>
+                  {registrationOpen ? (
+                    <Link to="/register" className="public-register-link">
+                      {t('studentRegistration.entry.createAccount')}
+                    </Link>
+                  ) : null}
+                </>
               }
             />
           ) : (

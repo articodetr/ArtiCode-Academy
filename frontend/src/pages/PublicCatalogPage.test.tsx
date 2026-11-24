@@ -27,10 +27,10 @@ function PathProbe() {
 }
 
 /** Serves API-205 and API-236 (`list` gets the query of each list request) and records the list requests. */
-function mockPublicApi(list: (query: URLSearchParams) => Response) {
+function mockPublicApi(list: (query: URLSearchParams) => Response, academy: Parameters<typeof makePublicAcademy>[0] = {}) {
   const requests: { query: URLSearchParams; headers: Headers }[] = []
   const fetchMock = mockFetch((url, init) => {
-    if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(200, makePublicAcademy({ catalogPublic: true, name: { ar: 'أكاديمية النور', en: 'Al-Nour Academy' } }))
+    if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(200, makePublicAcademy({ catalogPublic: true, name: { ar: 'أكاديمية النور', en: 'Al-Nour Academy' }, ...academy }))
     if (url === PUBLIC_CATALOG_PATH || url.startsWith(`${PUBLIC_CATALOG_PATH}?`)) {
       const query = new URL(url, 'http://localhost').searchParams
       requests.push({ query, headers: new Headers(init?.headers) })
@@ -310,6 +310,18 @@ describe('PublicCatalogPage', () => {
 
     fireEvent.click(within(closed).getByText(pc.closed.signIn).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/login')
+    expect(screen.queryByText(ar.studentRegistration.entry.createAccount)).not.toBeInTheDocument()
+  })
+
+  it('offers a new account on the closed panel only while the academy opens registration, reading API-205 once', async () => {
+    const { fetchMock } = mockPublicApi(() => jsonResponse(404, CATALOG_NOT_PUBLIC), { selfRegistration: true })
+    renderPage()
+
+    const closed = await screen.findByTestId('catalog-closed')
+    await waitFor(() => expect(within(closed).getByText(ar.studentRegistration.entry.accountsNote)).toBeInTheDocument())
+    expect(within(closed).queryByText(pc.closed.text)).not.toBeInTheDocument()
+    expect(within(closed).getByRole('link', { name: ar.studentRegistration.entry.createAccount })).toHaveAttribute('href', '/register')
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith(ACADEMY_PUBLIC_PATH))).toHaveLength(1)
   })
 
   it('reports another failure with a retry that asks again', async () => {

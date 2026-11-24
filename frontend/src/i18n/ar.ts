@@ -24,6 +24,7 @@ import { examAttempts } from './ar/examAttempts'
 import { takeExam } from './ar/takeExam'
 import { courseCover } from './ar/courseCover'
 import { courseEnrollmentPanel } from './ar/courseEnrollmentPanel'
+import { studentRegistration } from './ar/studentRegistration'
 import { publicHome } from './ar/publicHome'
 
 export const ar = {
@@ -85,6 +86,7 @@ export const ar = {
   publicHome,
   courseCover,
   courseEnrollmentPanel,
+  studentRegistration,
 }
 
 export type Translation = typeof ar
