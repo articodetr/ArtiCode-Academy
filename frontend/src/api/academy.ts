@@ -126,6 +126,8 @@ export interface PublicAcademy {
   /** `settings.catalog.publicBrowsing === true`: the public catalog (/explore) answers. */
   catalogPublic?: boolean
   homepageImages?: PublicHomepageImages | null
+  /** PORTAL-03 (#221): the academy lets a visitor create a student account and a mail transport is set. Absent = closed. */
+  selfRegistration?: boolean
 }
 
 export const ACADEMY_PATH = '/api/academy'
@@ -147,4 +149,9 @@ export function getPublicAcademy(signal?: AbortSignal): Promise<PublicAcademy> {
 /** True only when the academy says its catalog is open to visitors (absent on a server before MOD-20 = false). */
 export function isCatalogPublic(academy: Pick<PublicAcademy, 'catalogPublic'> | null | undefined): boolean {
   return academy?.catalogPublic === true
+}
+
+/** True only when the server says so: a server before PORTAL-03, a failed read or a missing field all read as closed. */
+export function isSelfRegistrationOpen(academy: Pick<PublicAcademy, 'selfRegistration'> | null | undefined): boolean {
+  return academy?.selfRegistration === true
 }

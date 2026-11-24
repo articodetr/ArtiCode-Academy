@@ -10,6 +10,7 @@ import { examAttempts } from './en/examAttempts'
 import { takeExam } from './en/takeExam'
 import { courseCover } from './en/courseCover'
 import { courseEnrollmentPanel } from './en/courseEnrollmentPanel'
+import { studentRegistration } from './en/studentRegistration'
 import { publicHome } from './en/publicHome'
 import { homepageImages } from './en/homepageImages'
 
@@ -4356,4 +4357,5 @@ export const en: Translation = {
   courseEnrollmentPanel,
   // Settings → Homepage images: the four pictures of /home the administration may replace.
   homepageImages,
+  studentRegistration,
 }

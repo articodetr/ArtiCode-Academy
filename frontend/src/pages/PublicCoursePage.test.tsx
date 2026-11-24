@@ -55,20 +55,26 @@ function renderPage(auth = makeAuth(), search = '') {
   })
 }
 
+/** The band: the page's h1 sits in its header. */
+const band = () => within(screen.getByRole('heading', { level: 1 }).closest('header')!)
+const SUMMARY = 'مدخل عملي إلى البرمجة'
+const DESCRIPTION = 'تتعلم في هذه الدورة المتغيرات والدوال والحلقات.'
+const SECTIONS_NAV = { name: pc.course.sectionsNav }
+const label = (ar: string) => ({ ar })
+
 describe('PublicCoursePage', () => {
   it('shows the course and its outline by level — titles, kinds and lengths only — read without a token', async () => {
     const { api } = mockCourseApi(serve(makePublicDetail()))
     renderPage()
 
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
-    expect(screen.getByText('PY-101')).toBeInTheDocument()
-    expect(screen.getByText('مبتدئ')).toBeInTheDocument()
-    expect(screen.getByText(pc.card.free)).toBeInTheDocument()
-    expect(screen.getByText('24 ساعة')).toBeInTheDocument()
-    expect(screen.getByText('12 جلسة')).toBeInTheDocument()
-    expect(screen.getByText('5 دروس · مستويان')).toBeInTheDocument()
-    expect(screen.getByText('من 12 إلى 18 سنة')).toBeInTheDocument()
-    expect(screen.getByText('تتعلم في هذه الدورة المتغيرات والدوال والحلقات.')).toBeInTheDocument()
+    // The band: the badges, the counts, the short text and the availability.
+    for (const text of [pc.card.courseType, 'مبتدئ', '24 ساعة', '5 دروس · مستويان', SUMMARY, pc.card.available]) expect(band().getByText(text)).toBeInTheDocument()
+    // The enrollment card: the difficulty, the compact facts, the price and the code.
+    const card = within(screen.getByTestId('public-enroll-card'))
+    expect(card.getByText(pc.course.level)).toBeInTheDocument()
+    for (const text of ['PY-101', 'مبتدئ', pc.card.free, '24 ساعة', '12 جلسة', '5 دروس · مستويان', 'من 12 إلى 18 سنة']) expect(card.getByText(text)).toBeInTheDocument()
+    expect(screen.getByText(DESCRIPTION)).toBeInTheDocument()
 
     const outline = within(screen.getByTestId('public-outline'))
     expect(outline.getByText(pc.course.outlineNote)).toBeInTheDocument()
@@ -80,11 +86,13 @@ describe('PublicCoursePage', () => {
     expect(outline.getByText(pc.kinds.live)).toBeInTheDocument()
     expect(outline.getByText('10 دقائق')).toBeInTheDocument()
     expect(outline.getByText('60 دقيقة')).toBeInTheDocument()
-    // The course name is the page's h1, each level an h2, and the lessons a plain ordered list (antd List is deprecated).
+    // The course name is the page's h1, each section an h2, each level a panel, and the lessons a plain ordered list.
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('أساسيات بايثون')
-    expect(outline.getByRole('heading', { level: 2, name: 'المستوى الأول — البداية' })).toBeInTheDocument()
-    expect(outline.getAllByRole('list')).toHaveLength(2)
-    expect(outline.getAllByRole('listitem')).toHaveLength(4)
+    expect(screen.getByRole('heading', { level: 2, name: pc.course.descriptionSection })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: pc.course.outlineSection })).toBeInTheDocument()
+    const lists = screen.getByTestId('public-outline').querySelectorAll('ol')
+    expect(lists).toHaveLength(2)
+    expect(screen.getByTestId('public-outline').querySelectorAll('ol > li')).toHaveLength(4)
 
     expect(api.reads).toBe(1)
     expect(api.headers[0]!.get('Authorization')).toBeNull()
@@ -107,6 +115,7 @@ describe('PublicCoursePage', () => {
       expect(notice.getByText(reason)).toBeInTheDocument()
       expect(screen.queryByTestId('public-enroll')).not.toBeInTheDocument()
       expect(screen.queryByText(pc.course.enroll)).not.toBeInTheDocument()
+      expect(screen.queryByTestId(`public-subscribe-${COURSE_ID}`)).not.toBeInTheDocument()
       // The details stay readable, and an unusable price is never called «full».
       expect(screen.getByTestId('public-outline')).toBeInTheDocument()
       if (reason === pc.course.notEnrollable.price_unavailable) expect(screen.queryByText(pc.card.full)).not.toBeInTheDocument()
@@ -150,6 +159,29 @@ describe('PublicCoursePage', () => {
     expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: `/catalog/${COURSE_ID}?intent=enroll` })
   })
 
+  it('offers «اشترك مجانًا» beside the enroll button, leading through the sign-in with the course kept', async () => {
+    mockCourseApi(serve(makePublicDetail()))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+
+    const buttons = screen.getByTestId('public-enroll').querySelector<HTMLElement>('.course-enroll__buttons')!
+    expect(within(buttons).getByText(pc.course.enroll)).toBeInTheDocument()
+    const subscribe = within(buttons).getByTestId(`public-subscribe-${COURSE_ID}`)
+    expect(subscribe.tagName).toBe('A')
+    expect(subscribe).toHaveTextContent(pc.card.subscribeFree)
+    fireEvent.click(subscribe)
+
+    const probe = await screen.findByTestId('path')
+    expect(probe.textContent).toBe('/login')
+    expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: `/catalog/${COURSE_ID}?intent=enroll` })
+  })
+
+  it('words the same action «طلب الاشتراك» for a paid course', async () => {
+    mockCourseApi(serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
+    renderPage()
+    expect(await screen.findByTestId(`public-subscribe-${COURSE_ID}`)).toHaveTextContent(pc.card.subscribePaid)
+  })
+
   it('shows the calm «closed» page when the academy does not open its catalog (404 catalog_not_public)', async () => {
     mockCourseApi(() => jsonResponse(404, CATALOG_NOT_PUBLIC))
     renderPage()
@@ -173,14 +205,14 @@ describe('PublicCoursePage', () => {
   it('leads «العودة إلى الدورات» back to the search the course was opened from — kept in its own address (PORTAL-04)', async () => {
     mockCourseApi(serve(makePublicDetail()))
     const opened = renderPage(makeAuth(), `?q=${encodeURIComponent('بايثون')}`)
-    await screen.findByText(pc.course.overview)
+    await screen.findByTestId('public-outline')
     fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
     expect(decodeURIComponent((await screen.findByTestId('path')).textContent!)).toBe('/explore?q=بايثون')
     opened.unmount()
 
     // Opened from a direct link (no search): back to all programs.
     renderPage()
-    await screen.findByText(pc.course.overview)
+    await screen.findByTestId('public-outline')
     fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/explore')
   })
@@ -188,7 +220,7 @@ describe('PublicCoursePage', () => {
   it('never leaves the site from «العودة إلى الدورات», whatever the address carries', async () => {
     mockCourseApi(serve(makePublicDetail()))
     renderPage(makeAuth(), `?q=${encodeURIComponent('https://evil.example')}`)
-    await screen.findByText(pc.course.overview)
+    await screen.findByTestId('public-outline')
     fireEvent.click(screen.getByText(pc.course.back).closest('button')!)
     const path = (await screen.findByTestId('path')).textContent!
     expect(path.startsWith('/explore?q=')).toBe(true)
@@ -220,6 +252,275 @@ describe('PublicCoursePage', () => {
     expect(screen.getByTestId('public-session-loading')).toBeInTheDocument()
     expect(screen.queryByTestId('public-outline')).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  describe('the short text and the description', () => {
+    it('shows the summary in the band and the description in its section, each once', async () => {
+      mockCourseApi(serve(makePublicDetail()))
+      renderPage()
+      await screen.findByTestId('public-outline')
+      expect(band().getByText(SUMMARY)).toBeInTheDocument()
+      expect(band().queryByText(DESCRIPTION)).not.toBeInTheDocument()
+      expect(screen.getAllByText(SUMMARY)).toHaveLength(1)
+      expect(screen.getAllByText(DESCRIPTION)).toHaveLength(1)
+    })
+
+    it('has no «الوصف» section when the description repeats the summary after trimming', async () => {
+      mockCourseApi(serve(makePublicDetail({ summary: label(SUMMARY), description: label(`  ${SUMMARY}\n`) })))
+      renderPage()
+      await screen.findByTestId('public-outline')
+      expect(screen.getAllByText(SUMMARY)).toHaveLength(1)
+      expect(band().getByText(SUMMARY)).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { level: 2, name: pc.course.descriptionSection })).not.toBeInTheDocument()
+    })
+
+    it('has no «الوصف» section without a description, and no short text in the band without a summary', async () => {
+      mockCourseApi(serve(makePublicDetail({ description: null })))
+      const first = renderPage()
+      await screen.findByTestId('public-outline')
+      expect(band().getByText(SUMMARY)).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { level: 2, name: pc.course.descriptionSection })).not.toBeInTheDocument()
+      first.unmount()
+
+      mockCourseApi(serve(makePublicDetail({ summary: null })))
+      const { container } = renderPage()
+      await screen.findByTestId('public-outline')
+      expect(container.querySelector('.course-page__summary')).toBeNull()
+      expect(screen.getAllByText(DESCRIPTION)).toHaveLength(1)
+      expect(band().queryByText(DESCRIPTION)).not.toBeInTheDocument()
+    })
+
+    it('keeps the line breaks of a description and never reads it as markup', async () => {
+      const text = 'سطر أول\n<b>سطر ثانٍ</b>'
+      mockCourseApi(serve(makePublicDetail({ description: label(text) })))
+      const { container } = renderPage()
+      await screen.findByTestId('public-outline')
+      const paragraph = container.querySelector('#course-description .course-page__text')!
+      expect(paragraph.textContent).toBe(text)
+      expect(paragraph.querySelector('b')).toBeNull()
+    })
+  })
+
+  describe('the sections', () => {
+    it('shows no study plan without a lesson: the band already says «لا دروس بعد»', async () => {
+      mockCourseApi(serve(makePublicDetail({ lessonCount: 0, levelCount: 0, outline: [{ number: 1, title: null, lessons: [] }] })))
+      renderPage()
+      await screen.findByTestId('public-enroll')
+      expect(screen.queryByTestId('public-outline')).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { level: 2, name: pc.course.outlineSection })).not.toBeInTheDocument()
+      // `levels` only with a curriculum level.
+      expect(band().getByText(pc.card.lessons)).toBeInTheDocument()
+    })
+
+    it('shows no section at all with neither a text nor a lesson, and never invents outcomes or a teacher', async () => {
+      mockCourseApi(serve(makePublicDetail({ summary: null, description: null, lessonCount: 0, levelCount: 0, outline: [] })))
+      const { container } = renderPage()
+      await screen.findByTestId('public-enroll')
+      expect(container.querySelectorAll('.course-page__section')).toHaveLength(0)
+      expect(screen.queryByRole('navigation', SECTIONS_NAV)).not.toBeInTheDocument()
+    })
+
+    it('words the availability in the band, and shows none for a course whose price is unavailable', async () => {
+      mockCourseApi(serve(makePublicDetail({ openClasses: 0, hasFreeSeat: false })))
+      const closed = renderPage()
+      await screen.findByTestId('public-not-enrollable')
+      expect(band().getByText(pc.card.closed)).toBeInTheDocument()
+      closed.unmount()
+
+      mockCourseApi(serve(makePublicDetail({ pricing: 'paid', price: null, hasFreeSeat: false })))
+      const { container } = renderPage()
+      await screen.findByTestId('public-not-enrollable')
+      expect(container.querySelector('.course-availability')).toBeNull()
+    })
+  })
+
+  describe('the bar of section links', () => {
+    it('links to both sections, lights the one pressed, moves the focus there and leaves the address alone', async () => {
+      mockCourseApi(serve(makePublicDetail()))
+      renderPage(makeAuth(), '?q=abc')
+      await screen.findByTestId('public-outline')
+
+      const bar = within(screen.getByRole('navigation', SECTIONS_NAV))
+      const description = bar.getByRole('link', { name: pc.course.descriptionSection })
+      const plan = bar.getByRole('link', { name: pc.course.outlineSection })
+      expect(description).toHaveAttribute('href', '#course-description')
+      expect(plan).toHaveAttribute('href', '#course-outline')
+      expect(description).toHaveAttribute('aria-current', 'true')
+
+      // `fireEvent` answers false when the click was prevented: no hash lands in the address.
+      expect(fireEvent.click(plan)).toBe(false)
+      expect(plan).toHaveAttribute('aria-current', 'true')
+      expect(description).not.toHaveAttribute('aria-current')
+      expect(document.activeElement).toBe(document.getElementById('course-outline'))
+    })
+
+    it('shows no bar with a single section', async () => {
+      mockCourseApi(serve(makePublicDetail({ description: null })))
+      renderPage()
+      await screen.findByTestId('public-outline')
+      expect(screen.queryByRole('navigation', SECTIONS_NAV)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('the study plan', () => {
+    const lesson = (title: string) => ({ title: label(title), kind: 'text' as const, durationSeconds: null })
+    const outline = [
+      { number: 1, title: label('الأول'), lessons: [lesson('درس أ'), lesson('درس ب')] },
+      { number: 2, title: label('فارغ'), lessons: [] },
+      { number: 3, title: label('الثالث'), lessons: [lesson('درس ج')] },
+    ]
+
+    it('keeps the server order, skips a level without lessons, and keeps every title in the document', async () => {
+      mockCourseApi(serve(makePublicDetail({ outline })))
+      renderPage()
+      const plan = await screen.findByTestId('public-outline')
+
+      const headers = [...plan.querySelectorAll('[role="button"][aria-expanded]')]
+      expect(headers.map((header) => header.querySelector('.ant-collapse-title')!.textContent)).toEqual(['المستوى الأول — الأول', 'المستوى الثالث — الثالث'])
+      expect(within(plan).queryByText(/فارغ/)).not.toBeInTheDocument()
+      expect([...plan.querySelectorAll('ol > li')].map((item) => item.querySelector('.course-outline__title > span:last-child')!.textContent)).toEqual(['درس أ', 'درس ب', 'درس ج'])
+      // The header counts its own lessons.
+      expect(within(headers[0] as HTMLElement).getByText('درسان')).toBeInTheDocument()
+      expect(within(headers[1] as HTMLElement).getByText('درس واحد')).toBeInTheDocument()
+    })
+
+    it('opens the first level only, and a level answers the mouse, Enter and Space', async () => {
+      mockCourseApi(serve(makePublicDetail({ outline })))
+      renderPage()
+      const plan = await screen.findByTestId('public-outline')
+      const [first, second] = [...plan.querySelectorAll<HTMLElement>('[role="button"][aria-expanded]')]
+      expect(first).toHaveAttribute('aria-expanded', 'true')
+      expect(second).toHaveAttribute('aria-expanded', 'false')
+
+      fireEvent.click(second!)
+      expect(second).toHaveAttribute('aria-expanded', 'true')
+      fireEvent.keyDown(second!, { key: 'Enter' })
+      expect(second).toHaveAttribute('aria-expanded', 'false')
+      // Space presses the header and does not scroll the page.
+      expect(fireEvent.keyDown(second!, { key: ' ' })).toBe(false)
+      expect(second).toHaveAttribute('aria-expanded', 'true')
+    })
+  })
+
+  it('keeps the loading, failure and closed states in the page column', async () => {
+    mockCourseApi(() => jsonResponse(404, CATALOG_NOT_PUBLIC))
+    const closed = renderPage()
+    expect((await screen.findByTestId('catalog-closed')).closest('.course-page-state')).not.toBeNull()
+    closed.unmount()
+
+    mockCourseApi(() => jsonResponse(404, { statusCode: 404, code: 'course_not_found', message: 'gone' }))
+    renderPage()
+    expect((await screen.findByText(pc.course.notFound)).closest('.course-page-state')).not.toBeNull()
+  })
+
+  describe('creating an account (PORTAL-04, the contract of #207)', () => {
+    const entry = ar.studentRegistration.entry
+    const academyReads = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls.filter(([url]) => url === ACADEMY_PUBLIC_PATH).length
+
+    /** API-205 with `academy` (or the failure `status`) and API-237 with `detail`. */
+    function mockRegistrationApi(academy: unknown, detail: () => Response, status = 200) {
+      return mockFetch((url) => {
+        if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(status, academy)
+        if (url === COURSE_PATH) return detail()
+        return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
+      })
+    }
+
+    function renderForRegister() {
+      return renderWithProviders(<PublicCoursePage />, {
+        auth: makeAuth(),
+        route: `/explore/${COURSE_ID}`,
+        path: '/explore/:courseId',
+        routes: { '/register': <PathProbe />, '/login': <PathProbe /> },
+      })
+    }
+
+    const open = () => makePublicAcademy({ catalogPublic: true, selfRegistration: true })
+
+    it.each([
+      ['the field absent', makePublicAcademy({ catalogPublic: true }), 200],
+      ['false', makePublicAcademy({ catalogPublic: true, selfRegistration: false }), 200],
+      ['a failed read', { statusCode: 503, code: 'academy_not_configured', message: 'none' }, 503],
+    ])('keeps the original note and offers no account with %s, reading API-205 once', async (_case, academy, status) => {
+      const fetchMock = mockRegistrationApi(academy, serve(makePublicDetail()), status)
+      renderForRegister()
+      const enroll = within(await screen.findByTestId('public-enroll'))
+      await waitFor(() => expect(academyReads(fetchMock)).toBe(1))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(enroll.getByText(pc.course.enrollNote)).toBeInTheDocument()
+      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+      expect(document.querySelector('a[href="/register"]')).toBeNull()
+      expect(document.body.textContent).not.toContain(entry.courseNote)
+      expect(academyReads(fetchMock)).toBe(1)
+    })
+
+    it('replaces the note and leads to /register with the course as the way back, reading API-205 once', async () => {
+      const fetchMock = mockRegistrationApi(open(), serve(makePublicDetail()))
+      renderForRegister()
+      const link = await screen.findByTestId('public-course-register')
+      const enroll = within(screen.getByTestId('public-enroll'))
+      expect(enroll.getByText(new RegExp(entry.courseNote))).toBeInTheDocument()
+      expect(enroll.queryByText(pc.course.enrollNote)).not.toBeInTheDocument()
+      // The two existing actions stay.
+      expect(enroll.getByText(pc.course.enroll)).toBeInTheDocument()
+      expect(enroll.getByTestId(`public-subscribe-${COURSE_ID}`)).toBeInTheDocument()
+      expect(academyReads(fetchMock)).toBe(1)
+
+      expect(link).toHaveTextContent(entry.createAccountLink)
+      expect(link).toHaveAttribute('href', '/register')
+      fireEvent.click(link)
+      const probe = await screen.findByTestId('path')
+      expect(probe.textContent).toBe('/register')
+      expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: `/catalog/${COURSE_ID}?intent=enroll` })
+    })
+
+    it('keeps the paid note beside the new one', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
+      renderForRegister()
+      await screen.findByTestId('public-course-register')
+      expect(within(screen.getByTestId('public-enroll')).getByText(pc.course.paidNote)).toBeInTheDocument()
+    })
+
+    it('offers no course link for a course that takes nobody now', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail({ openClasses: 0, hasFreeSeat: false })))
+      renderForRegister()
+      await screen.findByTestId('public-not-enrollable')
+      await waitFor(() => expect(document.querySelector('.public-catalog__register')).not.toBeNull())
+      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+    })
+
+    it('words the closed catalog truthfully, with the way to register, only while registration is open', async () => {
+      const opened = mockRegistrationApi(open(), () => jsonResponse(404, CATALOG_NOT_PUBLIC))
+      const first = renderForRegister()
+      const closed = within(await screen.findByTestId('catalog-closed'))
+      expect(await closed.findByText(entry.accountsNote)).toBeInTheDocument()
+      expect(closed.queryByText(pc.closed.text)).not.toBeInTheDocument()
+      expect(closed.getByRole('link', { name: entry.createAccount })).toHaveAttribute('href', '/register')
+      expect(closed.getByText(pc.closed.signIn)).toBeInTheDocument()
+      expect(academyReads(opened)).toBe(1)
+      first.unmount()
+
+      mockRegistrationApi(makePublicAcademy({ catalogPublic: false }), () => jsonResponse(404, CATALOG_NOT_PUBLIC))
+      renderForRegister()
+      const shut = within(await screen.findByTestId('catalog-closed'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(shut.getByText(pc.closed.text)).toBeInTheDocument()
+      expect(shut.queryByText(entry.accountsNote)).not.toBeInTheDocument()
+      expect(shut.queryByRole('link', { name: entry.createAccount })).not.toBeInTheDocument()
+    })
+
+    it('reads nothing for a signed-in user, whatever the academy allows', async () => {
+      const fetchMock = mockRegistrationApi(open(), serve(makePublicDetail()))
+      renderWithProviders(<PublicCoursePage />, {
+        auth: makeAuth({ user: makeUser({ role: 'student', roles: ['student'] }) }),
+        route: `/explore/${COURSE_ID}`,
+        path: '/explore/:courseId',
+        routes: { '/catalog/:courseId': <PathProbe /> },
+      })
+      await screen.findByTestId('path')
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(document.querySelector('a[href="/register"]')).toBeNull()
+    })
   })
 })
 

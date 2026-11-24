@@ -227,7 +227,7 @@ describe('PublicHomePage', () => {
 
     const third = renderPage()
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('a')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.card.viewCourse).closest('a')!)
     expect(await path()).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
     third.unmount()
 
@@ -319,7 +319,7 @@ describe('PublicHomePage', () => {
 
     const second = renderPage(auth)
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.list.details).closest('a')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.card.viewCourse).closest('a')!)
     expect(await path()).toBe(`/catalog/${PUBLIC_COURSE_IDS[0]}`)
     second.unmount()
 
@@ -389,7 +389,7 @@ describe('PublicHomePage', () => {
     renderPage(makeAuth({ user: makeUser({ role: null, roles: ['accountant'], permissions: ['invoices.read_all'] }) }))
     await programs().findByText('أساسيات بايثون')
     expect(screen.getByText('أساسيات بايثون').closest('a')).toBeNull()
-    expect(programs().queryByText(pc.list.details)).not.toBeInTheDocument()
+    expect(programs().queryByText(pc.card.viewCourse)).not.toBeInTheDocument()
     expect(programs().queryByText(ph.programs.all)).not.toBeInTheDocument()
   })
 
@@ -475,6 +475,112 @@ describe('PublicHomePage', () => {
 
       expect(await screen.findByText('Welcome to Al-Nour Academy')).toBeInTheDocument()
       expect(pictures()).toEqual({ ...DEFAULT_PICTURES, heroStudent: HERO_URL, whyClassroom: WHY_URL })
+    })
+  })
+
+  describe('creating an account (PORTAL-04, the contract of #207)', () => {
+    const entry = ar.studentRegistration.entry
+    const registerLinks = () => [...document.querySelectorAll('a[href="/register"]')]
+    const academyReads = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls.filter(([url]) => url === ACADEMY_PUBLIC_PATH).length
+    const list = () => jsonResponse(200, makePublicList([makePublicCard()]))
+    const learner = () => makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) })
+    const staff = () => makeAuth({ user: makeUser({ permissions: ['academy.settings.manage'] }) })
+
+    it.each([
+      ['the field absent', { catalogPublic: true }],
+      ['false', { catalogPublic: true, selfRegistration: false }],
+    ])('keeps the original words and offers no link with %s', async (_case, academy) => {
+      const { fetchMock } = mockHomeApi(list, academy)
+      renderPage()
+      await programs().findByText('أساسيات بايثون')
+      expect(hero().getByText(ph.hero.accountsNote)).toBeInTheDocument()
+      expect(screen.getByText(ph.steps.signIn.text)).toBeInTheDocument()
+      expect(registerLinks()).toHaveLength(0)
+      expect(document.body.textContent).not.toContain(entry.accountsNote)
+      expect(academyReads(fetchMock)).toBe(1)
+    })
+
+    it('offers nothing when API-205 fails', async () => {
+      mockFetch((url) => (url === ACADEMY_PUBLIC_PATH ? jsonResponse(503, { statusCode: 503, code: 'academy_not_configured', message: 'none' }) : list()))
+      renderPage()
+      await programs().findByText('أساسيات بايثون')
+      expect(await screen.findByText(ph.hero.welcome)).toBeInTheDocument()
+      expect(hero().getByText(ph.hero.accountsNote)).toBeInTheDocument()
+      expect(registerLinks()).toHaveLength(0)
+    })
+
+    it('tells a visitor the truth wherever accounts are mentioned, with one quiet link in the hero and one in the header', async () => {
+      const { fetchMock } = mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage()
+      const link = await screen.findByTestId('home-register')
+      expect(link).toHaveAttribute('href', '/register')
+      expect(link).toHaveTextContent(entry.createAccount)
+      expect(hero().getByText(new RegExp(entry.accountsNote))).toBeInTheDocument()
+      expect(document.body.textContent).not.toContain(ph.hero.accountsNote)
+      expect(document.body.textContent).not.toContain(ph.steps.signIn.text)
+      // A link, not a second button beside «استعرض البرامج».
+      expect(hero().queryByRole('button', { name: new RegExp(entry.createAccount) })).not.toBeInTheDocument()
+      expect(header().getByRole('link', { name: entry.createAccount })).toHaveAttribute('href', '/register')
+      expect(header().getByText(pc.header.signIn).closest('button')).toBeInTheDocument()
+      expect(registerLinks()).toHaveLength(2)
+      expect(academyReads(fetchMock)).toBe(1)
+    })
+
+    it('lists it in the phone menu and closes the menu on the way there', async () => {
+      mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderWithProviders(<PublicHomePage />, {
+        auth: makeAuth(),
+        route: '/home',
+        routes: { '/register': <PathProbe /> },
+      })
+      await screen.findByTestId('home-register')
+      fireEvent.click(header().getByRole('button', { name: new RegExp(pc.header.openMenu) }))
+      const menu = await screen.findByRole('dialog')
+      fireEvent.click(within(menu).getByRole('link', { name: entry.createAccount }))
+      expect(await path()).toBe('/register')
+    })
+
+    it('keeps the phone menu free of it while registration is closed', async () => {
+      mockHomeApi(list)
+      renderPage()
+      await programs().findByText('أساسيات بايثون')
+      fireEvent.click(header().getByRole('button', { name: new RegExp(pc.header.openMenu) }))
+      const menu = await screen.findByRole('dialog')
+      expect(within(menu).getByText(pc.header.programsLink)).toBeInTheDocument()
+      expect(within(menu).queryByText(entry.createAccount)).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ['a learner', learner],
+      ['staff', staff],
+    ])('offers %s no link, and never repeats the untrue line', async (_who, auth) => {
+      mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage(auth())
+      await programs().findByText('أساسيات بايثون')
+      await waitFor(() => expect(screen.getByText(entry.accountsNote)).toBeInTheDocument())
+      expect(registerLinks()).toHaveLength(0)
+      expect(screen.queryByTestId('home-register')).not.toBeInTheDocument()
+      expect(document.body.textContent).not.toContain(ph.steps.signIn.text)
+    })
+
+    it('offers nothing while the session is still being restored', async () => {
+      const { fetchMock } = mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage(makeAuth({ status: 'loading' }))
+      await programs().findByText('أساسيات بايثون')
+      await waitFor(() => expect(academyReads(fetchMock)).toBe(1))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(registerLinks()).toHaveLength(0)
+    })
+
+    it('words it in English', async () => {
+      await i18n.changeLanguage('en')
+      mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage()
+      const link = await screen.findByTestId('home-register')
+      expect(link).toHaveTextContent(en.studentRegistration.entry.createAccount)
+      expect(document.body.textContent).toContain(en.studentRegistration.entry.accountsNote)
+      expect(document.body.textContent).not.toContain(en.publicHome.hero.accountsNote)
+      expect(document.body.textContent).not.toContain(en.publicHome.steps.signIn.text)
     })
   })
 })

@@ -1,0 +1,133 @@
+/* The signed-in course page (/catalog/:courseId) on the frame of a course page (publicCourse.css), inside the app's
+   content area. Everything here is scoped to `.catalog-course`.
+
+   The document is what scrolls and the app's header scrolls away with it (AppLayout.css: no sticky header), so the
+   section bar stops at the very top of the window and a scroll target needs no room for a header. */
+
+.catalog-course .course-page.course-page--app {
+  --course-sticky-top: 0px;
+  box-sizing: border-box;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: 16px;
+}
+
+/* Rounded on the band itself: `overflow` on the page would make it the section bar's scroll container. */
+.catalog-course .course-page__band {
+  border-start-start-radius: 15px;
+  border-start-end-radius: 15px;
+}
+
+.catalog-course__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.catalog-course__meta > span + span::before {
+  content: '·';
+  margin-inline-end: 8px;
+}
+
+/* A comfortable target for a finger, on this page's buttons only. */
+@media (max-width: 767px) {
+  .catalog-course .ant-btn {
+    min-height: 40px;
+  }
+}
+
+/* ---------- The classes, under the enrollment card ---------- */
+
+.catalog-course__classes {
+  margin-top: 16px;
+  scroll-margin-top: calc(var(--course-sticky-top) + 16px);
+}
+
+.catalog-course__classes > .ant-card {
+  border-color: var(--pub-line);
+  border-radius: 16px;
+}
+
+/* ---------- The study plan ---------- */
+
+.catalog-course__syllabus {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--pub-line);
+  border-radius: 12px;
+}
+
+.catalog-course__lesson {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.catalog-course__lesson + .catalog-course__lesson {
+  border-top: 1px solid var(--pub-line);
+}
+
+.catalog-course__lesson-number {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--pub-primary-soft);
+  color: var(--pub-primary-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.catalog-course__lesson-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.catalog-course__lesson-title {
+  color: var(--pub-ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.75;
+}
+
+.catalog-course__lesson-text {
+  color: var(--pub-detail);
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+.catalog-course__lesson-minutes {
+  color: var(--pub-detail);
+  font-size: 12px;
+}
+
+/* ---------- A phone: the gutters and the nested cards give the text its width back ---------- */
+
+@media (max-width: 767.98px) {
+  .catalog-course .course-page.course-page--app {
+    --pub-gutter: 14px;
+  }
+}
+
+@container (max-width: 480px) {
+  .catalog-course .course-enroll__body {
+    padding: 14px;
+  }
+
+  .catalog-course__classes > .ant-card > .ant-card-head {
+    padding-inline: 14px;
+  }
+
+  .catalog-course__classes > .ant-card > .ant-card-body {
+    padding: 12px;
+  }
+}

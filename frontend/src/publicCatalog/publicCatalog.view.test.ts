@@ -9,6 +9,8 @@ import {
   appendCards,
   availabilityOf,
   availabilityPillKey,
+  courseBadgesOf,
+  courseTextsOf,
   durationMinutes,
   enrollIntentPath,
   explorePathFor,
@@ -49,6 +51,55 @@ describe('publicCatalog.view', () => {
     expect(tEn(availabilityPillKey('closed'))).toBe('Coming soon')
     expect(availabilityPillKey('available')).toBe('publicCatalog.card.available')
     expect(availabilityPillKey('full')).toBe('publicCatalog.card.full')
+  })
+
+  describe('courseBadgesOf', () => {
+    const level = { name: { ar: 'مبتدئ', en: 'Beginner' } }
+
+    it('names the course, its difficulty and its duration, in that order', () => {
+      expect(courseBadgesOf({ level, durationHours: 24 }, t, 'ar')).toEqual([
+        { key: 'type', text: 'دورة' },
+        { key: 'level', text: 'مبتدئ' },
+        { key: 'duration', text: '24 ساعة' },
+      ])
+      expect(courseBadgesOf({ level, durationHours: 1 }, tEn, 'en').map((badge) => badge.text)).toEqual(['Course', 'Beginner', tEn('publicCatalog.card.hours', { count: 1 })])
+    })
+
+    it('shows a badge only for what the server has', () => {
+      expect(courseBadgesOf({ level: null, durationHours: null }, t, 'ar').map((badge) => badge.key)).toEqual(['type'])
+      expect(courseBadgesOf({ level, durationHours: null }, t, 'ar').map((badge) => badge.key)).toEqual(['type', 'level'])
+      expect(courseBadgesOf({ level: null, durationHours: 3 }, t, 'ar').map((badge) => badge.key)).toEqual(['type', 'duration'])
+    })
+  })
+
+  describe('courseTextsOf', () => {
+    const text = (ar: string, en?: string) => ({ ar, en })
+
+    it('keeps the summary for the band and the description for its section', () => {
+      expect(courseTextsOf({ summary: text('قصير'), description: text('طويل') }, 'ar')).toEqual({ summary: 'قصير', description: 'طويل' })
+      expect(courseTextsOf({ summary: text('قصير', 'Short'), description: text('طويل', 'Long') }, 'en')).toEqual({ summary: 'Short', description: 'Long' })
+    })
+
+    it('never repeats a description that equals the summary after trimming', () => {
+      expect(courseTextsOf({ summary: text('نفس النص'), description: text('  نفس النص\n') }, 'ar')).toEqual({ summary: 'نفس النص', description: null })
+    })
+
+    it('compares the texts in the language shown', () => {
+      const course = { summary: text('نص', 'Same'), description: text('نص آخر', 'Same') }
+      expect(courseTextsOf(course, 'en').description).toBeNull()
+      expect(courseTextsOf(course, 'ar').description).toBe('نص آخر')
+    })
+
+    it('leaves the band without a short text when only a description exists, and has nothing with neither', () => {
+      expect(courseTextsOf({ summary: null, description: text('طويل') }, 'ar')).toEqual({ summary: null, description: 'طويل' })
+      expect(courseTextsOf({ summary: text('   '), description: text('طويل') }, 'ar')).toEqual({ summary: null, description: 'طويل' })
+      expect(courseTextsOf({ summary: null, description: null }, 'ar')).toEqual({ summary: null, description: null })
+      expect(courseTextsOf({ summary: text(' '), description: text(' ') }, 'ar')).toEqual({ summary: null, description: null })
+    })
+
+    it('keeps the line breaks inside a text', () => {
+      expect(courseTextsOf({ summary: null, description: text('سطر أول\nسطر ثانٍ') }, 'ar').description).toBe('سطر أول\nسطر ثانٍ')
+    })
   })
 
   describe('orderPublicPage', () => {

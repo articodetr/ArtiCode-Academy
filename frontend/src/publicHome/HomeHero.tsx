@@ -9,7 +9,9 @@
 // until it is known whether the catalog is open (no button that flashes and
 // flips); a learner gets «فصولي» and the signed-in catalog; staff the dashboard;
 // nothing while the session is restored. The visitor's line that accounts come
-// from the academy (there is no self-registration — no «أنشئ حسابًا») stays here.
+// from the academy stays here; only while the server says `selfRegistration: true`
+// it says a visitor can create one, with a quiet link in that same line — never a
+// second button beside «استعرض البرامج».
 // Under the search, four small facts: the server's figures once they are read,
 // plain words before and without them — never a number of its own. The picture
 // follows the reference: a pale disc, the student rising out of it (a stock photo
@@ -36,7 +38,7 @@ import { Button, Input, Skeleton, Typography } from 'antd'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { PUBLIC_SEARCH_MAX_LENGTH } from '../publicCatalog/publicCatalog.view'
 import { programsPathFor } from '../publicCatalog/publicViewer'
 import type { PublicViewer } from '../publicCatalog/publicViewer'
@@ -64,12 +66,14 @@ export function HomeHero({
   viewer,
   catalogOpen,
   stats,
+  registrationOpen = false,
 }: {
   name: string
   nameLoading: boolean
   viewer: PublicViewer
   catalogOpen: boolean | null
   stats: HomeStats | null
+  registrationOpen?: boolean
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -118,7 +122,18 @@ export function HomeHero({
               </Button>
             ) : null}
           </div>
-          {viewer === 'visitor' ? <p className="public-home__hero-note">{t('publicHome.hero.accountsNote')}</p> : null}
+          {viewer === 'visitor' ? (
+            registrationOpen ? (
+              <p className="public-home__hero-note">
+                {t('studentRegistration.entry.accountsNote')}{' '}
+                <Link to="/register" className="public-register-link" data-testid="home-register">
+                  {t('studentRegistration.entry.createAccount')}
+                </Link>
+              </p>
+            ) : (
+              <p className="public-home__hero-note">{t('publicHome.hero.accountsNote')}</p>
+            )
+          ) : null}
           <ul className="public-home__indicators">
             {stats
               ? FIGURES.filter((item) => stats[item.key] > 0).map((item) => (

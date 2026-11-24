@@ -489,4 +489,104 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
       unmount()
     }
   })
+
+  describe('creating an account (PORTAL-04, the contract of #207)', () => {
+    const INTENT = '/catalog/c-1?intent=enroll'
+    const entry = ar.studentRegistration.entry
+    const registerLink = () => screen.queryByRole('link', { name: entry.createAccountLink })
+
+    it.each([
+      ['the field absent', makePublicAcademy(), 200],
+      ['false', makePublicAcademy({ selfRegistration: false }), 200],
+      ['a truthy non-boolean', { ...makePublicAcademy(), selfRegistration: 'true' }, 200],
+      ['a failed read', { statusCode: 503, code: 'academy_not_configured', message: 'none' }, 503],
+    ])('offers nothing and keeps the original words with %s', async (_case, body, status) => {
+      const fetchMock = mockPublicAcademy(body, status)
+      renderLogin(makeAuth(), INTENT)
+      await settle(fetchMock)
+      expect(registerLink()).not.toBeInTheDocument()
+      expect(screen.queryByTestId('login-register')).not.toBeInTheDocument()
+      expect(screen.queryByText(entry.noAccount)).not.toBeInTheDocument()
+      expect(screen.getByTestId('login-enroll-intent')).toHaveTextContent(ar.login.enrollIntent.text)
+      expect(screen.getByTestId('login-enroll-intent')).not.toHaveTextContent(entry.courseNote)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('links to /register with no return path when the visitor came for nothing in particular', async () => {
+      const fetchMock = mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, { auth: makeAuth(), route: '/login', routes: { '/register': <StateProbe /> } })
+      const link = await waitFor(() => {
+        const found = registerLink()
+        expect(found).not.toBeNull()
+        return found!
+      })
+      expect(link).toHaveAttribute('href', '/register')
+      expect(screen.getByText(entry.noAccount)).toBeInTheDocument()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      fireEvent.click(link)
+      expect(await screen.findByTestId('state')).toHaveTextContent('null')
+    })
+
+    it('carries the chosen course to /register and stops saying accounts come from the administration', async () => {
+      mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, {
+        auth: makeAuth(),
+        route: { pathname: '/login', state: { from: INTENT } },
+        routes: { '/register': <StateProbe /> },
+      })
+      const link = await screen.findByRole('link', { name: entry.createAccountLink })
+      const notice = screen.getByTestId('login-enroll-intent')
+      expect(notice).toHaveTextContent(entry.courseNote)
+      expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
+      fireEvent.click(link)
+      expect(JSON.parse((await screen.findByTestId('state')).textContent!)).toEqual({ from: INTENT })
+    })
+
+    it('never carries a return path that leaves this site', async () => {
+      mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, {
+        auth: makeAuth(),
+        route: { pathname: '/login', state: { from: 'https://evil.example/x' } },
+        routes: { '/register': <StateProbe /> },
+      })
+      fireEvent.click(await screen.findByRole('link', { name: entry.createAccountLink }))
+      expect(await screen.findByTestId('state')).toHaveTextContent('null')
+    })
+
+    it('does not invite someone who has just finished registering to create another account', async () => {
+      const fetchMock = mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, {
+        auth: makeAuth(),
+        route: { pathname: '/login', state: { notice: 'registration_completed', from: INTENT } },
+      })
+      await settle(fetchMock)
+      expect(screen.getByText(ar.studentRegistration.notices.accountCreated)).toBeInTheDocument()
+      expect(registerLink()).not.toBeInTheDocument()
+      const notice = screen.getByTestId('login-enroll-intent')
+      expect(notice).toHaveTextContent(entry.courseAfterRegister)
+      expect(notice).not.toHaveTextContent(entry.courseNote)
+      expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
+    })
+
+    it('shows no way to register, and no talk of accounts, during the second step of a sign-in', async () => {
+      mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      const auth = makeAuth()
+      vi.mocked(auth.login).mockResolvedValue(mfaChallengeResponse())
+      renderLogin(auth, INTENT)
+      await screen.findByRole('link', { name: entry.createAccountLink })
+      await submitCredentials()
+      await screen.findByLabelText(ar.login.mfa.code)
+      expect(registerLink()).not.toBeInTheDocument()
+      const notice = screen.getByTestId('login-enroll-intent')
+      expect(notice).toHaveTextContent(ar.login.enrollIntent.title)
+      expect(notice).not.toHaveTextContent(entry.courseNote)
+      expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
+    })
+  })
 })
+
+/** The router state a link arrived with, as JSON. */
+function StateProbe() {
+  const location = useLocation()
+  return <output data-testid="state">{JSON.stringify(location.state ?? null)}</output>
+}

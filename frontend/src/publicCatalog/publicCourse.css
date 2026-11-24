@@ -1,0 +1,618 @@
+/* A course page and the badges it shares with the course cards. The layout follows the arrangement of a course page on
+   a learning platform (a band, an enrollment card beside it, sections under a bar); the colours, fonts and tokens are the
+   academy's own (--pub-*, publicCatalog.css). Every width rule is a container query, because the signed-in page sits
+   next to the side menu and has less room than the viewport says. */
+
+/* ---------- Badges ---------- */
+
+.course-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.course-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--pub-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  box-shadow: 0 1px 3px rgba(20, 32, 51, 0.12);
+}
+
+.course-badge bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-badge__icon {
+  display: inline-flex;
+  color: var(--pub-primary-strong);
+  font-size: 12px;
+}
+
+.course-badges--media {
+  position: absolute;
+  top: 10px;
+  inset-inline: 10px;
+  z-index: 1;
+}
+
+/* ---------- The frame ---------- */
+
+.course-page {
+  --course-side: 400px;
+  --course-gap: 40px;
+  /* The public header's height: the section bar stops under it and a section scrolls to just below the bar. */
+  --course-sticky-top: 68px;
+  container-type: inline-size;
+  width: 100%;
+  color: var(--pub-text);
+}
+
+.course-page.course-page--app {
+  --course-sticky-top: 72px;
+  font-family: inherit;
+}
+
+/* One column first: the band, the card running into its lower edge, the sections. */
+.course-page__grid {
+  display: grid;
+  grid-template-columns: [full-start] var(--pub-gutter) [main-start side-start] minmax(0, 1fr) [main-end side-end] var(--pub-gutter) [full-end];
+}
+
+/* The band is the academy's turquoise in its stronger shade, where white small text keeps a contrast of at least 4.5:1
+   (on --pub-primary it would be 3.9:1). In one column the text spans the band, so the whole band is that shade. */
+.course-page__band {
+  grid-column: full;
+  grid-row: 1;
+  background: var(--pub-primary-strong);
+}
+
+.course-page__hero {
+  grid-column: main;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding-block: 20px 72px;
+  color: #ffffff;
+}
+
+.course-page__title {
+  margin: 0;
+  color: #ffffff;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.course-page__meta {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.course-page__summary {
+  max-width: 68ch;
+  font-size: 15px;
+  line-height: 1.85;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.course-page__status {
+  font-size: 14px;
+}
+
+/* Whether a class takes a learner now: dark text on a white pill, readable on the band whatever the state. */
+.course-availability {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--pub-surface);
+  color: var(--pub-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.course-availability__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8a94a6;
+}
+
+.course-availability--available .course-availability__dot {
+  background: #1a7f4b;
+}
+
+.course-availability--full .course-availability__dot {
+  background: #a85d0b;
+}
+
+/* The way back: in the academy's colour on a state page, white on the band. */
+.course-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1px solid var(--pub-line);
+  border-radius: 999px;
+  background: var(--pub-surface);
+  color: var(--pub-primary-strong);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.course-back:hover {
+  background: var(--pub-primary-softer);
+}
+
+.course-back:focus-visible {
+  outline: 2px solid var(--pub-primary);
+  outline-offset: 2px;
+}
+
+.course-back__icon {
+  display: inline-flex;
+  font-size: 13px;
+}
+
+.course-page__back .course-back {
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+  color: #ffffff;
+}
+
+.course-page__back .course-back:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.course-page__back .course-back:focus-visible {
+  outline-color: #ffffff;
+}
+
+/* Loading, an error, a missing course, a closed catalog: the page's normal column (the shell's main area has no padding here). */
+.course-page-state {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--pub-content);
+  margin-inline: auto;
+  padding: 24px var(--pub-gutter) 48px;
+}
+
+.course-page-state > .course-back {
+  margin-bottom: 16px;
+}
+
+.course-page__aside {
+  grid-column: side;
+  grid-row: 2;
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  margin-top: -52px;
+}
+
+.course-page__body {
+  grid-column: main;
+  grid-row: 3;
+  min-width: 0;
+  padding-block: 8px 48px;
+}
+
+/* ---------- The enrollment card ---------- */
+
+.course-enroll {
+  overflow: hidden;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(20, 60, 66, 0.14);
+}
+
+.course-enroll .public-card__media {
+  aspect-ratio: 16 / 9;
+  border-radius: 0;
+}
+
+.course-enroll__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.course-facts {
+  margin: 0;
+}
+
+.course-facts__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--pub-line);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.course-facts__row:first-child {
+  padding-top: 0;
+}
+
+.course-facts dt {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  color: var(--pub-detail);
+  font-weight: 500;
+}
+
+.course-facts__icon {
+  display: inline-flex;
+  color: var(--pub-primary);
+  font-size: 14px;
+}
+
+.course-facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--pub-ink);
+  font-weight: 600;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.course-enroll__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.course-enroll__price-label {
+  color: var(--pub-detail);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.course-enroll__price .public-price {
+  font-size: 20px;
+}
+
+.course-enroll__price .public-price--unavailable {
+  font-size: 14px;
+}
+
+.course-enroll__action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* «سجّل في هذه الدورة» and the subscribe link side by side; on a narrow card they stack. */
+.course-enroll__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.course-enroll__buttons .ant-btn {
+  flex: 1 1 auto;
+}
+
+.course-enroll__subscribe {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 0 12px;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-primary);
+  border-radius: 10px;
+  color: var(--pub-primary-strong);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.course-enroll__subscribe:hover {
+  background: var(--pub-primary-softer);
+  color: var(--pub-primary-strong);
+}
+
+.course-enroll__subscribe:focus-visible {
+  outline: 2px solid var(--pub-primary-strong);
+  outline-offset: 2px;
+}
+
+.course-enroll__note {
+  margin: 0;
+  color: var(--pub-detail);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.course-enroll__code {
+  color: var(--pub-muted);
+  font-size: 12px;
+}
+
+/* ---------- The section bar and the sections ---------- */
+
+.course-page__nav {
+  position: sticky;
+  top: var(--course-sticky-top);
+  z-index: 3;
+  display: flex;
+  gap: 4px 24px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  background: var(--pub-surface);
+  border-bottom: 1px solid var(--pub-line);
+  scrollbar-width: none;
+}
+
+.course-page__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.course-page__nav-link {
+  flex: none;
+  padding: 14px 2px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--pub-muted);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.course-page__nav-link:hover {
+  color: var(--pub-primary-strong);
+}
+
+.course-page__nav-link--active {
+  border-bottom-color: var(--pub-primary);
+  color: var(--pub-primary-strong);
+}
+
+.course-page__nav-link:focus-visible {
+  outline: 2px solid var(--pub-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.course-page__section {
+  padding-top: 24px;
+  scroll-margin-top: calc(var(--course-sticky-top) + 52px);
+}
+
+.course-page__section:focus {
+  outline: none;
+}
+
+.course-page__section-title {
+  margin: 0 0 14px;
+  color: var(--pub-ink);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.course-page__text {
+  margin: 0;
+  color: var(--pub-text);
+  font-size: 15px;
+  line-height: 1.95;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- The study plan ---------- */
+
+.course-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.course-outline__note {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--pub-radius);
+  background: var(--pub-primary-softer);
+  color: var(--pub-detail);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+
+.course-outline__note-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 1.8em;
+  color: var(--pub-primary-strong);
+}
+
+.course-outline .ant-collapse > .ant-collapse-item > .ant-collapse-header {
+  color: var(--pub-ink);
+  font-weight: 600;
+}
+
+.course-outline .ant-collapse > .ant-collapse-item > .ant-collapse-header:focus-visible {
+  outline: 2px solid var(--pub-primary);
+  outline-offset: -2px;
+}
+
+.course-outline .ant-collapse-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.course-outline__count {
+  color: var(--pub-detail);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.course-outline__lessons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.course-outline__lesson {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 9px 0;
+}
+
+.course-outline__lesson + .course-outline__lesson {
+  border-top: 1px solid var(--pub-line);
+}
+
+.course-outline__title {
+  display: flex;
+  flex: 1 1 200px;
+  gap: 8px;
+  min-width: 0;
+  color: var(--pub-text);
+  font-size: 14.5px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.course-outline__title > span:last-child {
+  min-width: 0;
+}
+
+.course-outline__number {
+  flex: none;
+  min-width: 1.4em;
+  color: var(--pub-muted);
+  font-weight: 600;
+}
+
+.course-outline__info {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--pub-detail);
+  font-size: 12.5px;
+}
+
+.course-outline__kind {
+  padding: 1px 8px;
+  border: 1px solid var(--pub-line);
+  border-radius: 999px;
+  background: var(--pub-primary-softer);
+  color: var(--pub-primary-strong);
+  font-weight: 600;
+}
+
+/* ---------- Side by side, when the page has the room ---------- */
+
+@container (min-width: 960px) {
+  /* The columns line up with the header's content, which sits inside the same width and gutter. */
+  .course-page__grid {
+    grid-template-columns:
+      [full-start] minmax(var(--pub-gutter), 1fr)
+      [main-start] minmax(0, calc(var(--pub-content) - 2 * var(--pub-gutter) - var(--course-side) - var(--course-gap)))
+      [main-end] var(--course-gap)
+      [side-start] var(--course-side)
+      [side-end] minmax(var(--pub-gutter), 1fr)
+      [full-end];
+    grid-template-rows: auto 1fr;
+  }
+
+  /* The text now keeps to the reading side, at most about 63% of the band: the lighter shade starts past it. */
+  .course-page__band {
+    background: linear-gradient(to left, var(--pub-primary-strong) 0%, var(--pub-primary-strong) 64%, var(--pub-primary) 100%);
+  }
+
+  [dir='ltr'] .course-page__band {
+    background: linear-gradient(to right, var(--pub-primary-strong) 0%, var(--pub-primary-strong) 64%, var(--pub-primary) 100%);
+  }
+
+  .course-page__hero {
+    padding-block: 36px 44px;
+  }
+
+  .course-page__title {
+    font-size: 34px;
+  }
+
+  .course-page__aside {
+    grid-row: 1 / span 2;
+    margin-top: 36px;
+    margin-bottom: 32px;
+  }
+
+  .course-page__body {
+    grid-row: 2;
+  }
+
+  /* Sticky only where the whole card fits on the screen: a taller card would hide its foot until the end of the page. */
+  @media (min-height: 860px) {
+    .course-page--public .course-enroll {
+      position: sticky;
+      top: calc(var(--course-sticky-top) + 16px);
+    }
+  }
+}
+
+@media (max-width: 767px) {
+  .course-page {
+    --course-sticky-top: 62px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .course-page__nav-link,
+  .course-enroll__subscribe {
+    transition: none;
+  }
+}

@@ -27,10 +27,10 @@ function PathProbe() {
 }
 
 /** Serves API-205 and API-236 (`list` gets the query of each list request) and records the list requests. */
-function mockPublicApi(list: (query: URLSearchParams) => Response) {
+function mockPublicApi(list: (query: URLSearchParams) => Response, academy: Parameters<typeof makePublicAcademy>[0] = {}) {
   const requests: { query: URLSearchParams; headers: Headers }[] = []
   const fetchMock = mockFetch((url, init) => {
-    if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(200, makePublicAcademy({ catalogPublic: true, name: { ar: 'أكاديمية النور', en: 'Al-Nour Academy' } }))
+    if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(200, makePublicAcademy({ catalogPublic: true, name: { ar: 'أكاديمية النور', en: 'Al-Nour Academy' }, ...academy }))
     if (url === PUBLIC_CATALOG_PATH || url.startsWith(`${PUBLIC_CATALOG_PATH}?`)) {
       const query = new URL(url, 'http://localhost').searchParams
       requests.push({ query, headers: new Headers(init?.headers) })
@@ -86,7 +86,8 @@ describe('PublicCatalogPage', () => {
 
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
     const free = card(PUBLIC_COURSE_IDS[0])
-    expect(free.getByText('PY-101')).toBeInTheDocument()
+    // The code is not shown on a card; a search by code still reaches the server (below).
+    expect(free.queryByText('PY-101')).not.toBeInTheDocument()
     expect(free.getByText('مدخل عملي إلى البرمجة')).toBeInTheDocument()
     expect(free.getByText('مبتدئ')).toBeInTheDocument()
     expect(free.getByText(pc.card.free)).toBeInTheDocument()
@@ -134,8 +135,19 @@ describe('PublicCatalogPage', () => {
     mockPublicApi(() => jsonResponse(200, makePublicList()))
     renderPage()
     await screen.findByText('أساسيات بايثون')
-    fireEvent.click(card(PUBLIC_COURSE_IDS[0]).getByText(pc.list.details).closest('a')!)
+    fireEvent.click(card(PUBLIC_COURSE_IDS[0]).getByText(pc.card.viewCourse).closest('a')!)
     expect((await screen.findByTestId('path')).textContent).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
+  })
+
+  it('still finds a course by its code, which the card no longer shows', async () => {
+    const api = mockPublicApi(() => jsonResponse(200, makePublicList()))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+
+    fireEvent.change(screen.getByLabelText(pc.list.searchLabel), { target: { value: 'PY-101' } })
+    await waitFor(() => expect(api.requests.at(-1)!.query.get('q')).toBe('PY-101'))
+    expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
+    expect(screen.queryByText('PY-101')).not.toBeInTheDocument()
   })
 
   it('makes the whole card a real link to its course page, and names the tab after the page and the academy (PORTAL-04)', async () => {
@@ -254,12 +266,12 @@ describe('PublicCatalogPage', () => {
     expect(await screen.findByText('تطوير الويب')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText(pc.list.searchLabel), { target: { value: 'جافا' } })
-    expect(await screen.findByText('JV-101')).toBeInTheDocument()
+    expect(await screen.findByText('جافا')).toBeInTheDocument()
 
     const bar = within(document.querySelector<HTMLElement>('.public-explore__toolbar')!)
     fireEvent.click(bar.getByText(pc.list.clearSearch).closest('button')!)
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
-    await waitFor(() => expect(screen.queryByText('JV-101')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('جافا')).not.toBeInTheDocument())
     expect(screen.queryByText('تطوير الويب')).not.toBeInTheDocument()
     expect(screen.getByText(pc.list.more).closest('button')).toBeInTheDocument()
     expect(api.requests.at(-1)!.query.has('cursor')).toBe(false)
@@ -298,6 +310,18 @@ describe('PublicCatalogPage', () => {
 
     fireEvent.click(within(closed).getByText(pc.closed.signIn).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/login')
+    expect(screen.queryByText(ar.studentRegistration.entry.createAccount)).not.toBeInTheDocument()
+  })
+
+  it('offers a new account on the closed panel only while the academy opens registration, reading API-205 once', async () => {
+    const { fetchMock } = mockPublicApi(() => jsonResponse(404, CATALOG_NOT_PUBLIC), { selfRegistration: true })
+    renderPage()
+
+    const closed = await screen.findByTestId('catalog-closed')
+    await waitFor(() => expect(within(closed).getByText(ar.studentRegistration.entry.accountsNote)).toBeInTheDocument())
+    expect(within(closed).queryByText(pc.closed.text)).not.toBeInTheDocument()
+    expect(within(closed).getByRole('link', { name: ar.studentRegistration.entry.createAccount })).toHaveAttribute('href', '/register')
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith(ACADEMY_PUBLIC_PATH))).toHaveLength(1)
   })
 
   it('reports another failure with a retry that asks again', async () => {

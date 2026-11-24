@@ -581,24 +581,6 @@
   gap: 26px;
 }
 
-.public-card__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.public-card--home .public-card__availability {
-  margin-top: 0;
-}
-
-/* The home card has no foot row: its buttons span the card's padding box as they are. */
-.public-card--home .public-card__buttons {
-  flex: none;
-  margin-inline: 0;
-}
-
 .public-home__all-row {
   display: flex;
   justify-content: center;

@@ -7,7 +7,9 @@
    the owner's reference picture: `--pub-primary` is the one Ant Design gets too (PUBLIC_THEME in PublicShell.tsx). The
    menu of a phone opens in a portal outside `.public-catalog`, so it carries the same tokens. */
 .public-catalog,
-.public-menu {
+.public-menu,
+.course-page--app,
+.public-card--app {
   --pub-primary: #039092;
   --pub-primary-strong: #047c83;
   --pub-primary-soft: #dfeff4;
@@ -190,6 +192,42 @@
   font-weight: 600;
 }
 
+/* With «إنشاء حساب» in the row, a long academy name gives way (its ellipsis), never the main links. */
+.public-catalog__header-inner--register .public-catalog__nav {
+  flex-shrink: 0;
+}
+
+/* «إنشاء حساب» beside the sign-in: a plain link, so the sign-in stays the header's one button. */
+.public-catalog__register {
+  margin-inline-end: 14px;
+  color: var(--pub-primary-strong);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.public-catalog__register:hover {
+  color: var(--pub-primary-strong);
+  text-decoration: underline;
+}
+
+.public-catalog__register:focus-visible,
+.public-register-link:focus-visible {
+  outline: 2px solid var(--pub-primary-strong);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The same way in, inside a line of text or under a button: quiet, and still recognisably a link. */
+.public-register-link,
+.public-register-link:hover {
+  color: var(--pub-primary-strong);
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
 /* The header's search: a plain icon that opens the programs. */
 .public-catalog__search-link {
   display: inline-flex;
@@ -273,8 +311,10 @@
 
 /* ---------- Course card ---------- */
 
-/* A course card opens its page from anywhere on it (PORTAL-04 PR-2): the name's link stretches over the card, and
-   «التفاصيل» stays above it. The keyboard focus ring is drawn on the stretched area itself, so it surrounds the whole
+/* One card on /home, /explore and, through .public-card--app, the signed-in /catalog: the picture flush with the card's
+   edges, the name, at most two lines of summary, a few facts, the price with the availability, and «عرض الدورة» at the
+   bottom. A public card opens its page from anywhere on it (PORTAL-04 PR-2): the name's link stretches over the card and
+   the actions stay above it. The keyboard focus ring is drawn on the stretched area itself, so it surrounds the whole
    card without `:has()` — which is why the card itself never clips (only its media box does). The card is a column
    whose body grows, so the feet of a row line up at the bottom. */
 .public-card {
@@ -282,7 +322,6 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 9px;
   box-sizing: border-box;
   background: var(--pub-surface);
   border: 1px solid var(--pub-card-line);
@@ -294,17 +333,24 @@
     border-color 0.2s ease;
 }
 
+/* Inside the signed-in layout: the public tokens (the selector at the top of this file), the app's own font. */
+.public-card.public-card--app {
+  font-family: inherit;
+}
+
 .public-card--link:hover {
   transform: translateY(-3px);
   border-color: #b9e0e2;
   box-shadow: var(--pub-shadow-hover);
 }
 
+/* The inner radius follows the card's border, so the picture meets the rounded corners exactly. */
 .public-card__media {
   position: relative;
-  aspect-ratio: 16 / 10.4;
+  flex: none;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: calc(var(--pub-radius) - 1px) calc(var(--pub-radius) - 1px) 0 0;
   background: var(--pub-primary-soft);
 }
 
@@ -381,39 +427,46 @@
   --tint-fg: #17758b;
 }
 
-/* The level on the media box. */
-.public-card__badge {
-  position: absolute;
-  top: 12px;
-  inset-inline-start: 12px;
-  max-width: calc(100% - 24px);
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  color: var(--pub-ink);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: 0 1px 3px rgba(20, 32, 51, 0.12);
+/* The badges on the picture, smaller than on a course page: they wrap inside the picture and a long one ends in an
+   ellipsis, so a narrow card never overflows. */
+.public-card .course-badges--media {
+  top: 8px;
+  inset-inline: 8px;
+  gap: 4px;
+}
+
+.public-card .course-badge {
+  gap: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.public-card .course-badge__icon {
+  font-size: 11px;
 }
 
 .public-card__body {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 9px;
-  padding: 13px 3px 11px;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px 12px;
 }
 
+/* At most three lines, so a very long name cannot stretch its whole row. The stretched link is not clipped by this:
+   its containing block is the card, outside the title. The full name is the link's `title` and the course page's. */
 .public-card .public-card__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   margin: 0;
+  overflow: hidden;
   color: var(--pub-ink);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
@@ -440,17 +493,7 @@
 }
 
 .public-card--link:hover .public-card__link {
-  color: var(--pub-primary);
-}
-
-.public-card__code {
-  margin-top: 2px;
-  color: var(--pub-muted);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--pub-primary-strong);
 }
 
 .public-card .public-card__summary {
@@ -460,11 +503,11 @@
   line-height: 1.7;
 }
 
-/* The facts: on a light band of their own, so they read as one group at a glance. */
+/* The facts in one short wrapping row. */
 .public-card__facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 4px 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -473,23 +516,49 @@
 .public-card__fact {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
   color: var(--pub-detail);
   font-size: 12.5px;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .public-card__fact-icon {
+  flex: none;
   color: var(--pub-primary);
   font-size: 14px;
 }
 
+.public-card__fact-value {
+  min-width: 0;
+  color: var(--pub-ink);
+  font-weight: 600;
+}
+
+/* The price with the availability, at the bottom of the body so they line up across a row. */
+.public-card__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* The reader's own enrollment or request on the signed-in card. */
+.public-card__mine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .public-card__availability {
   display: inline-flex;
-  align-self: flex-start;
   align-items: center;
   gap: 7px;
-  margin-top: auto;
   padding: 2px 10px;
   border: 1px solid transparent;
   border-radius: 999px;
@@ -528,16 +597,6 @@
   background: #8a94a6;
 }
 
-/* The foot: the price, then «التفاصيل» as a full-width button. */
-.public-card__foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 9px 12px;
-  padding: 0 3px;
-}
-
 .public-price {
   font-size: 15px;
   font-weight: 700;
@@ -557,81 +616,53 @@
   font-weight: 600;
 }
 
+/* The foot: the quiet subscribe line, then the main button, which is always the card's last line. */
+.public-card__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 16px 16px;
+}
+
 .public-card .public-card__action {
   position: relative;
   z-index: 2;
-  display: inline-flex;
-  flex: 1 1 0;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  height: 38px;
-  padding-inline: 8px;
-  border-radius: 4px;
-  background: var(--pub-primary);
-  color: #fff;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 12px;
+  box-sizing: border-box;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-primary);
+  border-radius: var(--pub-radius);
+  color: var(--pub-primary-strong);
+  font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
   transition:
     background-color 0.15s ease,
+    border-color 0.15s ease,
     color 0.15s ease;
 }
 
+/* The soft tint keeps the label at 4.6:1 (--pub-primary-soft would drop it to 4.2:1). */
+.public-card .public-card__action:hover,
 .public-card--link:hover .public-card__action {
-  background: var(--pub-primary-strong);
-  color: #fff;
+  background: var(--pub-primary-softer);
+  border-color: var(--pub-primary-strong);
+  color: var(--pub-primary-strong);
 }
 
-/* The subscribe button beside «التفاصيل»: the main action is filled, the details are outlined. */
-.public-card__buttons {
-  display: flex;
-  flex: 1 1 100%;
-  gap: 8px;
-  min-width: 0;
-  margin-inline: -3px;
-}
-
-.public-card .public-card__subscribe {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  flex: 1 1 0;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  height: 38px;
-  padding-inline: 8px;
-  border-radius: 4px;
-  background: var(--pub-primary);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  transition: background-color 0.15s ease;
-}
-
-.public-card .public-card__subscribe:hover,
-.public-card .public-card__subscribe:focus-visible {
-  background: var(--pub-primary-strong);
-  color: #fff;
-}
-
-.public-card .public-card__subscribe:focus-visible {
+/* On the signed-in card it is a real button with a tab stop of its own. */
+.public-card .public-card__action:focus-visible {
   outline: 2px solid var(--pub-primary-strong);
   outline-offset: 2px;
-}
-
-.public-card .public-card__buttons--two .public-card__action {
-  background: var(--pub-surface);
-  box-shadow: inset 0 0 0 1px var(--pub-primary);
-  color: var(--pub-primary-strong);
-}
-
-.public-card--link:hover .public-card__buttons--two .public-card__action {
-  background: var(--pub-primary-soft);
-  color: var(--pub-primary-strong);
 }
 
 .public-card__action .anticon {
@@ -645,6 +676,45 @@
 
 [dir='rtl'] .public-card--link:hover .public-card__action .anticon {
   transform: translateX(-3px);
+}
+
+/* The line of the subscribe action keeps its height when a card has none, so the buttons of a row stay level. Nothing
+   on the line but the action itself rises above the stretched link. */
+.public-card__subscribe-line {
+  display: flex;
+  justify-content: center;
+  min-height: 28px;
+}
+
+.public-card .public-card__subscribe {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--pub-primary-strong);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.public-card .public-card__subscribe:hover,
+.public-card .public-card__subscribe:focus-visible {
+  color: var(--pub-ink);
+}
+
+.public-card .public-card__subscribe:focus-visible {
+  outline: 2px solid var(--pub-primary-strong);
+  outline-offset: 1px;
 }
 
 /* ---------- Course outline (the course page) ---------- */
@@ -786,6 +856,11 @@
     display: none;
   }
 
+  /* The header stays as it is here: «إنشاء حساب» is in the menu. */
+  .public-catalog__register {
+    display: none;
+  }
+
   .public-catalog__brand {
     flex: 1 1 0;
     min-width: 80px;
@@ -793,6 +868,29 @@
 
   .public-catalog__menu-button.ant-btn {
     display: inline-flex;
+  }
+}
+
+/* A small desktop with «إنشاء حساب» in the row: the links sit closer, so the academy's name keeps its room. */
+@media (min-width: 992px) and (max-width: 1099px) {
+  .public-catalog__header-inner--register {
+    column-gap: 10px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__nav {
+    margin-inline-start: 8px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__nav-link {
+    padding: 0 8px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__nav-link::after {
+    inset-inline: 8px;
+  }
+
+  .public-catalog__header-inner--register .public-catalog__register {
+    margin-inline-end: 8px;
   }
 }
 
@@ -804,6 +902,11 @@
 
   .public-catalog__header-inner {
     min-height: 62px;
+  }
+
+  /* A comfortable target for a finger. */
+  .public-card .public-card__subscribe {
+    min-height: 40px;
   }
 
   /* The action without its icon: the academy's name keeps the room. */
