@@ -437,6 +437,13 @@ describe('PublicHomePage', () => {
       expect(pictures()).toEqual(DEFAULT_PICTURES)
     })
 
+    it('shows no drawn laptop in front of the hero picture (removed at the owner’s request)', async () => {
+      mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])), { catalogPublic: true, homepageImages: OWN_PICTURES })
+      renderPage()
+      await screen.findByText('مرحبًا بك في أكاديمية النور')
+      expect(document.querySelector('.public-home__hero-laptop')).toBeNull()
+    })
+
     it('keeps the four frames empty while API-205 loads — no default flashes before the academy’s own picture', async () => {
       let answer!: (response: Response) => void
       const academy = new Promise<Response>((resolve) => {
