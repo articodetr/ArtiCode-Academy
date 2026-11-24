@@ -8,7 +8,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CompletionResult, LearningItem, LearningWorkspace } from '../api/learning'
-import { makeCounts, makeItem, makeProgress, makeSession, makeWorkspace, withSecondLevelClosed } from '../learn/learn.fixtures'
+import { makeItem, makeProgress, makeSession, makeWorkspace, withSecondLevelClosed } from '../learn/learn.fixtures'
 import type { FixtureItemId } from '../learn/learn.fixtures'
 import { formatLessonTimes } from '../lessons/lessons.format'
 import { formatDay } from '../users/users.format'
@@ -241,72 +241,15 @@ describe('LearnPage — the course player (TEST-251)', () => {
     await waitFor(() => expect(lessonHeading()).toHaveTextContent('مقدمة الدورة'))
   })
 
-  it('marks a manual lesson complete and moves the sidebar, the level and the course from the answer', async () => {
-    const after = makeWorkspace()
-    after.sections[1]!.items[0] = { ...after.sections[1]!.items[0]!, state: 'completed', completedAt: '2026-11-19T09:00:00.000Z' }
-    after.sections[1]!.progress = makeCounts({ total: 2, required: 1, completed: 1, completedRequired: 1, percent: 100, isComplete: true })
-    after.progress = makeCounts({ total: 4, required: 3, completed: 2, completedRequired: 2, percent: 66 })
-    const server = serve({
-      workspace: makeWorkspace(),
-      items: allItems(),
-      afterComplete: after,
-      complete: () => ({
-        progress: makeProgress({ state: 'completed', completedAt: '2026-11-19T09:00:00.000Z', completionSource: 'manual' }),
-        section: after.sections[1]!.progress,
-        course: after.progress,
-        completedNow: true,
-      }),
-    })
+  it('offers no completion button on a lesson and sends no completion of its own (AHMED-TT-1)', async () => {
+    const server = serve({ workspace: makeWorkspace(), items: allItems() })
     renderLearn('/learn/c1/i3')
     await waitFor(() => expect(lessonHeading()).toHaveTextContent('دليل الدورة'))
-    expect(screen.getByTestId('learn-course-percent')).toHaveTextContent('33٪')
-    expect(within(curriculum()).getByRole('link', { name: /دليل الدورة/ })).toHaveAccessibleName(/لم يبدأ|قيد التقدّم/)
-
-    fireEvent.click(screen.getByRole('button', { name: 'تحديد كمكتمل' }))
-
-    await waitFor(() => expect(screen.getByTestId('learn-course-percent')).toHaveTextContent('66٪'))
-    const nav = curriculum()
-    expect(within(nav).getByRole('link', { name: /دليل الدورة/ })).toHaveAccessibleName(/مكتمل/)
-    expect(within(nav).getByRole('button', { name: /المستوى الثاني/ })).toHaveTextContent('1/2')
-    expect(screen.getByText('مكتمل', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'تحديد كمكتمل' })).not.toBeInTheDocument()
-    expect(server.count('POST', '/api/me/learning/items/i3/complete')).toBe(1)
-    // The workspace is read again after the completion.
-    await waitFor(() => expect(server.count('GET', '/api/me/learning/courses/c1')).toBe(2))
-    // The course is not complete: no confirmation.
-    expect(screen.queryByText('أتممت جميع دروس الدورة المطلوبة')).not.toBeInTheDocument()
+    // Nothing beside the lesson: no overview, resources, assignments or exams sections.
+    for (const title of ['نظرة عامة', 'الموارد']) expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument()
+    expect(server.count('POST', '/api/me/learning/items/i3/complete')).toBe(0)
   })
-
-  it('confirms the course only once the server says it became complete', async () => {
-    const nearlyDone = makeWorkspace({ progress: makeCounts({ total: 4, required: 3, completed: 2, completedRequired: 2, percent: 66 }) })
-    nearlyDone.sections[0]!.items[1] = { ...nearlyDone.sections[0]!.items[1]!, state: 'completed' }
-    const done = makeCounts({ total: 4, required: 3, completed: 3, completedRequired: 3, percent: 100, isComplete: true, completedAt: '2026-11-19T09:00:00.000Z' })
-    serve({
-      workspace: nearlyDone,
-      items: allItems(),
-      afterComplete: { ...nearlyDone, progress: done },
-      complete: () => ({
-        progress: makeProgress({ state: 'completed', completedAt: '2026-11-19T09:00:00.000Z', completionSource: 'manual' }),
-        section: makeCounts({ total: 2, required: 1, completed: 1, completedRequired: 1, percent: 100, isComplete: true }),
-        course: done,
-        completedNow: true,
-      }),
-    })
-    // Opening the last lesson of the course confirms nothing.
-    renderLearn('/learn/c1/i4')
-    await waitFor(() => expect(lessonHeading()).toHaveTextContent('قراءة إضافية'))
-    expect(screen.queryByText('أتممت جميع دروس الدورة المطلوبة')).not.toBeInTheDocument()
-
-    fireEvent.click(within(curriculum()).getByRole('link', { name: /دليل الدورة/ }))
-    await waitFor(() => expect(lessonHeading()).toHaveTextContent('دليل الدورة'))
-    fireEvent.click(screen.getByRole('button', { name: 'تحديد كمكتمل' }))
-
-    const dialog = (await screen.findByText('أتممت جميع دروس الدورة المطلوبة')).closest('[role="dialog"]') as HTMLElement
-    expect(dialog).not.toBeNull()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'العودة إلى فصولي' }))
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/my-classes'))
-  })
-
   it('renders a text lesson as text — markup shows literally, nothing runs', async () => {
     serve({
       workspace: makeWorkspace(),
@@ -362,7 +305,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
     expect(server.count('GET', '/api/me/learning/courses/c1')).toBe(2)
   })
 
-  it('shows the playback rule and the watched share of a measured video from the server', async () => {
+  it('shows the watched share of a measured video from the server, without the rule text', async () => {
     serve({
       workspace: makeWorkspace(),
       items: allItems({
@@ -379,7 +322,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
     const video = container.querySelector('video')
     expect(video).toHaveAttribute('src', 'https://media.example.org/intro.mp4')
     expect(video).toHaveAttribute('preload', 'metadata')
-    expect(screen.getByText('يكتمل الدرس بعد مشاهدة 90٪ منه')).toBeInTheDocument()
+    expect(screen.queryByText('يكتمل الدرس بعد مشاهدة 90٪ منه')).not.toBeInTheDocument()
     expect(screen.getByText('شاهدت 40٪ منه حتى الآن')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'تحديد كمكتمل' })).not.toBeInTheDocument()
   })

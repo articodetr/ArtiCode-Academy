@@ -9,6 +9,7 @@
 // keys move between cards: up/down inside a day, left/right to the
 // neighbouring day (mirrored in RTL). One column = the day view.
 import { Spin } from 'antd'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { directionOf } from '../i18n/language'
@@ -53,7 +54,22 @@ function classNames(...names: Array<string | false | null | undefined>): string 
 export function WeekGrid({ days, language, academyTimeZone, nowMinutes, label, loading, empty, onSelectDate, onOpen }: WeekGridProps) {
   const { t } = useTranslation()
   const range = hourRangeOf(days.flatMap((day) => day.entries))
-  const hourHeight = hourHeightOf(range)
+  // Local preview: the hours shrink so the whole week fits the window, never below 26 px an hour.
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [available, setAvailable] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const measure = () => {
+      const body = bodyRef.current
+      if (!body) return
+      const top = body.getBoundingClientRect().top + window.scrollY
+      setAvailable(window.innerHeight - top - 64)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+  const hours = Math.max(1, range.endHour - range.startHour)
+  const hourHeight = available === null ? hourHeightOf(range) : Math.max(26, Math.min(hourHeightOf(range), Math.floor(available / hours)))
   const height = (range.endHour - range.startHour) * hourHeight
   const origin = range.startHour * 60
   const nowInRange = nowMinutes >= origin && nowMinutes <= range.endHour * 60
@@ -107,7 +123,7 @@ export function WeekGrid({ days, language, academyTimeZone, nowMinutes, label, l
             </button>
           ))}
         </div>
-        <div className="tt-grid__body" style={{ height }}>
+        <div ref={bodyRef} className="tt-grid__body" style={{ height }}>
           <div className="tt-axis" aria-hidden="true">
             {hoursOf(range).map((hour) => (
               <span key={hour} className="tt-axis__hour" style={{ top: (hour - range.startHour) * hourHeight }}>

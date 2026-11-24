@@ -1,6 +1,7 @@
 // One lesson in the course player (MOD-20): its heading (level, kind, length,
-// «اختياري»), its content by kind, how it completes, what it carries beside
-// (description, resources, assignments, exams), and the way on — «السابق» /
+// «اختياري»), its content by kind, where the learner stands in it (completed or
+// the watched share — no button and no side sections since AHMED-TT-1: the
+// description, resources, assignments and exams stay on their own pages), and the way on — «السابق» /
 // «التالي» in learning order across the levels (API-231 `neighbors` — none
 // skipped; a step toward a lesson of a level not open yet is disabled,
 // D-R145), and back to the curriculum. The author's preview renders it with
@@ -18,7 +19,6 @@ import { CompletionPanel } from './CompletionPanel'
 import { itemDurationLabel, levelName } from './learn.format'
 import { KindIcon } from './LearnIcons'
 import { LessonContent } from './LessonContent'
-import { LessonSections } from './LessonSections'
 
 export interface LessonViewProps {
   item: LearningItem
@@ -41,7 +41,7 @@ function reachable(neighbor: LearningNeighbor | null): neighbor is LearningNeigh
   return neighbor !== null && neighbor.available !== false
 }
 
-export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToContents, shouldFocus, examZone, preview = false, draft = false }: LessonViewProps) {
+export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToContents, shouldFocus, preview = false, draft = false }: LessonViewProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -82,9 +82,7 @@ export function LessonView({ item, onComplete, onPlayback, onNavigate, onBackToC
         <LessonContent item={item} onPlayback={(result) => onPlayback(item.id, result)} trackPlayback={!preview} onComplete={preview ? undefined : onComplete} />
       </section>
 
-      <CompletionPanel item={item} onComplete={onComplete} preview={preview} />
-
-      <LessonSections item={item} examZone={examZone} />
+      <CompletionPanel item={item} />
 
       <nav className="learn-nav" aria-label={t('learn.nav.label')}>
         <Button

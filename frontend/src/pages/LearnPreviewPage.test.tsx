@@ -113,10 +113,8 @@ describe('LearnPreviewPage — «معاينة كطالب» (TEST-263)', () => {
     expect(nav.queryByText('المستوى الثالث')).not.toBeInTheDocument()
     expect(nav.getByText('مقدمة').closest('a')).toHaveAttribute('href', '/learn/c1/preview/p1')
 
-    // The completion button shows disabled, with the reason.
-    expect(screen.getByText('تحديد كمكتمل').closest('button')).toBeDisabled()
-    expect(screen.getByText('في المعاينة لا يُسجَّل إكمال الدرس ولا يُحفظ أي تقدّم.')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('تحديد كمكتمل').closest('button')!)
+    // No completion button (AHMED-TT-1): a lesson completes by its video, never by a click.
+    expect(screen.queryByText('تحديد كمكتمل')).not.toBeInTheDocument()
 
     // «Next» steps to the next shown lesson, across the level boundary.
     fireEvent.click(within(screen.getByRole('navigation', { name: 'التنقل بين الدروس' })).getByText('التالي').closest('button')!)

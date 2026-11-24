@@ -1,52 +1,29 @@
-// How the lesson completes, and whether it has (MOD-20 — D-R134), always as
-// the server said: a manual lesson by the learner's «تحديد كمكتمل» (API-234 —
-// idempotent; the answer moves the sidebar and the progress at once), a
-// measured medium by playing the academy's share of it (the watched share is
-// the server's — API-231, then each API-233 answer), a live lesson by
-// attending a session that covers it. A completed lesson stays completed when
-// the learner comes back to review it. In the author's preview (D-R144)
-// nothing is recorded: the button shows disabled, with the reason beside it.
+// Where the learner stands in the lesson (MOD-20 — D-R134), always as the server
+// said: «مكتمل» once the lesson is completed, else the watched share of a
+// measured medium (API-231, then each API-233 answer). There is no button: a
+// video completes itself — a file video or audio by its watched share, a
+// YouTube video through `useYouTubeProgress` (API-234 when the share is
+// reached) — and a live lesson by attending its session (AHMED-TT-1, the
+// learner's page shows the lesson, its progress and the way on only).
+// Shows nothing while there is nothing to say.
 import { CheckCircleFilled } from '@ant-design/icons'
-import { Alert, Button } from 'antd'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LearningItem } from '../api/learning'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime } from '../users/users.format'
-import { actionFailureKey } from './learn.errors'
 
 export interface CompletionPanelProps {
   item: LearningItem
-  /** Sends API-234 and applies its answer; rejects with the server's refusal. */
-  onComplete: (itemId: string) => Promise<void>
-  /** The author's preview: the button is disabled and API-234 is never sent. */
-  preview?: boolean
 }
 
-export function CompletionPanel({ item, onComplete, preview = false }: CompletionPanelProps) {
+export function CompletionPanel({ item }: CompletionPanelProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const [busy, setBusy] = useState(false)
-  const [failure, setFailure] = useState<string | null>(null)
   const progress = item.progress
   const completed = progress.state === 'completed'
+  const watched = item.completionMode === 'playback' && !completed && progress.watchedPercent !== null
 
-  const complete = async () => {
-    if (busy || preview) return
-    setBusy(true)
-    setFailure(null)
-    try {
-      await onComplete(item.id)
-    } catch (error) {
-      setFailure(actionFailureKey(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  let rule: string | null = null
-  if (item.completionMode === 'playback') rule = t('learn.completion.playbackRule', { percent: item.completionPercent })
-  else if (item.completionMode === 'attendance') rule = t('learn.completion.attendanceRule')
+  if (!completed && !watched) return null
 
   return (
     <section className="learn-card learn-completion" aria-live="polite">
@@ -60,18 +37,9 @@ export function CompletionPanel({ item, onComplete, preview = false }: Completio
             ) : null}
           </div>
         </div>
-      ) : null}
-      {rule && !completed ? <p className="learn-completion__rule">{rule}</p> : null}
-      {item.completionMode === 'playback' && !completed && progress.watchedPercent !== null ? (
+      ) : (
         <p className="learn-muted learn-completion__watched">{t('learn.completion.watched', { percent: progress.watchedPercent })}</p>
-      ) : null}
-      {item.completionMode === 'manual' && !completed ? (
-        <Button type="primary" loading={busy} disabled={preview} onClick={() => void complete()}>
-          {t('learn.completion.markComplete')}
-        </Button>
-      ) : null}
-      {preview ? <p className="learn-muted learn-completion__preview">{t('learn.preview.completionHint')}</p> : null}
-      {failure ? <Alert className="learn-completion__error" type="error" showIcon title={t(failure)} /> : null}
+      )}
     </section>
   )
 }

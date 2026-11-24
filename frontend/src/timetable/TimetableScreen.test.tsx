@@ -7,11 +7,9 @@ import { makeCalendarLesson, makeCalendarLessons, makeMyItem, makeMySchedule, ma
 import { TimetableScreen } from './TimetableScreen'
 
 // Thursday 2026-11-12, 10:30 in Riyadh (07:30Z): the shown week is Sunday 8 – Saturday 14 (the
-// academy's week starts on Sunday) and "upcoming" covers Thursday 12 – Wednesday 18, so 9–11 belong to
-// the week alone and 15–18 to the panel alone.
+// academy's week starts on Sunday); only the shown week is read — there is no «upcoming» panel.
 const NOW = new Date('2026-11-12T07:30:00Z')
 const WEEK = ['2026-11-08', '2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14']
-const UPCOMING = ['2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-17', '2026-11-18']
 
 /** «My schedule» with one Sunday slot (10:00–11:30), failing with a 500 on the date given. */
 function mockApi(failingOn: string) {
@@ -50,8 +48,6 @@ function renderScreen() {
   return renderWithProviders(<TimetableScreen canReadAcademy={false} canReadMine canPickTeacher={false} canPickClass={false} />, { route: '/schedule' })
 }
 
-const upcomingPanel = () => screen.getByRole('region', { name: ar.schedule.upcoming.title })
-
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
@@ -61,29 +57,24 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('TimetableScreen — the «upcoming» panel and the grid’s alert report only their own failures', () => {
-  it('keeps the panel’s slots when a date of the shown week outside its seven days fails; the grid keeps its alert', async () => {
+describe('TimetableScreen — the grid’s alert follows the shown dates', () => {
+  it('reads the shown week alone, and a failure of one of its dates is the grid’s alert; no side panel', async () => {
     const asked = mockApi('2026-11-09')
     renderScreen()
 
-    // The week's failure is the grid's alert…
     expect(await screen.findByRole('alert')).toHaveTextContent(ar.schedule.calendar.failed)
-    await waitFor(() => expect([...new Set(asked)].sort()).toEqual([...new Set([...WEEK, ...UPCOMING])].sort()))
-    // …while every date of the panel answered: its Sunday-15 slot stays listed, with no failure text.
-    const items = await within(upcomingPanel()).findAllByRole('listitem')
-    expect(items).toHaveLength(1)
-    expect(items[0]).toHaveTextContent('15')
-    expect(within(upcomingPanel()).queryByText(ar.schedule.upcoming.failed)).not.toBeInTheDocument()
+    await waitFor(() => expect([...new Set(asked)].sort()).toEqual([...WEEK].sort()))
+    expect(screen.queryByRole('region', { name: ar.schedule.upcoming.title })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: ar.schedule.month.label })).not.toBeInTheDocument()
   })
 
-  it('shows the panel’s failure when one of its own dates fails outside the shown week — in the panel alone, with no alert over the grid (KI-120)', async () => {
+  it('never asks a date outside the shown week, so a failure there shows no alert over the grid (KI-120)', async () => {
     const asked = mockApi('2026-11-16')
     renderScreen()
 
-    expect(await within(upcomingPanel()).findByText(ar.schedule.upcoming.failed)).toBeInTheDocument()
-    expect(within(upcomingPanel()).queryByRole('listitem')).not.toBeInTheDocument()
     // Every date of the shown week answered: the grid shows its Sunday slot and no network alert.
-    await waitFor(() => expect([...new Set(asked)].sort()).toEqual([...new Set([...WEEK, ...UPCOMING])].sort()))
+    await waitFor(() => expect([...new Set(asked)].sort()).toEqual([...WEEK].sort()))
+    expect(asked).not.toContain('2026-11-16')
     const grid = screen.getByRole('region', { name: ar.schedule.calendar.grid })
     expect(within(grid).getByRole('button', { name: /من 10:00 إلى 11:30/ })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -124,8 +115,7 @@ describe('TimetableScreen — a student whose lessons were added by hand (J-F65,
     expect(within(drawer).queryByText(ar.schedule.details.recurring)).not.toBeInTheDocument()
   })
 
-  it('marks a cancelled lesson on the grid, offers no link and keeps it out of «upcoming»', async () => {
-    // Friday 13, after «now»: it would be upcoming if it were not cancelled.
+  it('marks a cancelled lesson on the grid and offers no link', async () => {
     mockLessonsOnly([makeCalendarLesson({ status: 'cancelled', startsAt: '2026-11-13T09:00:00.000Z', endsAt: '2026-11-13T10:00:00.000Z' })])
     renderScreen()
 
@@ -133,7 +123,6 @@ describe('TimetableScreen — a student whose lessons were added by hand (J-F65,
     const card = await within(grid).findByRole('button', { name: /من 12:00 إلى 13:00/ })
     expect(card).toHaveClass('is-cancelled')
     expect(card).toHaveTextContent(ar.labels.cancelled)
-    expect(await within(upcomingPanel()).findByText(ar.schedule.upcoming.empty)).toBeInTheDocument()
 
     fireEvent.click(card)
     expect(within(await screen.findByRole('dialog')).queryByRole('link')).not.toBeInTheDocument()
