@@ -3,6 +3,9 @@
 // it. The opened lesson lives in the address (`?course=…&lesson=…`), so a reload keeps it and the browser's back
 // closes it. The row and the player are shared with «دروسي» (`HubRow`, `HubPlayer` — J-F67); everything about a lesson
 // is the course player's own: its content, completion, resources and neighbours (LessonView), API-230..234.
+// Since J-F68 the panel ends with «اختبارات الدورة» (`CourseExams`): every exam of the class and where it stands, so the
+// learner sees here what they have not taken or passed yet; an exam popup closed anywhere in the panel reads the lessons
+// and the exams again and tells the page (`onExamClosed` — a certificate may have been issued).
 import { LockOutlined, PlayCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -16,6 +19,7 @@ import { levelName } from '../learn.format'
 import { isItemAvailable, isSectionOpen, openingItemOf, placeOf } from '../learn.state'
 import { LearnAccessNotice } from '../LearnAccessNotice'
 import { useLearningWorkspace } from '../useLearningWorkspace'
+import { CourseExams } from './CourseExams'
 import { HubPlayer } from './HubPlayer'
 import { HubRow } from './HubRow'
 import { scrollToStart } from './hub.scroll'
@@ -26,9 +30,13 @@ export interface HubLessonsProps {
   course: MyLearningCourse
   /** The course's counts as the server last answered them, for its card and the summary. */
   onProgress: (courseId: string, counts: ProgressCounts) => void
+  /** Changes when the learner asked to see the course's exams (the window of «الشهادة»); 0 = never asked. */
+  examsFocus?: number
+  /** An exam popup of the panel closed: the page may read the certificates again. */
+  onExamClosed?: () => void
 }
 
-export function HubLessons({ course, onProgress }: HubLessonsProps) {
+export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }: HubLessonsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const courseId = course.course.id
@@ -39,6 +47,13 @@ export function HubLessons({ course, onProgress }: HubLessonsProps) {
 
   const reading = useLearningWorkspace(courseId)
   const { workspace, update: updateWorkspace, reload: reloadWorkspace } = reading
+  const [examsRefresh, setExamsRefresh] = useState(0)
+  // An exam taken from a lesson row or from «اختبارات الدورة»: the rows' «تم الاختبار», the exams and the card follow.
+  const examClosed = useCallback(() => {
+    reloadWorkspace()
+    setExamsRefresh((value) => value + 1)
+    onExamClosed?.()
+  }, [reloadWorkspace, onExamClosed])
 
   const requested = params.get(LESSON_PARAM) ?? undefined
   const place = placeOf(workspace, requested)
@@ -158,12 +173,15 @@ export function HubLessons({ course, onProgress }: HubLessonsProps) {
               ) : null}
               <ol className="hub-list">
                 {rows.map(({ item, number }) => (
-                  <HubRow key={item.id} item={item} number={number} current={item.id === lessonId} opensOn={section.opensOn} onOpen={openLesson} onExamClosed={reloadWorkspace} />
+                  <HubRow key={item.id} item={item} number={number} current={item.id === lessonId} opensOn={section.opensOn} onOpen={openLesson} onExamClosed={examClosed} />
                 ))}
               </ol>
             </div>
           ))
         )}
+        {workspace !== null && !access ? (
+          <CourseExams classId={course.class.id} studentId={course.student.id} own={course.relation === 'self'} refresh={examsRefresh} focus={examsFocus} onClosed={examClosed} />
+        ) : null}
       </div>
     </section>
   )

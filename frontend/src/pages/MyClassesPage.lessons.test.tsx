@@ -39,6 +39,9 @@ function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWork
       return jsonResponse(200, makeMyLessonList([]))
     }
     if (pathname === '/api/me/classes') return jsonResponse(200, makeMyClassList([CLASS]))
+    // J-F68: «اختبارات الدورة» at the end of a course's lessons (none here) and the cards' certificates.
+    if (pathname === '/api/me/exams') return jsonResponse(200, { items: [], nextCursor: null })
+    if (pathname === '/api/me/certificates') return jsonResponse(200, { items: [] })
     return jsonResponse(404, { statusCode: 404, message: 'nope' })
   })
   return { paths, lessonQueries }
