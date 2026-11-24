@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { makePublicCard } from '../test/publicCatalog'
-import { catalogOpenOf, formatHomeStat, homeProgramsPath, homeProgramsStateOf, homeStatsOf } from './publicHome.view'
+import { catalogOpenOf, formatHomeStat, homeProgramsOf, homeProgramsPath, homeProgramsStateOf, homeStatsOf } from './publicHome.view'
 
 const closed = new ApiError(404, 'closed', { statusCode: 404, code: 'catalog_not_public' })
 const notFound = new ApiError(404, 'gone', { statusCode: 404, code: 'course_not_found' })
@@ -44,6 +44,42 @@ describe('publicHome.view', () => {
     expect(homeStatsOf(cards, false)).toEqual({ programs: 3, lessons: 8, hours: 3, openClasses: 3, partial: false })
     expect(homeStatsOf(cards, true)?.partial).toBe(true)
     expect(homeStatsOf([], true)).toBeNull()
+  })
+
+  describe('homeProgramsOf', () => {
+    const open = (id: string) => makePublicCard({ id })
+    const full = (id: string) => makePublicCard({ id, hasFreeSeat: false })
+    const unpriced = (id: string) => makePublicCard({ id, hasFreeSeat: false, pricing: 'paid', price: null })
+    const soon = (id: string) => makePublicCard({ id, openClasses: 0, hasFreeSeat: false })
+    const ids = (cards: readonly { id: string }[]) => cards.map((card) => card.id)
+
+    it('shows only what takes a learner now, in the server’s order', () => {
+      const selection = homeProgramsOf([soon('s1'), open('o1'), full('f1'), open('o2'), unpriced('p1')])
+      expect(ids(selection.cards)).toEqual(['o1', 'o2'])
+      expect(selection.joinable).toBe(true)
+    })
+
+    it('stops at six when more are available', () => {
+      const cards = Array.from({ length: 9 }, (_, index) => open(`o${index}`))
+      expect(ids(homeProgramsOf(cards).cards)).toEqual(['o0', 'o1', 'o2', 'o3', 'o4', 'o5'])
+    })
+
+    it('falls back to the first six published, marked as not joinable, when none is available', () => {
+      const cards = [soon('a'), full('b'), unpriced('c'), soon('d'), soon('e'), soon('f'), soon('g')]
+      const selection = homeProgramsOf(cards)
+      expect(ids(selection.cards)).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+      expect(selection.joinable).toBe(false)
+    })
+
+    it('has nothing to show without a card', () => {
+      expect(homeProgramsOf([])).toEqual({ cards: [], joinable: false })
+    })
+
+    it('leaves the figures to every card read, not to the ones shown', () => {
+      const cards = [open('o1'), soon('s1'), soon('s2')].map((card) => ({ ...card, lessonCount: 2 }))
+      expect(homeProgramsOf(cards).cards).toHaveLength(1)
+      expect(homeStatsOf(cards, false)).toMatchObject({ programs: 3, lessons: 6 })
+    })
   })
 
   it('writes a figure in Latin digits, with «+» for a lower bound', () => {

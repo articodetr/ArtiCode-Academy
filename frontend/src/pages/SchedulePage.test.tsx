@@ -65,6 +65,8 @@ function mockApi(options: ApiOptions = {}) {
         const on = query.get('on')!
         return jsonResponse(200, makeMySchedule((options.mine ?? []).filter((item) => effectiveOn(item, on)), on))
       }
+      case '/api/me/lessons':
+        return jsonResponse(200, { items: [], nextCursor: null })
       case '/api/branches':
         return jsonResponse(200, { items: [makeBranchOption()] })
       case '/api/rooms':
@@ -141,7 +143,8 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     expect(screen.queryByText(ar.schedule.tabs.academy)).not.toBeInTheDocument()
     const upcoming = screen.getByRole('region', { name: ar.schedule.upcoming.title })
     expect(within(upcoming).getAllByRole('listitem')[0]).toHaveTextContent(ar.schedule.upcoming.inProgress)
-    expect(screen.getByText(ar.schedule.calendar.recurring)).toBeInTheDocument()
+    // «My schedule» may hold real lessons too (J-F65): its note says how to tell them apart.
+    expect(screen.getByText(ar.schedule.calendar.recurringMine)).toBeInTheDocument()
   })
 
   it('opens the academy schedule to a manager — one request per date with its weekday — and switches to «my schedule»', async () => {

@@ -1,0 +1,17 @@
+/* PORTAL-04 phase 1: on a narrow phone the course's name takes its own row, so the action buttons never cover it. */
+@media (max-width: 480px) {
+  .course-drawer .ant-drawer-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .course-drawer .ant-drawer-header-title {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .course-drawer .ant-drawer-extra {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}

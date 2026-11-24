@@ -2,6 +2,7 @@
 // diacritics ignored, both languages matched), what a query looks like (an invoice or receipt number, a
 // certificate serial, an e-mail), which pages and actions match, the suggestions shown before typing, and the
 // recent searches kept on this device. Pure functions; the component (GlobalSearch.tsx) does the reads.
+import { SESSIONS_PATH } from '../learn/hub/hub.view'
 
 /** Lower-case, no Arabic diacritics or tatweel, alef/teh-marbuta/yeh variants folded, Latin accents stripped. */
 export function normalize(text: string): string {
@@ -100,7 +101,7 @@ export const SEARCH_ACTIONS: readonly SearchAction[] = [
   { key: 'enterResults', navKey: 'exams', path: '/exams', permission: 'exams.grade', keywords: 'exam results scores enter ادخال نتائج الاختبار' },
   { key: 'openReports', navKey: 'reports', path: '/reports', keywords: 'reports attendance rate revenue تقارير نسبه الحضور الايرادات' },
   { key: 'handIn', navKey: 'myAssignments', path: '/my-assignments', keywords: 'hand in submit homework تسليم الواجب' },
-  { key: 'nextLessons', navKey: 'myLessons', path: '/my-lessons', keywords: 'next lesson today دروسي القادمه' },
+  { key: 'nextLessons', navKey: 'myLessons', path: SESSIONS_PATH, keywords: 'next lesson today دروسي القادمه' },
   { key: 'myResults', navKey: 'myGrades', path: '/my-grades', keywords: 'grades results درجاتي نتائجي' },
   { key: 'payFees', navKey: 'payments', path: '/payments', permission: 'invoices.read_own', keywords: 'my invoices fees pay فواتيري رسوم' },
 ]

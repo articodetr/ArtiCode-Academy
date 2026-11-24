@@ -3,19 +3,19 @@ import type { publicHome as arPublicHome } from '../ar/publicHome'
 
 export const publicHome: typeof arPublicHome = {
   meta: {
-    descriptionNamed: '{{name}} — structured learning programs in levels and lessons that you follow step by step, with your progress in My School.',
-    description: 'Structured learning programs in levels and lessons that you follow step by step, with your progress in My School.',
+    descriptionNamed: '{{name}} — structured learning programs in levels and lessons that you follow step by step, with your progress in My classes.',
+    description: 'Structured learning programs in levels and lessons that you follow step by step, with your progress in My classes.',
   },
   hero: {
     welcomeNamed: 'Welcome to {{name}}',
     welcome: 'Welcome',
     titleStart: 'Transform Your Future Through',
     titleHighlight: 'Professional Learning',
-    subtitle: 'Structured programs in levels and lessons that you follow step by step, with your progress in My School.',
+    subtitle: 'Structured programs in levels and lessons that you follow step by step, with your progress in My classes.',
     browse: 'Browse programs',
     signIn: 'Sign in',
     accountsNote: 'Accounts are created by the academy.',
-    mySchool: 'My School',
+    mySchool: 'My classes',
     dashboard: 'Dashboard',
     indicators: {
       media: 'Video, audio and files',
@@ -43,7 +43,7 @@ export const publicHome: typeof arPublicHome = {
     label: 'Our programs',
     title: 'Explore Our Learning Programs',
     subtitle: 'From the academy’s published programs: their content, length and fees.',
-    open: 'Start Learning',
+    noneJoinable: 'None of these programs is taking new enrollments right now; you can still read about their content, length and fees.',
     all: 'All programs',
     emptyTitle: 'No programs yet',
     empty: 'No program is published yet.',
@@ -84,7 +84,7 @@ export const publicHome: typeof arPublicHome = {
       structure: 'Content ordered in levels and lessons',
       live: 'Sessions with your class and teachers',
       practice: 'Assignments, exams and grades',
-      progress: 'Your progress saved in My School',
+      progress: 'Your progress saved in My classes',
       certificate: 'A verifiable completion certificate',
     },
     action: 'Discover the programs',
@@ -104,7 +104,7 @@ export const publicHome: typeof arPublicHome = {
     },
     learn: {
       title: 'Enroll and start learning',
-      text: 'Enroll in a class — at once for a free program, after payment and the academy’s approval for a paid one — then follow your lessons in My School.',
+      text: 'Enroll in a class — at once for a free program, after payment and the academy’s approval for a paid one — then follow your lessons in My classes.',
     },
   },
   stats: {

@@ -23,7 +23,7 @@ export const catalog: typeof arCatalog = {
   clearFilters: 'Clear filters',
   loadError: 'The courses could not be loaded.',
   card: {
-    level: 'Level',
+    level: 'Difficulty',
     duration: 'Duration (hours)',
     sessions: 'Sessions',
     syllabus: 'Syllabus items',
@@ -36,7 +36,6 @@ export const catalog: typeof arCatalog = {
     teachers: 'Teachers',
     enrolled: 'You are enrolled',
     pending: 'Your request is under review',
-    details: 'Details',
     enroll: 'Enroll now',
     request: 'Request enrollment',
   },
@@ -44,16 +43,11 @@ export const catalog: typeof arCatalog = {
     back: 'Back to the courses',
     notFound: 'This course does not exist or is no longer published.',
     loadError: 'The course could not be loaded.',
-    overview: 'About the course',
-    noDescription: 'This course has no description.',
     age: 'Age range',
     ageRange: '{{min}} to {{max}} years',
     ageFrom: 'From {{min}} years',
     ageTo: 'Up to {{max}} years',
     installments: 'Installments',
-    syllabus: 'Syllabus',
-    syllabusEmpty: 'No syllabus has been added to this course yet.',
-    estimatedMinutes: 'Estimated duration (minutes)',
     lockedNote: 'Lessons, assignments, exams and course materials open once your enrollment is active.',
     classes: 'Classes',
     unavailable: 'Enrollment is not available right now',
@@ -61,6 +55,9 @@ export const catalog: typeof arCatalog = {
     noClasses: 'No class of this course is open for enrollment.',
     // MOD-20 (D-R138): the visitor chose “Enroll in this course” on the public page and signed in.
     intentNotice: 'Choose the class you want to enroll in',
+    // One class takes the learner: nothing to choose, only to confirm.
+    intentNoticeOne: 'This is the class open to you in this course',
+    intentHintOne: 'Nothing is sent until you confirm. Check its times and seats, then press its button when you are ready.',
     // PORTAL-04: no answer or a server error while enrolling — the outcome is unknown until the course is read again.
     enrollUnknown: 'No sure answer came back, so the enrollment may or may not have gone through. Reload the course to see where you stand before trying again.',
     reloadCourse: 'Reload the course',
@@ -76,7 +73,7 @@ export const catalog: typeof arCatalog = {
       pendingTitle: 'You have an enrollment request for this course',
       pendingText: 'Class “{{className}}”:',
       requests: 'My requests',
-      mySchool: 'My School',
+      mySchool: 'My classes',
     },
   },
   class: {
@@ -113,7 +110,7 @@ export const catalog: typeof arCatalog = {
   },
   confirm: {
     freeTitle: 'Confirm joining the course',
-    freeContent: 'Your enrollment in the class “{{className}}” becomes active as soon as you confirm, and the course shows in “My School”.',
+    freeContent: 'Your enrollment in the class “{{className}}” becomes active as soon as you confirm, and the course shows in “My classes”.',
     freeOk: 'Confirm and join',
     paidTitle: 'Confirm the request to join',
     paidContent: 'An invoice of {{price}} will be issued to you, to pay at the academy. Sending the request does not start your studies: the enrollment becomes active and the lessons open only once the payment is confirmed and the academy approves it.',
@@ -129,11 +126,11 @@ export const catalog: typeof arCatalog = {
     requestState: 'Request state:',
     myRequests: 'My requests',
     requestedContent: 'Invoice {{number}} was issued for {{total}}. Pay the fees at the academy; the enrollment becomes active once the payment is confirmed and the office approves it.',
-    myCourses: 'My School',
+    myCourses: 'My classes',
     myLessons: 'My lessons',
     // PORTAL-04: after an active enrollment.
     startLearning: 'Start learning',
-    goToMySchool: 'Go to My School',
+    goToMySchool: 'Go to My classes',
     invoices: 'My invoices',
   },
   states: {

@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import { useLocation } from 'react-router'
 import type { CourseList } from '../api/courses'
 import { ar } from '../i18n/ar'
 import { COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, makeCourseList, makeLevelList } from '../test/courses'
@@ -31,6 +32,11 @@ function mockCoursesApi(list: CourseList | Response, created: Response = jsonRes
     return jsonResponse(404, { statusCode: 404, code: 'course_not_found', message: 'nope' })
   })
   return { fetchMock, queries, posts }
+}
+
+/** The address's query string, to see that `?create=` is dropped once read (J-F59). */
+function SearchProbe() {
+  return <output data-testid="search">{useLocation().search}</output>
 }
 
 function renderPage(permissions: string[]) {
@@ -155,5 +161,30 @@ describe('CoursesPage', () => {
     renderPage(COURSE_READER_PERMISSIONS)
     await screen.findByText('PY-101')
     expect(screen.queryByText(ar.courses.tabs.levels)).not.toBeInTheDocument()
+  })
+
+  it('opens the creation modal from ?create=course for a manager and drops the parameter; a reader gets no modal (J-F59)', async () => {
+    mockCoursesApi(makeCourseList([python]))
+    const { unmount } = renderWithProviders(
+      <>
+        <CoursesPage />
+        <SearchProbe />
+      </>,
+      { auth: makeAuth({ user: makeUser({ permissions: COURSE_MANAGER_PERMISSIONS }) }), route: '/courses?create=course' },
+    )
+    expect((await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    unmount()
+
+    renderWithProviders(
+      <>
+        <CoursesPage />
+        <SearchProbe />
+      </>,
+      { auth: makeAuth({ user: makeUser({ permissions: COURSE_READER_PERMISSIONS }) }), route: '/courses?create=course' },
+    )
+    await screen.findByText('PY-101')
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    expect(screen.queryByText(ar.courses.create.title)).not.toBeInTheDocument()
   })
 })

@@ -64,7 +64,8 @@ export function PublicHomePage() {
         <HomeCertificate />
         <HomePromo programsPath={programsPath} />
         <HomeWhy />
-        <HomeCallToAction viewer={viewer} catalogOpen={catalogOpen} hasPrograms={programs.state === 'ready'} />
+        {/* The closing strip invites to enroll, so it needs a course that takes a learner now. */}
+        <HomeCallToAction viewer={viewer} catalogOpen={catalogOpen} hasPrograms={programs.state === 'ready' && programs.joinable} />
         <HomeArticles items={[]} />
       </div>
     </PublicShell>

@@ -84,7 +84,7 @@ function renderLearn(route: string) {
     path: deep ? '/learn/:courseId/:itemId' : '/learn/:courseId',
     routes: {
       [deep ? '/learn/:courseId' : '/learn/:courseId/:itemId']: <LearnPage />,
-      '/my-school': <LocationProbe />,
+      '/my-classes': <LocationProbe />,
     },
   })
 }
@@ -129,7 +129,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
     renderLearn('/learn/c1')
 
     expect(await screen.findByRole('heading', { name: 'اشتراكك بانتظار الدفع أو الموافقة' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'عرض طلبات اشتراكي' })).toHaveAttribute('href', '/my-school?section=requests')
+    expect(screen.getByRole('link', { name: 'عرض طلبات اشتراكي' })).toHaveAttribute('href', '/my-classes?section=requests')
   })
 
   it('explains a missing enrollment with a link to the course in the catalog', async () => {
@@ -148,8 +148,8 @@ describe('LearnPage — the course player (TEST-251)', () => {
     renderLearn('/learn/c1')
 
     expect(await screen.findByRole('heading', { name: 'الدورة غير موجودة أو لم تعد متاحة' })).toBeInTheDocument()
-    const back = screen.getAllByRole('link', { name: /العودة إلى مدرستي/ })
-    expect(back.every((link) => link.getAttribute('href') === '/my-school')).toBe(true)
+    const back = screen.getAllByRole('link', { name: /العودة إلى فصولي/ })
+    expect(back.every((link) => link.getAttribute('href') === '/my-classes')).toBe(true)
   })
 
   it('lists the levels with their counts and opens the level of the current lesson', async () => {
@@ -303,8 +303,8 @@ describe('LearnPage — the course player (TEST-251)', () => {
 
     const dialog = (await screen.findByText('أتممت جميع دروس الدورة المطلوبة')).closest('[role="dialog"]') as HTMLElement
     expect(dialog).not.toBeNull()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'العودة إلى مدرستي' }))
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/my-school'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'العودة إلى فصولي' }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/my-classes'))
   })
 
   it('renders a text lesson as text — markup shows literally, nothing runs', async () => {
@@ -329,10 +329,15 @@ describe('LearnPage — the course player (TEST-251)', () => {
 
     const frame = container.querySelector('iframe')
     expect(frame).not.toBeNull()
-    expect(frame).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')
+    const src = new URL(frame!.getAttribute('src')!)
+    expect(`${src.origin}${src.pathname}`).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')
+    // J-F64: the player reports to this page, so the learner sees how much they have watched.
+    expect(src.searchParams.get('enablejsapi')).toBe('1')
+    expect(src.searchParams.get('origin')).toBe(window.location.origin)
     expect(frame).toHaveAttribute('title', 'فيديو الترحيب')
     expect(frame).toHaveAttribute('referrerpolicy', 'strict-origin-when-cross-origin')
-    expect(screen.getByText('لا تُقاس مشاهدة هذا الفيديو: بعد مشاهدته اضغط «تحديد كمكتمل».')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'نسبة المشاهدة' })).toHaveAttribute('aria-valuenow', '0')
+    expect(screen.queryByText('لا تُقاس مشاهدة هذا الفيديو: بعد مشاهدته اضغط «تحديد كمكتمل».')).not.toBeInTheDocument()
   })
 
   it('opens a PDF in a new tab instead of framing it', async () => {

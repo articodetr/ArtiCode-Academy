@@ -7,7 +7,7 @@
 // open catalog gets the search box whose button is «استعرض البرامج» (an empty box
 // opens the whole catalog), a visitor of a closed one «تسجيل الدخول», and nothing
 // until it is known whether the catalog is open (no button that flashes and
-// flips); a learner gets «مدرستي» and the signed-in catalog; staff the dashboard;
+// flips); a learner gets «فصولي» and the signed-in catalog; staff the dashboard;
 // nothing while the session is restored. The visitor's line that accounts come
 // from the academy (there is no self-registration — no «أنشئ حسابًا») stays here.
 // Under the search, four small facts: the server's figures once they are read,
@@ -99,7 +99,7 @@ export function HomeHero({
           <div className={visitorBrowses ? 'public-home__hero-actions public-home__hero-actions--empty' : 'public-home__hero-actions'}>
             {viewer === 'learner' ? (
               <>
-                <Button type="primary" size="large" icon={<AppstoreOutlined />} onClick={() => navigate('/my-school')}>
+                <Button type="primary" size="large" icon={<AppstoreOutlined />} onClick={() => navigate('/my-classes')}>
                   {t('publicHome.hero.mySchool')}
                 </Button>
                 <Button size="large" icon={<CompassOutlined />} onClick={() => navigate(programsPathFor(viewer))}>

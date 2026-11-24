@@ -58,13 +58,6 @@ export function cardAvailability(card: Pick<CatalogCourseCard, 'pricing' | 'pric
   return card.pricing === 'paid' && card.price === null ? 'priceUnavailable' : 'full'
 }
 
-export const AVAILABILITY_COLORS: Record<CardAvailability, string> = {
-  available: 'green',
-  priceUnavailable: 'orange',
-  full: 'red',
-  closed: 'default',
-}
-
 /** The classes the details page offers a button for: the server's `enrollable` ones, in its order. */
 export function enrollableClasses(detail: Pick<CatalogCourseDetail, 'classes' | 'selfService'>): CatalogClass[] {
   if (!detail.selfService.allowed) return []
@@ -105,6 +98,17 @@ export function courseStandingOf(detail: Pick<CatalogCourseDetail, 'classes'>): 
     if (pending) return { kind: 'pending', klass: pending, state }
   }
   return null
+}
+
+/**
+ * The class whose confirmation opens by itself for a learner who pressed subscribe: the one class that takes them,
+ * when they may enroll and have no place in the course yet. Null otherwise — with two or more classes the learner
+ * chooses. This only picks what to ask about; the enrollment still waits for the learner's own confirmation.
+ */
+export function autoConfirmClass(detail: Pick<CatalogCourseDetail, 'classes' | 'selfService'>): CatalogClass | null {
+  if (courseStandingOf(detail) !== null) return null
+  const enrollable = enrollableClasses(detail)
+  return enrollable.length === 1 ? enrollable[0]! : null
 }
 
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const

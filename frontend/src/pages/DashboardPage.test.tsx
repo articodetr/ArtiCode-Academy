@@ -57,10 +57,12 @@ function mockDashboardApi(answers: Answers = {}) {
 /** The card whose title (or Statistic title) is `title`. */
 const cardOf = (title: string) => screen.getByText(title).closest('.ant-card') as HTMLElement
 
-describe('DashboardPage — the classic staff dashboard on the server’s data', () => {
+// Since J-F59 this is the teacher's home (the UI role `teacher`); the academy's admins and staff get the admin home —
+// dashboard/admin/AdminDashboardHome.test.tsx. A teacher may hold report keys through a custom role, so the cards stay tested.
+describe('DashboardPage — the teacher’s dashboard (the classic staff dashboard) on the server’s data', () => {
   it('shows the overview’s numbers, today’s lessons, the classes and the notifications from the server', async () => {
     const urls = mockDashboardApi()
-    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ permissions: MANAGER }) }) })
+    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: MANAGER }) }) })
 
     await waitFor(() => expect(within(cardOf(ar.dashboard.stats.activeStudents)).getByText('42')).toBeInTheDocument())
     expect(within(cardOf(ar.dashboard.stats.runningClasses)).getByText('3')).toBeInTheDocument()
@@ -98,7 +100,7 @@ describe('DashboardPage — the classic staff dashboard on the server’s data',
 
   it('leaves out the lessons, classes and money cards when the caller cannot read them', async () => {
     const urls = mockDashboardApi({ overview: () => jsonResponse(200, { ...OVERVIEW, attendance: null, financial: null, academic: null }) })
-    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ role: 'staff', roles: ['observer'], permissions: ['reports.academic.view'] }) }) })
+    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['reports.academic.view'] }) }) })
 
     await waitFor(() => expect(within(cardOf(ar.dashboard.stats.activeStudents)).getByText('42')).toBeInTheDocument())
     expect(screen.queryByText(ar.dashboard.stats.outstanding)).toBeNull()
@@ -116,7 +118,7 @@ describe('DashboardPage — the classic staff dashboard on the server’s data',
         return calls === 1 ? jsonResponse(500, { statusCode: 500, message: 'boom' }) : jsonResponse(200, OVERVIEW)
       },
     })
-    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ permissions: MANAGER }) }) })
+    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: MANAGER }) }) })
 
     const failure = (await screen.findByText(ar.dashboard.cardFailed)).closest('.ant-card') as HTMLElement
     expect(screen.queryByText(ar.dashboard.stats.activeStudents)).toBeNull()

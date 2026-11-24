@@ -40,6 +40,9 @@ export function EventCard({ entry, date, language, density, academyTimeZone, onO
   const room = entry.room ? roomLabel(entry.room, language) : null
   const roomName = entry.room?.name ? localizedLabel(entry.room.name, language) : null
   const relations = entry.relations.map((relation) => relationLabel(t, relation))
+  // A real lesson (J-F65) names itself where a weekly slot names its class, and says so when it is cancelled.
+  const lessonTitle = entry.lesson ? localizedLabel(entry.lesson.title, language) : null
+  const cancelled = entry.lesson?.status === 'cancelled'
   const otherZone = entry.timeZone !== academyTimeZone ? entry.timeZone : null
   // A one-line card and a card beside overlapping slots show the course and the time only.
   const showExtras = density === 'card' || (!narrow && density !== 'tiny')
@@ -51,7 +54,7 @@ export function EventCard({ entry, date, language, density, academyTimeZone, onO
     endTime: entry.endTime,
     room,
     teacher: entry.teacher ? teacher : null,
-    relations,
+    relations: [...(lessonTitle ? [lessonTitle] : []), ...(cancelled ? [t('labels.cancelled')] : []), ...relations],
   })
   // In the grid the range is compact (`09:00–10:30`); a free-standing card has room for spaces.
   const range = density === 'card' ? timeRange(entry.startTime, entry.endTime) : `${entry.startTime}–${entry.endTime}`
@@ -59,7 +62,7 @@ export function EventCard({ entry, date, language, density, academyTimeZone, onO
   return (
     <button
       type="button"
-      className={`tt-event tt-tone-${toneOf(entry.class.course.id)} is-${density}${narrow ? ' is-narrow' : ''}`}
+      className={`tt-event tt-tone-${toneOf(entry.class.course.id)} is-${density}${narrow ? ' is-narrow' : ''}${entry.lesson ? ' is-lesson' : ''}${cancelled ? ' is-cancelled' : ''}`}
       aria-label={label}
       onClick={() => onOpen(entry, date)}
       data-day={navDay}
@@ -71,7 +74,7 @@ export function EventCard({ entry, date, language, density, academyTimeZone, onO
         <span className="tt-event__extras">
           <span className="tt-event__info">
             <span className="tt-event__sub">
-              <bdi>{entry.class.code}</bdi>
+              <bdi>{lessonTitle ?? entry.class.code}</bdi>
             </span>
             {relations.length > 0 ? (
               <span className="tt-event__relations">
@@ -107,6 +110,7 @@ export function EventCard({ entry, date, language, density, academyTimeZone, onO
       <span className="tt-event__time">
         {/* A short card beside others shows its start; its height already shows the duration. */}
         <span dir="ltr">{narrow && (density === 'compact' || density === 'tiny') ? entry.startTime : range}</span>
+        {cancelled ? ` · ${t('labels.cancelled')}` : null}
         {otherZone ? (
           <>
             {' · '}

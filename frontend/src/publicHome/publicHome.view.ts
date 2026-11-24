@@ -5,9 +5,9 @@
 // Unit-tested in publicHome.view.test.ts.
 //
 // Which programs: the server offers no «featured» choice yet (a backend
-// requirement — #205), so the page shows the first page of API-236 as the server
-// orders it (by course code), at most HOME_PROGRAMS_LIMIT cards — the same
-// courses for every visitor, nothing picked or invented by the page.
+// requirement — #205), so the page reads one page of API-236 as the server orders
+// it (by course code) and shows at most HOME_PROGRAMS_LIMIT of the courses that take
+// a learner now (`homeProgramsOf()`) — the same courses for every visitor.
 //
 // Which figures: only sums of what API-236 itself answers for published courses.
 // The page reads one page of HOME_CATALOG_READ_LIMIT cards (the server's maximum);
@@ -17,6 +17,7 @@ import { isCatalogPublic } from '../api/academy'
 import type { PublicAcademy } from '../api/academy'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { PublicCourseCard } from '../api/publicCatalog'
+import { availabilityOf } from '../publicCatalog/publicCatalog.view'
 import { programsPathFor } from '../publicCatalog/publicViewer'
 import type { PublicViewer } from '../publicCatalog/publicViewer'
 
@@ -51,6 +52,25 @@ export function homeProgramsPath(viewer: PublicViewer, catalogOpen: boolean | nu
   if (viewer === 'visitor' && catalogOpen !== true) return null
   if (viewer === 'staff' && !canReadCourses) return null
   return programsPathFor(viewer)
+}
+
+export interface HomeSelection {
+  /** The cards the section shows, in the server's order. */
+  cards: PublicCourseCard[]
+  /** At least one of them takes a learner now; false = they are shown for reading only. */
+  joinable: boolean
+}
+
+/**
+ * The cards of the home page: the first HOME_PROGRAMS_LIMIT that take a learner now, in the server's order. When none
+ * does, the first published ones with their own state, so a new academy's page is not empty. It looks only at the
+ * HOME_CATALOG_READ_LIMIT cards read, so an available course past them is not found; the server filter of PR #220 can
+ * replace this later.
+ */
+export function homeProgramsOf(cards: readonly PublicCourseCard[]): HomeSelection {
+  const available = cards.filter((card) => availabilityOf(card) === 'available')
+  const joinable = available.length > 0
+  return { cards: (joinable ? available : cards).slice(0, HOME_PROGRAMS_LIMIT), joinable }
 }
 
 export interface HomeStats {

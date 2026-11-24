@@ -3,12 +3,16 @@
 // teacher, the room and its branch (or the academy's own site), the effective
 // period, and — in «my schedule» — why the caller sees it. Editing a class's
 // weekly slots belongs to the class screen (API-089), not here. A bottom sheet
-// on phones, a side drawer elsewhere.
+// on phones, a side drawer elsewhere. A real lesson (J-F65) shows its title,
+// status, delivery mode and link instead of the effective period and the
+// «recurring» notice.
 import { Alert, Descriptions, Drawer, Typography } from 'antd'
 import type { DescriptionsProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { StatusTag } from '../components/StatusTag'
+import { lessonLinkOf } from '../dashboard/learner.data'
 import type { Language } from '../i18n/language'
+import { isHttpsUrl } from '../learn/learn.format'
 import { localizedLabel } from '../users/users.format'
 import type { CalendarDate } from './timetable.dates'
 import { formatDate, formatLongDate, personName, relationLabel, roomLabel, timeRange } from './timetable.format'
@@ -21,16 +25,27 @@ interface SlotDrawerProps {
   language: Language
   academyTimeZone: string
   mobile: boolean
+  /** Epoch ms: whether a lesson's link still says «join». */
+  now: number
 }
 
-export function SlotDrawer({ opened, onClose, language, academyTimeZone, mobile }: SlotDrawerProps) {
+export function SlotDrawer({ opened, onClose, language, academyTimeZone, mobile, now }: SlotDrawerProps) {
   const { t } = useTranslation()
 
   let content = null
   if (opened) {
     const { entry, date } = opened
     const course = localizedLabel(entry.class.course.name, language)
+    const { lesson } = entry
+    const link = lesson ? lessonLinkOf(lesson, now) : null
     const items: DescriptionsProps['items'] = [
+      ...(lesson
+        ? [
+            { key: 'lesson', label: t('schedule.details.lesson'), children: <bdi>{localizedLabel(lesson.title, language)}</bdi> },
+            { key: 'status', label: t('schedule.details.status'), children: <StatusTag value={lesson.status} /> },
+            { key: 'delivery', label: t('schedule.details.delivery'), children: <StatusTag value={lesson.deliveryMode} /> },
+          ]
+        : []),
       {
         key: 'class',
         label: t('schedule.columns.class'),
@@ -79,11 +94,28 @@ export function SlotDrawer({ opened, onClose, language, academyTimeZone, mobile 
             },
           ]
         : []),
-      {
-        key: 'effective',
-        label: t('schedule.columns.effective'),
-        children: `${formatDate(entry.effectiveFrom, language)} – ${entry.effectiveTo ? formatDate(entry.effectiveTo, language) : t('schedule.openEnded')}`,
-      },
+      ...(link && isHttpsUrl(link.url)
+        ? [
+            {
+              key: 'link',
+              label: t('schedule.details.lessonLink'),
+              children: (
+                <a href={link.url} target="_blank" rel="noopener noreferrer">
+                  {link.action === 'join' ? t('schedule.details.joinLesson') : t('schedule.details.openLink')}
+                </a>
+              ),
+            },
+          ]
+        : []),
+      ...(lesson
+        ? []
+        : [
+            {
+              key: 'effective',
+              label: t('schedule.columns.effective'),
+              children: `${formatDate(entry.effectiveFrom, language)} – ${entry.effectiveTo ? formatDate(entry.effectiveTo, language) : t('schedule.openEnded')}`,
+            },
+          ]),
       ...(entry.relations.length > 0
         ? [
             {
@@ -112,7 +144,7 @@ export function SlotDrawer({ opened, onClose, language, academyTimeZone, mobile 
           </div>
         </div>
         <Descriptions column={1} size="small" items={items} />
-        <Alert type="info" showIcon style={{ marginTop: 16 }} title={t('schedule.details.recurring')} />
+        {lesson ? null : <Alert type="info" showIcon style={{ marginTop: 16 }} title={t('schedule.details.recurring')} />}
       </div>
     )
   }
@@ -121,7 +153,7 @@ export function SlotDrawer({ opened, onClose, language, academyTimeZone, mobile 
     <Drawer
       open={opened !== null}
       onClose={onClose}
-      title={t('schedule.details.title')}
+      title={opened?.entry.lesson ? t('schedule.details.lessonTitle') : t('schedule.details.title')}
       placement={mobile ? 'bottom' : 'right'}
       size={mobile ? '85vh' : 'default'}
       destroyOnHidden

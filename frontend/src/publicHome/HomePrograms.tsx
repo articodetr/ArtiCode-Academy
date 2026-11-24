@@ -1,5 +1,6 @@
-// «البرامج التعليمية» on the public home page: up to six cards of API-236 (the
-// server's data only) and a centred «كل البرامج». The section fails alone: while
+// «البرامج التعليمية» on the public home page: up to six cards of API-236 that take
+// a learner now — or, when none does, the first published ones under a line saying
+// so (`homeProgramsOf()`) — and a centred «كل البرامج». The section fails alone: while
 // it loads, fails, is empty or the academy keeps its catalog closed, the rest of
 // the page stays, and each of these states is a designed panel (HomeNotice), not a
 // bare message. The heading makes no «most popular» claim: the server records no
@@ -42,7 +43,10 @@ export function HomePrograms({ programs, viewer }: { programs: HomeProgramsReadi
           <Typography.Title level={2} id="public-home-programs" className="public-home__section-title public-home__section-title--accent">
             {t('publicHome.programs.title')}
           </Typography.Title>
-          {programs.state === 'closed' ? null : <p className="public-home__section-subtitle">{t('publicHome.programs.subtitle')}</p>}
+          {/* When none of the cards takes a learner now, the line says so rather than invite to join them. */}
+          {programs.state === 'closed' ? null : (
+            <p className="public-home__section-subtitle">{t(programs.state === 'ready' && !programs.joinable ? 'publicHome.programs.noneJoinable' : 'publicHome.programs.subtitle')}</p>
+          )}
         </div>
         <ProgramsBody programs={programs} viewer={viewer} hrefOf={hrefOf} />
         {programs.state === 'ready' && canOpen ? (
@@ -70,7 +74,7 @@ function ProgramsBody({ programs, viewer, hrefOf }: { programs: HomeProgramsRead
     return (
       <div className="public-home__courses" aria-busy="true">
         {Array.from({ length: SKELETON_CARDS }, (_, index) => (
-          <div key={index} className="public-card public-card--home public-card--skeleton">
+          <div key={index} className="public-card public-card--skeleton">
             <div className="public-card__media public-home__skeleton-media" />
             <div className="public-card__body">
               <Skeleton active title={{ width: '70%' }} paragraph={{ rows: 2 }} />

@@ -9,8 +9,8 @@ import { Alert, App, Button, Card, Checkbox, Flex, Input, Select, Space, Table, 
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { USER_SEARCH_MAX_LENGTH, USER_STATUSES } from '../api/users'
-import type { UserListItem } from '../api/users'
+import { USER_KINDS, USER_SEARCH_MAX_LENGTH, USER_STATUSES } from '../api/users'
+import type { UserKind, UserListItem } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { PageHeader } from '../components/PageHeader'
 import { StatusTag } from '../components/StatusTag'
@@ -22,7 +22,10 @@ import { PAGE_SIZES, useUsersList } from '../users/useUsersList'
 import type { UsersListFilters } from '../users/useUsersList'
 import { describeUsersFailure, failureMessage } from '../users/users.errors'
 import { displayNameOf, formatDateTime, roleFilterKeys, roleLabel } from '../users/users.format'
+import { useCreateFromLink } from '../common/useCreateFromLink'
 import { useOpenFromSearch } from '../common/useOpenFromSearch'
+
+const isUserKind = (value: string): value is UserKind => (USER_KINDS as readonly string[]).includes(value)
 
 export function UsersPage() {
   const { t } = useTranslation()
@@ -38,6 +41,13 @@ export function UsersPage() {
   // The global search opens a record here through `?open=<id>`.
   useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
+  // The kind the wizard opens on: `?create=<kind>` (J-F59 — the dashboard's «add a student / a teacher»), else `student`.
+  const [createKind, setCreateKind] = useState<UserKind | undefined>(undefined)
+  useCreateFromLink((what) => {
+    if (!canCreate || !isUserKind(what)) return
+    setCreateKind(what)
+    setCreating(true)
+  })
 
   const selected = list.items.find((item) => item.id === selectedId)
 
@@ -127,7 +137,14 @@ export function UsersPage() {
         subtitle={t('users.subtitle')}
         extra={
           canCreate ? (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setCreateKind(undefined)
+                setCreating(true)
+              }}
+            >
               {t('users.addUser')}
             </Button>
           ) : null
@@ -241,6 +258,7 @@ export function UsersPage() {
 
       <CreateUserWizard
         open={creating}
+        initialKind={createKind}
         onClose={() => setCreating(false)}
         onCreated={(user) => {
           setCreating(false)

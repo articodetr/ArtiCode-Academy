@@ -67,7 +67,8 @@ function renderPage(roles: string[], permissions: string[] = LESSON_LEARNER_PERM
   const role = roles.includes('guardian') ? 'guardian' : 'student'
   return renderWithProviders(<MyLessonsPage />, {
     auth: makeAuth({ user: makeUser({ id: SELF_STUDENT.id, role, roles, permissions }) }),
-    route: '/my-lessons',
+    // The table of class sessions: a student's own tab since J-F64, a guardian's whole page.
+    route: '/my-lessons?view=sessions',
   })
 }
 
@@ -77,7 +78,7 @@ function renderGuarded(user: ReturnType<typeof makeUser>) {
     <RequireAccess navKey="myLessons">
       <MyLessonsPage />
     </RequireAccess>,
-    { auth: makeAuth({ user }), route: '/my-lessons' },
+    { auth: makeAuth({ user }), route: '/my-lessons?view=sessions' },
   )
 }
 

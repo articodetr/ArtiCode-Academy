@@ -1,6 +1,7 @@
 // MOD-19 — «explore courses» (API-219): the cards the server returns, the filters it receives, the empty and error
 // states, and the way to a course page.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { useLocation } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { CatalogList } from '../api/catalog'
 import i18n from '../i18n'
@@ -10,7 +11,6 @@ import { formatMoney } from '../payments/payments.format'
 import { CATALOG_COURSE_IDS, makeCatalogCard, makeCatalogList } from '../test/catalog'
 import { makeLevel } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
-import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CatalogPage } from './CatalogPage'
 
@@ -44,8 +44,14 @@ function renderPage() {
   return renderWithProviders(<CatalogPage />, {
     auth: makeAuth({ user: makeUser({ id: 'st-1', role: 'student', roles: ['student'], permissions: ['courses.read', 'enrollments.self_enroll'] }) }),
     route: '/catalog',
-    routes: { '/catalog/:courseId': <LocationProbe /> },
+    routes: { '/catalog/:courseId': <CoursePathProbe /> },
   })
+}
+
+/** Where a card led: the path and the query (the enroll intent). */
+function CoursePathProbe() {
+  const location = useLocation()
+  return <output data-testid="course-path">{`${location.pathname}${location.search}`}</output>
 }
 
 const card = (id: string) => screen.getByTestId(`catalog-card-${id}`)
@@ -62,7 +68,7 @@ describe('CatalogPage', () => {
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
     expect(Object.fromEntries(queries[0]!)).toEqual({ limit: '24' })
     const free = within(card(CATALOG_COURSE_IDS[0]))
-    expect(free.getByText('PY-101')).toBeInTheDocument()
+    expect(free.queryByText('PY-101')).not.toBeInTheDocument()
     expect(free.getByText('مدخل عملي إلى البرمجة')).toBeInTheDocument()
     expect(free.getByText('مبتدئ')).toBeInTheDocument()
     expect(free.getByText(ar.catalog.free)).toBeInTheDocument()
@@ -77,8 +83,30 @@ describe('CatalogPage', () => {
     expect(web.getByText(ar.catalog.card.pending)).toBeInTheDocument()
     // A pending request: no second call to action on the card, the details only.
     expect(web.queryByText(ar.catalog.card.request)).not.toBeInTheDocument()
-    expect(web.getByText(ar.catalog.card.details)).toBeInTheDocument()
+    expect(web.getByText(ar.publicCatalog.card.viewCourse)).toBeInTheDocument()
     expect(card(CATALOG_COURSE_IDS[1]).querySelector('img')).toBeNull()
+  })
+
+  it('wears the public card’s look with the difficulty badge, and keeps the reader’s own state and the seats', async () => {
+    const enrolled = makeCatalogCard({ id: 'c-mine', code: 'X-3', name: { ar: 'دورتي' }, mine: { enrolled: true, pending: false } })
+    mockCatalogApi(() => makeCatalogList([makeCatalogCard(), enrolled]))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+
+    const node = card(CATALOG_COURSE_IDS[0])
+    expect(node).toHaveClass('public-card', 'public-card--app')
+    expect(node.querySelector('.course-badge--level')).toHaveTextContent('مبتدئ')
+    expect(node.querySelector('.course-badge--duration')).toHaveTextContent('24 ساعة')
+    const facts = within(node.querySelector<HTMLElement>('.public-card__facts')!)
+    expect(facts.getByText(ar.catalog.card.availableClasses)).toBeInTheDocument()
+    expect(facts.getByText('خالد المعلم')).toBeInTheDocument()
+
+    const mine = within(card('c-mine'))
+    expect(mine.getByText(ar.catalog.card.enrolled)).toBeInTheDocument()
+    expect(mine.queryByText(ar.catalog.card.enroll)).not.toBeInTheDocument()
+    // The name is the card's one link to the course; «عرض الدورة» repeats it for the pointer only.
+    expect(mine.getByRole('link', { name: 'دورتي' })).toHaveAttribute('href', '/catalog/c-mine')
+    expect(mine.getByText(ar.publicCatalog.card.viewCourse).closest('button')).toHaveAttribute('tabindex', '-1')
   })
 
   it('words a full course, one without an open class, and a paid one whose price is unavailable', async () => {
@@ -148,12 +176,29 @@ describe('CatalogPage', () => {
     expect(screen.queryByText(ar.catalog.loadError)).not.toBeInTheDocument()
   })
 
-  it('opens the course page from a card', async () => {
+  it('opens the course page from a card: the enroll button carries the intent', async () => {
     mockCatalogApi(() => makeCatalogList([makeCatalogCard()]))
     renderPage()
     await screen.findByText('أساسيات بايثون')
     fireEvent.click(within(card(CATALOG_COURSE_IDS[0])).getByText(ar.catalog.card.enroll).closest('button')!)
-    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe(`/catalog/${CATALOG_COURSE_IDS[0]}`)
+    expect((await screen.findByTestId('course-path')).textContent).toBe(`/catalog/${CATALOG_COURSE_IDS[0]}?intent=enroll`)
+  })
+
+  it('carries the intent on a paid course’s request button too', async () => {
+    const open = makeCatalogCard({ pricing: 'paid', price: { amount: 1200, currency: 'SAR', installments: 1 } })
+    mockCatalogApi(() => makeCatalogList([open]))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+    fireEvent.click(within(card(CATALOG_COURSE_IDS[0])).getByText(ar.catalog.card.request).closest('button')!)
+    expect((await screen.findByTestId('course-path')).textContent).toBe(`/catalog/${CATALOG_COURSE_IDS[0]}?intent=enroll`)
+  })
+
+  it('opens the course page with no intent from «عرض الدورة»', async () => {
+    mockCatalogApi(() => makeCatalogList([makeCatalogCard()]))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+    fireEvent.click(within(card(CATALOG_COURSE_IDS[0])).getByText(ar.publicCatalog.card.viewCourse).closest('button')!)
+    expect((await screen.findByTestId('course-path')).textContent).toBe(`/catalog/${CATALOG_COURSE_IDS[0]}`)
   })
 
   it('speaks English with the English names the server stores', async () => {

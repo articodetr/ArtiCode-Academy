@@ -1,6 +1,6 @@
 // The focused header of the course player (MOD-20): the academy's brand
-// (small), the way back to «مدرستي», the language, on a narrow screen the
-// button that opens the curriculum drawer, the breadcrumb مدرستي › course ›
+// (small), the way back to «فصولي», the language, on a narrow screen the
+// button that opens the curriculum drawer, the breadcrumb فصولي › course ›
 // level › lesson, and the course progress as the server computed it (D-R135 —
 // a bar with the percent and «n من m» of the required lessons). The author's
 // preview (D-R144) names its own way back (`home`) and shows no progress.
@@ -69,9 +69,9 @@ export interface LearnHome {
 }
 
 export interface LearnHeaderProps {
-  /** «مدرستي» (/my-school) by default. */
+  /** «فصولي» (/my-classes) by default. */
   home?: LearnHome
-  /** Breadcrumb entries after «مدرستي» (course, level, lesson) — only those known. */
+  /** Breadcrumb entries after «فصولي» (course, level, lesson) — only those known. */
   trail?: readonly string[]
   progress?: ProgressCounts | null
   /** On a narrow screen: opens the curriculum drawer. */
@@ -84,7 +84,7 @@ export function LearnHeader({ home, trail = [], progress = null, onOpenContents,
   const { t } = useTranslation()
   const { language } = useLocalized()
   const rtl = language === 'ar'
-  const way = home ?? { to: '/my-school', crumb: t('learn.header.mySchool'), back: t('learn.header.backToMySchool') }
+  const way = home ?? { to: '/my-classes', crumb: t('learn.header.mySchool'), back: t('learn.header.backToMySchool') }
   const items = [
     { key: 'school', title: <Link to={way.to}>{way.crumb}</Link> },
     ...trail.map((entry, index) => ({ key: `trail-${index}`, title: <bdi dir="auto">{entry}</bdi> })),

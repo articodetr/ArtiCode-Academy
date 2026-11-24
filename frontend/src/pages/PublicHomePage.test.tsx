@@ -39,7 +39,7 @@ function mockHomeApi(list: (query: URLSearchParams, read: number) => Response, a
   return { requests, fetchMock }
 }
 
-const PROBES = ['/explore', '/explore/:courseId', '/login', '/catalog', '/catalog/:courseId', '/my-school', '/', '/courses', '/settings', '/verify']
+const PROBES = ['/explore', '/explore/:courseId', '/login', '/catalog', '/catalog/:courseId', '/my-classes', '/', '/courses', '/settings', '/verify']
 
 function renderPage(auth = makeAuth()) {
   return renderWithProviders(<PublicHomePage />, {
@@ -100,7 +100,7 @@ describe('PublicHomePage', () => {
 
   it('shows six cards and states only figures summed from the server’s answer, a lower bound with «+» when more exist', async () => {
     const cards = Array.from({ length: 8 }, (_, index) =>
-      makePublicCard({ id: `00000000-0000-7000-8000-00000000000${index}`, code: `C-${index}`, name: { ar: `برنامج ${index}` }, lessonCount: 5, durationHours: 2.5, openClasses: index === 0 ? 1 : 0 }),
+      makePublicCard({ id: `00000000-0000-7000-8000-00000000000${index}`, code: `C-${index}`, name: { ar: `برنامج ${index}` }, lessonCount: 5, durationHours: 2.5, openClasses: 1 }),
     )
     mockHomeApi(() => jsonResponse(200, makePublicList(cards, 'next-page')))
     renderPage()
@@ -112,7 +112,56 @@ describe('PublicHomePage', () => {
     expect(stats.getByText(ph.stats.programs).closest('div')).toHaveTextContent('8+')
     expect(stats.getByText(ph.stats.lessons).closest('div')).toHaveTextContent('40+')
     expect(stats.getByText(ph.stats.hours).closest('div')).toHaveTextContent('20+')
-    expect(stats.getByText(ph.stats.openClasses).closest('div')).toHaveTextContent('1+')
+    expect(stats.getByText(ph.stats.openClasses).closest('div')).toHaveTextContent('8+')
+  })
+
+  it('keeps a course nobody can join off the page, while the figures still count every course read', async () => {
+    const soon = makePublicCard({ id: PUBLIC_COURSE_IDS[0], code: 'SOON-1', name: { ar: 'برنامج قادم' }, openClasses: 0, hasFreeSeat: false, lessonCount: 3 })
+    const full = makePublicCard({ id: PUBLIC_COURSE_IDS[1], code: 'FULL-1', name: { ar: 'برنامج ممتلئ' }, openClasses: 2, hasFreeSeat: false, lessonCount: 3 })
+    const open = makePublicCard({ id: PUBLIC_COURSE_IDS[2], code: 'OPEN-1', name: { ar: 'برنامج متاح' }, openClasses: 1, hasFreeSeat: true, lessonCount: 3 })
+    mockHomeApi(() => jsonResponse(200, makePublicList([soon, full, open])))
+    renderPage()
+
+    await programs().findByText('برنامج متاح')
+    expect(programs().queryByText('برنامج قادم')).not.toBeInTheDocument()
+    expect(programs().queryByText('برنامج ممتلئ')).not.toBeInTheDocument()
+    expect(programs().getByText(ph.programs.subtitle)).toBeInTheDocument()
+    expect(programs().getByText(ph.programs.all)).toBeInTheDocument()
+    const stats = within(screen.getByTestId('home-stats'))
+    expect(stats.getByText(ph.stats.programs).closest('div')).toHaveTextContent('3')
+    expect(stats.getByText(ph.stats.lessons).closest('div')).toHaveTextContent('9')
+    expect(stats.getByText(ph.stats.openClasses).closest('div')).toHaveTextContent('3')
+  })
+
+  it('shows the first published courses, marked «قريبًا» and without an invitation to join, when none can be joined', async () => {
+    const cards = Array.from({ length: 7 }, (_, index) =>
+      makePublicCard({ id: `00000000-0000-7000-8000-00000000001${index}`, code: `S-${index}`, name: { ar: `قادم ${index}` }, openClasses: 0, hasFreeSeat: false }),
+    )
+    mockHomeApi(() => jsonResponse(200, makePublicList(cards)))
+    renderPage()
+
+    await programs().findByText('قادم 0')
+    expect(programs().getByText('قادم 5')).toBeInTheDocument()
+    expect(programs().queryByText('قادم 6')).not.toBeInTheDocument()
+    expect(programs().getAllByText(pc.card.comingSoon)).toHaveLength(6)
+    expect(programs().queryByText(pc.card.closed)).not.toBeInTheDocument()
+    expect(programs().queryByText(pc.card.subscribeFree)).not.toBeInTheDocument()
+    expect(programs().queryByText(pc.card.subscribePaid)).not.toBeInTheDocument()
+    // The section says they cannot be joined now, and the way to the full catalog stays.
+    expect(programs().getByText(ph.programs.noneJoinable)).toBeInTheDocument()
+    expect(programs().queryByText(ph.programs.subtitle)).not.toBeInTheDocument()
+    expect(programs().getByText(ph.programs.all)).toBeInTheDocument()
+    // The closing strip invites to enroll: with nothing to join it does not show.
+    expect(screen.queryByTestId('home-cta')).not.toBeInTheDocument()
+  })
+
+  it('words a home card with no class open "Coming soon" in English', async () => {
+    await i18n.changeLanguage('en')
+    mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard({ openClasses: 0, hasFreeSeat: false })])))
+    renderPage()
+
+    expect(await programs().findByText(en.publicCatalog.card.comingSoon)).toBeInTheDocument()
+    expect(programs().getByText(en.publicHome.programs.noneJoinable)).toBeInTheDocument()
   })
 
   it('invents nothing: no figures without programs, and no testimonials or articles section', async () => {
@@ -166,7 +215,7 @@ describe('PublicHomePage', () => {
 
     const third = renderPage()
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(ph.programs.open).closest('a')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.card.viewCourse).closest('a')!)
     expect(await path()).toBe(`/explore/${PUBLIC_COURSE_IDS[0]}`)
     third.unmount()
 
@@ -244,7 +293,7 @@ describe('PublicHomePage', () => {
     expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute('content', ph.meta.description)
   })
 
-  it('offers a signed-in learner «مدرستي» and the signed-in catalog — never the sign-in page', async () => {
+  it('offers a signed-in learner «فصولي» and the signed-in catalog — never the sign-in page', async () => {
     mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])), { catalogPublic: false })
     const auth = makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) })
     const first = renderPage(auth)
@@ -253,12 +302,12 @@ describe('PublicHomePage', () => {
     expect(screen.queryByText(pc.header.signIn)).not.toBeInTheDocument()
     expect(header().getByText(pc.header.programsLink).closest('a')).toHaveAttribute('href', '/catalog')
     fireEvent.click(button(header(), pc.header.mySchool))
-    expect(await path()).toBe('/my-school')
+    expect(await path()).toBe('/my-classes')
     first.unmount()
 
     const second = renderPage(auth)
     await programs().findByText('أساسيات بايثون')
-    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(ph.programs.open).closest('a')!)
+    fireEvent.click(within(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`)).getByText(pc.card.viewCourse).closest('a')!)
     expect(await path()).toBe(`/catalog/${PUBLIC_COURSE_IDS[0]}`)
     second.unmount()
 
@@ -301,7 +350,7 @@ describe('PublicHomePage', () => {
     expect(await path()).toBe('/')
   })
 
-  it('shows neither sign-in nor «مدرستي» while the session is still being restored', async () => {
+  it('shows neither sign-in nor «فصولي» while the session is still being restored', async () => {
     mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])))
     renderPage(makeAuth({ status: 'loading' }))
 
@@ -328,7 +377,7 @@ describe('PublicHomePage', () => {
     renderPage(makeAuth({ user: makeUser({ role: null, roles: ['accountant'], permissions: ['invoices.read_all'] }) }))
     await programs().findByText('أساسيات بايثون')
     expect(screen.getByText('أساسيات بايثون').closest('a')).toBeNull()
-    expect(programs().queryByText(ph.programs.open)).not.toBeInTheDocument()
+    expect(programs().queryByText(pc.card.viewCourse)).not.toBeInTheDocument()
     expect(programs().queryByText(ph.programs.all)).not.toBeInTheDocument()
   })
 

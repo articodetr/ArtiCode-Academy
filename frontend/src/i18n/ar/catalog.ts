@@ -25,7 +25,7 @@ export const catalog = {
   clearFilters: 'مسح المرشّحات',
   loadError: 'تعذّر تحميل الدورات.',
   card: {
-    level: 'المستوى',
+    level: 'مستوى الصعوبة',
     duration: 'المدة (ساعات)',
     sessions: 'عدد الجلسات',
     syllabus: 'محاور المنهج',
@@ -38,7 +38,6 @@ export const catalog = {
     teachers: 'المعلمون',
     enrolled: 'أنت مسجّل',
     pending: 'طلبك قيد المراجعة',
-    details: 'التفاصيل',
     enroll: 'سجّل الآن',
     request: 'اطلب الاشتراك',
   },
@@ -46,16 +45,11 @@ export const catalog = {
     back: 'العودة إلى الدورات',
     notFound: 'الدورة غير موجودة أو لم تعد منشورة.',
     loadError: 'تعذّر تحميل الدورة.',
-    overview: 'نبذة عن الدورة',
-    noDescription: 'لا يوجد وصف لهذه الدورة.',
     age: 'الفئة العمرية',
     ageRange: 'من {{min}} إلى {{max}} سنة',
     ageFrom: 'من {{min}} سنة',
     ageTo: 'حتى {{max}} سنة',
     installments: 'عدد الأقساط',
-    syllabus: 'المنهج',
-    syllabusEmpty: 'لم يُضَف منهج لهذه الدورة بعد.',
-    estimatedMinutes: 'المدة التقديرية (دقائق)',
     lockedNote: 'الدروس والواجبات والاختبارات ومواد الدورة تُفتح لك بعد تفعيل تسجيلك.',
     classes: 'الفصول',
     unavailable: 'التسجيل غير متاح حالياً',
@@ -63,6 +57,9 @@ export const catalog = {
     noClasses: 'لا يوجد فصل مفتوح للتسجيل في هذه الدورة.',
     // MOD-20 (D-R138): the visitor chose «سجّل في هذه الدورة» on the public page and signed in.
     intentNotice: 'اختر الفصل الذي تريد التسجيل فيه',
+    // One class takes the learner: nothing to choose, only to confirm.
+    intentNoticeOne: 'هذا هو الفصل المتاح لك في هذه الدورة',
+    intentHintOne: 'لا يُرسل شيء قبل تأكيدك. راجع مواعيده ومقاعده، ثم اضغط زرّه متى كنت جاهزاً.',
     // PORTAL-04: no answer or a server error while enrolling — the outcome is unknown until the course is read again.
     enrollUnknown: 'لم يصلنا ردّ مؤكَّد، فقد يكون الالتحاق تمّ أو لم يتمّ. أعد تحميل الدورة لترى حالتك الحقيقية قبل أن تحاول مرة أخرى.',
     reloadCourse: 'إعادة تحميل الدورة',
@@ -78,7 +75,7 @@ export const catalog = {
       pendingTitle: 'لديك طلب التحاق بهذه الدورة',
       pendingText: 'فصل «{{className}}»:',
       requests: 'طلباتي',
-      mySchool: 'مدرستي',
+      mySchool: 'فصولي',
     },
   },
   class: {
@@ -115,7 +112,7 @@ export const catalog = {
   },
   confirm: {
     freeTitle: 'تأكيد الالتحاق بالدورة',
-    freeContent: 'سيُفعَّل التحاقك بفصل «{{className}}» فور تأكيدك، وتظهر الدورة في «مدرستي».',
+    freeContent: 'سيُفعَّل التحاقك بفصل «{{className}}» فور تأكيدك، وتظهر الدورة في «فصولي».',
     freeOk: 'تأكيد الالتحاق',
     paidTitle: 'تأكيد طلب الالتحاق',
     paidContent: 'ستصدر لك فاتورة بمبلغ {{price}} تسدّدها لدى الأكاديمية. إرسال الطلب لا يفعّل الدراسة: لا يُفعَّل الالتحاق ولا تُفتح الدروس إلا بعد تأكيد الدفع وموافقة إدارة الأكاديمية معاً.',
@@ -131,11 +128,11 @@ export const catalog = {
     requestState: 'حالة الطلب:',
     myRequests: 'طلباتي',
     requestedContent: 'صدرت الفاتورة {{number}} بمبلغ {{total}}. سدّد الرسوم لدى الأكاديمية، ثم يُفعَّل الاشتراك بعد تأكيد الدفع وموافقة الإدارة.',
-    myCourses: 'مدرستي',
+    myCourses: 'فصولي',
     myLessons: 'دروسي',
     // PORTAL-04: after an active enrollment.
     startLearning: 'ابدأ التعلم',
-    goToMySchool: 'اذهب إلى مدرستي',
+    goToMySchool: 'اذهب إلى فصولي',
     invoices: 'فواتيري',
   },
   states: {

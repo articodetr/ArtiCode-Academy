@@ -1,6 +1,7 @@
 // Fixtures for the schedule screen (MOD-07 — J-F05; moved from test/schedule.ts by J-F08): the shapes of API-090/091
 // and API-084 as the backend returns them, plus permission sets.
 import type { Branch } from '../api/branches'
+import type { MyLessonItem, MyLessonList } from '../api/myLessons'
 import type { Room, RoomList } from '../api/rooms'
 import type { AcademySchedule, MySchedule, MyScheduleItem, TimetableSlot } from '../api/timetable'
 import { makeAcademy } from './academy'
@@ -92,6 +93,37 @@ export function makeMyItem(overrides: Partial<MyScheduleItem> = {}): MyScheduleI
 
 export function makeMySchedule(items: MyScheduleItem[], on = '2026-11-08'): MySchedule {
   return { on, items }
+}
+
+// ---- J-F65 (the learner's real lessons on «my schedule») --------------------
+
+export const LESSON_ID = '0193c000-0000-7000-8000-00000000e001'
+
+/** An API-101 item: a lesson added by hand on Tuesday 2026-11-10, 12:00–13:00 in Riyadh. */
+export function makeCalendarLesson(overrides: Partial<MyLessonItem> = {}): MyLessonItem {
+  return {
+    id: LESSON_ID,
+    title: { ar: 'درس المتغيرات', en: 'Variables' },
+    description: null,
+    deliveryMode: 'live_online',
+    startsAt: '2026-11-10T09:00:00.000Z',
+    endsAt: '2026-11-10T10:00:00.000Z',
+    status: 'scheduled',
+    meetingUrl: 'https://meet.example.com/variables',
+    room: null,
+    timeZone: 'Asia/Riyadh',
+    teacher: { fullName: 'خالد المعلم', displayName: null },
+    syllabusItem: null,
+    class: CLASS,
+    relation: 'self',
+    student: { id: STUDENT_ID, fullName: 'سارة الطالبة', displayName: null },
+    attendance: null,
+    ...overrides,
+  } as MyLessonItem
+}
+
+export function makeCalendarLessons(items: MyLessonItem[] = [], nextCursor: string | null = null): MyLessonList {
+  return { items, nextCursor }
 }
 
 // ---- J-F08 (weekly calendar) ----------------------------------------------

@@ -22,6 +22,7 @@ import type { CoursesListFilters } from '../courses/useCoursesList'
 import { useLevels } from '../courses/useLevels'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
+import { CREATE_COURSE, useCreateFromLink } from '../common/useCreateFromLink'
 import { useOpenFromSearch } from '../common/useOpenFromSearch'
 
 export function CoursesPage() {
@@ -38,6 +39,12 @@ export function CoursesPage() {
   // The global search opens a record here through `?open=<id>`.
   useOpenFromSearch(setSelectedId)
   const [creating, setCreating] = useState(false)
+  // `?create=course` opens the modal for a holder of courses.manage, on the courses tab (where its button lives).
+  useCreateFromLink((what) => {
+    if (!canManage || what !== CREATE_COURSE) return
+    setTab('courses')
+    setCreating(true)
+  })
 
   const columns: TableProps<Course>['columns'] = [
     {

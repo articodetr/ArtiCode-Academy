@@ -5,12 +5,27 @@
 // relation (two children in one class = one card with both names). An entry
 // is a recurring weekly slot, never a confirmed lesson (roadmap §4e.1: dated
 // lessons are MOD-06), so it occurs on a date only when the date falls on its
-// weekday inside `effectiveFrom`..`effectiveTo` (inclusive, open end).
+// weekday inside `effectiveFrom`..`effectiveTo` (inclusive, open end). Since
+// J-F65 «my schedule» also holds the learner's real lessons (`lesson` set,
+// timetable.lessons.ts), each effective on its own date alone.
+import type { DeliveryMode, LessonStatus } from '../api/lessons'
 import type { MyScheduleItem, MyScheduleRelation, MyScheduleStudent, ScheduleClass, ScheduleRoom, TimetableSlot } from '../api/timetable'
+import type { LocalizedLabel } from '../api/users'
 import { clockMinutes, weekdayOf, zonedInstant } from './timetable.dates'
 import type { CalendarDate } from './timetable.dates'
 
 export type TimetableMode = 'academy' | 'mine'
+
+/** A dated lesson of API-101 behind an entry (J-F65); absent on a weekly slot. */
+export interface EntryLesson {
+  title: LocalizedLabel
+  status: LessonStatus
+  deliveryMode: DeliveryMode
+  meetingUrl: string | null
+  /** ISO 8601. */
+  startsAt: string
+  endsAt: string
+}
 
 /** Why «my schedule» shows a slot: as student (`self`), through a linked child, or as its teacher. */
 export interface EntryRelation {
@@ -20,7 +35,7 @@ export interface EntryRelation {
 }
 
 export interface TimetableEntry {
-  /** The slot id — one entry per weekly slot. */
+  /** The slot id — one entry per weekly slot — or the lesson id on a lesson. */
   id: string
   /** 0 = Sunday … 6 = Saturday. */
   weekday: number
@@ -40,6 +55,8 @@ export interface TimetableEntry {
   teacher: { fullName: string; displayName: string | null } | null
   /** «My schedule» only, in the server's order (`self` → `child` → `teacher`); empty for the academy schedule. */
   relations: EntryRelation[]
+  /** Set when the entry is a real lesson rather than a recurring weekly slot. */
+  lesson?: EntryLesson
 }
 
 export function entryOfSlot(slot: TimetableSlot): TimetableEntry {
@@ -106,7 +123,7 @@ export function entriesOn(entries: readonly TimetableEntry[], date: CalendarDate
   return entries.filter((entry) => occursOn(entry, date)).sort(compareEntries)
 }
 
-/** One dated occurrence of a weekly slot (for the upcoming list) — a projection, not a lesson. */
+/** One dated occurrence of an entry (for the upcoming list): a weekly slot's projection, or a real lesson. */
 export interface Occurrence {
   entry: TimetableEntry
   date: CalendarDate
@@ -118,7 +135,8 @@ export interface Occurrence {
 /**
  * The occurrences on `dates` that have not ended at `now`, soonest first
  * (instants computed in each slot's own zone, so slots of branches in other
- * zones sort correctly), at most `limit`.
+ * zones sort correctly), at most `limit`. A lesson counts by its own instants
+ * and only while it is `scheduled`: a cancelled or completed one is not coming.
  */
 export function upcomingOccurrences(
   entriesByDate: ReadonlyMap<CalendarDate, readonly TimetableEntry[]>,
@@ -130,9 +148,11 @@ export function upcomingOccurrences(
   for (const date of dates) {
     for (const entry of entriesByDate.get(date) ?? []) {
       if (!occursOn(entry, date)) continue
-      const endsAt = zonedInstant(date, entry.endTime, entry.timeZone)
+      if (entry.lesson && entry.lesson.status !== 'scheduled') continue
+      const endsAt = entry.lesson ? Date.parse(entry.lesson.endsAt) : zonedInstant(date, entry.endTime, entry.timeZone)
       if (endsAt <= now) continue
-      occurrences.push({ entry, date, startsAt: zonedInstant(date, entry.startTime, entry.timeZone), endsAt })
+      const startsAt = entry.lesson ? Date.parse(entry.lesson.startsAt) : zonedInstant(date, entry.startTime, entry.timeZone)
+      occurrences.push({ entry, date, startsAt, endsAt })
     }
   }
   return occurrences.sort((a, b) => a.startsAt - b.startsAt || a.endsAt - b.endsAt || compareEntries(a.entry, b.entry)).slice(0, limit)

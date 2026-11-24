@@ -263,7 +263,7 @@ export const publicCatalog = {
     aboutLink: 'من نحن',
     openMenu: 'فتح القائمة',
     searchLink: 'البحث عن برنامج',
-    mySchool: 'مدرستي',
+    mySchool: 'فصولي',
     dashboard: 'لوحة التحكم',
   },
   footer: {
@@ -303,10 +303,15 @@ export const publicCatalog = {
     loadError: 'تعذّر تحميل البرامج.',
     moreError: 'تعذّر تحميل المزيد من البرامج.',
     retry: 'إعادة المحاولة',
-    details: 'التفاصيل',
   },
   card: {
+    // The course-type badge and the card's main button (the course redesign).
+    courseType: 'دورة',
+    viewCourse: 'عرض الدورة',
     free: 'مجانية',
+    // The card's quiet action above «عرض الدورة»: it leads to choosing a class, it enrolls nobody by itself.
+    subscribeFree: 'اشترك مجانًا',
+    subscribePaid: 'طلب الاشتراك',
     // A paid course whose plan cannot price a request now (API-236 `pricing: paid`, `price: null`) — never «مجانية».
     priceUnavailable: 'السعر غير متاح حالياً',
     price: 'الرسوم',
@@ -315,7 +320,9 @@ export const publicCatalog = {
     content: 'المحتوى',
     available: 'فصول متاحة',
     full: 'الفصول المفتوحة ممتلئة',
+    // The course page's explanation; a card says `comingSoon` instead.
     closed: 'لا فصل مفتوح حالياً',
+    comingSoon: 'قريبًا',
     hours: '{{count}} ساعة',
     hours_one: 'ساعة واحدة',
     hours_two: 'ساعتان',
@@ -343,18 +350,19 @@ export const publicCatalog = {
   },
   course: {
     back: 'العودة إلى الدورات',
+    // The section bar of a course page: only the sections that hold real data show.
+    sectionsNav: 'أقسام صفحة الدورة',
+    descriptionSection: 'الوصف',
+    outlineSection: 'الخطة الدراسية',
     notFound: 'الدورة غير موجودة أو لم تعد منشورة.',
     loadError: 'تعذّر تحميل الدورة.',
-    overview: 'نبذة عن الدورة',
-    noDescription: 'لا يوجد وصف لهذه الدورة.',
-    level: 'المستوى',
+    // The course's difficulty (`course.level`), never its curriculum levels (`levelCount`/`outline`).
+    level: 'مستوى الصعوبة',
     age: 'الفئة العمرية',
     ageRange: 'من {{min}} إلى {{max}} سنة',
     ageFrom: 'من {{min}} سنة',
     ageTo: 'حتى {{max}} سنة',
-    outline: 'محتوى الدورة',
     outlineNote: 'تظهر هنا عناوين الدروس فقط؛ يُفتح محتواها بعد تفعيل تسجيلك في فصل من فصول الدورة.',
-    outlineEmpty: 'لم يُنشر محتوى لهذه الدورة بعد.',
     // D-R130: «المستوى الأول»، and « — title» when the level has a title.
     section: 'المستوى {{ordinal}}',
     sectionTitled: 'المستوى {{ordinal}} — {{title}}',
