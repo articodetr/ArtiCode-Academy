@@ -24,7 +24,9 @@ import { examAttempts } from './ar/examAttempts'
 import { takeExam } from './ar/takeExam'
 import { courseCover } from './ar/courseCover'
 import { courseEnrollmentPanel } from './ar/courseEnrollmentPanel'
+import { studentRegistration } from './ar/studentRegistration'
 import { publicHome } from './ar/publicHome'
+import { homepageImages } from './ar/homepageImages'
 
 export const ar = {
   common,
@@ -85,6 +87,9 @@ export const ar = {
   publicHome,
   courseCover,
   courseEnrollmentPanel,
+  // Settings → «صور الصفحة الرئيسية»: the four pictures of /home the administration may replace.
+  homepageImages,
+  studentRegistration,
 }
 
 export type Translation = typeof ar

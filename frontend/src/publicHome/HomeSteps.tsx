@@ -1,8 +1,10 @@
 // «كيف تبدأ الدراسة؟» on the public home page: the three steps as the product
-// works today — choose a program, sign in with the account the academy gives
-// (no self-registration exists yet — PR-3), enroll in a class (at once for a free
-// program, after payment and the academy's approval for a paid one — MOD-19) and
-// follow the lessons in «مدرستي». No figure, testimonial or name is shown.
+// works today — choose a program, sign in with the account the academy gives (or,
+// only while the server says `selfRegistration: true`, one the visitor creates:
+// the step then says so, since the academy is no longer the only source), enroll
+// in a class (at once for a free program, after payment and the academy's approval
+// for a paid one — MOD-19) and follow the lessons in «مدرستي». No figure,
+// testimonial or name is shown.
 // An ordered list of three cards, the middle one in the page's colour; one under
 // the other on a phone.
 import { CompassOutlined, LoginOutlined, ReadOutlined } from '@ant-design/icons'
@@ -16,8 +18,10 @@ const STEPS: { key: 'choose' | 'signIn' | 'learn'; icon: ReactNode }[] = [
   { key: 'learn', icon: <ReadOutlined /> },
 ]
 
-export function HomeSteps() {
+export function HomeSteps({ registrationOpen = false }: { registrationOpen?: boolean }) {
   const { t } = useTranslation()
+  const textOf = (key: (typeof STEPS)[number]['key']) =>
+    key === 'signIn' && registrationOpen ? t('studentRegistration.entry.accountsNote') : t(`publicHome.steps.${key}.text`)
   return (
     <section className="public-home__section public-home__section--soft" aria-labelledby="public-home-steps">
       <div className="public-home__container">
@@ -39,7 +43,7 @@ export function HomeSteps() {
                 <Typography.Title level={3} className="public-home__step-title">
                   {t(`publicHome.steps.${step.key}.title`)}
                 </Typography.Title>
-                <p className="public-home__step-text">{t(`publicHome.steps.${step.key}.text`)}</p>
+                <p className="public-home__step-text">{textOf(step.key)}</p>
               </div>
             </li>
           ))}

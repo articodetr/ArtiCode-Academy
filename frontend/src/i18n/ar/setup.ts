@@ -73,6 +73,7 @@ export const settings = {
     roles: 'الأدوار والصلاحيات',
     rooms: 'القاعات',
     gradeSchemes: 'سلالم التقدير',
+    homepageImages: 'صور الصفحة الرئيسية',
   },
 }
 

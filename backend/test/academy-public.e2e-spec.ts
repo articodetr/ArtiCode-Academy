@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../src/app.module.js';
 import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { readSettings } from '../src/academy/academy.settings.js';
+import { publicHomepageImageUrls } from '../src/academy/homepage-images.settings.js';
 import { readLocalizedText } from '../src/authorization/localized-text.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
@@ -30,7 +31,7 @@ const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}
 const USER_AGENT = `TEST-223 supertest ${RUN}`;
 const PUBLIC = '/api/academy/public';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
-const PUBLIC_KEYS = ['catalogPublic', 'defaultLocale', 'logoUrl', 'name'];
+const PUBLIC_KEYS = ['catalogPublic', 'defaultLocale', 'homepageImages', 'logoUrl', 'name'];
 /** API-205: 60 requests per minute per IP. */
 const LIMIT = 60;
 
@@ -79,7 +80,7 @@ describe.skipIf(!available)('MOD-02-T04 public academy branding (e2e, TEST-223)'
     expect(privateRead.body.code).toBe('unauthenticated');
   });
 
-  it('AC2 — exactly name, logoUrl, defaultLocale and catalogPublic (MOD-20), equal to the stored row; never an id, slug, contact, zone, currency or settings', async () => {
+  it('AC2 — exactly name, logoUrl, defaultLocale, catalogPublic (MOD-20) and homepageImages, equal to the stored row; never an id, slug, contact, zone, currency or settings', async () => {
     const res = await anonymous().expect(200);
     const row = await prisma.academy.findFirstOrThrow({ select: { slug: true, name: true, logoUrl: true, defaultLocale: true, contactEmail: true, contactPhone: true, settings: true } });
     expect(Object.keys(res.body).sort()).toEqual(PUBLIC_KEYS);
@@ -89,6 +90,8 @@ describe.skipIf(!available)('MOD-02-T04 public academy branding (e2e, TEST-223)'
       defaultLocale: row.defaultLocale,
       // TEST-248: true only when settings.catalog.publicBrowsing is exactly true.
       catalogPublic: readSettings(row.settings).catalog.publicBrowsing === true,
+      // Homepage images: the public URL of each of the four pictures, null = the built-in default.
+      homepageImages: publicHomepageImageUrls(row.settings, 'api'),
     });
     expect(typeof res.body.catalogPublic).toBe('boolean');
     expect(Object.keys(res.body.name as object).every((locale) => ['ar', 'en', 'tr'].includes(locale))).toBe(true);
@@ -119,7 +122,7 @@ describe.skipIf(!available)('MOD-02-T04 public academy branding (e2e, TEST-223)'
   });
 
   it(
-    'AC5 — the OpenAPI document shows the route without a security scheme and the four-field schema',
+    'AC5 — the OpenAPI document shows the route without a security scheme and the five-field schema',
     async () => {
       const docs = await api().get('/api/docs-json').expect(200);
       const path = docs.body.paths[PUBLIC];

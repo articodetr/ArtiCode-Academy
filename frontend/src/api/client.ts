@@ -58,10 +58,11 @@ export function apiUrl(path: string): string {
  * The wait a response asks for, in whole seconds: the standard `Retry-After`
  * (seconds or an HTTP date), else the header @nestjs/throttler names after the
  * blocking throttler — the academy's are `login` (a 429 carries `Retry-After-login`)
- * and, on the session refresh alone, the per-IP ceiling `refresh_ip` (D-R140).
+ * and, on the session refresh alone, the per-IP ceiling `refresh_ip` (D-R140); the self-registration adds `register_ip`
+ * (PORTAL-03, contract v2).
  */
 function retryAfterFrom(headers: Headers): number | null {
-  for (const name of ['Retry-After', 'Retry-After-login', 'Retry-After-refresh_ip']) {
+  for (const name of ['Retry-After', 'Retry-After-login', 'Retry-After-refresh_ip', 'Retry-After-register_ip']) {
     const value = headers.get(name)?.trim()
     if (!value) continue
     if (/^\d+$/.test(value)) return Number(value)
@@ -92,6 +93,14 @@ export interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   /** JSON-serialised request body. */
   body?: unknown
+  /**
+   * A request body sent as it is, not as JSON (the homepage images: the picture's own
+   * bytes, `PUT /api/academy/homepage-images/:key`). Replaces `body` when both are given;
+   * a refresh-and-retry sends the same Blob again (a Blob can be read more than once).
+   */
+  rawBody?: Blob
+  /** The `Content-Type` of `rawBody` (default: the Blob's own type, else `application/octet-stream`). */
+  contentType?: string
   signal?: AbortSignal
   /** Attach the access token (default true). Public endpoints may pass false. */
   auth?: boolean
@@ -110,16 +119,17 @@ async function parseBody(response: Response): Promise<unknown> {
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, auth = true, retry = true, keepalive } = options
+  const { method = 'GET', body, rawBody, contentType, signal, auth = true, retry = true, keepalive } = options
   const headers = new Headers({ Accept: 'application/json' })
-  if (body !== undefined) headers.set('Content-Type', 'application/json')
+  if (rawBody !== undefined) headers.set('Content-Type', contentType || rawBody.type || 'application/octet-stream')
+  else if (body !== undefined) headers.set('Content-Type', 'application/json')
   const token = auth ? getAccessToken() : null
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const response = await fetch(apiUrl(path), {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: rawBody !== undefined ? rawBody : body === undefined ? undefined : JSON.stringify(body),
     signal,
     ...(keepalive ? { keepalive: true } : {}),
     credentials: 'include',

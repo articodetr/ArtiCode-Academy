@@ -23,6 +23,12 @@
 // under the `tools` profile (`up` never creates it), hardened, with the `none` log driver (a
 // `run` container has no Docker log), the application role only, and a default command that
 // only prints its usage; `migrate` carries no AUTH_MFA_ENCRYPTION_KEY and no JWT_SECRET.
+// The homepage images (Settings → Homepage Images): the `media` volume is mounted on `api`
+// only, at MEDIA_STORAGE_DIR=/var/lib/articode/media (a fixed value, on `api` only), owned by
+// `node` and writable by the API's user without any capability; a picture uploaded through
+// the web origin is published (API-205, the media route) and a body over the API's 5 MiB
+// gets the API's own 413 image_too_large through Caddy; the picture and a file written on
+// the volume survive the replacement of the api container (AC3 recreates it).
 // Then: backup and maintenance are running, the maintenance loop printed its first line.
 // The project, its volumes and its network are removed at the end (never another project's).
 
@@ -32,6 +38,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const args = process.argv.slice(2);
@@ -135,6 +142,47 @@ async function apiHealthy(seconds) {
   return waitFor(() => stateOf('api').health === 'healthy', seconds);
 }
 
+/** A raw GET through the web origin: the status, the headers and the bytes. */
+async function bytesOf(path) {
+  const res = await fetch(`${BASE}${path}`, { redirect: 'manual', signal: AbortSignal.timeout(10_000) });
+  return { status: res.status, type: res.headers.get('content-type') ?? '', cache: res.headers.get('cache-control') ?? '', bytes: Buffer.from(await res.arrayBuffer()) };
+}
+
+const MEDIA_DIR = '/var/lib/articode/media';
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** A well-formed RGBA PNG of `width` × `height` (a gradient with a transparent edge), no metadata chunk. */
+function pngImage(width, height) {
+  const chunk = (type, data) => {
+    const typed = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(typed));
+    return Buffer.concat([length, typed, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 6, 0, 0, 0], 8); // 8 bits per sample, RGBA, deflate, adaptive filtering, no interlace
+  const rows = [];
+  for (let y = 0; y < height; y += 1) {
+    const row = Buffer.alloc(1 + width * 4); // filter type 0 (None)
+    for (let x = 0; x < width; x += 1) row.set([Math.floor((x * 255) / width), Math.floor((y * 255) / height), 160, x < 4 ? 0 : 255], 1 + x * 4);
+    rows.push(row);
+  }
+  return Buffer.concat([PNG_SIGNATURE, chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.concat(rows))), chunk('IEND', Buffer.alloc(0))]);
+}
+
+/** The volume mounts of a container: [{ name, destination, rw }]. */
+function volumeMountsOf(id) {
+  try {
+    return (JSON.parse(run('docker', ['inspect', '--format', '{{json .Mounts}}', id]).out.trim()) ?? []).filter((m) => m.Type === 'volume').map((m) => ({ name: m.Name ?? '', destination: m.Destination, rw: m.RW }));
+  } catch {
+    return [];
+  }
+}
+
 async function main() {
   if (run('docker', ['version', '--format', '{{.Server.Version}}']).code !== 0) {
     console.error('Docker is not reachable — start Docker Desktop (or the daemon) first.');
@@ -156,8 +204,9 @@ async function main() {
   // The rendered file holds the env file's secrets: it is parsed here and never printed.
   const rendered = compose(['--profile', 'tools', 'config', '--format', 'json']);
   let services = {};
+  let volumes = {};
   try {
-    services = JSON.parse(rendered.stdout).services ?? {};
+    ({ services = {}, volumes = {} } = JSON.parse(rendered.stdout));
   } catch {
     // reported by the checks below
   }
@@ -176,6 +225,15 @@ async function main() {
   const defaultServices = listed.stdout.trim().split(/\r?\n/);
   if (listed.code === 0 && defaultServices.includes('migrate') && !defaultServices.includes('account')) pass('account is outside the default profile', `up starts ${defaultServices.join(', ')}`);
   else fail('account is outside the default profile', `exit ${listed.code}: ${defaultServices.join(', ')}`);
+
+  // --- the homepage images: the `media` volume and MEDIA_STORAGE_DIR on api only -------------
+  // Every service, `account` included (rendered with the tools profile); only this one
+  // variable's value is read.
+  const mediaMounts = Object.entries(services).flatMap(([name, s]) => (s.volumes ?? []).filter((v) => v.type === 'volume' && v.source === 'media').map((v) => `${name}:${v.target}${v.read_only ? ':ro' : ''}`));
+  const mediaEnv = Object.entries(services).filter(([, s]) => 'MEDIA_STORAGE_DIR' in (s.environment ?? {})).map(([name, s]) => `${name}=${s.environment.MEDIA_STORAGE_DIR}`);
+  if (volumes.media?.name === `${PROJECT}_media` && mediaMounts.join() === `api:${MEDIA_DIR}` && mediaEnv.join() === `api=${MEDIA_DIR}`)
+    pass('media: a named volume mounted on api only, at MEDIA_STORAGE_DIR (set on api only)', `volume ${volumes.media.name}; mounts ${mediaMounts.join(', ')}; ${mediaEnv.join(', ')}`);
+  else fail('media: a named volume mounted on api only, at MEDIA_STORAGE_DIR (set on api only)', `volume ${JSON.stringify(volumes.media ?? null)}; mounts ${mediaMounts.join(', ') || 'none'}; env ${mediaEnv.join(', ') || 'none'}`);
 
   // --- AC1 ----------------------------------------------------------------------
   const started = Date.now();
@@ -198,6 +256,17 @@ async function main() {
   const migrateNames = containerEnvNames(containerOf('migrate'));
   if (createdAccounts === '' && migrateNames.length > 0 && !migrateNames.includes('AUTH_MFA_ENCRYPTION_KEY')) pass('`up` creates no account container, and the migrate container carries no AUTH_MFA_ENCRYPTION_KEY');
   else fail('`up` creates no account container, and the migrate container carries no AUTH_MFA_ENCRYPTION_KEY', `account containers: ${createdAccounts.split('\n').filter(Boolean).length}; migrate variables: ${migrateNames.length}`);
+
+  // The media directory at run time: the project's own volume on api (read-write) and on no
+  // other running service; a new volume starts owned by node (the image's directory), so the
+  // API's user writes there with cap_drop ALL.
+  const apiMounts = volumeMountsOf(containerOf('api')).filter((m) => m.destination === MEDIA_DIR);
+  const elsewhere = ['db', 'web', 'backup', 'maintenance'].filter((s) => volumeMountsOf(containerOf(s)).some((m) => m.name === `${PROJECT}_media` || m.destination === MEDIA_DIR));
+  const owner = compose(['exec', '-T', 'api', 'sh', '-c', 'id -un; stat -c "%U:%G %a" "$0"; f="$0/.t202-write-probe"; : > "$f" && rm "$f" && echo writable', MEDIA_DIR]);
+  const [whoami, ownership, writable] = owner.out.trim().split('\n');
+  if (apiMounts.length === 1 && apiMounts[0].name === `${PROJECT}_media` && apiMounts[0].rw && elsewhere.length === 0 && whoami === 'node' && ownership === 'node:node 755' && writable === 'writable')
+    pass('media: the volume is on api only, owned by node and writable by the API\'s user', `${apiMounts[0].name} at ${MEDIA_DIR} (rw); ${ownership}; the api process (${whoami}) creates and deletes a file there`);
+  else fail('media: the volume is on api only, owned by node and writable by the API\'s user', `api mounts ${JSON.stringify(apiMounts)}; also on ${elsewhere.join(', ') || 'nothing else'}; exec exit ${owner.code}: ${tail(owner.out, 3)}`);
 
   await waitFor(async () => (await http('/api/health').catch(() => ({ status: 0 }))).body?.status === 'ok', 60);
   const ready = await http('/api/health/ready');
@@ -230,6 +299,26 @@ async function main() {
   if (login.status === 200 && me.status === 200 && (me.body?.email ?? me.body?.user?.email) === email) pass('AC1 the first admin signs in through the web origin', 'POST /api/auth/login 200, GET /api/auth/me 200');
   else fail('AC1 the first admin signs in through the web origin', `login ${login.status} ${login.body?.code ?? ''}, me ${me.status}`);
 
+  // --- the homepage images through the web origin ------------------------------------------
+  const picture = pngImage(96, 128);
+  const upload = token ? await http('/api/academy/homepage-images/heroStudent', { method: 'PUT', headers: { 'content-type': 'image/png', origin: ORIGIN, authorization: `Bearer ${token}` }, body: picture }) : { status: 0, body: null };
+  const uploaded = upload.body?.items?.find((item) => item.key === 'heroStudent');
+  const mediaUrl = uploaded?.url ?? '';
+  const mediaFile = mediaUrl.split('/').pop();
+  const publicAcademy = await http('/api/academy/public');
+  const served = /^\/api\/academy\/media\/[0-9a-f]{32}\.png$/.test(mediaUrl) ? await bytesOf(mediaUrl) : { status: 0, type: '', cache: '', bytes: Buffer.alloc(0) };
+  const onVolume = compose(['exec', '-T', 'api', 'ls', '-A', MEDIA_DIR]).out.trim().split('\n');
+  if (upload.status === 200 && uploaded?.custom === true && uploaded.width === 96 && uploaded.height === 128 && publicAcademy.body?.homepageImages?.heroStudent === mediaUrl && served.status === 200 && served.type.startsWith('image/png') && served.bytes.subarray(0, 8).equals(PNG_SIGNATURE) && served.bytes.length === uploaded.bytes && /immutable/.test(served.cache) && onVolume.includes(mediaFile))
+    pass('media: a picture uploaded through the web origin is published from the volume', `PUT /api/academy/homepage-images/heroStudent 200 (96 × 128, ${uploaded.bytes} bytes); API-205 names ${mediaUrl}; GET it 200 image/png, ${served.cache}; ${mediaFile} is on the volume`);
+  else fail('media: a picture uploaded through the web origin is published from the volume', `PUT ${upload.status} ${upload.body?.code ?? ''}; item ${JSON.stringify(uploaded ?? null)}; API-205 ${JSON.stringify(publicAcademy.body?.homepageImages ?? null)}; GET ${served.status} ${served.type} ${served.bytes.length} bytes; volume: ${onVolume.join(' ') || 'empty'}`);
+
+  // Over the API's 5 MiB, under Caddy's 6 MB: the API's own answer reaches the browser.
+  const tooLarge = token
+    ? await http('/api/academy/homepage-images/aboutLearners', { method: 'PUT', headers: { 'content-type': 'image/png', origin: ORIGIN, authorization: `Bearer ${token}` }, body: Buffer.concat([PNG_SIGNATURE, Buffer.alloc(5_400_000)]) }).catch((error) => ({ status: `error ${error.cause?.code ?? error.message}`, body: null }))
+    : { status: 0, body: null };
+  if (tooLarge.status === 413 && tooLarge.body?.code === 'image_too_large') pass('media: a body over 5 MiB passes Caddy and gets the API\'s 413 image_too_large', `maxBytes ${tooLarge.body.maxBytes ?? tooLarge.body.details?.maxBytes ?? '?'}`);
+  else fail('media: a body over 5 MiB passes Caddy and gets the API\'s 413 image_too_large', `${tooLarge.status} ${JSON.stringify(tooLarge.body ?? null).slice(0, 200)}`);
+
   // --- AC2 ----------------------------------------------------------------------
   const before = psql('select (select count(*) from academy) || \',\' || (select count(*) from roles) || \',\' || (select count(*) from permissions) || \',\' || (select count(*) from users)');
   const again = compose(['up', '-d', '--no-build']);
@@ -242,6 +331,10 @@ async function main() {
   else fail('AC2 api is healthy again after the second up', JSON.stringify(stateOf('api')));
 
   // --- AC3: a failed migration keeps api stopped ------------------------------------
+  // (It removes the api container: the media volume must outlive it — checked after the next up.)
+  const apiBefore = containerOf('api');
+  const marker = randomBytes(16).toString('hex');
+  const wrote = compose(['exec', '-T', 'api', 'sh', '-c', 'printf %s "$1" > "$0/.t202-marker"', MEDIA_DIR, marker]);
   compose(['stop', 'api', 'web']);
   compose(['rm', '-f', 'api']);
   const broken = compose(['up', '-d', '--no-build', 'api'], { env: { DB_MIGRATOR_PASSWORD: `wrong-${randomBytes(8).toString('hex')}` } });
@@ -252,6 +345,17 @@ async function main() {
   const healed = compose(['up', '-d', '--no-build']);
   if (healed.code === 0 && (await apiHealthy(120))) pass('AC3 the next up with the right env migrates and starts api');
   else fail('AC3 the next up with the right env migrates and starts api', `exit ${healed.code} ${JSON.stringify(stateOf('api'))}`);
+
+  const apiAfter = containerOf('api');
+  const kept = compose(['exec', '-T', 'api', 'cat', `${MEDIA_DIR}/.t202-marker`]);
+  if (wrote.code === 0 && apiAfter && apiAfter !== apiBefore && kept.code === 0 && kept.out.trim() === marker)
+    pass('media: the volume survives the replacement of the api container', `a new api container (${apiAfter.slice(0, 12)}, was ${apiBefore.slice(0, 12)}) reads the file the old one wrote`);
+  else fail('media: the volume survives the replacement of the api container', `write exit ${wrote.code}; container ${apiBefore.slice(0, 12)} → ${apiAfter.slice(0, 12)}; marker ${kept.code === 0 && kept.out.trim() === marker ? 'kept' : `lost (${tail(kept.out, 2)})`}`);
+  let servedAgain = { status: 0, bytes: Buffer.alloc(0) };
+  // web was stopped with api: it answers again within seconds of the up.
+  if (mediaFile) await waitFor(async () => (servedAgain = await bytesOf(mediaUrl).catch(() => servedAgain)).status === 200, 30, 1000);
+  if (servedAgain.status === 200 && served.bytes.length > 0 && servedAgain.bytes.equals(served.bytes)) pass('media: the new api container still serves the uploaded picture', `${mediaUrl}: 200, the same ${servedAgain.bytes.length} bytes`);
+  else fail('media: the new api container still serves the uploaded picture', `${mediaUrl || 'no picture was uploaded'}: ${servedAgain.status}, ${servedAgain.bytes.length} bytes`);
 
   // --- AC3: an image newer than the database -----------------------------------------
   const future = join(tmp, 'migrations-future', '29991231235959_t202_future');

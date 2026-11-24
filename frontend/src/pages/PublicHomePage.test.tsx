@@ -9,6 +9,10 @@ import { PUBLIC_CATALOG_PATH } from '../api/publicCatalog'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
+import { HOME_IMAGES } from '../publicHome/homeImages'
+import { HOME_IMAGE_PLACEHOLDER } from '../publicHome/homeImages.view'
+import { HOME_IMAGE_KEYS } from '../publicHome/homeImageSlots'
+import type { HomeImageKey } from '../publicHome/homeImageSlots'
 import { makePublicAcademy } from '../test/academy'
 import { jsonResponse, mockFetch } from '../test/http'
 import { CATALOG_NOT_PUBLIC, PUBLIC_COURSE_IDS, makePublicCard, makePublicList } from '../test/publicCatalog'
@@ -18,6 +22,10 @@ import { PublicHomePage } from './PublicHomePage'
 const ph = ar.publicHome
 const pc = ar.publicCatalog
 const NAME = { ar: 'أكاديمية النور', en: 'Al-Nour Academy' }
+// The academy's own pictures of two places (Settings → Homepage Images); the other two stay the defaults.
+const HERO_URL = '/api/academy/media/0123456789abcdef0123456789abcdef.webp'
+const WHY_URL = '/api/academy/media/fedcba9876543210fedcba9876543210.jpg'
+const OWN_PICTURES = { heroStudent: HERO_URL, aboutLearners: null, promoTraining: null, whyClassroom: WHY_URL }
 
 function PathProbe() {
   const location = useLocation()
@@ -55,6 +63,10 @@ const header = () => within(document.querySelector<HTMLElement>('.public-catalog
 const footer = () => within(screen.getByTestId('public-footer'))
 const button = (scope: ReturnType<typeof within>, text: string) => scope.getByText(text).closest('button')!
 const path = async () => (await screen.findByTestId('path')).textContent
+/** The source of each of the four pictures of /home right now (null: the place is missing). */
+const pictures = () =>
+  Object.fromEntries(HOME_IMAGE_KEYS.map((key: HomeImageKey) => [key, document.querySelector(`img[data-home-image="${key}"]`)?.getAttribute('src') ?? null]))
+const DEFAULT_PICTURES = { ...HOME_IMAGES }
 
 describe('PublicHomePage', () => {
   afterEach(async () => {
@@ -390,5 +402,192 @@ describe('PublicHomePage', () => {
     expect(await programs().findByText('Python Basics')).toBeInTheDocument()
     expect(screen.getByText(en.publicHome.steps.title)).toBeInTheDocument()
     expect(header().getByText(en.publicCatalog.header.programsLink)).toBeInTheDocument()
+  })
+
+  describe('the academy’s own pictures (Settings → Homepage Images)', () => {
+    it('shows the academy’s hero and «why» pictures in their places and the defaults of the other two', async () => {
+      mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])), { catalogPublic: true, homepageImages: OWN_PICTURES })
+      renderPage()
+
+      await screen.findByText('مرحبًا بك في أكاديمية النور')
+      expect(pictures()).toEqual({ ...DEFAULT_PICTURES, heroStudent: HERO_URL, whyClassroom: WHY_URL })
+      // Each in its own band, with the attributes it always had.
+      const heroPicture = document.querySelector('.public-home__hero-figure img')
+      expect(heroPicture).toHaveAttribute('src', HERO_URL)
+      expect(heroPicture).toHaveAttribute('alt', '')
+      expect(heroPicture).toHaveAttribute('fetchpriority', 'high')
+      expect(document.querySelector('.public-home__why-photo img')).toHaveAttribute('src', WHY_URL)
+      expect(document.querySelector('.public-home__why-photo img')).toHaveAttribute('loading', 'lazy')
+      expect(document.querySelector('#about .public-home__photo-frame img')).toHaveAttribute('src', HOME_IMAGES.aboutLearners)
+      expect(document.querySelector('.public-home__photo-frame--promo img')).toHaveAttribute('src', HOME_IMAGES.promoTraining)
+    })
+
+    it('shows the four defaults when the academy has none of its own', async () => {
+      const none = { heroStudent: null, aboutLearners: null, promoTraining: null, whyClassroom: null }
+      mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])), { catalogPublic: true, homepageImages: none })
+      renderPage()
+      await screen.findByText('مرحبًا بك في أكاديمية النور')
+      expect(pictures()).toEqual(DEFAULT_PICTURES)
+    })
+
+    it('shows the four defaults when API-205 answers without homepageImages', async () => {
+      mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])))
+      renderPage()
+      await screen.findByText('مرحبًا بك في أكاديمية النور')
+      expect(pictures()).toEqual(DEFAULT_PICTURES)
+    })
+
+    it('shows no drawn laptop in front of the hero picture (removed at the owner’s request)', async () => {
+      mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])), { catalogPublic: true, homepageImages: OWN_PICTURES })
+      renderPage()
+      await screen.findByText('مرحبًا بك في أكاديمية النور')
+      expect(document.querySelector('.public-home__hero-laptop')).toBeNull()
+    })
+
+    it('keeps the four frames empty while API-205 loads — no default flashes before the academy’s own picture', async () => {
+      let answer!: (response: Response) => void
+      const academy = new Promise<Response>((resolve) => {
+        answer = resolve
+      })
+      mockFetch((url) => (url === ACADEMY_PUBLIC_PATH ? academy : jsonResponse(200, makePublicList([makePublicCard()]))))
+      renderPage()
+
+      // The programs are already shown; the pictures still wait for API-205, each in its frame.
+      await programs().findByText('أساسيات بايثون')
+      expect(pictures()).toEqual(Object.fromEntries(HOME_IMAGE_KEYS.map((key) => [key, HOME_IMAGE_PLACEHOLDER])))
+      expect(document.querySelector('.public-home__hero-figure img')).toHaveAttribute('width', '760')
+      expect(document.querySelector('.public-home__hero-figure img')).toHaveAttribute('height', '981')
+
+      answer(jsonResponse(200, makePublicAcademy({ name: NAME, catalogPublic: true, homepageImages: OWN_PICTURES })))
+      await screen.findByText('مرحبًا بك في أكاديمية النور')
+      expect(pictures()).toEqual({ ...DEFAULT_PICTURES, heroStudent: HERO_URL, whyClassroom: WHY_URL })
+    })
+
+    it('shows the defaults when the academy cannot be read', async () => {
+      mockFetch((url) =>
+        url === ACADEMY_PUBLIC_PATH
+          ? jsonResponse(503, { statusCode: 503, code: 'academy_not_configured', message: 'none' })
+          : jsonResponse(200, makePublicList([makePublicCard()])),
+      )
+      renderPage()
+
+      expect(await screen.findByText(ph.hero.welcome)).toBeInTheDocument()
+      expect(pictures()).toEqual(DEFAULT_PICTURES)
+    })
+
+    it('shows the same pictures in English', async () => {
+      await i18n.changeLanguage('en')
+      mockHomeApi(() => jsonResponse(200, makePublicList([makePublicCard()])), { catalogPublic: true, homepageImages: OWN_PICTURES })
+      renderPage()
+
+      expect(await screen.findByText('Welcome to Al-Nour Academy')).toBeInTheDocument()
+      expect(pictures()).toEqual({ ...DEFAULT_PICTURES, heroStudent: HERO_URL, whyClassroom: WHY_URL })
+    })
+  })
+
+  describe('creating an account (PORTAL-04, the contract of #207)', () => {
+    const entry = ar.studentRegistration.entry
+    const registerLinks = () => [...document.querySelectorAll('a[href="/register"]')]
+    const academyReads = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls.filter(([url]) => url === ACADEMY_PUBLIC_PATH).length
+    const list = () => jsonResponse(200, makePublicList([makePublicCard()]))
+    const learner = () => makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) })
+    const staff = () => makeAuth({ user: makeUser({ permissions: ['academy.settings.manage'] }) })
+
+    it.each([
+      ['the field absent', { catalogPublic: true }],
+      ['false', { catalogPublic: true, selfRegistration: false }],
+    ])('keeps the original words and offers no link with %s', async (_case, academy) => {
+      const { fetchMock } = mockHomeApi(list, academy)
+      renderPage()
+      await programs().findByText('أساسيات بايثون')
+      expect(hero().getByText(ph.hero.accountsNote)).toBeInTheDocument()
+      expect(screen.getByText(ph.steps.signIn.text)).toBeInTheDocument()
+      expect(registerLinks()).toHaveLength(0)
+      expect(document.body.textContent).not.toContain(entry.accountsNote)
+      expect(academyReads(fetchMock)).toBe(1)
+    })
+
+    it('offers nothing when API-205 fails', async () => {
+      mockFetch((url) => (url === ACADEMY_PUBLIC_PATH ? jsonResponse(503, { statusCode: 503, code: 'academy_not_configured', message: 'none' }) : list()))
+      renderPage()
+      await programs().findByText('أساسيات بايثون')
+      expect(await screen.findByText(ph.hero.welcome)).toBeInTheDocument()
+      expect(hero().getByText(ph.hero.accountsNote)).toBeInTheDocument()
+      expect(registerLinks()).toHaveLength(0)
+    })
+
+    it('tells a visitor the truth wherever accounts are mentioned, with one quiet link in the hero and one in the header', async () => {
+      const { fetchMock } = mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage()
+      const link = await screen.findByTestId('home-register')
+      expect(link).toHaveAttribute('href', '/register')
+      expect(link).toHaveTextContent(entry.createAccount)
+      expect(hero().getByText(new RegExp(entry.accountsNote))).toBeInTheDocument()
+      expect(document.body.textContent).not.toContain(ph.hero.accountsNote)
+      expect(document.body.textContent).not.toContain(ph.steps.signIn.text)
+      // A link, not a second button beside «استعرض البرامج».
+      expect(hero().queryByRole('button', { name: new RegExp(entry.createAccount) })).not.toBeInTheDocument()
+      expect(header().getByRole('link', { name: entry.createAccount })).toHaveAttribute('href', '/register')
+      expect(header().getByText(pc.header.signIn).closest('button')).toBeInTheDocument()
+      expect(registerLinks()).toHaveLength(2)
+      expect(academyReads(fetchMock)).toBe(1)
+    })
+
+    it('lists it in the phone menu and closes the menu on the way there', async () => {
+      mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderWithProviders(<PublicHomePage />, {
+        auth: makeAuth(),
+        route: '/home',
+        routes: { '/register': <PathProbe /> },
+      })
+      await screen.findByTestId('home-register')
+      fireEvent.click(header().getByRole('button', { name: new RegExp(pc.header.openMenu) }))
+      const menu = await screen.findByRole('dialog')
+      fireEvent.click(within(menu).getByRole('link', { name: entry.createAccount }))
+      expect(await path()).toBe('/register')
+    })
+
+    it('keeps the phone menu free of it while registration is closed', async () => {
+      mockHomeApi(list)
+      renderPage()
+      await programs().findByText('أساسيات بايثون')
+      fireEvent.click(header().getByRole('button', { name: new RegExp(pc.header.openMenu) }))
+      const menu = await screen.findByRole('dialog')
+      expect(within(menu).getByText(pc.header.programsLink)).toBeInTheDocument()
+      expect(within(menu).queryByText(entry.createAccount)).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ['a learner', learner],
+      ['staff', staff],
+    ])('offers %s no link, and never repeats the untrue line', async (_who, auth) => {
+      mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage(auth())
+      await programs().findByText('أساسيات بايثون')
+      await waitFor(() => expect(screen.getByText(entry.accountsNote)).toBeInTheDocument())
+      expect(registerLinks()).toHaveLength(0)
+      expect(screen.queryByTestId('home-register')).not.toBeInTheDocument()
+      expect(document.body.textContent).not.toContain(ph.steps.signIn.text)
+    })
+
+    it('offers nothing while the session is still being restored', async () => {
+      const { fetchMock } = mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage(makeAuth({ status: 'loading' }))
+      await programs().findByText('أساسيات بايثون')
+      await waitFor(() => expect(academyReads(fetchMock)).toBe(1))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(registerLinks()).toHaveLength(0)
+    })
+
+    it('words it in English', async () => {
+      await i18n.changeLanguage('en')
+      mockHomeApi(list, { catalogPublic: true, selfRegistration: true })
+      renderPage()
+      const link = await screen.findByTestId('home-register')
+      expect(link).toHaveTextContent(en.studentRegistration.entry.createAccount)
+      expect(document.body.textContent).toContain(en.studentRegistration.entry.accountsNote)
+      expect(document.body.textContent).not.toContain(en.publicHome.hero.accountsNote)
+      expect(document.body.textContent).not.toContain(en.publicHome.steps.signIn.text)
+    })
   })
 })

@@ -8,7 +8,9 @@
 // tab (J-F06 — MOD-07-T02 screen, API-084..API-087) under /settings/rooms behind
 // `schedule.manage` alone, on the same pattern; and the "grade schemes" tab (J-F44 —
 // MOD-09-T08 part a, API-122..API-125) under /settings/grade-schemes behind
-// `academy.settings.manage` alone (reading the schemes needs no key, every write that one).
+// `academy.settings.manage` alone (reading the schemes needs no key, every write that one); and the
+// "homepage images" tab (the four pictures of the public home page /home) under
+// /settings/homepage-images behind `academy.settings.manage` alone, right after the general tab.
 import { Tabs } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
@@ -20,15 +22,17 @@ import { BranchesManager } from '../branches/BranchesManager'
 import { MANAGE_BRANCHES_PERMISSION } from '../branches/branches.policy'
 import { PageHeader } from '../components/PageHeader'
 import { GradeSchemesManager } from '../grades/GradeSchemesManager'
+import { HomepageImagesManager } from '../homepageImages/HomepageImagesManager'
 import { canAccess } from '../layout/navigation'
 import { RolesManager } from '../roles/RolesManager'
 import { RoomsManager } from '../rooms/RoomsManager'
 import { MANAGE_SCHEDULE_PERMISSION } from '../rooms/rooms.policy'
 
-export type SettingsSection = 'general' | 'branches' | 'rooms' | 'gradeSchemes' | 'roles'
+export type SettingsSection = 'general' | 'homepageImages' | 'branches' | 'rooms' | 'gradeSchemes' | 'roles'
 
 const SECTION_PATHS: Readonly<Record<SettingsSection, string>> = {
   general: '/settings',
+  homepageImages: '/settings/homepage-images',
   branches: '/settings/branches',
   rooms: '/settings/rooms',
   gradeSchemes: '/settings/grade-schemes',
@@ -37,6 +41,7 @@ const SECTION_PATHS: Readonly<Record<SettingsSection, string>> = {
 
 /** The permission that gates a tab other than the general one (inside the page too — a direct render still answers 403). */
 const SECTION_PERMISSIONS: Readonly<Partial<Record<SettingsSection, string>>> = {
+  homepageImages: MANAGE_ACADEMY_SETTINGS_PERMISSION,
   branches: MANAGE_BRANCHES_PERMISSION,
   rooms: MANAGE_SCHEDULE_PERMISSION,
   gradeSchemes: MANAGE_ACADEMY_SETTINGS_PERMISSION,
@@ -50,15 +55,17 @@ export function SettingsPage({ section = 'general' }: { section?: SettingsSectio
   const canManageRoles = hasPermission('roles.manage')
   const canManageBranches = hasPermission(MANAGE_BRANCHES_PERMISSION)
   const canManageRooms = hasPermission(MANAGE_SCHEDULE_PERMISSION)
-  const canManageGradeSchemes = hasPermission(MANAGE_ACADEMY_SETTINGS_PERMISSION)
+  // The grade schemes and the homepage images follow the same key (every write of both needs it).
+  const canManageAcademySettings = hasPermission(MANAGE_ACADEMY_SETTINGS_PERMISSION)
   // The general tab follows the gate of the /settings entry (`academy.settings.read` or `.manage` since CH-0036).
   const canSeeGeneral = user ? canAccess(user, 'settings') : false
 
   const tabs = [
     ...(canSeeGeneral ? [{ key: 'general', label: t('settings.tabs.general') }] : []),
+    ...(canManageAcademySettings ? [{ key: 'homepageImages', label: t('settings.tabs.homepageImages') }] : []),
     ...(canManageBranches ? [{ key: 'branches', label: t('settings.tabs.branches') }] : []),
     ...(canManageRooms ? [{ key: 'rooms', label: t('settings.tabs.rooms') }] : []),
-    ...(canManageGradeSchemes ? [{ key: 'gradeSchemes', label: t('settings.tabs.gradeSchemes') }] : []),
+    ...(canManageAcademySettings ? [{ key: 'gradeSchemes', label: t('settings.tabs.gradeSchemes') }] : []),
     ...(canManageRoles ? [{ key: 'roles', label: t('settings.tabs.roles') }] : []),
   ]
 
@@ -71,7 +78,9 @@ export function SettingsPage({ section = 'general' }: { section?: SettingsSectio
           ? t('rooms.subtitle')
           : section === 'gradeSchemes'
             ? t('gradeSchemes.subtitle')
-            : t('settings.subtitle')
+            : section === 'homepageImages'
+              ? t('homepageImages.subtitle')
+              : t('settings.subtitle')
 
   const content = (
     <>
@@ -87,13 +96,15 @@ export function SettingsPage({ section = 'general' }: { section?: SettingsSectio
         <RoomsManager />
       ) : section === 'gradeSchemes' ? (
         <GradeSchemesManager />
+      ) : section === 'homepageImages' ? (
+        <HomepageImagesManager />
       ) : (
         <GeneralSettingsForm />
       )}
     </>
   )
 
-  // The roles, branches, rooms and grade schemes tabs are gated by their permission inside the page too, so a direct render (and
+  // The roles, branches, rooms, grade schemes and homepage images tabs are gated by their permission inside the page too, so a direct render (and
   // the route without its guard) still answers 403 without it (D-R06; RequireAccess — T15).
   const permission = SECTION_PERMISSIONS[section]
   return permission ? <RequireAccess permission={permission}>{content}</RequireAccess> : content

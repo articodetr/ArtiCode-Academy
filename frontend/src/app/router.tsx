@@ -39,6 +39,8 @@ import { QuestionBanksPage } from '../pages/QuestionBanksPage'
 import { ReportsPage } from '../pages/ReportsPage'
 import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { StudentRegisterCompletePage } from '../pages/StudentRegisterCompletePage'
+import { StudentRegisterPage } from '../pages/StudentRegisterPage'
 import { TakeExamPage } from '../pages/TakeExamPage'
 import { UsersPage } from '../pages/UsersPage'
 import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
@@ -60,6 +62,8 @@ const router = createBrowserRouter([
   // Public token pages (MOD-03-T12): the one-time link is the only credential.
   { path: '/invite/:token', element: <InvitationPage /> },
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+  { path: '/register', element: <StudentRegisterPage /> }, // PORTAL-04 (#207): closed unless API-205 says selfRegistration
+  { path: '/register/complete/:token', element: <StudentRegisterCompletePage /> }, // the e-mailed link; opens no session
   // Public certificate verification (J-F51 — API-134, D-R56): no sign-in; the printed code is the only input.
   // E-mail confirmation (API-166 — the link the server e-mails is <APP_PUBLIC_URL>/verify-email/<token>) and the
   // self-service reset request (API-021).
@@ -129,6 +133,7 @@ const router = createBrowserRouter([
       { path: 'settings/branches', element: guarded('branches', <SettingsPage section="branches" />) }, // `branches.manage` alone (MOD-02-T06 screen)
       { path: 'settings/rooms', element: guarded('rooms', <SettingsPage section="rooms" />) }, // `schedule.manage` alone (J-F06 — MOD-07-T02 screen)
       { path: 'settings/grade-schemes', element: guarded('gradeSchemes', <SettingsPage section="gradeSchemes" />) }, // `academy.settings.manage` alone (J-F44 — MOD-09-T08 part a)
+      { path: 'settings/homepage-images', element: guarded('homepageImages', <SettingsPage section="homepageImages" />) }, // `academy.settings.manage` alone (the four pictures of /home)
       // Own profile: every signed-in user, whatever the role.
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },

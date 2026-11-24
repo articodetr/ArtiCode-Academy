@@ -23,7 +23,9 @@
 #            schema check of MOD-17-T03) and `prisma/platform/migrations` (read-only —
 #            the platform readiness check, MOD-18-T06); non-root; `node dist/main.js`
 #            by default, `node dist/platform/main.js` / `dist/platform/probe.js` for the
-#            platform (deploy/compose.platform.yaml, D-R97 — one image, two entries).
+#            platform (deploy/compose.platform.yaml, D-R97 — one image, two entries);
+#            an empty /var/lib/articode/media owned by `node` — the mount point of the
+#            academy's `media` volume (the uploaded homepage images, MEDIA_STORAGE_DIR).
 #
 # Nothing secret is baked in: every setting comes from the environment at run
 # time (`NODE_ENV=production` requires JWT_SECRET and DATABASE_URL — env.schema.ts).
@@ -88,6 +90,12 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma/migrations ./prisma/migrations
 COPY --from=build /app/prisma/platform/migrations ./prisma/platform/migrations
+# The homepage images (MEDIA_STORAGE_DIR, the `media` volume of deploy/compose.academy.yaml):
+# the one directory the process user owns outside its home (TEST-200 checks it). Docker
+# gives a new, empty named volume the owner and mode of the image directory it is
+# mounted on, so the API (cap_drop ALL) can write there; an empty directory where
+# nothing is mounted (maintenance, the platform).
+RUN install -d -o node -g node -m 0755 /var/lib/articode/media
 USER node
 EXPOSE 3000
 # Liveness only; readiness (database and schema) is the compose health check.
