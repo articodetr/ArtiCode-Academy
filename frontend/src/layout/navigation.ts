@@ -16,6 +16,7 @@ import {
   FormOutlined,
   HomeOutlined,
   PercentageOutlined,
+  PictureOutlined,
   PlayCircleOutlined,
   PlaySquareOutlined,
   QuestionCircleOutlined,
@@ -189,6 +190,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // MOD-02/MOD-14 minimum (CH-0036): the general tab is real, so the entry moved from the role matrix to the
   // catalog keys (either one shows it; saving needs `manage`). By default only academy_admin holds them — no visible change.
   { key: 'settings', path: '/settings', labelKey: 'nav.settings', icon: createElement(SettingOutlined), permissions: ['academy.settings.read', 'academy.settings.manage'], module: 'MOD-14' },
+  // Homepage images: the tab of the settings that replaces the four pictures of /home lives under
+  // /settings/homepage-images behind the one key every route of /api/academy/homepage-images requires
+  // (`academy.settings.manage`; by seed only academy_admin holds it) — management only, like the grade schemes.
+  { key: 'homepageImages', path: '/settings/homepage-images', labelKey: 'nav.homepageImages', icon: createElement(PictureOutlined), permissions: ['academy.settings.manage'], module: 'MOD-14' },
   // MOD-02-T06 screen: the branches tab of the settings lives under /settings/branches behind the one key the server enforces for writes.
   { key: 'branches', path: '/settings/branches', labelKey: 'nav.branches', icon: createElement(EnvironmentOutlined), permissions: ['branches.manage'], module: 'MOD-02' },
   // J-F06 (MOD-07-T02 screen): the rooms tab of the settings lives under /settings/rooms behind the one key the server
@@ -255,7 +260,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
   { key: 'assessment', labelKey: 'nav.groups.assessment', items: ['assignments', 'exams', 'questionBanks', 'certificates'] },
   { key: 'finance', labelKey: 'nav.groups.finance', items: ['payments'] },
   { key: 'followUp', labelKey: 'nav.groups.followUp', items: ['reports', 'notifications'] },
-  { key: 'system', labelKey: 'nav.groups.system', items: ['settings', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit'] },
+  { key: 'system', labelKey: 'nav.groups.system', items: ['settings', 'homepageImages', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit'] },
 ]
 
 export interface NavGroup {

@@ -105,9 +105,19 @@ export interface UpdateAcademyInput {
   settings?: AcademySettingsInput
 }
 
+/** The four places of the public home page (/home) whose picture the academy may replace (`settings.homepageImages.<key>`). */
+export type HomepageImageKey = 'heroStudent' | 'aboutLearners' | 'promoTraining' | 'whyClassroom'
+
+/**
+ * API-205 `homepageImages`: the public address of the academy's own picture of each place — root-relative,
+ * `/api/academy/media/<file>` — or `null` for the built-in default. Nothing else about the files is published.
+ */
+export type PublicHomepageImages = Record<HomepageImageKey, string | null>
+
 /**
  * `AcademyPublicDto` (API-205): what the sign-in page and the public catalog show before anybody is signed in —
  * nothing else of the academy. `catalogPublic` since MOD-20 (D-R138); a server before it sends none (read as false).
+ * `homepageImages` since the homepage images settings; a server before them sends none (every place keeps its default).
  */
 export interface PublicAcademy {
   name: LocalizedLabel
@@ -115,6 +125,7 @@ export interface PublicAcademy {
   defaultLocale: AcademyLocale
   /** `settings.catalog.publicBrowsing === true`: the public catalog (/explore) answers. */
   catalogPublic?: boolean
+  homepageImages?: PublicHomepageImages | null
 }
 
 export const ACADEMY_PATH = '/api/academy'

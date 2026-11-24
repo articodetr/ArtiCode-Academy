@@ -65,13 +65,14 @@ describe('AppLayout navigation', () => {
     expect(selected[0]).toHaveTextContent(ar.nav.roles)
   })
 
-  it('shows the grade schemes entry right after the settings entry to a holder of academy.settings.manage, and selects it on /settings/grade-schemes (J-F44)', () => {
+  it('shows the homepage images and grade schemes entries right after the settings entry to a holder of academy.settings.manage, and selects grade schemes on /settings/grade-schemes (J-F44)', () => {
     renderWithProviders(<AppLayout />, {
       auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read', 'academy.settings.manage'] }) }),
       route: '/settings/grade-schemes',
     })
     const labels = menuLabels()
-    expect(labels.indexOf(ar.nav.gradeSchemes)).toBe(labels.indexOf(ar.nav.settings) + 1)
+    expect(labels.indexOf(ar.nav.homepageImages)).toBe(labels.indexOf(ar.nav.settings) + 1)
+    expect(labels.indexOf(ar.nav.gradeSchemes)).toBe(labels.indexOf(ar.nav.homepageImages) + 1)
     const selected = document.querySelectorAll('.ant-menu-item-selected')
     expect(selected).toHaveLength(1)
     expect(selected[0]).toHaveTextContent(ar.nav.gradeSchemes)
@@ -530,7 +531,7 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
       [ar.nav.groups.assessment, [ar.nav.assignments, ar.nav.exams, ar.nav.certificates]],
       [ar.nav.groups.finance, [ar.nav.payments]],
       [ar.nav.groups.followUp, [ar.nav.reports, ar.nav.notifications]],
-      [ar.nav.groups.system, [ar.nav.settings, ar.nav.gradeSchemes, ar.nav.roles, ar.nav.audit]],
+      [ar.nav.groups.system, [ar.nav.settings, ar.nav.homepageImages, ar.nav.gradeSchemes, ar.nav.roles, ar.nav.audit]],
     ])
     // «My pages» has nothing for an admin who is no learner: no empty heading.
     expect(headings(menu)).not.toContain(ar.nav.groups.mine)

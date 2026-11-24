@@ -37,9 +37,11 @@
 //        API's own helmet policy reaches the browser alone;
 //   plus the TEST-200 checks that apply: no .env file and no secret value of the local
 //   env files in any layer, the non-root user (no capability, no-new-privileges),
-//   cache and security headers, compression, the 2 MB /api body limit, the JSON access
-//   log on stdout without the one-time tokens of invitation/reset links, the
-//   HEALTHCHECK, and the image size.
+//   cache and security headers, compression, the 2 MB /api body limit — 6 MB for the
+//   PUT of a homepage image only (/api/academy/homepage-images/<key>, whose body is the
+//   picture; the API refuses one over 5 MiB itself), in the adapted configuration and at
+//   run time — the JSON access log on stdout without the one-time tokens of
+//   invitation/reset links, the HEALTHCHECK, and the image size.
 //
 // Prints PASS / FAIL / SKIP lines and, for the secret scan, counts only — never a
 // value. The JWT secret and the tokens it needs are random, generated here and thrown
@@ -421,6 +423,23 @@ function cspConfigured(site) {
   return cspBehind(site, 'https', CSP_HTTPS) && cspBehind(site, 'http', CSP_HTTP) && api.length === 1 && !setsAnyCsp(api[0]) && !setsReportOnly(site);
 }
 
+// The request-body limits of /api/*: inside the one /api/* route, two exclusive routes —
+// first a PUT to /api/academy/homepage-images/* (6 MB, the picture is the body), then
+// everything else without a matcher (2 MB). Each proxies to the API.
+const UPLOAD_PATH = '/api/academy/homepage-images/*';
+const bodyLimitsOf = (node) => collect(node, (h) => h.handler === 'request_body').map((h) => h.max_size);
+const proxies = (node) => findDeep(node, (h) => h.handler === 'reverse_proxy');
+function bodyLimitsConfigured(site) {
+  const api = collect(site, (n) => Array.isArray(n.match) && n.match.some((m) => (m.path ?? []).includes('/api/*')));
+  const inner = api.length === 1 ? (api[0].handle ?? []).flatMap((h) => (h.handler === 'subroute' ? (h.routes ?? []) : [])) : [];
+  const [upload, rest] = inner;
+  const uploadMatch = upload?.match?.length === 1 && Object.keys(upload.match[0]).sort().join() === 'method,path' && upload.match[0].method.join() === 'PUT' && upload.match[0].path.join() === UPLOAD_PATH;
+  return {
+    ok: inner.length === 2 && uploadMatch && !rest.match && typeof upload.group === 'string' && upload.group === rest.group && bodyLimitsOf(upload).join() === '6000000' && bodyLimitsOf(rest).join() === '2000000' && proxies(upload) && proxies(rest),
+    seen: inner.map((r) => ({ match: r.match ?? null, group: r.group ?? null, max_size: bodyLimitsOf(r) })),
+  };
+}
+
 function checkAdapt() {
   const fmt = docker(['run', '--rm', '--entrypoint', 'caddy', WEB, 'fmt', '/etc/caddy/Caddyfile']);
   check(fmt.code === 0, 'the Caddyfile is in `caddy fmt` form', 'no "input is not formatted" warning at start', tail(fmt.stderr, 2));
@@ -440,6 +459,13 @@ function checkAdapt() {
       'caddy adapt: the UI\'s Content-Security-Policy follows the request scheme',
       'enforcing (not report-only); img-src without http: behind `protocol https`, with http: behind `protocol http`; nothing set in the /api/* route',
       'the CSP routes of the UI are not as expected (or one sits in /api/*, or one is report-only)',
+    );
+    const limits = bodyLimitsConfigured(site);
+    check(
+      limits.ok,
+      'caddy adapt: /api/* bodies are capped at 2 MB, the PUT of a homepage image at 6 MB',
+      `inside /api/*, two exclusive routes: PUT ${UPLOAD_PATH} with max_size 6000000 first, then every other request (no matcher) with max_size 2000000; both proxy to the API`,
+      JSON.stringify(limits.seen),
     );
 
     const plain = adapt(null);
@@ -602,23 +628,58 @@ async function checkWithStub() {
       JSON.stringify(spoof.headers),
     );
 
+    // A request with a body of `bytes`. The client may still be writing when Caddy answers
+    // 413 and closes the connection (EPIPE / ECONNRESET); the access log then says what
+    // was answered — so a request that may be refused uses a path of its own.
+    const sendBody = async (method, path, bytes, contentType = 'application/json') => {
+      try {
+        return await send(port, { method, path, headers: { 'content-type': contentType }, body: Buffer.alloc(bytes, 0x20) });
+      } catch (error) {
+        await sleep(500);
+        const answered = docker(['logs', web]).stdout.split('\n').some((l) => l.includes(`"uri":"${path}"`) && l.includes('"status":413'));
+        return { status: answered ? 413 : `error ${error.code ?? error.message}`, headers: {}, body: Buffer.alloc(0) };
+      }
+    };
+
     // The 2 MB request-body limit of /api/* (the API's largest JSON limit is 1 MB).
-    const within = await send(port, { method: 'POST', path: '/api/lessons/x/attendance', headers: { 'content-type': 'application/json' }, body: Buffer.alloc(1_500_000, 0x20) });
-    let over;
-    try {
-      over = await send(port, { method: 'POST', path: '/api/lessons/x/attendance', headers: { 'content-type': 'application/json' }, body: Buffer.alloc(3_000_000, 0x20) });
-    } catch (error) {
-      // The client may still be writing when Caddy answers 413 and closes the
-      // connection (EPIPE / ECONNRESET); the access log then says what was answered.
-      await sleep(500);
-      const answered = docker(['logs', web]).stdout.split('\n').some((l) => l.includes('"uri":"/api/lessons/x/attendance"') && l.includes('"status":413'));
-      over = { status: answered ? 413 : `error ${error.code ?? error.message}` };
-    }
+    const within = await sendBody('POST', '/api/lessons/x/attendance', 1_500_000);
+    const over = await sendBody('POST', '/api/lessons/y/attendance', 3_000_000);
     check(
       within.status === 200 && json(within)?.bodyLength === 1_500_000 && over.status === 413,
       '/api/* bodies are limited to 2 MB',
       '1.5 MB reaches the upstream whole, 3 MB is 413',
       `1.5 MB: ${within.status} ${json(within)?.bodyLength}; 3 MB: ${over.status}`,
+    );
+
+    // The upload of a homepage image: its body IS the picture. Caddy lets up to 6 MB of a
+    // PUT to /api/academy/homepage-images/<key> through — a body over the API's own 5 MiB
+    // reaches the API, whose 413 image_too_large the administration then sees — with its
+    // Content-Type untouched (the API decides by it and by the bytes), and refuses more.
+    const OVER_API_LIMIT = 5 * 1024 * 1024 + 250_000;
+    const upload = await sendBody('PUT', '/api/academy/homepage-images/heroStudent', OVER_API_LIMIT, 'image/png');
+    const uploadOver = await sendBody('PUT', '/api/academy/homepage-images/aboutLearners', 6_500_000, 'image/png');
+    const seenUpload = json(upload);
+    check(
+      upload.status === 200 && seenUpload?.method === 'PUT' && seenUpload?.url === '/api/academy/homepage-images/heroStudent' && seenUpload?.bodyLength === OVER_API_LIMIT && seenUpload?.headers?.['content-type'] === 'image/png' && uploadOver.status === 413,
+      'a homepage-image upload may carry up to 6 MB',
+      `PUT /api/academy/homepage-images/heroStudent: ${OVER_API_LIMIT} bytes (over the API's 5 MiB) reach the upstream whole as image/png; 6.5 MB is 413`,
+      `${OVER_API_LIMIT} bytes: ${upload.status} ${seenUpload?.bodyLength} ${seenUpload?.headers?.['content-type']}; 6.5 MB: ${uploadOver.status}`,
+    );
+    // Every other request keeps 2 MB: another method on that path, the path without a
+    // key, and another PUT route of the API.
+    const others = [
+      ['POST', '/api/academy/homepage-images/promoTraining'],
+      ['PATCH', '/api/academy/homepage-images/whyClassroom'],
+      ['PUT', '/api/academy/homepage-images'],
+      ['PUT', `/api/users/${randomUUID()}/roles`],
+    ];
+    const refused = [];
+    for (const [method, path] of others) refused.push([`${method} ${path}`, (await sendBody(method, path, 3_000_000, 'image/png')).status]);
+    check(
+      refused.every(([, status]) => status === 413),
+      'every other /api/* request keeps the 2 MB limit',
+      `3 MB is 413 for ${refused.map(([request]) => request.replace(/\/users\/[0-9a-f-]{36}\//, '/users/<id>/')).join(', ')}`,
+      refused.map(([request, status]) => `${request}: ${status}`).join('; '),
     );
 
     // A response Caddy writes itself (the upstream gave none): empty, no Server header.

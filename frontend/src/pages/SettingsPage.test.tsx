@@ -5,6 +5,7 @@ import { ar } from '../i18n/ar'
 import { makeAcademy } from '../test/academy'
 import { THREE_BRANCHES } from '../test/branches'
 import { THREE_GRADE_SCHEMES } from '../test/gradeSchemes'
+import { customImage, makeHomepageImages } from '../homepageImages/homepageImages.testData'
 import { jsonResponse, mockFetch } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
@@ -12,7 +13,7 @@ import { ALL_ROLES, makeCatalog } from '../test/roles'
 import { makeRoomList } from '../test/rooms'
 import { SettingsPage } from './SettingsPage'
 
-/** Serves the roles tab (API-022/023), the general tab (API-035), the branches tab (API-080), the rooms tab (API-084, API-080) and the grade schemes tab (API-122). */
+/** Serves the roles tab (API-022/023), the general tab (API-035), the branches tab (API-080), the rooms tab (API-084, API-080), the grade schemes tab (API-122) and the homepage images tab. */
 function mockSettingsApi() {
   return mockFetch((url) => {
     if (url === '/api/roles') return jsonResponse(200, { items: ALL_ROLES })
@@ -21,6 +22,7 @@ function mockSettingsApi() {
     if (url === '/api/branches') return jsonResponse(200, { items: THREE_BRANCHES() })
     if (url === '/api/rooms') return jsonResponse(200, makeRoomList())
     if (url === '/api/grade-schemes') return jsonResponse(200, { items: THREE_GRADE_SCHEMES() })
+    if (url === '/api/academy/homepage-images') return jsonResponse(200, makeHomepageImages({ heroStudent: customImage('heroStudent') }))
     return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
   })
 }
@@ -99,8 +101,14 @@ describe('SettingsPage', () => {
     })
 
     expect(screen.getByText(ar.rooms.subtitle)).toBeInTheDocument()
-    // The grade schemes tab (J-F44) follows academy.settings.manage, which SETTINGS_ADMIN holds.
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.rooms, ar.settings.tabs.gradeSchemes, ar.settings.tabs.roles])
+    // The homepage images and grade schemes (J-F44) tabs follow academy.settings.manage, which SETTINGS_ADMIN holds.
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      ar.settings.tabs.general,
+      ar.settings.tabs.homepageImages,
+      ar.settings.tabs.rooms,
+      ar.settings.tabs.gradeSchemes,
+      ar.settings.tabs.roles,
+    ])
     expect(screen.getByRole('tab', { name: ar.settings.tabs.rooms })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByText('HALL')).toBeInTheDocument()
     expect(screen.queryByLabelText(ar.settings.academyNameAr)).not.toBeInTheDocument()
@@ -145,7 +153,13 @@ describe('SettingsPage', () => {
     })
 
     expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.branches, ar.settings.tabs.gradeSchemes, ar.settings.tabs.roles])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      ar.settings.tabs.general,
+      ar.settings.tabs.homepageImages,
+      ar.settings.tabs.branches,
+      ar.settings.tabs.gradeSchemes,
+      ar.settings.tabs.roles,
+    ])
     await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.branches }))
     expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings/branches')
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/academy'])
@@ -191,6 +205,7 @@ describe('SettingsPage', () => {
     expect(screen.getByText(ar.gradeSchemes.subtitle)).toBeInTheDocument()
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       ar.settings.tabs.general,
+      ar.settings.tabs.homepageImages,
       ar.settings.tabs.branches,
       ar.settings.tabs.rooms,
       ar.settings.tabs.gradeSchemes,
@@ -213,8 +228,8 @@ describe('SettingsPage', () => {
       route: '/settings/grade-schemes',
     })
     expect(await screen.findByText('ناجح أو راسب')).toBeInTheDocument()
-    // The general tab follows the settings entry (read or manage), so this holder sees two tabs.
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.gradeSchemes])
+    // The general tab follows the settings entry (read or manage), and the homepage images follow the same key, so this holder sees three tabs.
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.homepageImages, ar.settings.tabs.gradeSchemes])
     unmount()
 
     const fetchMock = mockSettingsApi()
@@ -222,5 +237,70 @@ describe('SettingsPage', () => {
     expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
     expect(screen.queryByText(ar.gradeSchemes.subtitle)).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // Homepage images: the tab under /settings/homepage-images behind `academy.settings.manage` alone, right after the general tab.
+  it('renders the homepage images manager under /settings/homepage-images for a holder of academy.settings.manage, its tab right after the general one', async () => {
+    const fetchMock = mockSettingsApi()
+    renderWithProviders(<SettingsPage section="homepageImages" />, {
+      auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }),
+      route: '/settings/homepage-images',
+      routes: { '/settings': <LocationProbe /> },
+    })
+
+    expect(screen.getByText(ar.homepageImages.subtitle)).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      ar.settings.tabs.general,
+      ar.settings.tabs.homepageImages,
+      ar.settings.tabs.gradeSchemes,
+      ar.settings.tabs.roles,
+    ])
+    expect(screen.getByRole('tab', { name: ar.settings.tabs.homepageImages })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByTestId('homepage-image-heroStudent')).toBeInTheDocument()
+    expect(screen.getByText(ar.homepageImages.title)).toBeInTheDocument()
+    expect(screen.queryByLabelText(ar.settings.academyNameAr)).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(['/api/academy/homepage-images'])
+
+    await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.general }))
+    expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings')
+  })
+
+  it('navigates from the general tab to /settings/homepage-images, and opens the tab to a custom role holding academy.settings.manage alone', async () => {
+    mockSettingsApi()
+    const { unmount } = renderWithProviders(<SettingsPage />, {
+      auth: makeAuth({ user: makeUser({ permissions: SETTINGS_ADMIN }) }),
+      route: '/settings',
+      routes: { '/settings/homepage-images': <LocationProbe /> },
+    })
+    expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: ar.settings.tabs.homepageImages }))
+    expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/settings/homepage-images')
+    unmount()
+
+    mockSettingsApi()
+    renderWithProviders(<SettingsPage section="homepageImages" />, {
+      auth: makeAuth({ user: makeUser({ role: null, roles: ['web_editor'], permissions: ['academy.settings.manage'] }) }),
+      route: '/settings/homepage-images',
+    })
+    expect(await screen.findByTestId('homepage-image-heroStudent')).toBeInTheDocument()
+    expect(screen.queryByText(ar.errors.forbidden)).not.toBeInTheDocument()
+  })
+
+  it('answers 403 under /settings/homepage-images without academy.settings.manage, sends nothing, and hides the tab on /settings', async () => {
+    const fetchMock = mockSettingsApi()
+    const { unmount } = renderWithProviders(<SettingsPage section="homepageImages" />, {
+      auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read', 'roles.manage'] }) }),
+      route: '/settings/homepage-images',
+    })
+    expect(screen.getByText(ar.errors.forbidden)).toBeInTheDocument()
+    expect(screen.queryByText(ar.homepageImages.title)).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+    unmount()
+
+    mockSettingsApi()
+    renderWithProviders(<SettingsPage />, { auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read', 'roles.manage'] }) }), route: '/settings' })
+    expect(await screen.findByLabelText(ar.settings.academyNameAr)).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([ar.settings.tabs.general, ar.settings.tabs.roles])
+    expect(screen.queryByRole('tab', { name: ar.settings.tabs.homepageImages })).not.toBeInTheDocument()
   })
 })
