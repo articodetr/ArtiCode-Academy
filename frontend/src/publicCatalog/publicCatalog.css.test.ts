@@ -31,7 +31,37 @@ function declarations(selector: string): Map<string, string> {
 }
 
 describe('publicCatalog.css', () => {
-  it('stretches the card name’s link over the whole card, with «التفاصيل» above it', () => {
+  it('sets the picture flush with the card at 16:9, rounded on top only', () => {
+    expect(declarations('.public-card').has('padding')).toBe(false)
+    const media = declarations('.public-card__media')
+    expect(media.get('aspect-ratio')).toBe('16 / 9')
+    expect(media.get('overflow')).toBe('hidden')
+    expect(media.get('border-radius')).toMatch(/ 0 0$/)
+    expect(declarations('.public-card__cover').get('object-fit')).toBe('cover')
+  })
+
+  it('draws «عرض الدورة» full width, white with a turquoise border', () => {
+    const action = declarations('.public-card .public-card__action')
+    expect(action.get('width')).toBe('100%')
+    expect(action.get('background')).toBe('var(--pub-surface)')
+    expect(action.get('border')).toBe('1px solid var(--pub-primary)')
+    expect(action.get('justify-content')).toBe('center')
+  })
+
+  it('keeps the subscribe action quiet, above the stretched link, with a focus ring', () => {
+    const subscribe = declarations('.public-card .public-card__subscribe')
+    expect(subscribe.get('background')).toBe('none')
+    expect(subscribe.get('text-decoration')).toBe('underline')
+    expect(subscribe.get('z-index')).toBe('2')
+    expect(declarations('.public-card .public-card__subscribe:focus-visible').get('outline')).toBe('2px solid var(--pub-primary-strong)')
+  })
+
+  it('gives the signed-in card the tokens without the public font', () => {
+    expect(css).toMatch(/\.course-page--app,\s*\.public-card--app\s*\{\s*--pub-primary:/)
+    expect(declarations('.public-card.public-card--app').get('font-family')).toBe('inherit')
+  })
+
+  it('stretches the card name’s link over the whole card, with «عرض الدورة» above it', () => {
     expect(declarations('.public-card').get('position')).toBe('relative')
     const stretched = declarations('.public-card .public-card__link::after')
     expect(stretched.get('position')).toBe('absolute')

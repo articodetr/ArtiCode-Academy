@@ -50,7 +50,7 @@ describe('CourseCoverField', () => {
     renderWithProviders(<Controlled />)
     expect(status()).toHaveTextContent(text.empty)
     expect(image()).toBeNull()
-    expect(screen.getByText('1200 × 780 px')).toBeInTheDocument()
+    expect(screen.getByText('1280 × 720 px')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: ar.courseCover.clear })).toBeNull()
   })
 

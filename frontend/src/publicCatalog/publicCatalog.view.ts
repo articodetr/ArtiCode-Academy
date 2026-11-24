@@ -6,6 +6,7 @@ import { ApiError } from '../api/client'
 import { levelOrdinalWord } from '../common/levelOrdinal'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { ListPublicCatalogParams, PublicCourseCard, PublicCourseList, PublicOutlineLevel } from '../api/publicCatalog'
+import type { LocalizedLabel } from '../api/users'
 import type { Language } from '../i18n/language'
 import { localizedLabel } from '../users/users.format'
 import type { PublicViewer } from './publicViewer'
@@ -99,12 +100,6 @@ export function placeholderTintOf(id: string): number {
   return hash % PLACEHOLDER_TINTS
 }
 
-export const AVAILABILITY_COLORS: Record<Exclude<PublicAvailability, 'priceUnavailable'>, string> = {
-  available: 'green',
-  full: 'orange',
-  closed: 'default',
-}
-
 /**
  * Whether a visitor can go on to enroll in a public course now (PORTAL-04 PR-2), from the server's numbers only:
  * no class open to self-service → `not_open`; a paid course whose plan cannot price a request now →
@@ -131,6 +126,41 @@ export function levelNameOf(level: Pick<PublicOutlineLevel, 'number' | 'title'>,
   const ordinal = levelOrdinalWord(level.number, language)
   const title = level.title ? localizedLabel(level.title, language).trim() : ''
   return title ? t('publicCatalog.course.sectionTitled', { ordinal, title }) : t('publicCatalog.course.section', { ordinal })
+}
+
+export interface CourseBadge {
+  key: 'type' | 'level' | 'duration'
+  text: string
+}
+
+/**
+ * The small badges of a course, on its card and at the top of its page: that it is a course, its difficulty
+ * (`course.level` — never the curriculum's levels, `levelCount`/`outline`) and its duration, each only when the server
+ * has it.
+ */
+export function courseBadgesOf(
+  course: { level: { name: LocalizedLabel } | null; durationHours: number | null },
+  t: Translate,
+  language: Language,
+): CourseBadge[] {
+  const badges: CourseBadge[] = [{ key: 'type', text: t('publicCatalog.card.courseType') }]
+  if (course.level) badges.push({ key: 'level', text: localizedLabel(course.level.name, language) })
+  if (course.durationHours !== null) badges.push({ key: 'duration', text: t('publicCatalog.card.hours', { count: course.durationHours }) })
+  return badges
+}
+
+/**
+ * The two texts of a course page, as shown in `language`: the band's short text and the «الوصف» section. The section
+ * says only what the band does not: a description equal to the summary (after trimming) is not repeated, and a course
+ * with a description but no summary has no short text in the band.
+ */
+export function courseTextsOf(
+  course: { summary: LocalizedLabel | null; description: LocalizedLabel | null },
+  language: Language,
+): { summary: string | null; description: string | null } {
+  const summary = course.summary ? localizedLabel(course.summary, language).trim() : ''
+  const description = course.description ? localizedLabel(course.description, language).trim() : ''
+  return { summary: summary || null, description: description && description !== summary ? description : null }
 }
 
 /** A lesson's length in whole minutes (at least one), or null without a length. */
@@ -166,7 +196,7 @@ export interface CardSubscribeTarget {
 }
 
 /**
- * Where a public card's subscribe button leads, or null when it shows no button: only while the server says the course
+ * Where a public course's subscribe button leads, or null when it shows no button: only while the server says the course
  * takes an enrollment now, for a visitor (through the sign-in, keeping the course) or a student (to the course's
  * classes). Staff and guardians cannot enroll themselves (API-221 needs the `student` role), and nothing is offered
  * while the session is still being restored. Nothing enrolls here: the learner chooses a class and confirms.

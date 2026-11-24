@@ -72,13 +72,25 @@ async function confirmDialog(title: string): Promise<HTMLElement> {
 }
 
 describe('CatalogCoursePage', () => {
+  it('still says what opens after enrolling, and that there are no lessons yet, for a course without a syllabus', async () => {
+    mockCourseApi(makeCatalogDetail({ syllabus: [] }))
+    renderPage()
+
+    expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
+    expect(screen.getByText(ar.catalog.detail.lockedNote)).toBeInTheDocument()
+    expect(within(document.querySelector<HTMLElement>('.course-page__hero')!).getByText(ar.publicCatalog.card.lessons)).toBeInTheDocument()
+    expect(document.getElementById('course-outline')).toBeNull()
+  })
+
   it('shows the course, its syllabus and its open class with the weekly times and seats', async () => {
     const zoned = makeCatalogClass({ schedule: [{ weekday: 1, startTime: '17:00', endTime: '18:30', timeZone: 'Pacific/Kiritimati', effectiveFrom: '2026-11-01', effectiveTo: '2027-02-28' }] })
     mockCourseApi(makeCatalogDetail({ classes: [zoned] }))
     renderPage()
 
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
-    expect(screen.getByText('مبتدئ')).toBeInTheDocument()
+    // The difficulty is both a badge of the band and a fact of the enrollment card.
+    expect(within(document.querySelector<HTMLElement>('.course-page__hero')!).getByText('مبتدئ')).toBeInTheDocument()
+    expect(within(screen.getByTestId('catalog-enroll-card')).getByText('مبتدئ')).toBeInTheDocument()
     expect(screen.getByText(ar.catalog.free)).toBeInTheDocument()
     expect(screen.getByText('من 12 إلى 18 سنة')).toBeInTheDocument()
     expect(screen.getByText('تتعلم في هذه الدورة المتغيرات والدوال والحلقات.')).toBeInTheDocument()

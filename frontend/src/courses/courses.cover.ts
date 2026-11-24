@@ -8,9 +8,9 @@ import { isCoverImageUrl } from './courses.form'
 
 /** How long the preview waits after the last keystroke. A pasted link does not wait. */
 export const COVER_PREVIEW_DELAY_MS = 400
-/** The recommended picture size: the public card's ratio (16 : 10.4), landscape. */
-export const COVER_RECOMMENDED_WIDTH = 1200
-export const COVER_RECOMMENDED_HEIGHT = 780
+/** The recommended picture size: the public card's ratio (16 : 9), landscape. */
+export const COVER_RECOMMENDED_WIDTH = 1280
+export const COVER_RECOMMENDED_HEIGHT = 720
 
 /**
  * What a form value means for the preview. `mixed` is a valid `http:` link on a

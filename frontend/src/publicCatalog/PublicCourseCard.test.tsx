@@ -1,11 +1,12 @@
-// PORTAL-04 PR-1 redesign: the public course card's media box (a cover, or a plain placeholder — also when the cover
-// fails), the level badge on it, and the price at its foot. The link behaviour is covered by the catalog and home pages.
+// The public course card (the course redesign): its media box (a cover, or a plain placeholder — also when the cover
+// fails), the badges on it, the price and the main button. The link behaviour is covered by the catalog and home pages,
+// and the subscribe action, which lives on the course page, by PublicCoursePage.test.tsx.
 import { fireEvent, screen, within } from '@testing-library/react'
-import { useLocation } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
+import { HomeCourseCard } from '../publicHome/HomeCourseCard'
 import { makePublicCard } from '../test/publicCatalog'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { PublicCourseCard } from './PublicCourseCard'
@@ -42,10 +43,58 @@ describe('PublicCourseCard', () => {
     expect(tint).toBeLessThan(PLACEHOLDER_TINTS)
   })
 
-  it('puts the level on the media box and the price at the foot', () => {
+  it('puts the badges on the picture and the price under the facts', () => {
     const free = renderCard()
-    expect(document.querySelector('.public-card__badge')).toHaveTextContent('مبتدئ')
+    const media = within(document.querySelector<HTMLElement>('.public-card__media')!)
+    expect(media.getByText(pc.card.courseType)).toBeInTheDocument()
+    expect(media.getByText('مبتدئ')).toBeInTheDocument()
+    expect(media.getByText('24 ساعة')).toBeInTheDocument()
     expect(free.getByTestId('public-price')).toHaveTextContent(pc.card.free)
+  })
+
+  it('takes the difficulty badge from course.level, never from the curriculum levels', () => {
+    renderCard({ level: { id: 'lv', name: { ar: 'متقدم' } }, levelCount: 3 })
+    expect(document.querySelector('.course-badge--level')).toHaveTextContent('متقدم')
+    expect(document.querySelector('.public-card__facts')).toHaveTextContent('3 مستويات')
+    expect(document.querySelector('.public-card__facts')).not.toHaveTextContent('متقدم')
+  })
+
+  it('shows no difficulty badge without course.level, even with curriculum levels', () => {
+    const card = renderCard({ level: null, levelCount: 3 })
+    expect(document.querySelector('.course-badge--level')).toBeNull()
+    expect(card.getByText('3 مستويات')).toBeInTheDocument()
+  })
+
+  it('shows the duration once, as a badge, and neither the code nor an empty summary', () => {
+    const card = renderCard({ summary: null })
+    expect(card.getAllByText('24 ساعة')).toHaveLength(1)
+    expect(document.querySelector('.public-card__facts')).not.toHaveTextContent('24 ساعة')
+    expect(card.queryByText('PY-101')).not.toBeInTheDocument()
+    expect(document.querySelector('.public-card__summary')).toBeNull()
+  })
+
+  it('leaves out the sessions when the server does not know them', () => {
+    const card = renderCard({ sessionsCount: null })
+    expect(card.getByText('5 دروس')).toBeInTheDocument()
+    expect(document.querySelector('.public-card__facts')).not.toHaveTextContent('جلسة')
+  })
+
+  it('has one tab stop for the course: the name; «عرض الدورة» repeats it for the pointer only', () => {
+    const card = renderCard({}, '/explore/x')
+    const main = card.getByText(pc.card.viewCourse).closest('a')!
+    expect(main).toHaveAttribute('href', '/explore/x')
+    expect(main).toHaveAttribute('tabindex', '-1')
+    expect(main).toHaveAttribute('aria-hidden', 'true')
+    expect(card.getByRole('link', { name: 'أساسيات بايثون' })).toHaveAttribute('href', '/explore/x')
+  })
+
+  it('renders the same card on /home and on /explore', () => {
+    const data = makePublicCard()
+    const home = renderWithProviders(<HomeCourseCard card={data} href="/explore/x" />)
+    const homeMarkup = screen.getByTestId(`public-card-${data.id}`).outerHTML
+    home.unmount()
+    renderWithProviders(<PublicCourseCard card={data} href="/explore/x" />)
+    expect(screen.getByTestId(`public-card-${data.id}`).outerHTML).toBe(homeMarkup)
   })
 
   it('never reads a paid course as free: its amount, or «السعر غير متاح حالياً» without a usable price', () => {
@@ -60,10 +109,12 @@ describe('PublicCourseCard', () => {
     expect(unpriced.queryByText(pc.card.full)).not.toBeInTheDocument()
   })
 
-  it('is a plain preview without a link: no «التفاصيل»', () => {
+  it('is a plain preview without a link: no buttons at all', () => {
     const preview = renderCard({}, null)
     expect(preview.queryByRole('link')).not.toBeInTheDocument()
-    expect(preview.queryByText(pc.list.details)).not.toBeInTheDocument()
+    expect(preview.queryByText(pc.card.viewCourse)).not.toBeInTheDocument()
+    expect(preview.queryByText(pc.card.subscribeFree)).not.toBeInTheDocument()
+    expect(document.querySelector('.public-card__foot')).toBeNull()
   })
 
   describe('a course with no class open', () => {
@@ -77,7 +128,7 @@ describe('PublicCourseCard', () => {
       expect(card.getByText('قريبًا')).toHaveClass('public-card__availability--closed')
       expect(card.queryByText(pc.card.closed)).not.toBeInTheDocument()
       expect(screen.queryByTestId(`public-subscribe-${makePublicCard().id}`)).not.toBeInTheDocument()
-      expect(card.getByText(pc.list.details)).toBeInTheDocument()
+      expect(card.getByText(pc.card.viewCourse)).toBeInTheDocument()
     })
 
     it('reads "Coming soon" in English', async () => {
@@ -94,51 +145,23 @@ describe('PublicCourseCard', () => {
     })
   })
 
-  describe('the subscribe button beside «التفاصيل»', () => {
-    function Probe() {
-      const location = useLocation()
-      return <output data-testid="landed">{JSON.stringify({ path: location.pathname + location.search, from: (location.state as { from?: string } | null)?.from })}</output>
+  it('offers no subscribe action on the card, to anybody: subscribing starts on the course page', () => {
+    const viewers = [
+      makeAuth({ status: 'anonymous', user: null }),
+      makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) }),
+      makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: [] }) }),
+    ]
+    for (const auth of viewers) {
+      for (const pricing of [{ pricing: 'free', price: null }, { pricing: 'paid', price: { amount: 150, currency: 'USD' } }] as const) {
+        const data = makePublicCard({ hasFreeSeat: true, openClasses: 1, ...pricing })
+        const { unmount } = renderWithProviders(<PublicCourseCard card={data} href={`/explore/${data.id}`} />, { auth })
+        const card = within(screen.getByTestId(`public-card-${data.id}`))
+        expect(screen.queryByTestId(`public-subscribe-${data.id}`)).not.toBeInTheDocument()
+        expect(card.queryByText(pc.card.subscribeFree)).not.toBeInTheDocument()
+        expect(card.queryByText(pc.card.subscribePaid)).not.toBeInTheDocument()
+        expect(card.getByText(pc.card.viewCourse)).toBeInTheDocument()
+        unmount()
+      }
     }
-    const visitor = () => makeAuth({ status: 'anonymous', user: null })
-    function renderFor(auth: ReturnType<typeof makeAuth>, overrides: Parameters<typeof makePublicCard>[0] = {}) {
-      const card = makePublicCard({ hasFreeSeat: true, openClasses: 1, ...overrides })
-      renderWithProviders(<PublicCourseCard card={card} href={`/explore/${card.id}`} />, {
-        auth,
-        route: '/explore',
-        path: '/explore',
-        routes: { '/login': <Probe />, '/catalog/:courseId': <Probe /> },
-      })
-      return card
-    }
-
-    it('says «اشترك مجانًا» for a free course and leads a visitor through the sign-in, keeping the course', async () => {
-      const card = renderFor(visitor())
-      const button = screen.getByTestId(`public-subscribe-${card.id}`)
-      expect(button).toHaveTextContent(pc.card.subscribeFree)
-      expect(button).toHaveAccessibleName(`${pc.card.subscribeFree}: أساسيات بايثون`)
-      fireEvent.click(button)
-      expect(JSON.parse((await screen.findByTestId('landed')).textContent!)).toEqual({ path: '/login', from: `/catalog/${card.id}?intent=enroll` })
-    })
-
-    it('says «طلب الاشتراك» for a paid course', () => {
-      const card = renderFor(visitor(), { pricing: 'paid', price: { amount: 150, currency: 'USD' } })
-      expect(screen.getByTestId(`public-subscribe-${card.id}`)).toHaveTextContent(pc.card.subscribePaid)
-      expect(within(screen.getByTestId(`public-card-${card.id}`)).getByText(pc.list.details)).toBeInTheDocument()
-    })
-
-    it('leads a signed-in student straight to the course’s classes', async () => {
-      const card = renderFor(makeAuth({ user: makeUser({ role: 'student', roles: ['student'], permissions: [] }) }))
-      fireEvent.click(screen.getByTestId(`public-subscribe-${card.id}`))
-      expect(JSON.parse((await screen.findByTestId('landed')).textContent!).path).toBe(`/catalog/${card.id}?intent=enroll`)
-    })
-
-    it('keeps only «التفاصيل» when nobody can enroll now, and for staff or a guardian', () => {
-      const full = renderFor(visitor(), { id: '00000000-0000-7000-8000-0000000000a1', hasFreeSeat: false })
-      expect(screen.queryByTestId(`public-subscribe-${full.id}`)).not.toBeInTheDocument()
-      const staff = renderFor(makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: [] }) }), { id: '00000000-0000-7000-8000-0000000000a2' })
-      expect(screen.queryByTestId(`public-subscribe-${staff.id}`)).not.toBeInTheDocument()
-      const guardian = renderFor(makeAuth({ user: makeUser({ role: 'guardian', roles: ['guardian'], permissions: [] }) }), { id: '00000000-0000-7000-8000-0000000000a3' })
-      expect(screen.queryByTestId(`public-subscribe-${guardian.id}`)).not.toBeInTheDocument()
-    })
   })
 })

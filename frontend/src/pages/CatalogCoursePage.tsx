@@ -16,9 +16,9 @@
 // exactly one class takes the learner there is nothing to choose: its usual
 // confirmation opens by itself, once per arrival, and nothing is sent until the
 // learner presses confirm. Cancelling leaves the class and its button.
-import { ArrowRightOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Col, Descriptions, Flex, List, Row, Skeleton, Space, Tag, Typography } from 'antd'
-import type { DescriptionsProps } from 'antd'
+import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, ConfigProvider, Descriptions, Flex, Skeleton, Space, Tag, Typography } from 'antd'
+import type { DescriptionsProps, ThemeConfig } from 'antd'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
@@ -28,13 +28,19 @@ import { catalogFailureKey, isCourseGone } from '../catalog/catalog.errors'
 import { REQUEST_STATE_COLORS, autoConfirmClass, courseStandingOf, enrollableClasses, enrollmentUnavailable } from '../catalog/catalog.view'
 import type { CourseStanding } from '../catalog/catalog.view'
 import { ClassOffer } from '../catalog/ClassOffer'
-import { CourseCover } from '../catalog/CourseCover'
 import { useCatalogCourse } from '../catalog/useCatalogCourse'
+import '../catalog/catalogCourse.css'
 import { PageHeader } from '../components/PageHeader'
 import { useLocalized } from '../i18n/useLocalized'
 import type { Language } from '../i18n/language'
 import { formatMoney } from '../payments/payments.format'
+import { CourseEnrollCard, CoursePageLayout } from '../publicCatalog/CoursePageLayout'
+import type { CoursePageSection } from '../publicCatalog/CoursePageLayout'
+import { courseBadgesOf } from '../publicCatalog/publicCatalog.view'
 import { localizedLabel } from '../users/users.format'
+
+// The page's buttons in the academy's turquoise: the stronger shade (--pub-primary-strong), where white text keeps 4.5:1.
+const COURSE_PAGE_THEME: ThemeConfig = { token: { colorPrimary: '#047c83' } }
 
 interface EnrollOutcome {
   result: CatalogEnrollResult
@@ -160,7 +166,7 @@ export function CatalogCoursePage() {
   )
 
   const back = (
-    <Button icon={<ArrowRightOutlined />} onClick={() => navigate('/catalog')}>
+    <Button icon={language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />} onClick={() => navigate('/catalog')}>
       {t('catalog.detail.back')}
     </Button>
   )
@@ -253,185 +259,211 @@ export function CatalogCoursePage() {
     facts.push({ key: 'age', label: t('catalog.detail.age'), children: age })
   }
 
-  const overview = course.description ?? course.summary
   const invoiceOf = (result: CatalogEnrollResult) => result.enrollment.payment.invoices.find((invoice) => invoice.status === 'issued') ?? null
 
+  const summary = course.summary ? localizedLabel(course.summary, language).trim() : ''
+  const description = course.description ? localizedLabel(course.description, language).trim() : ''
+  const counts = [
+    course.sessionsCount !== null ? t('publicCatalog.card.sessionsCount', { count: course.sessionsCount }) : null,
+    // With an empty syllabus this reads «لا دروس بعد»: the page says so instead of a section with nothing in it.
+    t('publicCatalog.card.lessons', { count: course.syllabus.length }),
+  ].filter((text) => text !== null)
+
+  // A section only for what the server has: the description unless the band already says it, the plan when it has items.
+  const sections: CoursePageSection[] = []
+  if (description && description !== summary) {
+    sections.push({
+      id: 'course-description',
+      label: t('publicCatalog.course.descriptionSection'),
+      content: <p className="course-page__text">{description}</p>,
+    })
+  }
+  if (course.syllabus.length > 0) {
+    sections.push({
+      id: 'course-outline',
+      label: t('publicCatalog.course.outlineSection'),
+      content: (
+        <ol className="catalog-course__syllabus">
+          {course.syllabus.map((item, index) => (
+            <li key={index} className="catalog-course__lesson">
+              <span className="catalog-course__lesson-number" aria-hidden="true">
+                <bdi dir="ltr">{index + 1}</bdi>
+              </span>
+              <div className="catalog-course__lesson-body">
+                <span className="catalog-course__lesson-title">{localizedLabel(item.title, language)}</span>
+                {item.description ? <span className="catalog-course__lesson-text">{localizedLabel(item.description, language)}</span> : null}
+                {item.estimatedMinutes !== null ? <span className="catalog-course__lesson-minutes">{t('publicCatalog.course.minutes', { count: item.estimatedMinutes })}</span> : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+      ),
+    })
+  }
+
   return (
-    <>
-      <PageHeader title={name} subtitle={course.code} extra={back} />
-
-      <Card style={{ marginBottom: 16 }} cover={course.coverImageUrl ? <CourseCover key={course.coverImageUrl} url={course.coverImageUrl} height={220} /> : undefined}>
-        <Flex vertical gap={12}>
-          <Space size={[4, 4]} wrap>
-            {course.mine.enrolled ? <Tag color="green">{t('catalog.card.enrolled')}</Tag> : null}
-            {course.mine.pending ? <Tag color="gold">{t('catalog.card.pending')}</Tag> : null}
-          </Space>
-          <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} items={facts} />
-        </Flex>
-      </Card>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={14}>
-          <Card title={t('catalog.detail.overview')} style={{ marginBottom: 16 }}>
-            <Typography.Paragraph style={{ whiteSpace: 'pre-line', margin: 0 }}>
-              {overview ? localizedLabel(overview, language) : <Typography.Text type="secondary">{t('catalog.detail.noDescription')}</Typography.Text>}
-            </Typography.Paragraph>
-          </Card>
-          <Card title={t('catalog.detail.syllabus')}>
-            {/* «تُفتح لك بعد تفعيل تسجيلك» is no news to a reader already enrolled (the server's `mine.enrolled`). */}
-            {course.mine.enrolled ? null : <Alert type="info" showIcon title={t('catalog.detail.lockedNote')} style={{ marginBottom: 12 }} />}
-            {course.syllabus.length === 0 ? (
-              <Typography.Text type="secondary">{t('catalog.detail.syllabusEmpty')}</Typography.Text>
-            ) : (
-              <List
-                size="small"
-                dataSource={course.syllabus}
-                renderItem={(item, index) => (
-                  <List.Item>
-                    <Flex vertical style={{ width: '100%' }}>
-                      <Typography.Text strong>
-                        <bdi dir="ltr">{index + 1}.</bdi> {localizedLabel(item.title, language)}
-                      </Typography.Text>
-                      {item.description ? <Typography.Text type="secondary">{localizedLabel(item.description, language)}</Typography.Text> : null}
-                      {item.estimatedMinutes !== null ? (
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          {t('catalog.detail.estimatedMinutes')}: <bdi dir="ltr">{item.estimatedMinutes}</bdi>
-                        </Typography.Text>
-                      ) : null}
-                    </Flex>
-                  </List.Item>
-                )}
-              />
-            )}
-          </Card>
-        </Col>
-
-        <Col xs={24} lg={10}>
-          <div ref={classesRef} style={{ scrollMarginTop: 16 }}>
-            <Card
-              title={t('catalog.detail.classes')}
-              aria-busy={loading}
-              data-testid="catalog-classes"
-              data-intent={highlightClasses ? 'enroll' : undefined}
-              style={highlightClasses ? { boxShadow: '0 0 0 2px #0f6cbd' } : undefined}
-            >
-              <Flex vertical gap={12}>
-                {standing ? <StandingNotice standing={standing} courseId={course.id} /> : null}
-                {chooseNotice ? (
-                  <Alert
-                    type="info"
-                    showIcon
-                    data-testid="catalog-intent-notice"
-                    title={t(oneClass ? 'catalog.detail.intentNoticeOne' : 'catalog.detail.intentNotice')}
-                    description={t(oneClass ? 'catalog.detail.intentHintOne' : 'catalog.detail.intentHint')}
-                    closable
-                    onClose={() => setIntentFor(null)}
-                  />
-                ) : null}
-                {course.selfService.allowed ? null : <Alert type="info" showIcon title={t(`catalog.selfService.${course.selfService.reason ?? 'no_permission'}`)} />}
-                {shownOutcome ? (
-                  shownOutcome.result.outcome === 'enrolled' ? (
-                    // PORTAL-04: the server answered an active enrollment — the way on is to learn, or to «فصولي».
-                    <Alert
-                      type="success"
-                      showIcon
-                      data-testid="catalog-enrolled"
-                      title={t('catalog.result.enrolledTitle')}
-                      description={
-                        <Flex vertical gap={8}>
-                          <span>{t('catalog.result.enrolledContent', { className: shownOutcome.className })}</span>
-                          <Space wrap>
-                            <Button type="primary" size="small" onClick={() => navigate(`/learn/${encodeURIComponent(course.id)}`)}>
-                              {t('catalog.result.startLearning')}
+    <ConfigProvider theme={COURSE_PAGE_THEME}>
+      <div className="catalog-course">
+        <CoursePageLayout
+          variant="app"
+          title={name}
+          back={back}
+          badges={courseBadgesOf(course, t, language)}
+          meta={
+            <span className="catalog-course__meta">
+              {counts.map((text) => (
+                <span key={text}>{text}</span>
+              ))}
+            </span>
+          }
+          summary={summary || undefined}
+          status={
+            course.mine.enrolled || course.mine.pending ? (
+              <Space size={[4, 4]} wrap>
+                {course.mine.enrolled ? <Tag color="green">{t('catalog.card.enrolled')}</Tag> : null}
+                {course.mine.pending ? <Tag color="gold">{t('catalog.card.pending')}</Tag> : null}
+              </Space>
+            ) : undefined
+          }
+          navLabel={t('publicCatalog.course.sectionsNav')}
+          sections={sections}
+          aside={
+            <>
+              <CourseEnrollCard courseId={course.id} coverUrl={course.coverImageUrl} testId="catalog-enroll-card">
+                <Descriptions size="small" column={1} items={facts} />
+                {/* «تُفتح لك بعد تفعيل تسجيلك» is no news to a reader already enrolled (the server's `mine.enrolled`). */}
+                {course.mine.enrolled ? null : <Alert type="info" showIcon title={t('catalog.detail.lockedNote')} />}
+                <div className="course-enroll__code">
+                  <bdi dir="ltr">{course.code}</bdi>
+                </div>
+              </CourseEnrollCard>
+              <div ref={classesRef} className="catalog-course__classes">
+                <Card
+                  title={t('catalog.detail.classes')}
+                  aria-busy={loading}
+                  data-testid="catalog-classes"
+                  data-intent={highlightClasses ? 'enroll' : undefined}
+                  style={highlightClasses ? { boxShadow: '0 0 0 2px #039092' } : undefined}
+                >
+                  <Flex vertical gap={12}>
+                    {standing ? <StandingNotice standing={standing} courseId={course.id} /> : null}
+                    {chooseNotice ? (
+                      <Alert
+                        type="info"
+                        showIcon
+                        data-testid="catalog-intent-notice"
+                        title={t(oneClass ? 'catalog.detail.intentNoticeOne' : 'catalog.detail.intentNotice')}
+                        description={t(oneClass ? 'catalog.detail.intentHintOne' : 'catalog.detail.intentHint')}
+                        closable
+                        onClose={() => setIntentFor(null)}
+                      />
+                    ) : null}
+                    {course.selfService.allowed ? null : <Alert type="info" showIcon title={t(`catalog.selfService.${course.selfService.reason ?? 'no_permission'}`)} />}
+                    {shownOutcome ? (
+                      shownOutcome.result.outcome === 'enrolled' ? (
+                        // PORTAL-04: the server answered an active enrollment — the way on is to learn, or to «فصولي».
+                        <Alert
+                          type="success"
+                          showIcon
+                          data-testid="catalog-enrolled"
+                          title={t('catalog.result.enrolledTitle')}
+                          description={
+                            <Flex vertical gap={8}>
+                              <span>{t('catalog.result.enrolledContent', { className: shownOutcome.className })}</span>
+                              <Space wrap>
+                                <Button type="primary" size="small" onClick={() => navigate(`/learn/${encodeURIComponent(course.id)}`)}>
+                                  {t('catalog.result.startLearning')}
+                                </Button>
+                                <Button size="small" onClick={() => navigate('/my-classes')}>
+                                  {t('catalog.result.goToMySchool')}
+                                </Button>
+                              </Space>
+                            </Flex>
+                          }
+                        />
+                      ) : (
+                        // PORTAL-04: the server's own request — its state, the invoice it issued, and where to follow it. The
+                        // request opens nothing: the lessons wait for the payment AND the academy's approval (D-R125).
+                        <Alert
+                          type="info"
+                          showIcon
+                          data-testid="catalog-requested"
+                          title={t('catalog.result.requestedTitle')}
+                          description={
+                            <Flex vertical gap={8}>
+                              <Space size={6} wrap>
+                                <span>{t('catalog.result.requestState')}</span>
+                                <Tag color={REQUEST_STATE_COLORS[shownOutcome.result.enrollment.state]}>{t(`catalog.states.${shownOutcome.result.enrollment.state}`)}</Tag>
+                              </Space>
+                              <span>
+                                {t('catalog.result.requestedContent', {
+                                  number: invoiceOf(shownOutcome.result)?.number ?? '—',
+                                  total: shownOutcome.result.enrollment.payment.currency
+                                    ? formatMoney(shownOutcome.result.enrollment.payment.total, shownOutcome.result.enrollment.payment.currency, language)
+                                    : shownOutcome.result.enrollment.payment.total.toFixed(2),
+                                })}
+                              </span>
+                              <Space wrap>
+                                <Button type="primary" size="small" onClick={() => navigate('/my-classes?section=requests')}>
+                                  {t('catalog.result.myRequests')}
+                                </Button>
+                                <Button size="small" onClick={() => navigate('/payments')}>
+                                  {t('catalog.result.invoices')}
+                                </Button>
+                              </Space>
+                            </Flex>
+                          }
+                        />
+                      )
+                    ) : null}
+                    {failureKey && !outcomeResolved ? (
+                      <Alert
+                        type="error"
+                        showIcon
+                        data-testid="catalog-enroll-failure"
+                        title={t(failureKey)}
+                        // No answer or a server error: the enrollment may have gone through — read the course before trying again.
+                        description={outcomeUnknown ? t('catalog.detail.enrollUnknown') : undefined}
+                        action={
+                          outcomeUnknown ? (
+                            <Button size="small" onClick={reload} loading={loading}>
+                              {t('catalog.detail.reloadCourse')}
                             </Button>
-                            <Button size="small" onClick={() => navigate('/my-classes')}>
-                              {t('catalog.result.goToMySchool')}
-                            </Button>
-                          </Space>
-                        </Flex>
-                      }
-                    />
-                  ) : (
-                    // PORTAL-04: the server's own request — its state, the invoice it issued, and where to follow it. The
-                    // request opens nothing: the lessons wait for the payment AND the academy's approval (D-R125).
-                    <Alert
-                      type="info"
-                      showIcon
-                      data-testid="catalog-requested"
-                      title={t('catalog.result.requestedTitle')}
-                      description={
-                        <Flex vertical gap={8}>
-                          <Space size={6} wrap>
-                            <span>{t('catalog.result.requestState')}</span>
-                            <Tag color={REQUEST_STATE_COLORS[shownOutcome.result.enrollment.state]}>{t(`catalog.states.${shownOutcome.result.enrollment.state}`)}</Tag>
-                          </Space>
-                          <span>
-                            {t('catalog.result.requestedContent', {
-                              number: invoiceOf(shownOutcome.result)?.number ?? '—',
-                              total: shownOutcome.result.enrollment.payment.currency
-                                ? formatMoney(shownOutcome.result.enrollment.payment.total, shownOutcome.result.enrollment.payment.currency, language)
-                                : shownOutcome.result.enrollment.payment.total.toFixed(2),
-                            })}
-                          </span>
-                          <Space wrap>
-                            <Button type="primary" size="small" onClick={() => navigate('/my-classes?section=requests')}>
-                              {t('catalog.result.myRequests')}
-                            </Button>
-                            <Button size="small" onClick={() => navigate('/payments')}>
-                              {t('catalog.result.invoices')}
-                            </Button>
-                          </Space>
-                        </Flex>
-                      }
-                    />
-                  )
-                ) : null}
-                {failureKey && !outcomeResolved ? (
-                  <Alert
-                    type="error"
-                    showIcon
-                    data-testid="catalog-enroll-failure"
-                    title={t(failureKey)}
-                    // No answer or a server error: the enrollment may have gone through — read the course before trying again.
-                    description={outcomeUnknown ? t('catalog.detail.enrollUnknown') : undefined}
-                    action={
-                      outcomeUnknown ? (
-                        <Button size="small" onClick={reload} loading={loading}>
-                          {t('catalog.detail.reloadCourse')}
-                        </Button>
-                      ) : undefined
-                    }
-                    closable
-                    onClose={() => setFailureKey(null)}
-                  />
-                ) : null}
-                {unavailable ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    title={t('catalog.detail.unavailable')}
-                    description={course.classes.length === 0 ? t('catalog.detail.noClasses') : t('catalog.detail.unavailableHint')}
-                  />
-                ) : null}
-                {course.classes.length === 0 && !course.selfService.allowed ? <Typography.Text type="secondary">{t('catalog.detail.noClasses')}</Typography.Text> : null}
-                {course.classes.map((klass) => (
-                  <ClassOffer
-                    key={klass.id}
-                    klass={klass}
-                    pricing={course.pricing}
-                    canEnroll={course.selfService.allowed}
-                    recommended={klass.id === recommendedId}
-                    busy={busyClassId === klass.id}
-                    disabled={busyClassId !== null}
-                    onEnroll={(picked) => confirmEnroll(course, picked)}
-                  />
-                ))}
-              </Flex>
-            </Card>
-          </div>
-        </Col>
-      </Row>
-    </>
+                          ) : undefined
+                        }
+                        closable
+                        onClose={() => setFailureKey(null)}
+                      />
+                    ) : null}
+                    {unavailable ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        title={t('catalog.detail.unavailable')}
+                        description={course.classes.length === 0 ? t('catalog.detail.noClasses') : t('catalog.detail.unavailableHint')}
+                      />
+                    ) : null}
+                    {course.classes.length === 0 && !course.selfService.allowed ? <Typography.Text type="secondary">{t('catalog.detail.noClasses')}</Typography.Text> : null}
+                    {course.classes.map((klass) => (
+                      <ClassOffer
+                        key={klass.id}
+                        klass={klass}
+                        pricing={course.pricing}
+                        canEnroll={course.selfService.allowed}
+                        recommended={klass.id === recommendedId}
+                        busy={busyClassId === klass.id}
+                        disabled={busyClassId !== null}
+                        onEnroll={(picked) => confirmEnroll(course, picked)}
+                      />
+                    ))}
+                  </Flex>
+                </Card>
+              </div>
+            </>
+          }
+        />
+      </div>
+    </ConfigProvider>
   )
 }
 
