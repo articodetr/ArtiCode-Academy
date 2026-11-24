@@ -24,12 +24,13 @@ const ROW = {
 const CALLER = { id: 'user-1', permissions: ['academy.settings.manage'] } as unknown as AuthPrincipal;
 const CTX = { ip: '127.0.0.1', userAgent: 'vitest' };
 
-function makeService(row: typeof ROW | null) {
+function makeService(row: typeof ROW | null, mailTransport = 'none') {
   const findFirst = vi.fn().mockResolvedValue(row);
   const transaction = vi.fn();
   const record = vi.fn();
   const prisma = { db: { academy: { findFirst }, $transaction: transaction } };
-  const service = new AcademyService(prisma as never, { record } as never);
+  const config = { get: vi.fn().mockReturnValue(mailTransport) };
+  const service = new AcademyService(prisma as never, { record } as never, config as never);
   return { service, findFirst, transaction, record };
 }
 
@@ -80,6 +81,7 @@ describe('AcademyService', () => {
       certificates: { serialPrefix: null },
       learning: { videoCompletionPercent: null },
       catalog: { publicBrowsing: null },
+      selfRegistration: { enabled: null },
     });
 
     const same = await service.update({ currency: 'SAR', name: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' }, logoUrl: null }, CALLER, CTX);
@@ -100,8 +102,23 @@ describe('AcademyService', () => {
     for (const [settings, expected] of cases) {
       const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings });
       const dto = await service.getPublic();
-      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'logoUrl', 'name']);
+      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'logoUrl', 'name', 'selfRegistration']);
       expect(dto.catalogPublic, JSON.stringify(settings)).toBe(expected);
+    }
+  });
+
+  it('API-205 answers selfRegistration true only with the setting exactly true AND a mail transport (PORTAL-03, TEST-320)', async () => {
+    const cases: Array<[unknown, string, boolean]> = [
+      [{}, 'resend', false],
+      [{ selfRegistration: { enabled: false } }, 'resend', false],
+      [{ selfRegistration: { enabled: 'true' } }, 'resend', false],
+      [{ selfRegistration: { enabled: true } }, 'none', false],
+      [{ selfRegistration: { enabled: true } }, 'log', true],
+      [{ selfRegistration: { enabled: true } }, 'resend', true],
+    ];
+    for (const [settings, transport, expected] of cases) {
+      const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings }, transport);
+      expect((await service.getPublic()).selfRegistration, `${JSON.stringify(settings)} ${transport}`).toBe(expected);
     }
   });
 });

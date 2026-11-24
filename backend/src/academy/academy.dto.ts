@@ -9,6 +9,7 @@ import { CURRENCY_PATTERN, IsIanaTimeZone, TIME_ZONE_MAX_LENGTH, currencyParam }
 import {
   MatchesSchema,
   publicBrowsingSchema,
+  selfRegistrationEnabledSchema,
   serialPrefixSchema,
   videoCompletionPercentSchema,
   weekStartsOnSchema,
@@ -80,6 +81,20 @@ export class CatalogSettingsPatchDto {
   publicBrowsing?: boolean | null;
 }
 
+/** `settings.selfRegistration` of a PATCH (PORTAL-03, #207): absent = unchanged, `null` = clear (off). */
+export class SelfRegistrationSettingsPatchDto {
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    example: false,
+    description: 'true = visitors may create their own student account, once the server can also send the confirmation e-mail; a JSON boolean; null clears it (off)',
+  })
+  @ValidateIf((dto: SelfRegistrationSettingsPatchDto) => dto.enabled !== undefined && dto.enabled !== null)
+  @Transform(rawValue)
+  @MatchesSchema(selfRegistrationEnabledSchema, 'settings.selfRegistration.enabled must be a JSON boolean or null')
+  enabled?: boolean | null;
+}
+
 /** `settings` of a PATCH: the known domains only (unknown keys are 400 through forbidNonWhitelisted). */
 export class AcademySettingsPatchDto {
   @ApiPropertyOptional({ type: SchedulingSettingsPatchDto })
@@ -109,6 +124,13 @@ export class AcademySettingsPatchDto {
   @ValidateNested()
   @Type(() => CatalogSettingsPatchDto)
   catalog?: CatalogSettingsPatchDto;
+
+  @ApiPropertyOptional({ type: SelfRegistrationSettingsPatchDto })
+  @ValidateIf((dto: AcademySettingsPatchDto) => dto.selfRegistration !== undefined)
+  @IsObject({ message: 'settings.selfRegistration must be an object' })
+  @ValidateNested()
+  @Type(() => SelfRegistrationSettingsPatchDto)
+  selfRegistration?: SelfRegistrationSettingsPatchDto;
 }
 
 /** Upper bound of the logo URL in a request (`logo_url` is unbounded text). */
@@ -232,9 +254,10 @@ export class AcademyDto {
 
 /**
  * The public branding of the academy (API-205, MOD-02-T04): what the sign-in
- * page shows before anybody is authenticated. Exactly these four keys — never
+ * page shows before anybody is authenticated. Exactly these five keys — never
  * the id, slug, contact details, time zone, currency or the settings
- * themselves (`catalogPublic` is the one derived flag — MOD-20, D-R138).
+ * themselves (`catalogPublic` — MOD-20, D-R138 — and `selfRegistration` —
+ * PORTAL-03 — are the two derived flags).
  */
 export class AcademyPublicDto {
   @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }` (only the locales stored)', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
@@ -252,6 +275,13 @@ export class AcademyPublicDto {
     description: 'true when the academy lets visitors browse its published courses without signing in (`settings.catalog.publicBrowsing` — API-236/237, MOD-20)',
   })
   catalogPublic: boolean;
+
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description: 'true when visitors may create their own student account: `settings.selfRegistration.enabled` is true AND the server has a mail transport (PORTAL-03)',
+  })
+  selfRegistration: boolean;
 }
 
 export class SchedulingSettingsDto {
@@ -277,6 +307,11 @@ export class CatalogSettingsDto {
   publicBrowsing: boolean | null;
 }
 
+export class SelfRegistrationSettingsDto {
+  @ApiProperty({ type: Boolean, nullable: true, example: false, description: 'The academy allows visitors to create their own student account; null = off. Effective only with a mail transport (see `selfRegistration` of API-205)' })
+  enabled: boolean | null;
+}
+
 export class AcademySettingsDto {
   @ApiProperty({ type: SchedulingSettingsDto })
   scheduling: SchedulingSettingsDto;
@@ -289,4 +324,7 @@ export class AcademySettingsDto {
 
   @ApiProperty({ type: CatalogSettingsDto })
   catalog: CatalogSettingsDto;
+
+  @ApiProperty({ type: SelfRegistrationSettingsDto })
+  selfRegistration: SelfRegistrationSettingsDto;
 }
