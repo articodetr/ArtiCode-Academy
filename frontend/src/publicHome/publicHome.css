@@ -251,7 +251,7 @@
   font-weight: 600;
 }
 
-/* The picture as in the reference: a pale disc, the student rising out of it, a laptop in front, small cards around. */
+/* The picture as in the reference: a pale disc, the student rising out of it, small cards around. */
 .public-home__hero-visual {
   position: relative;
   width: 100%;
@@ -288,15 +288,6 @@
   aspect-ratio: 760 / 981;
   object-fit: contain;
   object-position: center bottom;
-}
-
-.public-home__hero-laptop {
-  position: absolute;
-  bottom: 0;
-  left: 3%;
-  width: 46%;
-  height: auto;
-  filter: drop-shadow(0 12px 16px rgba(4, 80, 86, 0.26));
 }
 
 .public-home__badge {
