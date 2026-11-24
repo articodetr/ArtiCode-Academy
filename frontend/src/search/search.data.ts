@@ -63,7 +63,7 @@ export const PAGE_KEYWORDS: Readonly<Record<string, string>> = {
   users: 'people students teachers parents staff accounts invite مستخدمين طلاب معلمين اولياء موظفين حسابات دعوه',
   courses: 'catalog syllabus levels دورات مناهج مستويات',
   classes: 'groups sections enrol roster فصول مجموعات تسجيل طلاب الفصل',
-  myClasses: 'my classes فصولي',
+  myClasses: 'my courses my classes دوراتي فصولي',
   schedule: 'timetable calendar week جدول تقويم اسبوع مواعيد',
   lessons: 'attendance sessions دروس حضور حصص',
   myLessons: 'my lessons attendance دروسي حضوري',

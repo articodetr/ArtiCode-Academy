@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import type { RequestContext } from '../auth/principal.js';
 import { Prisma } from '../generated/prisma/client.js';
+import { AutoCertificatesService } from '../certificates/auto-certificates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ATTEMPT_GRACE_MS } from './attempts.policy.js';
 import { EXAM_ATTEMPTS_ENTITY_TYPE } from './exams.audit.js';
@@ -47,6 +48,12 @@ export type OpenAttempt = Prisma.ExamAttemptGetPayload<{ select: typeof ATTEMPT_
 export { ATTEMPT_SELECT as GRADING_ATTEMPT_SELECT };
 
 export type FinishedStatus = 'submitted' | 'timed_out';
+
+/** J-F67: an attempt the server closed — whose student may now complete a course's automatic certificate. */
+export interface ClosedAttempt {
+  studentUserId: string;
+  examId: string;
+}
 
 export interface FinalizedAttempt {
   id: string;
@@ -108,7 +115,29 @@ export class ExamGradingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly autoCertificates: AutoCertificatesService,
   ) {}
+
+  /**
+   * J-F67 — after the commit of a transaction that closed attempts as timed out (the sweeper, an overdue close,
+   * `publish`): each of their students may now have done every exam of the class, so the course's automatic
+   * certificate (CH-0363) is checked. A timed-out attempt counts as done. Never throws.
+   */
+  async awardAfterClose(closed: readonly ClosedAttempt[]): Promise<void> {
+    if (closed.length === 0) return;
+    try {
+      const exams = await this.prisma.db.exam.findMany({ where: { id: { in: [...new Set(closed.map((row) => row.examId))] } }, select: { id: true, class: { select: { courseId: true } } } });
+      const courseOf = new Map(exams.map((exam) => [exam.id, exam.class.courseId]));
+      const pairs = new Map<string, { studentId: string; courseId: string }>();
+      for (const row of closed) {
+        const courseId = courseOf.get(row.examId);
+        if (courseId) pairs.set(`${row.studentUserId}:${courseId}`, { studentId: row.studentUserId, courseId });
+      }
+      for (const { studentId, courseId } of pairs.values()) await this.autoCertificates.awardIfComplete(studentId, courseId);
+    } catch (error) {
+      this.logger.error(`the certificate check after closing attempts failed: ${error instanceof Error ? error.name : 'unknown error'}`);
+    }
+  }
 
   /**
    * Grades and closes an attempt the caller has locked and found in progress.
@@ -156,13 +185,16 @@ export class ExamGradingService {
    */
   async closeOverdueOf(examId: string, studentUserId: string, now: Date): Promise<number> {
     const cutoff = new Date(now.getTime() - ATTEMPT_GRACE_MS);
-    return this.prisma.db.$transaction(async (tx) => {
+    const closed: ClosedAttempt[] = [];
+    const count = await this.prisma.db.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<{ id: string }[]>`
         SELECT id FROM exam_attempts
          WHERE exam_id = ${examId}::uuid AND student_user_id = ${studentUserId}::uuid AND status = 'in_progress' AND expires_at <= ${cutoff}
          ORDER BY id FOR UPDATE`;
-      return this.finishLocked(tx, locked, now);
+      return this.finishLocked(tx, locked, now, closed);
     }, ATTEMPT_TX);
+    await this.awardAfterClose(closed);
+    return count;
   }
 
   /**
@@ -173,10 +205,11 @@ export class ExamGradingService {
    * stays open once the results — and, where the exam reveals them, the
    * correct answers — are released.
    */
-  async closeAllOpenOfExam(tx: Tx, examId: string, now: Date): Promise<number> {
+  async closeAllOpenOfExam(tx: Tx, examId: string, now: Date, closed?: ClosedAttempt[]): Promise<number> {
     const locked = await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM exam_attempts WHERE exam_id = ${examId}::uuid AND status = 'in_progress' ORDER BY id FOR UPDATE`;
-    return this.finishLocked(tx, locked, now);
+    // The caller holds the transaction: it hands `closed` to awardAfterClose() after its commit.
+    return this.finishLocked(tx, locked, now, closed);
   }
 
   /**
@@ -190,6 +223,7 @@ export class ExamGradingService {
     let closed = 0;
     for (let batch = 0; batch < maxBatches; batch += 1) {
       let done: number;
+      const closedNow: ClosedAttempt[] = [];
       try {
         done = await this.prisma.db.$transaction(
           async (tx) => {
@@ -202,7 +236,7 @@ export class ExamGradingService {
                   SELECT id FROM exam_attempts
                    WHERE status = 'in_progress' AND expires_at <= ${cutoff}
                    ORDER BY expires_at, id LIMIT ${SWEEP_BATCH} FOR UPDATE SKIP LOCKED`;
-            return this.finishLocked(tx, locked, now);
+            return this.finishLocked(tx, locked, now, closedNow);
           },
           { ...GRADING_TX, ...(options.batchTimeoutMs !== undefined ? { timeout: options.batchTimeoutMs } : {}) },
         );
@@ -212,6 +246,7 @@ export class ExamGradingService {
         this.logger.warn(`a sweep batch failed (${error instanceof Error ? error.message.split('\n')[0] : String(error)}); closing its attempts one at a time`);
         return closed + (await this.sweepOneByOne(cutoff, now, options.examIds));
       }
+      await this.awardAfterClose(closedNow);
       closed += done;
       if (done < SWEEP_BATCH) break;
     }
@@ -233,11 +268,13 @@ export class ExamGradingService {
     let closed = 0;
     for (const candidate of candidates) {
       try {
+        const closedNow: ClosedAttempt[] = [];
         closed += await this.prisma.db.$transaction(async (tx) => {
           const locked = await tx.$queryRaw<{ id: string }[]>`
             SELECT id FROM exam_attempts WHERE id = ${candidate.id}::uuid AND status = 'in_progress' AND expires_at <= ${cutoff} FOR UPDATE SKIP LOCKED`;
-          return this.finishLocked(tx, locked, now);
+          return this.finishLocked(tx, locked, now, closedNow);
         }, GRADING_TX);
+        await this.awardAfterClose(closedNow);
       } catch (error) {
         this.logger.error(`attempt ${candidate.id} could not be closed by the sweep`, error instanceof Error ? error.stack : String(error));
       }
@@ -304,10 +341,13 @@ export class ExamGradingService {
   // ---------------------------------------------------------------------------
 
   /** Closes the locked attempts as timed out, with no actor. */
-  private async finishLocked(tx: Tx, locked: readonly { id: string }[], now: Date): Promise<number> {
+  private async finishLocked(tx: Tx, locked: readonly { id: string }[], now: Date, closed?: ClosedAttempt[]): Promise<number> {
     if (locked.length === 0) return 0;
     const attempts = await tx.examAttempt.findMany({ where: { id: { in: locked.map((row) => row.id) }, status: 'in_progress' }, orderBy: { id: 'asc' }, select: ATTEMPT_SELECT });
-    for (const attempt of attempts) await this.finish(tx, attempt, 'timed_out', now, null);
+    for (const attempt of attempts) {
+      await this.finish(tx, attempt, 'timed_out', now, null);
+      closed?.push({ studentUserId: attempt.studentUserId, examId: attempt.examId });
+    }
     return attempts.length;
   }
 

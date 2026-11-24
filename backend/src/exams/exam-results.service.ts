@@ -6,6 +6,7 @@ import { ROSTER_STUDENT_SELECT, rosterProjectionOf, toRosterStudentDto } from '.
 import type { ExamResultStatus, Prisma } from '../generated/prisma/client.js';
 import { gradesError } from '../grades/grades.errors.js';
 import { toIso } from '../lessons/lessons.time.js';
+import { AutoCertificatesService } from '../certificates/auto-certificates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { UsersProjection } from '../users/users.service.js';
 import { RESULT_ENROLLMENT_STATUSES, duplicateStudents, isEmptyResultsPlan, planResultsBatch, resultsBlocker, scoreAboveMax } from './exam-results.changes.js';
@@ -108,6 +109,7 @@ export class ExamResultsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly autoCertificates: AutoCertificatesService,
   ) {}
 
   async sheet(examId: string, caller: AuthPrincipal): Promise<ExamResultsSheetDto> {
@@ -121,7 +123,7 @@ export class ExamResultsService {
     const duplicates = duplicateStudents(entries.map((entry) => entry.studentId));
     if (duplicates.length > 0) throw gradesError.resultsInvalid(duplicates);
     const view = rosterProjectionOf(caller);
-    return this.prisma.db.$transaction(async (tx) => {
+    const sheet = await this.prisma.db.$transaction(async (tx) => {
       const exam = await this.lockExam(tx, examId, caller);
       const blocker = resultsBlocker(exam.class.status, exam.status);
       if (blocker === 'class_cancelled') throw gradesError.classClosed(exam.classId, exam.class.status);
@@ -176,6 +178,10 @@ export class ExamResultsService {
       );
       return sheet;
     });
+    // J-F67: a result recorded may complete a student's automatic certificate (after the commit; never fails the save).
+    const klass = await this.prisma.db.exam.findUnique({ where: { id: examId }, select: { class: { select: { courseId: true } } } });
+    if (klass) for (const entry of entries) await this.autoCertificates.awardIfComplete(entry.studentId, klass.class.courseId);
+    return sheet;
   }
 
   // ---------------------------------------------------------------------------

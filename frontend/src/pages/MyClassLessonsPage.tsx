@@ -3,13 +3,16 @@
 // must be among the caller's `active`/`completed` enrollments (API-060), else the page says so and asks for nothing.
 // A guardian with two children in the class arrives on the child whose row they opened (`?student=`) and can switch.
 import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Empty } from 'antd'
+import { Alert, Button, Card, ConfigProvider, Empty } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { describeClassesFailure, failureMessage } from '../classes/classes.errors'
 import { PageHeader } from '../components/PageHeader'
 import { useMyClasses } from '../enrollments/useMyClasses'
 import { useLocalized } from '../i18n/useLocalized'
+import { HUB_ANTD_THEME } from '../learn/hub/hub.theme'
+import '../publicCatalog/publicFonts.css'
+import '../learn/hub/hub.css'
 import { MyLessonsList } from '../lessons/MyLessonsList'
 import { CLASS_LESSONS_STUDENT_PARAM } from '../lessons/myLessons.view'
 import { useAcademyZone } from '../lessons/useAcademyZone'
@@ -35,27 +38,29 @@ export function MyClassLessonsPage() {
   if (!enrollment) {
     const failure = myClasses.error ? describeClassesFailure(myClasses.error) : null
     return (
-      <>
-        <PageHeader title={t('myClasses.classLessons.title')} extra={back} />
-        {myClasses.loading ? (
-          <Card loading />
-        ) : failure ? (
-          <Alert
-            type="error"
-            showIcon
-            title={failureMessage(t, failure)}
-            action={
-              <Button size="small" onClick={myClasses.reload}>
-                {t('myClasses.refresh')}
-              </Button>
-            }
-          />
-        ) : (
-          <Card>
-            <Empty description={t('myClasses.classLessons.notFound')} />
-          </Card>
-        )}
-      </>
+      <ConfigProvider theme={HUB_ANTD_THEME}>
+        <div className="hub-sessions">
+          <PageHeader title={t('myClasses.classLessons.title')} extra={back} />
+          {myClasses.loading ? (
+            <Card loading />
+          ) : failure ? (
+            <Alert
+              type="error"
+              showIcon
+              title={failureMessage(t, failure)}
+              action={
+                <Button size="small" onClick={myClasses.reload}>
+                  {t('myClasses.refresh')}
+                </Button>
+              }
+            />
+          ) : (
+            <Card>
+              <Empty description={t('myClasses.classLessons.notFound')} />
+            </Card>
+          )}
+        </div>
+      </ConfigProvider>
     )
   }
 
@@ -65,13 +70,15 @@ export function MyClassLessonsPage() {
   const subtitle = `${localizedLabel(enrollment.class.course.name, language)} · ⁦${enrollment.class.code}⁩`
 
   return (
-    <>
-      <PageHeader title={localizedLabel(enrollment.class.name, language)} subtitle={subtitle} extra={back} />
-      {zone.settled ? (
-        <MyLessonsList key={`${classId}:${initialStudentId ?? ''}:${zone.timeZone}`} dayZone={zone.timeZone} myClasses={myClasses} classId={classId} initialStudentId={initialStudentId} />
-      ) : (
-        <Card loading />
-      )}
-    </>
+    <ConfigProvider theme={HUB_ANTD_THEME}>
+      <div className="hub-sessions">
+        <PageHeader title={localizedLabel(enrollment.class.name, language)} subtitle={subtitle} extra={back} />
+        {zone.settled ? (
+          <MyLessonsList key={`${classId}:${initialStudentId ?? ''}:${zone.timeZone}`} dayZone={zone.timeZone} myClasses={myClasses} classId={classId} initialStudentId={initialStudentId} />
+        ) : (
+          <Card loading />
+        )}
+      </div>
+    </ConfigProvider>
   )
 }

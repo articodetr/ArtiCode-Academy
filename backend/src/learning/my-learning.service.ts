@@ -32,6 +32,7 @@ import type {
   OwnedEnrollmentStatus,
   SavePlaybackDto,
   WorkspaceItemDto,
+  WorkspaceItemExamDto,
   WorkspaceSessionDto,
 } from './my-learning.dto.js';
 import { compareMyLearning, completionPercentOf, lastActivityOf, learningAccessOf, MY_LEARNING_ITEMS_MAX, watchedPercentOf } from './my-learning.policy.js';
@@ -64,7 +65,7 @@ const ENROLLMENT_SELECT = {
       status: true,
       startsOn: true,
       endsOn: true,
-      course: { select: { id: true, code: true, name: true, summary: true, coverImageUrl: true, level: { select: { id: true, name: true } } } },
+      course: { select: { id: true, code: true, name: true, summary: true, coverImageUrl: true, resources: true, level: { select: { id: true, name: true } } } },
       teachers: { where: { role: 'lead' }, take: 1, select: { teacher: { select: { fullName: true, displayName: true } } } },
     },
   },
@@ -273,6 +274,7 @@ export class MyLearningService {
         name: readLocalizedText(course.name) ?? { ar: course.code },
         summary: readLocalizedText(course.summary),
         coverImageUrl: course.coverImageUrl,
+        resources: readLessonResources(course.resources),
         level: course.level ? { id: course.level.id, name: readLocalizedText(course.level.name) ?? { ar: '' } } : null,
       },
       leadTeacher: lead ? { fullName: lead.fullName, displayName: lead.displayName } : null,
@@ -346,6 +348,7 @@ export class MyLearningService {
     const targetState = targetItem ? view.states.get(targetItem.id) : undefined;
     const tracksPosition = targetItem !== undefined && playbackDurationOf(targetItem.kind, contentOf(targetItem)) !== null;
     const sessions = await this.classSessions(db, access.enrollment.class.id, caller.id, academy.timeZone, new Set(order));
+    const examsOf = await this.lessonExams(db, access.enrollment.class.id, new Set(order), caller.id);
 
     return {
       course: { id: course.id, code: course.code, name: readLocalizedText(course.name) ?? { ar: course.code }, coverImageUrl: course.coverImageUrl },
@@ -366,7 +369,7 @@ export class MyLearningService {
           number: group.number,
           title: group.section ? readLocalizedText(group.section.title) : null,
           description: group.section ? readLocalizedText(group.section.description) : null,
-          items: group.items.map((item) => this.toWorkspaceItem(item, view.states.get(item.id)!, level.isOpen)),
+          items: group.items.map((item) => this.toWorkspaceItem(item, view.states.get(item.id)!, level.isOpen, examsOf.get(item.id) ?? [])),
           // A closed level's required lessons still count (D-R145): the course completes only once they are done.
           progress: toCounts(progressOf(group.items, view.states)),
           isOpen: level.isOpen,
@@ -410,7 +413,38 @@ export class MyLearningService {
     });
   }
 
-  private toWorkspaceItem(item: ItemRow, state: StoredLessonState, available: boolean): WorkspaceItemDto {
+  /**
+   * J-F67 — the scheduled or published exams of the class linked to a session of each published lesson (exam →
+   * session → `syllabusItemId`), soonest first; drafts never show, as in «my exams» (API-121). `done` = the learner
+   * has a finished attempt (submitted or timed out) or a `scored` or `excused` result — the rule of the automatic
+   * certificate (`examsComplete()`); the learner's own rows only.
+   */
+  private async lessonExams(db: Db, classId: string, published: ReadonlySet<string>, studentId: string): Promise<Map<string, WorkspaceItemExamDto[]>> {
+    const rows = await db.exam.findMany({
+      where: { classId, status: { in: ['scheduled', 'published'] }, lesson: { is: { syllabusItemId: { not: null } } } },
+      orderBy: [{ scheduledAt: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
+      select: { id: true, title: true, delivery: true, status: true, scheduledAt: true, closesAt: true, lesson: { select: { syllabusItemId: true } } },
+    });
+    const out = new Map<string, WorkspaceItemExamDto[]>();
+    if (rows.length === 0) return out;
+    const examIds = rows.map((row) => row.id);
+    const [finished, scored] = await Promise.all([
+      db.examAttempt.findMany({ where: { examId: { in: examIds }, studentUserId: studentId, status: { in: ['submitted', 'timed_out'] } }, select: { examId: true }, distinct: ['examId'] }),
+      // The certificate's rule (examsComplete() — CH-0363 + J-F67): an excused result is done too; an absent one is not.
+      db.examResult.findMany({ where: { examId: { in: examIds }, studentUserId: studentId, status: { in: ['scored', 'excused'] } }, select: { examId: true } }),
+    ]);
+    const done = new Set([...finished, ...scored].map((row) => row.examId));
+    for (const row of rows) {
+      const itemId = row.lesson?.syllabusItemId;
+      if (!itemId || !published.has(itemId) || (row.status !== 'scheduled' && row.status !== 'published')) continue;
+      const list = out.get(itemId) ?? [];
+      list.push({ id: row.id, title: titleOf(row.title), delivery: row.delivery, status: row.status, scheduledAt: iso(row.scheduledAt), closesAt: iso(row.closesAt), done: done.has(row.id) });
+      out.set(itemId, list);
+    }
+    return out;
+  }
+
+  private toWorkspaceItem(item: ItemRow, state: StoredLessonState, available: boolean, exams: WorkspaceItemExamDto[]): WorkspaceItemDto {
     const content = contentOf(item);
     return {
       id: item.id,
@@ -423,6 +457,9 @@ export class MyLearningService {
       state: state.state,
       completedAt: iso(state.completedAt),
       available,
+      createdAt: item.createdAt.toISOString(),
+      resources: readLessonResources(item.resources),
+      exams,
     };
   }
 

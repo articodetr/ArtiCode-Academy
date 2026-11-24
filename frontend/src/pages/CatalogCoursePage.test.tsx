@@ -120,7 +120,7 @@ describe('CatalogCoursePage', () => {
 
     fireEvent.click(within(classCard()).getByText(ar.catalog.class.enroll).closest('button')!)
     const dialog = await confirmDialog(ar.catalog.confirm.freeTitle)
-    expect(within(dialog).getByText('سيُفعَّل التحاقك بفصل «بايثون — الفصل أ» فور تأكيدك، وتظهر الدورة في «فصولي».')).toBeInTheDocument()
+    expect(within(dialog).getByText('سيُفعَّل التحاقك بفصل «بايثون — الفصل أ» فور تأكيدك، وتظهر الدورة في «دوراتي».')).toBeInTheDocument()
     expect(api.posts).toHaveLength(0)
     fireEvent.click(within(dialog).getByText(ar.catalog.confirm.freeOk).closest('button')!)
 
@@ -384,7 +384,7 @@ describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R
     renderWithIntent('?intent=enroll')
 
     const dialog = await confirmDialog(ar.catalog.confirm.freeTitle)
-    expect(within(dialog).getByText('سيُفعَّل التحاقك بفصل «بايثون — الفصل أ» فور تأكيدك، وتظهر الدورة في «فصولي».')).toBeInTheDocument()
+    expect(within(dialog).getByText('سيُفعَّل التحاقك بفصل «بايثون — الفصل أ» فور تأكيدك، وتظهر الدورة في «دوراتي».')).toBeInTheDocument()
     expect(openConfirms()).toHaveLength(1)
     // The notice behind it has nothing to choose from.
     const notice = within(classes()).getByTestId('catalog-intent-notice')

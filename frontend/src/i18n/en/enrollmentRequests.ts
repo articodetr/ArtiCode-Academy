@@ -117,7 +117,7 @@ export const enrollmentRequests: typeof arEnrollmentRequests = {
   },
   reject: {
     title: 'Reject the request of {{name}}',
-    content: 'The request is rejected and its unpaid invoice cancelled. The student sees the reason in “My classes” → “Enrollment requests”.',
+    content: 'The request is rejected and its unpaid invoice cancelled. The student sees the reason in “My courses” → “Enrollment requests”.',
     reason: 'Rejection reason',
     reasonHint: 'Required, 1 to 500 characters; shown to the student and kept in the audit log.',
     reasonMissing: 'Write the reason of the rejection',

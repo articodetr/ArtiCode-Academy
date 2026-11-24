@@ -12,10 +12,14 @@ import type { ListMyLessonsParams, MyLessonItem } from '../api/myLessons'
 import type { LocalizedLabel } from '../api/users'
 import { dayEndInstant, dayStartInstant, todayIn } from './lessons.format'
 
-export const MY_LESSON_VIEWS = ['upcoming', 'past', 'range'] as const
-/** One class's page (J-F62) opens on all of its lessons, so a class with nothing left to come is never an empty page. */
-export const CLASS_LESSON_VIEWS = ['all', ...MY_LESSON_VIEWS] as const
-export type MyLessonView = (typeof CLASS_LESSON_VIEWS)[number]
+/**
+ * Since J-F67 (CH-0243) «دروسي» opens on all of the learner's lessons, newest first (Jallal's request), and one class's
+ * page (J-F62) on all of its lessons, oldest first — so neither is ever an empty page while lessons exist. `all` takes
+ * its order from the filters; `upcoming` and `past` fix theirs.
+ */
+export const MY_LESSON_VIEWS = ['all', 'upcoming', 'past', 'range'] as const
+export const CLASS_LESSON_VIEWS = MY_LESSON_VIEWS
+export type MyLessonView = (typeof MY_LESSON_VIEWS)[number]
 
 /** Lessons per page (`limit` counts lessons — a page can hold more rows). */
 export const MY_LESSON_PAGE_SIZES = [20, 50, 100] as const
@@ -29,13 +33,13 @@ export interface MyLessonsFilters {
   /** `range` view only: calendar days (`YYYY-MM-DD`) of the academy's zone; blank = open-ended. */
   from: string | undefined
   to: string | undefined
-  /** `range` view only — `upcoming` is always oldest first and `past` newest first. */
+  /** `all` and `range` views — `upcoming` is always oldest first and `past` newest first. */
   order: LessonSortOrder
   limit: (typeof MY_LESSON_PAGE_SIZES)[number]
 }
 
 export function defaultMyLessonsFilters(): MyLessonsFilters {
-  return { view: 'upcoming', studentId: undefined, classId: undefined, status: undefined, from: undefined, to: undefined, order: 'asc', limit: 20 }
+  return { view: 'all', studentId: undefined, classId: undefined, status: undefined, from: undefined, to: undefined, order: 'desc', limit: 20 }
 }
 
 /** The first instant of the current day in `dayZone` (ISO 8601, `Z`) — the academy's day (D-R41). */
@@ -45,7 +49,8 @@ export function todayStartInstant(dayZone: string, now: Date = new Date()): stri
 
 /**
  * API-101 parameters of the filters at `now`, with the days of `dayZone` (the
- * academy's). `upcoming` = lessons starting today or later, oldest first
+ * academy's). `all` = every lesson in the chosen order (newest first on «دروسي»,
+ * oldest first on a class's page); `upcoming` = lessons starting today or later, oldest first
  * (today's lessons stay there all day, so a running lesson and its meeting
  * link remain at the top); `past` = lessons that started before today, newest
  * first; `range` = the chosen days (both inclusive) in the chosen order. The
@@ -53,7 +58,7 @@ export function todayStartInstant(dayZone: string, now: Date = new Date()): stri
  */
 export function myLessonsQuery(filters: MyLessonsFilters, dayZone: string, now: Date = new Date()): ListMyLessonsParams {
   const base: ListMyLessonsParams = { classId: filters.classId, studentId: filters.studentId, status: filters.status, limit: filters.limit }
-  if (filters.view === 'all') return { ...base, order: 'asc' }
+  if (filters.view === 'all') return { ...base, order: filters.order }
   if (filters.view === 'upcoming') return { ...base, from: todayStartInstant(dayZone, now), order: 'asc' }
   if (filters.view === 'past') return { ...base, to: new Date(new Date(todayStartInstant(dayZone, now)).getTime() - 1).toISOString(), order: 'desc' }
   return { ...base, from: dayStartInstant(filters.from, dayZone), to: dayEndInstant(filters.to, dayZone), order: filters.order }
@@ -69,7 +74,7 @@ export const CLASS_LESSONS_STUDENT_PARAM = 'student'
 
 /** The first filters of one class's page: every lesson of the class, oldest first, for one student when given. */
 export function classLessonsFilters(classId: string, studentId?: string): MyLessonsFilters {
-  return { ...defaultMyLessonsFilters(), view: 'all', classId, studentId }
+  return { ...defaultMyLessonsFilters(), view: 'all', order: 'asc', classId, studentId }
 }
 
 /** API-101 lists the lessons of `active` and `completed` enrollments only, so no other row opens a lessons page. */

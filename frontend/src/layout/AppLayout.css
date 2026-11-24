@@ -22,6 +22,8 @@
   --ac-sider-trigger-bg: rgba(0, 0, 0, 0.18);
   /* The keyboard focus ring on the dark side menu: gold, drawn against the dark background. */
   --ac-focus-ring: var(--ac-accent);
+  /* Scroll clearance below the sticky `.app-top` region (72 px header + 16 px breathing room; taller with the learner bar). */
+  --ac-sticky-offset: 88px;
 }
 
 /*
@@ -167,6 +169,18 @@
   outline-offset: 1px;
 }
 
+/*
+ * The top header region (`.app-header`, plus `.app-learner-nav` on desktop/tablet for learner-only viewers) stays
+ * pinned to the top of the viewport while the page scrolls. `z-index: 100` sits above in-page layers (tables, cards,
+ * timetable markers: 1–20) and below Ant Design's portaled overlays (drawers, modals, dropdowns, tooltips: 1000+).
+ */
+.app-top {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 10px rgb(17 52 100 / 5%);
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -175,6 +189,7 @@
   padding: 0 24px;
   height: 72px;
   line-height: normal;
+  background: var(--ac-card-bg);
 }
 
 /* The phone's menu button (none on a desktop) and the academy's brand. */
@@ -249,6 +264,109 @@
   outline-offset: 1px;
 }
 
+/*
+ * Horizontal navigation bar for learner-only viewers on desktop/tablet (J-F66): replaces the vertical dark Sider
+ * with TabseetCourse's crisp centered top navigation bar (#113464 navy active pill, #C5A052 gold active icon,
+ * self-hosted Cairo 14px/700) and aligns the learner header and page content to TabseetCourse's 1140 px container
+ * instead of stretching edge-to-edge. Below 768 px the phone drawer takes over as before.
+ */
+.app-shell--learner {
+  --ac-content-bg: #f8fafc;
+  --ac-learner-max: 1140px;
+}
+
+@media (min-width: 768px) {
+  .app-shell--learner {
+    --ac-sticky-offset: 140px;
+  }
+
+  .app-shell--learner .app-header {
+    padding-inline: max(24px, calc((100% - var(--ac-learner-max)) / 2));
+    font-family: 'Public Cairo', 'Public Poppins', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+  }
+
+  .app-shell--learner .app-content {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 0;
+    max-inline-size: calc(var(--ac-learner-max) + 48px);
+    margin-inline: auto;
+    padding: 24px 24px 48px;
+  }
+}
+
+.app-learner-nav {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px max(24px, calc((100% - var(--ac-learner-max)) / 2));
+}
+
+.app-learner-nav__bar {
+  width: 100%;
+  max-inline-size: var(--ac-learner-max);
+  margin-inline: auto;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 0;
+  background: transparent;
+  line-height: 1.4;
+  font-family: 'Public Cairo', 'Public Poppins', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  margin: 0;
+  height: auto;
+  line-height: 1.4;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #64748b;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item::after {
+  display: none;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item:hover {
+  color: #113464;
+  background: #f1f5f9;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item-selected,
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item-selected:hover {
+  color: #ffffff;
+  background: #113464;
+  box-shadow: 0 4px 12px rgb(17 52 100 / 15%);
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item .anticon {
+  font-size: 18px;
+  margin-inline-end: 0;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item .ant-menu-title-content {
+  margin-inline-start: 0;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item-selected .anticon {
+  color: #c5a052;
+}
+
+.app-learner-nav .ant-menu.ant-menu-horizontal > .ant-menu-item:focus-visible {
+  outline: 2px solid #c5a052;
+  outline-offset: 2px;
+}
+
 /* The phone edge of useIsPhone() (PHONE_QUERY): below it the side menu is a drawer opened from the header. */
 @media (max-width: 767.98px) {
   /*
@@ -297,9 +415,14 @@
   }
 }
 
-/* An open phone drawer is never printed (the header and the side menu are left out by reports.css). */
+/* An open phone drawer and the learner horizontal bar are never printed (the header and the side menu are left out by reports.css). */
 @media print {
-  .app-nav-drawer {
+  .app-top {
+    position: static;
+    box-shadow: none;
+  }
+  .app-nav-drawer,
+  .app-learner-nav {
     display: none !important;
   }
 }

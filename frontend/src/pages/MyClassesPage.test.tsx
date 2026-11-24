@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { MyEnrollmentRequest } from '../api/catalog'
 import type { MyClassList } from '../api/enrollments'
 import type { MyLearningCourse } from '../api/learning'
@@ -49,6 +49,11 @@ function mockMyClassesApi(list: MyClassList | Response, sources: Sources = {}) {
       other.push(parsed.pathname)
       return jsonResponse(200, makeMyRequestList(sources.requests ?? []))
     }
+    // J-F67: the issued certificates behind «الشهادة» (none in these tests).
+    if (parsed.pathname === '/api/me/certificates') {
+      other.push(parsed.pathname)
+      return jsonResponse(200, { items: [] })
+    }
     if (parsed.pathname.startsWith('/api/me/enrollment-requests/')) {
       other.push(`${init?.method ?? 'GET'} ${parsed.pathname}`)
       return jsonResponse(200, sources.cancelled)
@@ -69,9 +74,9 @@ function renderPage(roles: string[], route = '/my-classes') {
   })
 }
 
-function bodyRows() {
-  const [, ...rows] = within(screen.getByRole('table')).getAllByRole('row')
-  return rows.filter((row) => row.textContent && row.textContent.trim() !== '')
+/** The class cards (J-F67), in the server's order. */
+function classCards() {
+  return screen.getAllByTestId(/^class-card-/)
 }
 
 describe('MyClassesPage', () => {
@@ -79,7 +84,7 @@ describe('MyClassesPage', () => {
     await i18n.changeLanguage('ar')
   })
 
-  it('J-F62: the class name opens its lessons page, only for an enrollment with lessons', async () => {
+  it('J-F67: a card never leads to another page — no link on the name, no «استعراض الدروس» without lessons below', async () => {
     const withdrawn = makeMyClassItem({
       enrollmentId: ENROLLMENT_IDS[1],
       enrollmentStatus: 'withdrawn',
@@ -89,28 +94,34 @@ describe('MyClassesPage', () => {
     mockMyClassesApi(makeMyClassList([own, withdrawn]))
     renderPage(['student'])
 
-    const link = await screen.findByRole('link', { name: 'بايثون — الفصل أ' })
-    expect(link).toHaveAttribute('href', `/my-classes/${own.class.id}`)
-    expect(screen.getByText('فصل منسحب منه').closest('a')).toBeNull()
+    expect(await screen.findByText('بايثون — الفصل أ')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    // Without API-229's answer no card can show lessons below, so none offers «استعراض الدروس».
+    const [ownCard, withdrawnCard] = classCards()
+    expect(within(ownCard!).queryByText(ar.myClasses.card.browse)).not.toBeInTheDocument()
+    expect(within(withdrawnCard!).queryByText(ar.myClasses.card.browse)).not.toBeInTheDocument()
   })
 
-  it('shows a student their own classes from GET /api/me/classes with no student column and no contact details', async () => {
+  it('shows a student their own classes from GET /api/me/classes as cards, with no student line and no contact details', async () => {
     const api = mockMyClassesApi(makeMyClassList([own, completed]))
     renderPage(['student'])
 
     expect(await screen.findByText('بايثون — الفصل أ')).toBeInTheDocument()
     expect(api.urls).toEqual(['/api/me/classes'])
     expect(Object.fromEntries(api.queries[0]!)).toEqual({})
-    const rows = bodyRows()
-    expect(rows).toHaveLength(2)
-    expect(within(rows[0]!).getByText('PY-101-A')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('أساسيات بايثون')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('خالد المعلم')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText(ar.labels.running)).toBeInTheDocument()
-    expect(within(rows[0]!).getByText(ar.labels.active)).toBeInTheDocument()
-    expect(within(rows[1]!).getByText(ar.classes.noTeacher)).toBeInTheDocument()
-    expect(within(rows[1]!).getAllByText(ar.labels.completed)).toHaveLength(2)
-    expect(screen.queryAllByText(ar.myClasses.columns.student)).toHaveLength(0)
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    const cards = classCards()
+    expect(cards).toHaveLength(2)
+    expect(within(cards[0]!).getByText('أساسيات بايثون')).toBeInTheDocument()
+    expect(within(cards[0]!).getByText('خالد المعلم')).toBeInTheDocument()
+    expect(within(cards[1]!).getByText(ar.classes.noTeacher)).toBeInTheDocument()
+    // At Jallal's request: no class code, no enrollment badge, no period, class status or enrollment day.
+    for (const card of cards) {
+      for (const hidden of ['PY-101-A', 'WEB-B', ar.labels.running, ar.labels.active, ar.labels.completed]) {
+        expect(within(card).queryByText(hidden)).not.toBeInTheDocument()
+      }
+    }
+    expect(screen.queryByRole('definition')).not.toBeInTheDocument()
     expect(screen.queryByText(ar.myClasses.relation.self)).not.toBeInTheDocument()
     expect(document.body.textContent).not.toContain('@')
   })
@@ -120,25 +131,29 @@ describe('MyClassesPage', () => {
     renderPage(['guardian', 'student'])
 
     expect(await screen.findByText('ليلى سعيد')).toBeInTheDocument()
-    expect(screen.getAllByText(ar.myClasses.columns.student).length).toBeGreaterThan(0)
-    expect(screen.getByText(ar.myClasses.relation.child)).toBeInTheDocument()
-    expect(screen.getByText(ar.myClasses.relation.self)).toBeInTheDocument()
+    const [childCard, ownCard] = classCards()
+    expect(within(childCard!).getByText(ar.myClasses.relation.child)).toBeInTheDocument()
+    expect(within(ownCard!).getByText('عمر خالد')).toBeInTheDocument()
+    expect(within(ownCard!).getByText(ar.myClasses.relation.self)).toBeInTheDocument()
   })
 
-  it('asks the server for one status through the filter, and reloads on demand', async () => {
-    const api = mockMyClassesApi(makeMyClassList([]))
+  it('shows nothing above the cards — no visible title, no tabs, no status filter, no requests read (J-F67)', async () => {
+    const api = mockMyClassesApi(makeMyClassList([own]))
+    renderPage(['student'])
+
+    expect(await screen.findByTestId(`class-card-${own.enrollmentId}`)).toBeInTheDocument()
+    // The heading is kept for screen readers only.
+    expect(screen.getByRole('heading', { level: 1, name: ar.myClasses.title })).toHaveClass('hub-sr-only')
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.queryByText(ar.myClasses.sections.requests)).not.toBeInTheDocument()
+    expect(api.other).not.toContain('/api/me/enrollment-requests')
+  })
+
+  it('says so when the learner has no active or completed class', async () => {
+    mockMyClassesApi(makeMyClassList([]))
     renderPage(['student'])
     expect(await screen.findByText(ar.myClasses.empty)).toBeInTheDocument()
-
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.myClasses.filterLabel }))
-    fireEvent.click(await screen.findByText(ar.labels.withdrawn, { selector: '.ant-select-item-option-content' }))
-    await waitFor(() => expect(api.queries).toHaveLength(2))
-    expect(Object.fromEntries(api.queries[1]!)).toEqual({ status: 'withdrawn' })
-    expect(await screen.findByText(ar.myClasses.emptyFiltered)).toBeInTheDocument()
-
-    fireEvent.click(screen.getByLabelText(ar.myClasses.refresh))
-    await waitFor(() => expect(api.queries).toHaveLength(3))
-    expect(Object.fromEntries(api.queries[2]!)).toEqual({ status: 'withdrawn' })
   })
 
   it('shows a server failure with a retry button', async () => {
@@ -166,41 +181,45 @@ describe('MyClassesPage', () => {
     expect(api.urls).toEqual([])
   })
 
-  it('shows the progress of each class and opens its lessons from the row (J-F61)', async () => {
+  it('shows the progress of each class on its card and opens its lessons from there (J-F61, J-F67)', async () => {
     const course = makeLearningCourse({ enrollmentId: own.enrollmentId })
     mockMyClassesApi(makeMyClassList([own]), { learning: [course] })
     renderPage(['student'])
 
     const progress = await screen.findByTestId(`class-progress-${own.enrollmentId}`)
-    expect(within(progress).getByText('37%')).toBeInTheDocument()
-    fireEvent.click(screen.getByText(ar.mySchool.card.actions.continue).closest('button')!)
-    expect((await screen.findByTestId('location')).getAttribute('data-pathname')).toBe(`/learn/${course.course.id}`)
+    const card = screen.getByTestId(`class-card-${own.enrollmentId}`)
+    expect(card).toContainElement(progress)
+    // The server's counts and percent only, as on the cards of «دروسي».
+    expect(within(progress).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '37')
+    expect(progress.textContent).toContain('3 / 9')
+    expect(progress.textContent).toContain('37٪')
+    expect(within(card).getByText(ar.myClasses.card.lessons.replace('{{total}}', '9'), { exact: false })).toBeInTheDocument()
+    // «استعراض الدروس» is a button of this page (the lessons show below) — no «واصل التعلم», no link anywhere.
+    expect(within(card).getByText(ar.myClasses.card.browse).closest('button')).not.toBeNull()
+    expect(within(card).queryByText(ar.mySchool.card.actions.continue)).not.toBeInTheDocument()
+    expect(within(card).queryByRole('link')).not.toBeInTheDocument()
   })
 
-  it('keeps the progress and the way into the lessons in the first column on a phone (J-F61)', async () => {
-    const matchMedia = vi.spyOn(window, 'matchMedia').mockImplementation(
-      (query: string) => ({ matches: query.includes('max-width'), media: query, onchange: null, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false }) as MediaQueryList,
-    )
-    try {
-      mockMyClassesApi(makeMyClassList([own]), { learning: [makeLearningCourse({ enrollmentId: own.enrollmentId })] })
-      renderPage(['student'])
+  it('shows the course cover on the card only from an https address (J-F67)', async () => {
+    const base = makeLearningCourse().course
+    const withCover = makeLearningCourse({ enrollmentId: own.enrollmentId, course: { ...base, coverImageUrl: 'https://cdn.example.test/python.png' } })
+    const insecure = makeLearningCourse({ enrollmentId: completed.enrollmentId, course: { ...base, coverImageUrl: 'http://cdn.example.test/web.png' } })
+    mockMyClassesApi(makeMyClassList([own, completed]), { learning: [withCover, insecure] })
+    renderPage(['student'])
 
-      const progress = await screen.findByTestId(`class-progress-${own.enrollmentId}`)
-      const firstCell = progress.closest('td')!
-      expect(within(firstCell).getByText('بايثون — الفصل أ')).toBeInTheDocument()
-      expect(within(firstCell).getByText(ar.mySchool.card.actions.continue)).toBeInTheDocument()
-      expect(screen.queryAllByText(ar.myClasses.columns.progress)).toHaveLength(0)
-    } finally {
-      matchMedia.mockRestore()
-    }
+    await screen.findByTestId(`class-progress-${own.enrollmentId}`)
+    const [ownCard, completedCard] = classCards()
+    expect(ownCard!.querySelector('img')).toHaveAttribute('src', 'https://cdn.example.test/python.png')
+    expect(completedCard!.querySelector('img')).toBeNull()
   })
 
-  it('says a course has no published lesson yet, and only opens it (J-F61)', async () => {
+  it('says a course has no published lesson yet, with no way to another page (J-F61, J-F67)', async () => {
     mockMyClassesApi(makeMyClassList([own]), { learning: [makeLearningCourse({ enrollmentId: own.enrollmentId, progress: makeProgress({ total: 0, required: 0, completed: 0, completedRequired: 0, percent: null }) })] })
     renderPage(['student'])
 
     expect(await screen.findByText(ar.mySchool.card.noLessons)).toBeInTheDocument()
-    expect(screen.getByText(ar.mySchool.card.actions.open)).toBeInTheDocument()
+    expect(screen.queryByText(ar.mySchool.card.actions.open)).not.toBeInTheDocument()
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.queryByText(ar.mySchool.card.actions.continue)).not.toBeInTheDocument()
   })
 
@@ -212,7 +231,7 @@ describe('MyClassesPage', () => {
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.queryByText(ar.mySchool.card.actions.continue)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.mySchool.card.actions.start)).not.toBeInTheDocument()
-    expect(api.other).toEqual(['/api/me/learning'])
+    expect([...api.other].sort()).toEqual(['/api/me/certificates', '/api/me/learning'])
   })
 
   it('keeps the classes on screen when the progress cannot be read, with its own retry (J-F61)', async () => {
@@ -233,7 +252,10 @@ describe('MyClassesPage', () => {
     renderPage(['student'], '/my-classes?section=requests')
 
     const card = await screen.findByTestId(`request-${pending.id}`)
-    expect(screen.getByRole('tab', { selected: true }).textContent).toContain(ar.myClasses.sections.requests)
+    // J-F67: no tabs — the requests have their own heading and a way back to the cards.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: ar.myClasses.sections.requests })).toBeInTheDocument()
+    expect(screen.queryByTestId(/^class-card-/)).not.toBeInTheDocument()
     fireEvent.click(within(card).getByText(ar.myCourses.requests.cancel).closest('button')!)
     fireEvent.click((await screen.findByText(ar.myCourses.requests.cancelOk)).closest('button')!)
     await waitFor(() => expect(api.other.some((call) => call.startsWith('POST /api/me/enrollment-requests/'))).toBe(true))
@@ -249,11 +271,12 @@ describe('MyClassesPage', () => {
       await i18n.changeLanguage('en')
     })
     expect(document.documentElement).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByText(en.myClasses.title)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: en.myClasses.title })).toBeInTheDocument()
     expect(screen.queryByText(ar.myClasses.title)).not.toBeInTheDocument()
-    expect(screen.getAllByText(en.myClasses.columns.student).length).toBeGreaterThan(0)
+    // Both cards render; neither offers «Browse lessons» without API-229's answer (not served here — J-F67).
+    expect(classCards()).toHaveLength(2)
+    expect(screen.queryByText(en.myClasses.card.browse)).not.toBeInTheDocument()
     expect(screen.getByText(en.myClasses.relation.child)).toBeInTheDocument()
     expect(screen.getByText(en.myClasses.relation.self)).toBeInTheDocument()
-    expect(screen.getAllByText(en.labels.running).length).toBeGreaterThan(0)
   })
 })

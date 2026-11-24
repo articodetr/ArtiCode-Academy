@@ -14,10 +14,12 @@ import { titleSearchWhere } from '../lessons/title-search.js';
 import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
 import type { NotificationBatch } from '../notifications/notifications.service.js';
 import { formatNumber } from '../notifications/notifications.templates.js';
+import { AutoCertificatesService } from '../certificates/auto-certificates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { ExamGradingService, GRADING_TX } from './exam-grading.service.js';
+import type { ClosedAttempt } from './exam-grading.service.js';
 import { ExamQuestionsService } from './exam-questions.service.js';
 import { EXAMS_ENTITY_TYPE } from './exams.audit.js';
 import { isEmptyExamPatch, passScoreProblem, planExamUpdate } from './exams.changes.js';
@@ -203,6 +205,7 @@ export class ExamsService {
     private readonly notifications: NotificationsService,
     private readonly examQuestions: ExamQuestionsService,
     private readonly grading: ExamGradingService,
+    private readonly autoCertificates: AutoCertificatesService,
   ) {}
 
   async list(query: ListExamsQueryDto, caller: AuthPrincipal): Promise<ExamListDto> {
@@ -373,6 +376,8 @@ export class ExamsService {
    * copies are handed to the dispatcher after the commit.
    */
   async changeStatus(id: string, input: ChangeExamStatusDto, caller: AuthPrincipal, ctx: RequestContext): Promise<ExamDto> {
+    // J-F67: the attempts `publish` closes, for the certificate check after the commit.
+    const closed: ClosedAttempt[] = [];
     const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const row = await this.lockExam(tx, id, caller, 'NO KEY UPDATE');
       if (actionNeedsLiveClass(input.action) && isClassFrozenForExams(row.class.status)) throw gradesError.classClosed(row.classId, row.class.status);
@@ -382,7 +387,7 @@ export class ExamsService {
         const resultCount = await tx.examResult.count({ where: { examId: id } });
         if (resultCount > 0) throw gradesError.examHasResults(input.action, resultCount);
       }
-      if (row.delivery === 'online') await this.moveOnlineExam(tx, input.action, row);
+      if (row.delivery === 'online') await this.moveOnlineExam(tx, input.action, row, closed);
       const data: Prisma.ExamUncheckedUpdateInput = { status: to };
       if (input.action === 'publish') data.publishedAt = new Date();
       if (input.action === 'unpublish') data.publishedAt = null;
@@ -405,6 +410,9 @@ export class ExamsService {
       // The limits of a grading transaction: publishing an online exam closes and grades what is still open.
     }, GRADING_TX);
     this.notifications.dispatch(batch);
+    await this.grading.awardAfterClose(closed);
+    // CH-0244: publishing releases the results, so a student who passed the last exam of the class may now earn the course certificate.
+    if (input.action === 'publish') await this.autoCertificates.awardForExam(id);
     return dto;
   }
 
@@ -445,7 +453,7 @@ export class ExamsService {
    *     `exam.results_published` notification below sees them;
    *   - `unpublish`: nothing more.
    */
-  private async moveOnlineExam(tx: Tx, action: ExamStatusAction, row: ExamRow): Promise<void> {
+  private async moveOnlineExam(tx: Tx, action: ExamStatusAction, row: ExamRow, closed: ClosedAttempt[]): Promise<void> {
     const now = new Date();
     if (action === 'schedule') {
       await this.examQuestions.freeze(tx, row, now);
@@ -459,7 +467,7 @@ export class ExamsService {
     }
     if (action === 'publish') {
       if (windowStateOf(row.scheduledAt, row.closesAt, now) !== 'closed') throw gradesError.examWindowOpen(row.closesAt ? toIso(row.closesAt) : null);
-      await this.grading.closeAllOpenOfExam(tx, row.id, now);
+      await this.grading.closeAllOpenOfExam(tx, row.id, now, closed);
     }
   }
 

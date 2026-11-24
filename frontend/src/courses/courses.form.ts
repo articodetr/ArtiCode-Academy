@@ -4,7 +4,7 @@
 // value differs from the loaded course (null clears an optional field); a
 // localized text travels as a whole object and keeps a Turkish text the form
 // does not edit; nothing changed → null (no request).
-import type { Course, CoursePricing, CreateCourseInput, UpdateCourseInput } from '../api/courses'
+import type { Course, CoursePricing, CourseResource, CreateCourseInput, UpdateCourseInput } from '../api/courses'
 import type { FeePlan } from '../api/feePlans'
 import type { LocalizedLabel } from '../api/users'
 
@@ -36,6 +36,35 @@ export interface CourseFormValues {
   pricing?: CoursePricing
   /** The plan of a paid course. */
   enrollmentFeePlanId?: string | null
+  /** J-F67: the course's materials, in the edit form only (absent = the form does not edit them). */
+  resources?: CourseResourceRow[]
+}
+
+/** One row of «مقرّر الدورة» in the edit form: the Arabic title and the address. */
+export interface CourseResourceRow {
+  titleAr?: string
+  url?: string
+}
+
+/** The mirror of the server's rule for a resource address (learning.content.ts): an absolute https URL without spaces. */
+export function isResourceUrl(value: string | undefined): boolean {
+  const text = (value ?? '').trim()
+  return text.length > 0 && text.length <= 2048 && /^https:\/\/[^\s]+$/.test(text)
+}
+
+/**
+ * The materials the form would save: every row with something typed, in order. A row whose title and address are
+ * those of the stored item at the same place keeps that item whole (its English or Turkish title too).
+ */
+export function resourcesOfRows(rows: readonly CourseResourceRow[], current: readonly CourseResource[]): CourseResource[] {
+  return rows
+    .filter((row) => (row.titleAr ?? '').trim() !== '' || (row.url ?? '').trim() !== '')
+    .map((row, index) => {
+      const titleAr = (row.titleAr ?? '').trim()
+      const url = (row.url ?? '').trim()
+      const stored = current[index]
+      return stored && stored.title.ar === titleAr && stored.url === url ? stored : { title: { ar: titleAr }, url }
+    })
 }
 
 export function normaliseCourseCode(value: string | undefined): string {
@@ -63,6 +92,7 @@ export function courseFormValuesOf(course: Course): CourseFormValues {
     coverImageUrl: course.coverImageUrl ?? '',
     pricing: course.pricing,
     enrollmentFeePlanId: course.enrollmentFeePlan?.id ?? null,
+    resources: (course.resources ?? []).map((resource) => ({ titleAr: resource.title.ar, url: resource.url })),
   }
 }
 
@@ -168,6 +198,12 @@ export function planCoursePatch(course: Course, values: CourseFormValues): Updat
   if (values.coverImageUrl !== undefined) {
     const cover = coverOf(values.coverImageUrl)
     if (cover !== course.coverImageUrl) body.coverImageUrl = cover
+  }
+  // J-F67: the course's materials, sent whole and only when they differ.
+  if (values.resources !== undefined) {
+    const current = course.resources ?? []
+    const next = resourcesOfRows(values.resources, current)
+    if (JSON.stringify(next) !== JSON.stringify(current)) body.resources = next
   }
   if (values.pricing !== undefined) {
     const plan = chosenPlanOf(values)

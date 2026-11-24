@@ -122,7 +122,7 @@ export const nav = {
   users: 'المستخدمون',
   courses: 'الدورات والمستويات',
   classes: 'الفصول والمجموعات',
-  myClasses: 'فصولي',
+  myClasses: 'دوراتي',
   // MOD-19: the learner's catalog and courses, the office's requests.
   catalog: 'استكشف الدورات',
   myCourses: 'دوراتي',

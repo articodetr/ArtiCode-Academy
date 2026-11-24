@@ -137,9 +137,9 @@ export const classes = {
       cancel: 'يُلغى تسجيل الطالب ويتحرّر مقعده؛ يمكن إعادة تفعيله لاحقاً.',
       reactivate: 'يعود التسجيل نشطاً ويشغل مقعداً؛ يُفحص الطالب والفصل والسعة كتسجيل جديد.',
       approve: 'يصبح التسجيل نشطاً ويشغل مقعداً، فيصل الطالب إلى دروس الفصل وواجباته. يرفض الخادم الموافقة ما دامت على الطلب فاتورة غير مسدَّدة بالكامل.',
-      reject: 'يُرفض الطلب وتُلغى فاتورته غير المسدَّدة؛ يرى الطالب سبب الرفض في «فصولي» ← «طلبات الاشتراك». لا يُرفض طلب عليه دفعة مسجّلة قبل عكسها.',
+      reject: 'يُرفض الطلب وتُلغى فاتورته غير المسدَّدة؛ يرى الطالب سبب الرفض في «دوراتي» ← «طلبات الاشتراك». لا يُرفض طلب عليه دفعة مسجّلة قبل عكسها.',
       reasonRequired: 'السبب (مطلوب)',
-      reasonRequiredHint: 'يراه الطالب في «فصولي» ← «طلبات الاشتراك» ويُحفظ في سجل التدقيق؛ من حرف واحد إلى 500 حرف',
+      reasonRequiredHint: 'يراه الطالب في «دوراتي» ← «طلبات الاشتراك» ويُحفظ في سجل التدقيق؛ من حرف واحد إلى 500 حرف',
       reasonMissing: 'اكتب سبب الرفض',
       reactivateFull: 'الفصل ممتلئ حالياً ({{enrolledCount}} / {{capacity}})؛ سيرفض الخادم إعادة التفعيل حتى يتوفر مقعد.',
       reason: 'السبب (اختياري)',
@@ -245,35 +245,31 @@ export const classes = {
 }
 
 export const myClasses = {
-  title: 'فصولي',
-  subtitle: 'الفصول المسجَّل فيها أنت أو الطلاب المرتبطون بك',
-  filterLabel: 'حالة التسجيل',
-  defaultStatuses: 'النشطة والمكتملة',
+  title: 'دوراتي',
   refresh: 'تحديث',
   empty: 'لا فصول نشطة أو مكتملة بعد',
-  emptyFiltered: 'لا تسجيلات بهذه الحالة',
   // J-F61: the progress and the way into the lessons (API-229), and the student's requests (API-222).
-  learningError: 'تعذّر تحميل تقدّمك في الدورات. فصولك معروضة، وتعود نسب التقدّم بعد إعادة المحاولة.',
+  learningError: 'تعذّر تحميل تقدّمك في الدورات. دوراتك معروضة، وتعود نسب التقدّم بعد إعادة المحاولة.',
+  // J-F67: the requests open only from the links that ask for them (`?section=requests`).
   sections: {
-    classes: 'الفصول',
     requests: 'طلبات الاشتراك',
   },
   // J-F62: the lessons of one class (/my-classes/:classId).
   classLessons: {
     title: 'دروس الفصل',
     open: 'عرض دروس هذا الفصل',
-    back: 'العودة إلى فصولي',
+    back: 'العودة إلى دوراتي',
     notFound: 'هذا الفصل ليس ضمن فصولك النشطة أو المكتملة',
   },
-  columns: {
-    class: 'الفصل',
-    student: 'الطالب',
-    progress: 'التقدّم',
-    learn: 'الدروس',
-    period: 'الفترة',
-    classStatus: 'حالة الفصل',
-    enrollmentStatus: 'حالة التسجيل',
-    enrolledAt: 'تاريخ التسجيل',
+  // J-F67: one card per enrollment, on the look of the course cards of «دروسي».
+  card: {
+    select: 'عرض دروس {{course}}',
+    lessons: 'الدروس: {{total}}',
+    progress: 'الدروس المكتملة',
+    browse: 'استعراض الدروس',
+    certificate: 'الشهادة',
+    materials: 'المقرّر',
+    materialsMany: 'المقرّر ({{n}})',
   },
   relation: {
     self: 'أنا',

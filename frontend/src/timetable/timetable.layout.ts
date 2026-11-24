@@ -12,10 +12,14 @@ export interface HourRange {
   endHour: number
 }
 
-/** The working-day frame every grid shows; slots outside it extend it. */
-export const DAY_FRAME: HourRange = { startHour: 8, endHour: 17 }
+/** The full 24-hour frame every grid shows on one screen without scrolling. */
+export const DAY_FRAME: HourRange = { startHour: 0, endHour: 24 }
 
-/** The frame, widened to the whole hours that hold every given slot. */
+export const MIN_HOUR_HEIGHT = 16
+export const DEFAULT_HOUR_HEIGHT = 24
+export const MAX_HOUR_HEIGHT = 36
+
+/** The frame, covering all 24 hours of the day. */
 export function hourRangeOf(items: ReadonlyArray<{ startMinutes: number; endMinutes: number }>): HourRange {
   let { startHour, endHour } = DAY_FRAME
   for (const item of items) {
@@ -30,9 +34,15 @@ export function hoursOf(range: HourRange): number[] {
   return Array.from({ length: range.endHour - range.startHour + 1 }, (_, index) => range.startHour + index)
 }
 
-/** Pixels per hour: roomy for an ordinary day, tighter when the range is long. */
-export function hourHeightOf(range: HourRange): number {
-  return range.endHour - range.startHour > 12 ? 52 : 64
+/**
+ * Pixels per hour: sized so the whole `range` (all 24 hours) fits inside `availableHeight` without
+ * scrolling down, clamped between `MIN_HOUR_HEIGHT` and `MAX_HOUR_HEIGHT` (`DEFAULT_HOUR_HEIGHT` when
+ * unmeasured, e.g. before layout or in jsdom).
+ */
+export function hourHeightOf(range: HourRange, availableHeight?: number): number {
+  const span = Math.max(1, range.endHour - range.startHour)
+  if (availableHeight === undefined || availableHeight <= 0) return DEFAULT_HOUR_HEIGHT
+  return Math.max(MIN_HOUR_HEIGHT, Math.min(MAX_HOUR_HEIGHT, Math.floor(availableHeight / span)))
 }
 
 /** Top offset and height (px) of a time span inside a grid of `range`. */
@@ -43,18 +53,17 @@ export function verticalBox(startMinutes: number, endMinutes: number, range: Hou
 
 /**
  * How a card of the grid is laid out by its height: `tiny` = one row (the course and the time),
- * `compact` = a one-line course over the time (tightened in a short card so the time always fits —
- * J-F22), `regular` = a course on up to two lines. Between the course and the time a card shows as many
- * WHOLE secondary lines (class code, why it is in «my schedule», room, teacher) as its real height and
- * width allow — timetable.css, J-F17. (A fourth density, `full` from 124 px, was laid out exactly like
- * `regular` since J-F17 and was folded into it in J-F22 — the owner's note 2 on #61.)
+ * `compact` = a one-line course over the time (or one row when the slot is very tight), `regular` = a
+ * course on up to two lines. Between the course and the time a card shows as many WHOLE secondary lines
+ * (class code, why it is in «my schedule», room, teacher) as its real height and width allow —
+ * timetable.css, J-F17.
  */
 export type CardDensity = 'tiny' | 'compact' | 'regular'
 
-/** The density a card of `height` px can afford. */
+/** The density a card of `height` px can afford in the compact 24-hour grid. */
 export function densityOf(height: number): CardDensity {
-  if (height < 44) return 'tiny'
-  if (height < 84) return 'compact'
+  if (height < 16) return 'tiny'
+  if (height < 56) return 'compact'
   return 'regular'
 }
 

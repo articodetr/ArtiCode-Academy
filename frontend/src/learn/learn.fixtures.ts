@@ -37,6 +37,8 @@ function workspaceItem(id: FixtureItemId, overrides: Partial<WorkspaceItem> = {}
     state: 'not_started',
     completedAt: null,
     available: true,
+    // J-F67: the later in the course, the newer (i1 on the 1st … i4 on the 4th).
+    createdAt: `2026-11-0${ORDER.indexOf(id) + 1}T09:00:00.000Z`,
     ...overrides,
   }
 }

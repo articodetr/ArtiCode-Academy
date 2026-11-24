@@ -18,6 +18,7 @@ const course = (overrides: Partial<CourseValues> = {}): CourseValues => ({
   maxAge: 14,
   coverImageUrl: null,
   enrollmentFeePlanId: null,
+  resources: [],
   ...overrides,
 });
 

@@ -16,6 +16,20 @@ import { CHILD_ONE, CHILD_TWO, SELF_STUDENT, makeMyLesson, makeMyLessonList } fr
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { MyLessonsPage } from './MyLessonsPage'
+import { Card } from 'antd'
+import { useMyClasses } from '../enrollments/useMyClasses'
+import { MyLessonsList } from '../lessons/MyLessonsList'
+import { useAcademyZone } from '../lessons/useAcademyZone'
+
+// Since J-F67 (CH-0243) /my-lessons shows a student the lessons panel of every course (AllCoursesLessons) and a
+// guardian the newest-first feed (MyLessonsFeed); the lessons table (MyLessonsList) stays on one class's page. These
+// cases keep testing the table in its every-class mode, mounted the way /my-lessons mounted it before J-F67: the
+// academy's zone first, then the list over «my classes». The route gate is still tested on the page itself.
+function LessonsTable() {
+  const zone = useAcademyZone()
+  const myClasses = useMyClasses()
+  return zone.settled ? <MyLessonsList key={zone.timeZone} dayZone={zone.timeZone} myClasses={myClasses} /> : <Card loading />
+}
 
 const FUTURE = { startsAt: '2030-01-15T09:00:00.000Z', endsAt: '2030-01-15T10:00:00.000Z' }
 
@@ -65,10 +79,9 @@ function mockMyLessonsApi(lessons: LessonsHandler, classes: MyClassList | Respon
 
 function renderPage(roles: string[], permissions: string[] = LESSON_LEARNER_PERMISSIONS) {
   const role = roles.includes('guardian') ? 'guardian' : 'student'
-  return renderWithProviders(<MyLessonsPage />, {
+  return renderWithProviders(<LessonsTable />, {
     auth: makeAuth({ user: makeUser({ id: SELF_STUDENT.id, role, roles, permissions }) }),
-    // The table of class sessions: a student's own tab since J-F64, a guardian's whole page.
-    route: '/my-lessons?view=sessions',
+    route: '/my-lessons',
   })
 }
 
@@ -91,13 +104,14 @@ async function pick(label: string, option: string) {
   fireEvent.click(await screen.findByText(option, { selector: '.ant-select-item-option-content' }))
 }
 
-describe('MyLessonsPage', () => {
-  it('shows a student their lessons from today on: day, times, lesson, class, teacher by name, place, status and their own attendance', async () => {
+describe('MyLessonsPage — the lessons table (MyLessonsList) and the route gate', () => {
+  it('shows a student all their lessons, newest first (J-F67): day, times, lesson, class, teacher by name, place, status and their own attendance', async () => {
     const api = mockMyLessonsApi(makeMyLessonList([attended, cancelled]))
     renderPage(['student'])
 
     expect(await screen.findByText('المتغيرات وأنواع البيانات')).toBeInTheDocument()
-    expect(Object.fromEntries(api.queries[0]!)).toEqual({ from: todayStartInstant(LESSON_TIME_ZONE), order: 'asc', limit: '20' })
+    // Since J-F67 the list opens on every lesson, newest first.
+    expect(Object.fromEntries(api.queries[0]!)).toEqual({ order: 'desc', limit: '20' })
     const rows = bodyRows()
     expect(rows).toHaveLength(2)
     const [first, second] = rows as [HTMLElement, HTMLElement]
@@ -249,16 +263,16 @@ describe('MyLessonsPage', () => {
   it('switches views and filters: past, a custom range and a status re-query from the first page', async () => {
     const api = mockMyLessonsApi(makeMyLessonList([]))
     renderPage(['student'])
-    expect(await screen.findByText(ar.myLessons.empty.upcoming)).toBeInTheDocument()
+    expect(await screen.findByText(ar.myLessons.empty.all)).toBeInTheDocument()
 
     fireEvent.click(screen.getByText(ar.myLessons.views.past))
-    await waitFor(() => expect(api.queries.at(-1)?.get('order')).toBe('desc'))
-    expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ to: new Date(new Date(todayStartInstant(LESSON_TIME_ZONE)).getTime() - 1).toISOString(), order: 'desc', limit: '20' })
+    // `all` is newest first too, so wait for the past view's own bound, not for its order.
+    await waitFor(() => expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ to: new Date(new Date(todayStartInstant(LESSON_TIME_ZONE)).getTime() - 1).toISOString(), order: 'desc', limit: '20' }))
     expect(await screen.findByText(ar.myLessons.empty.past)).toBeInTheDocument()
     expect(screen.queryByLabelText(ar.lessons.filters.from)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByText(ar.myLessons.views.range))
-    await waitFor(() => expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'asc', limit: '20' }))
+    await waitFor(() => expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'desc', limit: '20' }))
     expect(await screen.findByText(ar.myLessons.empty.all)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(ar.lessons.filters.from), { target: { value: '2026-11-01' } })
     // Midnight of the 1st in the academy's zone (Asia/Riyadh, UTC+3).
@@ -277,9 +291,9 @@ describe('MyLessonsPage', () => {
   it('treats a malformed day as no day: the list stays unfiltered and nothing is sent (J-F25)', async () => {
     const api = mockMyLessonsApi(makeMyLessonList([]))
     renderPage(['student'])
-    expect(await screen.findByText(ar.myLessons.empty.upcoming)).toBeInTheDocument()
+    expect(await screen.findByText(ar.myLessons.empty.all)).toBeInTheDocument()
     fireEvent.click(screen.getByText(ar.myLessons.views.range))
-    await waitFor(() => expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'asc', limit: '20' }))
+    await waitFor(() => expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'desc', limit: '20' }))
     expect(await screen.findByText(ar.myLessons.empty.all)).toBeInTheDocument()
 
     // A browser without a native date field hands the typed text over as it is.
@@ -289,7 +303,7 @@ describe('MyLessonsPage', () => {
     expect(from).toHaveValue('')
     expect(screen.getByText(ar.myLessons.empty.all)).toBeInTheDocument()
     expect(screen.queryByText(ar.myLessons.empty.filtered)).not.toBeInTheDocument()
-    expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'asc', limit: '20' })
+    expect(Object.fromEntries(api.queries.at(-1)!)).toEqual({ order: 'desc', limit: '20' })
   })
 
   it('pages with the server cursor (limit counts lessons) and back to the first page', async () => {
@@ -360,7 +374,7 @@ describe('MyLessonsPage', () => {
     renderPage(['student'])
 
     expect(await screen.findByText('المتغيرات وأنواع البيانات')).toBeInTheDocument()
-    expect(Object.fromEntries(api.queries[0]!)).toEqual({ from: todayStartInstant(FAR_TIME_ZONE), order: 'asc', limit: '20' })
+    expect(Object.fromEntries(api.queries[0]!)).toEqual({ order: 'desc', limit: '20' })
     const [farRow, localRow] = bodyRows() as [HTMLElement, HTMLElement]
     expect(within(farRow).getByText('00:00 – 01:30')).toBeInTheDocument()
     expect(within(farRow).getByText(formatLessonDay(far.startsAt, 'ar', FAR_TIME_ZONE))).toBeInTheDocument()
@@ -376,10 +390,9 @@ describe('MyLessonsPage', () => {
     expect(note).toHaveTextContent(ar.lessons.zone.rows.replace('{{zone}}', device))
     expect(note).toHaveTextContent(ar.lessons.zone.days.replace('{{zone}}', FAR_TIME_ZONE))
 
-    // The past view ends one millisecond before the academy's midnight.
+    // The past view ends one millisecond before the academy's midnight: «today» is the academy's day.
     fireEvent.click(screen.getByText(ar.myLessons.views.past))
-    await waitFor(() => expect(api.queries.at(-1)?.get('order')).toBe('desc'))
-    expect(api.queries.at(-1)?.get('to')).toBe(new Date(new Date(todayStartInstant(FAR_TIME_ZONE)).getTime() - 1).toISOString())
+    await waitFor(() => expect(api.queries.at(-1)?.get('to')).toBe(new Date(new Date(todayStartInstant(FAR_TIME_ZONE)).getTime() - 1).toISOString()))
   })
 
   it('says nothing about zones when the academy and every lesson are in the device’s zone', async () => {
