@@ -307,9 +307,9 @@ describe.skipIf(!available)('PORTAL-02 the enrollment journey (e2e)', () => {
   });
 
   // Only the protections are held down here. Two behaviours found while exploring stay OUT of the tests on purpose,
-  // pending the owner's decision: a full scholarship can only be approved by unpricing the whole course and cancelling
-  // the invoice (the "total 0 = paid" waiver of D-R125 is unreachable), and a paid request is still approved after its
-  // course is archived.
+  // pending the owner's decision (KI-140, KI-141): the "total 0 = paid" waiver of D-R125 is unreachable, so a full
+  // scholarship needs a workaround (unpricing the whole course, or a replacement invoice discounted down to 0.01),
+  // and a paid request is still approved after its course is archived.
   describe('group 3 — no zero-cost way into a paid course', () => {
     it('Q1: a request invoice cannot be waived to zero — a fully discounted invoice, a discount on the issued one and a zero-priced plan are all refused', async () => {
       const { classId, enrollmentId, invoiceId } = await pendingRequest('s1');
@@ -350,7 +350,7 @@ describe.skipIf(!available)('PORTAL-02 the enrollment journey (e2e)', () => {
     });
 
     // Awaiting the owner's decision (raised on #206 and in the PORTAL-02 PR); written once the intended behaviour is decided.
-    it.todo('Q1: a full scholarship for ONE student in a paid course — awaiting the owner’s decision (today only unpricing the whole course works)');
+    it.todo('Q1: a full scholarship for ONE student in a paid course — awaiting the owner’s decision (KI-140; today only workarounds exist)');
     it.todo('Q2: approving a paid request after its course is archived — awaiting the owner’s decision (today it is approved)');
   });
 
