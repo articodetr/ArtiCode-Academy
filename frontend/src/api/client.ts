@@ -92,6 +92,14 @@ export interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   /** JSON-serialised request body. */
   body?: unknown
+  /**
+   * A request body sent as it is, not as JSON (the homepage images: the picture's own
+   * bytes, `PUT /api/academy/homepage-images/:key`). Replaces `body` when both are given;
+   * a refresh-and-retry sends the same Blob again (a Blob can be read more than once).
+   */
+  rawBody?: Blob
+  /** The `Content-Type` of `rawBody` (default: the Blob's own type, else `application/octet-stream`). */
+  contentType?: string
   signal?: AbortSignal
   /** Attach the access token (default true). Public endpoints may pass false. */
   auth?: boolean
@@ -110,16 +118,17 @@ async function parseBody(response: Response): Promise<unknown> {
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, auth = true, retry = true, keepalive } = options
+  const { method = 'GET', body, rawBody, contentType, signal, auth = true, retry = true, keepalive } = options
   const headers = new Headers({ Accept: 'application/json' })
-  if (body !== undefined) headers.set('Content-Type', 'application/json')
+  if (rawBody !== undefined) headers.set('Content-Type', contentType || rawBody.type || 'application/octet-stream')
+  else if (body !== undefined) headers.set('Content-Type', 'application/json')
   const token = auth ? getAccessToken() : null
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const response = await fetch(apiUrl(path), {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: rawBody !== undefined ? rawBody : body === undefined ? undefined : JSON.stringify(body),
     signal,
     ...(keepalive ? { keepalive: true } : {}),
     credentials: 'include',

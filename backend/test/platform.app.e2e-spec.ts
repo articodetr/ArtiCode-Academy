@@ -126,6 +126,10 @@ describe('platform app skeleton — MOD-18-T02 (e2e, TEST-207)', () => {
     for (const path of ['/api/academy', '/api/users', '/api/courses', '/api/audit-logs']) {
       await api().get(path).expect(404);
     }
+    // configureApp(app, PLATFORM_APP_SETUP): JSON bodies only — the academy's raw image parser is not registered here.
+    const middleware = (app.getHttpAdapter().getInstance() as { router: { stack: Array<{ name: string }> } }).router.stack.map((layer) => layer.name);
+    expect(middleware).toContain('jsonParser');
+    expect(middleware).not.toContain('rawParser');
   });
 
   it('protects every route without @Public(): 401 unauthenticated, 401 token_invalid for garbage and for an academy access token', async () => {
