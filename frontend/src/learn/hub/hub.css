@@ -892,6 +892,163 @@ a.hub-btn--certificate:hover {
   background: #f8edcf;
 }
 
+/* «الشهادة» before it is issued (J-F68): always there, muted and locked; pressing it says what the course still needs. */
+.hub-btn--certificate.is-locked {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  border-style: dashed;
+}
+
+.hub-btn--certificate.is-locked:hover {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+/* The window of the locked «الشهادة» (J-F68): the lessons and exams the certificate still waits for. */
+.hub-certgaps {
+  display: grid;
+  gap: 14px;
+}
+
+.hub-certgaps__intro {
+  margin: 0;
+  color: #475569;
+  line-height: 1.8;
+}
+
+.hub-certgaps__part {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.hub-certgaps__heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--hub-navy);
+}
+
+.hub-certgaps__summary {
+  margin: 0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.hub-certgaps__list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-certgaps__item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.hub-certgaps__item > .anticon {
+  margin-block-start: 4px;
+}
+
+.hub-certgaps__text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.hub-certgaps__name {
+  font-weight: 700;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.hub-certgaps__meta {
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.hub-certgaps__more {
+  padding-inline-start: 22px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.hub-certgaps__take {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+}
+
+.hub-certgaps__ok {
+  color: #15803d;
+}
+
+.hub-certgaps__missing {
+  color: #b91c1c;
+}
+
+.hub-certgaps__wait {
+  color: #b45309;
+}
+
+a.hub-certgaps__open {
+  margin-block-start: 6px;
+}
+
+/* «اختبارات الدورة» at the end of a course's lessons (J-F68): every exam of the class and where it stands. */
+.hub-exams {
+  margin-block-start: 24px;
+  scroll-margin-block-start: var(--ac-sticky-offset, 88px);
+}
+
+.hub-exams__summary {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.hub-exam-row .hub-row__number {
+  background: #f1f5f9;
+}
+
+.hub-exam-row.is-passed .hub-row__number {
+  background: #dcfce7;
+}
+
+.hub-exam-row .hub-row__number .anticon.hub-certgaps__ok {
+  color: #16a34a;
+}
+
+.hub-exam-row .hub-row__number .anticon.hub-certgaps__missing {
+  color: #b91c1c;
+}
+
+.hub-exam-row .hub-row__number .anticon.hub-certgaps__wait {
+  color: #b45309;
+}
+
+.hub-exam-row__note {
+  font-weight: 600;
+  color: #334155;
+}
+
+.hub-exam-row.is-failed .hub-exam-row__note,
+.hub-exam-row.is-absent .hub-exam-row__note {
+  color: #b91c1c;
+}
+
+.hub-exam-row__passed {
+  cursor: default;
+}
+
 /* The learner has taken the lesson's exam (J-F67): green, and still opens it (the result, another attempt). */
 .hub-btn--exam-done {
   color: #15803d;

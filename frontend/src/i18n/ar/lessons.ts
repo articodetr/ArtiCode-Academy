@@ -298,6 +298,17 @@ export const myLessons = {
       files: 'المرفقات ({{n}})',
     },
     player: { label: 'الدرس المفتوح', close: 'إغلاق الدرس' },
+    // J-F68: every exam of the class at the end of a course's lessons — what is not taken or passed yet.
+    courseExams: {
+      title: 'اختبارات الدورة',
+      summary: 'تم اجتياز {{passed}} من {{total}}. اجتيازها كلها مع إكمال الدروس يُصدر الشهادة.',
+      passed: 'ناجح',
+      take: 'ابدأ الاختبار',
+      resume: 'متابعة الاختبار',
+      lesson: 'الدرس: {{title}}',
+      loadFailed: 'تعذّر تحميل اختبارات الدورة.',
+      retry: 'إعادة المحاولة',
+    },
     // J-F67: the exam of a lesson in a popup.
     examPopup: {
       toMyExams: 'اختباراتي',

@@ -17,17 +17,25 @@
 // `learn/hub/HubLessons.tsx` — the levels, the «الكل / المباشرة / المسجلة» filter and the lesson playing inside the
 // page. The chosen course and the opened lesson live in the address (`?course=…&lesson=…`), so a reload keeps them;
 // without `?course=` no course is shown until one is chosen.
+// Since J-F68 «الشهادة» is on every card: before the certificate is issued it opens `CertificateGapsModal`, which reads
+// the certificates, the class's exams and (for the learner's own card) the course's lessons again and says what is
+// missing — the lessons left and how many exams are not passed yet; the exams themselves are listed only at the end of
+// the course's lessons below the cards («اختبارات الدورة» of HubLessons), which its «عرض الاختبارات» brings into view.
 import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import { Alert, Button, ConfigProvider, Skeleton } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router'
+import type { MyClassItem } from '../api/enrollments'
 import type { ProgressCounts } from '../api/learning'
 import { listMyCertificates } from '../api/myCertificates'
+import type { MyCertificateItem } from '../api/myCertificates'
 import { useAuth } from '../auth/auth-context'
 import { useMyRequests } from '../catalog/useMyRequests'
 import { describeClassesFailure, failureMessage } from '../classes/classes.errors'
 import { PageHeader } from '../components/PageHeader'
+import { CertificateGapsModal } from '../enrollments/CertificateGapsModal'
+import { certificateFor } from '../enrollments/certificateGaps'
 import { MyClassCard } from '../enrollments/MyClassCard'
 import { MyEnrollmentRequests } from '../enrollments/MyEnrollmentRequests'
 import { useMyClasses } from '../enrollments/useMyClasses'
@@ -77,23 +85,35 @@ export function MyClassesPage() {
 }
 
 /**
- * The issued certificates of the caller's enrollments (API-135), by enrollment id — for «الشهادة» on a card (J-F67).
- * Read once; a failure or a missing key (403) just shows no certificate button.
+ * The caller's certificates (API-135) — for «الشهادة» on a card (J-F67): a card opens the issued certificate of its
+ * course for its student (`certificateFor()` — one per course, CH-0363). Read once; a failure or a missing key (403)
+ * leaves every card with the locked button (J-F68), whose window reads them again. `remember` adds a certificate that
+ * window found (issued since this read); `reload` reads them again (an exam was taken from the lessons below).
  */
-function useIssuedCertificates(): ReadonlyMap<string, string> {
-  const [byEnrollment, setByEnrollment] = useState<ReadonlyMap<string, string>>(() => new Map())
+function useMyCertificateItems(): { items: readonly MyCertificateItem[]; remember: (certificate: MyCertificateItem) => void; reload: () => void } {
+  const [items, setItems] = useState<readonly MyCertificateItem[]>([])
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     const controller = new AbortController()
     listMyCertificates({}, controller.signal).then(
       (list) => {
-        if (controller.signal.aborted) return
-        setByEnrollment(new Map(list.items.filter((item) => item.status === 'issued').map((item) => [item.enrollmentId, item.id])))
+        if (!controller.signal.aborted) setItems(list.items)
       },
       () => undefined,
     )
     return () => controller.abort()
+  }, [attempt])
+  const reload = useCallback(() => setAttempt((value) => value + 1), [])
+  const remember = useCallback((certificate: MyCertificateItem) => {
+    setItems((previous) => (previous.some((item) => item.id === certificate.id && item.status === certificate.status) ? previous : [certificate, ...previous.filter((item) => item.id !== certificate.id)]))
   }, [])
-  return byEnrollment
+  return { items, remember, reload }
+}
+
+/** The id of the card's issued certificate, else null. */
+function issuedCertificateId(items: readonly MyCertificateItem[], row: MyClassItem): string | null {
+  const certificate = certificateFor(items, { enrollmentId: row.enrollmentId, studentId: row.student.id, courseId: row.class.course.id })
+  return certificate?.status === 'issued' ? certificate.id : null
 }
 
 /** Brings the chosen course's lessons into view, without the animation for a reader who asked for less motion. */
@@ -110,13 +130,19 @@ function MyClassCards() {
   const learning = useMyLearning()
   const [live, setLive] = useState<Readonly<Record<string, ProgressCounts>>>({})
   const [reveal, setReveal] = useState(0)
+  // Asked from the window of «الشهادة» (J-F68): the chosen course's «اختبارات الدورة» comes into view once read.
+  const [examsFocus, setExamsFocus] = useState(0)
   const panelRef = useRef<HTMLDivElement>(null)
   const learningOf = new Map((learning.data ?? []).map((item) => [item.enrollmentId, item]))
-  const certificateOf = useIssuedCertificates()
+  const certificates = useMyCertificateItems()
+  // The card whose «الشهادة» was pressed without a certificate (J-F68): its window says what the course still needs.
+  const [gapsOf, setGapsOf] = useState<string | null>(null)
   const selected = chosenCourseOf(studyCourses(learning.data ?? []), params.get(COURSE_PARAM))
   // The student line matters only to a guardian (or whenever the server returned a child's enrollment).
   const showStudent = (user?.roles.includes('guardian') ?? false) || my.items.some((item) => item.relation === 'child')
   const failure = my.error ? describeClassesFailure(my.error) : null
+  const gapsRow = gapsOf ? (my.items.find((row) => row.enrollmentId === gapsOf) ?? null) : null
+  const gapsLearning = gapsRow ? (learningOf.get(gapsRow.enrollmentId) ?? null) : null
 
   const onProgress = useCallback((courseId: string, counts: ProgressCounts) => {
     setLive((previous) => (previous[courseId] === counts ? previous : { ...previous, [courseId]: counts }))
@@ -127,7 +153,7 @@ function MyClassCards() {
     if (reveal > 0) scrollToStart(panelRef.current)
   }, [reveal])
 
-  const selectCourse = (courseId: string) => {
+  const selectCourse = (courseId: string, target: 'lessons' | 'exams' = 'lessons') => {
     if (courseId !== selected?.course.id) {
       setParams((previous) => {
         const next = new URLSearchParams(previous)
@@ -136,7 +162,13 @@ function MyClassCards() {
         return next
       })
     }
-    setReveal((count) => count + 1)
+    if (target === 'exams') {
+      // The exams section scrolls itself into view once its list is read (CourseExams).
+      setExamsFocus((count) => count + 1)
+    } else {
+      setExamsFocus(0)
+      setReveal((count) => count + 1)
+    }
   }
 
   return (
@@ -181,7 +213,8 @@ function MyClassCards() {
                 showStudent={showStudent}
                 onSelect={choosable ? () => selectCourse(item.course.id) : null}
                 active={choosable && item.course.id === selected?.course.id}
-                certificateId={certificateOf.get(row.enrollmentId) ?? null}
+                certificateId={issuedCertificateId(certificates.items, row)}
+                onShowCertificateGaps={() => setGapsOf(row.enrollmentId)}
               />
             )
           })}
@@ -192,8 +225,19 @@ function MyClassCards() {
         </div>
       )}
 
+      {gapsRow ? (
+        <CertificateGapsModal
+          key={gapsRow.enrollmentId}
+          row={gapsRow}
+          counts={gapsLearning ? countsOf(gapsLearning, live) : null}
+          onClose={() => setGapsOf(null)}
+          onBrowse={gapsLearning && isStudyCourse(gapsLearning) ? (target) => selectCourse(gapsLearning.course.id, target) : null}
+          onIssued={certificates.remember}
+        />
+      ) : null}
+
       <div ref={panelRef} className="hub-panel-anchor">
-        {selected ? <HubLessons key={selected.course.id} course={selected} onProgress={onProgress} /> : null}
+        {selected ? <HubLessons key={selected.course.id} course={selected} onProgress={onProgress} examsFocus={examsFocus} onExamClosed={certificates.reload} /> : null}
       </div>
     </section>
   )

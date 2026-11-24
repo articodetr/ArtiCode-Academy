@@ -3,10 +3,12 @@
 // its lesson count and the learner's progress. Every number is the server's (D-R133).
 // The card never leads to another page (Jallal's request): a card of a course the learner studies (`isStudyCourse()`)
 // is `selectable` — the whole card and «استعراض الدروس» show that course's lessons below the cards, on this page —
-// and an issued certificate of the enrollment (API-135) adds «الشهادة», which opens the certificate in a new tab, and
-// the course's own materials (API-229 `course.resources` — its textbook) add «المقرّر», each file in a new tab.
+// and «الشهادة» is on every card (J-F68, Jallal's request): with an issued certificate of the course (API-135) it opens
+// the certificate in a new tab; before that it is a locked button whose press says what the course still needs
+// (`CertificateGapsModal`, opened by the page). The course's own materials (API-229 `course.resources` — its
+// textbook) add «المقرّر», each file in a new tab.
 // No enrollment badge, no class code, no period / class status / enrollment day, no «واصل التعلم».
-import { BookOutlined, FilePdfOutlined, PlayCircleOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons'
+import { BookOutlined, FilePdfOutlined, LockOutlined, PlayCircleOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons'
 import { Skeleton } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { MyClassItem } from '../api/enrollments'
@@ -32,11 +34,13 @@ interface MyClassCardProps {
   onSelect: (() => void) | null
   /** Its course's lessons are the ones shown below. */
   active: boolean
-  /** The id of the enrollment's issued certificate (API-135); null when it has none. */
+  /** The id of the course's issued certificate for this student (API-135); null when it has none. */
   certificateId: string | null
+  /** «الشهادة» without a certificate: show what the course still needs (J-F68). */
+  onShowCertificateGaps: () => void
 }
 
-export function MyClassCard({ row, learning, counts, learningLoading, showStudent, onSelect, active, certificateId }: MyClassCardProps) {
+export function MyClassCard({ row, learning, counts, learningLoading, showStudent, onSelect, active, certificateId, onShowCertificateGaps }: MyClassCardProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const className = localizedLabel(row.class.name, language)
@@ -77,32 +81,38 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
 
       {learning ? <ClassProgress item={learning} counts={counts ?? learning.progress} /> : learningLoading && hasClassLessons(row.enrollmentStatus) ? <Skeleton.Input active size="small" block /> : null}
 
-      {onSelect || certificateId || materials.length > 0 ? (
-        <div className="hub-card__actions">
-          {onSelect ? (
-            <button type="button" className="hub-card__browse" onClick={onSelect}>
-              <UnorderedListOutlined aria-hidden /> {t('myClasses.card.browse')}
-              <span className="hub-sr-only">: {courseName}</span>
-            </button>
-          ) : null}
-          <ResourcesButton
-            resources={materials}
-            label={t('myClasses.card.materials')}
-            labelMany={t('myClasses.card.materialsMany', { n: materials.length })}
-            context={courseName}
-            className="hub-btn--book"
-            icon={<FilePdfOutlined aria-hidden />}
-          />
-          {certificateId ? (
-            <a className="hub-btn hub-btn--certificate" href={myCertificatePrintPath(certificateId)} target="_blank" rel="noopener noreferrer">
-              <SafetyCertificateOutlined aria-hidden /> {t('myClasses.card.certificate')}
-              <span className="hub-sr-only">
-                : {courseName} {t('mySchool.card.newTab')}
-              </span>
-            </a>
-          ) : null}
-        </div>
-      ) : null}
+      {/* «الشهادة» is always there (J-F68), so the row of actions always is. */}
+      <div className="hub-card__actions">
+        {onSelect ? (
+          <button type="button" className="hub-card__browse" onClick={onSelect}>
+            <UnorderedListOutlined aria-hidden /> {t('myClasses.card.browse')}
+            <span className="hub-sr-only">: {courseName}</span>
+          </button>
+        ) : null}
+        <ResourcesButton
+          resources={materials}
+          label={t('myClasses.card.materials')}
+          labelMany={t('myClasses.card.materialsMany', { n: materials.length })}
+          context={courseName}
+          className="hub-btn--book"
+          icon={<FilePdfOutlined aria-hidden />}
+        />
+        {certificateId ? (
+          <a className="hub-btn hub-btn--certificate" href={myCertificatePrintPath(certificateId)} target="_blank" rel="noopener noreferrer">
+            <SafetyCertificateOutlined aria-hidden /> {t('myClasses.card.certificate')}
+            <span className="hub-sr-only">
+              : {courseName} {t('mySchool.card.newTab')}
+            </span>
+          </a>
+        ) : (
+          <button type="button" className="hub-btn hub-btn--certificate is-locked" aria-haspopup="dialog" onClick={onShowCertificateGaps}>
+            <LockOutlined aria-hidden /> {t('myClasses.card.certificate')}
+            <span className="hub-sr-only">
+              : {courseName} — {t('myClasses.card.certificateLocked')}
+            </span>
+          </button>
+        )}
+      </div>
     </article>
   )
 }
