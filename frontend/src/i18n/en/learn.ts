@@ -4,8 +4,8 @@ import type { learn as arLearn } from '../ar/learn'
 
 export const learn: typeof arLearn = {
   header: {
-    backToMySchool: 'Back to My classes',
-    mySchool: 'My classes',
+    backToMySchool: 'Back to My courses',
+    mySchool: 'My courses',
     breadcrumb: 'Breadcrumb',
     openContents: 'Course content',
   },
@@ -211,9 +211,10 @@ export const learn: typeof arLearn = {
   done: {
     title: 'You completed every required lesson of the course',
     text: 'Well done! You can come back and review the lessons whenever you like.',
-    backToMySchool: 'Back to My classes',
+    backToMySchool: 'Back to My courses',
     keepReviewing: 'Keep reviewing',
     certificateText: 'Well done! Your certificate was issued with the number {{serial}}.',
+    examsHint: 'If the course has exams, pass them: your certificate is issued automatically once your passing results are out.',
     viewCertificate: 'View my certificate',
   },
   errors: {

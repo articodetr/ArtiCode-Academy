@@ -3,19 +3,19 @@ import type { publicHome as arPublicHome } from '../ar/publicHome'
 
 export const publicHome: typeof arPublicHome = {
   meta: {
-    descriptionNamed: '{{name}} — structured learning programs in levels and lessons that you follow step by step, with your progress in My classes.',
-    description: 'Structured learning programs in levels and lessons that you follow step by step, with your progress in My classes.',
+    descriptionNamed: '{{name}} — structured learning programs in levels and lessons that you follow step by step, with your progress in My courses.',
+    description: 'Structured learning programs in levels and lessons that you follow step by step, with your progress in My courses.',
   },
   hero: {
     welcomeNamed: 'Welcome to {{name}}',
     welcome: 'Welcome',
     titleStart: 'Transform Your Future Through',
     titleHighlight: 'Professional Learning',
-    subtitle: 'Structured programs in levels and lessons that you follow step by step, with your progress in My classes.',
+    subtitle: 'Structured programs in levels and lessons that you follow step by step, with your progress in My courses.',
     browse: 'Browse programs',
     signIn: 'Sign in',
     accountsNote: 'Accounts are created by the academy.',
-    mySchool: 'My classes',
+    mySchool: 'My courses',
     dashboard: 'Dashboard',
     indicators: {
       media: 'Video, audio and files',
@@ -84,7 +84,7 @@ export const publicHome: typeof arPublicHome = {
       structure: 'Content ordered in levels and lessons',
       live: 'Sessions with your class and teachers',
       practice: 'Assignments, exams and grades',
-      progress: 'Your progress saved in My classes',
+      progress: 'Your progress saved in My courses',
       certificate: 'A verifiable completion certificate',
     },
     action: 'Discover the programs',
@@ -104,7 +104,7 @@ export const publicHome: typeof arPublicHome = {
     },
     learn: {
       title: 'Enroll and start learning',
-      text: 'Enroll in a class — at once for a free program, after payment and the academy’s approval for a paid one — then follow your lessons in My classes.',
+      text: 'Enroll in a class — at once for a free program, after payment and the academy’s approval for a paid one — then follow your lessons in My courses.',
     },
   },
   stats: {

@@ -39,6 +39,7 @@ import { CoursePricingFields } from './CoursePricingFields'
 import { OpenEnrollmentPanel } from './OpenEnrollmentPanel'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { courseFormHasChanges, courseFormValuesOf, planCoursePatch } from './courses.form'
+import { CourseResourcesField } from './CourseResourcesField'
 import type { CourseFormValues } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction } from './courses.status'
 import type { CourseMenuAction } from './courses.status'
@@ -225,6 +226,19 @@ export function CourseDrawer({ courseId, levels, onClose, onUpdated, onDeleted }
             DASH
           )}
         </Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.resources')}>
+          {(course.resources ?? []).length > 0 ? (
+            <Space orientation="vertical" size={2}>
+              {(course.resources ?? []).map((resource, index) => (
+                <Typography.Link key={`${index}:${resource.url}`} href={resource.url} target="_blank" rel="noopener noreferrer">
+                  {localizedLabel(resource.title, language)}
+                </Typography.Link>
+              ))}
+            </Space>
+          ) : (
+            DASH
+          )}
+        </Descriptions.Item>
         <Descriptions.Item label={t('courses.fields.summary')}>{course.summary ? localizedLabel(course.summary, language) : DASH}</Descriptions.Item>
         <Descriptions.Item label={t('courses.fields.description')}>
           {course.description ? localizedLabel(course.description, language) : DASH}
@@ -389,6 +403,8 @@ function CourseEditForm({ course, levels, onSaved, onCancel, onUnsavedChange }: 
       disabled={saving}
     >
       <CourseFormFields form={form} levels={levels} />
+      {/* J-F67: the course's own materials (its textbook), edited here only — the create form has none. */}
+      <CourseResourcesField />
       {canPrice ? (
         <CoursePricingFields course={course} />
       ) : (

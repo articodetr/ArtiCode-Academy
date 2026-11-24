@@ -389,7 +389,9 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   return (
     <ConfigProvider theme={{ token: { colorPrimary: ACCENT } }}>
       <div className={phone ? 'tt tt-mobile' : 'tt'}>
-        <PageHeader title={t('schedule.title')} subtitle={t('schedule.subtitle')} extra={modeSwitch} />
+        <div className="tt-head">
+          <PageHeader title={t('schedule.title')} subtitle={t('schedule.subtitle')} extra={modeSwitch} />
+        </div>
         {academy.error && !academy.academy ? <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={t('schedule.calendar.settingsFallback')} /> : null}
         <div className="tt-surface">
           {toolbar}

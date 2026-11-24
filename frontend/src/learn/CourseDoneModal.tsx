@@ -36,6 +36,8 @@ export function CourseDoneModal({ open, onClose, certificate = null }: { open: b
         <CheckCircleFilled className="learn-done__icon" aria-hidden />
         <span>{certificate ? t('learn.done.certificateText', { serial: certificate.serial }) : t('learn.done.text')}</span>
       </p>
+      {/* J-F67: the automatic certificate also waits for the class's exams — say so when none came with this answer. */}
+      {certificate ? null : <p className="learn-done__hint">{t('learn.done.examsHint')}</p>}
     </Modal>
   )
 }

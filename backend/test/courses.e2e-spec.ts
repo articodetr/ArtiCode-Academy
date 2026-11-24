@@ -42,6 +42,8 @@ const DTO_KEYS = [
   'minAge',
   'name',
   'pricing',
+  // J-F67: the course's own materials.
+  'resources',
   'sessionsCount',
   'status',
   'summary',

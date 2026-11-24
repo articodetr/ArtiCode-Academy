@@ -16,7 +16,7 @@ describe('CourseDoneModal (TEST-323)', () => {
 
   it('keeps the plain message without a certificate', () => {
     renderWithProviders(<CourseDoneModal open onClose={vi.fn()} />)
-    expect(screen.getByText('العودة إلى فصولي')).toBeInTheDocument()
+    expect(screen.getByText('العودة إلى دوراتي')).toBeInTheDocument()
     expect(screen.queryByText('عرض شهادتي')).not.toBeInTheDocument()
   })
 })

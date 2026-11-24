@@ -1,0 +1,214 @@
+// A course's lessons on «دوراتي» (J-F64's panel, on «دوراتي» — «فصولي» — since J-F67) and «دروسي» after J-F67: the summary
+// and the same panel for every course (a guardian: the lessons newest first). Moved from MyLessonsPage.hub.test.tsx.
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { useLocation } from 'react-router'
+import { beforeEach, describe, expect, it } from 'vitest'
+import type { LearningItem, LearningWorkspace, MyLearningCourse } from '../api/learning'
+import { ar } from '../i18n/ar'
+import { TITLES, makeItem, makeWorkspace, withSecondLevelClosed } from '../learn/learn.fixtures'
+import { resetWatchedMemory } from '../learn/watched.store'
+import { makeLearningCourse } from '../mySchool/mySchool.fixtures'
+import { makeAcademy } from '../test/academy'
+import { makeMyClassItem, makeMyClassList } from '../test/enrollments'
+import { jsonResponse, mockFetch } from '../test/http'
+import { makeMyLessonList } from '../test/myLessons'
+import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { MyClassesPage } from './MyClassesPage'
+import { MyLessonsPage } from './MyLessonsPage'
+
+const hub = ar.myLessons.hub
+const COURSE = makeLearningCourse({ course: { ...makeLearningCourse().course, id: 'c1', name: { ar: 'أساسيات البرمجة' } } })
+const CLASS = makeMyClassItem({ enrollmentId: COURSE.enrollmentId })
+
+function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWorkspace; items?: Record<string, LearningItem> } = {}) {
+  const { courses = [COURSE], workspace = makeWorkspace(), items = { i2: makeItem('i2'), i3: makeItem('i3') } } = options
+  const paths: string[] = []
+  const lessonQueries: URLSearchParams[] = []
+  mockFetch((url, init) => {
+    const { pathname, searchParams } = new URL(url, 'http://localhost')
+    paths.push(`${init?.method ?? 'GET'} ${pathname}`)
+    if (pathname === '/api/academy') return jsonResponse(200, makeAcademy())
+    if (pathname === '/api/me/learning') return jsonResponse(200, { items: courses })
+    if (pathname === '/api/me/learning/courses/c1') return jsonResponse(200, workspace)
+    const visit = /^\/api\/me\/learning\/items\/([^/]+)\/visit$/.exec(pathname)
+    if (visit) return jsonResponse(200, { progress: items[visit[1]!]!.progress })
+    const item = /^\/api\/me\/learning\/items\/([^/]+)$/.exec(pathname)
+    if (item) return items[item[1]!] ? jsonResponse(200, items[item[1]!]) : jsonResponse(404, { statusCode: 404, code: 'lesson_not_found' })
+    if (pathname === '/api/me/lessons') {
+      lessonQueries.push(searchParams)
+      return jsonResponse(200, makeMyLessonList([]))
+    }
+    if (pathname === '/api/me/classes') return jsonResponse(200, makeMyClassList([CLASS]))
+    return jsonResponse(404, { statusCode: 404, message: 'nope' })
+  })
+  return { paths, lessonQueries }
+}
+
+/** The address with its query: the chosen course and the opened lesson live there. */
+function AddressProbe() {
+  const { pathname, search } = useLocation()
+  return <output data-testid="location">{`${pathname}${search}`}</output>
+}
+
+function renderClasses(route = '/my-classes', roles = ['student']) {
+  return renderWithProviders(
+    <>
+      <MyClassesPage />
+      <AddressProbe />
+    </>,
+    { auth: makeAuth({ user: makeUser({ id: 'student-1', role: roles.includes('student') ? 'student' : 'guardian', roles, permissions: [] }) }), route, path: '/my-classes' },
+  )
+}
+
+function renderLessons(roles = ['student'], route = '/my-lessons') {
+  return renderWithProviders(<MyLessonsPage />, {
+    auth: makeAuth({ user: makeUser({ id: 'student-1', role: roles.includes('student') ? 'student' : 'guardian', roles, permissions: [] }) }),
+    route,
+  })
+}
+
+const row = (title: string) => screen.getByText(title, { selector: '.hub-row__title, .hub-row__title *' }).closest('li')!
+
+beforeEach(() => {
+  window.localStorage.clear()
+  resetWatchedMemory()
+})
+
+describe('«فصولي» — a course’s lessons below the cards (J-F67)', () => {
+  it('shows no lessons until a card is chosen, then the chosen course’s lessons by level below the cards', async () => {
+    const { paths } = serve()
+    renderClasses()
+
+    const card = await screen.findByTestId(`class-card-${CLASS.enrollmentId}`)
+    await waitFor(() => expect(within(card).getByRole('progressbar')).toBeInTheDocument())
+    expect(screen.queryByRole('region', { name: hub.panel.label.replace('{{course}}', 'أساسيات البرمجة') })).not.toBeInTheDocument()
+    expect(paths).not.toContain('GET /api/me/learning/courses/c1')
+
+    // The whole card chooses the course (its own button covers it).
+    fireEvent.click(within(card).getByRole('button', { name: ar.myClasses.card.select.replace('{{course}}', 'أساسيات بايثون') }))
+    expect(await screen.findByText(TITLES.i2)).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/my-classes?course=c1')
+    expect(card).toHaveClass('is-active')
+    const panel = screen.getByRole('region', { name: hub.panel.label.replace('{{course}}', 'أساسيات البرمجة') })
+    expect(screen.getByText('المستوى الأول — أساسيات')).toBeInTheDocument()
+    // The panel comes after the cards in the page.
+    expect(card.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(row(TITLES.i1)).getByText(hub.row.completed)).toBeInTheDocument()
+    expect(within(row(TITLES.i2)).getByRole('button', { name: new RegExp(hub.row.play) })).toBeInTheDocument()
+    expect(within(row(TITLES.i3)).getByRole('button', { name: new RegExp(hub.row.open) })).toBeInTheDocument()
+  })
+
+  it('chooses the course from «استعراض الدروس» too, and scrolls to its lessons', async () => {
+    serve()
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this)
+    }
+    try {
+      renderClasses()
+      const card = await screen.findByTestId(`class-card-${CLASS.enrollmentId}`)
+      await waitFor(() => expect(within(card).getByRole('progressbar')).toBeInTheDocument())
+      fireEvent.click(within(card).getByText(ar.myClasses.card.browse).closest('button')!)
+      expect(await screen.findByText(TITLES.i2)).toBeInTheDocument()
+      expect(scrolled.some((element) => element.classList.contains('hub-panel-anchor'))).toBe(true)
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
+
+  it('plays a YouTube lesson inside the page, keeps the list and closes back to it', async () => {
+    const { paths } = serve()
+    const { container } = renderClasses('/my-classes?course=c1')
+    await screen.findByText(TITLES.i2)
+
+    fireEvent.click(within(row(TITLES.i2)).getByRole('button', { name: new RegExp(hub.row.play) }))
+
+    const player = await screen.findByRole('region', { name: hub.player.label })
+    await waitFor(() => expect(player.querySelector('iframe')).not.toBeNull())
+    expect(player.querySelector('iframe')!.getAttribute('src')).toContain('youtube-nocookie.com/embed/dQw4w9WgXcQ')
+    expect(within(player).getByRole('progressbar', { name: ar.learn.lesson.watch.label })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/my-classes?course=c1&lesson=i2')
+    expect(within(row(TITLES.i2)).getByText(hub.row.playing)).toBeInTheDocument()
+    await waitFor(() => expect(paths).toContain('POST /api/me/learning/items/i2/visit'))
+
+    fireEvent.click(within(player).getByRole('button', { name: new RegExp(hub.player.close) }))
+    await waitFor(() => expect(container.querySelector('iframe')).toBeNull())
+    expect(screen.getByTestId('location')).toHaveTextContent('/my-classes?course=c1')
+  })
+
+  it('opens the lesson the address names', async () => {
+    serve()
+    renderClasses('/my-classes?course=c1&lesson=i2')
+    const player = await screen.findByRole('region', { name: hub.player.label })
+    await waitFor(() => expect(player.querySelector('iframe')).not.toBeNull())
+  })
+
+  it('never opens a lesson of a level that is not open yet', async () => {
+    const { paths } = serve({ workspace: withSecondLevelClosed(makeWorkspace()) })
+    renderClasses('/my-classes?course=c1&lesson=i3')
+    await screen.findByText(TITLES.i3)
+    expect(within(row(TITLES.i3)).queryByRole('button')).not.toBeInTheDocument()
+    expect(row(TITLES.i3)).toHaveTextContent('يُفتح في')
+    expect(screen.queryByRole('region', { name: hub.player.label })).not.toBeInTheDocument()
+    expect(paths).not.toContain('GET /api/me/learning/items/i3')
+  })
+
+  it('filters the lessons by type', async () => {
+    serve()
+    renderClasses('/my-classes?course=c1')
+    await screen.findByText(TITLES.i2)
+    fireEvent.click(screen.getByRole('button', { name: hub.filters.live }))
+    expect(await screen.findByText(hub.emptyFilter)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: hub.filters.recorded }))
+    expect(await screen.findByText(TITLES.i2)).toBeInTheDocument()
+  })
+})
+
+describe('«دروسي» after J-F67 — one list of every course’s lessons, newest first, in the look of «دوراتي»', () => {
+  it('gives a student the summary and one list naming each lesson’s course — no tabs, no cards, no sessions read', async () => {
+    const { paths } = serve()
+    renderLessons()
+
+    expect(await screen.findByRole('heading', { name: hub.title })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: ar.myLessons.feed.title })).toBeInTheDocument()
+    expect(await screen.findByText(TITLES.i2)).toBeInTheDocument()
+    // Newest first (the fixture adds i1 … i4 a day apart), each row naming its course and level.
+    const titles = [...document.querySelectorAll('.hub-row__title')].map((node) => node.textContent ?? '')
+    expect(titles.findIndex((text) => text.includes(TITLES.i4))).toBeLessThan(titles.findIndex((text) => text.includes(TITLES.i1)))
+    expect(within(row(TITLES.i2)).getByText(/أساسيات البرمجة/)).toBeInTheDocument()
+    expect(within(row(TITLES.i2)).getByRole('button', { name: new RegExp(hub.row.play) })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+    expect(document.querySelector('.hub-card, .hub-grid')).toBeNull()
+    expect(paths).not.toContain('GET /api/me/lessons')
+  })
+
+  it('plays a lesson inside the page from «دروسي» too', async () => {
+    serve()
+    renderLessons(['student'], '/my-lessons?course=c1&lesson=i2')
+    const player = await screen.findByRole('region', { name: hub.player.label })
+    await waitFor(() => expect(player.querySelector('iframe')).not.toBeNull())
+  })
+
+  it('offers the catalog when the student has no course', async () => {
+    serve({ courses: [] })
+    renderLessons()
+    expect(await screen.findByText(hub.empty.title)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: hub.empty.action })).toHaveAttribute('href', '/catalog')
+  })
+
+  it('keeps the old link of the learner home working: the same page', async () => {
+    serve()
+    renderLessons(['student'], '/my-lessons?view=sessions')
+    expect(await screen.findByText(TITLES.i2)).toBeInTheDocument()
+  })
+
+  it('gives a guardian their children’s lessons newest first: they follow, they do not study', async () => {
+    const { paths, lessonQueries } = serve()
+    renderLessons(['guardian'])
+    await waitFor(() => expect(lessonQueries.length).toBeGreaterThan(0))
+    expect(lessonQueries.at(-1)!.get('order')).toBe('desc')
+    expect(paths).not.toContain('GET /api/me/learning')
+    expect(screen.getByRole('heading', { name: ar.myLessons.title })).toBeInTheDocument()
+  })
+})

@@ -1,0 +1,137 @@
+// One enrollment of «دوراتي» as a card (J-F67), on the look of the course cards «دروسي» had (J-F64 — `learn/hub/hub.css`):
+// the class (API-060) with its course and lead teacher, and — when API-229 lists the enrollment — the course's cover,
+// its lesson count and the learner's progress. Every number is the server's (D-R133).
+// The card never leads to another page (Jallal's request): a card of a course the learner studies (`isStudyCourse()`)
+// is `selectable` — the whole card and «استعراض الدروس» show that course's lessons below the cards, on this page —
+// and an issued certificate of the enrollment (API-135) adds «الشهادة», which opens the certificate in a new tab, and
+// the course's own materials (API-229 `course.resources` — its textbook) add «المقرّر», each file in a new tab.
+// No enrollment badge, no class code, no period / class status / enrollment day, no «واصل التعلم».
+import { BookOutlined, FilePdfOutlined, PlayCircleOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons'
+import { Skeleton } from 'antd'
+import { useTranslation } from 'react-i18next'
+import type { MyClassItem } from '../api/enrollments'
+import type { MyLearningCourse, ProgressCounts } from '../api/learning'
+import { myCertificatePrintPath } from '../certificates/certificates.links'
+import { useLocalized } from '../i18n/useLocalized'
+import { ResourcesButton } from '../learn/hub/ResourcesButton'
+import { isHttpsUrl } from '../learn/learn.format'
+import { hasClassLessons } from '../lessons/myLessons.view'
+import { displayNameOf, localizedLabel } from '../users/users.format'
+
+interface MyClassCardProps {
+  row: MyClassItem
+  /** API-229's answer for this enrollment; null when it does not list it (or could not be read). */
+  learning: MyLearningCourse | null
+  /** The course's counts as the server last answered them (the lessons panel below may have moved them). */
+  counts: ProgressCounts | null
+  /** API-229 is still on its way. */
+  learningLoading: boolean
+  /** Name the student and their relation (a guardian, or a list holding a child's enrollment). */
+  showStudent: boolean
+  /** Choosing the card shows its course's lessons below the cards; null when the card cannot be chosen. */
+  onSelect: (() => void) | null
+  /** Its course's lessons are the ones shown below. */
+  active: boolean
+  /** The id of the enrollment's issued certificate (API-135); null when it has none. */
+  certificateId: string | null
+}
+
+export function MyClassCard({ row, learning, counts, learningLoading, showStudent, onSelect, active, certificateId }: MyClassCardProps) {
+  const { t } = useTranslation()
+  const { language } = useLocalized()
+  const className = localizedLabel(row.class.name, language)
+  const courseName = localizedLabel(row.class.course.name, language)
+  const cover = learning && isHttpsUrl(learning.course.coverImageUrl) ? learning.course.coverImageUrl : null
+  const materials = learning?.course.resources ?? []
+
+  return (
+    <article className={`hub-card hub-card--class${active ? ' is-active' : ''}`} data-testid={`class-card-${row.enrollmentId}`}>
+      {onSelect ? (
+        <button type="button" className="hub-card__select" aria-pressed={active} aria-label={t('myClasses.card.select', { course: courseName })} onClick={onSelect} />
+      ) : null}
+      <div className="hub-card__top">
+        <span className="hub-card__icon">{cover ? <img src={cover} alt="" referrerPolicy="no-referrer" decoding="async" /> : <ReadOutlined aria-hidden />}</span>
+        {learning ? (
+          <span className="hub-card__badges">
+            <span className="hub-badge hub-badge--kind">
+              <PlayCircleOutlined aria-hidden /> {t('myClasses.card.lessons', { total: (counts ?? learning.progress).total })}
+            </span>
+          </span>
+        ) : null}
+      </div>
+
+      <h3 className="hub-card__name">{className}</h3>
+
+      <p className="hub-card__teacher">
+        <BookOutlined aria-hidden /> <span>{courseName}</span>
+      </p>
+      {showStudent ? (
+        <p className="hub-card__teacher">
+          <TeamOutlined aria-hidden /> <span>{displayNameOf(row.student)}</span>
+          <span className={`hub-badge hub-badge--${row.relation === 'self' ? 'active' : 'recorded'} hub-badge--small`}>{t(`myClasses.relation.${row.relation}`)}</span>
+        </p>
+      ) : null}
+      <p className="hub-card__teacher">
+        <UserOutlined aria-hidden /> {row.class.leadTeacher ? displayNameOf(row.class.leadTeacher) : t('classes.noTeacher')}
+      </p>
+
+      {learning ? <ClassProgress item={learning} counts={counts ?? learning.progress} /> : learningLoading && hasClassLessons(row.enrollmentStatus) ? <Skeleton.Input active size="small" block /> : null}
+
+      {onSelect || certificateId || materials.length > 0 ? (
+        <div className="hub-card__actions">
+          {onSelect ? (
+            <button type="button" className="hub-card__browse" onClick={onSelect}>
+              <UnorderedListOutlined aria-hidden /> {t('myClasses.card.browse')}
+              <span className="hub-sr-only">: {courseName}</span>
+            </button>
+          ) : null}
+          <ResourcesButton
+            resources={materials}
+            label={t('myClasses.card.materials')}
+            labelMany={t('myClasses.card.materialsMany', { n: materials.length })}
+            context={courseName}
+            className="hub-btn--book"
+            icon={<FilePdfOutlined aria-hidden />}
+          />
+          {certificateId ? (
+            <a className="hub-btn hub-btn--certificate" href={myCertificatePrintPath(certificateId)} target="_blank" rel="noopener noreferrer">
+              <SafetyCertificateOutlined aria-hidden /> {t('myClasses.card.certificate')}
+              <span className="hub-sr-only">
+                : {courseName} {t('mySchool.card.newTab')}
+              </span>
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+/** The learner's progress in the course, as the cards of «دروسي» showed it: the server's counts and percent only. */
+function ClassProgress({ item, counts }: { item: MyLearningCourse; counts: ProgressCounts }) {
+  const { t } = useTranslation()
+  if (counts.total === 0) {
+    return (
+      <p className="hub-card__note" data-testid={`class-progress-${item.enrollmentId}`}>
+        {t('mySchool.card.noLessons')}
+      </p>
+    )
+  }
+  const percent = counts.percent ?? 0
+  return (
+    <div className="hub-progress" data-testid={`class-progress-${item.enrollmentId}`}>
+      <div className="hub-progress__text">
+        <span>{t('myClasses.card.progress')}</span>
+        <span>
+          <bdi dir="ltr">
+            {counts.completed} / {counts.total}
+          </bdi>{' '}
+          ({t('learn.progress.percent', { percent })})
+        </span>
+      </div>
+      <div className="hub-progress__bar" role="progressbar" aria-label={t('myClasses.card.progress')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className="hub-progress__fill" style={{ inlineSize: `${percent}%` }} />
+      </div>
+    </div>
+  )
+}

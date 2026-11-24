@@ -263,7 +263,7 @@ export const publicCatalog = {
     aboutLink: 'من نحن',
     openMenu: 'فتح القائمة',
     searchLink: 'البحث عن برنامج',
-    mySchool: 'فصولي',
+    mySchool: 'دوراتي',
     dashboard: 'لوحة التحكم',
   },
   footer: {

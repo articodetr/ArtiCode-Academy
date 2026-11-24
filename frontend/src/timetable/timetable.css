@@ -49,10 +49,35 @@
 
 /* ---- surface and layout ---------------------------------------------- */
 
+.tt:not(.tt-mobile) {
+  margin-top: -10px;
+}
+
+.app-shell--learner .tt:not(.tt-mobile) {
+  margin-bottom: -36px;
+}
+
+.tt:not(.tt-mobile) .tt-head > div {
+  margin-bottom: 8px !important;
+  align-items: center !important;
+}
+
+.tt:not(.tt-mobile) .tt-head > div > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tt:not(.tt-mobile) .tt-head h3.ant-typography {
+  font-size: 20px;
+  line-height: 1.3;
+}
+
 .tt-surface {
   background: var(--tt-surface);
   border-radius: 20px;
-  padding: 20px 24px 24px;
+  padding: 12px 20px;
   box-shadow:
     0 1px 2px rgba(37, 32, 74, 0.05),
     0 18px 40px -28px rgba(76, 54, 184, 0.35);
@@ -63,8 +88,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 16px;
-  margin-bottom: 16px;
+  gap: 8px 16px;
+  margin-bottom: 8px;
 }
 
 .tt-toolbar__nav {
@@ -76,9 +101,9 @@
 
 .tt-toolbar__range {
   margin: 0 4px;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
   color: var(--tt-ink);
 }
 
@@ -93,9 +118,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 12px;
-  padding: 12px;
-  margin-bottom: 16px;
+  gap: 8px 10px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
   border-radius: 14px;
   background: var(--tt-accent-wash);
 }
@@ -103,7 +128,7 @@
 .tt-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 24px;
+  gap: 20px;
   align-items: start;
 }
 
@@ -115,7 +140,7 @@
 
 .tt-side {
   display: grid;
-  gap: 20px;
+  gap: 12px;
   align-content: start;
   min-width: 0;
 }
@@ -130,8 +155,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  margin-top: 12px;
-  font-size: 12.5px;
+  margin-top: 6px;
+  font-size: 12px;
   color: var(--tt-muted);
 }
 
@@ -155,7 +180,7 @@
 
 .tt-grid__head {
   align-items: center;
-  padding-bottom: 14px;
+  padding-bottom: 6px;
 }
 
 .tt-grid__corner {
@@ -166,11 +191,11 @@
 
 .tt-dayhead {
   appearance: none;
-  height: 40px;
+  height: 32px;
   margin: 0 6px;
   padding: 0 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   background: transparent;
   display: flex;
   align-items: center;
@@ -205,14 +230,14 @@
 }
 
 .tt-dayhead__num {
-  font-size: 16px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--tt-text);
   font-variant-numeric: tabular-nums;
 }
 
 .tt-dayhead__name {
-  font-size: 14px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -252,7 +277,7 @@
   position: absolute;
   inset-inline: 0 10px;
   transform: translateY(-50%);
-  font-size: 12px;
+  font-size: 10.5px;
   line-height: 1;
   color: var(--tt-muted);
   text-align: center;
@@ -263,6 +288,7 @@
 .tt-col {
   position: relative;
   border-inline-start: 1px solid var(--tt-line);
+  border-bottom: 1px solid var(--tt-hourline);
   background-image: repeating-linear-gradient(
     to bottom,
     var(--tt-hourline) 0,
@@ -293,8 +319,8 @@
 .tt-slot {
   position: absolute;
   box-sizing: border-box;
-  padding: 3px 4px 4px;
-  min-height: 24px;
+  padding: 1px 3px;
+  min-height: 14px;
   /* The card adapts to its real size: its width (a seven-day week, slots side by side, the day view)
      and, since J-F17, its height. */
   container: tt-slot / size;
@@ -323,7 +349,7 @@
 
 .tt-grid__overlay {
   position: absolute;
-  inset-block: 54px 0;
+  inset-block: 38px 0;
   inset-inline: var(--tt-axis) 0;
   display: flex;
   align-items: flex-start;
@@ -372,9 +398,9 @@
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--tt-tone-bg);
   color: var(--tt-tone-ink);
   font: inherit;
@@ -542,7 +568,7 @@
 }
 
 .tt-event.is-compact {
-  padding: 6px 10px;
+  padding: 4px 8px;
 }
 
 .tt-event.is-compact .tt-event__title {
@@ -552,19 +578,27 @@
 .tt-event.is-tiny {
   flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 5px;
 }
 
 .tt-event.is-tiny .tt-event__title {
-  -webkit-line-clamp: 1;
-  font-size: 12px;
+  flex: 1 1 0;
+  min-width: 0;
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10.5px;
+  line-height: 1.15;
 }
 
 .tt-event.is-tiny .tt-event__time {
+  flex: none;
   margin: 0;
   padding: 0;
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1.15;
 }
 
 /* Overlapping slots side by side: the course (wrapping) and a compact time that may wrap after its dash. */
@@ -678,6 +712,7 @@
   }
 
   .tt-slot.is-cascade .tt-event.is-tiny .tt-event__title {
+    flex: none;
     line-height: 1.2;
   }
 
@@ -702,27 +737,56 @@
   font-size: 13px;
 }
 
-/* A short card that cannot hold the course over the time with the usual spacing (the slot's box minus
-   its padding under 6 + 17.6 + 2 + 20.9 + 6 px: 41–55 minutes at 64 px per hour, 51–68 at 52) tightens
-   instead of dropping the time (J-F22 — the owner's note 1 on #61: J-F17 hid the time here, so such a
-   card showed less than a shorter one and a long week lost the time of every one-hour slot). With
-   2 + 16.2 + 2 + 13.2 + 2 px the course and the time fit from a 44 px slot, the smallest compact card;
-   one row would not do in a week column, where a course name pushes the time out. The time does not
-   wrap after its dash here: there is no room for a second line. A wide card holds both on one row. */
+/* In the compact 24-hour grid, a compact card under 34 px of slot height keeps course and time on one
+   row; between 34 px and 52.49 px it stacks two tight lines so both stay visible (J-F22). */
 @container tt-slot (max-height: 52.49px) and (max-width: 279.98px) {
   .tt-slot .tt-event.is-compact {
-    padding-block: 2px;
+    padding: 2px 6px;
+    gap: 1px;
   }
 
   .tt-slot .tt-event.is-compact .tt-event__title {
-    line-height: 1.2;
+    font-size: 11.5px;
+    line-height: 1.15;
   }
 
   .tt-slot .tt-event.is-compact .tt-event__time {
     padding-top: 0;
-    font-size: 11px;
-    line-height: 1.2;
+    font-size: 10px;
+    line-height: 1.15;
     white-space: nowrap;
+  }
+}
+
+@container tt-slot (max-height: 33.99px) and (max-width: 279.98px) {
+  .tt-slot .tt-event.is-compact {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    border-radius: 5px;
+  }
+
+  .tt-slot .tt-event.is-compact > .tt-event__extras {
+    display: none;
+  }
+
+  .tt-slot .tt-event.is-compact .tt-event__title {
+    flex: 1 1 0;
+    min-width: 0;
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 10.5px;
+    line-height: 1.15;
+  }
+
+  .tt-slot .tt-event.is-compact .tt-event__time {
+    flex: none;
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    line-height: 1.15;
   }
 }
 
@@ -811,10 +875,38 @@
   }
 }
 
+@container tt-slot (min-width: 280px) and (max-height: 35.99px) {
+  .tt-slot .tt-event.is-compact:not(.is-narrow) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: 'title extras time';
+    align-items: center;
+    padding: 0 10px;
+    border-radius: 6px;
+  }
+
+  .tt-slot .tt-event.is-compact:not(.is-narrow) .tt-event__title {
+    font-size: 12px;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .tt-slot .tt-event.is-compact:not(.is-narrow) > .tt-event__extras {
+    margin-top: 0;
+    align-self: center;
+  }
+
+  .tt-slot .tt-event.is-compact:not(.is-narrow) .tt-event__time {
+    padding-top: 0;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+}
+
 /* ---- month calendar ---------------------------------------------------- */
 
 .tt-month {
-  padding: 14px 12px 8px;
+  padding: 10px 10px 6px;
   border: 1px solid var(--tt-line);
   border-radius: 16px;
   background: var(--tt-surface);
@@ -825,12 +917,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 4px 8px;
+  margin: 0 4px 4px;
 }
 
 .tt-month__title {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--tt-text);
 }
@@ -838,12 +930,12 @@
 .tt-month__grid {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0 4px;
+  border-spacing: 0 2px;
   table-layout: fixed;
 }
 
 .tt-month__grid th {
-  padding: 2px 0 4px;
+  padding: 2px 0;
   font-size: 11px;
   font-weight: 600;
   color: var(--tt-muted);
@@ -873,15 +965,15 @@
 
 .tt-month__day {
   appearance: none;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   color: var(--tt-accent-ink);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: background-color 0.15s;
@@ -905,23 +997,25 @@
 
 .tt-upcoming__title {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--tt-ink);
 }
 
 .tt-upcoming__hint {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--tt-muted);
 }
 
 .tt-upcoming__list {
   list-style: none;
-  margin: 12px 0 0;
-  padding: 10px 6px;
+  margin: 8px 0 0;
+  padding: 6px;
   display: grid;
   gap: 2px;
+  max-height: 210px;
+  overflow-y: auto;
   border: 1px solid var(--tt-line);
   border-radius: 16px;
 }
@@ -934,9 +1028,9 @@
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  padding: 8px;
+  padding: 6px;
   border: 0;
   border-radius: 12px;
   background: transparent;
@@ -952,9 +1046,9 @@
 
 .tt-tile {
   flex: none;
-  width: 54px;
-  height: 58px;
-  border-radius: 12px;
+  width: 46px;
+  height: 48px;
+  border-radius: 10px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -964,12 +1058,12 @@
 }
 
 .tt-tile__day {
-  padding: 2px 0;
+  padding: 1px 0;
   background: var(--tt-accent);
   color: #fff;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  line-height: 16px;
+  line-height: 15px;
 }
 
 .tt-tile__num {
@@ -977,7 +1071,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -1033,6 +1127,11 @@
 .tt-mobile .tt-surface {
   padding: 14px 12px 16px;
   border-radius: 18px;
+}
+
+.tt-mobile .tt-upcoming__list {
+  max-height: none;
+  overflow-y: visible;
 }
 
 /* The mode switch of the page header («Academy schedule | My schedule» is 241 px in English) narrows

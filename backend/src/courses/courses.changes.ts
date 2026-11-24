@@ -5,6 +5,7 @@
 // (POST /api/courses/:id/status).
 import { sameLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
+import type { LessonResource } from '../learning/learning.content.js';
 
 export const COURSE_PATCH_FIELDS = [
   'code',
@@ -19,6 +20,8 @@ export const COURSE_PATCH_FIELDS = [
   // MOD-19 (D-R122/D-R129): the cover and the plan that prices a request.
   'coverImageUrl',
   'enrollmentFeePlanId',
+  // J-F67: the course's own materials (its textbook), replaced as a whole.
+  'resources',
 ] as const;
 export type CoursePatchField = (typeof COURSE_PATCH_FIELDS)[number];
 
@@ -37,6 +40,7 @@ export interface CourseValues {
   maxAge: number | null;
   coverImageUrl: string | null;
   enrollmentFeePlanId: string | null;
+  resources: LessonResource[];
 }
 
 export type CoursePatch = Partial<CourseValues>;
@@ -65,7 +69,9 @@ export function planCourseUpdate(current: CourseValues, patch: CoursePatch): Cou
     if (requested === undefined) continue;
     const unchanged = LOCALIZED.has(field)
       ? sameLocalizedText(current[field] as LocalizedText | null, requested as LocalizedText | null)
-      : current[field] === requested;
+      : field === 'resources'
+        ? JSON.stringify(current.resources) === JSON.stringify(requested)
+        : current[field] === requested;
     if (unchanged) continue;
     (data as Record<string, unknown>)[field] = requested;
     fields.push(field);

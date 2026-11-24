@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { IsDecimalNumber } from '../common/decimal-number.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
@@ -260,6 +260,21 @@ export class UpdateCourseDto {
   coverImageUrl?: string | null;
 
   @ApiPropertyOptional({
+    type: () => [CourseResourceDto],
+    maxItems: 20,
+    description:
+      'J-F67: the course’s own materials (its textbook) as a whole new list — [{ title: { ar, en?, tr? }, url }], https only, at most 20; [] removes them. ' +
+      'Checked as a lesson’s resources (400 resources_invalid { problems }). A lesson’s attachments stay on the lesson (API-228).',
+  })
+  // The raw JSON array: the global implicit conversion would turn each object into an array (as API-228 does).
+  @Transform(({ obj }: { obj: Record<string, unknown> }) => obj['resources'])
+  // Absent, never null: `IsOptional` would let a null through to the service.
+  @ValidateIf((dto: UpdateCourseDto) => dto.resources !== undefined)
+  @IsArray()
+  @ArrayMaxSize(20)
+  resources?: unknown[];
+
+  @ApiPropertyOptional({
     type: String,
     format: 'uuid',
     nullable: true,
@@ -357,6 +372,9 @@ export class CourseDto {
   @ApiProperty({ type: String, nullable: true, description: 'MOD-19: an absolute http(s) URL of the cover image' })
   coverImageUrl: string | null;
 
+  @ApiProperty({ type: () => [CourseResourceDto], description: 'J-F67: the course’s own materials (its textbook), [] when none' })
+  resources: CourseResourceDto[];
+
   @ApiProperty({ enum: COURSE_PRICINGS, description: 'MOD-19 (D-R122): paid exactly when `enrollmentFeePlan` is set' })
   pricing: CoursePricing;
 
@@ -376,4 +394,13 @@ export class CourseListDto {
 
   @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })
   nextCursor: string | null;
+}
+
+/** One of a course's own materials (J-F67): the shape of a lesson's resource. */
+export class CourseResourceDto {
+  @ApiProperty({ type: () => LocalizedTextDto })
+  title: LocalizedText;
+
+  @ApiProperty({ example: 'https://cdn.example.org/textbook.pdf' })
+  url: string;
 }

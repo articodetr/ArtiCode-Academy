@@ -10,6 +10,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { CourseStatus } from '../generated/prisma/client.js';
 import { COURSE_PLAN_SELECT, coursePlanFits, toCourseFeePlan } from '../catalog/course-pricing.js';
 import { FEE_PLANS_MANAGE_PERMISSION } from '../finance/finance.policy.js';
+import { parseLessonResources, readLessonResources } from '../learning/learning.content.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { escapeLikePattern } from '../users/users.validation.js';
@@ -53,6 +54,7 @@ const COURSE_SELECT = {
   createdAt: true,
   updatedAt: true,
   coverImageUrl: true,
+  resources: true,
   level: { select: { id: true, code: true, name: true, isActive: true } },
   enrollmentFeePlan: { select: COURSE_PLAN_SELECT },
   _count: { select: { syllabusItems: true } },
@@ -78,6 +80,7 @@ function toCourseDto(row: CourseRow, currency: string): CourseDto {
     maxAge: row.maxAge,
     syllabusCount: row._count.syllabusItems,
     coverImageUrl: row.coverImageUrl,
+    resources: readLessonResources(row.resources),
     pricing: row.enrollmentFeePlan ? 'paid' : 'free',
     enrollmentFeePlan: row.enrollmentFeePlan ? toCourseFeePlan(row.enrollmentFeePlan, currency) : null,
     createdAt: row.createdAt.toISOString(),
@@ -98,6 +101,7 @@ function valuesOf(row: CourseRow): CourseValues {
     maxAge: row.maxAge,
     coverImageUrl: row.coverImageUrl,
     enrollmentFeePlanId: row.enrollmentFeePlan?.id ?? null,
+    resources: readLessonResources(row.resources),
   };
 }
 
@@ -119,6 +123,7 @@ function toUpdateInput(data: CoursePatch): Prisma.CourseUncheckedUpdateInput {
   if (data.maxAge !== undefined) input.maxAge = data.maxAge;
   if (data.coverImageUrl !== undefined) input.coverImageUrl = data.coverImageUrl;
   if (data.enrollmentFeePlanId !== undefined) input.enrollmentFeePlanId = data.enrollmentFeePlanId;
+  if (data.resources !== undefined) input.resources = data.resources as unknown as Prisma.InputJsonValue;
   return input;
 }
 
@@ -280,6 +285,12 @@ export class CoursesService {
     if (input.maxAge !== undefined) patch.maxAge = input.maxAge;
     if (input.coverImageUrl !== undefined) patch.coverImageUrl = input.coverImageUrl;
     if (input.enrollmentFeePlanId !== undefined) patch.enrollmentFeePlanId = input.enrollmentFeePlanId;
+    if (input.resources !== undefined) {
+      // J-F67: the rules of a lesson's resources (https, a localized title, at most 20).
+      const check = parseLessonResources(input.resources);
+      if (!check.ok) throw coursesError.resourcesInvalid(check.problems);
+      patch.resources = check.resources;
+    }
 
     const current = valuesOf(row);
     const badRange = invalidAgeRange(current, patch);

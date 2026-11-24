@@ -5,6 +5,7 @@ import { ROSTER_STUDENT_SELECT, rosterProjectionOf, toRosterStudentDto } from '.
 import { Prisma } from '../generated/prisma/client.js';
 import { gradesError } from '../grades/grades.errors.js';
 import { toIso } from '../lessons/lessons.time.js';
+import { AutoCertificatesService } from '../certificates/auto-certificates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type {
   CorrectKeyDto,
@@ -121,6 +122,7 @@ export class ExamAttemptsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly grading: ExamGradingService,
+    private readonly autoCertificates: AutoCertificatesService,
   ) {}
 
   /** API-274 — the attempts of an exam by student, with its figures. */
@@ -257,7 +259,7 @@ export class ExamAttemptsService {
 
   /** API-272 — corrects the key of one frozen question and grades the finished attempts again (D-R161). */
   async correctKey(examId: string, examQuestionId: string, input: CorrectKeyDto, caller: AuthPrincipal, ctx: RequestContext): Promise<KeyCorrectionResultDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const result = await this.prisma.db.$transaction(async (tx) => {
       const exam = await this.lockCorrectable(tx, examId, caller);
       // Before the copy is read or changed: no attempt may finish between the old key and the regrade.
       await this.grading.lockAttemptsOf(tx, examId);
@@ -287,11 +289,14 @@ export class ExamAttemptsService {
       const after = await tx.examQuestion.findUniqueOrThrow({ where: { id: link.id }, select: EXAM_QUESTION_LINK_SELECT });
       return { changed: true, question: toExamQuestionItem(after), regrade };
     }, GRADING_TX);
+    // CH-0244: a corrected key may turn a failed result into a pass — the course certificate is checked after the commit.
+    if (result.regrade.changedResults > 0) await this.autoCertificates.awardForExam(examId);
+    return result;
   }
 
   /** API-273 — grades every finished attempt again from the frozen copies; nothing is written or recorded when nothing changes. */
   async regrade(examId: string, input: RegradeExamDto, caller: AuthPrincipal, ctx: RequestContext): Promise<RegradeSummaryDto> {
-    return this.prisma.db.$transaction(async (tx) => {
+    const summary = await this.prisma.db.$transaction(async (tx) => {
       const exam = await this.lockCorrectable(tx, examId, caller);
       const summary = await this.grading.regrade(tx, examId, new Date());
       if (summary.changedAttempts === 0 && summary.changedResults === 0) return summary;
@@ -308,6 +313,9 @@ export class ExamAttemptsService {
       );
       return summary;
     }, GRADING_TX);
+    // CH-0244: as after a key correction.
+    if (summary.changedResults > 0) await this.autoCertificates.awardForExam(examId);
+    return summary;
   }
 
   // ---------------------------------------------------------------------------

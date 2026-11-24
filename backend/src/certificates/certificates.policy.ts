@@ -3,6 +3,11 @@
 // which enrollment may receive a certificate, and the serial and the
 // verification code (D-R53).
 import { randomInt } from 'node:crypto';
+import { isResultReleased } from '../exams/attempts.policy.js';
+import type { ExamDeliveryValue, ExamResultsReleaseValue } from '../exams/exams.online.js';
+import type { ResultSourceValue } from '../exams/my-exams.policy.js';
+import { Prisma } from '../generated/prisma/client.js';
+import type { ExamResultStatus, ExamStatus } from '../generated/prisma/client.js';
 
 export const ISSUE_CERTIFICATES_PERMISSION = 'certificates.issue';
 export const READ_ALL_CERTIFICATES_PERMISSION = 'certificates.read_all';
@@ -61,10 +66,54 @@ export function ineligibilityOf(input: EligibilityInput): IneligibleReason | nul
  * CH-0363: the automatic course-completion certificate. A student receives one
  * per course: every required published lesson completed, an active or completed
  * enrollment, and no certificate for the course yet — a revoked one counts, so
- * a revocation is never undone automatically.
+ * a revocation is never undone automatically. Since J-F67 (Jallal's request:
+ * the subject examined and the curriculum taken in full) also every exam of the
+ * class — and since CH-0244 (Jallal's decision: the student must PASS them, not
+ * just take them) every exam passed — `examPassed()` + `examsComplete()`.
  */
-export function earnsAutomaticCertificate(input: { hasCertificateForCourse: boolean; enrolled: boolean; courseComplete: boolean }): boolean {
-  return !input.hasCertificateForCourse && input.enrolled && input.courseComplete;
+export function earnsAutomaticCertificate(input: { hasCertificateForCourse: boolean; enrolled: boolean; courseComplete: boolean; examsPassed: boolean }): boolean {
+  return !input.hasCertificateForCourse && input.enrolled && input.courseComplete && input.examsPassed;
+}
+
+/**
+ * J-F67 / CH-0244: every scheduled or published exam of the class is in `passedExamIds` (`examPassed()`). A class
+ * without such an exam has nothing to wait for.
+ */
+export function examsComplete(examIds: readonly string[], passedExamIds: ReadonlySet<string>): boolean {
+  return examIds.every((id) => passedExamIds.has(id));
+}
+
+/** The exam fields `examPassed()` reads (`passScore` as `numeric(6,2)` text, or null when the exam has no pass mark). */
+export interface CertificateExamView {
+  status: ExamStatus;
+  delivery: ExamDeliveryValue;
+  resultsRelease: ExamResultsReleaseValue;
+  passScore: string | null;
+}
+
+/** The student's `exam_results` row for that exam (`score` as `numeric(6,2)` text), or null when there is none. */
+export interface CertificateResultView {
+  status: ExamResultStatus;
+  score: string | null;
+  source: ResultSourceValue;
+}
+
+/**
+ * CH-0244 — the student passed this exam, as far as they may know it:
+ *   1. the result is visible to them — the rule of «my exams» (`visibleResult()` of my-exams.policy.ts): once the
+ *      exam is published, or at once for the counted result of an online exam that releases on submit. A certificate
+ *      never tells a learner they passed before their result is out;
+ *   2. and it is `excused` (left out, as in the gradebook), or `scored` at or above the exam's pass mark (`passScore`;
+ *      an exam without one only needs a score). An `absent` result, or none, is not a pass. An online exam's
+ *      counted result is its highest finished attempt (D-R153), so a learner with an attempt left can still pass.
+ */
+export function examPassed(exam: CertificateExamView, result: CertificateResultView | null): boolean {
+  if (result === null) return false;
+  const visible = exam.status === 'published' || (isResultReleased(exam) && result.source === 'online');
+  if (!visible) return false;
+  if (result.status === 'excused') return true;
+  if (result.status !== 'scored' || result.score === null) return false;
+  return exam.passScore === null || new Prisma.Decimal(result.score).gte(exam.passScore);
 }
 
 /** The `number_sequences` key of the certificate serials; the period is the year. */

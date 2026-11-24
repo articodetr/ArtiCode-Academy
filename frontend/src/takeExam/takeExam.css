@@ -759,3 +759,19 @@
     flex: 1 1 auto;
   }
 }
+
+/* J-F67: the exam of a lesson in a popup (LessonExamModal) — the page inside it fits the popup, its header stays on top. */
+.take-page--embedded {
+  min-block-size: auto;
+  border-radius: 12px;
+  overflow: clip;
+}
+
+.take-exam-modal .ant-modal-container {
+  padding: 12px;
+}
+
+.take-exam-modal .ant-modal-body {
+  max-block-size: calc(100vh - 120px);
+  overflow-y: auto;
+}

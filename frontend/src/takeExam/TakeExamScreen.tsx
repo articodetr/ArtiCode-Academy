@@ -18,7 +18,7 @@
 // the focus to the heading of what came on screen.
 import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Skeleton, Spin } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -58,12 +58,17 @@ interface FrameProps {
   children: ReactNode
 }
 
+/** J-F67: the screen inside the popup of a lesson's exam (learn/hub) — its window has its own way out and no topbar. */
+const EmbeddedContext = createContext(false)
+
 /** The page's own frame: the way back and the language, the sticky header, the content. */
 function Frame({ title, meta, side, children }: FrameProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
+  const embedded = useContext(EmbeddedContext)
   return (
-    <div className="take-page">
+    <div className={embedded ? 'take-page take-page--embedded' : 'take-page'}>
+      {embedded ? null : (
       <div className="take-topbar">
         <Link to={MY_EXAMS_ROUTE} className="take-back-link">
           {language === 'ar' ? <ArrowRightOutlined aria-hidden /> : <ArrowLeftOutlined aria-hidden />}
@@ -72,6 +77,7 @@ function Frame({ title, meta, side, children }: FrameProps) {
         <span className="take-topbar__spacer" />
         <LanguageSwitcher />
       </div>
+      )}
       <header className="take-header">
         <div className="take-header__titles">
           <h1 className="take-header__title">
@@ -88,7 +94,23 @@ function Frame({ title, meta, side, children }: FrameProps) {
   )
 }
 
-export function TakeExamScreen({ attemptId }: { attemptId: string }) {
+interface TakeExamScreenProps {
+  attemptId: string
+  /** J-F67: inside the popup of a lesson's exam — no topbar (the popup closes itself). */
+  embedded?: boolean
+  /** J-F67: whether an answer has not reached the server yet, for the popup that holds the screen. */
+  onUnsavedChange?: (unsaved: boolean) => void
+}
+
+export function TakeExamScreen({ embedded = false, ...props }: TakeExamScreenProps) {
+  return (
+    <EmbeddedContext.Provider value={embedded}>
+      <TakeExamBody {...props} />
+    </EmbeddedContext.Provider>
+  )
+}
+
+function TakeExamBody({ attemptId, onUnsavedChange }: Omit<TakeExamScreenProps, 'embedded'>) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { modal } = App.useApp()
@@ -133,6 +155,10 @@ export function TakeExamScreen({ attemptId }: { attemptId: string }) {
   // browser's own prompt. Leaving itself sends what is unsaved once more (the session's stop()).
   const unsaved = isLive(status) && save.unsaved
   const { holdNavigation } = useUnsavedChangesGuard(unsaved, nothingToDiscard, 'takeExam.leave.unsaved')
+  useEffect(() => {
+    onUnsavedChange?.(unsaved)
+  }, [unsaved, onUnsavedChange])
+  useEffect(() => () => onUnsavedChange?.(false), [onUnsavedChange])
 
   // --- Before the attempt is known ------------------------------------------------------------------------------
   if (status === 'not_found') {
