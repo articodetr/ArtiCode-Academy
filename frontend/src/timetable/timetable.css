@@ -1378,3 +1378,25 @@
   max-width: none;
   margin-bottom: 4px;
 }
+
+/* Local preview (Ahmed, 2026-11-24): a compact card from 47 px of content shows the course on two lines
+   instead of cutting it after the first: tighter padding, a 12 px course and a 10.5 px time. */
+@container tt-slot (min-height: 47px) and (max-width: 279.98px) {
+  .tt-slot .tt-event.is-compact {
+    padding: 2px 8px;
+    justify-content: center;
+  }
+
+  .tt-slot .tt-event.is-compact .tt-event__title {
+    -webkit-line-clamp: 2;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .tt-slot .tt-event.is-compact .tt-event__time {
+    padding-top: 1px;
+    font-size: 10.5px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+}
