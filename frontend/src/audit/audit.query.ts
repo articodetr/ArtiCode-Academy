@@ -74,6 +74,9 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'guardians.unlinked',
   'academy.',
   'academy.updated',
+  // Settings → homepage images: a picture of /home replaced, or restored to its default.
+  'academy.homepage_image.updated',
+  'academy.homepage_image.reset',
   // MOD-02-T06 (CH-0089)
   'branches.',
   'branches.created',

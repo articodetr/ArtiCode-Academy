@@ -40,7 +40,7 @@ import { useNavigate } from 'react-router'
 import { PUBLIC_SEARCH_MAX_LENGTH } from '../publicCatalog/publicCatalog.view'
 import { programsPathFor } from '../publicCatalog/publicViewer'
 import type { PublicViewer } from '../publicCatalog/publicViewer'
-import { HOME_IMAGES } from './homeImages'
+import { HomeImage } from './HomeImage'
 import { formatHomeStat } from './publicHome.view'
 import type { HomeStats } from './publicHome.view'
 
@@ -147,7 +147,7 @@ export function HomeHero({
         <div className="public-home__hero-visual">
           <span className="public-home__hero-disc" aria-hidden="true" />
           <div className="public-home__hero-figure">
-            <img src={HOME_IMAGES.heroStudent} alt="" width={760} height={981} decoding="async" fetchPriority="high" />
+            <HomeImage place="heroStudent" alt="" width={760} height={981} decoding="async" fetchPriority="high" />
           </div>
           <HeroLaptop />
           <HeroBadge place="top" icon={<WifiOutlined />} title={t('publicHome.hero.badges.online')} text={t('publicHome.hero.badges.onlineText')} />

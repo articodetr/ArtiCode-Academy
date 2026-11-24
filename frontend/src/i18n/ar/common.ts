@@ -147,6 +147,7 @@ export const nav = {
   branches: 'الفروع',
   rooms: 'القاعات',
   gradeSchemes: 'سلالم التقدير',
+  homepageImages: 'صور الصفحة الرئيسية',
 }
 
 export const server = {

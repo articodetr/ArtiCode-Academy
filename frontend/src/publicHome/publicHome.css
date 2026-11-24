@@ -283,6 +283,11 @@
   max-width: none;
   height: 91%;
   transform: translateX(-50%);
+  /* The box of the built-in picture (760 × 981, its exact shape): an academy's own picture of another shape fits inside
+     it whole, undistorted and standing on its bottom edge, never wider or narrower than the figure's rounded mask. */
+  aspect-ratio: 760 / 981;
+  object-fit: contain;
+  object-position: center bottom;
 }
 
 .public-home__hero-laptop {

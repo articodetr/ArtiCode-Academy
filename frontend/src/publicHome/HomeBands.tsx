@@ -32,7 +32,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { useLocalized } from '../i18n/useLocalized'
-import { HOME_IMAGES } from './homeImages'
+import { HomeImage } from './HomeImage'
 import { formatHomeStat } from './publicHome.view'
 import type { HomeStats } from './publicHome.view'
 
@@ -132,7 +132,7 @@ export function HomeAbout({ programsPath }: { programsPath: string | null }) {
           ) : null}
         </div>
         <div className="public-home__photo-frame">
-          <img src={HOME_IMAGES.aboutLearners} alt="" width={960} height={680} loading="lazy" decoding="async" />
+          <HomeImage place="aboutLearners" alt="" width={960} height={680} loading="lazy" decoding="async" />
           <div className="public-home__photo-badge">
             <span aria-hidden="true">
               <TeamOutlined />
@@ -249,7 +249,7 @@ export function HomePromo({ programsPath }: { programsPath: string | null }) {
           ) : null}
         </div>
         <div className="public-home__photo-frame public-home__photo-frame--promo">
-          <img src={HOME_IMAGES.promoTraining} alt="" width={900} height={600} loading="lazy" decoding="async" />
+          <HomeImage place="promoTraining" alt="" width={900} height={600} loading="lazy" decoding="async" />
           <div className="public-home__photo-badge">
             <span aria-hidden="true">
               <VideoCameraOutlined />
@@ -297,7 +297,7 @@ export function HomeWhy() {
             ))}
           </ul>
           <div className="public-home__why-photo">
-            <img src={HOME_IMAGES.whyClassroom} alt="" width={800} height={760} loading="lazy" decoding="async" />
+            <HomeImage place="whyClassroom" alt="" width={800} height={760} loading="lazy" decoding="async" />
           </div>
         </div>
       </div>
