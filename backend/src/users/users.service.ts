@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isPendingSelfRegistration } from '../account/registration.rules.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { ACADEMY_ADMIN_ROLE_KEY } from '../authorization/system-roles.js';
@@ -48,7 +49,7 @@ import {
   removesActiveAccount,
   revokesSessions,
 } from './users.status.js';
-import type { AccountAction } from './users.status.js';
+import type { AccountAction, AccountStateOptions } from './users.status.js';
 import { calendarDateToDate, escapeLikePattern } from './users.validation.js';
 
 /**
@@ -143,12 +144,15 @@ const CURRENT_SELECT = {
 } satisfies Prisma.UserSelect;
 
 // What a status change (users.status.ts) decides on, plus the roles for SEC-R-17 and the last-admin rule.
+// The password hash is read only to know whether the account has one (a self-registered `pending` account
+// without a password cannot be activated — PORTAL-03); it never leaves the service.
 const STATE_SELECT = {
   id: true,
   status: true,
   deletedAt: true,
   lockedUntil: true,
   failedLoginCount: true,
+  passwordHash: true,
   roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
 } satisfies Prisma.UserSelect;
 
@@ -608,7 +612,9 @@ export class UsersService {
    * Order of the checks: 404 (unknown, or soft-deleted for a caller who may
    * not see deleted users) → 403 `permission_denied` when the target's roles
    * confer a permission the caller lacks (SEC-R-17) → 403 `self_forbidden` →
-   * 409 `invalid_transition` → inside the transaction 409 `last_admin`.
+   * 409 `invalid_transition` → inside the transaction 409 `last_admin`. A
+   * self-registered `pending` account without a password allows `delete` only
+   * (PORTAL-03: it becomes `active` through its e-mailed link alone).
    * The status is written with a conditional update, so a concurrent change
    * makes the loser fail with `invalid_transition` instead of overwriting.
    */
@@ -623,8 +629,11 @@ export class UsersService {
     const target = await this.loadStateTarget(id, caller);
     if (isSelfForbidden(action) && target.id === caller.id) throw usersError.selfForbidden(action);
     const from = accountState(target);
-    const to = nextStatus(action, from);
-    if (to === null) throw usersError.invalidTransition(from, action, allowedActions(from));
+    const options: AccountStateOptions = {
+      awaitingRegistration: isPendingSelfRegistration(target),
+    };
+    const to = nextStatus(action, from, options);
+    if (to === null) throw usersError.invalidTransition(from, action, allowedActions(from, options));
     if (action === 'unlock' && target.lockedUntil === null && target.failedLoginCount === 0) {
       return this.getById(id, false, view);
     }
@@ -646,7 +655,7 @@ export class UsersService {
           ...(action === 'unlock' ? { lockedUntil: null, failedLoginCount: 0 } : {}),
         },
       });
-      if (updated.count !== 1) throw usersError.invalidTransition(from, action, allowedActions(from));
+      if (updated.count !== 1) throw usersError.invalidTransition(from, action, allowedActions(from, options));
 
       let revokedSessions: number | null = null;
       if (revokesSessions(action)) {

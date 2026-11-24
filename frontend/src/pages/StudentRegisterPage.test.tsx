@@ -1,7 +1,8 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicAcademy } from '../api/academy'
+import { browserNavigation } from '../api/google'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
@@ -47,6 +48,7 @@ async function fillIn(name = NAME, email = EMAIL) {
   const user = userEvent.setup()
   await user.type(await screen.findByLabelText(text.register.fullName), name)
   await user.type(screen.getByLabelText(text.register.email), email)
+  await user.click(screen.getByLabelText(text.register.terms))
   return user
 }
 
@@ -80,6 +82,7 @@ describe('StudentRegisterPage', () => {
     window.sessionStorage.clear()
   })
   afterEach(async () => {
+    vi.restoreAllMocks()
     window.localStorage.clear()
     window.sessionStorage.clear()
     await i18n.changeLanguage('ar')
@@ -110,14 +113,14 @@ describe('StudentRegisterPage', () => {
       expect(posts(fetchMock)).toHaveLength(0)
     })
 
-    it('keeps the way back to the chosen course in the sign-in link of the closed notice', async () => {
+    it('keeps the way back to the chosen course in the sign-in link of the closed notice, as ?returnTo=', async () => {
       mockApi({ academy: () => jsonResponse(200, { ...OPEN, selfRegistration: false }) })
       renderPage({ from: `/catalog/${COURSE}?intent=enroll` })
 
-      await userEvent.click(await screen.findByRole('link', { name: text.closed.signIn }))
-
-      const probe = await screen.findByTestId('location')
-      expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: `/catalog/${COURSE}?intent=enroll` })
+      const link = await screen.findByRole('link', { name: text.closed.signIn })
+      expect(link).toHaveAttribute('href', `/login?returnTo=${encodeURIComponent(`/catalog/${COURSE}?intent=enroll`)}`)
+      await userEvent.click(link)
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/login')
     })
   })
 
@@ -200,6 +203,7 @@ describe('StudentRegisterPage', () => {
       const user = userEvent.setup()
       await user.type(await screen.findByLabelText(en.studentRegistration.register.fullName), NAME)
       await user.type(screen.getByLabelText(en.studentRegistration.register.email), EMAIL)
+      await user.click(screen.getByLabelText(en.studentRegistration.register.terms))
       await user.click(screen.getByText(en.studentRegistration.register.submit).closest('button')!)
 
       await screen.findByText(en.studentRegistration.register.sentTitle)
@@ -427,34 +431,139 @@ describe('StudentRegisterPage', () => {
       expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
     })
 
-    it('keeps `from` in the sign-in link of the form', async () => {
+    const signInHref = `/login?returnTo=${encodeURIComponent(fromCourse.from)}`
+
+    it('keeps `from` in the sign-in link above the form, as ?returnTo=', async () => {
       mockApi()
       renderPage(fromCourse)
 
-      await userEvent.click(await screen.findByRole('link', { name: text.register.haveAccount }))
-
-      const probe = await screen.findByTestId('location')
-      expect(probe).toHaveAttribute('data-pathname', '/login')
-      expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual(fromCourse)
+      const prompt = await screen.findByTestId('register-sign-in')
+      expect(prompt).toHaveTextContent(text.register.haveAccount)
+      const link = within(prompt).getByRole('link', { name: text.register.signIn })
+      expect(link).toHaveAttribute('href', signInHref)
+      await userEvent.click(link)
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/login')
     })
 
     it('keeps `from` in the sign-in link after the 202', async () => {
       mockApi()
       renderPage(fromCourse)
-      const user = await fillAndSend()
+      await fillAndSend()
 
-      await user.click(await screen.findByRole('link', { name: text.register.goToSignIn }))
+      expect(await screen.findByRole('link', { name: text.register.goToSignIn })).toHaveAttribute('href', signInHref)
+      // The form's own prompt is gone with the form.
+      expect(screen.queryByTestId('register-sign-in')).not.toBeInTheDocument()
+    })
 
-      expect(JSON.parse((await screen.findByTestId('location')).getAttribute('data-state')!)).toEqual(fromCourse)
+    it('reads the chosen course from ?returnTo= too, and keeps it after the 202', async () => {
+      mockApi()
+      renderWithProviders(<StudentRegisterPage />, {
+        route: { pathname: '/register', search: `?returnTo=${encodeURIComponent(fromCourse.from)}` },
+        path: '/register',
+      })
+
+      expect(within(await screen.findByTestId('register-sign-in')).getByRole('link')).toHaveAttribute('href', signInHref)
+      await fillAndSend()
+      await screen.findByText(text.register.sentTitle)
+      expect(JSON.parse(window.localStorage.getItem(KEPT_COURSE_KEY)!).courseId).toBe(COURSE)
     })
 
     it('never carries a return path to another site', async () => {
       mockApi()
       renderPage({ from: 'https://evil.example/' })
 
-      await userEvent.click(await screen.findByRole('link', { name: text.register.haveAccount }))
+      const prompt = await screen.findByTestId('register-sign-in')
+      expect(within(prompt).getByRole('link', { name: text.register.signIn })).toHaveAttribute('href', '/login')
+    })
+  })
+  describe('the terms and Google (PORTAL-04)', () => {
+    const GOOGLE_URL = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
 
-      expect(within(document.body).getByTestId('location')).toHaveAttribute('data-state', 'null')
+    it('refuses to send before the terms are accepted, and sends nothing about them', async () => {
+      const fetchMock = mockApi()
+      renderPage()
+      const user = userEvent.setup()
+      await user.type(await screen.findByLabelText(text.register.fullName), NAME)
+      await user.type(screen.getByLabelText(text.register.email), EMAIL)
+
+      await user.click(submitButton())
+
+      expect(await screen.findByText(text.register.termsRequired)).toBeInTheDocument()
+      expect(posts(fetchMock)).toHaveLength(0)
+
+      await user.click(screen.getByLabelText(text.register.terms))
+      await user.click(submitButton())
+
+      await screen.findByText(text.register.sentTitle)
+      expect(Object.keys(JSON.parse(String(posts(fetchMock)[0]![1]?.body))).sort()).toEqual(['email', 'fullName', 'locale'])
+    })
+
+    it('words the terms as plain text: the academy has no pages to link to yet', async () => {
+      mockApi()
+      renderPage()
+      const box = await screen.findByLabelText(text.register.terms)
+      expect(box).toHaveAttribute('type', 'checkbox')
+      expect(box.closest('label')!.querySelector('a')).toBeNull()
+    })
+
+    it('heads the card with its title and the way to sign in, then Google, «أو» and the form', async () => {
+      mockApi()
+      renderPage()
+      await screen.findByLabelText(text.register.fullName)
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(text.register.title)
+      expect(screen.getByTestId('register-sign-in')).toHaveTextContent(text.register.haveAccount)
+      expect(screen.getByText(ar.login.or)).toBeInTheDocument()
+      expect(submitButton()).toHaveTextContent(text.register.submit)
+    })
+
+    it('shows Google disabled with its reason while googleSignUp is not on', async () => {
+      mockApi()
+      renderPage()
+      const hint = await screen.findByTestId('google-sign-in-hint')
+      expect(hint).toHaveTextContent(ar.login.google.signUpNotEnabled)
+      expect(screen.getByText(ar.login.google.button).closest('button')).toBeDisabled()
+    })
+
+    it('starts Google with the chosen course when googleSignUp is on', async () => {
+      const fetchMock = mockFetch((url) =>
+        url.endsWith('/api/academy/public')
+          ? jsonResponse(200, { ...OPEN, googleSignIn: true, googleSignUp: true })
+          : jsonResponse(200, { url: GOOGLE_URL }),
+      )
+      const assign = vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
+      renderPage({ from: `/catalog/${COURSE}?intent=enroll` })
+      const button = await waitFor(() => {
+        const found = screen.getByText(ar.login.google.button).closest('button')!
+        expect(found).toBeEnabled()
+        return found
+      })
+
+      fireEvent.click(button)
+
+      await waitFor(() => expect(assign).toHaveBeenCalledWith(GOOGLE_URL))
+      const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/auth/google/start')!
+      expect(JSON.parse(String(init?.body))).toEqual({ returnTo: `/catalog/${COURSE}?intent=enroll` })
+      expect(screen.queryByTestId('google-sign-in-hint')).not.toBeInTheDocument()
+    })
+
+    it('still offers Google when only the e-mail way is closed: a notice, no form', async () => {
+      const fetchMock = mockApi({ academy: () => jsonResponse(200, { ...OPEN, selfRegistration: false, googleSignIn: true, googleSignUp: true }) })
+      renderPage()
+
+      expect(await screen.findByTestId('register-email-closed')).toHaveTextContent(text.register.emailClosedTitle)
+      expect(screen.getByText(ar.login.google.button).closest('button')).toBeEnabled()
+      expect(screen.queryByLabelText(text.register.fullName)).not.toBeInTheDocument()
+      expect(screen.queryByText(text.closed.title)).not.toBeInTheDocument()
+      expect(screen.getByTestId('register-sign-in')).toBeInTheDocument()
+      expect(posts(fetchMock)).toHaveLength(0)
+    })
+
+    it('shows the plain closed notice, without Google, while neither way is open', async () => {
+      mockApi({ academy: () => jsonResponse(200, { ...OPEN, selfRegistration: false, googleSignIn: true, googleSignUp: false }) })
+      renderPage()
+
+      expect(await screen.findByText(text.closed.title)).toBeInTheDocument()
+      expect(screen.queryByText(ar.login.google.button)).not.toBeInTheDocument()
     })
   })
 })

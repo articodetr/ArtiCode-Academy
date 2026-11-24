@@ -9,7 +9,7 @@ import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
 import { formatMoney } from '../payments/payments.format'
 import { CATALOG_COURSE_IDS, makeCatalogCard, makeCatalogList } from '../test/catalog'
-import { makeLevel } from '../test/courses'
+import { SUBJECT_IDS, makeSubject } from '../test/subjects'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CatalogPage } from './CatalogPage'
@@ -32,7 +32,7 @@ function mockCatalogApi(answer: (query: URLSearchParams, call: number) => Catalo
   const queries: URLSearchParams[] = []
   mockFetch((url) => {
     const parsed = new URL(url, 'http://localhost')
-    if (parsed.pathname === '/api/levels') return jsonResponse(200, { items: [makeLevel(), makeLevel({ id: 'lv-off', code: 'OLD', name: { ar: 'قديم' }, isActive: false })] })
+    if (parsed.pathname === '/api/subjects') return jsonResponse(200, { items: [makeSubject(), makeSubject({ id: SUBJECT_IDS[2], code: 'OLD', name: { ar: 'قديم' }, isActive: false })] })
     queries.push(parsed.searchParams)
     const result = answer(parsed.searchParams, queries.length)
     return result instanceof Response ? result : jsonResponse(200, result)
@@ -70,7 +70,10 @@ describe('CatalogPage', () => {
     const free = within(card(CATALOG_COURSE_IDS[0]))
     expect(free.queryByText('PY-101')).not.toBeInTheDocument()
     expect(free.getByText('مدخل عملي إلى البرمجة')).toBeInTheDocument()
-    expect(free.getByText('مبتدئ')).toBeInTheDocument()
+    // PORTAL-04: the school subject, never the difficulty level; no sessions.
+    expect(free.getByText('البرمجة')).toBeInTheDocument()
+    expect(free.queryByText('مبتدئ')).not.toBeInTheDocument()
+    expect(card(CATALOG_COURSE_IDS[0]).textContent).not.toContain('جلس')
     expect(free.getByText(ar.catalog.free)).toBeInTheDocument()
     expect(free.getByText(ar.catalog.card.available)).toBeInTheDocument()
     expect(free.getByText('خالد المعلم')).toBeInTheDocument()
@@ -87,7 +90,7 @@ describe('CatalogPage', () => {
     expect(card(CATALOG_COURSE_IDS[1]).querySelector('img')).toBeNull()
   })
 
-  it('wears the public card’s look with the difficulty badge, and keeps the reader’s own state and the seats', async () => {
+  it('wears the public card’s look with the subject badge, and keeps the reader’s own state and the seats', async () => {
     const enrolled = makeCatalogCard({ id: 'c-mine', code: 'X-3', name: { ar: 'دورتي' }, mine: { enrolled: true, pending: false } })
     mockCatalogApi(() => makeCatalogList([makeCatalogCard(), enrolled]))
     renderPage()
@@ -95,7 +98,8 @@ describe('CatalogPage', () => {
 
     const node = card(CATALOG_COURSE_IDS[0])
     expect(node).toHaveClass('public-card', 'public-card--app')
-    expect(node.querySelector('.course-badge--level')).toHaveTextContent('مبتدئ')
+    expect(node.querySelector('.course-badge--subject')).toHaveTextContent('البرمجة')
+    expect(node.querySelector('.course-badge--level')).toBeNull()
     expect(node.querySelector('.course-badge--duration')).toHaveTextContent('24 ساعة')
     const facts = within(node.querySelector<HTMLElement>('.public-card__facts')!)
     expect(facts.getByText(ar.catalog.card.availableClasses)).toBeInTheDocument()
@@ -126,7 +130,7 @@ describe('CatalogPage', () => {
     expect(screen.queryByText(ar.catalog.card.enroll)).not.toBeInTheDocument()
   })
 
-  it('sends the type, «available now», the level and the search (after a pause) as filters', async () => {
+  it('sends the type, «available now», the subject and the search (after a pause) as filters', async () => {
     const queries = mockCatalogApi(() => makeCatalogList([makeCatalogCard()]))
     renderPage()
     await screen.findByText('أساسيات بايثون')
@@ -140,13 +144,15 @@ describe('CatalogPage', () => {
     await waitFor(() => expect(queries).toHaveLength(3))
     expect(Object.fromEntries(queries[2]!)).toEqual({ limit: '24', pricing: 'paid', available: 'true' })
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.catalog.levelLabel }))
-    // Inactive levels are not offered.
-    expect(await screen.findByText('مبتدئ', { selector: '.ant-select-item-option-content' })).toBeInTheDocument()
+    // PORTAL-04: the subject replaced the difficulty level; inactive subjects are not offered.
+    expect(screen.queryByRole('combobox', { name: 'المستوى' })).not.toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.catalog.subjectLabel }))
+    expect(await screen.findByText('البرمجة', { selector: '.ant-select-item-option-content' })).toBeInTheDocument()
     expect(screen.queryByText('قديم', { selector: '.ant-select-item-option-content' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByText('مبتدئ', { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(screen.getByText('البرمجة', { selector: '.ant-select-item-option-content' }))
     await waitFor(() => expect(queries).toHaveLength(4))
-    expect(queries[3]!.get('levelId')).toBe(makeLevel().id)
+    expect(queries[3]!.get('subjectId')).toBe(makeSubject().id)
+    expect(queries[3]!.get('levelId')).toBeNull()
 
     fireEvent.change(screen.getByLabelText(ar.catalog.searchLabel), { target: { value: ' بايثون ' } })
     await waitFor(() => expect(queries).toHaveLength(5), { timeout: 2000 })
@@ -209,7 +215,9 @@ describe('CatalogPage', () => {
     expect(screen.getByText(en.catalog.title)).toBeInTheDocument()
     const free = within(card(CATALOG_COURSE_IDS[0]))
     expect(free.getByText(en.catalog.free)).toBeInTheDocument()
-    expect(free.getByText('Beginner')).toBeInTheDocument()
+    // PORTAL-04: the subject's English name, never the difficulty level.
+    expect(free.getByText('Programming')).toBeInTheDocument()
+    expect(free.queryByText('Beginner')).not.toBeInTheDocument()
     expect(free.getByText(en.catalog.card.enroll)).toBeInTheDocument()
   })
 

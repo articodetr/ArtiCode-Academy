@@ -14,7 +14,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
-import { isSelfRegistrationOpen } from '../api/academy'
+import { canCreateAccount } from '../api/academy'
 import { useAuth } from '../auth/auth-context'
 import { PublicShell } from '../publicCatalog/PublicShell'
 import { PublicTitle } from '../publicCatalog/PublicTitle'
@@ -41,7 +41,7 @@ export function PublicHomePage() {
   const catalogOpen = catalogOpenOf(programs.state, academy.academy)
   const programsPath = homeProgramsPath(viewer, catalogOpen, hasPermission('courses.read'))
   // Only the server's `true`: the page then stops saying that accounts come from the administration alone.
-  const registrationOpen = isSelfRegistrationOpen(academy.academy)
+  const registrationOpen = canCreateAccount(academy.academy)
   const { hash, key } = useLocation()
   const programsState = programs.state
 

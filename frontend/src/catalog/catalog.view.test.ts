@@ -17,14 +17,16 @@ import {
 } from './catalog.view'
 
 describe('catalog filters', () => {
-  it('sends only what narrows: a trimmed, capped search, the type, the level and «available» as true only', () => {
+  it('sends only what narrows: a trimmed, capped search, the type, the subject and «available» as true only', () => {
     expect(catalogParams({}, undefined)).toEqual({ limit: 24 })
     expect(catalogParams({ q: '  ', pricing: undefined }, '')).toEqual({ limit: 24 })
-    expect(catalogParams({ q: ' py ', pricing: 'paid', levelId: 'lv', available: true }, 'c1')).toEqual({ limit: 24, q: 'py', pricing: 'paid', levelId: 'lv', available: true, cursor: 'c1' })
+    expect(catalogParams({ q: ' py ', pricing: 'paid', subjectId: 'sb', available: true }, 'c1')).toEqual({ limit: 24, q: 'py', pricing: 'paid', subjectId: 'sb', available: true, cursor: 'c1' })
     expect(catalogParams({ q: 'a'.repeat(150) }, undefined).q).toHaveLength(100)
     expect(isCatalogNarrowed({})).toBe(false)
     expect(isCatalogNarrowed({ q: '  ' })).toBe(false)
     expect(isCatalogNarrowed({ available: true })).toBe(true)
+    // PORTAL-04: the subject narrows the list (the difficulty filter is gone).
+    expect(isCatalogNarrowed({ subjectId: 'sb' })).toBe(true)
   })
 })
 

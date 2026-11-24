@@ -1,8 +1,8 @@
 // A course of the catalog (MOD-19, roadmap §4p): GET /api/catalog/courses/:id
 // (API-220) and the self-service enrollment POST /api/catalog/classes/:id/enroll
-// (API-221). The course (cover, level, duration, sessions, price, overview,
-// age range, syllabus titles — lessons and materials stay behind an active
-// enrollment) and its classes: the ones open to self-service and any holding
+// (API-221). The course (cover, school subject, duration, content, price,
+// overview, syllabus titles — lessons and materials stay behind an active
+// enrollment; since PORTAL-04 no difficulty, sessions or age range) and its classes: the ones open to self-service and any holding
 // the reader's own enrollment or request. Whether a class takes the reader is
 // the server's `enrollable`/`blocker`; the page offers a button for those only,
 // behind a confirmation that, for a paid course, says the invoice comes first
@@ -36,7 +36,7 @@ import type { Language } from '../i18n/language'
 import { formatMoney } from '../payments/payments.format'
 import { CourseEnrollCard, CoursePageLayout } from '../publicCatalog/CoursePageLayout'
 import type { CoursePageSection } from '../publicCatalog/CoursePageLayout'
-import { courseBadgesOf } from '../publicCatalog/publicCatalog.view'
+import { courseBadgesOf, subjectNameOf } from '../publicCatalog/publicCatalog.view'
 import { localizedLabel } from '../users/users.format'
 
 // The page's buttons in the academy's turquoise: the stronger shade (--pub-primary-strong), where white text keeps 4.5:1.
@@ -230,10 +230,13 @@ export function CatalogCoursePage() {
   const chooseNotice = highlightClasses && standing === null && enrollable.length > 0
   const oneClass = enrollable.length === 1
 
+  // PORTAL-04: المادة · المدة · المحتوى · الرسوم — each only with a real value; no difficulty, sessions or age range.
+  const lessonsText = t('publicCatalog.card.lessons', { count: course.syllabus.length })
+  const subject = subjectNameOf(course, language)
   const facts: DescriptionsProps['items'] = []
-  if (course.level) facts.push({ key: 'level', label: t('catalog.card.level'), children: localizedLabel(course.level.name, language) })
+  if (subject) facts.push({ key: 'subject', label: t('catalog.card.subject'), children: subject })
   if (course.durationHours !== null) facts.push({ key: 'duration', label: t('catalog.card.duration'), children: <bdi dir="ltr">{course.durationHours}</bdi> })
-  if (course.sessionsCount !== null) facts.push({ key: 'sessions', label: t('catalog.card.sessions'), children: <bdi dir="ltr">{course.sessionsCount}</bdi> })
+  facts.push({ key: 'content', label: t('catalog.card.content'), children: lessonsText })
   facts.push({
     key: 'price',
     label: t('catalog.card.price'),
@@ -249,25 +252,12 @@ export function CatalogCoursePage() {
   if (course.price && course.price.installments > 1) {
     facts.push({ key: 'installments', label: t('catalog.detail.installments'), children: <bdi dir="ltr">{course.price.installments}</bdi> })
   }
-  if (course.minAge !== null || course.maxAge !== null) {
-    const age =
-      course.minAge !== null && course.maxAge !== null
-        ? t('catalog.detail.ageRange', { min: course.minAge, max: course.maxAge })
-        : course.minAge !== null
-          ? t('catalog.detail.ageFrom', { min: course.minAge })
-          : t('catalog.detail.ageTo', { max: course.maxAge })
-    facts.push({ key: 'age', label: t('catalog.detail.age'), children: age })
-  }
-
   const invoiceOf = (result: CatalogEnrollResult) => result.enrollment.payment.invoices.find((invoice) => invoice.status === 'issued') ?? null
 
   const summary = course.summary ? localizedLabel(course.summary, language).trim() : ''
   const description = course.description ? localizedLabel(course.description, language).trim() : ''
-  const counts = [
-    course.sessionsCount !== null ? t('publicCatalog.card.sessionsCount', { count: course.sessionsCount }) : null,
-    // With an empty syllabus this reads «لا دروس بعد»: the page says so instead of a section with nothing in it.
-    t('publicCatalog.card.lessons', { count: course.syllabus.length }),
-  ].filter((text) => text !== null)
+  // With an empty syllabus this reads «لا دروس بعد»: the page says so instead of a section with nothing in it.
+  const counts = [lessonsText]
 
   // A section only for what the server has: the description unless the band already says it, the plan when it has items.
   const sections: CoursePageSection[] = []
@@ -468,8 +458,9 @@ export function CatalogCoursePage() {
 }
 
 /**
- * The reader's own place in the course (PORTAL-04): studying it → «واصل التعلم» to the learning workspace, which
- * resumes where the server says; completed → its review there; a request → its state and «طلباتي» in «فصولي».
+ * The reader's own place in the course (PORTAL-04): studying or completed it → «انتقل إلى الدورة» to the learning
+ * workspace, which resumes where the server says (or shows the finished course); a request → its state and «طلباتي» in
+ * «فصولي» instead of any enroll button.
  * The workspace itself still checks the enrollment (API-229..234) — this only shows the way.
  */
 function StandingNotice({ standing, courseId }: { standing: CourseStanding; courseId: string }) {
@@ -523,7 +514,7 @@ function StandingNotice({ standing, courseId }: { standing: CourseStanding; cour
           <span>{t(studying ? 'catalog.detail.mine.studyingText' : 'catalog.detail.mine.completedText', { className })}</span>
           <Space wrap>
             <Button type="primary" size="small" onClick={() => navigate(learnPath)}>
-              {t(studying ? 'catalog.detail.mine.continue' : 'catalog.detail.mine.review')}
+              {t('catalog.detail.mine.goToCourse')}
             </Button>
             <Button size="small" onClick={() => navigate('/my-classes')}>
               {t('catalog.detail.mine.mySchool')}

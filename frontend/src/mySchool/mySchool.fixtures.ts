@@ -5,6 +5,8 @@ import type { MyLearningCourse, NextSession, ProgressCounts } from '../api/learn
 export const LEARNING_COURSE_IDS = ['0195a000-0000-7000-8000-00000000a001', '0195a000-0000-7000-8000-00000000a002', '0195a000-0000-7000-8000-00000000a003'] as const
 export const LEARNING_ENROLLMENT_IDS = ['0195a000-0000-7000-8000-00000000b001', '0195a000-0000-7000-8000-00000000b002', '0195a000-0000-7000-8000-00000000b003'] as const
 export const LEARNING_STUDENT = { id: '0195a000-0000-7000-8000-00000000c001', fullName: 'سارة أحمد', displayName: null }
+/** PORTAL-04: a school subject (API-229 `course.subject`). */
+export const LEARNING_SUBJECT = { id: '0195a000-0000-7000-8000-00000000a101', name: { ar: 'البرمجة', en: 'Programming' } }
 export const LEARNING_CHILD = { id: '0195a000-0000-7000-8000-00000000c002', fullName: 'ليلى سعيد', displayName: null }
 
 /** 3 of 8 required lessons done, nothing complete yet. */
@@ -27,6 +29,7 @@ export function makeLearningCourse(overrides: Partial<MyLearningCourse> = {}): M
       summary: null,
       coverImageUrl: null,
       level: null,
+      subject: null,
     },
     leadTeacher: { fullName: 'خالد المعلم', displayName: null },
     nextSession: null,
@@ -60,7 +63,7 @@ export function makeCompletedCourse(overrides: Partial<MyLearningCourse> = {}): 
     enrollmentId: LEARNING_ENROLLMENT_IDS[1],
     enrollment: { status: 'completed', enrolledAt: '2026-09-01T09:00:00.000Z', activatedAt: '2026-09-01T09:00:00.000Z', completedAt: '2026-10-30T09:00:00.000Z' },
     class: { id: '0195a000-0000-7000-8000-00000000d002', code: 'WEB-201-A', name: { ar: 'تطوير الويب — أ', en: 'Web — A' }, status: 'completed', startsOn: '2026-09-01', endsOn: '2026-10-30' },
-    course: { id: LEARNING_COURSE_IDS[1], code: 'WEB-201', name: { ar: 'تطوير الويب', en: 'Web development' }, summary: null, coverImageUrl: null, level: null },
+    course: { id: LEARNING_COURSE_IDS[1], code: 'WEB-201', name: { ar: 'تطوير الويب', en: 'Web development' }, summary: null, coverImageUrl: null, level: null, subject: null },
     progress: makeProgress({ completed: 6, completedRequired: 6, required: 6, total: 6, percent: 100, isComplete: true, completedAt: '2026-10-29T09:00:00.000Z' }),
     lastLesson: null,
     lastActivityAt: '2026-10-29T09:00:00.000Z',
@@ -75,7 +78,7 @@ export function makeChildCourse(overrides: Partial<MyLearningCourse> = {}): MyLe
     enrollmentId: LEARNING_ENROLLMENT_IDS[2],
     relation: 'child',
     student: LEARNING_CHILD,
-    course: { id: LEARNING_COURSE_IDS[2], code: 'AR-110', name: { ar: 'اللغة العربية', en: 'Arabic' }, summary: null, coverImageUrl: null, level: null },
+    course: { id: LEARNING_COURSE_IDS[2], code: 'AR-110', name: { ar: 'اللغة العربية', en: 'Arabic' }, summary: null, coverImageUrl: null, level: null, subject: null },
     progress: makeProgress({ required: 2, completedRequired: 1, completed: 1, total: 2, percent: 50 }),
     action: null,
     canLearn: false,

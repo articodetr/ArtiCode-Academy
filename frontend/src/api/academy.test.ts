@@ -2,7 +2,17 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { setAccessToken } from '../auth/token-store'
 import { makeAcademy, makePublicAcademy } from '../test/academy'
 import { jsonResponse, mockFetch } from '../test/http'
-import { ACADEMY_PATH, ACADEMY_PUBLIC_PATH, getAcademy, getPublicAcademy, isCatalogPublic, updateAcademy } from './academy'
+import {
+  ACADEMY_PATH,
+  ACADEMY_PUBLIC_PATH,
+  canCreateAccount,
+  getAcademy,
+  getPublicAcademy,
+  isCatalogPublic,
+  isGoogleSignInOn,
+  isGoogleSignUpOpen,
+  updateAcademy,
+} from './academy'
 
 describe('academy API calls', () => {
   beforeEach(() => {
@@ -71,5 +81,25 @@ describe('public academy (API-205)', () => {
     expect(isCatalogPublic(makePublicAcademy({ catalogPublic: false }))).toBe(false)
     expect(isCatalogPublic({ catalogPublic: undefined })).toBe(false)
     expect(isCatalogPublic(null)).toBe(false)
+  })
+
+  it('reads the two Google flags as on only for exactly true (an older server sends neither)', () => {
+    expect(isGoogleSignInOn(makePublicAcademy({ googleSignIn: true }))).toBe(true)
+    expect(isGoogleSignUpOpen(makePublicAcademy({ googleSignUp: true }))).toBe(true)
+    for (const academy of [makePublicAcademy(), makePublicAcademy({ googleSignIn: false, googleSignUp: false }), null, undefined]) {
+      expect(isGoogleSignInOn(academy)).toBe(false)
+      expect(isGoogleSignUpOpen(academy)).toBe(false)
+    }
+    // A value that is not the boolean true (an older field, a proxy that rewrote it) stays off.
+    expect(isGoogleSignInOn({ googleSignIn: 'true' as unknown as boolean })).toBe(false)
+    expect(isGoogleSignUpOpen({ googleSignUp: 1 as unknown as boolean })).toBe(false)
+  })
+
+  it('canCreateAccount is open by e-mail registration or by a Google sign-up, else closed', () => {
+    expect(canCreateAccount(makePublicAcademy({ selfRegistration: true }))).toBe(true)
+    expect(canCreateAccount(makePublicAcademy({ googleSignUp: true }))).toBe(true)
+    expect(canCreateAccount(makePublicAcademy({ googleSignIn: true }))).toBe(false)
+    expect(canCreateAccount(makePublicAcademy())).toBe(false)
+    expect(canCreateAccount(null)).toBe(false)
   })
 })

@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import { z } from 'zod';
+import { googleRedirectProblem, isGoogleConfigured } from '../auth/google/google.config.js';
 import { parseMfaKey } from '../auth/mfa/secret-box.js';
 import { POSTGRES_DEFAULTS, buildPostgresUrl } from './database-url.js';
 
@@ -277,6 +278,25 @@ export const envSchema = z
         .optional(),
     ),
 
+    // --- Google sign-in (PORTAL-04, OpenID Connect + PKCE) -------------------
+    /**
+     * OAuth 2.0 client id of a Google Cloud "Web application" client. Google
+     * sign-in is ON only when this AND GOOGLE_OAUTH_CLIENT_SECRET are set; one
+     * without the other is refused below. Not a secret.
+     */
+    GOOGLE_OAUTH_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().regex(/^\S+$/, 'must not contain spaces').optional()),
+    /**
+     * The client secret of that Google client — a secret: env files only, never
+     * committed, logged or documented by value (the error below never repeats it).
+     */
+    GOOGLE_OAUTH_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().regex(/^\S+$/, 'must not contain spaces').optional()),
+    /**
+     * The exact redirect URI registered at Google. Optional: by default
+     * `${APP_PUBLIC_URL}/<API_PREFIX>/auth/google/callback`. Absolute http(s);
+     * https in production unless the host is localhost.
+     */
+    GOOGLE_OAUTH_REDIRECT_URI: z.preprocess(emptyToUndefined, z.string().optional()),
+
     // --- Mail (MOD-03-T03, owner decision D-R08) ---------------------------
     /**
      * How outgoing e-mail is handled. `none` (default): nothing is sent and
@@ -385,6 +405,21 @@ export const envSchema = z
       for (const key of ['RESEND_API_KEY', 'MAIL_FROM', 'APP_PUBLIC_URL'] as const) {
         if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required when MAIL_TRANSPORT=resend' });
       }
+    }
+    // PORTAL-04: Google is on with both halves of the client or with neither — never half-configured —
+    // and only with a usable redirect URI. The values themselves are never repeated in a message.
+    if (Boolean(env.GOOGLE_OAUTH_CLIENT_ID) !== Boolean(env.GOOGLE_OAUTH_CLIENT_SECRET)) {
+      const [missing, present] = env.GOOGLE_OAUTH_CLIENT_ID
+        ? (['GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_OAUTH_CLIENT_ID'] as const)
+        : (['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET'] as const);
+      ctx.addIssue({
+        code: 'custom',
+        path: [missing],
+        message: `is required together with ${present} (set both to turn Google sign-in on, or neither)`,
+      });
+    } else if (isGoogleConfigured(env)) {
+      const problem = googleRedirectProblem(env);
+      if (problem) ctx.addIssue({ code: 'custom', path: ['GOOGLE_OAUTH_REDIRECT_URI'], message: problem });
     }
     if (env.AUTH_SELF_SERVICE_RESET_ENABLED && env.MAIL_TRANSPORT === 'none') {
       ctx.addIssue({

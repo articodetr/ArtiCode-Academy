@@ -190,6 +190,7 @@ describe.skipIf(!available)('MOD-19 catalog and enrollment requests (e2e, TEST-2
         await prisma.course.updateMany({ where: { code: { startsWith: PREFIX } }, data: { enrollmentFeePlanId: null } });
         await prisma.feePlan.deleteMany({ where: { name: { path: ['ar'], string_starts_with: PREFIX } } });
         await prisma.course.deleteMany({ where: { code: { startsWith: PREFIX } } });
+        await prisma.subject.deleteMany({ where: { code: { startsWith: PREFIX } } });
       }
     } finally {
       if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
@@ -248,6 +249,44 @@ describe.skipIf(!available)('MOD-19 catalog and enrollment requests (e2e, TEST-2
     expect(asTeacher.body.classes[0].blocker).toBe('not_allowed');
     await enroll('teacher', ids['freeClass']!).expect(403, /permission_denied/);
     await enroll('g1', ids['freeClass']!).expect(403, /permission_denied/);
+  });
+
+  it('PORTAL-04: every card and detail carries the school subject as { id, name } only, and subjectId filters the list (unknown = nothing)', async () => {
+    const subjectAt = async (suffix: string, isActive: boolean) => {
+      const max = await prisma.subject.aggregate({ _max: { sortOrder: true } });
+      return prisma.subject.create({
+        data: { code: `${PREFIX}${suffix}`.slice(0, 16), name: { ar: `مادة ${suffix}`, en: `Subject ${suffix}` }, isActive, sortOrder: (max._max.sortOrder ?? -1) + 1 },
+        select: { id: true, code: true },
+      });
+    };
+    const math = await subjectAt('M', true);
+    const retired = await subjectAt('R', true);
+    await api().patch(`/api/courses/${ids['freeCourse']}`).set(bearer('director')).send({ subjectId: math.id }).expect(200);
+    await api().patch(`/api/courses/${ids['paidCourse']}`).set(bearer('director')).send({ subjectId: retired.id }).expect(200);
+    // Deactivated after it was given: the course keeps it and the catalog still names it — by id and name, never its code or state.
+    await prisma.subject.update({ where: { id: retired.id }, data: { isActive: false }, select: { id: true } });
+
+    const list = await api().get('/api/catalog/courses').query({ q: PREFIX }).set(bearer('s1')).expect(200);
+    const subjects = (list.body.items as { code: string; subject: unknown }[]).map((item) => [item.code, item.subject]);
+    expect(subjects).toEqual([
+      [`${PREFIX}-FREE`, { id: math.id, name: { ar: 'مادة M', en: 'Subject M' } }],
+      [`${PREFIX}-PAID`, { id: retired.id, name: { ar: 'مادة R', en: 'Subject R' } }],
+    ]);
+    expect(JSON.stringify(list.body)).not.toContain(math.code);
+    const detail = await api().get(`/api/catalog/courses/${ids['freeCourse']}`).set(bearer('s1')).expect(200);
+    expect(detail.body.subject).toEqual({ id: math.id, name: { ar: 'مادة M', en: 'Subject M' } });
+
+    const byMath = await api().get('/api/catalog/courses').query({ q: PREFIX, subjectId: math.id }).set(bearer('s1')).expect(200);
+    expect((byMath.body.items as { code: string }[]).map((item) => item.code)).toEqual([`${PREFIX}-FREE`]);
+    const byRetired = await api().get('/api/catalog/courses').query({ q: PREFIX, subjectId: retired.id }).set(bearer('s1')).expect(200);
+    expect((byRetired.body.items as { code: string }[]).map((item) => item.code)).toEqual([`${PREFIX}-PAID`]);
+    const none = await api().get('/api/catalog/courses').query({ q: PREFIX, subjectId: NIL_ID }).set(bearer('s1')).expect(200);
+    expect(none.body.items).toEqual([]);
+    await api().get('/api/catalog/courses').query({ subjectId: 'nope' }).set(bearer('s1')).expect(400);
+    // A course without a subject says null.
+    await api().patch(`/api/courses/${ids['paidCourse']}`).set(bearer('director')).send({ subjectId: null }).expect(200);
+    const cleared = await api().get(`/api/catalog/courses/${ids['paidCourse']}`).set(bearer('s1')).expect(200);
+    expect(cleared.body.subject).toBeNull();
   });
 
   it('TEST-241: a free course enrolls the student at once, refuses a second time and a full class', async () => {

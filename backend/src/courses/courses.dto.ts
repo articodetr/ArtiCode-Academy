@@ -171,12 +171,23 @@ export class CreateCourseDto {
   @IsOptional()
   @IsUUID('all')
   enrollmentFeePlanId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'PORTAL-04: the school subject the course teaches — an existing, active subject (404 subject_not_found / 422 subject_inactive); absent or null = none',
+  })
+  @IsOptional()
+  @IsUUID('all')
+  subjectId?: string | null;
 }
 
 /**
  * PATCH semantics (as API-018): absent = unchanged, `null` clears the
  * optional fields (`summary`, `description`, `levelId`, `durationHours`,
- * `sessionsCount`, `minAge`, `maxAge`); `code` and `name` are required columns
+ * `sessionsCount`, `minAge`, `maxAge`, `coverImageUrl`, `enrollmentFeePlanId`,
+ * `subjectId`); `code` and `name` are required columns
  * and refuse null. The status changes through `POST /api/courses/:id/status`.
  */
 export class UpdateCourseDto {
@@ -270,6 +281,18 @@ export class UpdateCourseDto {
   @ValidateIf((_dto, value) => value !== undefined && value !== null)
   @IsUUID('all')
   enrollmentFeePlanId?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'PORTAL-04: the school subject — an existing, active subject (404 subject_not_found / 422 subject_inactive); null clears it. ' +
+      'A course keeps a subject deactivated later until this field changes.',
+  })
+  @ValidateIf((_dto, value) => value !== undefined && value !== null)
+  @IsUUID('all')
+  subjectId?: string | null;
 }
 
 export class ChangeCourseStatusDto {
@@ -294,6 +317,18 @@ export class CourseLevelDto {
 
   @ApiProperty()
   isActive: boolean;
+}
+
+/** PORTAL-04: the school subject of a course (the subject's own `isActive` is read through /api/subjects). */
+export class CourseSubjectDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ example: 'MATH' })
+  code: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
+  name: LocalizedText;
 }
 
 /** MOD-19 (D-R122): the plan that prices a request — its total in the academy currency. */
@@ -335,6 +370,9 @@ export class CourseDto {
 
   @ApiProperty({ type: CourseLevelDto, nullable: true })
   level: CourseLevelDto | null;
+
+  @ApiProperty({ type: CourseSubjectDto, nullable: true, description: 'PORTAL-04: the school subject the course teaches; null = not set' })
+  subject: CourseSubjectDto | null;
 
   @ApiProperty({ enum: COURSE_STATUSES })
   status: CourseStatus;

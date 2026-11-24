@@ -422,3 +422,65 @@ describe('validateEnv — the resend transport (TEST-172)', () => {
     }
   });
 });
+
+describe('validateEnv — Google sign-in (PORTAL-04)', () => {
+  const PRODUCTION = { NODE_ENV: 'production', DATABASE_URL: 'postgresql://u:p@db:5432/app', JWT_SECRET: PRODUCTION_SECRET };
+  const CLIENT_ID = 'test-client.apps.googleusercontent.com';
+  // A test value only — never a real client secret.
+  const CLIENT_SECRET = 'test-only-client-secret-value';
+  const google = { GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET: CLIENT_SECRET };
+
+  it('is off by default: no client values, nothing refused', () => {
+    const env = validateEnv({});
+    expect(env.GOOGLE_OAUTH_CLIENT_ID).toBeUndefined();
+    expect(env.GOOGLE_OAUTH_CLIENT_SECRET).toBeUndefined();
+    expect(env.GOOGLE_OAUTH_REDIRECT_URI).toBeUndefined();
+    expect(validateEnv({ GOOGLE_OAUTH_CLIENT_ID: '', GOOGLE_OAUTH_CLIENT_SECRET: '', GOOGLE_OAUTH_REDIRECT_URI: '' }).GOOGLE_OAUTH_CLIENT_ID).toBeUndefined();
+  });
+
+  it('accepts both client values with an explicit redirect URI, or one derived from APP_PUBLIC_URL', () => {
+    const explicit = validateEnv({ ...google, GOOGLE_OAUTH_REDIRECT_URI: 'http://localhost:5173/api/auth/google/callback' });
+    expect(explicit.GOOGLE_OAUTH_CLIENT_ID).toBe(CLIENT_ID);
+    expect(explicit.GOOGLE_OAUTH_REDIRECT_URI).toBe('http://localhost:5173/api/auth/google/callback');
+    expect(validateEnv({ ...google, APP_PUBLIC_URL: 'https://academy.example' }).GOOGLE_OAUTH_CLIENT_SECRET).toBe(CLIENT_SECRET);
+    expect(validateEnv({ ...PRODUCTION, ...google, APP_PUBLIC_URL: 'https://academy.example' }).NODE_ENV).toBe('production');
+    // A local trial of a production image on http://localhost (MOD-17's academy-demo).
+    expect(validateEnv({ ...PRODUCTION, ...google, APP_PUBLIC_URL: 'http://localhost:8080' }).NODE_ENV).toBe('production');
+  });
+
+  it('refuses one client value without the other, naming the missing one and never repeating a value', () => {
+    for (const [given, missing] of [
+      [{ GOOGLE_OAUTH_CLIENT_ID: CLIENT_ID }, 'GOOGLE_OAUTH_CLIENT_SECRET'],
+      [{ GOOGLE_OAUTH_CLIENT_SECRET: CLIENT_SECRET }, 'GOOGLE_OAUTH_CLIENT_ID'],
+    ] as const) {
+      let message = '';
+      try {
+        validateEnv({ ...given, APP_PUBLIC_URL: 'https://academy.example' });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message, missing).toMatch(new RegExp(`${missing}: is required together with`));
+      expect(message).not.toContain(CLIENT_SECRET);
+      expect(message).not.toContain(CLIENT_ID);
+    }
+  });
+
+  it('refuses Google on without any redirect URI, a relative or non-http(s) one, and http outside localhost in production', () => {
+    expect(() => validateEnv(google)).toThrow(/GOOGLE_OAUTH_REDIRECT_URI: Google sign-in needs a redirect URI/);
+    for (const bad of ['/api/auth/google/callback', 'ftp://academy.example/cb', 'javascript:alert(1)', 'https://user:pw@academy.example/cb', 'https://academy.example/cb#x']) {
+      expect(() => validateEnv({ ...google, GOOGLE_OAUTH_REDIRECT_URI: bad }), bad).toThrow(/GOOGLE_OAUTH_REDIRECT_URI/);
+    }
+    expect(() => validateEnv({ ...PRODUCTION, ...google, GOOGLE_OAUTH_REDIRECT_URI: 'http://academy.example/api/auth/google/callback' })).toThrow(
+      /GOOGLE_OAUTH_REDIRECT_URI: must use https when NODE_ENV=production/,
+    );
+    expect(() => validateEnv({ ...PRODUCTION, ...google, APP_PUBLIC_URL: 'http://academy.example' })).toThrow(/GOOGLE_OAUTH_REDIRECT_URI/);
+    // Outside production http is fine anywhere (a LAN trial), and a redirect URI without Google on is ignored.
+    expect(validateEnv({ ...google, GOOGLE_OAUTH_REDIRECT_URI: 'http://192.168.1.20:5173/api/auth/google/callback' }).NODE_ENV).toBe('development');
+    expect(validateEnv({ GOOGLE_OAUTH_REDIRECT_URI: 'not a url' }).GOOGLE_OAUTH_CLIENT_ID).toBeUndefined();
+  });
+
+  it('refuses client values with white space', () => {
+    expect(() => validateEnv({ ...google, GOOGLE_OAUTH_CLIENT_ID: 'a b', APP_PUBLIC_URL: 'https://academy.example' })).toThrow(/GOOGLE_OAUTH_CLIENT_ID/);
+    expect(() => validateEnv({ ...google, GOOGLE_OAUTH_CLIENT_SECRET: 'a b', APP_PUBLIC_URL: 'https://academy.example' })).toThrow(/GOOGLE_OAUTH_CLIENT_SECRET/);
+  });
+});

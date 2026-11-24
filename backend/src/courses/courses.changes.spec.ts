@@ -18,6 +18,7 @@ const course = (overrides: Partial<CourseValues> = {}): CourseValues => ({
   maxAge: 14,
   coverImageUrl: null,
   enrollmentFeePlanId: null,
+  subjectId: null,
   ...overrides,
 });
 
@@ -69,6 +70,17 @@ describe('course update planning', () => {
   it('clears optional fields with null and is idempotent', () => {
     expect(planCourseUpdate(course(), { durationHours: null, minAge: null }).fields).toEqual(['durationHours', 'minAge']);
     expect(planCourseUpdate(course(), { summary: null, levelId: null, sessionsCount: 12 }).fields).toEqual([]);
+  });
+
+  it('PORTAL-04: sets, replaces and clears the subject like any optional reference, last in the field order', () => {
+    const math = '01a19870-0000-7000-8000-0000000000a1';
+    const physics = '01a19870-0000-7000-8000-0000000000a2';
+    expect(planCourseUpdate(course(), { subjectId: math, maxAge: 15 })).toEqual({ data: { maxAge: 15, subjectId: math }, fields: ['maxAge', 'subjectId'] });
+    expect(planCourseUpdate(course({ subjectId: math }), { subjectId: math }).fields).toEqual([]);
+    expect(planCourseUpdate(course({ subjectId: math }), { subjectId: physics }).fields).toEqual(['subjectId']);
+    expect(planCourseUpdate(course({ subjectId: math }), { subjectId: null })).toEqual({ data: { subjectId: null }, fields: ['subjectId'] });
+    expect(planCourseUpdate(course(), { subjectId: null }).fields).toEqual([]);
+    expect(isEmptyCoursePatch({ subjectId: null })).toBe(false);
   });
 
   it('checks the age range after merging the patch', () => {

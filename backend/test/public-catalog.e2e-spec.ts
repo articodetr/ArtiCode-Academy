@@ -49,6 +49,8 @@ const CARD_KEYS = [
   'price',
   'pricing',
   'sessionsCount',
+  // PORTAL-04: the school subject ({ id, name }).
+  'subject',
   'summary',
 ].sort();
 /** API-236/237: 60 requests per minute per IP. */
@@ -155,6 +157,15 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
       select: { id: true },
     });
     ids['a'] = a.id;
+    // PORTAL-04: course A teaches a school subject; its code must never reach a visitor.
+    const maxSubject = await prisma.subject.aggregate({ _max: { sortOrder: true } });
+    const subject = await prisma.subject.create({
+      data: { code: `${PREFIX}S`.slice(0, 16), name: { ar: 'الرياضيات', en: 'Mathematics' }, sortOrder: (maxSubject._max.sortOrder ?? -1) + 1 },
+      select: { id: true, code: true },
+    });
+    ids['subject'] = subject.id;
+    ids['subjectCode'] = subject.code;
+    await prisma.course.update({ where: { id: a.id }, data: { subjectId: subject.id }, select: { id: true } });
     const plan = await prisma.feePlan.create({
       data: {
         name: { ar: `${PREFIX} رسوم` },
@@ -204,6 +215,7 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
           await prisma.course.updateMany({ where: { code: { startsWith: PREFIX } }, data: { enrollmentFeePlanId: null } });
           await prisma.feePlan.deleteMany({ where: { name: { path: ['ar'], string_starts_with: PREFIX } } });
           await prisma.course.deleteMany({ where: { code: { startsWith: PREFIX } } });
+          await prisma.subject.deleteMany({ where: { code: { startsWith: PREFIX } } });
           if (teacherId) await prisma.user.deleteMany({ where: { id: teacherId } });
         }
       } finally {
@@ -246,6 +258,7 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
       summary: { ar: 'ملخص' },
       coverImageUrl: COVER,
       level: null,
+      subject: { id: ids['subject'], name: { ar: 'الرياضيات', en: 'Mathematics' } },
       durationHours: 12.5,
       sessionsCount: 8,
       pricing: 'paid',
@@ -256,10 +269,10 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
       lessonCount: 4,
       levelCount: 3,
     });
-    expect(items[1]).toMatchObject({ id: ids['b'], pricing: 'free', price: null, openClasses: 0, hasFreeSeat: false, lessonCount: 0, levelCount: 0 });
+    expect(items[1]).toMatchObject({ id: ids['b'], subject: null, pricing: 'free', price: null, openClasses: 0, hasFreeSeat: false, lessonCount: 0, levelCount: 0 });
 
     const text = JSON.stringify(res.body);
-    for (const hidden of [TEACHER_NAME, `${PREFIX}-A-OPEN`, `${PREFIX}-A-OFFICE`, `${PREFIX}-D`, 'secret', 'نص الدرس السري']) expect(text).not.toContain(hidden);
+    for (const hidden of [TEACHER_NAME, `${PREFIX}-A-OPEN`, `${PREFIX}-A-OFFICE`, `${PREFIX}-D`, 'secret', 'نص الدرس السري', ids['subjectCode']!]) expect(text).not.toContain(hidden);
     for (const key of ['teachers', 'leadTeacher', 'classes', 'schedule', 'mine', 'syllabus', 'content']) expect(keysOf(res.body).has(key), key).toBe(false);
 
     // Keyset by code: one per page.
@@ -401,6 +414,26 @@ describe.skipIf(!available)('MOD-20 public catalog (e2e, TEST-248 part 2)', () =
         await prisma.enrollment.deleteMany({ where: { studentUserId: studentId } });
         await prisma.user.deleteMany({ where: { id: studentId } });
       }
+    }
+  });
+
+  it('PORTAL-04 — the detail names the subject too, and subjectId narrows the list (an unknown id matches nothing, a malformed one is 400)', async () => {
+    await setPublicBrowsing(true);
+    const detail = await anonymous(`${LIST}/${ids['a']}`).expect(200);
+    expect(detail.body.subject).toEqual({ id: ids['subject'], name: { ar: 'الرياضيات', en: 'Mathematics' } });
+    expect(JSON.stringify(detail.body)).not.toContain(ids['subjectCode']!);
+    const bySubject = await list(`&subjectId=${ids['subject']}`).expect(200);
+    expect((bySubject.body.items as JsonObject[]).map((item) => item['code'])).toEqual([`${PREFIX}-A`]);
+    const none = await list(`&subjectId=${NIL_ID}`).expect(200);
+    expect(none.body.items).toEqual([]);
+    await list('&subjectId=not-a-uuid').expect(400);
+    // A deactivated subject stays on its course and is still named (id and name only).
+    await prisma.subject.update({ where: { id: ids['subject'] }, data: { isActive: false }, select: { id: true } });
+    try {
+      const still = await list(`&subjectId=${ids['subject']}`).expect(200);
+      expect((still.body.items as JsonObject[])[0]?.['subject']).toEqual({ id: ids['subject'], name: { ar: 'الرياضيات', en: 'Mathematics' } });
+    } finally {
+      await prisma.subject.update({ where: { id: ids['subject'] }, data: { isActive: true }, select: { id: true } });
     }
   });
 

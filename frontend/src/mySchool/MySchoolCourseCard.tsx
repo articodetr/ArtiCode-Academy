@@ -1,6 +1,7 @@
 // One course of «My School» (MOD-20, API-229; PORTAL-04 redesign of the
 // course cards, in the identity of /home and /explore): a 16:9 cover (or a
-// tinted placeholder of the course) with the state badge, the code and level,
+// tinted placeholder of the course) with the state badge, the code and the
+// school subject (PORTAL-04 — never the difficulty level),
 // the course, its class, the lead teacher by name, the server's progress — the
 // percentage, a quiet bar and the counts of required lessons, or «no required
 // lessons yet», or «no lesson published yet» —, the last lesson opened, and
@@ -91,7 +92,8 @@ export function MySchoolCourseCard({ item, featured = false }: { item: MyLearnin
   // PORTAL-04: no published lesson yet (the server's `total` counts the published lessons) — said plainly, and the
   // button only opens the course (its class sessions live there) instead of promising lessons to learn.
   const noLessons = progress.total === 0
-  const level = item.course.level ? localizedLabel(item.course.level.name, language) : null
+  // PORTAL-04: the school subject the course teaches (المادة) — the difficulty level is not shown to learners.
+  const subject = item.course.subject ? localizedLabel(item.course.subject.name, language) : null
   // «ابدأ/واصل التعلم» stand out; reviewing a finished course or opening one without lessons is a quieter step.
   const primaryAction = action !== null && action !== 'review' && !noLessons
   // A finished course says when (the enrollment's completion, else the server's last required lesson) — PORTAL-04.
@@ -112,7 +114,11 @@ export function MySchoolCourseCard({ item, featured = false }: { item: MyLearnin
           <bdi dir="ltr" className="ms-ccard__code">
             {item.course.code}
           </bdi>
-          {level ? <span className="ms-ccard__level">{level}</span> : null}
+          {subject ? (
+            <span className="ms-ccard__subject" data-testid="course-subject">
+              {subject}
+            </span>
+          ) : null}
         </div>
         <h3 className="ms-ccard__title" id={titleId}>
           {localizedLabel(item.course.name, language)}

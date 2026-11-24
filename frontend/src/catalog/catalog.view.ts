@@ -4,6 +4,7 @@
 // courses» groups the enrollments of API-060 by course. Nothing here decides
 // what the server decides — `enrollable`, `blocker`, the request state and the
 // payment state are always the server's. Unit-tested in catalog.view.test.ts.
+// PORTAL-04: the list narrows by school subject (`subjectId`) instead of difficulty.
 import { brandLogoSrc } from '../academy/academy.brand'
 import type { CatalogClass, CatalogCourseCard, CatalogCourseDetail, ListCatalogParams, RequestState } from '../api/catalog'
 import type { CoursePricing } from '../api/courses'
@@ -12,7 +13,8 @@ import type { CoursePricing } from '../api/courses'
 export interface CatalogFilters {
   q?: string
   pricing?: CoursePricing
-  levelId?: string
+  /** PORTAL-04: the school subject (API-219 `subjectId`). */
+  subjectId?: string
   /** Only `true` is sent: the toggle narrows, it never asks for the unavailable ones. */
   available?: true
 }
@@ -28,7 +30,7 @@ export function catalogParams(filters: CatalogFilters, cursor: string | undefine
   const q = filters.q?.trim()
   if (q) params.q = q.slice(0, CATALOG_SEARCH_MAX_LENGTH)
   if (filters.pricing) params.pricing = filters.pricing
-  if (filters.levelId) params.levelId = filters.levelId
+  if (filters.subjectId) params.subjectId = filters.subjectId
   if (filters.available) params.available = true
   if (cursor) params.cursor = cursor
   return params
@@ -36,7 +38,7 @@ export function catalogParams(filters: CatalogFilters, cursor: string | undefine
 
 /** True when a filter narrows the list (the empty state then offers to clear them). */
 export function isCatalogNarrowed(filters: CatalogFilters): boolean {
-  return Boolean(filters.q?.trim() || filters.pricing || filters.levelId || filters.available)
+  return Boolean(filters.q?.trim() || filters.pricing || filters.subjectId || filters.available)
 }
 
 /**

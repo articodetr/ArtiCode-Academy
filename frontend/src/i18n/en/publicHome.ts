@@ -14,7 +14,7 @@ export const publicHome: typeof arPublicHome = {
     subtitle: 'Structured programs in levels and lessons that you follow step by step, with your progress in My classes.',
     browse: 'Browse programs',
     signIn: 'Sign in',
-    accountsNote: 'Accounts are created by the academy.',
+    accountsNote: 'Sign in with your account to enroll in courses and start learning.',
     mySchool: 'My classes',
     dashboard: 'Dashboard',
     indicators: {
@@ -100,7 +100,7 @@ export const publicHome: typeof arPublicHome = {
     },
     signIn: {
       title: 'Sign in with your account',
-      text: 'Accounts are created by the academy; sign in with the account it gives you.',
+      text: 'Sign in with your account to enroll in a program and start learning.',
     },
     learn: {
       title: 'Enroll and start learning',

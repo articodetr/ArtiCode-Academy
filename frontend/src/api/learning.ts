@@ -106,7 +106,10 @@ export interface MyLearningCourse {
     name: LocalizedLabel
     summary: LocalizedLabel | null
     coverImageUrl: string | null
+    /** The course difficulty (MOD-04 `levels`) — kept in the contract; «My School» never shows it to learners. */
     level: { id: string; name: LocalizedLabel } | null
+    /** PORTAL-04: the school subject the course teaches; null = not set. */
+    subject: { id: string; name: LocalizedLabel } | null
   }
   leadTeacher: { fullName: string; displayName: string | null } | null
   /** null when the class has no session left (D-R143). */

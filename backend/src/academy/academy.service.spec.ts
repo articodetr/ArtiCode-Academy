@@ -24,12 +24,12 @@ const ROW = {
 const CALLER = { id: 'user-1', permissions: ['academy.settings.manage'] } as unknown as AuthPrincipal;
 const CTX = { ip: '127.0.0.1', userAgent: 'vitest' };
 
-function makeService(row: typeof ROW | null, mailTransport = 'none') {
+function makeService(row: typeof ROW | null, mailTransport = 'none', env: Record<string, string> = {}) {
   const findFirst = vi.fn().mockResolvedValue(row);
   const transaction = vi.fn();
   const record = vi.fn();
   const prisma = { db: { academy: { findFirst }, $transaction: transaction } };
-  const config = { get: vi.fn().mockReturnValue(mailTransport) };
+  const config = { get: vi.fn((key: string) => (key === 'MAIL_TRANSPORT' ? mailTransport : env[key])) };
   const service = new AcademyService(prisma as never, { record } as never, config as never);
   return { service, findFirst, transaction, record };
 }
@@ -102,7 +102,7 @@ describe('AcademyService', () => {
     for (const [settings, expected] of cases) {
       const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings });
       const dto = await service.getPublic();
-      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'logoUrl', 'name', 'selfRegistration']);
+      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'googleSignIn', 'googleSignUp', 'logoUrl', 'name', 'selfRegistration']);
       expect(dto.catalogPublic, JSON.stringify(settings)).toBe(expected);
     }
   });
@@ -119,6 +119,27 @@ describe('AcademyService', () => {
     for (const [settings, transport, expected] of cases) {
       const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings }, transport);
       expect((await service.getPublic()).selfRegistration, `${JSON.stringify(settings)} ${transport}`).toBe(expected);
+    }
+  });
+
+  it('API-205 answers googleSignIn when both Google client values are set, and googleSignUp only with the self-registration setting too — no mail transport needed (PORTAL-04)', async () => {
+    const both = { GOOGLE_OAUTH_CLIENT_ID: 'client.apps.googleusercontent.com', GOOGLE_OAUTH_CLIENT_SECRET: 'test-only-secret' };
+    const cases: Array<[unknown, Record<string, string>, boolean, boolean]> = [
+      [{ selfRegistration: { enabled: true } }, {}, false, false],
+      [{ selfRegistration: { enabled: true } }, { GOOGLE_OAUTH_CLIENT_ID: both.GOOGLE_OAUTH_CLIENT_ID }, false, false],
+      [{}, both, true, false],
+      [{ selfRegistration: { enabled: false } }, both, true, false],
+      [{ selfRegistration: { enabled: 'true' } }, both, true, false],
+      [{ selfRegistration: { enabled: true } }, both, true, true],
+    ];
+    for (const [settings, env, signIn, signUp] of cases) {
+      // MAIL_TRANSPORT=none: Google sign-up does not depend on a transport, the e-mail sign-up does.
+      const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings }, 'none', env);
+      const dto = await service.getPublic();
+      const label = `${JSON.stringify(settings)} ${Object.keys(env).join(',')}`;
+      expect(dto.googleSignIn, label).toBe(signIn);
+      expect(dto.googleSignUp, label).toBe(signUp);
+      expect(dto.selfRegistration, label).toBe(false);
     }
   });
 });

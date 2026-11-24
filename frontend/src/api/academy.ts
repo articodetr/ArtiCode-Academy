@@ -117,6 +117,10 @@ export interface PublicAcademy {
   catalogPublic?: boolean
   /** PORTAL-03 (#221): the academy lets a visitor create a student account and a mail transport is set. Absent = closed. */
   selfRegistration?: boolean
+  /** PORTAL-04: Google sign-in is configured on this server (`POST /api/auth/google/start` answers). Absent = off. */
+  googleSignIn?: boolean
+  /** PORTAL-04: `googleSignIn` and the academy takes registrations, so a new Google account becomes a student. Absent = off. */
+  googleSignUp?: boolean
 }
 
 export const ACADEMY_PATH = '/api/academy'
@@ -143,4 +147,19 @@ export function isCatalogPublic(academy: Pick<PublicAcademy, 'catalogPublic'> | 
 /** True only when the server says so: a server before PORTAL-03, a failed read or a missing field all read as closed. */
 export function isSelfRegistrationOpen(academy: Pick<PublicAcademy, 'selfRegistration'> | null | undefined): boolean {
   return academy?.selfRegistration === true
+}
+
+/** True only when the server says Google sign-in is configured: an older server, a failed read or a missing field read as off. */
+export function isGoogleSignInOn(academy: Pick<PublicAcademy, 'googleSignIn'> | null | undefined): boolean {
+  return academy?.googleSignIn === true
+}
+
+/** True only when the server says a new account may be created through Google (`googleSignUp`). */
+export function isGoogleSignUpOpen(academy: Pick<PublicAcademy, 'googleSignUp'> | null | undefined): boolean {
+  return academy?.googleSignUp === true
+}
+
+/** A visitor may create an account one way or the other: by e-mail (`selfRegistration`) or through Google (`googleSignUp`). */
+export function canCreateAccount(academy: Pick<PublicAcademy, 'selfRegistration' | 'googleSignUp'> | null | undefined): boolean {
+  return isSelfRegistrationOpen(academy) || isGoogleSignUpOpen(academy)
 }

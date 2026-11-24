@@ -48,6 +48,11 @@ export class ListCatalogQueryDto {
   @IsUUID('all')
   levelId?: string;
 
+  @ApiPropertyOptional({ format: 'uuid', description: 'PORTAL-04: the courses of this school subject (an unknown id matches nothing)' })
+  @IsOptional()
+  @IsUUID('all')
+  subjectId?: string;
+
   @ApiPropertyOptional({ enum: COURSE_PRICINGS })
   @IsOptional()
   @IsIn(COURSE_PRICINGS)
@@ -79,6 +84,15 @@ export class CatalogLevelDto {
 
   @ApiProperty()
   code: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto })
+  name: LocalizedText;
+}
+
+/** PORTAL-04: the school subject of a course — its id and localized name only. */
+export class CatalogSubjectDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
 
   @ApiProperty({ type: () => LocalizedTextDto })
   name: LocalizedText;
@@ -121,6 +135,9 @@ export class CatalogCourseCardDto {
 
   @ApiProperty({ type: CatalogLevelDto, nullable: true })
   level: CatalogLevelDto | null;
+
+  @ApiProperty({ type: CatalogSubjectDto, nullable: true, description: 'PORTAL-04: the school subject the course teaches; null = not set' })
+  subject: CatalogSubjectDto | null;
 
   @ApiProperty({ type: Number, nullable: true })
   durationHours: number | null;

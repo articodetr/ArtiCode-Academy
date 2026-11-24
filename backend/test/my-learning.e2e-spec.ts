@@ -78,6 +78,7 @@ interface CourseItem {
   relation: 'self' | 'child';
   student: { id: string };
   class: { id: string };
+  course: { subject: { id: string; name: unknown } | null } & Record<string, unknown>;
   progress: Counts;
   lastLesson: { id: string; sectionNumber: number; sectionTitle: unknown; openedAt: string } | null;
   lastActivityAt: string | null;
@@ -126,6 +127,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
   let academyTimeZone: string;
   let threshold: number;
   let courseId: string;
+  let subjectId: string;
   const createdUserIds: string[] = [];
   const fx: Record<string, string> = {};
   const tokens: Record<string, string> = {};
@@ -215,9 +217,17 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
     await createUser('teacher', 'teacher');
     await prisma.guardianStudent.create({ data: { guardianUserId: id('guardian'), studentUserId: id('sA'), relationship: 'mother', isPrimary: true }, select: { studentUserId: true } });
 
+    // PORTAL-04: the course teaches a school subject — «My School» shows it instead of the difficulty level.
+    const maxSubject = await prisma.subject.aggregate({ _max: { sortOrder: true } });
+    subjectId = (
+      await prisma.subject.create({
+        data: { code: `${PREFIX}S`.slice(0, 16), name: { ar: 'الرياضيات', en: 'Mathematics' }, sortOrder: (maxSubject._max.sortOrder ?? -1) + 1 },
+        select: { id: true },
+      })
+    ).id;
     courseId = (
       await prisma.course.create({
-        data: { code: code('CRS'), name: { ar: 'دورة مدرستي', en: 'My School course' }, summary: { ar: 'ملخص الدورة' }, status: 'published', coverImageUrl: COVER },
+        data: { code: code('CRS'), name: { ar: 'دورة مدرستي', en: 'My School course' }, summary: { ar: 'ملخص الدورة' }, status: 'published', coverImageUrl: COVER, subjectId },
         select: { id: true },
       })
     ).id;
@@ -267,6 +277,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
         if (Object.keys(classes).length > 0) await prisma.enrollment.deleteMany({ where: { classId: { in: Object.values(classes) } } });
         await prisma.class.deleteMany({ where: { code: { startsWith: PREFIX } } });
         await prisma.course.deleteMany({ where: { code: { startsWith: PREFIX } } });
+        await prisma.subject.deleteMany({ where: { code: { startsWith: PREFIX } } });
       }
     } finally {
       if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
@@ -284,13 +295,15 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       [classes['B'], 'self'],
     ]); // no activity yet: the newest enrollment first
     expect(Object.keys(list[0]!).sort()).toEqual(COURSE_ITEM_KEYS);
+    expect(Object.keys(list[0]!.course).sort()).toEqual(['code', 'coverImageUrl', 'id', 'level', 'name', 'subject', 'summary']);
+    expect(Object.keys(list[0]!.course.subject!).sort()).toEqual(['id', 'name']); // never the subject's code or state
     expect(list[0]).toMatchObject({
       enrollmentId: enrollments['A:sA'],
       relation: 'self',
       student: { id: id('sA'), fullName: 'Test sA', displayName: null },
       enrollment: { status: 'active', enrolledAt: '2026-02-01T09:00:00.000Z', activatedAt: '2026-02-01T09:00:00.000Z', completedAt: null },
       class: { id: classes['A'], code: code('A'), name: { ar: 'فصل A' }, status: 'open', startsOn: null, endsOn: null },
-      course: { id: courseId, code: code('CRS'), name: { ar: 'دورة مدرستي', en: 'My School course' }, summary: { ar: 'ملخص الدورة' }, coverImageUrl: COVER, level: null },
+      course: { id: courseId, code: code('CRS'), name: { ar: 'دورة مدرستي', en: 'My School course' }, summary: { ar: 'ملخص الدورة' }, coverImageUrl: COVER, level: null, subject: { id: subjectId, name: { ar: 'الرياضيات', en: 'Mathematics' } } },
       leadTeacher: { fullName: 'Test teacher', displayName: null },
       progress: { total: 6, required: 5, completed: 0, completedRequired: 0, percent: 0, isComplete: false, completedAt: null },
       lastLesson: null,

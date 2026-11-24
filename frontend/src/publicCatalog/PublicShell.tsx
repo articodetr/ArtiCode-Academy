@@ -30,7 +30,7 @@ import { Link, Navigate, NavLink, useNavigate } from 'react-router'
 import { brandLogoSrc } from '../academy/academy.brand'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
 import type { PublicAcademyReading } from '../academy/usePublicAcademy'
-import { isCatalogPublic, isSelfRegistrationOpen } from '../api/academy'
+import { canCreateAccount, isCatalogPublic } from '../api/academy'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useLocalized } from '../i18n/useLocalized'
@@ -117,7 +117,7 @@ export function PublicShell({
   const viewer = viewerOf(status, user)
   const programs = showsProgramsLink(viewer, catalogOpen ?? isCatalogPublic(reading.academy))
   // A visitor only: `pending` may still turn out to be a signed-in user.
-  const offersRegistration = viewer === 'visitor' && isSelfRegistrationOpen(reading.academy)
+  const offersRegistration = viewer === 'visitor' && canCreateAccount(reading.academy)
 
   return (
     <ConfigProvider theme={PUBLIC_THEME}>

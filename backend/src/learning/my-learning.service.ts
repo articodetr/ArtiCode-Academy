@@ -63,7 +63,7 @@ const ENROLLMENT_SELECT = {
       status: true,
       startsOn: true,
       endsOn: true,
-      course: { select: { id: true, code: true, name: true, summary: true, coverImageUrl: true, level: { select: { id: true, name: true } } } },
+      course: { select: { id: true, code: true, name: true, summary: true, coverImageUrl: true, level: { select: { id: true, name: true } }, subject: { select: { id: true, name: true } } } },
       teachers: { where: { role: 'lead' }, take: 1, select: { teacher: { select: { fullName: true, displayName: true } } } },
     },
   },
@@ -270,6 +270,8 @@ export class MyLearningService {
         summary: readLocalizedText(course.summary),
         coverImageUrl: course.coverImageUrl,
         level: course.level ? { id: course.level.id, name: readLocalizedText(course.level.name) ?? { ar: '' } } : null,
+        // PORTAL-04: the school subject, read in the same query (its id and name only).
+        subject: course.subject ? { id: course.subject.id, name: readLocalizedText(course.subject.name) ?? { ar: '' } } : null,
       },
       leadTeacher: lead ? { fullName: lead.fullName, displayName: lead.displayName } : null,
       progress: toCounts(progress),

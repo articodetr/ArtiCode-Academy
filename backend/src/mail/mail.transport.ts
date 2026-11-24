@@ -12,8 +12,17 @@ export const MAIL_TRANSPORT = Symbol('MAIL_TRANSPORT');
 /** Names accepted by the `MAIL_TRANSPORT` variable (declared in env.schema.ts; `log` is refused in production). */
 export type MailTransportName = Env['MAIL_TRANSPORT'];
 
-/** `notification` (MOD-12): the e-mail copy of an in-app notification — its delivery state lives in the notification row, not in the audit log (D-R86). */
-export type MailKind = 'invitation' | 'password_reset' | 'email_verification' | 'notification';
+/**
+ * `notification` (MOD-12): the e-mail copy of an in-app notification — its delivery state lives in the notification row, not in the audit log (D-R86).
+ * `registration` / `registration_existing` (PORTAL-03): the self-registration link, and the notice to an address that already has an account.
+ */
+export type MailKind =
+  | 'invitation'
+  | 'password_reset'
+  | 'email_verification'
+  | 'notification'
+  | 'registration'
+  | 'registration_existing';
 
 /** A rendered, ready-to-send message. */
 export interface MailMessage {

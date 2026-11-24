@@ -1,0 +1,57 @@
+/* «المتابعة باستخدام Google» (auth/GoogleSignInButton.tsx), in the light theme of Google's sign-in branding: a white
+   fill, a #747775 border, #1f1f1f text in a medium weight, the multi-colour «G» before the label (on the right in Arabic,
+   on the left in English — Ant Design places the icon at the reading start), and the disabled state at 38 % as the
+   guidelines draw it. The selectors outrank Ant Design's outlined-button rules, whose hash class counts nothing. */
+.google-sign-in .google-sign-in__button.ant-btn {
+  border-color: #747775;
+  background: #ffffff;
+  color: #1f1f1f;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.google-sign-in .google-sign-in__button.ant-btn:not(:disabled):not(.ant-btn-disabled):hover {
+  border-color: #747775;
+  background: #f7f8f8;
+  color: #1f1f1f;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+.google-sign-in .google-sign-in__button.ant-btn:not(:disabled):not(.ant-btn-disabled):active {
+  border-color: #747775;
+  background: #eef0f0;
+  color: #1f1f1f;
+}
+
+.google-sign-in .google-sign-in__button.ant-btn:focus-visible {
+  outline: 2px solid #039092;
+  outline-offset: 2px;
+}
+
+.google-sign-in .google-sign-in__button.ant-btn:disabled,
+.google-sign-in .google-sign-in__button.ant-btn.ant-btn-disabled {
+  border-color: rgba(31, 31, 31, 0.12);
+  background: rgba(255, 255, 255, 0.38);
+  color: rgba(31, 31, 31, 0.38);
+}
+
+.google-sign-in__mark {
+  display: block;
+  flex: none;
+}
+
+.google-sign-in__button:disabled .google-sign-in__mark {
+  opacity: 0.38;
+}
+
+.google-sign-in__hint {
+  margin-top: 8px;
+  color: #62757b;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.google-sign-in__failure {
+  margin-top: 12px;
+}

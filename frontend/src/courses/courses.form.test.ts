@@ -3,18 +3,29 @@ import { ApiError } from '../api/client'
 import { COURSE_ID, makeCourse } from '../test/courses'
 import { makeFeePlan } from '../test/payments'
 import { describeCoursesFailure } from './courses.errors'
-import { buildCreateCourseInput, courseFormHasChanges, courseFormValuesOf, englishWithoutArabic, invalidAgeRange, isCoverImageUrl, localizedOf, planCoursePatch, plansFittingCourse } from './courses.form'
+import { buildCreateCourseInput, courseFormHasChanges, courseFormValuesOf, englishWithoutArabic, isCoverImageUrl, localizedOf, planCoursePatch, plansFittingCourse } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction, nextCourseStatus } from './courses.status'
 
 describe('course form helpers', () => {
   it('builds the create body from what was filled in only, with a normalised code', () => {
-    expect(buildCreateCourseInput({ code: ' py-101 ', nameAr: ' بايثون ', nameEn: '', summaryAr: '', levelId: null, durationHours: null })).toEqual({
+    expect(buildCreateCourseInput({ code: ' py-101 ', nameAr: ' بايثون ', nameEn: '', summaryAr: '', levelId: null, subjectId: null, durationHours: null })).toEqual({
       code: 'PY-101',
       name: { ar: 'بايثون' },
     })
     expect(
-      buildCreateCourseInput({ code: 'A', nameAr: 'أ', nameEn: 'A', summaryAr: 'م', summaryEn: 'S', levelId: 'l-1', durationHours: 12.5, sessionsCount: 4, minAge: 8, maxAge: 9 }),
-    ).toEqual({ code: 'A', name: { ar: 'أ', en: 'A' }, summary: { ar: 'م', en: 'S' }, levelId: 'l-1', durationHours: 12.5, sessionsCount: 4, minAge: 8, maxAge: 9 })
+      buildCreateCourseInput({ code: 'A', nameAr: 'أ', nameEn: 'A', summaryAr: 'م', summaryEn: 'S', levelId: 'l-1', subjectId: 's-1', durationHours: 12.5, sessionsCount: 4 }),
+    ).toEqual({ code: 'A', name: { ar: 'أ', en: 'A' }, summary: { ar: 'م', en: 'S' }, levelId: 'l-1', subjectId: 's-1', durationHours: 12.5, sessionsCount: 4 })
+  })
+
+  it('never sends an age range (PORTAL-04): neither on create nor in a PATCH, so the stored ages stay', () => {
+    const created = buildCreateCourseInput({ code: 'A', nameAr: 'أ', durationHours: 2, sessionsCount: 3 })
+    expect(created).not.toHaveProperty('minAge')
+    expect(created).not.toHaveProperty('maxAge')
+    const course = makeCourse({ minAge: 10, maxAge: 14 })
+    const values = courseFormValuesOf(course)
+    expect(values).not.toHaveProperty('minAge')
+    expect(values).not.toHaveProperty('maxAge')
+    expect(planCoursePatch(course, { ...values, sessionsCount: 20 })).toEqual({ sessionsCount: 20 })
   })
 
   it('sends no PATCH when nothing changed', () => {
@@ -24,22 +35,34 @@ describe('course form helpers', () => {
 
   it('sends only the changed fields: null clears, a localized text travels whole and keeps its Turkish text', () => {
     const course = makeCourse({ name: { ar: 'بايثون', en: 'Python', tr: 'Python TR' }, summary: { ar: 'ملخص' } })
-    const values = { ...courseFormValuesOf(course), nameEn: 'Python 3', summaryAr: '', levelId: null, maxAge: null, code: 'py-102' }
+    const values = { ...courseFormValuesOf(course), nameEn: 'Python 3', summaryAr: '', levelId: null, sessionsCount: null, code: 'py-102' }
     expect(planCoursePatch(course, values)).toEqual({
       code: 'PY-102',
       name: { ar: 'بايثون', en: 'Python 3', tr: 'Python TR' },
       summary: null,
       levelId: null,
-      maxAge: null,
+      sessionsCount: null,
     })
   })
 
-  it('reads localized text and the age rule like the server', () => {
+  it('reads the subject from the course and sends it only when it changes; an emptied picker clears it (PORTAL-04)', () => {
+    const course = makeCourse()
+    const values = courseFormValuesOf(course)
+    expect(values.subjectId).toBe(course.subject!.id)
+    expect(planCoursePatch(course, values)).toBeNull()
+    expect(planCoursePatch(course, { ...values, subjectId: 'other-subject' })).toEqual({ subjectId: 'other-subject' })
+    // antd answers undefined when a Select is cleared.
+    expect(planCoursePatch(course, { ...values, subjectId: undefined })).toEqual({ subjectId: null })
+    expect(planCoursePatch(course, { ...values, subjectId: null })).toEqual({ subjectId: null })
+    const none = makeCourse({ subject: null })
+    expect(courseFormValuesOf(none).subjectId).toBeNull()
+    expect(planCoursePatch(none, { ...courseFormValuesOf(none), subjectId: 's-1' })).toEqual({ subjectId: 's-1' })
+    expect(courseFormHasChanges(none, { ...courseFormValuesOf(none), subjectId: 's-1' })).toBe(true)
+  })
+
+  it('reads localized text like the server', () => {
     expect(localizedOf('  ', 'only english')).toBeNull()
     expect(localizedOf('أ', '  ')).toEqual({ ar: 'أ' })
-    expect(invalidAgeRange(12, 10)).toBe(true)
-    expect(invalidAgeRange(12, null)).toBe(false)
-    expect(invalidAgeRange(10, 10)).toBe(false)
   })
 })
 
@@ -66,6 +89,16 @@ describe('course errors', () => {
     expect(describeCoursesFailure(new ApiError(400, 'name.ar must be longer'))).toEqual({ key: 'courses.errors.validation', params: { message: 'name.ar must be longer' } })
     expect(describeCoursesFailure(new ApiError(500, 'boom'))).toEqual({ key: 'login.errors.server' })
     expect(describeCoursesFailure(new TypeError('offline'))).toEqual({ key: 'login.errors.network' })
+  })
+
+  it('maps the subject codes (PORTAL-04): the course form\'s picker, the subjects tab\'s code field and the course count', () => {
+    expect(describeCoursesFailure(new ApiError(404, 'gone', { code: 'subject_not_found', subjectId: 's-1' }))).toEqual({ key: 'courses.errors.subject_not_found', field: ['subjectId'] })
+    expect(describeCoursesFailure(new ApiError(422, 'off', { code: 'subject_inactive', subjectId: 's-1' }))).toEqual({ key: 'courses.errors.subject_inactive', field: ['subjectId'] })
+    expect(describeCoursesFailure(new ApiError(409, 'taken', { code: 'subject_code_taken', subjectCode: 'MATH' }))).toEqual({ key: 'courses.errors.subject_code_taken', field: ['code'] })
+    expect(describeCoursesFailure(new ApiError(409, 'used', { code: 'subject_in_use', courseCount: 3 }))).toEqual({ key: 'courses.errors.subject_in_use', params: { courseCount: '3' } })
+    expect(describeCoursesFailure(new ApiError(400, 'order', { code: 'subject_order_invalid' }))).toEqual({ key: 'courses.errors.subject_order_invalid' })
+    // No age field is left on the form: a stale age refusal shows above it.
+    expect(describeCoursesFailure(new ApiError(400, 'age', { code: 'age_range_invalid' }))).toEqual({ key: 'courses.errors.age_range_invalid' })
   })
 })
 

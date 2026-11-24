@@ -254,10 +254,11 @@ export class AcademyDto {
 
 /**
  * The public branding of the academy (API-205, MOD-02-T04): what the sign-in
- * page shows before anybody is authenticated. Exactly these five keys — never
+ * page shows before anybody is authenticated. Exactly these seven keys — never
  * the id, slug, contact details, time zone, currency or the settings
- * themselves (`catalogPublic` — MOD-20, D-R138 — and `selfRegistration` —
- * PORTAL-03 — are the two derived flags).
+ * themselves (`catalogPublic` — MOD-20, D-R138 —, `selfRegistration` —
+ * PORTAL-03 — and `googleSignIn`/`googleSignUp` — PORTAL-04 — are the derived
+ * flags).
  */
 export class AcademyPublicDto {
   @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }` (only the locales stored)', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
@@ -282,6 +283,22 @@ export class AcademyPublicDto {
     description: 'true when visitors may create their own student account: `settings.selfRegistration.enabled` is true AND the server has a mail transport (PORTAL-03)',
   })
   selfRegistration: boolean;
+
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description:
+      'true when Google sign-in is configured on this server (GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET — PORTAL-04): the sign-in page offers «Continue with Google»',
+  })
+  googleSignIn: boolean;
+
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description:
+      'true when Google sign-in may also create a new student account: `googleSignIn` AND `settings.selfRegistration.enabled` is true (Google proves the address, so no mail transport is needed — PORTAL-04)',
+  })
+  googleSignUp: boolean;
 }
 
 export class SchedulingSettingsDto {

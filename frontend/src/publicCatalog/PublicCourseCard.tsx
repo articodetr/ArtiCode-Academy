@@ -8,11 +8,11 @@
 //
 // The look (the course redesign): a 16:9 picture flush with the card's edges — the course's cover, or a plain patterned
 // placeholder with a book icon when it has none or the image fails (never a picture that could pass for the course's
-// own) — with the small badges on it (type, difficulty = `course.level`, duration); then the name, two lines of summary
-// when there is one, the facts (lessons, curriculum levels, sessions — the duration is already a badge), the price with
-// the availability, and the actions (PublicCardActions). The course code is not shown; a search by code still works, on
-// the server. The body grows, so the feet of a row line up.
-import { ApartmentOutlined, CalendarOutlined, ReadOutlined } from '@ant-design/icons'
+// own) — with the small badges on it (type, the school subject = `course.subject` since PORTAL-04, duration); then the
+// name, two lines of summary when there is one, the facts (lessons, curriculum levels — the duration is already a badge;
+// no sessions and no age since PORTAL-04), the price with the availability, and the actions (PublicCardActions). The
+// course code is not shown; a search by code still works, on the server. The body grows, so the feet of a row line up.
+import { ApartmentOutlined, ReadOutlined } from '@ant-design/icons'
 import { Typography } from 'antd'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -92,7 +92,6 @@ export function PublicCourseCard({ card, href, headingLevel = 3 }: { card: Publi
         <ul className="public-card__facts">
           <Fact icon={<ReadOutlined />}>{t('publicCatalog.card.lessons', { count: card.lessonCount })}</Fact>
           {card.levelCount > 0 ? <Fact icon={<ApartmentOutlined />}>{t('publicCatalog.card.levels', { count: card.levelCount })}</Fact> : null}
-          {card.sessionsCount !== null ? <Fact icon={<CalendarOutlined />}>{t('publicCatalog.card.sessionsCount', { count: card.sessionsCount })}</Fact> : null}
         </ul>
         <div className="public-card__status">
           <PublicPriceText course={card} />

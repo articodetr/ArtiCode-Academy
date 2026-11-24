@@ -2,6 +2,10 @@
 // how a card words whether a class is open, a level's name (D-R130), a lesson's
 // length, what a failure says and where «سجّل في هذه الدورة» leads. Nothing
 // here decides what the server decides. Unit-tested in publicCatalog.view.test.ts.
+// PORTAL-04: a course is badged by its school subject (`subject`), never by its
+// difficulty; a visitor reaches the sign-in (or the new-account) page with the
+// enroll intent as its `returnTo`, and whether an account may be created is read
+// from API-205 (`selfRegistration` or `googleSignUp`).
 import { ApiError } from '../api/client'
 import { levelOrdinalWord } from '../common/levelOrdinal'
 import { isCatalogNotPublic } from '../api/publicCatalog'
@@ -9,7 +13,6 @@ import type { ListPublicCatalogParams, PublicCourseCard, PublicCourseList, Publi
 import type { LocalizedLabel } from '../api/users'
 import type { Language } from '../i18n/language'
 import { localizedLabel } from '../users/users.format'
-import type { PublicViewer } from './publicViewer'
 
 export const PUBLIC_CATALOG_PAGE_SIZE = 24
 /** Upper bound of `q` (1–100 characters after trim), as on API-219. */
@@ -129,22 +132,29 @@ export function levelNameOf(level: Pick<PublicOutlineLevel, 'number' | 'title'>,
 }
 
 export interface CourseBadge {
-  key: 'type' | 'level' | 'duration'
+  key: 'type' | 'subject' | 'duration'
   text: string
 }
 
+/** A course's school subject as shown in `language`, or null without one (a server before PORTAL-04 sends none). */
+export function subjectNameOf(course: { subject?: { name: LocalizedLabel } | null }, language: Language): string | null {
+  const name = course.subject ? localizedLabel(course.subject.name, language).trim() : ''
+  return name || null
+}
+
 /**
- * The small badges of a course, on its card and at the top of its page: that it is a course, its difficulty
- * (`course.level` — never the curriculum's levels, `levelCount`/`outline`) and its duration, each only when the server
- * has it.
+ * The small badges of a course, on its card and at the top of its page: that it is a course, its school subject
+ * (`course.subject`, PORTAL-04 — no longer its difficulty, and never the curriculum's levels, `levelCount`/`outline`) and
+ * its duration, each only when the server has it.
  */
 export function courseBadgesOf(
-  course: { level: { name: LocalizedLabel } | null; durationHours: number | null },
+  course: { subject?: { name: LocalizedLabel } | null; durationHours: number | null },
   t: Translate,
   language: Language,
 ): CourseBadge[] {
   const badges: CourseBadge[] = [{ key: 'type', text: t('publicCatalog.card.courseType') }]
-  if (course.level) badges.push({ key: 'level', text: localizedLabel(course.level.name, language) })
+  const subject = subjectNameOf(course, language)
+  if (subject) badges.push({ key: 'subject', text: subject })
   if (course.durationHours !== null) badges.push({ key: 'duration', text: t('publicCatalog.card.hours', { count: course.durationHours }) })
   return badges
 }
@@ -189,25 +199,21 @@ export function enrollIntentPath(courseId: string): string {
   return `/catalog/${encodeURIComponent(courseId)}?intent=enroll`
 }
 
-export interface CardSubscribeTarget {
-  to: string
-  /** The sign-in page's return path. */
-  state?: { from: string }
+/**
+ * Whether a visitor may create an account (API-205, PORTAL-04): by e-mail (`selfRegistration`) or through Google
+ * (`googleSignUp`). Read defensively — only a literal `true` opens it; a server that sends neither, a failed read or any
+ * other value reads as closed.
+ */
+export function accountCreationOpen(academy: { selfRegistration?: unknown; googleSignUp?: unknown } | null | undefined): boolean {
+  return academy?.selfRegistration === true || academy?.googleSignUp === true
 }
 
-/**
- * Where a public course's subscribe button leads, or null when it shows no button: only while the server says the course
- * takes an enrollment now, for a visitor (through the sign-in, keeping the course) or a student (to the course's
- * classes). Staff and guardians cannot enroll themselves (API-221 needs the `student` role), and nothing is offered
- * while the session is still being restored. Nothing enrolls here: the learner chooses a class and confirms.
- */
-export function cardSubscribeTarget(
-  course: Pick<PublicCourseCard, 'id' | 'openClasses' | 'hasFreeSeat' | 'pricing' | 'price'>,
-  viewer: PublicViewer,
-  isStudent: boolean,
-): CardSubscribeTarget | null {
-  if (publicEnrollStateOf(course) !== 'enrollable') return null
-  if (viewer === 'visitor') return { to: '/login', state: { from: enrollIntentPath(course.id) } }
-  if (viewer === 'learner' && isStudent) return { to: enrollIntentPath(course.id) }
-  return null
+/** The sign-in page with the enroll intent as its `returnTo` (always a path of this site — `enrollIntentPath()`). */
+export function visitorSignInPath(courseId: string): string {
+  return `/login?returnTo=${encodeURIComponent(enrollIntentPath(courseId))}`
+}
+
+/** The new-account page with the same `returnTo`. */
+export function visitorRegisterPath(courseId: string): string {
+  return `/register?returnTo=${encodeURIComponent(enrollIntentPath(courseId))}`
 }

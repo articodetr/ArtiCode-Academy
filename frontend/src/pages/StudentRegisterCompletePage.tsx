@@ -1,17 +1,22 @@
-// /register/complete/:token (PORTAL-04 on the contract v2 of GitHub #207): the e-mailed link. Shows the masked address and
-// the name, and the visitor chooses a password. It opens NO session: success goes to the sign-in page, replacing this
-// history entry so the token leaves it. The token exists only in the URL and in the two requests of its own route.
+// /register/complete/:token (PORTAL-04 on the contract v2 of GitHub #207): the e-mailed link, in the frame of the account
+// pages (auth/AuthLayout.tsx). Shows the masked address and the name (editable), and the visitor chooses a password
+// with its confirmation (a mismatch is refused here) and the rules in words. It opens NO session: success goes to the
+// sign-in page, which says «تم إنشاء حسابك، سجّل الدخول» above its form and keeps the course kept on this device —
+// replacing this history entry so the token leaves it. The token exists only in the URL and in the two requests of its
+// own route.
 import { UserOutlined } from '@ant-design/icons'
 import { Alert, Button, Descriptions, Flex, Form, Input, Spin, Typography } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
-import { isTokenShaped } from '../account/account.links'
+import { PASSWORD_MIN_LENGTH, isTokenShaped } from '../account/account.links'
 import { NewPasswordForm } from '../account/NewPasswordForm'
-import { DeadLinkNotice, PublicCard } from '../account/PublicCard'
+import { DeadLinkNotice } from '../account/PublicCard'
 import { completeRegistration, getRegistrationLink } from '../api/registration'
 import type { RegistrationPreview } from '../api/registration'
+import { AuthLayout } from '../auth/AuthLayout'
 import { signInNoticeState } from '../auth/mfa.signIn'
+import { withReturnTo } from '../auth/returnPath'
 import { enrollIntentPath } from '../publicCatalog/publicCatalog.view'
 import { PublicOnly } from '../publicCatalog/PublicShell'
 import { readKeptCourse, takeKeptCourse } from '../studentRegistration/keptCourse'
@@ -95,25 +100,21 @@ function CompleteBody() {
     body = <CompleteForm token={token} preview={preview} onDead={setVerdict} />
   }
 
-  return <PublicCard subtitle={t('studentRegistration.complete.subtitle')}>{body}</PublicCard>
+  return <AuthLayout title={t('studentRegistration.complete.title')}>{body}</AuthLayout>
 }
 
 /** A link that ran out: the visitor registers again, and a course still kept on this device goes along. */
 function ExpiredLinkNotice() {
   const { t } = useTranslation()
   const [course] = useState(() => readKeptCourse())
-  const state = course ? { from: enrollIntentPath(course) } : undefined
+  const returnTo = course ? enrollIntentPath(course) : null
   return (
     <>
       <Alert type="warning" showIcon title={t('studentRegistration.complete.linkExpired')} />
-      <Flex vertical align="center" gap={8} style={{ marginTop: 16 }}>
-        <Link to="/register" state={state}>
-          {t('studentRegistration.complete.registerAgain')}
-        </Link>
-        <Link to="/login" state={state}>
-          {t('account.goToLogin')}
-        </Link>
-      </Flex>
+      <div className="auth-layout__links">
+        <Link to={withReturnTo('/register', returnTo)}>{t('studentRegistration.complete.registerAgain')}</Link>
+        <Link to={withReturnTo('/login', returnTo)}>{t('account.goToLogin')}</Link>
+      </div>
     </>
   )
 }
@@ -172,7 +173,7 @@ function CompleteForm({
 
   return (
     <>
-      <Typography.Paragraph>{t('studentRegistration.complete.intro')}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{t('studentRegistration.complete.intro')}</Typography.Paragraph>
       <Descriptions
         column={1}
         size="small"
@@ -206,6 +207,7 @@ function CompleteForm({
             <Input prefix={<UserOutlined />} autoComplete="name" dir="auto" />
           </Form.Item>
         }
+        passwordHint={t('studentRegistration.complete.passwordHint', { min: PASSWORD_MIN_LENGTH })}
         submitLabel={t('studentRegistration.complete.submit')}
         submittingLabel={t('studentRegistration.complete.submitting')}
         submitting={submitting}

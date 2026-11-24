@@ -7,6 +7,7 @@ import { ar } from '../i18n/ar'
 import { COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, makeCourseList, makeLevelList } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { SUBJECT_IDS, THREE_SUBJECTS } from '../test/subjects'
 import { CoursesPage } from './CoursesPage'
 
 const python = makeCourse({ status: 'published' })
@@ -20,6 +21,7 @@ function mockCoursesApi(list: CourseList | Response, created: Response = jsonRes
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
     if (parsed.pathname === '/api/levels') return jsonResponse(200, makeLevelList())
+    if (parsed.pathname === '/api/subjects') return jsonResponse(200, { items: THREE_SUBJECTS() })
     if (parsed.pathname === '/api/courses' && method === 'GET') {
       queries.push(parsed.searchParams)
       return list instanceof Response ? list : jsonResponse(200, list)
@@ -144,6 +146,48 @@ describe('CoursesPage', () => {
     expect(await within(dialog).findByText(ar.courses.validation.codeFormat)).toBeInTheDocument()
     expect(await within(dialog).findByText(ar.courses.validation.arabicFirst)).toBeInTheDocument()
     expect(api.posts).toEqual([])
+  })
+
+  it('creates a course with its subject and asks no age range (PORTAL-04)', async () => {
+    const api = mockCoursesApi(makeCourseList([python]))
+    renderPage(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101')
+
+    fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
+    const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
+    expect(within(dialog).queryByText('أصغر عمر')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('أكبر عمر')).not.toBeInTheDocument()
+    expect(within(dialog).getByLabelText(ar.courses.fields.sessionsCount)).toBeInTheDocument()
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.code), 'new-1')
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.nameAr), 'دورة جديدة')
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.subject }))
+    // A manager reads the inactive subjects too: they are marked, not hidden.
+    expect(await screen.findByText(/الفنون/, { selector: '.ant-select-item-option-content' })).toHaveTextContent(ar.labels.inactive)
+    fireEvent.click(screen.getByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
+
+    await waitFor(() => expect(api.posts).toEqual([{ code: 'NEW-1', name: { ar: 'دورة جديدة' }, subjectId: SUBJECT_IDS[1] }]))
+  })
+
+  it('gives a manager the subjects tab beside the levels tab; a reader neither the tab nor a read of the subjects (PORTAL-04)', async () => {
+    const managed = mockCoursesApi(makeCourseList([python]))
+    const view = renderPage(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101')
+
+    const tabs = [...document.querySelectorAll('.ant-tabs-tab')].map((tab) => tab.textContent)
+    expect(tabs).toEqual([ar.courses.tabs.courses, ar.courses.tabs.levels, ar.courses.tabs.subjects])
+    fireEvent.click(screen.getByText(ar.courses.tabs.subjects))
+    expect(await screen.findByLabelText(`${ar.courses.subjects.delete}: PROG`)).toBeDisabled()
+    expect(screen.getByText(ar.courses.subjects.add)).toBeInTheDocument()
+    expect(screen.queryByText(ar.courses.addCourse)).not.toBeInTheDocument()
+    expect(managed.fetchMock.mock.calls.filter(([url]) => String(url) === '/api/subjects')).toHaveLength(1)
+    view.unmount()
+
+    const read = mockCoursesApi(makeCourseList([python]))
+    renderPage(COURSE_READER_PERMISSIONS)
+    await screen.findByText('PY-101')
+    expect(screen.queryByText(ar.courses.tabs.subjects)).not.toBeInTheDocument()
+    expect(read.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/subjects'))).toBe(false)
   })
 
   it('gives a manager the levels tab (MOD-04-T06) and a reader no tabs at all', async () => {

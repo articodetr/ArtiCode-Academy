@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AcademyModule } from './academy/academy.module.js';
 import { AssignmentsModule } from './assignments/assignments.module.js';
 import { AccountModule } from './account/account.module.js';
+import { REGISTER_IP_THROTTLER_OPTIONS } from './account/registration.throttle.js';
 import { AuditModule } from './audit/audit.module.js';
 import { REFRESH_IP_THROTTLER_OPTIONS } from './auth/auth-throttler.guard.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -31,6 +32,7 @@ import { QuestionsModule } from './questions/questions.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { RolesModule } from './roles/roles.module.js';
 import { ScheduleModule } from './schedule/schedule.module.js';
+import { SubjectsModule } from './subjects/subjects.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
@@ -46,9 +48,10 @@ import { UsersModule } from './users/users.module.js';
     // Named limiters used by AuthThrottlerGuard: `login` by the auth routes and
     // the public account routes (each overrides it with @Throttle; nothing else
     // is throttled yet), and `refresh_ip`, the per-IP ceiling of the session
-    // refresh alone (D-R140 — its skipIf keeps it off every other route).
+    // refresh alone (D-R140 — its skipIf keeps it off every other route), and
+    // `register_ip`, the per-IP ceiling of POST /api/account/register (PORTAL-03).
     ThrottlerModule.forRoot({
-      throttlers: [{ name: 'login', ttl: 15 * 60 * 1000, limit: 10 }, REFRESH_IP_THROTTLER_OPTIONS],
+      throttlers: [{ name: 'login', ttl: 15 * 60 * 1000, limit: 10 }, REFRESH_IP_THROTTLER_OPTIONS, REGISTER_IP_THROTTLER_OPTIONS],
     }),
     PrismaModule,
     AuditModule,
@@ -64,6 +67,7 @@ import { UsersModule } from './users/users.module.js';
     AcademyModule,
     // MOD-04-T02: course levels.
     LevelsModule,
+    SubjectsModule, // PORTAL-04: the school subjects of the courses (a mirror of the levels).
     // MOD-04-T03: courses.
     CoursesModule,
     // MOD-05-T02: classes.

@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { isPendingSelfRegistration } from '../account/registration.rules.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { Env } from '../config/env.schema.js';
 import type { Prisma, User } from '../generated/prisma/client.js';
@@ -134,8 +135,11 @@ export class AuthService {
       include: ACCESS_INCLUDE,
     });
 
-    // Unknown, archived or soft-deleted accounts look exactly like a wrong password.
-    if (!user || user.deletedAt !== null || user.status === 'archived') {
+    // Unknown, archived or soft-deleted accounts look exactly like a wrong password — and so does a
+    // self-registered account whose holder has not opened the e-mailed link yet (`pending` without a
+    // password, PORTAL-03): anybody can register any address, so its existence is never revealed
+    // (no `account_not_activated`, no event, the same dummy verification as an unknown address).
+    if (!user || user.deletedAt !== null || user.status === 'archived' || isPendingSelfRegistration(user)) {
       await this.passwords.verifyDummy(password);
       throw authError.invalidCredentials();
     }

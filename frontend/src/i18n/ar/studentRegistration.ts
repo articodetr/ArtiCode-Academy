@@ -5,6 +5,8 @@ export const studentRegistration = {
     createAccount: 'إنشاء حساب',
     noAccount: 'ليس لديك حساب؟',
     createAccountLink: 'أنشئ حسابًا',
+    // The sign-in card's way to /register (with «ليس لديك حساب؟» before it).
+    createAccountNow: 'أنشئ حسابك الآن',
     // Replaces «الحسابات تُنشأ من إدارة الأكاديمية» while the academy lets a visitor register.
     accountsNote: 'يمكنك إنشاء حساب طالب بنفسك، أو الدخول بحسابك الحالي.',
     courseNote: 'سجّل الدخول أو أنشئ حسابًا لتختار الفصل وتؤكد التسجيل.',
@@ -13,13 +15,21 @@ export const studentRegistration = {
   },
   // /register: the same message whatever the address, so nothing says whether an account exists.
   register: {
+    title: 'أنشئ حسابك',
     subtitle: 'إنشاء حساب طالب',
     intro: 'أدخل اسمك وبريدك الإلكتروني، وسنرسل إليك رسالة فيها الخطوة التالية.',
+    haveAccount: 'لديك حساب بالفعل؟',
+    signIn: 'تسجيل الدخول',
     fullName: 'الاسم الكامل',
     email: 'البريد الإلكتروني',
-    submit: 'متابعة',
+    // Checked on this page only: the academy has no terms pages yet, so the words link nowhere and nothing is sent.
+    terms: 'أوافق على شروط الاستخدام وسياسة الخصوصية',
+    termsRequired: 'وافق على شروط الاستخدام وسياسة الخصوصية لإنشاء حسابك.',
+    submit: 'إنشاء حساب',
     submitting: 'جارٍ الإرسال…',
-    haveAccount: 'لديك حساب؟ سجّل الدخول',
+    // Registration by e-mail is closed while a new account may still come through Google (API-205 `googleSignUp`).
+    emailClosedTitle: 'إنشاء الحساب بالبريد الإلكتروني غير متاح حاليًا',
+    emailClosedText: 'يمكنك إنشاء حسابك عبر Google، أو تسجيل الدخول إن كان لديك حساب.',
     sentTitle: 'تحقّق من بريدك الإلكتروني',
     sentText: 'إن كان البريد صحيحًا فستصلك رسالة فيها الخطوة التالية. قد تتأخر قليلًا، فتفقّد أيضًا مجلد الرسائل غير المرغوب فيها.',
     goToSignIn: 'الذهاب إلى تسجيل الدخول',
@@ -32,10 +42,12 @@ export const studentRegistration = {
   },
   // /register/complete/:token: the e-mailed link.
   complete: {
+    title: 'أكمل إنشاء حسابك',
     subtitle: 'إكمال إنشاء الحساب',
     intro: 'اختر كلمة مرور لحسابك، ويمكنك تعديل اسمك قبل المتابعة.',
     email: 'البريد الإلكتروني',
     fullName: 'الاسم الكامل',
+    passwordHint: 'استخدم {{min}} أحرف على الأقل، واختر كلمة مرور يصعب تخمينها.',
     submit: 'إنشاء الحساب',
     submitting: 'جارٍ إنشاء الحساب…',
     loadFailed: 'تعذّر فتح الرابط',

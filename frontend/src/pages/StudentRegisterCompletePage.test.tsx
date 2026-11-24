@@ -37,6 +37,11 @@ function mockApi({
   })
 }
 
+/** The requests of the link itself — without the frame's own read of API-205 for the academy's name. */
+function linkCalls(fetchMock: ReturnType<typeof mockFetch>) {
+  return fetchMock.mock.calls.filter(([url]) => !String(url).endsWith('/api/academy/public'))
+}
+
 function posts(fetchMock: ReturnType<typeof mockFetch>) {
   return fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
 }
@@ -107,7 +112,7 @@ describe('StudentRegisterCompletePage', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent(text.complete.linkInvalid)
       expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
-      expect(fetchMock).not.toHaveBeenCalled()
+      expect(linkCalls(fetchMock)).toHaveLength(0)
     })
 
     it('shows a spinner while it reads the link', () => {
@@ -123,8 +128,8 @@ describe('StudentRegisterCompletePage', () => {
       renderPage()
 
       await screen.findByLabelText(text.complete.fullName)
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-      const [url, init] = fetchMock.mock.calls[0]!
+      expect(linkCalls(fetchMock)).toHaveLength(1)
+      const [url, init] = linkCalls(fetchMock)[0]!
       expect(String(url)).toBe(`/api/account/register/${TOKEN}`)
       expect(new Headers(init?.headers).has('Authorization')).toBe(false)
     })
@@ -143,6 +148,19 @@ describe('StudentRegisterCompletePage', () => {
       expect(name).toBeEnabled()
       expect(screen.getByLabelText(ar.account.password)).toBeInTheDocument()
       expect(screen.getByLabelText(ar.account.confirmPassword)).toBeInTheDocument()
+    })
+
+    it('heads the card with its title and words the password rules under the password', async () => {
+      mockApi()
+      renderPage()
+
+      const password = await screen.findByLabelText(ar.account.password)
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(text.complete.title)
+      expect(password).toHaveAttribute('type', 'password')
+      expect(screen.getByLabelText(ar.account.confirmPassword)).toHaveAttribute('type', 'password')
+      expect(screen.getByText(i18n.t('studentRegistration.complete.passwordHint', { min: 10 }))).toBeInTheDocument()
+      // Both fields can show what was typed (Input.Password).
+      expect(document.querySelectorAll('.ant-input-password-icon')).toHaveLength(2)
     })
 
     it.each<[string, Answer]>([
@@ -176,10 +194,13 @@ describe('StudentRegisterCompletePage', () => {
       mockApi({ preview: () => jsonResponse(410, { statusCode: 410, code: 'registration_link_expired' }) })
       renderPage()
 
-      await userEvent.click(await screen.findByRole('link', { name: text.complete.registerAgain }))
+      const again = await screen.findByRole('link', { name: text.complete.registerAgain })
+      const returnTo = encodeURIComponent(`/catalog/${COURSE}?intent=enroll`)
+      expect(again).toHaveAttribute('href', `/register?returnTo=${returnTo}`)
+      expect(screen.getByRole('link', { name: ar.account.goToLogin })).toHaveAttribute('href', `/login?returnTo=${returnTo}`)
+      await userEvent.click(again)
 
-      await screen.findByTestId('location')
-      expect(locationState()).toEqual({ from: `/catalog/${COURSE}?intent=enroll` })
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/register')
       expect(window.localStorage.getItem(KEPT_COURSE_KEY)).not.toBeNull()
     })
 
@@ -206,7 +227,7 @@ describe('StudentRegisterCompletePage', () => {
       fetchMock.mockImplementation(async () => jsonResponse(200, PREVIEW))
       await userEvent.click(screen.getByText(text.complete.retry).closest('button')!)
       expect(await screen.findByLabelText(text.complete.fullName)).toBeInTheDocument()
-      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(linkCalls(fetchMock)).toHaveLength(2)
     })
 
     it('sends a signed-in learner to their classes without reading the link', async () => {

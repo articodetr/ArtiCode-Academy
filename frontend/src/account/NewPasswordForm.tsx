@@ -27,6 +27,8 @@ interface NewPasswordFormProps {
   extraFields?: ReactNode
   /** Initial values of `extraFields`. */
   initialValues?: Record<string, unknown>
+  /** The password rules in words, under the password field (the registration's last step). */
+  passwordHint?: ReactNode
   onSubmit: (password: string, extra: Record<string, unknown>) => void | Promise<void>
 }
 
@@ -39,6 +41,7 @@ export function NewPasswordForm({
   form,
   extraFields,
   initialValues,
+  passwordHint,
   onSubmit,
 }: NewPasswordFormProps) {
   const { t } = useTranslation()
@@ -64,6 +67,7 @@ export function NewPasswordForm({
       <Form.Item
         name="password"
         label={t('account.password')}
+        extra={passwordHint}
         rules={[
           { required: true, message: t('account.validation.passwordRequired') },
           {

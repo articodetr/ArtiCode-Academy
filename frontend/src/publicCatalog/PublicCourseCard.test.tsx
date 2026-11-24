@@ -47,21 +47,23 @@ describe('PublicCourseCard', () => {
     const free = renderCard()
     const media = within(document.querySelector<HTMLElement>('.public-card__media')!)
     expect(media.getByText(pc.card.courseType)).toBeInTheDocument()
-    expect(media.getByText('مبتدئ')).toBeInTheDocument()
+    expect(media.getByText('البرمجة')).toBeInTheDocument()
     expect(media.getByText('24 ساعة')).toBeInTheDocument()
     expect(free.getByTestId('public-price')).toHaveTextContent(pc.card.free)
   })
 
-  it('takes the difficulty badge from course.level, never from the curriculum levels', () => {
-    renderCard({ level: { id: 'lv', name: { ar: 'متقدم' } }, levelCount: 3 })
-    expect(document.querySelector('.course-badge--level')).toHaveTextContent('متقدم')
+  it('badges the school subject (PORTAL-04) — never the difficulty, and never the curriculum levels', () => {
+    renderCard({ subject: { id: 'sb', name: { ar: 'الرياضيات' } }, level: { id: 'lv', name: { ar: 'متقدم' } }, levelCount: 3 })
+    expect(document.querySelector('.course-badge--subject')).toHaveTextContent('الرياضيات')
+    expect(document.querySelector('.course-badge--level')).toBeNull()
+    expect(document.querySelector('.public-card')).not.toHaveTextContent('متقدم')
     expect(document.querySelector('.public-card__facts')).toHaveTextContent('3 مستويات')
-    expect(document.querySelector('.public-card__facts')).not.toHaveTextContent('متقدم')
+    expect(document.querySelector('.public-card__facts')).not.toHaveTextContent('الرياضيات')
   })
 
-  it('shows no difficulty badge without course.level, even with curriculum levels', () => {
-    const card = renderCard({ level: null, levelCount: 3 })
-    expect(document.querySelector('.course-badge--level')).toBeNull()
+  it('shows no subject badge without course.subject, even with curriculum levels', () => {
+    const card = renderCard({ subject: null, levelCount: 3 })
+    expect(document.querySelector('.course-badge--subject')).toBeNull()
     expect(card.getByText('3 مستويات')).toBeInTheDocument()
   })
 
@@ -73,10 +75,11 @@ describe('PublicCourseCard', () => {
     expect(document.querySelector('.public-card__summary')).toBeNull()
   })
 
-  it('leaves out the sessions when the server does not know them', () => {
-    const card = renderCard({ sessionsCount: null })
+  it('never shows the sessions (PORTAL-04), even when the server knows them', () => {
+    const card = renderCard({ sessionsCount: 12 })
     expect(card.getByText('5 دروس')).toBeInTheDocument()
-    expect(document.querySelector('.public-card__facts')).not.toHaveTextContent('جلسة')
+    expect(document.querySelector('.public-card')).not.toHaveTextContent('جلس')
+    expect(document.querySelector('.public-card')).not.toHaveTextContent('12')
   })
 
   it('has one tab stop for the course: the name; «عرض الدورة» repeats it for the pointer only', () => {

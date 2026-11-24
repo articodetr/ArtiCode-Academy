@@ -10,13 +10,17 @@ import { renderMailHtml } from './mail.html.js';
 import {
   EMAIL_VERIFICATION_PATH,
   INVITATION_PATH,
+  LOGIN_PATH,
   NOTIFICATIONS_PATH,
   PASSWORD_RESET_PATH,
+  REGISTRATION_COMPLETE_PATH,
   formatExpiry,
   renderEmailVerification,
+  renderExistingAccount,
   renderInvitation,
   renderNotificationMail,
   renderPasswordReset,
+  renderRegistration,
   templateLocale,
 } from './mail.templates.js';
 import type { AccountMailInput, RenderedMail, TemplateLocale } from './mail.templates.js';
@@ -41,6 +45,29 @@ export interface AccountMail {
   /** The raw one-time token (becomes part of the link; never logged by this service). */
   token: string;
   expiresAt: Date;
+}
+
+/**
+ * PORTAL-03 (#207): the self-registration link. No recipient name: anybody can type any address on the public
+ * form, so the message carries nothing the visitor typed (the address is the recipient, not a part of the text).
+ */
+export interface RegistrationMail {
+  /** The pending account: the entity of the `mail.delivery.*` events. */
+  userId: string;
+  to: string;
+  /** The locale the visitor asked for, else the account's; null = academy default. */
+  locale: LocaleCode | null;
+  /** The raw one-time token (becomes part of the link; never logged by this service). */
+  token: string;
+  expiresAt: Date;
+}
+
+/** PORTAL-03: the notice to an address that already belongs to an account (a link to the sign-in page, nothing else). */
+export interface ExistingAccountMail {
+  /** The existing account: the entity of the `mail.delivery.*` events. */
+  userId: string;
+  to: string;
+  locale: LocaleCode | null;
 }
 
 /** The e-mail copy of an in-app notification (MOD-12, D-R83): the title and a path — never the body. */
@@ -118,6 +145,16 @@ export class MailService {
     return `${this.publicUrl ?? ''}${EMAIL_VERIFICATION_PATH}/${encodeURIComponent(token)}`;
   }
 
+  /** PORTAL-03: `<APP_PUBLIC_URL>/register/complete/<token>` — the link travels in the e-mail only. */
+  registrationLink(token: string): string {
+    return `${this.publicUrl ?? ''}${REGISTRATION_COMPLETE_PATH}/${encodeURIComponent(token)}`;
+  }
+
+  /** `<APP_PUBLIC_URL>/login`. */
+  loginLink(): string {
+    return `${this.publicUrl ?? ''}${LOGIN_PATH}`;
+  }
+
   sendInvitation(mail: AccountMail): Promise<MailDeliveryResult> {
     return this.deliver('invitation', mail, this.invitationLink(mail.token), renderInvitation);
   }
@@ -130,6 +167,24 @@ export class MailService {
   /** LR-01-T02: the address-ownership message (D-R78). */
   sendEmailVerification(mail: AccountMail): Promise<MailDeliveryResult> {
     return this.deliver('email_verification', mail, this.emailVerificationLink(mail.token), renderEmailVerification);
+  }
+
+  /** PORTAL-03: «أكمل إنشاء حسابك» with the link that proves the address (the password is chosen there). */
+  sendRegistration(mail: RegistrationMail): Promise<MailDeliveryResult> {
+    return this.deliverRendered('registration', mail.userId, mail.to, mail.locale, (locale, academy) =>
+      renderRegistration(locale, {
+        academyName: academy.localName,
+        link: this.registrationLink(mail.token),
+        expiresAt: formatExpiry(mail.expiresAt, locale, academy.timezone),
+      }),
+    );
+  }
+
+  /** PORTAL-03: «لديك حساب بالفعل» — a link to the sign-in page; nothing about the account changes. */
+  sendExistingAccountNotice(mail: ExistingAccountMail): Promise<MailDeliveryResult> {
+    return this.deliverRendered('registration_existing', mail.userId, mail.to, mail.locale, (locale, academy) =>
+      renderExistingAccount(locale, { academyName: academy.localName, link: this.loginLink() }),
+    );
   }
 
   /**
@@ -151,27 +206,44 @@ export class MailService {
     return this.transmit({ kind: 'notification', to: mail.to, locale, subject: rendered.subject, text: rendered.text, html });
   }
 
-  private async deliver(
+  private deliver(
     kind: MailKind,
     mail: AccountMail,
     link: string,
     render: (locale: TemplateLocale, input: AccountMailInput) => RenderedMail,
   ): Promise<MailDeliveryResult> {
-    if (!mail.to) {
+    return this.deliverRendered(kind, mail.userId, mail.to, mail.locale, (locale, academy) =>
+      render(locale, {
+        academyName: academy.localName,
+        recipientName: mail.recipientName,
+        link,
+        expiresAt: formatExpiry(mail.expiresAt, locale, academy.timezone),
+      }),
+    );
+  }
+
+  /**
+   * One account e-mail: the template locale (the recipient's, else the academy
+   * default), the academy name in it, the HTML twin, the transport, and the
+   * `mail.delivery.*` event of a real provider on the recipient account.
+   */
+  private async deliverRendered(
+    kind: MailKind,
+    userId: string,
+    to: string | null,
+    preferredLocale: LocaleCode | null,
+    render: (locale: TemplateLocale, academy: AcademyContext & { localName: string }) => RenderedMail,
+  ): Promise<MailDeliveryResult> {
+    if (!to) {
       this.logger.log(`mail skipped (no address, kind=${kind})`);
       return { transport: this.transport.name, status: 'skipped', messageId: null };
     }
     const academy = await this.academy();
-    const locale = templateLocale(mail.locale, academy.defaultLocale);
-    const rendered = render(locale, {
-      academyName: pickLocalized(academy.name, locale, academy.defaultLocale),
-      recipientName: mail.recipientName,
-      link,
-      expiresAt: formatExpiry(mail.expiresAt, locale, academy.timezone),
-    });
+    const locale = templateLocale(preferredLocale, academy.defaultLocale);
+    const rendered = render(locale, { ...academy, localName: pickLocalized(academy.name, locale, academy.defaultLocale) });
     const html = renderMailHtml(rendered.text, locale, rendered.subject);
-    const result = await this.transmit({ kind, to: mail.to, locale, subject: rendered.subject, text: rendered.text, html });
-    await this.recordDelivery(kind, mail.userId, result);
+    const result = await this.transmit({ kind, to, locale, subject: rendered.subject, text: rendered.text, html });
+    await this.recordDelivery(kind, userId, result);
     return result;
   }
 

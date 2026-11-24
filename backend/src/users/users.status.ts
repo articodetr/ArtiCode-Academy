@@ -12,6 +12,10 @@
 // A soft-deleted account is a terminal pseudo-state (`deleted`): no action
 // applies to it, not even `restore` (ADR-035). An `invited` account is
 // activated by accepting its invitation (MOD-03-T03), never by `activate`.
+// PORTAL-03 (#207): a `pending` account WITHOUT a password was created by
+// self-registration and waits for its holder to open the e-mailed link — the
+// only way it becomes `active` (the password and the proof of the address
+// arrive together), so `activate` does not apply to it either: only `delete`.
 import type { UserStatus } from '../generated/prisma/client.js';
 
 /** Actions of `POST /api/users/:id/status` (API-027). */
@@ -45,14 +49,25 @@ export function accountState(user: { status: UserStatus; deletedAt: Date | null 
   return user.deletedAt === null ? user.status : 'deleted';
 }
 
+/** What the state machine needs to know about one account beyond its state. */
+export interface AccountStateOptions {
+  /**
+   * A self-registered account waiting for its holder — `isPendingSelfRegistration()`
+   * of account/registration.rules.ts, the one rule shared with the sign-in and
+   * Google sign-in: `activate` is refused.
+   */
+  awaitingRegistration?: boolean;
+}
+
 /** The status the action leads to from `from`, or null when the transition is not allowed. */
-export function nextStatus(action: AccountAction, from: AccountState): UserStatus | null {
+export function nextStatus(action: AccountAction, from: AccountState, options: AccountStateOptions = {}): UserStatus | null {
+  if (action === 'activate' && from === 'pending' && options.awaitingRegistration === true) return null;
   return TRANSITIONS[action][from] ?? null;
 }
 
 /** Actions allowed from a state, in catalogue order (the `allowed` detail of `invalid_transition`). */
-export function allowedActions(from: AccountState): AccountAction[] {
-  return ACTIONS.filter((action) => TRANSITIONS[action][from] !== undefined);
+export function allowedActions(from: AccountState, options: AccountStateOptions = {}): AccountAction[] {
+  return ACTIONS.filter((action) => nextStatus(action, from, options) !== null);
 }
 
 /** `suspend`, `archive` and `delete` sign the user out of every device (`refresh_tokens.revoked_at`). */

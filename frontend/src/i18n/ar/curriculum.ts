@@ -316,7 +316,6 @@ export const publicCatalog = {
     priceUnavailable: 'السعر غير متاح حالياً',
     price: 'الرسوم',
     duration: 'المدة',
-    sessions: 'الجلسات',
     content: 'المحتوى',
     available: 'فصول متاحة',
     full: 'الفصول المفتوحة ممتلئة',
@@ -329,12 +328,6 @@ export const publicCatalog = {
     hours_few: '{{count}} ساعات',
     hours_many: '{{count}} ساعة',
     hours_other: '{{count}} ساعة',
-    sessionsCount: '{{count}} جلسة',
-    sessionsCount_one: 'جلسة واحدة',
-    sessionsCount_two: 'جلستان',
-    sessionsCount_few: '{{count}} جلسات',
-    sessionsCount_many: '{{count}} جلسة',
-    sessionsCount_other: '{{count}} جلسة',
     lessons: 'لا دروس بعد',
     lessons_one: 'درس واحد',
     lessons_two: 'درسان',
@@ -356,12 +349,8 @@ export const publicCatalog = {
     outlineSection: 'الخطة الدراسية',
     notFound: 'الدورة غير موجودة أو لم تعد منشورة.',
     loadError: 'تعذّر تحميل الدورة.',
-    // The course's difficulty (`course.level`), never its curriculum levels (`levelCount`/`outline`).
-    level: 'مستوى الصعوبة',
-    age: 'الفئة العمرية',
-    ageRange: 'من {{min}} إلى {{max}} سنة',
-    ageFrom: 'من {{min}} سنة',
-    ageTo: 'حتى {{max}} سنة',
+    // PORTAL-04: the course's school subject (`course.subject`) — not its difficulty, never its curriculum levels.
+    subject: 'المادة',
     outlineNote: 'تظهر هنا عناوين الدروس فقط؛ يُفتح محتواها بعد تفعيل تسجيلك في فصل من فصول الدورة.',
     // D-R130: «المستوى الأول»، and « — title» when the level has a title.
     section: 'المستوى {{ordinal}}',
@@ -374,7 +363,11 @@ export const publicCatalog = {
     minutes_other: '{{count}} دقيقة',
     enrollTitle: 'التسجيل في الدورة',
     enroll: 'سجّل في هذه الدورة',
-    enrollNote: 'سجّل الدخول بحسابك لتختار الفصل وتؤكد التسجيل. لا يُنشأ حساب جديد من هنا: الحسابات تُنشأ من إدارة الأكاديمية.',
+    // PORTAL-04: the quiet link beside «سجّل في هذه الدورة», only while API-205 lets a visitor create an account.
+    createAccount: 'إنشاء حساب',
+    // …and the note under the two: with the way to a new account, or (nobody can create one) the sign-in alone.
+    signInOrRegisterNote: 'سجّل الدخول أو أنشئ حسابًا جديدًا للاشتراك في الدورة والبدء بالتعلم.',
+    signInNote: 'سجّل الدخول للاشتراك في الدورة والبدء بالتعلم.',
     // PORTAL-04 PR-2 (MOD-19): a paid course becomes a request with an invoice, activated after payment and approval.
     paidNote: 'دورة مدفوعة: بعد اختيار الفصل يُنشأ طلب التحاق وفاتورة، ويُفعَّل التحاقك بعد الدفع وموافقة الأكاديمية.',
     // PORTAL-04 PR-2: no way to enroll now, in the order of the server's refusals (publicEnrollStateOf()).
@@ -398,7 +391,7 @@ export const publicCatalog = {
   // 404 catalog_not_public: the academy keeps its catalog for signed-in users (D-R138).
   closed: {
     title: 'الأكاديمية لا تعرض دوراتها للزوار',
-    text: 'سجّل الدخول بحسابك لتتصفّح الدورات المتاحة لك. الحسابات تُنشأ من إدارة الأكاديمية.',
+    text: 'سجّل الدخول بحسابك لتتصفّح الدورات المتاحة لك.',
     signIn: 'تسجيل الدخول',
   },
   errors: {

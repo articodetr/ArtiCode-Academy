@@ -46,7 +46,9 @@ describe('LoginPage', () => {
 
   it('renders the sign-in form in Arabic (RTL) by default', () => {
     renderLogin()
-    expect(screen.getByText(ar.common.appName)).toBeInTheDocument()
+    // The card's heading; the frame names the academy, never the product (PORTAL-04).
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(ar.login.title)
+    expect(screen.queryByText(ar.common.appName)).not.toBeInTheDocument()
     const { identifier, password, submit } = fields()
     expect(identifier).toHaveAttribute('autocomplete', 'username')
     expect(password).toHaveAttribute('type', 'password')
@@ -166,7 +168,7 @@ describe('LoginPage', () => {
       const { challenge, code, container } = await reachSecondStep(auth, '/users')
 
       // Same card, second step: the subtitle says so and nobody is signed in or sent anywhere yet.
-      expect(screen.getByText(ar.common.appName)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(ar.login.title)
       expect(screen.getByText(mfa.subtitle)).toBeInTheDocument()
       expect(screen.queryByText(ar.login.subtitle)).not.toBeInTheDocument()
       expect(screen.queryByTestId('location')).not.toBeInTheDocument()
@@ -493,7 +495,7 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
   describe('creating an account (PORTAL-04, the contract of #207)', () => {
     const INTENT = '/catalog/c-1?intent=enroll'
     const entry = ar.studentRegistration.entry
-    const registerLink = () => screen.queryByRole('link', { name: entry.createAccountLink })
+    const registerLink = () => screen.queryByRole('link', { name: entry.createAccountNow })
 
     it.each([
       ['the field absent', makePublicAcademy(), 200],
@@ -514,7 +516,7 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
 
     it('links to /register with no return path when the visitor came for nothing in particular', async () => {
       const fetchMock = mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
-      renderWithProviders(<LoginPage />, { auth: makeAuth(), route: '/login', routes: { '/register': <StateProbe /> } })
+      renderWithProviders(<LoginPage />, { auth: makeAuth(), route: '/login', routes: { '/register': <PathProbe /> } })
       const link = await waitFor(() => {
         const found = registerLink()
         expect(found).not.toBeNull()
@@ -524,22 +526,22 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
       expect(screen.getByText(entry.noAccount)).toBeInTheDocument()
       expect(fetchMock).toHaveBeenCalledTimes(1)
       fireEvent.click(link)
-      expect(await screen.findByTestId('state')).toHaveTextContent('null')
+      expect((await screen.findByTestId('path')).textContent).toBe('/register')
     })
 
-    it('carries the chosen course to /register and stops saying accounts come from the administration', async () => {
+    it('carries the chosen course to /register as ?returnTo= and stops saying accounts come from the administration', async () => {
       mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
       renderWithProviders(<LoginPage />, {
         auth: makeAuth(),
         route: { pathname: '/login', state: { from: INTENT } },
-        routes: { '/register': <StateProbe /> },
+        routes: { '/register': <PathProbe /> },
       })
-      const link = await screen.findByRole('link', { name: entry.createAccountLink })
+      const link = await screen.findByRole('link', { name: entry.createAccountNow })
       const notice = screen.getByTestId('login-enroll-intent')
       expect(notice).toHaveTextContent(entry.courseNote)
       expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
       fireEvent.click(link)
-      expect(JSON.parse((await screen.findByTestId('state')).textContent!)).toEqual({ from: INTENT })
+      expect((await screen.findByTestId('path')).textContent).toBe(`/register?returnTo=${encodeURIComponent(INTENT)}`)
     })
 
     it('never carries a return path that leaves this site', async () => {
@@ -547,10 +549,10 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
       renderWithProviders(<LoginPage />, {
         auth: makeAuth(),
         route: { pathname: '/login', state: { from: 'https://evil.example/x' } },
-        routes: { '/register': <StateProbe /> },
+        routes: { '/register': <PathProbe /> },
       })
-      fireEvent.click(await screen.findByRole('link', { name: entry.createAccountLink }))
-      expect(await screen.findByTestId('state')).toHaveTextContent('null')
+      fireEvent.click(await screen.findByRole('link', { name: entry.createAccountNow }))
+      expect((await screen.findByTestId('path')).textContent).toBe('/register')
     })
 
     it('does not invite someone who has just finished registering to create another account', async () => {
@@ -573,7 +575,7 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
       const auth = makeAuth()
       vi.mocked(auth.login).mockResolvedValue(mfaChallengeResponse())
       renderLogin(auth, INTENT)
-      await screen.findByRole('link', { name: entry.createAccountLink })
+      await screen.findByRole('link', { name: entry.createAccountNow })
       await submitCredentials()
       await screen.findByLabelText(ar.login.mfa.code)
       expect(registerLink()).not.toBeInTheDocument()
@@ -584,9 +586,3 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
     })
   })
 })
-
-/** The router state a link arrived with, as JSON. */
-function StateProbe() {
-  const location = useLocation()
-  return <output data-testid="state">{JSON.stringify(location.state ?? null)}</output>
-}

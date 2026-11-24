@@ -141,6 +141,15 @@ export class MyLearningCatalogLevelDto {
   name: LocalizedText;
 }
 
+/** PORTAL-04: the school subject the course teaches (`subjects`) — its id and localized name only. */
+export class MyLearningSubjectDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`' })
+  name: LocalizedText;
+}
+
 export class MyLearningCourseSummaryDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
@@ -159,6 +168,9 @@ export class MyLearningCourseSummaryDto {
 
   @ApiProperty({ type: () => MyLearningCatalogLevelDto, nullable: true })
   level: MyLearningCatalogLevelDto | null;
+
+  @ApiProperty({ type: () => MyLearningSubjectDto, nullable: true, description: 'PORTAL-04: the school subject the course teaches; null = not set' })
+  subject: MyLearningSubjectDto | null;
 }
 
 /** The lesson the student opened last in the course, while it is still published. */

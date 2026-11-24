@@ -8,7 +8,7 @@ import type { CurriculumItemRow, CurriculumSectionRow } from '../learning/learni
 import { learningError } from '../learning/learning.errors.js';
 import { loadCurriculumRows } from '../learning/learning.read.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { codeCursorFilter, codePageOf, COURSE_CARD_SELECT, courseOfferOf, courseSearchFilter, selfServiceClassesOf } from './catalog.service.js';
+import { catalogSubjectOf, codeCursorFilter, codePageOf, COURSE_CARD_SELECT, courseOfferOf, courseSearchFilter, selfServiceClassesOf } from './catalog.service.js';
 import type { ClassRow } from './catalog.service.js';
 import { catalogError } from './catalog.errors.js';
 import { PUBLIC_CATALOG_PAGE_DEFAULT } from './public-catalog.dto.js';
@@ -44,6 +44,7 @@ export class PublicCatalogService {
     const currency = await this.assertPublic(db);
     const limit = query.limit ?? PUBLIC_CATALOG_PAGE_DEFAULT;
     const filters: Prisma.CourseWhereInput[] = [{ status: 'published' }];
+    if (query.subjectId) filters.push({ subjectId: query.subjectId });
     if (query.q) filters.push(await courseSearchFilter(db, query.q));
     if (query.cursor) filters.push(codeCursorFilter(query.cursor));
     const rows = await db.course.findMany({ where: { AND: filters }, orderBy: [{ code: 'asc' }], take: limit + 1, select: COURSE_CARD_SELECT });
@@ -122,6 +123,7 @@ function toCard(row: CourseCardRow, open: readonly ClassRow[], curriculum: Curri
     summary: readLocalizedText(row.summary),
     coverImageUrl: row.coverImageUrl,
     level: row.level ? { id: row.level.id, name: readLocalizedText(row.level.name) ?? { ar: row.level.code } } : null,
+    subject: catalogSubjectOf(row),
     durationHours: row.durationHours === null ? null : Number(row.durationHours),
     sessionsCount: row.sessionsCount,
     pricing: row.enrollmentFeePlan === null ? 'free' : 'paid',

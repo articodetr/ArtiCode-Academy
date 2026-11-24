@@ -64,7 +64,7 @@ function renderPage(auth = makeAuth(), search = '') {
 const card = (id: string) => within(screen.getByTestId(`public-card-${id}`))
 
 describe('PublicCatalogPage', () => {
-  it('shows the published courses as cards — price, level, counts and open classes — read without a token', async () => {
+  it('shows the published courses as cards — price, subject, counts and open classes — read without a token', async () => {
     const paid = makePublicCard({
       id: PUBLIC_COURSE_IDS[1],
       code: 'WEB-201',
@@ -89,11 +89,13 @@ describe('PublicCatalogPage', () => {
     // The code is not shown on a card; a search by code still reaches the server (below).
     expect(free.queryByText('PY-101')).not.toBeInTheDocument()
     expect(free.getByText('مدخل عملي إلى البرمجة')).toBeInTheDocument()
-    expect(free.getByText('مبتدئ')).toBeInTheDocument()
+    // PORTAL-04: the school subject, never the difficulty level; no sessions and no age range.
+    expect(free.getByText('البرمجة')).toBeInTheDocument()
+    expect(free.queryByText('مبتدئ')).not.toBeInTheDocument()
     expect(free.getByText(pc.card.free)).toBeInTheDocument()
     expect(free.getByText(pc.card.available)).toBeInTheDocument()
     expect(free.getByText('24 ساعة')).toBeInTheDocument()
-    expect(free.getByText('12 جلسة')).toBeInTheDocument()
+    expect(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`).textContent).not.toContain('جلس')
     expect(free.getByText('5 دروس')).toBeInTheDocument()
     expect(free.getByText('مستويان')).toBeInTheDocument()
     expect(free.getByTestId('course-cover')).toHaveAttribute('src', 'https://cdn.example.org/py.jpg')

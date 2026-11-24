@@ -58,6 +58,19 @@ describe('users.status — transitions (T06 AC 1)', () => {
     expect(allowedActions('archived')).toEqual(['restore', 'delete']);
   });
 
+  it('allows only delete on a self-registered account awaiting its holder (PORTAL-03)', () => {
+    const awaiting = { awaitingRegistration: true };
+    expect(nextStatus('activate', 'pending', awaiting)).toBeNull();
+    expect(nextStatus('delete', 'pending', awaiting)).toBe('archived');
+    expect(allowedActions('pending', awaiting)).toEqual(['delete']);
+    // A pending account with a password keeps its transitions; the option changes nothing elsewhere.
+    expect(allowedActions('pending', { awaitingRegistration: false })).toEqual(['activate', 'delete']);
+    expect(nextStatus('activate', 'suspended', awaiting)).toBe('active');
+    for (const from of STATES) {
+      if (from !== 'pending') expect(allowedActions(from, awaiting), from).toEqual(allowedActions(from));
+    }
+  });
+
   it('derives the state from the status and the soft-delete marker', () => {
     expect(accountState({ status: 'active', deletedAt: null })).toBe('active');
     expect(accountState({ status: 'archived', deletedAt: new Date() })).toBe('deleted');

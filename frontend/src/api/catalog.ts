@@ -5,6 +5,9 @@
 // `enrollments.self_enroll` and the `student` role; «my requests» is
 // ownership. The server decides everything — `enrollable`/`blocker` say what
 // API-221 would answer, in its refusal order.
+// PORTAL-04: every card and detail names the course's school subject (`subject`,
+// localized name only) beside its difficulty (`level`), and API-219 takes a
+// `subjectId` filter (additive).
 import { apiRequest } from './client'
 import type { ClassStatus } from './classes'
 import type { CoursePricing } from './courses'
@@ -32,6 +35,12 @@ export interface CatalogLevel {
   name: LocalizedLabel
 }
 
+/** PORTAL-04: the course's school subject — never its difficulty (`level`). */
+export interface CatalogSubject {
+  id: string
+  name: LocalizedLabel
+}
+
 export interface CatalogPrice {
   amount: number
   currency: string
@@ -46,6 +55,8 @@ export interface CatalogCourseCard {
   summary: LocalizedLabel | null
   coverImageUrl: string | null
   level: CatalogLevel | null
+  /** PORTAL-04: null for a course without a subject. */
+  subject: CatalogSubject | null
   durationHours: number | null
   sessionsCount: number | null
   syllabusCount: number
@@ -118,6 +129,8 @@ export interface CatalogCourseDetail extends CatalogCourseCard {
 export interface ListCatalogParams {
   q?: string
   levelId?: string
+  /** PORTAL-04 */
+  subjectId?: string
   pricing?: CoursePricing
   available?: boolean
   /** 1–100, server default 24. */
@@ -217,6 +230,7 @@ export function catalogPath(params: ListCatalogParams = {}): string {
   const q = params.q?.trim()
   if (q) search.set('q', q)
   if (params.levelId) search.set('levelId', params.levelId)
+  if (params.subjectId) search.set('subjectId', params.subjectId)
   if (params.pricing) search.set('pricing', params.pricing)
   if (params.available !== undefined) search.set('available', String(params.available))
   if (params.limit !== undefined) search.set('limit', String(params.limit))
