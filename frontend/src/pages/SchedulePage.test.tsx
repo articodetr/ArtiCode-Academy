@@ -139,10 +139,10 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     await waitFor(() => expect(dates(api.mineQueries)).toEqual(WEEK))
     expect(api.mineQueries.every((query) => [...query.keys()].join() === 'on')).toBe(true)
     expect(api.academyQueries).toHaveLength(0)
-    // No mode switch for a single view; the running slot leads "upcoming".
+    // No mode switch for a single view, and no «upcoming» panel or month calendar beside the grid.
     expect(screen.queryByText(ar.schedule.tabs.academy)).not.toBeInTheDocument()
-    const upcoming = screen.getByRole('region', { name: ar.schedule.upcoming.title })
-    expect(within(upcoming).getAllByRole('listitem')[0]).toHaveTextContent(ar.schedule.upcoming.inProgress)
+    expect(screen.queryByRole('region', { name: ar.schedule.upcoming.title })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: ar.schedule.month.label })).not.toBeInTheDocument()
     // «My schedule» may hold real lessons too (J-F65): its note says how to tell them apart.
     expect(screen.getByText(ar.schedule.calendar.recurringMine)).toBeInTheDocument()
   })
@@ -204,7 +204,7 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     await waitFor(() => expect(headerLabels()).toHaveLength(5))
   })
 
-  it('moves by week and by day, follows a date picked in the month calendar and comes back to today', async () => {
+  it('moves by week and by day and comes back to today', async () => {
     const api = mockApi({ slots: [makeSlot()] })
     renderPage(SCHEDULE_MANAGER_PERMISSIONS)
     await waitFor(() => expect(api.academyQueries).toHaveLength(7))
@@ -221,11 +221,6 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     expect(screen.getByRole('region', { name: formatLongDate('2026-11-08', 'ar') })).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText(ar.schedule.calendar.nextDay))
     expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-09', 'ar'))
-
-    const month = screen.getByRole('region', { name: ar.schedule.month.label })
-    fireEvent.click(within(month).getByLabelText(formatLongDate('2026-11-25', 'ar')))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-25', 'ar'))
-    await waitFor(() => expect(dates(api.academyQueries)).toContain('2026-11-28'))
   })
 
   it('shows a server refusal with a retry, then the empty week with its hint', async () => {
@@ -244,7 +239,6 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     expect(await screen.findByText(ar.schedule.calendar.emptyWeek)).toBeInTheDocument()
     expect(screen.getByText(ar.schedule.calendar.emptyHintAcademy)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByText(ar.schedule.upcoming.empty)).toBeInTheDocument()
   })
 
   it('refuses a user without any schedule key without calling the server', () => {
@@ -265,12 +259,11 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     renderPage(SCHEDULE_MANAGER_PERMISSIONS)
 
     await within(await screen.findByRole('region', { name: ar.schedule.calendar.grid })).findByRole('button', { name: /من 16:00 إلى 17:00/ })
-    // The week from Saturday 7 November, plus the upcoming days up to Saturday 14.
-    await waitFor(() => expect([...dates(api.academyQueries)].sort()).toEqual(['2026-11-07', ...WEEK]))
+    // The week from Saturday 7 November to Friday 13 — only the shown week is read.
+    await waitFor(() => expect([...dates(api.academyQueries)].sort()).toEqual(['2026-11-07', ...WEEK.slice(0, 6)]))
     // Saturday is a day off without slots (hidden); Friday is a day off that holds one (shown, marked).
     expect(headerLabels()).toEqual([...WEEK.slice(0, 5).map((date) => formatLongDate(date, 'ar')), `${formatLongDate('2026-11-13', 'ar')} (${ar.schedule.calendar.nonWorkingDay})`])
     expect(within(grid()).getByRole('button', { name: formatLongDate('2026-11-08', 'ar') })).toHaveAttribute('aria-current', 'date')
-    expect(within(screen.getByRole('region', { name: ar.schedule.month.label })).getAllByRole('columnheader')[0]).toHaveTextContent(ar.schedule.calendar.weekdaysShort.sat)
     expect(screen.getByText(ar.schedule.calendar.zone.replace('{{zone}}', 'Asia/Riyadh'))).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('switch', { name: ar.schedule.calendar.allDays }))
@@ -358,7 +351,7 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
 
   // ---- J-F18: the owner's note 4 on PR #46 — the day view with a weekday filter ----
 
-  it('keeps the day view on the filtered weekday: the arrows, «today» and the month calendar land on that weekday of their week', async () => {
+  it('keeps the day view on the filtered weekday: the arrows and «today» land on that weekday of their week', async () => {
     const api = mockApi({ slots: [makeSlot({ id: 'tuesday', weekday: 2, startTime: '12:00', endTime: '13:00' })] })
     renderPage(SCHEDULE_MANAGER_PERMISSIONS)
     await waitFor(() => expect(api.academyQueries).toHaveLength(7))
@@ -376,13 +369,10 @@ describe('SchedulePage — weekly calendar (J-F08)', () => {
     fireEvent.click(screen.getByText(ar.schedule.calendar.today))
     expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-10', 'ar'))
     expect(screen.getByText(ar.schedule.calendar.today).closest('button')).toBeDisabled()
-    // Thursday the 26th picked in the month calendar lands on the Tuesday of its week.
-    fireEvent.click(within(screen.getByRole('region', { name: ar.schedule.month.label })).getByLabelText(formatLongDate('2026-11-26', 'ar')))
-    expect(rangeHeading()).toHaveTextContent(formatLongDate('2026-11-24', 'ar'))
-    expect(await tuesdaySlot('2026-11-24')).toBeInTheDocument()
+    expect(await tuesdaySlot('2026-11-10')).toBeInTheDocument()
     expect(screen.queryByText(ar.schedule.calendar.emptyDay)).not.toBeInTheDocument()
     // Once the filter was set, only Tuesdays were asked.
-    expect(api.academyQueries.slice(7).map((query) => query.toString())).toEqual(['on=2026-11-17&weekday=2', 'on=2026-11-24&weekday=2'])
+    expect(api.academyQueries.slice(7).map((query) => query.toString())).toEqual(['on=2026-11-17&weekday=2'])
   })
 
   it('on a phone, a day of the week strip keeps the timeline on the filtered weekday of that week', async () => {
