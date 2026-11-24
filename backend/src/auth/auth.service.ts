@@ -80,6 +80,15 @@ function normalizeIdentifier(raw: string): string {
   return raw.trim().toLowerCase();
 }
 
+/**
+ * An `active` account without a password: it was created or activated by a
+ * Google sign-in and signs in with Google only. A password sign-in of it is
+ * answered like an unknown address (review #4).
+ */
+function signsInWithoutPassword(user: { status: string; passwordHash: string | null }): boolean {
+  return user.status === 'active' && user.passwordHash === null;
+}
+
 function toPrincipal(user: UserWithAccess, tokenId: string): AuthPrincipal {
   const permissions = new Set<string>();
   for (const grant of user.roles) {
@@ -135,11 +144,19 @@ export class AuthService {
       include: ACCESS_INCLUDE,
     });
 
-    // Unknown, archived or soft-deleted accounts look exactly like a wrong password — and so does a
-    // self-registered account whose holder has not opened the e-mailed link yet (`pending` without a
-    // password, PORTAL-03): anybody can register any address, so its existence is never revealed
-    // (no `account_not_activated`, no event, the same dummy verification as an unknown address).
-    if (!user || user.deletedAt !== null || user.status === 'archived' || isPendingSelfRegistration(user)) {
+    // Unknown, archived or soft-deleted accounts look exactly like a wrong password — and so does an
+    // account with no password to check: a self-registered one whose holder has not opened the e-mailed
+    // link yet (`pending` without a password, PORTAL-03 — anybody can register any address) and an
+    // `active` one that signs in with Google only (review #4). Neither is revealed: no
+    // `account_not_activated`, no lock answer, no event, the same dummy verification as an unknown
+    // address. An invited account (no password yet) keeps its own answer below.
+    if (
+      !user ||
+      user.deletedAt !== null ||
+      user.status === 'archived' ||
+      isPendingSelfRegistration(user) ||
+      signsInWithoutPassword(user)
+    ) {
       await this.passwords.verifyDummy(password);
       throw authError.invalidCredentials();
     }

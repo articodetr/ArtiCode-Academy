@@ -191,8 +191,14 @@ export const en: Translation = {
         registration_closed:
           'No account is linked to this Google account, and new accounts cannot be created right now. Sign in with your existing account, or contact the academy administration.',
         link_required:
-          'An account with this e-mail already exists. Sign in with your password, then confirm your e-mail from “My account” to be able to sign in with Google.',
+          'An account with this e-mail already exists. Sign in with your password; to use Google later, confirm your e-mail from “My account” or ask the academy administration to do so.',
+        link_conflict:
+          'Your academy account is linked to another Google account. Sign in with your password or with the linked Google account.',
+        email_not_authoritative:
+          'An account cannot be created or linked through Google for this e-mail. Create your account with your e-mail, or sign in with your password.',
         account_unavailable: 'This account cannot be signed in right now. Contact the academy administration.',
+        mfa_unavailable:
+          'Two-step verification is not available on the server right now, and this account cannot be opened without it. Contact the academy administration.',
       },
       done: {
         subtitle: 'Signing in with Google',
@@ -842,6 +848,7 @@ export const en: Translation = {
         archive: 'The account is taken out of service and every session ends. It can be restored later.',
         restore: 'The archived account becomes active again.',
         unlock: 'The failed-attempt counter is reset and the sign-in lock removed.',
+        deleteForGood: 'Permanent delete: a visitor created this account and never completed it, so it is removed entirely and its e-mail address becomes free again. This cannot be undone.',
         delete: 'Soft delete: the account is archived, disappears from the lists and every session ends. This cannot be undone from the interface.',
       },
       done: {
@@ -865,6 +872,17 @@ export const en: Translation = {
         done: 'Two-step verification was reset and the user’s sessions ended (sessions ended: {{sessions}}).',
         doneNoSessions: 'Two-step verification was reset. The user had no open session.',
         notEnabled: 'Two-step verification was not on for this account; nothing changed.',
+      },
+    },
+    google: {
+      label: 'Sign-in with Google',
+      linkedSince: 'Linked to a Google account since {{date}}',
+      unlink: {
+        action: 'Unlink the Google account',
+        hint: 'The link between this account and its Google account is removed, so its owner cannot sign in with it until it is linked again. The account’s status and password do not change.',
+        noPassword: 'If the account has no password, issue its owner a password-reset link so they can sign in.',
+        confirm: 'Unlink',
+        done: 'The Google account was unlinked',
       },
     },
     links: {

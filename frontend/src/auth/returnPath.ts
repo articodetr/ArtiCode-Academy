@@ -5,7 +5,8 @@
 // These pure rules read that value back:
 // - the rule of the server for `returnTo` (POST /api/auth/google/start — the shared contract): at most 512 characters,
 //   exactly one leading `/` (never `//` or `/\`, which lead to another host in a browser), no backslash, no whitespace
-//   or control character (a browser drops tabs and newlines inside a URL, so `/\t/evil` would become `//evil`), and not
+//   and no control character — C0, DEL or C1 (a browser drops tabs and newlines inside a URL, so `/\t/evil` would
+//   become `//evil`), and not
 //   under `/api/`; a full URL is never one. Anything else is no return path at all;
 // - on top of it, the same origin once parsed, and `/login` itself is no destination (it would loop);
 // - after a sign-in: the return path when it names a page, else the course a visitor kept on this device while
@@ -26,14 +27,16 @@ export const RETURN_PATH_MAX_LENGTH = 512
 export const RETURN_TO_PARAM = 'returnTo'
 
 const WHITESPACE = /\s/
+/** The C1 control characters U+0080–U+009F (written as escapes: the source never holds them raw). */
+const C1_CONTROL = /[\u0080-\u009f]/
 
 function hasUnsafeCharacter(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
-    // Control characters and the backslash.
+    // The C0 control characters, DEL and the backslash.
     if (code < 0x20 || code === 0x7f || code === 0x5c) return true
   }
-  return WHITESPACE.test(value)
+  return C1_CONTROL.test(value) || WHITESPACE.test(value)
 }
 
 /**

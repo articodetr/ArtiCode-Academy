@@ -30,7 +30,8 @@ process.env['TRUST_PROXY'] = '1';
 const { AppModule } = await import('../src/app.module.js');
 const { APP_CREATE_OPTIONS, configureApp } = await import('../src/app.setup.js');
 const { MAIL_TRANSPORT } = await import('../src/mail/mail.transport.js');
-const { RegistrationService } = await import('../src/account/registration.service.js');
+const { RegistrationService, REGISTRATION_MAIL_WINDOW_MS, countRegistrationMails } = await import('../src/account/registration.service.js');
+const { COMPLETE_CLIENT_LIMIT, COMPLETE_IP_LIMIT, REGISTER_CLIENT_LIMIT, REGISTER_IP_LIMIT } = await import('../src/account/registration.throttle.js');
 
 const DATABASE_URL = process.env['DATABASE_URL'] || postgresUrlFromEnv(process.env, 'app');
 const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -77,6 +78,7 @@ describe.skipIf(!available)('PORTAL-03 student self-registration (e2e)', () => {
   let defaultLocale = 'ar';
   let markId = '00000000-0000-0000-0000-000000000000';
   let ipCounter = 0;
+  let dailyMailLimit = 0;
   const mailbox = new RecordingTransport();
   const createdUserIds: string[] = [];
   const createdRoleIds: string[] = [];
@@ -162,6 +164,10 @@ describe.skipIf(!available)('PORTAL-03 student self-registration (e2e)', () => {
     configureApp(app);
     await app.init();
     registration = app.get(RegistrationService);
+    // The academy's daily budget counts the stored rows of earlier runs against this database too: lifted for the
+    // suite, and lowered on purpose by the test that proves it.
+    dailyMailLimit = registration.limits.mailsPerDay;
+    registration.limits.mailsPerDay = Number.MAX_SAFE_INTEGER;
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL! }) });
     const academy = await prisma.academy.findFirstOrThrow({ select: { settings: true, defaultLocale: true } });
     originalSettings = academy.settings;
@@ -180,7 +186,10 @@ describe.skipIf(!available)('PORTAL-03 student self-registration (e2e)', () => {
 
   afterAll(async () => {
     try {
-      if (registration) await settle();
+      if (registration) {
+        await settle();
+        registration.limits.mailsPerDay = dailyMailLimit;
+      }
       if (prisma) {
         const created = await prisma.user.findMany({ where: { email: { endsWith: `-${RUN}@example.test` } }, select: { id: true } });
         const userIds = [...new Set([...createdUserIds, ...created.map((row) => row.id)])];
@@ -324,7 +333,18 @@ describe.skipIf(!available)('PORTAL-03 student self-registration (e2e)', () => {
     expect(notice[0]!.text).not.toContain('Someone Else');
     expect(await accountOf(email('holder'))).toEqual(before);
     expect(await tokenRows(holderId)).toEqual([]);
-    expect((await events(holderId)).map((event) => event.action)).toEqual(['mail.delivery.sent']);
+    expect((await events(holderId)).map((event) => [event.action, event.actorUserId, event.metadata])).toEqual([
+      ['users.self_registration.notice_sent', null, null],
+      ['mail.delivery.sent', null, expect.objectContaining({ kind: 'registration_existing' })],
+    ]);
+
+    // At most one notice per account per 24 hours, whatever the IP: the next requests answer 202 and send nothing.
+    await register({ fullName: 'Someone Else', email: email('holder') }).expect(202);
+    await register({ fullName: 'Someone Else', email: email('holder'), locale: 'ar' }).expect(202);
+    await settle();
+    expect(mailsTo(email('holder'))).toHaveLength(1);
+    expect((await events(holderId)).filter((event) => event.action === 'users.self_registration.notice_sent')).toHaveLength(1);
+    expect(await accountOf(email('holder'))).toEqual(before);
 
     expect(mailsTo(email('gone'))).toEqual([]);
     expect(await tokenRows(deletedId)).toEqual([]);
@@ -476,10 +496,83 @@ describe.skipIf(!available)('PORTAL-03 student self-registration (e2e)', () => {
     expect((await events(account!.id)).map((event) => event.action)).toEqual(['users.self_registered', 'mail.delivery.sent']);
   });
 
-  it('limits a registration to 5 per 15 minutes per (IP, e-mail) and 20 per hour per IP, a completion to 20 per 15 minutes per IP', async () => {
+  it('answers a password sign-in of an active account without a password (Google only) exactly like an unknown address, recording nothing', async () => {
+    const googleOnlyId = await fixtureUser('google-only', { status: 'active', passwordHash: null, emailVerifiedAt: new Date() });
+    const lockedId = await fixtureUser('google-locked', { status: 'active', passwordHash: null, lockedUntil: new Date(Date.now() + 600_000) });
+    const unknown = await signIn(email('nobody-google'), CHOSEN).expect(401);
+    for (const name of ['google-only', 'google-locked']) {
+      const res = await signIn(email(name), CHOSEN).expect(401);
+      expect(res.body, name).toEqual(unknown.body);
+      expect(res.body.code, name).toBe('invalid_credentials');
+    }
+    expect(await events(googleOnlyId)).toEqual([]);
+    expect(await events(lockedId)).toEqual([]);
+    // An invited account keeps its own answer.
+    await fixtureUser('still-invited', { status: 'invited', passwordHash: null });
+    expect((await signIn(email('still-invited'), CHOSEN).expect(403)).body.code).toBe('account_not_activated');
+  });
+
+  it('removes a self-registered account awaiting its holder for good on the admin delete, freeing the address', async () => {
+    const address = email('squatted');
+    await register({ fullName: 'Squatted Address', email: address }).expect(202);
+    await settle();
+    const squatted = (await accountOf(address))!;
+    const res = await api()
+      .delete(`/api/users/${squatted.id}`)
+      .set({ Authorization: `Bearer ${tokens['deactivator']}` })
+      .send({ reason: 'Not ours' })
+      .expect(200);
+    expect(res.body).toMatchObject({ id: squatted.id, status: 'archived', awaitingRegistration: false });
+    expect(res.body.deletedAt).toEqual(expect.any(String));
+    expect(await prisma.user.findUnique({ where: { id: squatted.id } })).toBeNull();
+    expect(await tokenRows(squatted.id)).toEqual([]);
+    expect(await prisma.userRole.count({ where: { userId: squatted.id } })).toBe(0);
+    const trail = await events(squatted.id);
+    expect(trail.map((event) => event.action)).toEqual(['users.self_registered', 'mail.delivery.sent', 'users.deleted']);
+    expect(trail[2]!.metadata).toEqual({ action: 'delete', from: 'pending', to: null, reason: 'Not ours', hard: true });
+
+    // The address is free: the owner registers it and gets a link of their own.
+    await register({ fullName: 'Real Owner', email: address }).expect(202);
+    await settle();
+    const fresh = (await accountOf(address))!;
+    expect(fresh.id).not.toBe(squatted.id);
+    expect(fresh).toMatchObject({ status: 'pending', fullName: 'Real Owner' });
+    await api().get(linkPath(mailedToken(address))).set(from(freshIp())).expect(200);
+  });
+
+  it('stops every registration e-mail past the academy daily budget, creating nothing, and still answers 202', async () => {
+    const used = await countRegistrationMails(prisma, new Date(Date.now() - REGISTRATION_MAIL_WINDOW_MS));
+    const holderId = await fixtureUser('budget-holder', { emailVerifiedAt: new Date() });
+    registration.limits.mailsPerDay = used + 1;
+    try {
+      // The last e-mail of the budget goes out ...
+      await register({ fullName: 'Within Budget', email: email('budget-in') }).expect(202);
+      await settle();
+      expect(mailsTo(email('budget-in')).map((message) => message.kind)).toEqual(['registration']);
+      // ... and nothing after it: no account, no link, no notice, no event.
+      await register({ fullName: 'Past Budget', email: email('budget-out') }).expect(202);
+      await register({ fullName: 'Past Budget', email: email('budget-holder') }).expect(202);
+      await register({ fullName: 'Within Budget', email: email('budget-in') }).expect(202);
+      await settle();
+      expect(await accountOf(email('budget-out'))).toBeNull();
+      expect(mailsTo(email('budget-out'))).toEqual([]);
+      expect(mailsTo(email('budget-holder'))).toEqual([]);
+      expect(await events(holderId)).toEqual([]);
+      expect(mailsTo(email('budget-in'))).toHaveLength(1);
+      expect(await tokenRows((await accountOf(email('budget-in')))!.id)).toHaveLength(1);
+    } finally {
+      registration.limits.mailsPerDay = Number.MAX_SAFE_INTEGER;
+    }
+    // With the budget back, the same address is registered as usual.
+    await register({ fullName: 'Past Budget', email: email('budget-out') }).expect(202);
+    await settle();
+    expect(await accountOf(email('budget-out'))).toMatchObject({ status: 'pending' });
+  });
+
+  it(`limits a registration to ${REGISTER_CLIENT_LIMIT} per 15 minutes per (IP, e-mail) and ${REGISTER_IP_LIMIT} per hour per IP, a completion to ${COMPLETE_CLIENT_LIMIT} per 15 minutes per (IP, link) and ${COMPLETE_IP_LIMIT} per IP`, async () => {
     const ip = freshIp();
     const address = email('limited');
-    for (let attempt = 1; attempt <= 5; attempt += 1) await register({ fullName: 'Limited', email: address }, ip).expect(202);
+    for (let attempt = 1; attempt <= REGISTER_CLIENT_LIMIT; attempt += 1) await register({ fullName: 'Limited', email: address }, ip).expect(202);
     const sixth = await register({ fullName: 'Limited', email: address }, ip).expect(429);
     expect(sixth.body.code).toBe('rate_limited');
     expect(sixth.headers['retry-after-login']).toBeDefined();
@@ -487,18 +580,34 @@ describe.skipIf(!available)('PORTAL-03 student self-registration (e2e)', () => {
     await register({ fullName: 'Limited', email: email('limited-other') }, ip).expect(202);
 
     const crowded = freshIp();
-    for (let attempt = 1; attempt <= 20; attempt += 1) await register({ email: `crowd-${attempt}-${RUN}@example.test` }, crowded).expect(400);
-    const ceiling = await register({ email: `crowd-21-${RUN}@example.test` }, crowded).expect(429);
+    for (let attempt = 1; attempt <= REGISTER_IP_LIMIT; attempt += 1) {
+      await register({ email: `crowd-${attempt}-${RUN}@example.test` }, crowded).expect(400);
+    }
+    const ceiling = await register({ email: `crowd-x-${RUN}@example.test` }, crowded).expect(429);
     expect(ceiling.body.code).toBe('rate_limited');
     expect(ceiling.headers['retry-after-register_ip']).toBeDefined();
 
+    // One link retried from one IP: refused at the per-(IP, link) limit; another link from that IP still passes.
     const completer = freshIp();
-    for (let attempt = 1; attempt <= 20; attempt += 1) {
-      await api().post(completePath(randomToken())).set(from(completer)).send({ password: CHOSEN }).expect(404);
+    const guessed = randomToken();
+    for (let attempt = 1; attempt <= COMPLETE_CLIENT_LIMIT; attempt += 1) {
+      await api().post(completePath(guessed)).set(from(completer)).send({ password: CHOSEN }).expect(404);
     }
-    expect((await api().post(completePath(randomToken())).set(from(completer)).send({ password: CHOSEN }).expect(429)).body.code).toBe('rate_limited');
+    const retried = await api().post(completePath(guessed)).set(from(completer)).send({ password: CHOSEN }).expect(429);
+    expect(retried.body.code).toBe('rate_limited');
+    expect(retried.headers['retry-after-login']).toBeDefined();
+    await api().post(completePath(randomToken())).set(from(completer)).send({ password: CHOSEN }).expect(404);
+
+    // Many links from one IP: refused at the per-IP ceiling.
+    const sprayer = freshIp();
+    for (let attempt = 1; attempt <= COMPLETE_IP_LIMIT; attempt += 1) {
+      await api().post(completePath(randomToken())).set(from(sprayer)).send({ password: CHOSEN }).expect(404);
+    }
+    const sprayed = await api().post(completePath(randomToken())).set(from(sprayer)).send({ password: CHOSEN }).expect(429);
+    expect(sprayed.body.code).toBe('rate_limited');
+    expect(sprayed.headers['retry-after-register_ip']).toBeDefined();
     await settle();
-  });
+  }, 120_000);
 
   it('never puts a token, an address or a name in the audit metadata of the suite', async () => {
     await settle();
@@ -508,7 +617,7 @@ describe.skipIf(!available)('PORTAL-03 student self-registration (e2e)', () => {
     const text = JSON.stringify(trail);
     expect(text).not.toMatch(/@example\.test/);
     expect(text).not.toMatch(/[A-Za-z0-9_-]{43}/);
-    expect(text).not.toMatch(/Student|Visitor|Limited|Twin/);
+    expect(text).not.toMatch(/Student|Visitor|Limited|Twin|Squatted|Owner|Budget/);
     for (const event of trail) {
       for (const key of Object.keys((event.metadata ?? {}) as Record<string, unknown>)) expect(key).not.toMatch(/token|hash|password|email/i);
     }

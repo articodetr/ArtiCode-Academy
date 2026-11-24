@@ -45,8 +45,15 @@ export const login = {
       unavailable: 'تسجيل الدخول عبر Google غير متاح حاليًا في هذه الأكاديمية.',
       registration_closed:
         'لا يوجد حساب مرتبط بحساب Google هذا، وإنشاء الحسابات غير متاح حاليًا. سجّل الدخول بحسابك الحالي، أو تواصل مع إدارة الأكاديمية.',
-      link_required: 'يوجد حساب بهذا البريد. سجّل الدخول بكلمة المرور، ثم أكّد بريدك من «حسابي» لتتمكن من الدخول عبر Google.',
+      link_required:
+        'يوجد حساب بهذا البريد. سجّل الدخول بكلمة المرور؛ ولاستخدام Google لاحقًا أكّد بريدك من «حسابي» أو اطلب ذلك من إدارة الأكاديمية.',
+      link_conflict: 'حسابك في الأكاديمية مرتبط بحساب Google آخر. سجّل الدخول بكلمة المرور أو بحساب Google المرتبط.',
+      email_not_authoritative:
+        'لا يمكن إنشاء الحساب أو ربطه عبر Google لهذا البريد. أنشئ حسابك بالبريد الإلكتروني، أو سجّل الدخول بكلمة المرور.',
       account_unavailable: 'لا يمكن الدخول إلى هذا الحساب حاليًا. تواصل مع إدارة الأكاديمية.',
+      // The wording of login.errors.mfa_unavailable: the same situation, reached through Google.
+      mfa_unavailable:
+        'التحقق بخطوتين غير متاح على الخادم حالياً، ولا يمكن الدخول إلى هذا الحساب بدونه. تواصل مع إدارة الأكاديمية.',
     },
     // /auth/google/done: Google's callback set the session cookie and sent the visitor here.
     done: {

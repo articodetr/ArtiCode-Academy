@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
 import { GOOGLE_URL_INVALID } from '../api/google'
+import { ar } from '../i18n/ar'
+import { en } from '../i18n/en'
 import {
   GOOGLE_RESULT_CODES,
   describeGoogleStartFailure,
@@ -33,6 +35,21 @@ describe('google.signIn', () => {
     expect(googleResultOf('?google=cancelled')?.type).toBe('info')
     expect(googleResultOf('?google=link_required')?.type).toBe('warning')
     expect(googleResultOf('?google=account_unavailable')?.type).toBe('error')
+    // The codes the review added (the shared contract).
+    expect(googleResultOf('?google=link_conflict')).toEqual({ code: 'link_conflict', key: 'login.google.results.link_conflict', type: 'warning' })
+    expect(googleResultOf('?google=email_not_authoritative')).toEqual({
+      code: 'email_not_authoritative',
+      key: 'login.google.results.email_not_authoritative',
+      type: 'warning',
+    })
+    expect(googleResultOf('?google=mfa_unavailable')).toEqual({ code: 'mfa_unavailable', key: 'login.google.results.mfa_unavailable', type: 'error' })
+  })
+
+  it('has a message for every verdict in both languages', () => {
+    for (const code of GOOGLE_RESULT_CODES) {
+      expect(ar.login.google.results[code]).toMatch(/\S/)
+      expect(en.login.google.results[code]).toMatch(/\S/)
+    }
   })
 
   it('reads an unknown verdict as failed, never as its raw value, and nothing without the parameter', () => {

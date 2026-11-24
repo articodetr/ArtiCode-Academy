@@ -1759,4 +1759,114 @@ describe.skipIf(!available)('MOD-03 users list, detail, creation, update, accoun
       expect(replace.requestBody).toBeDefined();
     }, OPENAPI_TIMEOUT_MS);
   });
+
+  // ------------------------------------------- PORTAL-03 self-registered accounts
+
+  describe('the Google link, an account awaiting its registration, and its delete (PORTAL-03)', () => {
+    const remove = (caller: string, id: string, body?: Record<string, unknown>) => {
+      const req = api().delete(`${USERS}/${id}`).set(bearer(caller));
+      return body ? req.send(body) : req;
+    };
+    const deleteEvents = (id: string) =>
+      prisma.auditLog.findMany({ where: { action: 'users.deleted', entityId: id }, orderBy: { createdAt: 'asc' }, select: { actorUserId: true, metadata: true } });
+    let studentRoleId: string;
+    let linkedAt: Date;
+
+    /** A self-registered account awaiting its holder, as registration.service.ts creates it: pending, no password, the student role and profile, an open link. */
+    async function awaitingAccount(name: string, extra: Partial<Prisma.UserCreateInput> = {}): Promise<string> {
+      const id = await createUser(name, { status: 'pending', withPassword: false, roleIds: [studentRoleId], studentProfile: { create: {} }, ...extra });
+      await prisma.verificationToken.create({
+        data: {
+          userId: id,
+          purpose: 'email_verification',
+          tokenHash: `${id.replaceAll('-', '')}${'0'.repeat(32)}`,
+          expiresAt: new Date(Date.now() + 3_600_000),
+          metadata: { via: 'self_registration', email: email(name) },
+        },
+      });
+      return id;
+    }
+
+    beforeAll(async () => {
+      studentRoleId = (await prisma.role.findUniqueOrThrow({ where: { key: 'student' }, select: { id: true } })).id;
+      await awaitingAccount('awaiting');
+      await awaitingAccount('awaiting-linked', { guardians: { create: [{ guardianUserId: fx['charlie']!, relationship: 'father' }] } });
+      await awaitingAccount('awaiting-shown');
+      const identity = await prisma.userIdentity.create({
+        data: { userId: fx['golf']!, provider: 'google', providerSubject: `google-sub-${RUN}` },
+        select: { createdAt: true },
+      });
+      linkedAt = identity.createdAt;
+    });
+
+    it('shows googleLinkedAt to holders of users.read_contact and awaitingRegistration to every reader, in the detail only', async () => {
+      const golf = await api().get(`${USERS}/${fx['golf']}`).set(bearer('manager')).expect(200);
+      expect(golf.body).toMatchObject({ googleLinkedAt: linkedAt.toISOString(), awaitingRegistration: false });
+      const reduced = await api().get(`${USERS}/${fx['golf']}`).set(bearer('reader')).expect(200);
+      expect(reduced.body).toMatchObject({ googleLinkedAt: null, awaitingRegistration: false });
+      // Never the Google subject or a key of the identity row.
+      expect(JSON.stringify(golf.body)).not.toContain(`google-sub-${RUN}`);
+      expect([...collectKeys(golf.body)].filter((key) => /subject|provider|identit/i.test(key))).toEqual([]);
+
+      const unlinked = await api().get(`${USERS}/${fx['alpha']}`).set(bearer('manager')).expect(200);
+      expect(unlinked.body).toMatchObject({ googleLinkedAt: null, awaitingRegistration: false });
+      for (const caller of ['manager', 'reader']) {
+        const awaiting = await api().get(`${USERS}/${fx['awaiting-shown']}`).set(bearer(caller)).expect(200);
+        expect(awaiting.body, caller).toMatchObject({ status: 'pending', awaitingRegistration: true, googleLinkedAt: null });
+        expect([...collectKeys(awaiting.body)].filter((key) => SENSITIVE_KEY.test(key)), caller).toEqual([]);
+      }
+      // A pending account WITH a password is not awaiting a registration.
+      const withPassword = await createUser('pending-with-password', { status: 'pending' });
+      expect((await api().get(`${USERS}/${withPassword}`).set(bearer('manager')).expect(200)).body.awaitingRegistration).toBe(false);
+
+      const listed = await api().get(`${USERS}?q=${RUN}&limit=100`).set(bearer('manager')).expect(200);
+      for (const item of listed.body.items as ListItem[]) {
+        expect(item).not.toHaveProperty('googleLinkedAt');
+        expect(item).not.toHaveProperty('awaitingRegistration');
+      }
+
+      const docs = await api().get('/api/docs-json').expect(200);
+      const detail = docs.body.components.schemas['UserDetailDto'].properties;
+      expect(detail['googleLinkedAt']).toMatchObject({ type: 'string', format: 'date-time', nullable: true });
+      expect(detail['awaitingRegistration']).toMatchObject({ type: 'boolean' });
+      expect(docs.body.components.schemas['UserDetailDto'].required).toEqual(expect.arrayContaining(['googleLinkedAt', 'awaitingRegistration']));
+    }, OPENAPI_TIMEOUT_MS);
+
+    it('removes an account awaiting its registration for good — with its roles, profile and links — freeing the address, one event', async () => {
+      const id = fx['awaiting']!;
+      const res = await remove('manager', id, { reason: 'Squatted address' }).expect(200);
+      expect(res.body).toMatchObject({ id, status: 'archived', email: email('awaiting'), awaitingRegistration: false, googleLinkedAt: null, roles: [{ key: 'student' }] });
+      expect(res.body.deletedAt).toEqual(expect.any(String));
+      expect([...collectKeys(res.body)].filter((key) => SENSITIVE_KEY.test(key))).toEqual([]);
+
+      expect(await prisma.user.findUnique({ where: { id } })).toBeNull();
+      expect(await prisma.userRole.count({ where: { userId: id } })).toBe(0);
+      expect(await prisma.studentProfile.count({ where: { userId: id } })).toBe(0);
+      expect(await prisma.verificationToken.count({ where: { userId: id } })).toBe(0);
+      const events = await deleteEvents(id);
+      expect(events).toEqual([{ actorUserId: fx['manager'], metadata: { action: 'delete', from: 'pending', to: null, reason: 'Squatted address', hard: true } }]);
+
+      // Gone: nothing applies to it any more, and the address can be given to a new account.
+      expect((await remove('manager', id).expect(404)).body.code).toBe('user_not_found');
+      expect((await api().get(`${USERS}/${id}?includeDeleted=true`).set(bearer('manager')).expect(404)).body.code).toBe('user_not_found');
+      const reborn = await create('superuser', { kind: 'student', email: email('awaiting'), fullName: 'The Real Owner' });
+      expect(reborn.status, JSON.stringify(reborn.body)).toBe(201);
+      expect(reborn.body.id).not.toBe(id);
+    });
+
+    it('keeps the soft delete for an account awaiting its registration that anything else refers to', async () => {
+      const id = fx['awaiting-linked']!;
+      const res = await remove('manager', id).expect(200);
+      expect(res.body).toMatchObject({ id, status: 'archived', awaitingRegistration: false });
+      expect(res.body.deletedAt).toEqual(expect.any(String));
+      expect(await prisma.user.findUnique({ where: { id }, select: { status: true, deletedAt: true } })).toMatchObject({ status: 'archived', deletedAt: expect.any(Date) });
+      // The guardian link a hard delete would have cascaded away is still there.
+      expect(await prisma.guardianStudent.count({ where: { studentUserId: id } })).toBe(1);
+      expect((await deleteEvents(id)).map((event) => event.metadata)).toEqual([{ action: 'delete', from: 'pending', to: 'archived', reason: null, revokedSessions: 0 }]);
+      // And the address stays reserved, as for every soft delete.
+      const clash = await create('superuser', { kind: 'student', email: email('awaiting-linked'), fullName: 'Taken Address' });
+      expect(clash.status).toBe(409);
+      expect(clash.body.code).toBe('email_in_use');
+    });
+  });
 });

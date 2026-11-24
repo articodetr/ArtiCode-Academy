@@ -9,10 +9,14 @@
 // function against a local key set (nonce, audience, issuer, expiry, verified
 // e-mail). Covers: start (URL, cookie attributes, Origin, validation, the
 // unconfigured 503), the callback's failures (no/forged cookie, state
-// mismatch, access_denied, closed sign-up, link_required, account_unavailable),
-// the four resolutions (existing identity, verified e-mail, pending
-// self-registration, new account), MFA (the fragment and API-211), returnTo,
-// the API-205 flags, rate limits and the OpenAPI document.
+// mismatch, access_denied, closed sign-up, link_required, link_conflict,
+// account_unavailable, mfa_unavailable, email_not_authoritative), the four
+// resolutions (existing identity, verified e-mail, pending self-registration,
+// new account), Google's authority over an address (Gmail, or `hd` = the
+// address's domain — the fixtures' ID tokens carry `hd: example.test` unless a
+// test says otherwise), the roles that may be linked by e-mail, MFA (the
+// fragment and API-211), returnTo, the API-205 flags, rate limits, the OpenAPI
+// document, and the administrative unlink DELETE /api/users/:id/google-identity.
 //
 // Fixture users carry a unique suffix and are deleted at the end (cascade
 // removes their identities, tokens and profiles; their audit rows stay — the
@@ -53,6 +57,7 @@ const { GoogleOidcClient, GoogleOidcError, GOOGLE_ISSUERS } = await import('../s
 const { GOOGLE_OAUTH_CONFIG } = await import('../src/auth/google/google.config.js');
 const { codeChallengeS256 } = await import('../src/auth/google/google-state.js');
 const { PasswordService } = await import('../src/auth/password.service.js');
+const { TokenService } = await import('../src/auth/token.service.js');
 const { parseMfaKey, sealSecret } = await import('../src/auth/mfa/secret-box.js');
 const { base32Decode, generateTotpSecret, totpCode, totpStep } = await import('../src/auth/mfa/totp.js');
 const { ConfigService } = await import('@nestjs/config');
@@ -66,6 +71,9 @@ const CALLBACK = '/api/auth/google/callback';
 const STATE_COOKIE = 'aca_google';
 const REFRESH_COOKIE = 'aca_refresh';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
+const UNKNOWN_ID = '00000000-0000-7000-8000-000000000000';
+/** The Workspace domain the fixtures' ID tokens claim by default: Google is then authoritative for their addresses. */
+const FIXTURE_DOMAIN = 'example.test';
 
 async function canConnect(url: string): Promise<boolean> {
   const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url, connectionTimeoutMillis: 3000 }) });
@@ -157,6 +165,7 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
   let originalSettings: Prisma.JsonValue;
   let academyId: string;
   const createdUserIds: string[] = [];
+  const createdRoleIds: string[] = [];
   const newAccountEmails: string[] = [];
   let ipCounter = 0;
   let codeCounter = 0;
@@ -192,7 +201,8 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
   /** Google's redirect back with a code that the fake exchanges for an ID token with these claims. */
   function finish(attempt: Attempt, claims: Record<string, unknown>, ip: string, cookie: string | null = attempt.cookie) {
     const code = `code-${RUN}-${(codeCounter += 1)}`;
-    fake.codes.set(code, { claims: { email_verified: true, ...claims }, nonce: attempt.nonce, codeChallenge: attempt.codeChallenge });
+    // `hd: null` in a test's claims drops the Workspace domain (JSON leaves a null claim the server ignores).
+    fake.codes.set(code, { claims: { email_verified: true, hd: FIXTURE_DOMAIN, ...claims }, nonce: attempt.nonce, codeChallenge: attempt.codeChallenge });
     const req = api().get(CALLBACK).query({ code, state: attempt.state, scope: 'openid email profile', authuser: '0', prompt: 'consent' }).set('X-Forwarded-For', ip);
     return cookie === null ? req : req.set('Cookie', `${STATE_COOKIE}=${cookie}`);
   }
@@ -203,13 +213,43 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     return finish(attempt, claims, ip);
   }
 
-  async function createUser(name: string, data: Partial<Prisma.UserUncheckedCreateInput> = {}): Promise<{ id: string; email: string }> {
+  async function createUser(
+    name: string,
+    data: Partial<Prisma.UserUncheckedCreateInput> & { roleKeys?: string[]; roleIds?: string[] } = {},
+  ): Promise<{ id: string; email: string }> {
+    const { roleKeys = [], roleIds = [], ...rest } = data;
+    const keyed = roleKeys.length > 0 ? await prisma.role.findMany({ where: { key: { in: roleKeys } }, select: { id: true } }) : [];
+    expect(keyed).toHaveLength(roleKeys.length);
+    const grants = [...keyed.map((role) => role.id), ...roleIds];
     const user = await prisma.user.create({
-      data: { email: email(name), fullName: `Google ${name}`, passwordHash, status: 'active', emailVerifiedAt: new Date(), ...data },
+      data: {
+        email: email(name),
+        fullName: `Google ${name}`,
+        passwordHash,
+        status: 'active',
+        emailVerifiedAt: new Date(),
+        ...rest,
+        ...(grants.length > 0 ? { roles: { create: grants.map((roleId) => ({ roleId })) } } : {}),
+      },
       select: { id: true, email: true },
     });
     createdUserIds.push(user.id);
     return { id: user.id, email: user.email! };
+  }
+
+  async function createRole(name: string, permissionKeys: readonly string[]): Promise<string> {
+    const role = await prisma.role.create({
+      data: { key: `test_google_${name}_${RUN}`, label: { ar: `دور اختبار ${name}` }, permissions: { create: permissionKeys.map((permissionKey) => ({ permissionKey })) } },
+      select: { id: true },
+    });
+    createdRoleIds.push(role.id);
+    return role.id;
+  }
+
+  /** A Bearer header for a fixture (the principal is read from the database on every request). */
+  async function bearer(userId: string): Promise<{ Authorization: string }> {
+    const signed = await app.get(TokenService).signAccessToken({ userId, roles: [] });
+    return { Authorization: `Bearer ${signed.token}` };
   }
 
   async function mark(): Promise<string> {
@@ -280,6 +320,7 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
       const created = await prisma.user.findMany({ where: { email: { in: newAccountEmails } }, select: { id: true } });
       const ids = [...createdUserIds, ...created.map((user) => user.id)];
       if (ids.length > 0) await prisma.user.deleteMany({ where: { id: { in: ids } } });
+      if (createdRoleIds.length > 0) await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
       await prisma.$disconnect();
     }
     await app?.close();
@@ -467,9 +508,72 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     // The password still works: nothing about the account changed but the link.
     expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { passwordHash: true } })).passwordHash).toBe(passwordHash);
 
-    // Another Google account with the same address is never swapped in.
+    // Another Google account with the same address is never swapped in: link_conflict, the first link kept.
     const other = await signIn({ sub: nextSub(), email: user.email });
-    expect(locationOf(other).query).toEqual({ google: 'link_required', returnTo: '/' });
+    expect(locationOf(other).query).toEqual({ google: 'link_conflict', returnTo: '/' });
+    expect(cookieLine(other, REFRESH_COOKIE)).toBe('');
+    expect(await prisma.userIdentity.findMany({ where: { userId: user.id }, select: { providerSubject: true } })).toEqual([{ providerSubject: sub }]);
+  });
+
+  it('Google is authoritative only for Gmail or its own Workspace domain: else link_required for an account, email_not_authoritative for a new person', async () => {
+    await setSignUp(true);
+    // An existing confirmed account, a Google account without hd (a consumer account made with this address) or of another Workspace.
+    const verified = await createUser('not-authoritative');
+    const suspended = await createUser('not-authoritative-suspended', { status: 'suspended' });
+    const m = await mark();
+    for (const claims of [{ hd: null }, { hd: 'other.example' }, { hd: `mail.${FIXTURE_DOMAIN}` }]) {
+      const res = await signIn({ sub: nextSub(), email: verified.email, ...claims });
+      expect(locationOf(res).query, JSON.stringify(claims)).toEqual({ google: 'link_required', returnTo: '/' });
+      expect(cookieLine(res, REFRESH_COOKIE)).toBe('');
+    }
+    // Before anything about the account: not even its state is told.
+    const quiet = await signIn({ sub: nextSub(), email: suspended.email, hd: null });
+    expect(locationOf(quiet).query).toEqual({ google: 'link_required', returnTo: '/' });
+    expect(await prisma.userIdentity.count({ where: { userId: { in: [verified.id, suspended.id] } } })).toBe(0);
+    expect(await eventsOf(m, verified.id)).toEqual([]);
+
+    // A new person: refused while sign-up is open; registration_closed while it is closed.
+    const address = email('not-authoritative-new');
+    newAccountEmails.push(address);
+    const refused = await signIn({ sub: nextSub(), email: address, hd: null }, { returnTo: '/catalog' });
+    expect(locationOf(refused)).toMatchObject({ path: '/login', query: { google: 'email_not_authoritative', returnTo: '/catalog' } });
+    await setSignUp(false);
+    const closed = await signIn({ sub: nextSub(), email: address, hd: null });
+    expect(locationOf(closed).query).toEqual({ google: 'registration_closed', returnTo: '/' });
+    expect(await prisma.user.count({ where: { email: address } })).toBe(0);
+
+    // A Gmail address needs no hd: a new account is created.
+    await setSignUp(true);
+    const gmail = `g-gmail-${RUN}@gmail.com`;
+    newAccountEmails.push(gmail);
+    const created = await signIn({ sub: nextSub(), email: gmail, hd: null });
+    expect(locationOf(created).path).toBe('/auth/google/done');
+    expect(await prisma.user.count({ where: { email: gmail, status: 'active' } })).toBe(1);
+  });
+
+  it('only student or guardian accounts are linked by their e-mail; an identity that already exists keeps working for anyone', async () => {
+    const teacher = await createUser('teacher', { roleKeys: ['teacher'] });
+    const staff = await createUser('staff', { roleKeys: ['student', 'staff'] });
+    const admin = await createUser('admin-role', { roleKeys: ['academy_admin'] });
+    const custom = await createUser('custom-role', { roleIds: [await createRole('custom', ['courses.read'])] });
+    for (const user of [teacher, staff, admin, custom]) {
+      const res = await signIn({ sub: nextSub(), email: user.email });
+      expect(locationOf(res).query, user.email).toEqual({ google: 'link_required', returnTo: '/' });
+      expect(cookieLine(res, REFRESH_COOKIE)).toBe('');
+      expect(await prisma.userIdentity.count({ where: { userId: user.id } })).toBe(0);
+    }
+
+    const guardian = await createUser('guardian', { roleKeys: ['guardian'] });
+    const linked = await signIn({ sub: nextSub(), email: guardian.email });
+    expect(locationOf(linked).path).toBe('/auth/google/done');
+    expect(await prisma.userIdentity.count({ where: { userId: guardian.id } })).toBe(1);
+
+    // A teacher whose identity row exists (linked before, or by an administrator's own sign-in) still signs in.
+    const sub = nextSub();
+    await prisma.userIdentity.create({ data: { userId: teacher.id, provider: 'google', providerSubject: sub, email: teacher.email } });
+    const viaIdentity = await signIn({ sub, email: teacher.email });
+    expect(locationOf(viaIdentity).path).toBe('/auth/google/done');
+    expect(cookieValue(viaIdentity, REFRESH_COOKIE)).toBeDefined();
   });
 
   it('an account without a confirmed address, or only invited → link_required, nothing linked', async () => {
@@ -484,8 +588,19 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     expect((await prisma.user.findUniqueOrThrow({ where: { id: invited.id }, select: { status: true } })).status).toBe('invited');
   });
 
+  it('a pending self-registered account while sign-up is closed → registration_closed, the account stays pending and unlinked', async () => {
+    await setSignUp(false);
+    const user = await createUser('pending-closed', { status: 'pending', passwordHash: null, emailVerifiedAt: null, roleKeys: ['student'] });
+    const res = await signIn({ sub: nextSub(), email: user.email }, { returnTo: '/catalog' });
+    expect(locationOf(res).query).toEqual({ google: 'registration_closed', returnTo: '/catalog' });
+    expect(cookieLine(res, REFRESH_COOKIE)).toBe('');
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { status: true, emailVerifiedAt: true } })).toEqual({ status: 'pending', emailVerifiedAt: null });
+    expect(await prisma.userIdentity.count({ where: { userId: user.id } })).toBe(0);
+  });
+
   it('a pending self-registered account (no password) becomes active with a confirmed address, its open links retired, and is linked', async () => {
-    const user = await createUser('pending', { status: 'pending', passwordHash: null, emailVerifiedAt: null });
+    await setSignUp(true);
+    const user = await createUser('pending', { status: 'pending', passwordHash: null, emailVerifiedAt: null, roleKeys: ['student'] });
     const token = await prisma.verificationToken.create({
       data: {
         userId: user.id,
@@ -555,6 +670,18 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     expect((await eventsOf(m, user.id)).map((event) => event.action)).toEqual(['auth.google.linked', 'auth.login.succeeded']);
   });
 
+  it('an account with two-step verification whose secret the server cannot open → mfa_unavailable, no session and no challenge', async () => {
+    const user = await createUser('mfa-unavailable');
+    // Sealed with another key: the server's key does not open it (a rotated or lost key) — never a bypass.
+    const otherKey = parseMfaKey(Buffer.alloc(32, 3).toString('base64'))!;
+    await prisma.user.update({ where: { id: user.id }, data: { mfaSecret: sealSecret(otherKey, generateTotpSecret(), user.id), mfaEnabledAt: new Date() } });
+    const res = await signIn({ sub: nextSub(), email: user.email }, { returnTo: '/my-school' });
+    expect(res.status).toBe(302);
+    expect(locationOf(res)).toEqual({ path: '/login', query: { google: 'mfa_unavailable', returnTo: '/my-school' }, fragment: {} });
+    expect(cookieLine(res, REFRESH_COOKIE)).toBe('');
+    expect(await prisma.verificationToken.count({ where: { userId: user.id, purpose: 'mfa_challenge' } })).toBe(0);
+  });
+
   it('returnTo is carried from start to the redirect and reduced to a safe path', async () => {
     const user = await createUser('return');
     const sub = nextSub();
@@ -587,31 +714,60 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     expectStateCleared(res);
   });
 
-  it('rate limits: start 20 per 15 minutes per IP (429 JSON), the callback 30 — then still a 302 to failed', async () => {
-    const ip = nextIp();
-    let startCount = 0;
-    let limitedStart: SupertestResponse | undefined;
-    for (let i = 0; i < 25 && !limitedStart; i += 1) {
-      const res = await api().post(START).set('X-Forwarded-For', ip).send({});
-      if (res.status === 429) limitedStart = res;
-      else startCount += 1;
-    }
-    expect(startCount).toBe(20);
-    expect(limitedStart?.body).toMatchObject({ statusCode: 429, code: 'rate_limited' });
+  it(
+    'rate limits: start 200 per 15 minutes per IP (429 JSON); the callback 30 per (IP, state cookie) and 300 per IP — then still a 302 to failed',
+    async () => {
+      const ip = nextIp();
+      let startCount = 0;
+      let limitedStart: SupertestResponse | undefined;
+      for (let i = 0; i < 205 && !limitedStart; i += 1) {
+        const res = await api().post(START).set('X-Forwarded-For', ip).send({});
+        if (res.status === 429) limitedStart = res;
+        else startCount += 1;
+      }
+      expect(startCount).toBe(200);
+      expect(limitedStart?.body).toMatchObject({ statusCode: 429, code: 'rate_limited' });
+      expect(limitedStart?.headers['retry-after-login']).toBeDefined();
 
-    const cbIp = nextIp();
-    let limitedCallback: SupertestResponse | undefined;
-    let callbackCount = 0;
-    for (let i = 0; i < 35 && !limitedCallback; i += 1) {
-      const res = await api().get(CALLBACK).query({ code: 'c', state: 's' }).set('X-Forwarded-For', cbIp);
-      expect(res.status).toBe(302);
-      if (res.headers['retry-after-login'] !== undefined) limitedCallback = res;
-      else callbackCount += 1;
-    }
-    expect(callbackCount).toBe(30);
-    expect(locationOf(limitedCallback!).query).toEqual({ google: 'failed', returnTo: '/' });
-    expectStateCleared(limitedCallback!);
-  });
+      // One attempt replayed: its cookie has a budget of 30; another attempt from the same address still has its own.
+      const cbIp = nextIp();
+      const attempt = await begin(cbIp);
+      const replay = () => api().get(CALLBACK).query({ code: 'c', state: 's' }).set({ 'X-Forwarded-For': cbIp, Cookie: `${STATE_COOKIE}=${attempt.cookie}` });
+      let limitedCallback: SupertestResponse | undefined;
+      let callbackCount = 0;
+      for (let i = 0; i < 35 && !limitedCallback; i += 1) {
+        const res = await replay();
+        expect(res.status).toBe(302);
+        if (res.headers['retry-after-login'] !== undefined) limitedCallback = res;
+        else callbackCount += 1;
+      }
+      expect(callbackCount).toBe(30);
+      expect(locationOf(limitedCallback!).query).toEqual({ google: 'failed', returnTo: '/' });
+      expectStateCleared(limitedCallback!);
+      const fresh = await begin(cbIp);
+      const other = await api().get(CALLBACK).query({ code: 'c', state: 's' }).set({ 'X-Forwarded-For': cbIp, Cookie: `${STATE_COOKIE}=${fresh.cookie}` });
+      expect(other.headers['retry-after-login']).toBeUndefined();
+      // The state mismatch, not the limit: the attempt's own returnTo.
+      expect(locationOf(other).query).toEqual({ google: 'failed', returnTo: '/' });
+
+      // Forged cookies sprayed from one address: each is a new per-cookie key, the per-IP ceiling stops them at 300.
+      const sprayIp = nextIp();
+      let sprayed = 0;
+      let ceiling: SupertestResponse | undefined;
+      for (let i = 0; i < 310 && !ceiling; i += 1) {
+        const res = await api().get(CALLBACK).query({ code: 'c', state: 's' }).set({ 'X-Forwarded-For': sprayIp, Cookie: `${STATE_COOKIE}=forged-${RUN}-${i}` });
+        expect(res.status).toBe(302);
+        if (res.headers['retry-after-google_callback_ip'] !== undefined) ceiling = res;
+        else sprayed += 1;
+      }
+      expect(sprayed).toBe(300);
+      expect(locationOf(ceiling!).query).toEqual({ google: 'failed', returnTo: '/' });
+      expectStateCleared(ceiling!);
+      // The ceiling belongs to the callback: the start route of that address is not limited by it.
+      expect((await api().post(START).set('X-Forwarded-For', sprayIp).send({})).status).toBe(200);
+    },
+    60_000,
+  );
 
   it(
     'the OpenAPI document lists both routes, public, with the start body and the 302 of the callback',
@@ -627,7 +783,93 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
       expect(callback.responses).toHaveProperty('302');
       expect(docs.body.components.schemas['GoogleStartResponseDto'].properties).toHaveProperty('url');
       expect(Object.keys(docs.body.components.schemas['AcademyPublicDto'].properties)).toEqual(expect.arrayContaining(['googleSignIn', 'googleSignUp']));
+      const unlink = docs.body.paths['/api/users/{id}/google-identity']?.delete;
+      expect(unlink).toBeDefined();
+      expect(unlink.responses['200'].content['application/json'].schema.$ref).toBe('#/components/schemas/UserDetailDto');
+      expect(Object.keys(unlink.responses)).toEqual(expect.arrayContaining(['200', '400', '401', '403', '404']));
     },
     20_000,
   );
+
+  describe('DELETE /api/users/:id/google-identity', () => {
+    const unlink = async (callerId: string, targetId: string, headers: Record<string, string> = {}) =>
+      api().delete(`/api/users/${targetId}/google-identity`).set({ ...(await bearer(callerId)), ...headers });
+    const linkGoogle = (userId: string) => prisma.userIdentity.create({ data: { userId, provider: 'google', providerSubject: nextSub() } });
+    const unlinkEvents = (markId: string) =>
+      prisma.auditLog.findMany({
+        where: { id: { gt: markId }, action: 'users.identity.unlinked', OR: [{ actorUserId: { in: createdUserIds } }, { entityId: { in: createdUserIds } }] },
+        select: { action: true, actorUserId: true, entityId: true, metadata: true },
+      });
+
+    it('removes the identity with exactly one event and answers the detail; with nothing linked 200 and no event; allowed on oneself', async () => {
+      const admin = await createUser('unlink-admin', { roleKeys: ['academy_admin'] });
+      const target = await createUser('unlink-target', { roleKeys: ['student'] });
+      const identity = await linkGoogle(target.id);
+      const m = await mark();
+      const res = await unlink(admin.id, target.id);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body).toMatchObject({ id: target.id, email: target.email, googleLinkedAt: null });
+      expect(JSON.stringify(res.body)).not.toContain(identity.providerSubject);
+      expect(await prisma.userIdentity.count({ where: { userId: target.id } })).toBe(0);
+      expect(await unlinkEvents(m)).toEqual([{ action: 'users.identity.unlinked', actorUserId: admin.id, entityId: target.id, metadata: { provider: 'google' } }]);
+
+      // Nothing linked any more: the same answer, no write, no event.
+      const m2 = await mark();
+      const again = await unlink(admin.id, target.id);
+      expect(again.status).toBe(200);
+      expect(again.body.id).toBe(target.id);
+      expect(await unlinkEvents(m2)).toEqual([]);
+
+      // One's own Google identity, as the holder of users.update.
+      await linkGoogle(admin.id);
+      const own = await unlink(admin.id, admin.id);
+      expect(own.status).toBe(200);
+      expect(await prisma.userIdentity.count({ where: { userId: admin.id } })).toBe(0);
+      expect((await unlinkEvents(m2)).map((event) => event.entityId)).toEqual([admin.id]);
+
+      // The Google account signs in again only through a new link (here: the verified address of a student, linked again).
+      const relinked = await signIn({ sub: identity.providerSubject, email: target.email });
+      expect(locationOf(relinked).path).toBe('/auth/google/done');
+    });
+
+    it('needs users.update, never reaches a more privileged account (SEC-R-15), answers 404 for an unknown or soft-deleted user, 400 for a malformed id, 403 for a foreign Origin — and writes nothing', async () => {
+      const readerRole = await createRole('reader', ['users.read', 'users.read_contact']);
+      const updaterRole = await createRole('updater', ['users.read', 'users.update']);
+      const reader = await createUser('unlink-reader', { roleIds: [readerRole] });
+      const updater = await createUser('unlink-updater', { roleIds: [updaterRole] });
+      const privileged = await createUser('unlink-privileged', { roleKeys: ['academy_admin'] });
+      const student = await createUser('unlink-student', { roleKeys: ['student'] });
+      const deleted = await createUser('unlink-deleted', { roleKeys: ['student'], deletedAt: new Date(), status: 'archived' });
+      for (const user of [privileged, student, deleted]) await linkGoogle(user.id);
+      const m = await mark();
+
+      const noKey = await unlink(reader.id, student.id);
+      expect(noKey.status).toBe(403);
+      expect(noKey.body).toMatchObject({ code: 'permission_denied', missing: ['users.update'] });
+
+      const beyond = await unlink(updater.id, privileged.id);
+      expect(beyond.status).toBe(403);
+      expect(beyond.body.code).toBe('permission_denied');
+      expect(beyond.body.missing.length).toBeGreaterThan(0);
+
+      for (const id of [deleted.id, UNKNOWN_ID]) {
+        const missing = await unlink(updater.id, id);
+        expect(missing.status, id).toBe(404);
+        expect(missing.body.code).toBe('user_not_found');
+      }
+      expect((await unlink(updater.id, 'not-a-uuid')).status).toBe(400);
+      const foreign = await unlink(updater.id, student.id, { Origin: 'https://evil.example' });
+      expect(foreign.status).toBe(403);
+      expect(foreign.body.code).toBe('origin_forbidden');
+
+      expect(await prisma.userIdentity.count({ where: { userId: { in: [privileged.id, student.id, deleted.id] } } })).toBe(3);
+      expect(await unlinkEvents(m)).toEqual([]);
+
+      // Within reach and holding users.update: allowed; the reduced projection without users.read_contact.
+      const allowed = await unlink(updater.id, student.id);
+      expect(allowed.status).toBe(200);
+      expect(allowed.body).toMatchObject({ id: student.id, email: null, googleLinkedAt: null });
+      expect(await prisma.userIdentity.count({ where: { userId: student.id } })).toBe(0);
+    });
+  });
 });

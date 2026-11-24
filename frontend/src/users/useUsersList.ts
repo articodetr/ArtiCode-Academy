@@ -31,7 +31,8 @@ export const DEFAULT_FILTERS: UsersListFilters = {
 
 /** The list item that corresponds to a detail returned by a write (roles collapse to keys). */
 export function listItemOf(user: UserDetail): UserListItem {
-  // `mfaEnabledAt` belongs to the detail alone (API-013): a list row never carries it.
+  // `mfaEnabledAt`, `googleLinkedAt` and `awaitingRegistration` belong to the detail alone (API-013): a list row
+  // never carries them.
   const {
     roles,
     studentProfile: _student,
@@ -39,6 +40,8 @@ export function listItemOf(user: UserDetail): UserListItem {
     guardians: _guardians,
     students: _students,
     mfaEnabledAt: _mfaEnabledAt,
+    googleLinkedAt: _googleLinkedAt,
+    awaitingRegistration: _awaitingRegistration,
     ...summary
   } = user
   return { ...summary, roles: roles.map((role) => role.key).sort() }

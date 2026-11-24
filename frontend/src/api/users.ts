@@ -4,7 +4,10 @@
 // API-027 POST /api/users/:id/status, API-028 DELETE /api/users/:id and the
 // role assignment API-034 PUT /api/users/:id/roles. Since MFA-T04 the detail
 // carries `mfaEnabledAt` and API-212 POST /api/users/:id/mfa/reset clears a
-// user's two-step verification. Types mirror backend/src/users/users.dto.ts.
+// user's two-step verification. Since PORTAL-04 (Google sign-in) the detail
+// carries `googleLinkedAt` and `awaitingRegistration`, and
+// DELETE /api/users/:id/google-identity unlinks the user's Google account.
+// Types mirror backend/src/users/users.dto.ts.
 import { apiRequest } from './client'
 
 export const USER_STATUSES = ['invited', 'pending', 'active', 'suspended', 'archived'] as const
@@ -109,6 +112,20 @@ export interface UserDetail extends UserSummary {
    * never proves that it is off.
    */
   mfaEnabledAt: string | null
+  /**
+   * When the account was linked to a Google account (the link's creation);
+   * null while none is linked — and null for every account when the caller
+   * lacks `users.read_contact` (D-R07), so null alone never proves that none
+   * is linked. Absent from a server older than PORTAL-04.
+   */
+  googleLinkedAt?: string | null
+  /**
+   * True for a `pending` account that a visitor opened through self-registration
+   * and never completed: only its owner's link activates it, so the server
+   * refuses `activate` (`409 invalid_transition { allowed: ['delete'] }`).
+   * Always present on a PORTAL-04 server; absent from an older one.
+   */
+  awaitingRegistration?: boolean
   roles: UserRoleSummary[]
   studentProfile: StudentProfileSummary | null
   employeeProfile: EmployeeProfileSummary | null
@@ -139,6 +156,7 @@ export const USERS_PATHS = {
   status: (id: string) => `/api/users/${encodeURIComponent(id)}/status`,
   roles: (id: string) => `/api/users/${encodeURIComponent(id)}/roles`,
   mfaReset: (id: string) => `/api/users/${encodeURIComponent(id)}/mfa/reset`,
+  googleIdentity: (id: string) => `/api/users/${encodeURIComponent(id)}/google-identity`,
 } as const
 
 /** Query string of API-012: empty and default-false values are left out. */
@@ -300,4 +318,19 @@ export interface MfaResetResult {
 export function resetUserMfa(userId: string, reason?: string): Promise<MfaResetResult> {
   const trimmed = reason?.trim()
   return apiRequest<MfaResetResult>(USERS_PATHS.mfaReset(userId), { method: 'POST', body: trimmed ? { reason: trimmed } : undefined })
+}
+
+// ---------------------------------------------------------------------------
+// PORTAL-04 — unlinking the user's Google account
+// ---------------------------------------------------------------------------
+
+/**
+ * DELETE /api/users/:id/google-identity (`users.update`; the reach rule of the
+ * account — SEC-R-15 — applies): removes the link between the account and its
+ * Google account, without a body, and answers 200 with the detail (the
+ * caller's projection). Nothing linked: the same 200, nothing written.
+ * Errors: 404 `user_not_found`, 403 `permission_denied`.
+ */
+export function unlinkUserGoogleIdentity(userId: string): Promise<UserDetail> {
+  return apiRequest<UserDetail>(USERS_PATHS.googleIdentity(userId), { method: 'DELETE' })
 }

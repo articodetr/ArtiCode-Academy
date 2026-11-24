@@ -3,9 +3,10 @@
 // endpoint with the PKCE verifier (never logged: not the code, not a token,
 // not the secret); the ID token is verified with jose against Google's
 // published keys (one remote key set per process, cached by jose) and then its
-// nonce, subject and verified e-mail are checked. `verifyGoogleIdToken()` is
-// pure with an injected key set, so the tests verify REAL signed tokens against
-// a local key set; e2e suites replace the key set and the exchange.
+// nonce, subject and verified e-mail are checked, and the optional `hd` (the
+// Workspace domain) is read. `verifyGoogleIdToken()` is pure with an injected
+// key set, so the tests verify REAL signed tokens against a local key set; e2e
+// suites replace the key set and the exchange.
 import { Inject, Injectable } from '@nestjs/common';
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from 'jose';
 import type { JWTVerifyGetKey } from 'jose';
@@ -35,6 +36,13 @@ export interface GoogleIdentityClaims {
   email: string;
   /** `name`, when Google sent one. */
   name: string | null;
+  /**
+   * `hd`, the Google Workspace domain of the account, trimmed and lower-cased,
+   * when Google sent one (never for a consumer Gmail account). With the
+   * address it decides whether Google is authoritative for that address
+   * (`isGoogleAuthoritative()` in google-auth.service.ts).
+   */
+  hd: string | null;
 }
 
 /** Why a step at Google failed — a code only, never a value from the exchange (logged, never answered). */
@@ -60,7 +68,9 @@ export class GoogleOidcError extends Error {
  * Verifies a Google ID token: signature against `keys` (RS256 only), issuer,
  * audience = our client id, expiry with 60 s of clock tolerance; then the
  * `nonce` of this attempt, a non-empty `sub`, an `email` and
- * `email_verified === true`. Throws GoogleOidcError, never anything else.
+ * `email_verified === true`; `hd` is read when it is a non-empty string (no
+ * check — it only narrows what the account resolution allows). Throws
+ * GoogleOidcError, never anything else.
  */
 export async function verifyGoogleIdToken(
   idToken: string,
@@ -90,7 +100,9 @@ export async function verifyGoogleIdToken(
   if (email.length === 0 || email.length > MAX_EMAIL_LENGTH || !email.includes('@')) throw new GoogleOidcError('email_missing');
   if (payload['email_verified'] !== true) throw new GoogleOidcError('email_unverified');
   const name = typeof payload['name'] === 'string' ? payload['name'] : null;
-  return { sub, email, name };
+  const hostedDomain = typeof payload['hd'] === 'string' ? payload['hd'].trim().toLowerCase() : '';
+  const hd = hostedDomain.length > 0 && hostedDomain.length <= MAX_EMAIL_LENGTH ? hostedDomain : null;
+  return { sub, email, name, hd };
 }
 
 /** The key set of Google's published keys, one per process (jose caches the keys and refetches on rotation). */

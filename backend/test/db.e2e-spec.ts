@@ -82,6 +82,9 @@ const TABLES = [
   'exam_questions',
   'exam_attempts',
   'exam_answers',
+  // PORTAL-04 (20261124134334_portal04_subjects_google_identities): course subjects and Google sign-in identities.
+  'subjects',
+  'user_identities',
 ] as const;
 
 // PostgreSQL SQLSTATE codes

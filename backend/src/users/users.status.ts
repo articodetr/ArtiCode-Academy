@@ -15,7 +15,8 @@
 // PORTAL-03 (#207): a `pending` account WITHOUT a password was created by
 // self-registration and waits for its holder to open the e-mailed link — the
 // only way it becomes `active` (the password and the proof of the address
-// arrive together), so `activate` does not apply to it either: only `delete`.
+// arrive together), so `activate` does not apply to it either: only `delete`,
+// which removes the row itself while nothing else refers to it (deletesForGood()).
 import type { UserStatus } from '../generated/prisma/client.js';
 
 /** Actions of `POST /api/users/:id/status` (API-027). */
@@ -68,6 +69,18 @@ export function nextStatus(action: AccountAction, from: AccountState, options: A
 /** Actions allowed from a state, in catalogue order (the `allowed` detail of `invalid_transition`). */
 export function allowedActions(from: AccountState, options: AccountStateOptions = {}): AccountAction[] {
   return ACTIONS.filter((action) => nextStatus(action, from, options) !== null);
+}
+
+/**
+ * Whether a `delete` may remove the row for good instead of the soft delete
+ * (PORTAL-03, review #5): only the delete of a self-registered account still
+ * awaiting its holder — anybody can register any address, and a soft-deleted
+ * row would keep the address taken for ever. The service still keeps the soft
+ * delete when anything but the registration's own rows (its roles, its student
+ * profile, its tokens) refers to the account.
+ */
+export function deletesForGood(action: AccountAction, from: AccountState, options: AccountStateOptions = {}): boolean {
+  return action === 'delete' && from === 'pending' && options.awaitingRegistration === true;
 }
 
 /** `suspend`, `archive` and `delete` sign the user out of every device (`refresh_tokens.revoked_at`). */

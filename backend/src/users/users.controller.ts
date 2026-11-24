@@ -254,12 +254,14 @@ export class UsersController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(DEACTIVATE_USERS_PERMISSION)
   @ApiOperation({
-    summary: 'Soft-delete a user',
+    summary: 'Delete a user (soft; hard for a never-completed self-registration)',
     description:
       'Sets `deletedAt` and `status: archived`, revokes every session of the user and records one audit event `users.deleted` `{ from, to, reason, revokedSessions }`. ' +
       'The row stays and its e-mail/username remain reserved; the user disappears from the list and the detail (except with `includeDeleted=true`), cannot sign in, ' +
       'and no status action applies afterwards. Optional JSON body `{ reason }`. Requires `users.deactivate`; the target’s roles may not confer a permission the caller lacks; ' +
-      'nobody can delete themself; the last active academy admin cannot be deleted. The response follows the caller’s projection.',
+      'nobody can delete themself; the last active academy admin cannot be deleted. The response follows the caller’s projection. ' +
+      'PORTAL-04: a self-registered `pending` account its holder never completed (no password) and that nothing else references is removed for good instead, ' +
+      'so its e-mail address is free again — the event then carries `{ to: null, hard: true }`.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: UserDetailDto, description: 'The user after the deletion (`status: archived`, `deletedAt` set)' })

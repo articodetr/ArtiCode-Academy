@@ -61,10 +61,19 @@ describe('verifyGoogleIdToken', () => {
   it('accepts a valid token from either issuer spelling and returns the subject, the lower-cased e-mail and the name', async () => {
     for (const issuer of ['https://accounts.google.com', 'accounts.google.com']) {
       const claims = await verifyGoogleIdToken(await idToken({ issuer }), keys, { clientId: CLIENT_ID, nonce: NONCE });
-      expect(claims).toEqual({ sub: '108234567890123456789', email: 'learner@example.test', name: 'Learner One' });
+      expect(claims).toEqual({ sub: '108234567890123456789', email: 'learner@example.test', name: 'Learner One', hd: null });
     }
     const nameless = await verifyGoogleIdToken(await idToken({ claims: { name: 42 } }), keys, { clientId: CLIENT_ID, nonce: NONCE });
     expect(nameless.name).toBeNull();
+  });
+
+  it('reads the Workspace domain `hd` trimmed and lower-cased, and ignores one that is not a non-empty string', async () => {
+    const read = async (hd: unknown) => (await verifyGoogleIdToken(await idToken({ claims: { hd } }), keys, { clientId: CLIENT_ID, nonce: NONCE })).hd;
+    expect(await read(' Example.Test ')).toBe('example.test');
+    expect(await read('')).toBeNull();
+    expect(await read('   ')).toBeNull();
+    expect(await read(42)).toBeNull();
+    expect(await read(['example.test'])).toBeNull();
   });
 
   it('refuses another audience, another issuer, another signing key and an unknown key id', async () => {

@@ -9,19 +9,33 @@
 // outcome is a redirect the controller answers.
 //
 // Account resolution (common contract B), in one transaction where it writes:
-//   1. a `user_identities` row (google, sub) → that user;
-//   2. else the user with the same e-mail: linked automatically only when the
-//      account is `active` with a confirmed address of its own, or `pending`
-//      from self-registration without a password (it then becomes `active`
-//      with a confirmed address and its open confirmation links are retired);
+//   1. a `user_identities` row (google, sub) → that user (whatever its roles
+//      and address: a link made once keeps working);
+//   2. else the user with the same e-mail, under its row lock, in this order:
+//      Google not authoritative for the address → `link_required`; suspended,
+//      archived, soft-deleted or locked → `account_unavailable`; already
+//      linked to ANOTHER Google subject → `link_conflict`; holding any role
+//      but `student`/`guardian` → `link_required`; then linked automatically
+//      only when the account is `active` with a confirmed address of its own,
+//      or `pending` from self-registration without a password while sign-up
+//      is open (it then becomes `active` with a confirmed address and its open
+//      confirmation links are retired; sign-up closed → `registration_closed`);
 //      anything else → `link_required`;
 //   3. else a new student account — only while the academy accepts
-//      self-registration (`settings.selfRegistration.enabled === true`).
-// A suspended, archived, soft-deleted or locked account → `account_unavailable`
-// (no failed login is counted). Audit: `auth.google.linked { via }` when an
-// identity row is created, `users.self_registered { via: 'google' }` for a new
-// account; `auth.login.succeeded { via: 'google' }` comes from the session
-// code. Never the e-mail, the subject, a code or a token in metadata.
+//      self-registration (`settings.selfRegistration.enabled === true`, else
+//      `registration_closed`) and only for an address Google is authoritative
+//      for (else `email_not_authoritative`).
+// Google is AUTHORITATIVE for an address when it is a Gmail address
+// (`@gmail.com`, `@googlemail.com`) or the ID token's `hd` (the Workspace
+// domain) is the address's own domain: only then does `email_verified` say
+// that the person holds the address today — a consumer Google account made
+// with any other address was verified once, and that address may have
+// changed hands since. No failed login is ever counted here. A session refused
+// for a missing MFA key → `mfa_unavailable` (the second factor is never
+// skipped). Audit: `auth.google.linked { via }` when an identity row is
+// created, `users.self_registered { via: 'google' }` for a new account;
+// `auth.login.succeeded { via: 'google' }` comes from the session code. Never
+// the e-mail, the subject, a code or a token in metadata.
 import { isPendingSelfRegistration } from '../../account/registration.rules.js';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -63,6 +77,12 @@ export type GoogleLinkVia = 'existing_identity' | 'verified_email' | 'pending_re
 /** The seeded role every self-registered account gets — and nothing else. */
 export const SELF_REGISTERED_ROLE_KEY = 'student';
 
+/** The only roles an existing account may hold to be linked automatically by its e-mail (staff, teachers, admins and custom roles never are). */
+export const AUTO_LINKABLE_ROLE_KEYS: ReadonlySet<string> = new Set(['student', 'guardian']);
+
+/** Consumer Google addresses: Google is their mail provider, so it is authoritative for them without `hd`. */
+export const GMAIL_DOMAINS: ReadonlySet<string> = new Set(['gmail.com', 'googlemail.com']);
+
 const FULL_NAME_MIN = 2;
 const FULL_NAME_MAX = 200;
 const MAX_CODE_LENGTH = 2048;
@@ -93,6 +113,11 @@ const ACCOUNT_SELECT = {
 } satisfies Prisma.UserSelect;
 type AccountRow = Prisma.UserGetPayload<{ select: typeof ACCOUNT_SELECT }>;
 
+const LINK_TARGET_SELECT = {
+  ...ACCOUNT_SELECT,
+  roles: { select: { role: { select: { key: true } } } },
+} satisfies Prisma.UserSelect;
+
 /** A single string from an Express query value (`?x=a&x=b` is an array: refused). */
 function queryString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
@@ -107,6 +132,28 @@ export function isUnavailable(user: Pick<AccountRow, 'status' | 'deletedAt' | 'l
   if (user.deletedAt !== null) return true;
   if (user.status === 'suspended' || user.status === 'archived') return true;
   return user.lockedUntil !== null && user.lockedUntil > now;
+}
+
+/**
+ * True when Google is authoritative for the address of the ID token: a Gmail
+ * address, or a Workspace account whose `hd` is the address's own domain
+ * (case-insensitive, exact — a subdomain or a parent domain is not enough).
+ * Only then may an existing account be linked by its e-mail or a new account
+ * be created from it (review #1).
+ */
+export function isGoogleAuthoritative(claims: Pick<GoogleIdentityClaims, 'email' | 'hd'>): boolean {
+  const email = claims.email.trim().toLowerCase();
+  const at = email.lastIndexOf('@');
+  if (at <= 0 || at === email.length - 1) return false;
+  const domain = email.slice(at + 1);
+  if (GMAIL_DOMAINS.has(domain)) return true;
+  const hd = typeof claims.hd === 'string' ? claims.hd.trim().toLowerCase() : '';
+  return hd.length > 0 && hd === domain;
+}
+
+/** True when every role of the account may be linked automatically by its e-mail (no role at all included). */
+export function holdsOnlyAutoLinkableRoles(roleKeys: readonly string[]): boolean {
+  return roleKeys.every((key) => AUTO_LINKABLE_ROLE_KEYS.has(key));
 }
 
 /**
@@ -199,10 +246,12 @@ export class GoogleAuthService {
       if (isPendingMfa(outcome)) return { kind: 'mfa', challenge: outcome.challenge, expiresAt: outcome.expiresAt, returnTo };
       return { kind: 'session', session: outcome, returnTo };
     } catch (caught) {
-      // The status gate refused (the account changed between the resolution and now), or the account has
-      // MFA and the server has no usable key (`503 mfa_unavailable` — the second factor is never skipped).
-      if (caught instanceof AuthHttpException && caught.code !== 'mfa_unavailable') return failure('account_unavailable', caught.code);
-      return failure('failed', caught instanceof AuthHttpException ? caught.code : 'session_error');
+      // The account has MFA and the server has no usable key (`503 mfa_unavailable`): no session — the
+      // second factor is never skipped — and the visitor is told why. Any other refusal of the status gate
+      // means the account changed between the resolution and now.
+      if (caught instanceof AuthHttpException && caught.code === 'mfa_unavailable') return failure('mfa_unavailable', caught.code);
+      if (caught instanceof AuthHttpException) return failure('account_unavailable', caught.code);
+      return failure('failed', 'session_error');
     }
   }
 
@@ -232,30 +281,48 @@ export class GoogleAuthService {
     }
 
     const sameEmail = await tx.user.findUnique({ where: { email: claims.email }, select: { id: true } });
-    if (sameEmail) return this.linkExisting(tx, sameEmail.id, claims, now, ctx);
+    if (sameEmail) return this.linkExisting(tx, sameEmail.id, claims, signUpOpen, now, ctx);
     if (!signUpOpen) return { kind: 'refused', code: 'registration_closed' };
+    if (!isGoogleAuthoritative(claims)) return { kind: 'refused', code: 'email_not_authoritative' };
     return this.createAccount(tx, claims, now, ctx);
   }
 
   /** Step 2 under the user-row lock (`FOR NO KEY UPDATE` — never `FOR UPDATE`, KI-079). */
-  private async linkExisting(tx: Tx, userId: string, claims: GoogleIdentityClaims, now: Date, ctx: RequestContext): Promise<Resolution> {
+  private async linkExisting(
+    tx: Tx,
+    userId: string,
+    claims: GoogleIdentityClaims,
+    signUpOpen: boolean,
+    now: Date,
+    ctx: RequestContext,
+  ): Promise<Resolution> {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
-    const user = await tx.user.findUnique({ where: { id: userId }, select: ACCOUNT_SELECT });
-    if (!user || isUnavailable(user, now)) return { kind: 'refused', code: 'account_unavailable' };
+    const user = await tx.user.findUnique({ where: { id: userId }, select: LINK_TARGET_SELECT });
+    if (!user) return { kind: 'refused', code: 'account_unavailable' };
+    // First, before anything about the account: whoever Google is not authoritative for has not shown that the
+    // address is theirs today, so they learn that an account exists and nothing else (not its state, not its link).
+    if (!isGoogleAuthoritative(claims)) return { kind: 'refused', code: 'link_required' };
+    if (isUnavailable(user, now)) return { kind: 'refused', code: 'account_unavailable' };
     // One Google identity per account: another Google account is never swapped in automatically. The same
     // one means a parallel sign-in linked it while this one waited for the lock: it is simply used.
     const linked = await tx.userIdentity.findFirst({ where: { userId, provider: 'google' }, select: { id: true, providerSubject: true } });
     if (linked) {
-      if (linked.providerSubject !== claims.sub) return { kind: 'refused', code: 'link_required' };
+      if (linked.providerSubject !== claims.sub) return { kind: 'refused', code: 'link_conflict' };
       if (user.status !== 'active') return { kind: 'refused', code: 'account_unavailable' };
       await tx.userIdentity.update({ where: { id: linked.id }, data: { lastUsedAt: now } });
       return { kind: 'user', userId };
     }
+    // Staff, teachers, administrators and custom roles are never linked by their e-mail: a Google
+    // account holding their address would otherwise open a privileged session. They keep the password; an
+    // identity row that already exists keeps working (step 1).
+    if (!holdsOnlyAutoLinkableRoles(user.roles.map((grant) => grant.role.key))) return { kind: 'refused', code: 'link_required' };
 
     let via: GoogleLinkVia;
     if (user.status === 'active' && user.emailVerifiedAt !== null) {
       via = 'verified_email';
     } else if (isPendingSelfRegistration(user)) {
+      // Activating a self-registered account is a registration: only while the academy accepts them (review #7).
+      if (!signUpOpen) return { kind: 'refused', code: 'registration_closed' };
       via = 'pending_registration';
       await tx.user.update({ where: { id: userId }, data: { status: 'active', emailVerifiedAt: now } });
       // The address is proven now: every open confirmation link of the account is retired.

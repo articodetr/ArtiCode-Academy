@@ -68,6 +68,9 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   // PORTAL-03/PORTAL-04 (provisional): a student account created by the visitor (e-mail or Google) and its completion
   'users.self_registered',
   'users.self_registration.completed',
+  'users.self_registration.notice_sent',
+  // PORTAL-04 (provisional): an administrator removed a user's Google sign-in link
+  'users.identity.unlinked',
   'roles.',
   'roles.created',
   'roles.updated',

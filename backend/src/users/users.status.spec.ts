@@ -5,6 +5,7 @@ import {
   USER_STATUS_ACTIONS,
   accountState,
   allowedActions,
+  deletesForGood,
   isSelfForbidden,
   missingPermissionFor,
   nextStatus,
@@ -69,6 +70,16 @@ describe('users.status — transitions (T06 AC 1)', () => {
     for (const from of STATES) {
       if (from !== 'pending') expect(allowedActions(from, awaiting), from).toEqual(allowedActions(from));
     }
+  });
+
+  it('removes the row for good only on the delete of a self-registered account awaiting its holder (review #5)', () => {
+    const awaiting = { awaitingRegistration: true };
+    expect(deletesForGood('delete', 'pending', awaiting)).toBe(true);
+    // A pending account with a password, or without the option, keeps the soft delete.
+    expect(deletesForGood('delete', 'pending', { awaitingRegistration: false })).toBe(false);
+    expect(deletesForGood('delete', 'pending')).toBe(false);
+    for (const from of STATES) if (from !== 'pending') expect(deletesForGood('delete', from, awaiting), from).toBe(false);
+    for (const action of USER_STATUS_ACTIONS) expect(deletesForGood(action, 'pending', awaiting), action).toBe(false);
   });
 
   it('derives the state from the status and the soft-delete marker', () => {

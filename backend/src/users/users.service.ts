@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { isPendingSelfRegistration } from '../account/registration.rules.js';
+import { PENDING_SELF_REGISTRATION_WHERE, isPendingSelfRegistration } from '../account/registration.rules.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { ACADEMY_ADMIN_ROLE_KEY } from '../authorization/system-roles.js';
@@ -44,12 +44,13 @@ import { SELF_FORBIDDEN_ROLES_ACTION, diffRoleKeys, planProfiles, removesAcademy
 import {
   accountState,
   allowedActions,
+  deletesForGood,
   isSelfForbidden,
   nextStatus,
   removesActiveAccount,
   revokesSessions,
 } from './users.status.js';
-import type { AccountAction, AccountStateOptions } from './users.status.js';
+import type { AccountAction, AccountState, AccountStateOptions } from './users.status.js';
 import { calendarDateToDate, escapeLikePattern } from './users.validation.js';
 
 /**
@@ -65,7 +66,10 @@ export const USERS_AUDIT_ACTIONS = {
   updated: 'users.updated',
   /** T06: every status action (`activate`/`suspend`/`archive`/`restore`/`unlock`), metadata `{ action, from, to, reason, … }`. */
   statusChanged: 'users.status.changed',
-  /** T06: soft delete, metadata `{ from, to: 'archived', reason, revokedSessions }`. */
+  /**
+   * T06: soft delete, metadata `{ action, from, to: 'archived', reason, revokedSessions }`; the removal for good of a
+   * self-registered account awaiting its holder (PORTAL-03, review #5) records `{ action, from: 'pending', to: null, reason, hard: true }`.
+   */
   deleted: 'users.deleted',
   /** T07: role replacement, metadata `{ added, removed, roles, profilesCreated? }` (keys only). */
   rolesChanged: 'users.roles.changed',
@@ -106,6 +110,8 @@ const DETAIL_SELECT = {
   ...SUMMARY_SELECT,
   // The MFA timestamp only — never `mfaSecret`, `mfaPendingSecret`, `mfaLastStep` or the recovery codes.
   mfaEnabledAt: true,
+  // When the Google link was made — never its subject or the address Google reported (one per user: uq_user_identities_user_provider).
+  identities: { where: { provider: 'google' }, select: { createdAt: true }, take: 1 },
   roles: { select: { role: { select: { key: true, label: true } } } },
   studentProfile: { select: { studentNumber: true, dateOfBirth: true, enrolledOn: true } },
   employeeProfile: {
@@ -224,7 +230,7 @@ function toListItem(row: ListRow, view: UsersProjection): UserListItemDto {
   return { ...toSummary(row, view), roles: row.roles.map((grant) => grant.role.key).sort() };
 }
 
-function toDetail(row: DetailRow, view: UsersProjection): UserDetailDto {
+function toDetail(row: DetailRow, view: UsersProjection, awaitingRegistration: boolean): UserDetailDto {
   const roles: UserRoleSummaryDto[] = row.roles
     .map((grant) => ({ key: grant.role.key, label: asLocalizedText(grant.role.label, grant.role.key) }))
     .sort((a, b) => a.key.localeCompare(b.key));
@@ -245,6 +251,8 @@ function toDetail(row: DetailRow, view: UsersProjection): UserDetailDto {
   return {
     ...toSummary(row, view),
     mfaEnabledAt: view === 'full' ? isoOrNull(row.mfaEnabledAt) : null,
+    googleLinkedAt: view === 'full' ? isoOrNull(row.identities[0]?.createdAt ?? null) : null,
+    awaitingRegistration,
     roles,
     studentProfile: row.studentProfile
       ? {
@@ -362,7 +370,16 @@ export class UsersService {
       select: DETAIL_SELECT,
     });
     if (!row) throw usersError.userNotFound();
-    return toDetail(row, view);
+    return toDetail(row, view, await this.awaitsRegistration(row));
+  }
+
+  /**
+   * `isPendingSelfRegistration()` of the row without reading its password hash: only a `pending` account can be one,
+   * and for it the rule runs as a filter (PENDING_SELF_REGISTRATION_WHERE).
+   */
+  private async awaitsRegistration(row: { id: string; status: string }): Promise<boolean> {
+    if (row.status !== 'pending') return false;
+    return (await this.prisma.db.user.count({ where: { id: row.id, ...PENDING_SELF_REGISTRATION_WHERE } })) === 1;
   }
 
   // ------------------------------------------------------------- create
@@ -602,7 +619,9 @@ export class UsersService {
    * MOD-03-T06: soft delete — `deleted_at = now()` and `status = archived`,
    * every refresh token revoked, one `users.deleted` event. The row stays
    * (history refers to it) and its e-mail/username remain reserved by the
-   * unique indexes. Nothing applies to a deleted account afterwards.
+   * unique indexes. Nothing applies to a deleted account afterwards. The one
+   * exception: a self-registered account still awaiting its holder, with
+   * nothing else referring to it, is removed for good (deleteForGood()).
    */
   softDelete(id: string, input: DeleteUserDto, caller: AuthPrincipal, ctx: RequestContext, view: UsersProjection): Promise<UserDetailDto> {
     return this.transition(id, 'delete', input.reason ?? null, caller, ctx, view);
@@ -614,7 +633,9 @@ export class UsersService {
    * confer a permission the caller lacks (SEC-R-17) → 403 `self_forbidden` →
    * 409 `invalid_transition` → inside the transaction 409 `last_admin`. A
    * self-registered `pending` account without a password allows `delete` only
-   * (PORTAL-03: it becomes `active` through its e-mailed link alone).
+   * (PORTAL-03: it becomes `active` through its e-mailed link alone), and that
+   * delete removes the row for good while nothing else refers to it
+   * (deleteForGood(), review #5).
    * The status is written with a conditional update, so a concurrent change
    * makes the loser fail with `invalid_transition` instead of overwriting.
    */
@@ -636,6 +657,11 @@ export class UsersService {
     if (to === null) throw usersError.invalidTransition(from, action, allowedActions(from, options));
     if (action === 'unlock' && target.lockedUntil === null && target.failedLoginCount === 0) {
       return this.getById(id, false, view);
+    }
+    if (deletesForGood(action, from, options)) {
+      const removed = await this.deleteForGood(id, from, reason, caller, ctx, view);
+      if (removed) return removed;
+      // Something else refers to the account (or it no longer awaits its holder): the soft delete below.
     }
 
     const isAdmin = target.roles.some((grant) => grant.role.key === ACADEMY_ADMIN_ROLE_KEY);
@@ -701,6 +727,53 @@ export class UsersService {
     }
     assertWithinReach(user.roles.map((grant) => grant.role), caller);
     return user;
+  }
+
+  /**
+   * PORTAL-03 (review #5): the delete of a self-registered account still
+   * awaiting its holder removes the row, so the address is free again —
+   * anybody can register any address, and a soft-deleted row would keep it
+   * taken by the unique index for ever. One transaction, on the row locked
+   * `FOR UPDATE`: the lock the DELETE takes anyway, taken first so that no row
+   * can start referring to the account (a foreign-key insert waits for it)
+   * between the check and the delete — such an account is never the recipient
+   * of an announcement (it is not `active`), the long key-share holder of
+   * KI-079. The account must still await its holder and nothing but the
+   * registration's own rows may refer to it (referencedBeyondRegistration());
+   * otherwise null, and the caller soft-deletes it like any account. Its roles,
+   * its student profile and its tokens go with it (ON DELETE CASCADE); its
+   * audit rows stay with their entity id. One `users.deleted { hard: true }`.
+   * The answer is the detail as it stood, marked deleted (`status: archived`,
+   * `deletedAt`) like the answer of a soft delete — the row is gone and cannot
+   * be read again.
+   */
+  private async deleteForGood(
+    id: string,
+    from: AccountState,
+    reason: string | null,
+    caller: AuthPrincipal,
+    ctx: RequestContext,
+    view: UsersProjection,
+  ): Promise<UserDetailDto | null> {
+    const now = new Date();
+    return this.prisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR UPDATE`;
+      const row = await tx.user.findFirst({ where: { id, deletedAt: null, ...PENDING_SELF_REGISTRATION_WHERE }, select: DETAIL_SELECT });
+      if (!row || (await referencedBeyondRegistration(tx, id))) return null;
+      await tx.user.delete({ where: { id }, select: { id: true } });
+      await this.audit.record(
+        {
+          action: USERS_AUDIT_ACTIONS.deleted,
+          actorUserId: caller.id,
+          entityType: 'users',
+          entityId: id,
+          metadata: { action: 'delete', from, to: null, reason, hard: true },
+          ...ctx,
+        },
+        tx,
+      );
+      return toDetail({ ...row, status: 'archived', deletedAt: now, updatedAt: now }, view, false);
+    });
   }
 
   // -------------------------------------------------------- roles (T07)
@@ -909,6 +982,45 @@ function assertWithinReach(roles: readonly RoleGrants[], caller: AuthPrincipal):
 
 function holdsAcademyAdmin(grants: readonly { role: RoleRow }[]): boolean {
   return grants.some((grant) => grant.role.key === ACADEMY_ADMIN_ROLE_KEY);
+}
+
+/** The rows a self-registration creates for its account (account/registration.service.ts); they go with it. */
+const REGISTRATION_FOOTPRINT: ReadonlySet<string> = new Set(['user_roles.user_id', 'student_profiles.user_id', 'verification_tokens.user_id']);
+
+function quoteIdentifier(name: string): string {
+  return `"${name.replaceAll('"', '""')}"`;
+}
+
+/**
+ * Whether any row but the registration's own refers to the account. Every
+ * foreign key of the database that references `users(id)` is read from the
+ * catalog — a table added later is covered without a change here — and each
+ * one outside REGISTRATION_FOOTPRINT is probed for the id: one EXISTS over a
+ * UNION ALL, whose identifiers come from the catalog (quoted) and whose id is
+ * a parameter. An enrollment, an invoice, a guardian link, a notification, an
+ * identity, a session, an audit row the account wrote, a role it assigned —
+ * anything — keeps the soft delete.
+ */
+async function referencedBeyondRegistration(tx: Prisma.TransactionClient, id: string): Promise<boolean> {
+  const references = await tx.$queryRaw<{ schema_name: string; table_name: string; column_name: string }[]>`
+    SELECT n.nspname AS schema_name, t.relname AS table_name, a.attname AS column_name
+    FROM pg_constraint c
+    CROSS JOIN LATERAL unnest(c.conkey, c.confkey) AS k(attnum, refnum)
+    JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+    JOIN pg_attribute r ON r.attrelid = c.confrelid AND r.attnum = k.refnum
+    WHERE c.contype = 'f' AND c.confrelid = 'users'::regclass AND r.attname = 'id'
+    ORDER BY 1, 2, 3`;
+  const probes = references
+    .filter((ref) => !REGISTRATION_FOOTPRINT.has(`${ref.table_name}.${ref.column_name}`))
+    .map(
+      (ref) =>
+        Prisma.sql`SELECT 1 FROM ${Prisma.raw(`${quoteIdentifier(ref.schema_name)}.${quoteIdentifier(ref.table_name)}`)} WHERE ${Prisma.raw(quoteIdentifier(ref.column_name))} = ${id}::uuid`,
+    );
+  if (probes.length === 0) return false;
+  const [result] = await tx.$queryRaw<{ referenced: boolean }[]>`SELECT EXISTS (${Prisma.join(probes, ' UNION ALL ')}) AS referenced`;
+  return result?.referenced === true;
 }
 
 /**

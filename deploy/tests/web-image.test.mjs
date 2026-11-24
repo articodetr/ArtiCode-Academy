@@ -38,7 +38,8 @@
 //   plus the TEST-200 checks that apply: no .env file and no secret value of the local
 //   env files in any layer, the non-root user (no capability, no-new-privileges),
 //   cache and security headers, compression, the 2 MB /api body limit, the JSON access
-//   log on stdout without the one-time tokens of invitation/reset links, the
+//   log on stdout without the one-time tokens of invitation/reset links (nor the
+//   two-step challenge in the Location of a Google sign-in's redirect), the
 //   HEALTHCHECK, and the image size.
 //
 // Prints PASS / FAIL / SKIP lines and, for the secret scan, counts only — never a
@@ -459,11 +460,15 @@ function checkAdapt() {
 // --- AC1..AC3 with a stub upstream ---------------------------------------------
 // Echoes what reaches the upstream; sets the response headers an API would, so the
 // test sees whether Caddy leaves them alone. `x-stub-drop` closes the connection
-// without an answer (Caddy's 502); `x-stub-cut` breaks a response half-way.
+// without an answer (Caddy's 502); `x-stub-cut` breaks a response half-way;
+// a GET of /api/stub-redirect/<token> answers the 302 of the Google callback with the
+// two-step challenge `/login#google-mfa=<token>&returnTo=%2F` (the token rides in the
+// path, which the URI filter already cuts — never in a request header, which Caddy logs).
 const STUB = [
   "const http=require('http');",
   "http.createServer((q,s)=>{q.on('error',()=>{});",
   "if(q.headers['x-stub-drop']){q.socket.destroy();return}",
+  "if(q.url.startsWith('/api/stub-redirect/')){s.writeHead(302,{location:'/login#google-mfa='+q.url.split('/').pop()+'&returnTo=%2F','cache-control':'no-store'});s.end();return}",
   "if(q.headers['x-stub-cut']){s.writeHead(200,{'content-type':'application/json','content-length':'4096'});s.write('{\"partial\":');setTimeout(()=>q.socket.destroy(),100);return}",
   "let n=0;q.on('data',c=>{n+=c.length});",
   "q.on('end',()=>{s.writeHead(200,{'content-type':'application/json','x-frame-options':'SAMEORIGIN','cache-control':'no-store','x-stub':'yes'});",
@@ -622,7 +627,7 @@ async function checkWithStub() {
     );
 
     // A response Caddy writes itself (the upstream gave none): empty, no Server header.
-    const tokens = { link: token(), referer: token(), api: token(), cookie: token(), bearer: token(), dropped: token(), cut: token() };
+    const tokens = { link: token(), referer: token(), api: token(), cookie: token(), bearer: token(), dropped: token(), cut: token(), location: token() };
     const dropped = await send(port, { method: 'POST', path: `/api/account/password-reset/${tokens.dropped}/confirm`, headers: { 'x-stub-drop': '1', 'content-type': 'application/json' }, body: '{}' });
     check(
       dropped.status === 502 && dropped.body.length === 0 && !('server' in dropped.headers),
@@ -638,6 +643,8 @@ async function checkWithStub() {
     await send(port, { path: `/invite/${tokens.link}`, headers: { referer: `${origin}/reset-password/${tokens.referer}`, cookie: `aca_refresh=${tokens.cookie}`, authorization: `Bearer ${tokens.bearer}` } });
     await send(port, { path: `/api/account/invitations/${tokens.api}` });
     await send(port, { path: `/api/users/${userId}?limit=5` });
+    // The Google callback's 302 to the two-step challenge: a fragment the browser never sends, but a response header Caddy logs.
+    await send(port, { path: `/api/stub-redirect/${tokens.location}` });
     await sleep(800);
     const logs = docker(['logs', web]);
     const access = logs.stdout
@@ -656,6 +663,8 @@ async function checkWithStub() {
     const redactedLink = entries.find((e) => e.request.uri === '/invite/REDACTED' && e.request.headers?.Referer);
     const droppedEntry = entries.find((e) => e.request.uri === '/api/account/password-reset/REDACTED/confirm');
     const stderrQuotesCut = logs.stderr.includes('/api/account/invitations/REDACTED');
+    const redirectEntry = entries.find((e) => e.request.uri === '/api/stub-redirect/REDACTED');
+    const redactedLocation = redirectEntry?.status === 302 && (redirectEntry.resp_headers?.Location ?? [])[0] === '/login#google-mfa=REDACTED&returnTo=%2F';
     check(
       access.length > 0 && access.every(Boolean) && entries.length >= 10 && entries.every((e) => /^http\.log\.access/.test(e.logger ?? '')),
       'the access log is JSON on stdout',
@@ -663,10 +672,10 @@ async function checkWithStub() {
       `${access.length} stdout lines, ${entries.length} access entries`,
     );
     check(
-      leaked.length === 0 && redactedLink && entries.some((e) => e.request.uri === '/api/account/invitations/REDACTED') && entries.some((e) => e.request.uri === `/api/users/${userId}?limit=5`) && /\/reset-password\/REDACTED$/.test(redactedLink.request.headers.Referer[0] ?? ''),
+      leaked.length === 0 && redactedLink && redactedLocation && entries.some((e) => e.request.uri === '/api/account/invitations/REDACTED') && entries.some((e) => e.request.uri === `/api/users/${userId}?limit=5`) && /\/reset-password\/REDACTED$/.test(redactedLink.request.headers.Referer[0] ?? ''),
       'the logs carry no one-time token, cookie or bearer token',
-      `${Object.keys(tokens).length} tokens, 0 in stdout or stderr: /invite/REDACTED, /api/account/invitations/REDACTED, Referer …/reset-password/REDACTED${stderrQuotesCut ? ', the stderr report of the broken response too' : ''}; ids (uuid) and queries kept; Cookie and Authorization redacted by Caddy`,
-      `found in the logs: ${leaked.join(', ') || 'none'}; Referer entry: ${JSON.stringify(redactedLink?.request?.headers?.Referer ?? null)}; uuid entry: ${entries.some((e) => e.request.uri === `/api/users/${userId}?limit=5`)}`,
+      `${Object.keys(tokens).length} tokens, 0 in stdout or stderr: /invite/REDACTED, /api/account/invitations/REDACTED, Referer …/reset-password/REDACTED, Location /login#google-mfa=REDACTED${stderrQuotesCut ? ', the stderr report of the broken response too' : ''}; ids (uuid) and queries kept; Cookie and Authorization redacted by Caddy`,
+      `found in the logs: ${leaked.join(', ') || 'none'}; Referer entry: ${JSON.stringify(redactedLink?.request?.headers?.Referer ?? null)}; Location entry: ${JSON.stringify(redirectEntry?.resp_headers?.Location ?? null)}; uuid entry: ${entries.some((e) => e.request.uri === `/api/users/${userId}?limit=5`)}`,
     );
     check(
       droppedEntry?.status === 502 && typeof droppedEntry.error === 'string' && droppedEntry.error.length > 0,

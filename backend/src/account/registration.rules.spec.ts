@@ -1,7 +1,8 @@
-// PORTAL-03 (#207) — the body rules of self-registration and the per-(IP, e-mail) tracker of its limit; no database.
+// PORTAL-03 (#207) — the body rules of self-registration and the per-client trackers of its limits; no database.
 import { describe, expect, it } from 'vitest';
 import {
   FULL_NAME_MAX_LENGTH,
+  PENDING_SELF_REGISTRATION_WHERE,
   checkCompleteBody,
   checkRegisterBody,
   emailProblem,
@@ -11,7 +12,7 @@ import {
   normalizeRegistrationEmail,
   passwordShapeProblem,
 } from './registration.rules.js';
-import { registrationClientTracker } from './registration.throttle.js';
+import { completionClientTracker, registrationClientTracker } from './registration.throttle.js';
 
 describe('registration.rules — fields', () => {
   it('words a full name in the contract problem codes, counting characters as a person sees them', () => {
@@ -63,6 +64,9 @@ describe('registration.rules — fields', () => {
     for (const status of ['invited', 'active', 'suspended', 'archived']) {
       expect(isPendingSelfRegistration({ status, passwordHash: null }), status).toBe(false);
     }
+    // The query-filter form says the same.
+    expect(isPendingSelfRegistration(PENDING_SELF_REGISTRATION_WHERE)).toBe(true);
+    expect(PENDING_SELF_REGISTRATION_WHERE).toEqual({ status: 'pending', passwordHash: null });
   });
 
   it('normalises the address like every stored e-mail', () => {
@@ -126,5 +130,17 @@ describe('registration.throttle — the per-client key', () => {
     expect(registrationClientTracker({ ip: '10.0.0.1', body: { email: 42 } })).toBe('10.0.0.1|register:');
     expect(registrationClientTracker({ ip: '10.0.0.1' })).toBe('10.0.0.1|register:');
     expect(registrationClientTracker({ body: { email: 'a@b.test' } })).toBe('|register:a@b.test');
+  });
+
+  it('keys a completion by IP and a digest of the token, never the token itself', () => {
+    const token = 'A'.repeat(43);
+    const key = completionClientTracker({ ip: '10.0.0.1', params: { token } });
+    const DIGEST_KEY = /^10\.0\.0\.1\|register-complete:[0-9a-f]{32}$/;
+    expect(key).toMatch(DIGEST_KEY);
+    expect(key).not.toContain(token);
+    expect(completionClientTracker({ ip: '10.0.0.1', params: { token } })).toBe(key);
+    expect(completionClientTracker({ ip: '10.0.0.2', params: { token } })).not.toBe(key);
+    expect(completionClientTracker({ ip: '10.0.0.1', params: { token: 'B'.repeat(43) } })).not.toBe(key);
+    expect(completionClientTracker({ ip: '10.0.0.1' })).toMatch(DIGEST_KEY);
   });
 });

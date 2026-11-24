@@ -167,7 +167,16 @@ export function buildAuthorizationUrl(input: {
   return url.toString();
 }
 
-/** Codes of `/login?google=<code>` (common contract B). */
+/**
+ * Codes of `/login?google=<code>` (common contract B): `cancelled` (refused at
+ * Google), `failed`, `unavailable` (not configured), `registration_closed`,
+ * `link_required` (an account with this e-mail exists but is not linked
+ * automatically), `account_unavailable`, `link_conflict` (that account is
+ * already linked to ANOTHER Google account), `mfa_unavailable` (the account
+ * has two-step verification and the server has no usable key) and
+ * `email_not_authoritative` (a new person whose address Google is not
+ * authoritative for — e-mail registration instead).
+ */
 export const GOOGLE_FAILURE_CODES = [
   'cancelled',
   'failed',
@@ -175,6 +184,9 @@ export const GOOGLE_FAILURE_CODES = [
   'registration_closed',
   'link_required',
   'account_unavailable',
+  'link_conflict',
+  'mfa_unavailable',
+  'email_not_authoritative',
 ] as const;
 export type GoogleFailureCode = (typeof GOOGLE_FAILURE_CODES)[number];
 
@@ -190,8 +202,12 @@ export function doneRedirect(returnTo: unknown): string {
 
 /**
  * `302 /login#google-mfa=<challenge>&expiresAt=<ISO>&returnTo=<path>` — the
- * account has two-step verification. A fragment is never sent to a server and
- * never written to an access log; the frontend finishes with API-211.
+ * account has two-step verification; the frontend finishes with API-211. The
+ * browser never sends a fragment to a server, so the challenge is in no
+ * request line, Referer or upstream access log. It IS in the `Location`
+ * header of this 302, though, and a proxy that logs response headers would
+ * write it down: the `web` server's access log (deploy/Caddyfile) redacts
+ * every run of 40 or more base64url characters of `resp_headers>Location`.
  */
 export function mfaRedirect(challenge: string, expiresAt: Date, returnTo: unknown): string {
   const fragment = new URLSearchParams({

@@ -1,4 +1,4 @@
-import { Body, Catch, Controller, Get, HttpCode, HttpException, HttpStatus, Injectable, Logger, Post, Req, Res, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Catch, Controller, Get, HttpCode, HttpException, HttpStatus, Injectable, Logger, Post, Req, Res, UseFilters } from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -12,10 +12,8 @@ import {
   ApiTags,
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
-import { Throttle, normalizeIp } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { Env } from '../../config/env.schema.js';
-import { AuthThrottlerGuard } from '../auth-throttler.guard.js';
 import { AuthErrorDto } from '../auth.dto.js';
 import { requestContext } from '../cookies.js';
 import type { RefreshCookieOptions } from '../cookies.js';
@@ -28,14 +26,7 @@ import { GoogleStartDto, GoogleStartResponseDto } from './google-auth.dto.js';
 import { clearGoogleStateCookie, googleCookiePath, readGoogleStateCookie, setGoogleStateCookie } from './google.cookie.js';
 import type { GoogleCookieOptions } from './google.cookie.js';
 import { DEFAULT_RETURN_TO, doneRedirect, failureRedirect, mfaRedirect } from './google-state.js';
-
-const WINDOW_MS = 15 * 60 * 1000;
-/** Per IP only — never a body field (the start body carries no identifier, the callback no body at all). */
-const ipTracker = (req: Record<string, any>): string => normalizeIp(typeof req['ip'] === 'string' ? req['ip'] : '');
-/** 20 sign-in attempts per 15 minutes per IP. */
-export const GOOGLE_START_LIMIT = 20;
-/** 30 returns from Google per 15 minutes per IP. */
-export const GOOGLE_CALLBACK_LIMIT = 30;
+import { GoogleCallbackThrottle, GoogleStartThrottle } from './google-throttle.js';
 
 function googleCookieOptions(config: ConfigService<Env, true>): GoogleCookieOptions {
   return { secure: config.get('AUTH_COOKIE_SECURE', { infer: true }), path: googleCookiePath(config.get('API_PREFIX', { infer: true })) };
@@ -79,7 +70,7 @@ export class GoogleCallbackExceptionFilter implements ExceptionFilter {
 
 @ApiTags('auth')
 @Controller('auth/google')
-@UseGuards(AuthThrottlerGuard)
+// The rate limits live on each route (google-throttle.ts): the callback's guard adds a per-IP ceiling of its own.
 export class GoogleAuthController {
   private readonly sessionCookie: RefreshCookieOptions;
   private readonly stateCookie: GoogleCookieOptions;
@@ -96,13 +87,13 @@ export class GoogleAuthController {
   @Post('start')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @Throttle({ login: { limit: GOOGLE_START_LIMIT, ttl: WINDOW_MS, getTracker: ipTracker } })
+  @GoogleStartThrottle()
   @ApiOperation({
     summary: 'Start a Google sign-in (PORTAL-04)',
     description:
       'Answers the Google authorization URL (authorization code with PKCE S256, scope `openid email profile`, `state`, `nonce`, `prompt=select_account`) and sets the httpOnly cookie `aca_google` ' +
       '(SameSite=Lax — it must come back on Google’s redirect —, Secure like the session cookie, Path `/api/auth/google`, 10 minutes) holding the signed state, nonce, PKCE verifier and `returnTo`. ' +
-      'The frontend then navigates to `url`. Public; needs an acceptable Origin like every POST; 20 per 15 minutes per IP. Records nothing.',
+      'The frontend then navigates to `url`. Public; needs an acceptable Origin like every POST; 200 per 15 minutes per IP. Records nothing.',
   })
   @ApiOkResponse({ type: GoogleStartResponseDto })
   @ApiBadRequestResponse({ description: 'Validation failed (a field other than `returnTo`)' })
@@ -118,7 +109,7 @@ export class GoogleAuthController {
 
   @Get('callback')
   @Public()
-  @Throttle({ login: { limit: GOOGLE_CALLBACK_LIMIT, ttl: WINDOW_MS, getTracker: ipTracker } })
+  @GoogleCallbackThrottle()
   @UseFilters(GoogleCallbackExceptionFilter)
   @ApiOperation({
     summary: 'Google’s redirect back after the sign-in (PORTAL-04)',
@@ -127,9 +118,14 @@ export class GoogleAuthController {
       'Success: the session cookie `aca_refresh` is set exactly as a password sign-in sets it, then `/auth/google/done?returnTo=<path>`. ' +
       'An account with two-step verification: no session, `/login#google-mfa=<challenge>&expiresAt=<ISO>&returnTo=<path>` (a fragment — finish with `POST /api/auth/login/mfa`). ' +
       'Failure: `/login?google=<code>&returnTo=<path>` with `cancelled` (refused at Google), `failed` (state or cookie missing, forged or expired, the token exchange or the ID-token check failed, or the rate limit), ' +
-      '`unavailable` (not configured), `registration_closed` (a new person while the academy accepts no self-registration), `link_required` (an account with this e-mail exists but cannot be linked automatically — ' +
-      'sign in with the password and confirm the address first) or `account_unavailable` (suspended, archived, deleted or locked). ' +
-      'A new account is a student account (the `student` role and a student profile) with a confirmed address and no password. 30 per 15 minutes per IP. ' +
+      '`unavailable` (not configured), `registration_closed` (a new person — or a self-registered account awaiting completion — while the academy accepts no self-registration), ' +
+      '`link_required` (an account with this e-mail exists but is not linked automatically: Google is not authoritative for the address, the account holds a role other than student/guardian, ' +
+      'or its address is not confirmed — sign in with the password), `link_conflict` (that account is already linked to another Google account), ' +
+      '`account_unavailable` (suspended, archived, deleted or locked), `mfa_unavailable` (the account has two-step verification and the server has no usable key) or ' +
+      '`email_not_authoritative` (a new person whose address Google is not authoritative for — register by e-mail). ' +
+      'Google is authoritative for a Gmail address (`@gmail.com`, `@googlemail.com`) or when the ID token’s `hd` is the address’s own domain. ' +
+      'A new account is a student account (the `student` role and a student profile) with a confirmed address and no password. ' +
+      '30 per 15 minutes per (IP, state cookie — a digest of it) and 300 per 15 minutes per IP; a refusal is the `failed` redirect too. ' +
       'Events: `auth.google.linked { via }` when an identity is linked, `users.self_registered { via: google }` for a new account, `auth.login.succeeded { via: google }` for a session.',
   })
   @ApiQuery({ name: 'code', required: false, type: String, description: 'The authorization code Google issued' })

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
+import { GoogleIdentityController } from '../auth/google/google-identity.controller.js';
+import { GoogleIdentityService } from '../auth/google/google-identity.service.js';
 import { UsersController } from './users.controller.js';
 import { UsersService } from './users.service.js';
 
@@ -10,12 +12,15 @@ import { UsersService } from './users.service.js';
  * of two-step verification, API-212); invitations and password reset live in
  * AccountModule, guardian links in GuardiansModule. Imports AuthModule for
  * MfaCore (it also registers the global guards); relies on PrismaModule and
- * the global AuditModule.
+ * the global AuditModule. PORTAL-04: the unlink of a user's Google identity
+ * (`DELETE /api/users/:id/google-identity`, auth/google/google-identity.*) is
+ * registered here because it answers the user detail through UsersService and
+ * AuthModule cannot import this module.
  */
 @Module({
   imports: [AuthModule],
-  controllers: [UsersController],
-  providers: [UsersService],
+  controllers: [UsersController, GoogleIdentityController],
+  providers: [UsersService, GoogleIdentityService],
   exports: [UsersService],
 })
 export class UsersModule {}

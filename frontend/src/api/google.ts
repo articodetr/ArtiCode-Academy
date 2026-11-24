@@ -25,12 +25,19 @@ export interface GoogleStartResponse {
 /** Client-side code of the error thrown when the server's answer is not an address this page may leave for. */
 export const GOOGLE_URL_INVALID = 'google_url_invalid'
 
-/** Google's authorization page is always served over `https:`; anything else (a `javascript:` URL) is never followed. */
+/** The one origin of Google's authorization page (the server builds `https://accounts.google.com/o/oauth2/v2/auth?…`). */
+export const GOOGLE_AUTHORIZATION_ORIGIN = 'https://accounts.google.com'
+
+/**
+ * Only Google's own authorization page is ever followed: `https://accounts.google.com/…` on the default port, without
+ * credentials. Anything else — a `javascript:` URL, plain http, another host (`accounts.google.com.evil.example`), a
+ * port — is refused, whatever the server answered.
+ */
 export function isGoogleAuthorizationUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.length === 0) return false
   try {
     const url = new URL(value)
-    return url.protocol === 'https:' && url.hostname !== '' && url.username === '' && url.password === ''
+    return url.origin === GOOGLE_AUTHORIZATION_ORIGIN && url.username === '' && url.password === ''
   } catch {
     return false
   }

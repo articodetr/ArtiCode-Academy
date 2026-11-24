@@ -6,10 +6,13 @@
 // reason that goes to the audit log only. Since MFA-T04 the same menu also
 // offers «reset two-step verification» (API-212) below a divider — not a status
 // action, so it lives beside the state machine (canResetMfa()) and has its own
-// confirmation, UserMfaReset.
+// confirmation, UserMfaReset. Since PORTAL-04 the same section offers «unlink the
+// Google account» (DELETE /api/users/:id/google-identity — canUnlinkGoogle(),
+// UserGoogleUnlink), whose answer is the detail.
 import {
   CheckCircleOutlined,
   DeleteOutlined,
+  DisconnectOutlined,
   DownOutlined,
   InboxOutlined,
   PauseCircleOutlined,
@@ -26,14 +29,17 @@ import { changeUserStatus, deleteUser, STATUS_REASON_MAX_LENGTH } from '../api/u
 import type { UserDetail } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { ReasonHint } from './ReasonHint'
+import { UserGoogleUnlink } from './UserGoogleUnlink'
 import { UserMfaReset } from './UserMfaReset'
 import { describeUsersFailure, failureMessage } from './users.errors'
 import { displayNameOf } from './users.format'
-import { availableAccountActions, canResetMfa, signsOut } from './users.status'
+import { availableAccountActions, canResetMfa, canUnlinkGoogle, signsOut } from './users.status'
 import type { AccountAction } from './users.status'
 
 /** Menu key of the two-step verification reset; never an AccountAction. */
 const MFA_RESET_KEY = 'mfa_reset'
+/** Menu key of the Google unlink; never an AccountAction. */
+const GOOGLE_UNLINK_KEY = 'google_unlink'
 
 const ICONS: Readonly<Record<AccountAction, ReactNode>> = {
   activate: <CheckCircleOutlined />,
@@ -69,12 +75,14 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
   const [error, setError] = useState<string | null>(null)
   const [form] = Form.useForm<ReasonFormValues>()
   const [resettingMfa, setResettingMfa] = useState(false)
+  const [unlinkingGoogle, setUnlinkingGoogle] = useState(false)
 
   const viewer = { permissions: me?.permissions ?? [], selfId: me?.id ?? null }
   const actions = availableAccountActions(user, { ...viewer, contact: hasPermission('users.read_contact') })
   const offersMfaReset = canResetMfa(user, viewer)
-  // An open reset confirmation outlives its menu item: a re-read can take the item away while a message still shows.
-  if (actions.length === 0 && !offersMfaReset && !resettingMfa) return null
+  const offersGoogleUnlink = canUnlinkGoogle(user, viewer)
+  // An open confirmation outlives its menu item: a re-read can take the item away while a message still shows.
+  if (actions.length === 0 && !offersMfaReset && !offersGoogleUnlink && !resettingMfa && !unlinkingGoogle) return null
 
   const items: MenuProps['items'] = actions.map((action) => ({
     key: action,
@@ -82,10 +90,18 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
     icon: ICONS[action],
     danger: signsOut(action),
   }))
+  // The actions that change no status, below one divider.
+  const extras: NonNullable<MenuProps['items']> = []
   if (offersMfaReset) {
-    if (items.length > 0) items.push({ type: 'divider' })
     // Red like the actions that sign out: every device of the user is signed out.
-    items.push({ key: MFA_RESET_KEY, label: t('users.mfa.reset.action'), icon: <SafetyOutlined />, danger: true })
+    extras.push({ key: MFA_RESET_KEY, label: t('users.mfa.reset.action'), icon: <SafetyOutlined />, danger: true })
+  }
+  if (offersGoogleUnlink) {
+    extras.push({ key: GOOGLE_UNLINK_KEY, label: t('users.google.unlink.action'), icon: <DisconnectOutlined /> })
+  }
+  if (extras.length > 0) {
+    if (items.length > 0) items.push({ type: 'divider' })
+    items.push(...extras)
   }
 
   const close = () => {
@@ -136,6 +152,10 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
                 setResettingMfa(true)
                 return
               }
+              if (key === GOOGLE_UNLINK_KEY) {
+                setUnlinkingGoogle(true)
+                return
+              }
               setError(null)
               setPending(key as AccountAction)
             },
@@ -158,7 +178,12 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
         onCancel={close}
         destroyOnHidden
       >
-        {pending ? <Typography.Paragraph>{t(`users.status.hints.${pending}`)}</Typography.Paragraph> : null}
+        {pending ? (
+          <Typography.Paragraph>
+            {/* A self-registered account its holder never completed is removed for good (the address becomes free again). */}
+            {pending === 'delete' && user.awaitingRegistration === true ? t('users.status.hints.deleteForGood') : t(`users.status.hints.${pending}`)}
+          </Typography.Paragraph>
+        ) : null}
         {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
         <Form<ReasonFormValues> form={form} layout="vertical" requiredMark={false} disabled={busy}>
           <Form.Item
@@ -180,6 +205,19 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
           onDone={() => {
             setResettingMfa(false)
             onStale()
+          }}
+          onStale={onStale}
+        />
+      ) : null}
+
+      {/* Mounted per session, like the reset: an earlier session's message never shows again. */}
+      {unlinkingGoogle ? (
+        <UserGoogleUnlink
+          user={user}
+          onClose={() => setUnlinkingGoogle(false)}
+          onDone={(updated) => {
+            setUnlinkingGoogle(false)
+            onChanged(updated)
           }}
           onStale={onStale}
         />

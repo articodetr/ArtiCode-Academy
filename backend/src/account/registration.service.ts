@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { isSelfRegistrationOpen, readSettings } from '../academy/academy.settings.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -28,6 +29,11 @@ export const REGISTRATION_AUDIT_ACTIONS = {
   selfRegistered: 'users.self_registered',
   /** The visitor opened the e-mailed link and chose the password: the account is `active`. */
   completed: 'users.self_registration.completed',
+  /**
+   * The notice «لديك حساب بالفعل» was sent to an existing account (actor NULL, no metadata) — the stored row the
+   * notice limit counts (REGISTRATION_NOTICE_LIMIT) and part of the academy's daily budget (REGISTRATION_MAIL_DAILY_LIMIT).
+   */
+  noticeSent: 'users.self_registration.notice_sent',
 } as const;
 
 /**
@@ -38,6 +44,43 @@ export const REGISTRATION_AUDIT_ACTIONS = {
  */
 export const REGISTRATION_RESEND_LIMIT = 3;
 export const REGISTRATION_RESEND_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * At most one «لديك حساب بالفعل» per account per 24 hours, counted from its
+ * `users.self_registration.notice_sent` events: anybody can type somebody
+ * else's address, and the notice must not become a way to flood its holder.
+ */
+export const REGISTRATION_NOTICE_LIMIT = 1;
+export const REGISTRATION_NOTICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The academy's ceiling of registration e-mails — links (the self-registration
+ * tokens) and notices (their events) together — per 24 hours, counted from the
+ * stored rows under one advisory lock (REGISTRATION_MAIL_BUDGET_LOCK), so many
+ * addresses from many IPs cannot turn the academy's sending domain into a
+ * spam source or spend its provider quota. Past it a request still answers 202
+ * and nothing is created or sent.
+ */
+export const REGISTRATION_MAIL_DAILY_LIMIT = 300;
+export const REGISTRATION_MAIL_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** The transaction-level advisory lock that serialises the daily budget (count, then reserve). */
+export const REGISTRATION_MAIL_BUDGET_LOCK = 'articode.registration.mail_budget';
+
+/** The models the budget is counted from (a transaction or a client). */
+type BudgetReader = Pick<Prisma.TransactionClient, 'verificationToken' | 'auditLog'>;
+
+/**
+ * The registration e-mails reserved since `since`: every self-registration
+ * token issued (one link e-mail each — retired or used ones included) plus
+ * every notice event. The rows of an account removed since then are gone with
+ * it (its tokens cascade), which only ever gives back budget.
+ */
+export async function countRegistrationMails(db: BudgetReader, since: Date): Promise<number> {
+  // One after the other: inside an interactive transaction the two would share one connection (KI-074).
+  const links = await db.verificationToken.count({ where: { ...SELF_REGISTRATION_TOKEN_WHERE, createdAt: { gte: since } } });
+  const notices = await db.auditLog.count({ where: { action: REGISTRATION_AUDIT_ACTIONS.noticeSent, createdAt: { gte: since } } });
+  return links + notices;
+}
 
 type Tx = Prisma.TransactionClient;
 
@@ -103,14 +146,26 @@ function isUniqueViolation(error: unknown): boolean {
  * `{ via: 'self_registration', email }` (the kind guard of
  * verification-token.service.ts). Lock order of every write on an existing
  * account: its `users` row (`FOR NO KEY UPDATE`, never `FOR UPDATE` — KI-079),
- * then its tokens.
+ * then the daily e-mail budget (REGISTRATION_MAIL_BUDGET_LOCK), then its tokens.
+ * Every e-mail is bounded three ways (review #3): the throttles bound the
+ * requests, the per-account limits bound what one address receives (3 links
+ * per 15 minutes, 1 notice per 24 hours) and the daily budget bounds what the
+ * academy sends (300 per 24 hours); past any of them the request still answers
+ * 202 and nothing is sent.
  */
 @Injectable()
-export class RegistrationService {
+export class RegistrationService implements OnModuleDestroy {
   private readonly logger = new Logger(RegistrationService.name);
   private readonly mailTransport: string;
   /** The background steps that have not finished yet (`whenIdle()`). */
   private readonly inFlight = new Set<Promise<void>>();
+  /**
+   * The two e-mail limits, from the constants above. Mutable for the e2e suite
+   * only: the 24-hour window counts the stored rows of earlier runs against the
+   * same database too, so the suite lifts the daily ceiling and lowers it to
+   * prove it.
+   */
+  readonly limits = { noticesPerAccount: REGISTRATION_NOTICE_LIMIT, mailsPerDay: REGISTRATION_MAIL_DAILY_LIMIT };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -121,6 +176,17 @@ export class RegistrationService {
     config: ConfigService<Env, true>,
   ) {
     this.mailTransport = config.get('MAIL_TRANSPORT', { infer: true });
+  }
+
+  /**
+   * A graceful stop lets the registrations already answered with 202 finish
+   * (review #9). `onModuleDestroy`, not `onApplicationShutdown`: Nest runs the
+   * destroy hooks of this module before those of the global PrismaModule, whose
+   * `onModuleDestroy` closes the database client — the shutdown hooks come only
+   * after it, when the steps could no longer write.
+   */
+  async onModuleDestroy(): Promise<void> {
+    await this.whenIdle();
   }
 
   // ------------------------------------------------------------ register
@@ -160,7 +226,7 @@ export class RegistrationService {
 
   private async processRegistration(input: RegisterInput, ctx: RequestContext): Promise<void> {
     const existing = await this.prisma.db.user.findUnique({ where: { email: input.email }, select: { id: true } });
-    if (existing) return this.handleExisting(existing.id, input);
+    if (existing) return this.handleExisting(existing.id, input, ctx);
     try {
       await this.createPending(input, ctx);
     } catch (error) {
@@ -168,11 +234,15 @@ export class RegistrationService {
       // the other request is handled as for an address that already has it.
       if (!isUniqueViolation(error)) throw error;
       const winner = await this.prisma.db.user.findUnique({ where: { email: input.email }, select: { id: true } });
-      if (winner) await this.handleExisting(winner.id, input);
+      if (winner) await this.handleExisting(winner.id, input, ctx);
     }
   }
 
-  /** A new address: the pending account, its role and profile, the first link and `users.self_registered` — one transaction. */
+  /**
+   * A new address: the pending account, its role and profile, the first link
+   * and `users.self_registered` — one transaction, after the daily budget
+   * (nothing is created past it: the address stays free for a later request).
+   */
   private async createPending(input: RegisterInput, ctx: RequestContext): Promise<void> {
     const role = await this.prisma.db.role.findUnique({ where: { key: STUDENT_ROLE_KEY }, select: { id: true } });
     if (!role) {
@@ -183,6 +253,7 @@ export class RegistrationService {
     const now = new Date();
     const expiresAt = this.tokens.emailVerificationExpiry(now);
     const userId = await this.prisma.db.$transaction(async (tx) => {
+      if (!(await this.reserveMail(tx, now))) return null;
       const user = await tx.user.create({
         data: {
           email: input.email,
@@ -218,6 +289,7 @@ export class RegistrationService {
       );
       return user.id;
     });
+    if (userId === null) return;
     await this.mail.sendRegistration({ userId, to: input.email, locale: input.locale, token: generated.token, expiresAt });
   }
 
@@ -225,21 +297,41 @@ export class RegistrationService {
    * An address that already has an account, decided on its locked row: a
    * pending self-registered account gets a fresh link (the older ones retired,
    * the stored name and locale unchanged; nothing past REGISTRATION_RESEND_LIMIT),
-   * a soft-deleted one nothing, any other the notice «لديك حساب بالفعل» — and
-   * nothing about it changes.
+   * a soft-deleted one nothing, any other the notice «لديك حساب بالفعل» (at most
+   * REGISTRATION_NOTICE_LIMIT per 24 hours, recorded as
+   * `users.self_registration.notice_sent`) — and nothing about it changes.
+   * Neither e-mail leaves past the academy's daily budget.
    */
-  private async handleExisting(userId: string, input: RegisterInput): Promise<void> {
+  private async handleExisting(userId: string, input: RegisterInput, ctx: RequestContext): Promise<void> {
     const generated = this.tokens.generate();
     const now = new Date();
     const expiresAt = this.tokens.emailVerificationExpiry(now);
     const outcome = await this.prisma.db.$transaction(async (tx) => {
       const account = await this.lockAccount(tx, userId);
       if (!account || account.deletedAt !== null || !account.email) return { kind: 'nothing' as const };
-      if (!awaiting(account)) return { kind: 'notice' as const, account };
+      if (!awaiting(account)) {
+        // Counted on the locked row: two requests for one address at once never send two notices.
+        const notices = await tx.auditLog.count({
+          where: {
+            action: REGISTRATION_AUDIT_ACTIONS.noticeSent,
+            entityType: 'users',
+            entityId: userId,
+            createdAt: { gte: new Date(now.getTime() - REGISTRATION_NOTICE_WINDOW_MS) },
+          },
+        });
+        if (notices >= this.limits.noticesPerAccount) return { kind: 'notice_capped' as const, notices };
+        if (!(await this.reserveMail(tx, now))) return { kind: 'budget' as const };
+        await this.audit.record(
+          { action: REGISTRATION_AUDIT_ACTIONS.noticeSent, actorUserId: null, entityType: 'users', entityId: userId, ...ctx },
+          tx,
+        );
+        return { kind: 'notice' as const, account };
+      }
       const recent = await tx.verificationToken.count({
         where: { userId, ...SELF_REGISTRATION_TOKEN_WHERE, createdAt: { gte: new Date(now.getTime() - REGISTRATION_RESEND_WINDOW_MS) } },
       });
       if (recent >= REGISTRATION_RESEND_LIMIT) return { kind: 'capped' as const };
+      if (!(await this.reserveMail(tx, now))) return { kind: 'budget' as const };
       await tx.verificationToken.updateMany({
         where: { userId, ...SELF_REGISTRATION_TOKEN_WHERE, consumedAt: null },
         data: { consumedAt: now },
@@ -265,7 +357,26 @@ export class RegistrationService {
       await this.mail.sendExistingAccountNotice({ userId, to: outcome.account.email!, locale });
     } else if (outcome.kind === 'capped') {
       this.logger.warn(`self-registration link not re-sent: ${REGISTRATION_RESEND_LIMIT} in the last 15 minutes`);
+    } else if (outcome.kind === 'notice_capped') {
+      this.logger.warn(`existing-account notice not sent: ${outcome.notices} in the last 24 hours (limit ${this.limits.noticesPerAccount})`);
     }
+  }
+
+  /**
+   * The academy's daily budget of registration e-mails: under the advisory
+   * lock (held to the end of the transaction, so the count and the row that
+   * reserves the next e-mail — a token or a notice event — are one step for
+   * every concurrent request), true while fewer than `limits.mailsPerDay` were
+   * reserved in the last 24 hours. Past it, a warning with the counts only.
+   * Lock order: an account's row (handleExisting) before this lock, never the
+   * other way round.
+   */
+  private async reserveMail(tx: Tx, now: Date): Promise<boolean> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${REGISTRATION_MAIL_BUDGET_LOCK}))`;
+    const sent = await countRegistrationMails(tx, new Date(now.getTime() - REGISTRATION_MAIL_WINDOW_MS));
+    if (sent < this.limits.mailsPerDay) return true;
+    this.logger.warn(`self-registration e-mail not sent: ${sent} registration e-mails in the last 24 hours (limit ${this.limits.mailsPerDay})`);
+    return false;
   }
 
   // ------------------------------------------------------------- preview

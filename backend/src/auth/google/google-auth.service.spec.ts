@@ -1,7 +1,17 @@
-// PORTAL-04 — GoogleAuthService without a database: the pure account rules,
-// and the order of the callback's checks before anything touches Google or
-// the database (unconfigured, refused at Google, the state cookie).
-import { GoogleAuthService, fullNameFrom, isPendingSelfRegistration, isUnavailable } from './google-auth.service.js';
+// PORTAL-04 — GoogleAuthService without a database: the pure account rules
+// (availability, Google's authority over an address, the roles that may be
+// linked by e-mail, the name of a new account), the order of the callback's
+// checks before anything touches Google or the database (unconfigured, refused
+// at Google, the state cookie), and how a refused session is answered.
+import { authError } from '../auth.errors.js';
+import {
+  GoogleAuthService,
+  fullNameFrom,
+  holdsOnlyAutoLinkableRoles,
+  isGoogleAuthoritative,
+  isPendingSelfRegistration,
+  isUnavailable,
+} from './google-auth.service.js';
 import { deriveStateKey, newGoogleAttempt, signGoogleState } from './google-state.js';
 
 const NOW = new Date('2026-11-24T10:00:00.000Z');
@@ -11,10 +21,16 @@ const CTX = { ip: '127.0.0.1', userAgent: 'vitest' };
 
 function makeService(config: typeof CONFIG | null = CONFIG) {
   const authenticate = vi.fn();
-  const prisma = { db: {} };
+  const beginSession = vi.fn();
+  // Just enough database for step 1 of the resolution: an identity of an active account.
+  const tx = {
+    userIdentity: { findUnique: vi.fn(async () => ({ id: 'identity-1', userId: 'user-1' })), update: vi.fn(async () => ({})) },
+    user: { findUnique: vi.fn(async () => ({ id: 'user-1', status: 'active', deletedAt: null, lockedUntil: null, emailVerifiedAt: NOW, passwordHash: null })) },
+  };
+  const prisma = { db: { academy: { findFirst: vi.fn(async () => null) }, $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)) } };
   const env = { get: vi.fn((key: string) => (key === 'JWT_SECRET' ? SECRET : undefined)) };
-  const service = new GoogleAuthService(prisma as never, { record: vi.fn() } as never, { beginSession: vi.fn() } as never, { authenticate } as never, config, env as never);
-  return { service, authenticate };
+  const service = new GoogleAuthService(prisma as never, { record: vi.fn() } as never, { beginSession } as never, { authenticate } as never, config, env as never);
+  return { service, authenticate, beginSession };
 }
 
 describe('the account rules', () => {
@@ -37,6 +53,31 @@ describe('the account rules', () => {
     expect(isPendingSelfRegistration({ status: 'pending', passwordHash: '$argon2id$…' })).toBe(false);
     expect(isPendingSelfRegistration({ status: 'invited', passwordHash: null })).toBe(false);
     expect(isPendingSelfRegistration({ status: 'active', passwordHash: null })).toBe(false);
+  });
+
+  it('is authoritative for Gmail addresses, and for another address only when hd is exactly its domain', () => {
+    expect(isGoogleAuthoritative({ email: 'learner@gmail.com', hd: null })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'learner@googlemail.com', hd: null })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'Learner@GMAIL.com', hd: null })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'school.example' })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'School.Example' })).toBe(true);
+    // A consumer Google account made with another address, or a Workspace of another domain, proves nothing today.
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: null })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'other.example' })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'teacher@mail.school.example', hd: 'school.example' })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'mail.school.example' })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'learner@gmail.com.evil.example', hd: null })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'learner@notgmail.com', hd: null })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'no-domain@', hd: '' })).toBe(false);
+  });
+
+  it('links by e-mail only accounts whose roles are all student or guardian', () => {
+    expect(holdsOnlyAutoLinkableRoles([])).toBe(true);
+    expect(holdsOnlyAutoLinkableRoles(['student'])).toBe(true);
+    expect(holdsOnlyAutoLinkableRoles(['guardian', 'student'])).toBe(true);
+    for (const key of ['teacher', 'staff', 'academy_admin', 'custom_reviewer']) {
+      expect(holdsOnlyAutoLinkableRoles(['student', key]), key).toBe(false);
+    }
   });
 
   it('names a new account from Google, cleaned, else from the e-mail', () => {
@@ -93,5 +134,21 @@ describe('GoogleAuthService', () => {
     authenticate.mockRejectedValueOnce(new Error('network'));
     expect(await service.callback({ code: 'c', state: attempt.state }, cookie, CTX)).toEqual({ kind: 'failure', code: 'failed', returnTo: '/my-school' });
     expect(authenticate).toHaveBeenCalledWith({ code: 'c', codeVerifier: attempt.codeVerifier, nonce: attempt.nonce });
+  });
+
+  it('callback: a session refused for a missing MFA key is mfa_unavailable, another refusal account_unavailable, anything else failed', async () => {
+    const { service, authenticate, beginSession } = makeService();
+    const attempt = newGoogleAttempt('/my-school');
+    const cookie = await signGoogleState(deriveStateKey(SECRET), attempt);
+    authenticate.mockResolvedValue({ sub: 'sub-1', email: 'learner@gmail.com', name: null, hd: null });
+    const answer = () => service.callback({ code: 'c', state: attempt.state }, cookie, CTX);
+
+    beginSession.mockRejectedValueOnce(authError.mfaUnavailable());
+    expect(await answer()).toEqual({ kind: 'failure', code: 'mfa_unavailable', returnTo: '/my-school' });
+    beginSession.mockRejectedValueOnce(authError.accountSuspended());
+    expect(await answer()).toEqual({ kind: 'failure', code: 'account_unavailable', returnTo: '/my-school' });
+    beginSession.mockRejectedValueOnce(new Error('database gone'));
+    expect(await answer()).toEqual({ kind: 'failure', code: 'failed', returnTo: '/my-school' });
+    expect(beginSession).toHaveBeenCalledWith('user-1', 'google', CTX);
   });
 });

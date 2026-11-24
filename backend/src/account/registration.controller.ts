@@ -26,12 +26,10 @@ import {
   RegistrationPreviewDto,
 } from './registration.dto.js';
 import { RegistrationService } from './registration.service.js';
-import { RegisterThrottle } from './registration.throttle.js';
+import { CompleteRegistrationThrottle, RegisterThrottle } from './registration.throttle.js';
 
 /** 60 previews per minute per IP (a page load each), like an invitation preview. */
 const PREVIEW_LIMIT = { login: { limit: 60, ttl: 60 * 1000 } };
-/** 20 completions per 15 minutes per IP, like an invitation acceptance. */
-const COMPLETE_LIMIT = { login: { limit: 20, ttl: 15 * 60 * 1000 } };
 
 const CLOSED = 'registration_disabled — `settings.selfRegistration.enabled` is not true, or the server has no mail transport (the `selfRegistration` flag of API-205)';
 
@@ -46,7 +44,7 @@ const CLOSED = 'registration_disabled — `settings.selfRegistration.enabled` is
 @Controller('account/register')
 @Public()
 @UseGuards(AuthThrottlerGuard)
-@ApiTooManyRequestsResponse({ type: AuthErrorDto, description: 'rate_limited (`Retry-After-login`, or `Retry-After-register_ip` on the registration request)' })
+@ApiTooManyRequestsResponse({ type: AuthErrorDto, description: 'rate_limited (`Retry-After-login`, or `Retry-After-register_ip` for the per-IP ceiling of the registration request and of the completion)' })
 export class RegistrationController {
   constructor(private readonly registration: RegistrationService) {}
 
@@ -60,7 +58,8 @@ export class RegistrationController {
       'A new address gets a `pending` account without a password (the `student` role and a student profile) and the e-mail «أكمل إنشاء حسابك» with the link ' +
       '`<APP_PUBLIC_URL>/register/complete/<token>`; a pending self-registered account gets a fresh link (older ones retired, at most 3 per 15 minutes); ' +
       'any other account the notice «لديك حساب بالفعل» (a link to /login, nothing changes); a soft-deleted one nothing. The e-mails carry nothing the visitor typed. ' +
-      'Limits: 5 per 15 minutes per (IP, e-mail) and 20 per hour per IP.',
+      'At most one «لديك حساب بالفعل» per account per 24 hours and 300 registration e-mails (links and notices) per 24 hours for the academy — past either, still 202 and nothing is sent. ' +
+      'Limits: 5 per 15 minutes per (IP, e-mail) and 200 per hour per IP.',
   })
   @ApiBody({ type: RegisterDto })
   @ApiAcceptedResponse({ description: 'Accepted — an e-mail is on its way to the address (which one, and whether, is never revealed)' })
@@ -90,12 +89,13 @@ export class RegistrationController {
 
   @Post(':token/complete')
   @HttpCode(HttpStatus.OK)
-  @Throttle(COMPLETE_LIMIT)
+  @CompleteRegistrationThrottle()
   @ApiOperation({
     summary: 'Complete a registration: choose the password (public)',
     description:
       'Consumes the one-time link, stores the password (argon2id) and sets the account `active` with `emailVerifiedAt` — opening the e-mailed link proved the address. ' +
-      'Opens NO session: the visitor signs in next. Records `users.self_registration.completed`.',
+      'Opens NO session: the visitor signs in next. Records `users.self_registration.completed`. ' +
+      'Limits: 20 per 15 minutes per (IP, link) and 200 per 15 minutes per IP.',
   })
   @ApiParam({ name: 'token', description: 'The raw token from the e-mailed link' })
   @ApiBody({ type: CompleteRegistrationDto })

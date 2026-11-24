@@ -11,11 +11,16 @@
 //
 // A soft-deleted account is the terminal pseudo-state `deleted`: nothing
 // applies to it (ADR-035). An `invited` account is activated by accepting its
-// invitation, never by `activate`.
+// invitation, never by `activate`; nor is a `pending` account a visitor opened
+// through self-registration and never completed (`awaitingRegistration` —
+// PORTAL-04): only its owner's link activates it, and the server answers
+// `activate` with `409 invalid_transition { allowed: ['delete'] }`.
 //
 // Beside the machine, at the end of this file and NOT part of the mirror: the
-// administrative reset of two-step verification (API-212), which the same menu
-// offers. It changes no status, so it stays out of AccountAction/TRANSITIONS.
+// administrative reset of two-step verification (API-212) and the unlinking of
+// the user's Google account (DELETE /api/users/:id/google-identity), which the
+// same menu offers. They change no status, so they stay out of
+// AccountAction/TRANSITIONS.
 import type { UserDetail, UserStatus, UserStatusAction, UserSummary } from '../api/users'
 
 /** Every state-changing operation of the menu, the soft delete of API-028 included. */
@@ -87,11 +92,14 @@ export interface AccountActionContext {
 
 /**
  * The actions the menu offers for this account: allowed by the state machine,
- * permitted for the caller, not self-destructive, and `unlock` only when the
- * account is known (or might be) locked.
+ * permitted for the caller, not self-destructive, `unlock` only when the
+ * account is known (or might be) locked, and no `activate` for a
+ * self-registration awaiting its owner (`awaitingRegistration` — the server
+ * answers 409; a detail without the field, from an older server, keeps the
+ * plain rule).
  */
 export function availableAccountActions(
-  user: Pick<UserSummary, 'id' | 'status' | 'deletedAt' | 'lockedUntil'>,
+  user: Pick<UserSummary, 'id' | 'status' | 'deletedAt' | 'lockedUntil'> & Partial<Pick<UserDetail, 'awaitingRegistration'>>,
   context: AccountActionContext,
 ): AccountAction[] {
   const state = accountStateOf(user)
@@ -100,6 +108,7 @@ export function availableAccountActions(
     if (!isActionPermitted(action, context.permissions)) return false
     if (self && isSelfForbidden(action)) return false
     if (action === 'unlock' && context.contact && user.lockedUntil === null) return false
+    if (action === 'activate' && user.awaitingRegistration === true) return false
     return true
   })
 }
@@ -134,4 +143,32 @@ export function canResetMfa(
   if (user.deletedAt) return false
   // Truthiness, as the drawer's row reads it: a detail without the field (an older server) is «off or unknown» too.
   return Boolean(user.mfaEnabledAt)
+}
+
+// ---------------------------------------------------------------------------
+// Not a status action either — unlinking the user's Google account
+// (DELETE /api/users/:id/google-identity, PORTAL-04): the account keeps its
+// status and its password; only the link to Google goes.
+// ---------------------------------------------------------------------------
+
+/** The unlink route needs `users.update` (`users.deactivate` does not replace it). */
+export const UNLINK_GOOGLE_PERMISSION = 'users.update'
+
+/**
+ * Whether the menu offers «unlink the Google account» for this account:
+ *
+ * - the caller holds `users.update` — on their own account too (the server
+ *   allows it; the reach rule of SEC-R-15 stays the server's);
+ * - the account is not soft-deleted (the server answers 404 for it);
+ * - a Google account is visibly linked (`googleLinkedAt`). The server sends
+ *   null to a caller without `users.read_contact`, so such a caller is never
+ *   offered the action — as with the reset, never on a guess.
+ */
+export function canUnlinkGoogle(
+  user: Pick<UserDetail, 'deletedAt' | 'googleLinkedAt'>,
+  context: Pick<AccountActionContext, 'permissions'>,
+): boolean {
+  if (!context.permissions.includes(UNLINK_GOOGLE_PERMISSION)) return false
+  if (user.deletedAt) return false
+  return Boolean(user.googleLinkedAt)
 }

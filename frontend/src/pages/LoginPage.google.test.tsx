@@ -202,7 +202,17 @@ describe('LoginPage — PORTAL-04', () => {
   })
 
   describe('the callback’s verdicts (?google=)', () => {
-    it.each(['cancelled', 'failed', 'unavailable', 'registration_closed', 'link_required', 'account_unavailable'] as const)(
+    it.each([
+      'cancelled',
+      'failed',
+      'unavailable',
+      'registration_closed',
+      'link_required',
+      'link_conflict',
+      'email_not_authoritative',
+      'account_unavailable',
+      'mfa_unavailable',
+    ] as const)(
       'words %s and drops it from the address, keeping the return path',
       async (code) => {
         mockApi()
@@ -216,10 +226,18 @@ describe('LoginPage — PORTAL-04', () => {
       },
     )
 
-    it('reads the e-mail rule of link_required as the brief words it', () => {
+    it('reads the e-mail rules of link_required, link_conflict and email_not_authoritative as the review words them', () => {
       expect(google.results.link_required).toBe(
-        'يوجد حساب بهذا البريد. سجّل الدخول بكلمة المرور، ثم أكّد بريدك من «حسابي» لتتمكن من الدخول عبر Google.',
+        'يوجد حساب بهذا البريد. سجّل الدخول بكلمة المرور؛ ولاستخدام Google لاحقًا أكّد بريدك من «حسابي» أو اطلب ذلك من إدارة الأكاديمية.',
       )
+      expect(google.results.link_conflict).toBe(
+        'حسابك في الأكاديمية مرتبط بحساب Google آخر. سجّل الدخول بكلمة المرور أو بحساب Google المرتبط.',
+      )
+      expect(google.results.email_not_authoritative).toBe(
+        'لا يمكن إنشاء الحساب أو ربطه عبر Google لهذا البريد. أنشئ حسابك بالبريد الإلكتروني، أو سجّل الدخول بكلمة المرور.',
+      )
+      // The second step of an account with two-step verification cannot run without the server's key.
+      expect(google.results.mfa_unavailable).toBe(ar.login.errors.mfa_unavailable)
     })
 
     it('never shows an unknown code, and clears the verdict at the next sign-in attempt', async () => {

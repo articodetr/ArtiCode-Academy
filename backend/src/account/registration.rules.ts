@@ -110,6 +110,13 @@ export function isPendingSelfRegistration(user: { status: string; passwordHash: 
   return user.status === 'pending' && user.passwordHash === null;
 }
 
+/**
+ * The same rule as a query filter (`Prisma.UserWhereInput`), for a reader that never loads the password hash — the
+ * user detail (`awaitingRegistration`) and the hard delete of such an account. Keep it in step with the function above
+ * (registration.rules.spec.ts checks both say the same).
+ */
+export const PENDING_SELF_REGISTRATION_WHERE = { status: 'pending', passwordHash: null } as const;
+
 /** The trimmed, lower-cased address (the form every stored e-mail has — users.validation.ts). */
 export function normalizeRegistrationEmail(email: string): string {
   return email.trim().toLowerCase();

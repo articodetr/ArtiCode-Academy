@@ -25,14 +25,22 @@ export function describeGoogleStartFailure(error: unknown): string {
 
 // ------------------------------------------------------------ verdicts
 
-/** The codes of `/login?google=<code>` (the callback's failures). */
+/**
+ * The codes of `/login?google=<code>` (the callback's failures). Since the review: `link_conflict` (the academy account
+ * with this e-mail is linked to ANOTHER Google account), `mfa_unavailable` (the account has two-step verification but
+ * the server's MFA key is missing) and `email_not_authoritative` (Google does not vouch for this address, so it can
+ * neither create an account nor link one; an existing account in that case answers `link_required`).
+ */
 export const GOOGLE_RESULT_CODES = [
   'cancelled',
   'failed',
   'unavailable',
   'registration_closed',
   'link_required',
+  'link_conflict',
+  'email_not_authoritative',
   'account_unavailable',
+  'mfa_unavailable',
 ] as const
 export type GoogleResultCode = (typeof GOOGLE_RESULT_CODES)[number]
 
@@ -44,7 +52,10 @@ const RESULT_TYPES: Readonly<Record<GoogleResultCode, 'info' | 'warning' | 'erro
   unavailable: 'warning',
   registration_closed: 'warning',
   link_required: 'warning',
+  link_conflict: 'warning',
+  email_not_authoritative: 'warning',
   account_unavailable: 'error',
+  mfa_unavailable: 'error',
 }
 
 export interface GoogleResultMessage {

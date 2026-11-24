@@ -45,13 +45,22 @@ describe('Google sign-in API', () => {
     ['a relative path', { url: '/o/oauth2/v2/auth' }],
     ['credentials in the address', { url: 'https://user:pass@accounts.google.com/' }],
     ['a number', { url: 42 }],
+    ['another https host', { url: 'https://evil.example/o/oauth2/v2/auth' }],
+    ['a host that only starts like Google’s', { url: 'https://accounts.google.com.evil.example/o/oauth2/v2/auth' }],
+    ['a host that only ends like Google’s', { url: 'https://evilaccounts.google.com/o/oauth2/v2/auth' }],
+    ['another Google host', { url: 'https://www.google.com/o/oauth2/v2/auth' }],
+    ['a port', { url: 'https://accounts.google.com:8443/o/oauth2/v2/auth' }],
   ])('refuses an answer with %s', async (_label, body) => {
     mockFetch(() => jsonResponse(200, body))
     await expect(startGoogleSignIn(null)).rejects.toThrow(GOOGLE_URL_INVALID)
   })
 
-  it('takes only https: addresses as Google’s page', () => {
+  it('takes only Google’s own authorization page', () => {
     expect(isGoogleAuthorizationUrl(GOOGLE_URL)).toBe(true)
+    // The default port, written out, is the same origin.
+    expect(isGoogleAuthorizationUrl('https://accounts.google.com:443/o/oauth2/v2/auth?state=s')).toBe(true)
+    expect(isGoogleAuthorizationUrl('HTTPS://ACCOUNTS.GOOGLE.COM/o/oauth2/v2/auth')).toBe(true)
+    expect(isGoogleAuthorizationUrl('https://accounts.google.com.evil.example/')).toBe(false)
     expect(isGoogleAuthorizationUrl('data:text/html,x')).toBe(false)
     expect(isGoogleAuthorizationUrl('')).toBe(false)
     expect(isGoogleAuthorizationUrl(null)).toBe(false)

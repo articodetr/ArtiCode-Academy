@@ -21,7 +21,10 @@
 // verification is on (`mfaEnabledAt` — like `lockedUntil` the server sends null
 // without `users.read_contact`, so the row is absent there, never «off»), and
 // the account-actions menu resets it (API-212); that answer carries no detail,
-// so the drawer re-reads it (reloadDetail).
+// so the drawer re-reads it (reloadDetail). Since PORTAL-04 the same rows say
+// since when a Google account is linked (`googleLinkedAt`, the same D-R07 rule —
+// the row shows only while a link is visible), and the menu unlinks it
+// (DELETE /api/users/:id/google-identity), whose answer is the detail.
 import { EditOutlined, KeyOutlined, LinkOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Divider, Drawer, Flex, Form, Popconfirm, Space, Spin, Tabs, Tag, Typography } from 'antd'
 import type { TabsProps } from 'antd'
@@ -452,6 +455,17 @@ function UserDetails({ user, contact }: { user: UserDetail; contact: boolean }) 
               ? t('users.mfa.enabledSince', { date: formatDateTime(user.mfaEnabledAt, language) })
               : t('users.mfa.disabled'),
           },
+          // Only when a link is visible: the server sends null without one — and without `users.read_contact`,
+          // so a «not linked» row would be a guess.
+          ...(user.googleLinkedAt
+            ? [
+                {
+                  key: 'googleLinkedAt',
+                  label: t('users.google.label'),
+                  children: t('users.google.linkedSince', { date: formatDateTime(user.googleLinkedAt, language) }),
+                },
+              ]
+            : []),
           ...(user.lockedUntil
             ? [{ key: 'lockedUntil', label: t('users.detail.lockedUntil'), children: formatDateTime(user.lockedUntil, language) }]
             : []),

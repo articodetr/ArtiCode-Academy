@@ -2,7 +2,18 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { setAccessToken } from '../auth/token-store'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeUserDetail, makeUserList } from '../test/users'
-import { changeUserStatus, createUser, deleteUser, getUser, listUsers, replaceUserRoles, resetUserMfa, updateUser, usersListPath } from './users'
+import {
+  changeUserStatus,
+  createUser,
+  deleteUser,
+  getUser,
+  listUsers,
+  replaceUserRoles,
+  resetUserMfa,
+  unlinkUserGoogleIdentity,
+  updateUser,
+  usersListPath,
+} from './users'
 
 describe('usersListPath', () => {
   it('returns the bare path when every parameter is absent or empty', () => {
@@ -156,5 +167,24 @@ describe('users API calls', () => {
     expect(fetchMock.mock.calls[1][1]?.method).toBe('POST')
     expect(fetchMock.mock.calls[1][1]?.body).toBe('{"reason":"فقد هاتفه"}')
     expect(fetchMock.mock.calls[2][1]?.body).toBeUndefined()
+  })
+
+  it('unlinkUserGoogleIdentity sends a DELETE without a body to /api/users/:id/google-identity and resolves with the detail', async () => {
+    const updated = makeUserDetail({ status: 'active', googleLinkedAt: null })
+    const fetchMock = mockFetch(() => jsonResponse(200, updated))
+
+    await expect(unlinkUserGoogleIdentity(updated.id)).resolves.toEqual(updated)
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`/api/users/${updated.id}/google-identity`)
+    expect(init?.method).toBe('DELETE')
+    expect(init?.body).toBeUndefined()
+    expect(new Headers(init?.headers).has('Content-Type')).toBe(false)
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer access-1')
+  })
+
+  it('unlinkUserGoogleIdentity rejects with the stable code of a refusal', async () => {
+    mockFetch(() => jsonResponse(404, { statusCode: 404, code: 'user_not_found', message: 'gone' }))
+    await expect(unlinkUserGoogleIdentity('u-1')).rejects.toMatchObject({ status: 404, code: 'user_not_found' })
   })
 })

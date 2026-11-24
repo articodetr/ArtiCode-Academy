@@ -62,6 +62,9 @@ describe('returnPath', () => {
     ['a line separator', '/catalog/c 1'],
     ['a NUL', `/catalog/c${String.fromCharCode(0)}1`],
     ['DEL', `/catalog/c${String.fromCharCode(0x7f)}1`],
+    ['the first C1 control (U+0080)', `/catalog/c${String.fromCharCode(0x80)}1`],
+    ['NEL (U+0085)', `/catalog/c${String.fromCharCode(0x85)}1`],
+    ['the last C1 control (U+009F)', `/catalog/c${String.fromCharCode(0x9f)}1`],
     ['the API', '/api/auth/me'],
     ['the API by its root', '/api/'],
     ['513 characters', `/${'a'.repeat(RETURN_PATH_MAX_LENGTH)}`],
