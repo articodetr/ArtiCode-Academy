@@ -30,6 +30,19 @@ export function selfServiceReason(caller: { permissions: readonly string[]; role
   return null;
 }
 
+/**
+ * `nextStartsOn` of the public catalog (PORTAL-01, #205 — agreed with the
+ * frontend): the earliest start day, today or later in the academy's zone, of
+ * the classes a visitor could enroll in now; null when none has one (no start
+ * day set, or every such class has already started). All `YYYY-MM-DD`, so the
+ * string order is the calendar order.
+ */
+export function nextStartsOn(startDays: readonly (string | null)[], today: string): string | null {
+  let next: string | null = null;
+  for (const day of startDays) if (day !== null && day >= today && (next === null || day < next)) next = day;
+  return next;
+}
+
 /** A class open to self-service now: the office opened it, and it runs or takes students (D-R123). The course is published by the catalog's own filter. */
 export function isSelfServiceOpen(klass: { selfEnrollment: boolean; status: ClassStatus }): boolean {
   return klass.selfEnrollment && isEnrollableClass(klass.status);

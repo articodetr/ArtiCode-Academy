@@ -28,7 +28,7 @@ const ENROLLMENT_STATUSES = Object.values(EnrollmentStatus) as EnrollmentStatus[
  * conversion would turn "false" into true: exactly `true` or `false`,
  * anything else stays a string and fails @IsBoolean.
  */
-function booleanParam({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
+export function booleanParam({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
   const raw = obj[key];
   if (raw === 'true' || raw === true) return true;
   if (raw === 'false' || raw === false) return false;

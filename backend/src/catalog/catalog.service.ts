@@ -365,21 +365,9 @@ export class CatalogService {
     return map;
   }
 
-  /**
-   * Published courses with at least one class a reader could enroll in now:
-   * open to self-service, a free seat, and for a paid course a plan that can
-   * price a request (active, no class, this course or none — D-R122).
-   */
-  private async availableCourseIds(): Promise<string[]> {
-    const rows = await this.prisma.db.$queryRaw<{ id: string }[]>`
-      SELECT DISTINCT c.course_id AS id
-      FROM classes c JOIN courses co ON co.id = c.course_id
-      WHERE c.self_enrollment AND c.status IN ('open', 'running') AND co.status = 'published'
-        AND (SELECT count(*) FROM enrollments e WHERE e.class_id = c.id AND e.status = 'active') < c.capacity
-        AND (co.enrollment_fee_plan_id IS NULL OR EXISTS (
-          SELECT 1 FROM fee_plans p
-          WHERE p.id = co.enrollment_fee_plan_id AND p.is_active AND p.class_id IS NULL AND (p.course_id IS NULL OR p.course_id = co.id)))`;
-    return rows.map((row) => row.id);
+  /** The `available` filter of API-219 (`availableCourseIdsOf()`). */
+  private availableCourseIds(): Promise<string[]> {
+    return availableCourseIdsOf(this.prisma.db);
   }
 
   private currency(): Promise<string> {
@@ -390,4 +378,22 @@ export class CatalogService {
     const academy = await this.prisma.db.academy.findFirst({ select: { timezone: true } });
     return academy?.timezone ?? 'UTC';
   }
+}
+
+/**
+ * Published courses with at least one class a reader could enroll in now:
+ * open to self-service, a free seat, and for a paid course a plan that can
+ * price a request (active, no class, this course or none — D-R122). The
+ * `available` filter of API-219 and of the public API-236 (PORTAL-01, #205).
+ */
+export async function availableCourseIdsOf(db: Db): Promise<string[]> {
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT DISTINCT c.course_id AS id
+    FROM classes c JOIN courses co ON co.id = c.course_id
+    WHERE c.self_enrollment AND c.status IN ('open', 'running') AND co.status = 'published'
+      AND (SELECT count(*) FROM enrollments e WHERE e.class_id = c.id AND e.status = 'active') < c.capacity
+      AND (co.enrollment_fee_plan_id IS NULL OR EXISTS (
+        SELECT 1 FROM fee_plans p
+        WHERE p.id = co.enrollment_fee_plan_id AND p.is_active AND p.class_id IS NULL AND (p.course_id IS NULL OR p.course_id = co.id)))`;
+  return rows.map((row) => row.id);
 }

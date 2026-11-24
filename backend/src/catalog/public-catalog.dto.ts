@@ -5,9 +5,10 @@
 // code or schedule, no lesson id or content.
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { COURSE_PRICINGS } from '../courses/courses.dto.js';
+import { booleanParam } from './catalog.dto.js';
 import type { CoursePricing } from '../courses/courses.dto.js';
 import type { LearningItemKind } from '../generated/prisma/client.js';
 import { LEARNING_ITEM_KINDS } from '../learning/learning.content.js';
@@ -25,6 +26,20 @@ export class ListPublicCatalogQueryDto {
   @Length(1, 100)
   q?: string;
 
+  @ApiPropertyOptional({ enum: COURSE_PRICINGS, description: 'free = courses without a course plan; paid = courses with one (as API-219)' })
+  @IsOptional()
+  @IsIn(COURSE_PRICINGS)
+  pricing?: CoursePricing;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'true = at least one class takes a self-service enrollment now (open to it, a free seat, a usable price) — the `hasFreeSeat` of the card; false = none (as API-219)',
+  })
+  @IsOptional()
+  @Transform(booleanParam)
+  @IsBoolean()
+  available?: boolean;
+
   @ApiPropertyOptional({ default: PUBLIC_CATALOG_PAGE_DEFAULT, minimum: 1, maximum: PUBLIC_CATALOG_PAGE_MAX })
   @IsOptional()
   @IsInt()
@@ -32,7 +47,7 @@ export class ListPublicCatalogQueryDto {
   @Max(PUBLIC_CATALOG_PAGE_MAX)
   limit?: number;
 
-  @ApiPropertyOptional({ maxLength: 512, description: 'Opaque `nextCursor` of the previous page; send it with the same `q`' })
+  @ApiPropertyOptional({ maxLength: 512, description: 'Opaque `nextCursor` of the previous page; send it with the same `q`, `pricing` and `available`' })
   @IsOptional()
   @IsString()
   @Length(1, 512)
@@ -53,6 +68,9 @@ export class PublicCatalogPriceDto {
 
   @ApiProperty({ example: 'SAR', description: 'The academy currency (D15)' })
   currency: string;
+
+  @ApiProperty({ type: 'integer', minimum: 1, example: 2, description: 'How many installments the course plan splits the price into (as API-219; PORTAL-01, #205)' })
+  installments: number;
 }
 
 export class PublicCatalogCourseDto {
@@ -91,6 +109,17 @@ export class PublicCatalogCourseDto {
 
   @ApiProperty({ description: 'At least one of those classes has a free seat (and a usable price for a paid course)' })
   hasFreeSeat: boolean;
+
+  @ApiProperty({
+    type: String,
+    format: 'date',
+    nullable: true,
+    example: '2026-12-06',
+    description:
+      'The earliest start day (YYYY-MM-DD), today or later in the academy’s time zone, of the classes counted by `hasFreeSeat`; null when none has one — ' +
+      'no start day set, or every such class has already started (PORTAL-01, #205). Never the class itself',
+  })
+  nextStartsOn: string | null;
 
   @ApiProperty({ type: 'integer', description: 'Published lessons of the curriculum' })
   lessonCount: number;
