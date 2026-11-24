@@ -29,7 +29,7 @@ export interface IssuedSession {
 }
 
 /** A session opened by a one-time token instead of a password (invitation MOD-03-T03, password reset T05). */
-export type TokenSessionOrigin = 'invitation' | 'password_reset';
+export type TokenSessionOrigin = 'invitation' | 'password_reset' | 'google';
 
 /**
  * How a session that did not start with the password alone was opened
