@@ -115,6 +115,31 @@ describe('UserDrawer — account actions', () => {
     expect(menuButton(dialog)).not.toBeInTheDocument()
   })
 
+  it('removes a self-registration its holder never completed for good: the confirmation says so, then the drawer hands the removal to the page instead of a stale row (PORTAL-04)', async () => {
+    const detail = makeUserDetail({ status: 'pending', awaitingRegistration: true })
+    const api = mockStatusApi(detail)
+    const onUpdated = vi.fn()
+    const onRemoved = vi.fn()
+    renderWithProviders(<UserDrawer userId={detail.id} onClose={vi.fn()} onUpdated={onUpdated} onRemoved={onRemoved} />, {
+      auth: makeAuth({ user: makeUser({ id: 'user-1', permissions: ADMIN_PERMISSIONS }) }),
+    })
+    const dialog = await drawerLoaded(detail)
+
+    const { labels } = await openMenu(dialog)
+    // The server refuses «تفعيل» for such an account (409), so the menu does not offer it.
+    expect(labels).not.toContain(ar.users.status.actions.activate)
+    // The confirmation names the permanent removal, not the soft delete of every other account.
+    const { menu } = await openMenu(dialog)
+    fireEvent.click(within(menu).getByText(ar.users.status.actions.delete))
+    const modal = (await screen.findByText(ar.users.status.hints.deleteForGood)).closest('[role="dialog"]') as HTMLElement
+    expect(within(modal).queryByText(ar.users.status.hints.delete)).not.toBeInTheDocument()
+    await userEvent.click(within(modal).getByRole('button', { name: ar.users.status.actions.delete }))
+
+    await waitFor(() => expect(onRemoved).toHaveBeenCalledTimes(1))
+    expect(api.writes).toEqual([{ method: 'DELETE', url: `/api/users/${detail.id}`, body: undefined }])
+    expect(onUpdated).not.toHaveBeenCalled()
+  })
+
   it('offers the actions by permission and state: unlock alone for support staff on a locked account, nothing for a reader', async () => {
     const locked = makeUserDetail({ status: 'active', lockedUntil: '2026-10-30T12:00:00.000Z' })
     const api = mockStatusApi(locked)

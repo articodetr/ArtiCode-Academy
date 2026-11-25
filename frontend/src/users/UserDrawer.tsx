@@ -66,6 +66,8 @@ interface UserDrawerProps {
   onClose: () => void
   /** Called with the detail returned by a successful write so the list can refresh its row. */
   onUpdated: (user: UserDetail) => void
+  /** The account was removed for good (a never-completed self-registration); default: close the drawer. */
+  onRemoved?: () => void
 }
 
 /** The editors of the drawer that report unsaved work (KI-054): the edit form and one per tab. */
@@ -75,7 +77,7 @@ type UnsavedReporters = Readonly<Record<EditorPart, (unsaved: boolean) => void>>
 
 const NOTHING_UNSAVED: Readonly<Record<EditorPart, boolean>> = { details: false, roles: false, guardians: false, students: false }
 
-export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null, onClose, onUpdated }: UserDrawerProps) {
+export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null, onClose, onUpdated, onRemoved }: UserDrawerProps) {
   const { t } = useTranslation()
   const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<EditorPart, boolean>>>(NOTHING_UNSAVED)
 
@@ -119,6 +121,7 @@ export function UserDrawer({ userId, includeDeleted = false, loadedRoles = null,
           loadedRoles={loadedRoles}
           reportUnsaved={reportUnsaved}
           onUpdated={onUpdated}
+          onRemoved={onRemoved ?? onClose}
         />
       ) : null}
     </Drawer>
@@ -131,12 +134,14 @@ interface UserDrawerBodyProps {
   loadedRoles: readonly Role[] | null
   reportUnsaved: UnsavedReporters
   onUpdated: (user: UserDetail) => void
+  /** The account was removed for good: close the drawer (and let the page re-read its list). */
+  onRemoved: () => void
 }
 
 const DETAILS_TAB = 'details'
 const ROLES_TAB = 'roles'
 
-function UserDrawerBody({ userId, includeDeleted, loadedRoles, reportUnsaved, onUpdated }: UserDrawerBodyProps) {
+function UserDrawerBody({ userId, includeDeleted, loadedRoles, reportUnsaved, onUpdated, onRemoved }: UserDrawerBodyProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { hasPermission } = useAuth()
@@ -280,7 +285,7 @@ function UserDrawerBody({ userId, includeDeleted, loadedRoles, reportUnsaved, on
                   </Button>
                 </Popconfirm>
               ) : null}
-              <UserStatusActions user={user} onChanged={applyUpdate} onStale={reloadDetail} />
+              <UserStatusActions user={user} onChanged={applyUpdate} onStale={reloadDetail} onRemoved={onRemoved} />
             </Space>
           ) : null
         }

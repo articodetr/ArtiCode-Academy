@@ -60,13 +60,15 @@ interface UserStatusActionsProps {
    * reset answered — API-212 returns no detail.
    */
   onStale: () => void
+  /** The server removed the account for good (a never-completed self-registration): the drawer closes and the list re-reads. */
+  onRemoved?: () => void
 }
 
 interface ReasonFormValues {
   reason?: string
 }
 
-export function UserStatusActions({ user, onChanged, onStale }: UserStatusActionsProps) {
+export function UserStatusActions({ user, onChanged, onStale, onRemoved }: UserStatusActionsProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { user: me, hasPermission } = useAuth()
@@ -125,7 +127,9 @@ export function UserStatusActions({ user, onChanged, onStale }: UserStatusAction
       message.success(t(`users.status.done.${pending}`))
       setPending(null)
       form.resetFields()
-      onChanged(updated)
+      // A never-completed self-registration is removed for good: nothing is left to show or re-read.
+      if (pending === 'delete' && user.awaitingRegistration === true && onRemoved) onRemoved()
+      else onChanged(updated)
     } catch (caught) {
       const failure = describeUsersFailure(caught)
       setError(failureMessage(t, failure))
