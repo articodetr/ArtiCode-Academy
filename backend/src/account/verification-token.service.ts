@@ -11,9 +11,10 @@ export const VERIFICATION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 /**
  * PORTAL-03 (#207): the `via` of a self-registration token. Such a token has the purpose `email_verification`
- * (opening its link proves the address) and the metadata `{ via: 'self_registration', email }`; it is the only
- * kind the registration routes accept, and the confirmation route API-166 refuses it. An API-165/166 token
- * carries `via: 'self' | 'invitation'`.
+ * (opening its link proves the address) and the metadata `{ via: 'self_registration', email, attempts? }` — `attempts`
+ * = the wrong passwords typed on its completion (contract v3, registration.service.ts); it is the only kind the
+ * registration routes accept, and the confirmation route API-166 refuses it. An API-165/166 token carries
+ * `via: 'self' | 'invitation'`.
  */
 export const SELF_REGISTRATION_VIA = 'self_registration';
 

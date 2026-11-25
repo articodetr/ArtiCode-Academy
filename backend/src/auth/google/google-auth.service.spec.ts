@@ -25,7 +25,7 @@ function makeService(config: typeof CONFIG | null = CONFIG) {
   // Just enough database for step 1 of the resolution: an identity of an active account.
   const tx = {
     userIdentity: { findUnique: vi.fn(async () => ({ id: 'identity-1', userId: 'user-1' })), update: vi.fn(async () => ({})) },
-    user: { findUnique: vi.fn(async () => ({ id: 'user-1', status: 'active', deletedAt: null, lockedUntil: null, emailVerifiedAt: NOW, passwordHash: null })) },
+    user: { findUnique: vi.fn(async () => ({ id: 'user-1', status: 'active', deletedAt: null, lockedUntil: null, emailVerifiedAt: NOW, selfRegisteredAt: NOW })) },
   };
   const prisma = { db: { academy: { findFirst: vi.fn(async () => null) }, $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)) } };
   const env = { get: vi.fn((key: string) => (key === 'JWT_SECRET' ? SECRET : undefined)) };
@@ -48,11 +48,13 @@ describe('the account rules', () => {
     expect(isUnavailable({ ...active, status: 'pending' }, NOW)).toBe(false);
   });
 
-  it('recognises a pending self-registered account by its missing password', () => {
-    expect(isPendingSelfRegistration({ status: 'pending', passwordHash: null })).toBe(true);
-    expect(isPendingSelfRegistration({ status: 'pending', passwordHash: '$argon2id$…' })).toBe(false);
-    expect(isPendingSelfRegistration({ status: 'invited', passwordHash: null })).toBe(false);
-    expect(isPendingSelfRegistration({ status: 'active', passwordHash: null })).toBe(false);
+  it('recognises a pending self-registered account by its self-registration marker (contract v3), not by its password', () => {
+    expect(isPendingSelfRegistration({ status: 'pending', selfRegisteredAt: NOW })).toBe(true);
+    // A pending account nobody self-registered (awaiting approval) is not one, with or without a password.
+    expect(isPendingSelfRegistration({ status: 'pending', selfRegisteredAt: null })).toBe(false);
+    expect(isPendingSelfRegistration({ status: 'invited', selfRegisteredAt: null })).toBe(false);
+    // Completed (or created by Google): active, the marker stays.
+    expect(isPendingSelfRegistration({ status: 'active', selfRegisteredAt: NOW })).toBe(false);
   });
 
   it('is authoritative for Gmail addresses, and for another address only when hd is exactly its domain', () => {

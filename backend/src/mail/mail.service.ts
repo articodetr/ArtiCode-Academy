@@ -169,7 +169,7 @@ export class MailService {
     return this.deliver('email_verification', mail, this.emailVerificationLink(mail.token), renderEmailVerification);
   }
 
-  /** PORTAL-03: «أكمل إنشاء حسابك» with the link that proves the address (the password is chosen there). */
+  /** PORTAL-03/04 (contract v3): «أكّد بريدك الإلكتروني لإكمال إنشاء حسابك» with the link that proves the address; the visitor types there the password chosen at registration. */
   sendRegistration(mail: RegistrationMail): Promise<MailDeliveryResult> {
     return this.deliverRendered('registration', mail.userId, mail.to, mail.locale, (locale, academy) =>
       renderRegistration(locale, {

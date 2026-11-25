@@ -237,6 +237,7 @@ export const en: Translation = {
       account_suspended: 'This account is suspended. Contact the academy administration.',
       account_pending: 'This account is awaiting approval by the academy administration.',
       account_not_activated: 'This account has not been activated yet. Use the invitation link you received.',
+      email_not_verified: 'Confirm your e-mail first: open the confirmation message we sent you and enter your password.',
       rate_limited: 'Too many attempts in a short time. Wait a moment and try again.',
       mfa_unavailable:
         'Two-step verification is not available on the server right now, and this account cannot be opened without it. Contact the academy administration.',

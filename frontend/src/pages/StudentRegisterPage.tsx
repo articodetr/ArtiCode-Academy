@@ -1,16 +1,18 @@
-// /register (PORTAL-04 on the contract v2 of GitHub #207): a visitor asks for a student account with a name and an
-// e-mail, in the frame of the account pages (auth/AuthLayout.tsx). The e-mail way is closed unless API-205 says
+// /register (PORTAL-04, contract v3): a visitor asks for a student account with a name, an e-mail and a password (typed
+// twice), in the frame of the account pages (auth/AuthLayout.tsx). The e-mail way is closed unless API-205 says
 // `selfRegistration: true`; «المتابعة باستخدام Google» is enabled only while it says `googleSignUp: true` (Google proves
 // the address, so it needs no mail and may stay open while the e-mail way is closed); a failed read closes both. The
 // server answers 202 whatever the address, so the page shows one fixed message and never says whether an account
-// exists. The password is chosen later, from the e-mailed link. The terms box is checked on this page only — the
-// academy has no terms pages yet, so its words link nowhere — and nothing about it is sent. A course chosen before
-// coming here waits on this device (keptCourse.ts); nothing enrolls.
-import { MailOutlined, UserOutlined } from '@ant-design/icons'
+// exists. The account is activated from the e-mailed link, where the same password is typed again. The password lives in
+// the form only: it is sent once, never trimmed, never kept after the 202 or stored. The terms box is checked on this
+// page only — the academy has no terms pages yet, so its words link nowhere — and nothing about it is sent. A course
+// chosen before coming here waits on this device (keptCourse.ts); nothing enrolls.
+import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons'
 import { Alert, Button, Checkbox, Divider, Flex, Form, Input, Spin, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../account/account.links'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
 import { isGoogleSignUpOpen, isSelfRegistrationOpen } from '../api/academy'
 import { requestRegistration } from '../api/registration'
@@ -23,11 +25,18 @@ import { rememberChosenCourse } from '../studentRegistration/keptCourse'
 import { RegistrationClosedNotice } from '../studentRegistration/RegistrationClosedNotice'
 import { describeRegisterFailure } from '../studentRegistration/registration.errors'
 import type { RegistrationMessage } from '../studentRegistration/registration.errors'
-import { emailProblem, fullNameProblem } from '../studentRegistration/registration.rules'
+import {
+  confirmationProblem,
+  emailProblem,
+  fullNameProblem,
+  passwordProblem,
+} from '../studentRegistration/registration.rules'
 
 interface RegisterValues {
   fullName: string
   email: string
+  password: string
+  confirmPassword: string
   acceptTerms?: boolean
 }
 
@@ -160,8 +169,9 @@ function RegisterForm({
     setMessage(null)
     const fullName = values.fullName.trim()
     try {
-      // The terms box is not part of the contract: the server refuses any other field.
-      await requestRegistration({ fullName, email: values.email.trim(), locale: language })
+      // The terms box and the confirmation are not part of the contract: the server refuses any other field. The
+      // password goes exactly as typed.
+      await requestRegistration({ fullName, email: values.email.trim(), password: values.password, locale: language })
       onSent(fullName)
     } catch (error) {
       const failure = describeRegisterFailure(error)
@@ -236,6 +246,52 @@ function RegisterForm({
           autoFocus={Boolean(initialName)}
           readOnly={submitting}
         />
+      </Form.Item>
+
+      <Form.Item
+        name="password"
+        label={t('studentRegistration.register.password')}
+        extra={t('studentRegistration.register.passwordHint', { min: PASSWORD_MIN_LENGTH })}
+        rules={[
+          {
+            validator: (_, value: unknown) => {
+              const problem = passwordProblem(value)
+              if (problem === null) return Promise.resolve()
+              return Promise.reject(
+                new Error(
+                  problem === 'required'
+                    ? t('studentRegistration.register.passwordRequired')
+                    : t('account.validation.passwordPolicy', { min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH }),
+                ),
+              )
+            },
+          },
+        ]}
+      >
+        <Input.Password prefix={<LockOutlined />} autoComplete="new-password" readOnly={submitting} />
+      </Form.Item>
+
+      <Form.Item
+        name="confirmPassword"
+        label={t('studentRegistration.register.confirmPassword')}
+        dependencies={['password']}
+        rules={[
+          ({ getFieldValue }) => ({
+            validator: (_, value: unknown) => {
+              const problem = confirmationProblem(getFieldValue('password'), value)
+              if (problem === null) return Promise.resolve()
+              return Promise.reject(
+                new Error(
+                  problem === 'required'
+                    ? t('studentRegistration.register.confirmRequired')
+                    : t('studentRegistration.register.mismatch'),
+                ),
+              )
+            },
+          }),
+        ]}
+      >
+        <Input.Password prefix={<LockOutlined />} autoComplete="new-password" readOnly={submitting} />
       </Form.Item>
 
       <Form.Item

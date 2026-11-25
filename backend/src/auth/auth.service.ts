@@ -29,8 +29,12 @@ export interface IssuedSession {
   user: AuthPrincipal;
 }
 
-/** A session opened by a one-time token instead of a password (invitation MOD-03-T03, password reset T05). */
-export type TokenSessionOrigin = 'invitation' | 'password_reset' | 'google';
+/**
+ * A session opened by a one-time proof instead of the sign-in form: an invitation (MOD-03-T03), a password reset
+ * (T05), Google (PORTAL-04), or a self-registration confirmed by its e-mailed link with the password chosen at
+ * registration (PORTAL-04, contract v3).
+ */
+export type TokenSessionOrigin = 'invitation' | 'password_reset' | 'google' | 'self_registration';
 
 /**
  * How a session that did not start with the password alone was opened
@@ -89,6 +93,16 @@ function signsInWithoutPassword(user: { status: string; passwordHash: string | n
   return user.status === 'active' && user.passwordHash === null;
 }
 
+/**
+ * A `pending` account without a password: a self-registration of contract v2
+ * (the password came after the e-mailed link) whose holder never finished it.
+ * Since v3 the password is chosen at registration, but such a row keeps the v2
+ * answer — exactly like an unknown address.
+ */
+function pendingWithoutPassword(user: { status: string; passwordHash: string | null }): boolean {
+  return user.status === 'pending' && user.passwordHash === null;
+}
+
 function toPrincipal(user: UserWithAccess, tokenId: string): AuthPrincipal {
   const permissions = new Set<string>();
   for (const grant of user.roles) {
@@ -145,16 +159,17 @@ export class AuthService {
     });
 
     // Unknown, archived or soft-deleted accounts look exactly like a wrong password — and so does an
-    // account with no password to check: a self-registered one whose holder has not opened the e-mailed
-    // link yet (`pending` without a password, PORTAL-03 — anybody can register any address) and an
-    // `active` one that signs in with Google only (review #4). Neither is revealed: no
-    // `account_not_activated`, no lock answer, no event, the same dummy verification as an unknown
-    // address. An invited account (no password yet) keeps its own answer below.
+    // account with no password to check: a `pending` one without a password (a v2 self-registration never
+    // finished — anybody can register any address) and an `active` one that signs in with Google only
+    // (review #4). Neither is revealed: no `account_not_activated`, no lock answer, no event, the same
+    // dummy verification as an unknown address. An invited account (no password yet) keeps its own
+    // answer below, and a self-registered pending account WITH its password (contract v3) is answered
+    // `email_not_verified` only once that password matched.
     if (
       !user ||
       user.deletedAt !== null ||
       user.status === 'archived' ||
-      isPendingSelfRegistration(user) ||
+      pendingWithoutPassword(user) ||
       signsInWithoutPassword(user)
     ) {
       await this.passwords.verifyDummy(password);
@@ -180,6 +195,12 @@ export class AuthService {
     }
 
     // Status is checked only after the password matched, so it is not revealed to guessers.
+    if (isPendingSelfRegistration(user)) {
+      // Contract v3: the visitor chose this password at registration, but the address is not confirmed yet —
+      // the e-mailed link activates the account (with this same password). Recorded like any pending account.
+      await this.audit.record({ action: AUDIT_ACTIONS.loginRejected, actorUserId: user.id, entityType: 'users', entityId: user.id, metadata: { reason: 'pending' }, ...ctx });
+      throw authError.emailNotVerified();
+    }
     if (user.status === 'pending') {
       await this.audit.record({ action: AUDIT_ACTIONS.loginRejected, actorUserId: user.id, entityType: 'users', entityId: user.id, metadata: { reason: 'pending' }, ...ctx });
       throw authError.accountPending();
@@ -330,11 +351,13 @@ export class AuthService {
 
   /**
    * Opens a session for an account whose holder has just proved themself with
-   * a one-time token — invitation acceptance (MOD-03-T03) or password reset
-   * (T05) — so there is no password to check here. The account must be usable
-   * (same gate as refresh); the login event records how the session started.
-   * An account with MFA never gets a session this way (D-R109): a reset goes
-   * through `beginSession()`, and an invited account cannot have MFA yet.
+   * a one-time token — invitation acceptance (MOD-03-T03), password reset
+   * (T05) or a self-registration confirmed with its password (PORTAL-04,
+   * contract v3) — so there is no password to check here. The account must be
+   * usable (same gate as refresh); the login event records how the session
+   * started. An account with MFA never gets a session this way (D-R109): a
+   * reset goes through `beginSession()`, and an invited or self-registered
+   * account cannot have MFA yet.
    */
   async openSession(userId: string, via: TokenSessionOrigin, ctx: RequestContext): Promise<IssuedSession> {
     const user = await this.prisma.db.user.findUnique({ where: { id: userId }, include: ACCESS_INCLUDE });

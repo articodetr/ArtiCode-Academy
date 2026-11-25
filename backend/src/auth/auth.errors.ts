@@ -32,6 +32,9 @@ export const AUTH_ERROR_CODES = [
   'mfa_code_invalid',
   'mfa_factor_required',
   'mfa_challenge_invalid',
+  // PORTAL-04 (#207, contract v3): a self-registered account whose holder has not confirmed the address yet,
+  // answered only after its password matched.
+  'email_not_verified',
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
@@ -79,6 +82,16 @@ export const authError = {
     ),
   accountPending: () =>
     new AuthHttpException(HttpStatus.FORBIDDEN, 'account_pending', 'This account is awaiting approval'),
+  /**
+   * PORTAL-04 (contract v3): the password of a self-registered account matched, but its holder has not opened the
+   * e-mailed confirmation link yet (it activates the account with this same password).
+   */
+  emailNotVerified: () =>
+    new AuthHttpException(
+      HttpStatus.FORBIDDEN,
+      'email_not_verified',
+      'Confirm your e-mail address first: open the link we sent and enter your password',
+    ),
   accountSuspended: () =>
     new AuthHttpException(HttpStatus.FORBIDDEN, 'account_suspended', 'This account is suspended'),
   accountLocked: (retryAfterSeconds: number) =>

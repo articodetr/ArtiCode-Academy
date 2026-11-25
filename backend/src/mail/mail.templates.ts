@@ -193,31 +193,31 @@ export interface ExistingAccountMailInput {
 
 const REGISTRATION: PerTemplateLocale<(input: RegistrationMailInput) => RenderedMail> = {
   ar: (input) => ({
-    subject: `أكمل إنشاء حسابك في ${input.academyName}`,
+    subject: `أكّد بريدك الإلكتروني لإكمال إنشاء حسابك في ${input.academyName}`,
     text:
       `مرحباً،\n\n` +
       `طُلب إنشاء حساب طالب في ${input.academyName} بهذا البريد الإلكتروني. ` +
-      `لإكمال إنشاء حسابك واختيار كلمة المرور افتح الرابط التالي:\n${input.link}\n\n` +
+      `لتأكيد بريدك وإكمال إنشاء حسابك افتح الرابط التالي وأدخل كلمة المرور التي اخترتها عند التسجيل:\n${input.link}\n\n` +
       `تنتهي صلاحية هذا الرابط في ${input.expiresAt}. ` +
-      `إن لم تطلب إنشاء حساب فتجاهل هذه الرسالة؛ لا يُفعَّل أي حساب دون فتح هذا الرابط.`,
+      `إن لم تطلب إنشاء حساب فتجاهل هذه الرسالة؛ لا يُفعَّل أي حساب دون فتح هذا الرابط وإدخال كلمة المرور التي اختيرت عند التسجيل.`,
   }),
   en: (input) => ({
-    subject: `Complete your ${input.academyName} account`,
+    subject: `Confirm your e-mail to finish creating your ${input.academyName} account`,
     text:
       `Hello,\n\n` +
       `A student account was requested at ${input.academyName} with this e-mail address. ` +
-      `To complete it and choose your password, open this link:\n${input.link}\n\n` +
+      `To confirm your address and finish creating your account, open this link and enter the password you chose when you registered:\n${input.link}\n\n` +
       `The link expires on ${input.expiresAt}. ` +
-      `If you did not ask for an account, you can ignore this message; no account is activated without this link.`,
+      `If you did not ask for an account, you can ignore this message; no account is activated without this link and the password chosen at registration.`,
   }),
   tr: (input) => ({
-    subject: `${input.academyName} hesabınızı tamamlayın`,
+    subject: `${input.academyName} hesabınızı tamamlamak için e-posta adresinizi doğrulayın`,
     text:
       `Merhaba,\n\n` +
       `${input.academyName} bünyesinde bu e-posta adresiyle bir öğrenci hesabı talep edildi. ` +
-      `Hesabınızı tamamlamak ve şifrenizi belirlemek için şu bağlantıyı açın:\n${input.link}\n\n` +
+      `E-posta adresinizi doğrulamak ve hesabınızı tamamlamak için şu bağlantıyı açın ve kayıt olurken belirlediğiniz şifreyi girin:\n${input.link}\n\n` +
       `Bu bağlantı ${input.expiresAt} tarihine kadar geçerlidir. ` +
-      `Hesap talebinde bulunmadıysanız bu e-postayı dikkate almayabilirsiniz; bu bağlantı açılmadan hiçbir hesap etkinleştirilmez.`,
+      `Hesap talebinde bulunmadıysanız bu e-postayı dikkate almayabilirsiniz; bu bağlantı açılıp kayıtta belirlenen şifre girilmeden hiçbir hesap etkinleştirilmez.`,
   }),
 };
 
@@ -251,7 +251,10 @@ const EXISTING_ACCOUNT: PerTemplateLocale<(input: ExistingAccountMailInput) => R
   }),
 };
 
-/** PORTAL-03: «أكمل إنشاء حسابك» — opening its link proves the address; the password is chosen there. */
+/**
+ * PORTAL-03/04 (contract v3): «أكّد بريدك الإلكتروني لإكمال إنشاء حسابك» — opening its link proves the address, and
+ * typing there the password chosen at registration activates the account.
+ */
 export function renderRegistration(locale: TemplateLocale, input: RegistrationMailInput): RenderedMail {
   return REGISTRATION[locale](input);
 }

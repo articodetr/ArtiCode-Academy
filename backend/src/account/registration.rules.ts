@@ -1,10 +1,13 @@
-// PORTAL-03 (#207, the agreed contract v2): the pure rules of a visitor creating their own student account — the
-// body checks of the three public routes in the problem codes of `400 registration_invalid`, with every problem under
-// its own field and every unexpected field named in `unknown` (the global ValidationPipe never sees these bodies, so
-// the refusal always has the contract's shape). A length is counted in characters as a person sees them (code points),
-// as the frontend's mirror does (`frontend/src/studentRegistration/registration.rules.ts` — keep them in step).
-// No Nest, no Prisma: unit-tested in registration.rules.spec.ts.
+// PORTAL-03/04 (#207, contract v3 — the password is chosen on /register): the pure rules of a visitor creating their
+// own student account — the body checks of the public routes in the problem codes of `400 registration_invalid`, with
+// every problem under its own field and every unexpected field named in `unknown` (the global ValidationPipe never
+// sees these bodies, so the refusal always has the contract's shape), and THE rule of a self-registered account still
+// waiting for its address. A name or an address is counted in characters as a person sees them (code points), as the
+// frontend's mirror does (`frontend/src/studentRegistration/registration.rules.ts` — keep them in step); a password is
+// counted as the MOD-01 policy counts it (`passwordProblems()` of password.service.ts).
+// No Prisma, no database: unit-tested in registration.rules.spec.ts.
 import { isEmail } from 'class-validator';
+import { PASSWORD_MAX_LENGTH } from '../auth/password.service.js';
 import { EMAIL_MAX_LENGTH } from '../users/users.validation.js';
 
 export const FULL_NAME_MIN_LENGTH = 2;
@@ -20,8 +23,8 @@ export const REGISTRATION_PROBLEMS = ['required', 'too_short', 'too_long', 'inva
 export type RegistrationProblem = (typeof REGISTRATION_PROBLEMS)[number];
 
 /** The fields each route accepts; anything else is reported in `unknown`. */
-export const REGISTER_FIELDS = ['fullName', 'email', 'locale'] as const;
-export const COMPLETE_FIELDS = ['password', 'fullName'] as const;
+export const REGISTER_FIELDS = ['fullName', 'email', 'password', 'locale'] as const;
+export const COMPLETE_FIELDS = ['password'] as const;
 
 /** The details of `400 registration_invalid`: `fields` holds only the fields with a problem; both keys are always present. */
 export interface RegistrationViolations {
@@ -31,18 +34,20 @@ export interface RegistrationViolations {
 
 export type Checked<T> = { ok: true; value: T } | { ok: false; violations: RegistrationViolations };
 
-/** A valid `POST /api/account/register` body, normalised: the name trimmed, the address trimmed and lower-cased. */
+/**
+ * A `POST /api/account/register` body whose shape is valid, normalised: the name trimmed, the address trimmed and
+ * lower-cased, the password as typed (the rest of its policy — `password_weak` — is the service's next check).
+ */
 export interface RegisterInput {
   fullName: string;
   email: string;
+  password: string;
   locale: RegistrationLocale | null;
 }
 
-/** A `POST /api/account/register/:token/complete` body whose shape is valid (the password policy comes after). */
+/** A `POST /api/account/register/:token/complete` body whose shape is valid: the password chosen at registration. */
 export interface CompleteInput {
   password: string;
-  /** The trimmed new name, or null when the visitor kept the stored one. */
-  fullName: string | null;
 }
 
 /** A C0 control or DEL: a name or an address with a line break or a tab is never what a person typed on purpose. */
@@ -92,30 +97,37 @@ export function localeProblem(value: unknown): RegistrationProblem | null {
   return typeof value === 'string' && (REGISTRATION_LOCALES as readonly string[]).includes(value) ? null : 'invalid_format';
 }
 
-/** The password must be a non-empty string here; its policy (`password_weak`) is checked by the service. */
+/**
+ * The password must be a non-empty string of at most the MOD-01 maximum (`PASSWORD_MAX_LENGTH`, counted like
+ * `passwordProblems()` counts it — a longer one can never have been stored). The rest of its policy (`password_weak`)
+ * is the service's next check on registration; on completion the stored hash decides.
+ */
 export function passwordShapeProblem(value: unknown): RegistrationProblem | null {
   if (value === undefined || value === '') return 'required';
-  return typeof value === 'string' ? null : 'invalid_format';
+  if (typeof value !== 'string') return 'invalid_format';
+  return value.length > PASSWORD_MAX_LENGTH ? 'too_long' : null;
 }
 
 /**
- * THE rule of a self-registered account whose holder has not opened the e-mailed link yet: `pending` and without a
- * password. Nothing else creates such a row (POST /api/users creates `invited`, Google sign-up `active`), and it reads
- * the row alone — no token history (old tokens are pruned by the maintenance command), no migration. Every path that
- * treats such an account specially uses it: the registration routes (a fresh link, completion), the sign-in (401
- * `invalid_credentials`, like an unknown address), the admin `activate` (409 — only `delete` applies) and the Google
- * sign-in (links and activates it). A soft-deleted row is each caller's own check.
+ * THE rule of a self-registered account whose holder has not confirmed the address yet (contract v3): `pending` and
+ * marked `self_registered_at` — the marker e-mail registration and Google sign-up set when they create an account
+ * (POST /api/users creates `invited` accounts without it). Since v3 the visitor chooses the password at registration,
+ * so the v2 rule (`pending` without a password) no longer holds. Every path that treats such an account specially
+ * uses it: the registration routes (a fresh link, the completion), the sign-in (`403 email_not_verified` once the
+ * password matched), the admin `activate` (409 — only `delete` applies), the hard delete, the user detail
+ * (`awaitingRegistration`) and the Google sign-in (links and activates it). A soft-deleted row is each caller's own
+ * check.
  */
-export function isPendingSelfRegistration(user: { status: string; passwordHash: string | null }): boolean {
-  return user.status === 'pending' && user.passwordHash === null;
+export function isPendingSelfRegistration(user: { status: string; selfRegisteredAt: Date | null }): boolean {
+  return user.status === 'pending' && user.selfRegisteredAt !== null;
 }
 
 /**
- * The same rule as a query filter (`Prisma.UserWhereInput`), for a reader that never loads the password hash — the
- * user detail (`awaitingRegistration`) and the hard delete of such an account. Keep it in step with the function above
+ * The same rule as a query filter (`Prisma.UserWhereInput`) — the user detail (`awaitingRegistration`), the hard
+ * delete of such an account and the conditional writes of the completion. Keep it in step with the function above
  * (registration.rules.spec.ts checks both say the same).
  */
-export const PENDING_SELF_REGISTRATION_WHERE = { status: 'pending', passwordHash: null } as const;
+export const PENDING_SELF_REGISTRATION_WHERE = { status: 'pending', selfRegisteredAt: { not: null } } as const;
 
 /** The trimmed, lower-cased address (the form every stored e-mail has — users.validation.ts). */
 export function normalizeRegistrationEmail(email: string): string {
@@ -132,11 +144,16 @@ function violationsOf(problems: Record<string, RegistrationProblem | null>, unkn
   return Object.keys(fields).length > 0 || unknown.length > 0 ? { fields, unknown } : null;
 }
 
-/** `POST /api/account/register`: a body that is not a JSON object reads as an empty one (both fields required). */
+/** `POST /api/account/register`: a body that is not a JSON object reads as an empty one (the three fields required). */
 export function checkRegisterBody(raw: unknown): Checked<RegisterInput> {
   const body = bodyObject(raw);
   const violations = violationsOf(
-    { fullName: fullNameProblem(body['fullName']), email: emailProblem(body['email']), locale: localeProblem(body['locale']) },
+    {
+      fullName: fullNameProblem(body['fullName']),
+      email: emailProblem(body['email']),
+      password: passwordShapeProblem(body['password']),
+      locale: localeProblem(body['locale']),
+    },
     unknownFields(body, REGISTER_FIELDS),
   );
   if (violations) return { ok: false, violations };
@@ -145,25 +162,16 @@ export function checkRegisterBody(raw: unknown): Checked<RegisterInput> {
     value: {
       fullName: (body['fullName'] as string).trim(),
       email: normalizeRegistrationEmail(body['email'] as string),
+      password: body['password'] as string,
       locale: (body['locale'] as RegistrationLocale | undefined) ?? null,
     },
   };
 }
 
-/** `POST /api/account/register/:token/complete`: `fullName` is optional, `password` required. */
+/** `POST /api/account/register/:token/complete`: the password only (the name was fixed at registration). */
 export function checkCompleteBody(raw: unknown): Checked<CompleteInput> {
   const body = bodyObject(raw);
-  const violations = violationsOf(
-    {
-      password: passwordShapeProblem(body['password']),
-      fullName: Object.hasOwn(body, 'fullName') ? fullNameProblem(body['fullName']) : null,
-    },
-    unknownFields(body, COMPLETE_FIELDS),
-  );
+  const violations = violationsOf({ password: passwordShapeProblem(body['password']) }, unknownFields(body, COMPLETE_FIELDS));
   if (violations) return { ok: false, violations };
-  const fullName = body['fullName'];
-  return {
-    ok: true,
-    value: { password: body['password'] as string, fullName: typeof fullName === 'string' ? fullName.trim() : null },
-  };
+  return { ok: true, value: { password: body['password'] as string } };
 }

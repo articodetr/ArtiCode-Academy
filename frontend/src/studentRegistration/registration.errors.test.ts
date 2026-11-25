@@ -3,6 +3,7 @@ import { ApiError } from '../api/client'
 import { REGISTRATION_PROBLEMS } from '../api/registration'
 import i18n from '../i18n'
 import {
+  attemptsLeftOf,
   describeCompleteFailure,
   describeLinkFailure,
   describeRegisterFailure,
@@ -32,9 +33,12 @@ describe('fieldErrorsOf', () => {
     ])
   })
 
-  it('words every password problem as the password policy, once', () => {
-    const [error] = fieldErrorsOf({ fields: { password: ['required', 'too_short'] } }, ['password'])
-    expect(error?.messages).toEqual([{ key: 'account.validation.passwordPolicy', params: { min: 10, max: 128 } }])
+  it('asks for a missing password and words every other password problem as the policy, once', () => {
+    const [error] = fieldErrorsOf({ fields: { password: ['required', 'too_short', 'too_long', '<b>x</b>'] } }, ['password'])
+    expect(error?.messages).toEqual([
+      { key: 'account.validation.passwordRequired' },
+      { key: 'account.validation.passwordPolicy', params: { min: 10, max: 128 } },
+    ])
   })
 
   it('ignores a body without usable fields', () => {
@@ -90,6 +94,17 @@ describe('describeRegisterFailure', () => {
     })
   })
 
+  it('puts a password problem under the password field', () => {
+    expect(describeRegisterFailure(refused(400, 'registration_invalid', { fields: { password: ['required'] }, unknown: [] }))).toEqual({
+      kind: 'fields',
+      fields: [{ name: 'password', messages: [{ key: 'account.validation.passwordRequired' }] }],
+    })
+    expect(describeRegisterFailure(refused(400, 'password_weak', { problems: ['at least 10 characters'] }))).toEqual({
+      kind: 'fields',
+      fields: [{ name: 'password', messages: [{ key: 'account.errors.password_weak', params: { min: 10 } }] }],
+    })
+  })
+
   it('answers a refusal that names no shown field with a general message', () => {
     expect(describeRegisterFailure(refused(400, 'registration_invalid', { fields: {}, unknown: ['role'] }))).toEqual({
       kind: 'message',
@@ -126,20 +141,56 @@ describe('describeLinkFailure', () => {
   })
 })
 
-describe('describeCompleteFailure', () => {
-  it('puts password_weak under the password', () => {
-    expect(describeCompleteFailure(refused(400, 'password_weak', { problems: ['at least 10 characters'] }))).toEqual({
-      kind: 'fields',
-      fields: [{ name: 'password', messages: [{ key: 'account.errors.password_weak', params: { min: 10 } }] }],
-    })
+describe('attemptsLeftOf', () => {
+  it('reads the number of attempts the server left', () => {
+    for (const count of [0, 1, 4, 5]) expect(attemptsLeftOf({ attemptsLeft: count })).toBe(count)
   })
 
-  it('puts registration_invalid under the name or the password', () => {
-    expect(describeCompleteFailure(refused(400, 'registration_invalid', { fields: { fullName: ['too_long'] } }))).toEqual({
+  it('believes no number it cannot use', () => {
+    for (const body of [undefined, null, 'x', {}, { attemptsLeft: '3' }, { attemptsLeft: -1 }, { attemptsLeft: 1.5 }, { attemptsLeft: 6 }]) {
+      expect(attemptsLeftOf(body)).toBeNull()
+    }
+  })
+})
+
+describe('describeCompleteFailure', () => {
+  const incorrect = (attemptsLeft?: unknown) =>
+    refused(400, 'registration_password_incorrect', attemptsLeft === undefined ? {} : { attemptsLeft })
+
+  it('puts a wrong password under the password field, with the attempts left', () => {
+    expect(describeCompleteFailure(incorrect(3))).toEqual({
       kind: 'fields',
-      fields: [{ name: 'fullName', messages: [{ key: 'studentRegistration.validation.fullName.too_long' }] }],
+      fields: [
+        { name: 'password', messages: [{ key: 'studentRegistration.complete.passwordIncorrectAttempts', params: { count: 3 } }] },
+      ],
     })
-    expect(describeCompleteFailure(refused(400, 'registration_invalid', { fields: { email: ['required'] } }))).toEqual({
+    expect(describeCompleteFailure(incorrect())).toEqual({
+      kind: 'fields',
+      fields: [{ name: 'password', messages: [{ key: 'studentRegistration.complete.passwordIncorrect' }] }],
+    })
+    expect(describeCompleteFailure(incorrect('3'))).toEqual(describeCompleteFailure(incorrect()))
+  })
+
+  it('reads the last wrong password the link allowed as a retired link', () => {
+    expect(describeCompleteFailure(incorrect(0))).toEqual({ kind: 'link_exhausted' })
+  })
+
+  it('words the attempts left in both languages', () => {
+    const key = 'studentRegistration.complete.passwordIncorrectAttempts'
+    expect(i18n.t(key, { lng: 'ar', count: 1 })).toContain('محاولة واحدة')
+    expect(i18n.t(key, { lng: 'ar', count: 2 })).toContain('محاولتان')
+    expect(i18n.t(key, { lng: 'ar', count: 4 })).toContain('4 محاولات')
+    expect(i18n.t(key, { lng: 'en', count: 1 })).toContain('1 attempt left')
+    expect(i18n.t(key, { lng: 'en', count: 4 })).toContain('4 attempts left')
+  })
+
+  it('puts registration_invalid under the password, and answers any other field with a general message', () => {
+    expect(describeCompleteFailure(refused(400, 'registration_invalid', { fields: { password: ['required'] } }))).toEqual({
+      kind: 'fields',
+      fields: [{ name: 'password', messages: [{ key: 'account.validation.passwordRequired' }] }],
+    })
+    // The name is no longer part of this request: a problem under it is no field of this screen.
+    expect(describeCompleteFailure(refused(400, 'registration_invalid', { fields: { fullName: ['too_long'] } }))).toEqual({
       kind: 'message',
       key: 'studentRegistration.errors.invalid',
     })

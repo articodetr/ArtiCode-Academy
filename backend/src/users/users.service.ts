@@ -112,6 +112,8 @@ const DETAIL_SELECT = {
   mfaEnabledAt: true,
   // When the Google link was made — never its subject or the address Google reported (one per user: uq_user_identities_user_provider).
   identities: { where: { provider: 'google' }, select: { createdAt: true }, take: 1 },
+  // The self-registration marker, read only for `awaitingRegistration` (isPendingSelfRegistration()); never answered as such.
+  selfRegisteredAt: true,
   roles: { select: { role: { select: { key: true, label: true } } } },
   studentProfile: { select: { studentNumber: true, dateOfBirth: true, enrolledOn: true } },
   employeeProfile: {
@@ -150,15 +152,15 @@ const CURRENT_SELECT = {
 } satisfies Prisma.UserSelect;
 
 // What a status change (users.status.ts) decides on, plus the roles for SEC-R-17 and the last-admin rule.
-// The password hash is read only to know whether the account has one (a self-registered `pending` account
-// without a password cannot be activated — PORTAL-03); it never leaves the service.
+// The self-registration marker tells whether a `pending` account awaits its holder (`isPendingSelfRegistration()`:
+// it cannot be activated by an admin — PORTAL-03/04, contract v3).
 const STATE_SELECT = {
   id: true,
   status: true,
   deletedAt: true,
   lockedUntil: true,
   failedLoginCount: true,
-  passwordHash: true,
+  selfRegisteredAt: true,
   roles: { select: { role: { select: ROLE_GRANT_SELECT } } },
 } satisfies Prisma.UserSelect;
 
@@ -370,16 +372,7 @@ export class UsersService {
       select: DETAIL_SELECT,
     });
     if (!row) throw usersError.userNotFound();
-    return toDetail(row, view, await this.awaitsRegistration(row));
-  }
-
-  /**
-   * `isPendingSelfRegistration()` of the row without reading its password hash: only a `pending` account can be one,
-   * and for it the rule runs as a filter (PENDING_SELF_REGISTRATION_WHERE).
-   */
-  private async awaitsRegistration(row: { id: string; status: string }): Promise<boolean> {
-    if (row.status !== 'pending') return false;
-    return (await this.prisma.db.user.count({ where: { id: row.id, ...PENDING_SELF_REGISTRATION_WHERE } })) === 1;
+    return toDetail(row, view, isPendingSelfRegistration(row));
   }
 
   // ------------------------------------------------------------- create
@@ -632,8 +625,9 @@ export class UsersService {
    * not see deleted users) → 403 `permission_denied` when the target's roles
    * confer a permission the caller lacks (SEC-R-17) → 403 `self_forbidden` →
    * 409 `invalid_transition` → inside the transaction 409 `last_admin`. A
-   * self-registered `pending` account without a password allows `delete` only
-   * (PORTAL-03: it becomes `active` through its e-mailed link alone), and that
+   * self-registered `pending` account (`isPendingSelfRegistration()`) allows
+   * `delete` only (PORTAL-03/04: it becomes `active` through its e-mailed link
+   * and the password chosen at registration alone), and that
    * delete removes the row for good while nothing else refers to it
    * (deleteForGood(), review #5).
    * The status is written with a conditional update, so a concurrent change

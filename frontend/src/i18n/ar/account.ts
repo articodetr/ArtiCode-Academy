@@ -91,6 +91,9 @@ export const login = {
     account_suspended: 'هذا الحساب موقوف. تواصل مع إدارة الأكاديمية.',
     account_pending: 'هذا الحساب بانتظار اعتماد إدارة الأكاديمية.',
     account_not_activated: 'لم يتم تفعيل هذا الحساب بعد. استخدم رابط الدعوة الذي وصلك.',
+    // A student who registered but has not opened the confirmation link yet (contract v3): said only after the
+    // password matched, so it reveals nothing to someone who does not know it.
+    email_not_verified: 'أكّد بريدك الإلكتروني أولًا: افتح رسالة التأكيد التي أرسلناها إليك وأدخل كلمة مرورك.',
     rate_limited: 'محاولات كثيرة في وقت قصير. انتظر قليلاً ثم حاول مجدداً.',
     mfa_unavailable:
       'التحقق بخطوتين غير متاح على الخادم حالياً، ولا يمكن الدخول إلى هذا الحساب بدونه. تواصل مع إدارة الأكاديمية.',

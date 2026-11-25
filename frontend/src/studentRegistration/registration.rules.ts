@@ -1,7 +1,9 @@
-// Pure rules of a student creating their own account (PORTAL-03/04, the agreed contract v2 in GitHub #207): the limits of
-// the two fields, mirrored for immediate feedback (the server stays the judge), and which name a completed link sends.
-// A length is counted in characters as a person sees them (code points), so an emoji is one. No React, no I/O.
+// Pure rules of a student creating their own account (PORTAL-04, contract v3): the limits of the name and the e-mail,
+// and the password with its confirmation, mirrored for immediate feedback (the server stays the judge). A length of the
+// name or the e-mail is counted in characters as a person sees them (code points), so an emoji is one; the password
+// follows the invitation's policy mirror (account.links.ts — backend passwordProblems()). No React, no I/O.
 import type { RegistrationProblem } from '../api/registration'
+import { isAcceptablePassword } from '../account/account.links'
 import { EMAIL_MAX_LENGTH } from '../users/users.validation'
 
 export const FULL_NAME_MIN_LENGTH = 2
@@ -35,9 +37,14 @@ export function emailProblem(value: unknown): RegistrationProblem | null {
   return EMAIL_SHAPE.test(email) ? null : 'invalid_format'
 }
 
-/** The name a completed link sends: the trimmed new one, or undefined when the visitor left it as the server showed it. */
-export function changedFullName(shown: string, typed: unknown): string | undefined {
-  if (typeof typed !== 'string') return undefined
-  const name = typed.trim()
-  return name === shown.trim() ? undefined : name
+/** What is wrong with a chosen password: missing, or outside the policy; null when it is fine. Never trimmed. */
+export function passwordProblem(value: unknown): 'required' | 'policy' | null {
+  if (typeof value !== 'string' || value.length === 0) return 'required'
+  return isAcceptablePassword(value) ? null : 'policy'
+}
+
+/** What is wrong with the confirmation of a chosen password; null when it repeats it exactly. */
+export function confirmationProblem(password: unknown, confirmation: unknown): 'required' | 'mismatch' | null {
+  if (typeof confirmation !== 'string' || confirmation.length === 0) return 'required'
+  return confirmation === password ? null : 'mismatch'
 }

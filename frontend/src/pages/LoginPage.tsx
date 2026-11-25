@@ -45,6 +45,8 @@ const KNOWN_CODES = new Set([
   'account_suspended',
   'account_pending',
   'account_not_activated',
+  // A self-registered student whose address is not confirmed yet (contract v3): answered only after the password matched.
+  'email_not_verified',
   'rate_limited',
   // An account with two-step verification on a server without its key: never a session without the second step.
   'mfa_unavailable',

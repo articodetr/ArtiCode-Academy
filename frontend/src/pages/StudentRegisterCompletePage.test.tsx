@@ -1,35 +1,46 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App as AntdApp, ConfigProvider } from 'antd'
+import { useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import type { RegistrationPreview } from '../api/registration'
-import { getAccessToken } from '../auth/token-store'
+import { getAccessToken, setAccessToken } from '../auth/token-store'
 import { AuthContext } from '../auth/auth-context'
+import type { AuthUser } from '../auth/auth-context'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { KEPT_COURSE_KEY, KEPT_COURSE_TTL_MS, keepCourse } from '../studentRegistration/keptCourse'
-import { jsonResponse, mockFetch } from '../test/http'
+import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
-import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { LoginPage } from './LoginPage'
+import { makeAuth, makeUser, renderWithProviders, userOfSession } from '../test/render'
 import { StudentRegisterCompletePage } from './StudentRegisterCompletePage'
 
 const text = ar.studentRegistration
 const TOKEN = 'reg_'.padEnd(43, 'x')
 const PASSWORD = 'Secret123!x'
 const COURSE = '0192f0a0-0000-7000-8000-00000000c001'
+const INTENT = `/catalog/${COURSE}?intent=enroll`
 const PREVIEW: RegistrationPreview = {
   fullName: 'سارة علي',
   maskedEmail: 's***@example.test',
   expiresAt: '2026-11-26T10:00:00.000Z',
 }
+const SESSION = sessionResponse('access-of-sara', {
+  id: 'user-sara',
+  email: 'sara@example.test',
+  username: null,
+  fullName: PREVIEW.fullName,
+  roles: ['student'],
+  permissions: ['catalog.read'],
+})
 
 type Answer = () => Response | Promise<Response>
 
 function mockApi({
   preview = () => jsonResponse(200, PREVIEW),
-  complete = () => jsonResponse(200, { completed: true }),
+  complete = () => jsonResponse(200, SESSION),
 }: { preview?: Answer; complete?: Answer } = {}) {
   return mockFetch((url, init) => {
     if (url.endsWith('/api/academy/public')) return jsonResponse(200, { name: { ar: 'أ' }, logoUrl: null, defaultLocale: 'ar' })
@@ -46,19 +57,31 @@ function posts(fetchMock: ReturnType<typeof mockFetch>) {
   return fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
 }
 
-function renderPage(token: string = TOKEN, auth = makeAuth()) {
+/** The path and the query string a navigation reached. */
+function PathProbe() {
+  const location = useLocation()
+  return <output data-testid="path">{`${location.pathname}${location.search}`}</output>
+}
+
+function renderPage(token: string = TOKEN, auth = makeAuth(), search = '') {
   const utils = renderWithProviders(<StudentRegisterCompletePage />, {
     auth,
-    route: `/register/complete/${token}`,
+    route: `/register/complete/${token}${search}`,
     path: '/register/complete/:token',
     routes: {
       '/login': <LocationProbe />,
       '/register': <LocationProbe />,
       '/my-classes': <LocationProbe />,
+      '/my-school': <LocationProbe />,
+      '/catalog/:courseId': <PathProbe />,
       '/': <LocationProbe />,
     },
   })
   return { ...utils, auth }
+}
+
+function passwordField(): HTMLInputElement {
+  return screen.getByLabelText<HTMLInputElement>(text.complete.password)
 }
 
 function submitButton(): HTMLElement {
@@ -67,15 +90,14 @@ function submitButton(): HTMLElement {
   return button
 }
 
-async function typePasswords(password = PASSWORD, confirmation = password) {
+async function typePassword(password = PASSWORD) {
   const user = userEvent.setup()
-  await user.type(await screen.findByLabelText(ar.account.password), password)
-  await user.type(screen.getByLabelText(ar.account.confirmPassword), confirmation)
+  await user.type(await screen.findByLabelText(text.complete.password), password)
   return user
 }
 
-async function chooseAndSubmit(password = PASSWORD) {
-  const user = await typePasswords(password)
+async function enterAndSubmit(password = PASSWORD) {
+  const user = await typePassword(password)
   await user.click(submitButton())
   return user
 }
@@ -95,6 +117,44 @@ function locationState() {
   return JSON.parse(screen.getByTestId('location').getAttribute('data-state')!)
 }
 
+/** A stand-in for AuthProvider that, like it, becomes signed in when a session is adopted. */
+function StatefulAuth({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const value = useMemo(
+    () =>
+      makeAuth({
+        user,
+        adoptSession: (session) => {
+          const adopted = userOfSession(session)
+          setUser(adopted)
+          return adopted
+        },
+      }),
+    [user],
+  )
+  return <AuthContext value={value}>{children}</AuthContext>
+}
+
+function renderInDataRouter(initialEntries: string[], withProvider = false) {
+  const router = createMemoryRouter(
+    [
+      { path: '/home', element: <LocationProbe /> },
+      { path: '/', element: <LocationProbe /> },
+      { path: '/my-classes', element: <LocationProbe /> },
+      { path: '/catalog/:courseId', element: <PathProbe /> },
+      { path: '/register/complete/:token', element: <StudentRegisterCompletePage /> },
+    ],
+    { initialEntries, initialIndex: initialEntries.length - 1 },
+  )
+  const routed = <RouterProvider router={router} />
+  render(
+    <ConfigProvider>
+      <AntdApp>{withProvider ? <StatefulAuth>{routed}</StatefulAuth> : <AuthContext value={makeAuth()}>{routed}</AuthContext>}</AntdApp>
+    </ConfigProvider>,
+  )
+  return router
+}
+
 describe('StudentRegisterCompletePage', () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -103,6 +163,7 @@ describe('StudentRegisterCompletePage', () => {
   afterEach(() => {
     window.localStorage.clear()
     window.sessionStorage.clear()
+    setAccessToken(null)
   })
 
   describe('the link', () => {
@@ -111,7 +172,7 @@ describe('StudentRegisterCompletePage', () => {
       renderPage(encodeURIComponent(token))
 
       expect(screen.getByRole('alert')).toHaveTextContent(text.complete.linkInvalid)
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
       expect(linkCalls(fetchMock)).toHaveLength(0)
     })
 
@@ -120,59 +181,69 @@ describe('StudentRegisterCompletePage', () => {
       const { container } = renderPage()
 
       expect(container.querySelector('.ant-spin')).toBeInTheDocument()
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
     })
 
     it('reads the preview once on its own route, without a bearer token', async () => {
       const fetchMock = mockApi()
       renderPage()
 
-      await screen.findByLabelText(text.complete.fullName)
+      await screen.findByLabelText(text.complete.password)
       expect(linkCalls(fetchMock)).toHaveLength(1)
       const [url, init] = linkCalls(fetchMock)[0]!
       expect(String(url)).toBe(`/api/account/register/${TOKEN}`)
       expect(new Headers(init?.headers).has('Authorization')).toBe(false)
     })
 
-    it('shows the masked e-mail read-only and left-to-right, and the name editable', async () => {
+    it('shows the name and the masked e-mail read-only, the e-mail left-to-right', async () => {
       mockApi()
       renderPage()
 
       const email = await screen.findByText(PREVIEW.maskedEmail)
       expect(email.tagName).toBe('BDI')
       expect(email).toHaveAttribute('dir', 'ltr')
+      expect(screen.getByText(PREVIEW.fullName)).toBeInTheDocument()
       expect(screen.queryByDisplayValue(PREVIEW.maskedEmail)).not.toBeInTheDocument()
-      const name = screen.getByLabelText<HTMLInputElement>(text.complete.fullName)
-      expect(name.value).toBe(PREVIEW.fullName)
-      expect(name).not.toHaveAttribute('readonly')
-      expect(name).toBeEnabled()
-      expect(screen.getByLabelText(ar.account.password)).toBeInTheDocument()
-      expect(screen.getByLabelText(ar.account.confirmPassword)).toBeInTheDocument()
+      // The name is no longer part of the request: nothing on the page edits it.
+      expect(screen.queryByDisplayValue(PREVIEW.fullName)).not.toBeInTheDocument()
     })
 
-    it('heads the card with its title and words the password rules under the password', async () => {
+    it('heads the card with its title and asks for ONE password, the one chosen at registration, that can be shown', async () => {
       mockApi()
       renderPage()
 
-      const password = await screen.findByLabelText(ar.account.password)
+      const password = await screen.findByLabelText(text.complete.password)
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(text.complete.title)
+      expect(screen.getByText(text.complete.intro)).toBeInTheDocument()
       expect(password).toHaveAttribute('type', 'password')
-      expect(screen.getByLabelText(ar.account.confirmPassword)).toHaveAttribute('type', 'password')
-      expect(screen.getByText(i18n.t('studentRegistration.complete.passwordHint', { min: 10 }))).toBeInTheDocument()
-      // Both fields can show what was typed (Input.Password).
-      expect(document.querySelectorAll('.ant-input-password-icon')).toHaveLength(2)
+      expect(password).toHaveAttribute('autocomplete', 'current-password')
+      expect(document.querySelectorAll('input[type="password"]')).toHaveLength(1)
+      expect(document.querySelectorAll('.ant-input-password-icon')).toHaveLength(1)
+      expect(screen.queryByLabelText(ar.account.confirmPassword)).not.toBeInTheDocument()
+      expect(submitButton()).toHaveTextContent(text.complete.submit)
+    })
+
+    it('offers to register again for a forgotten password, carrying a kept course', async () => {
+      keepCourse(COURSE)
+      mockApi()
+      renderPage()
+
+      await screen.findByLabelText(text.complete.password)
+      expect(screen.getByText(text.complete.forgotPassword, { exact: false })).toBeInTheDocument()
+      const link = screen.getByRole('link', { name: text.complete.registerWithNewPassword })
+      expect(link).toHaveAttribute('href', `/register?returnTo=${encodeURIComponent(INTENT)}`)
     })
 
     it.each<[string, Answer]>([
       ['404 registration_link_invalid', () => jsonResponse(404, { statusCode: 404, code: 'registration_link_invalid' })],
       ['a 404 with no code', () => jsonResponse(404, { statusCode: 404, message: 'Cannot GET' })],
-    ])('shows %s as a dead link with the way to sign in', async (_label, preview) => {
+    ])('shows %s as a dead link that offers to register again', async (_label, preview) => {
       mockApi({ preview })
       renderPage()
 
       expect(await screen.findByRole('alert')).toHaveTextContent(text.complete.linkInvalid)
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
-      expect(screen.queryByRole('link', { name: text.complete.registerAgain })).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: text.complete.registerAgain })).toHaveAttribute('href', '/register')
       expect(screen.getByRole('link', { name: ar.account.goToLogin })).toHaveAttribute('href', '/login')
     })
 
@@ -181,7 +252,7 @@ describe('StudentRegisterCompletePage', () => {
       renderPage()
 
       expect(await screen.findByRole('alert')).toHaveTextContent(text.complete.linkExpired)
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
       expect(screen.getByRole('link', { name: ar.account.goToLogin })).toHaveAttribute('href', '/login')
 
       await userEvent.click(screen.getByRole('link', { name: text.complete.registerAgain }))
@@ -195,7 +266,7 @@ describe('StudentRegisterCompletePage', () => {
       renderPage()
 
       const again = await screen.findByRole('link', { name: text.complete.registerAgain })
-      const returnTo = encodeURIComponent(`/catalog/${COURSE}?intent=enroll`)
+      const returnTo = encodeURIComponent(INTENT)
       expect(again).toHaveAttribute('href', `/register?returnTo=${returnTo}`)
       expect(screen.getByRole('link', { name: ar.account.goToLogin })).toHaveAttribute('href', `/login?returnTo=${returnTo}`)
       await userEvent.click(again)
@@ -209,7 +280,7 @@ describe('StudentRegisterCompletePage', () => {
       renderPage()
 
       expect(await screen.findByText(text.closed.title)).toBeInTheDocument()
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
     })
 
     it.each<[string, Answer, string]>([
@@ -222,11 +293,11 @@ describe('StudentRegisterCompletePage', () => {
 
       expect(await screen.findByText(text.complete.loadFailed)).toBeInTheDocument()
       expect(screen.getByText(message)).toBeInTheDocument()
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
 
       fetchMock.mockImplementation(async () => jsonResponse(200, PREVIEW))
       await userEvent.click(screen.getByText(text.complete.retry).closest('button')!)
-      expect(await screen.findByLabelText(text.complete.fullName)).toBeInTheDocument()
+      expect(await screen.findByLabelText(text.complete.password)).toBeInTheDocument()
       expect(linkCalls(fetchMock)).toHaveLength(2)
     })
 
@@ -240,61 +311,45 @@ describe('StudentRegisterCompletePage', () => {
   })
 
   describe('submitting', () => {
-    it('sends the password alone while the name is unchanged', async () => {
+    it('sends the password alone, exactly as typed, without a bearer token', async () => {
       const fetchMock = mockApi()
       renderPage()
 
-      await chooseAndSubmit()
+      await enterAndSubmit(` ${PASSWORD} `)
 
       await screen.findByTestId('location')
       const [call] = posts(fetchMock)
       expect(String(call![0])).toBe(`/api/account/register/${TOKEN}/complete`)
-      expect(JSON.parse(String(call![1]?.body))).toEqual({ password: PASSWORD })
+      expect(JSON.parse(String(call![1]?.body))).toEqual({ password: ` ${PASSWORD} ` })
       expect(new Headers(call![1]?.headers).has('Authorization')).toBe(false)
     })
 
-    it('does not send a name that differs only by spaces', async () => {
+    it('refuses an empty password before sending', async () => {
       const fetchMock = mockApi()
       renderPage()
-      const name = await screen.findByLabelText(text.complete.fullName)
-      fireEvent.change(name, { target: { value: `  ${PREVIEW.fullName} ` } })
+      await screen.findByLabelText(text.complete.password)
 
-      await chooseAndSubmit()
+      await userEvent.click(submitButton())
 
-      await screen.findByTestId('location')
-      expect(JSON.parse(String(posts(fetchMock)[0]![1]?.body))).toEqual({ password: PASSWORD })
-    })
-
-    it('sends the trimmed name when the visitor changed it', async () => {
-      const fetchMock = mockApi()
-      renderPage()
-      const name = await screen.findByLabelText(text.complete.fullName)
-      fireEvent.change(name, { target: { value: '  سارة أحمد ' } })
-
-      await chooseAndSubmit()
-
-      await screen.findByTestId('location')
-      expect(JSON.parse(String(posts(fetchMock)[0]![1]?.body))).toEqual({ password: PASSWORD, fullName: 'سارة أحمد' })
-    })
-
-    it('refuses an emptied name and a mismatched confirmation before sending', async () => {
-      const fetchMock = mockApi()
-      renderPage()
-      fireEvent.change(await screen.findByLabelText(text.complete.fullName), { target: { value: '   ' } })
-
-      const user = await typePasswords(PASSWORD, 'Different123!')
-      await user.click(submitButton())
-
-      expect(await screen.findByText(text.validation.fullName.blank)).toBeInTheDocument()
-      expect(await screen.findByText(ar.account.validation.mismatch)).toBeInTheDocument()
+      expect(await screen.findByText(text.complete.passwordRequired)).toBeInTheDocument()
       expect(posts(fetchMock)).toHaveLength(0)
     })
 
-    it('sends one request for a double press', async () => {
+    it('refuses a password that cannot be the chosen one, so it costs no attempt', async () => {
+      const fetchMock = mockApi()
+      renderPage()
+
+      await enterAndSubmit('short')
+
+      expect(await screen.findByText(i18n.t('account.validation.passwordPolicy', { min: 10, max: 128 }))).toBeInTheDocument()
+      expect(posts(fetchMock)).toHaveLength(0)
+    })
+
+    it('sends one request for a double press and for Enter during the request', async () => {
       let release: (response: Response) => void = () => {}
       const fetchMock = mockApi({ complete: () => new Promise<Response>((resolve) => (release = resolve)) })
       renderPage()
-      await typePasswords()
+      await typePassword()
 
       const button = submitButton()
       const form = button.closest('form')!
@@ -307,38 +362,88 @@ describe('StudentRegisterCompletePage', () => {
       })
       expect(posts(fetchMock)).toHaveLength(1)
 
-      await act(async () => release(jsonResponse(200, { completed: true })))
-      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/login')
+      await act(async () => release(jsonResponse(200, SESSION)))
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+    })
+  })
+
+  describe('a wrong password', () => {
+    const incorrect = (attemptsLeft?: number) => () =>
+      jsonResponse(400, {
+        statusCode: 400,
+        code: 'registration_password_incorrect',
+        ...(attemptsLeft === undefined ? {} : { attemptsLeft }),
+      })
+
+    it('says under the field how many attempts are left, keeps the form, and can activate next', async () => {
+      const fetchMock = mockApi({ complete: incorrect(3) })
+      const { auth } = renderPage()
+      const user = await enterAndSubmit('Wrong12345!')
+
+      const message = i18n.t('studentRegistration.complete.passwordIncorrectAttempts', { count: 3 })
+      expect(message).toContain('3 محاولات')
+      expect(await screen.findByText(message)).toBeInTheDocument()
+      expect(passwordField()).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.queryByText('registration_password_incorrect')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+      expect(auth.adoptSession).not.toHaveBeenCalled()
+      expect(getAccessToken()).toBeNull()
+
+      fetchMock.mockImplementation(async () => jsonResponse(200, SESSION))
+      await user.clear(passwordField())
+      await user.type(passwordField(), PASSWORD)
+      await user.click(submitButton())
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+      expect(JSON.parse(String(posts(fetchMock)[1]![1]?.body))).toEqual({ password: PASSWORD })
+    })
+
+    it('warns that the last attempt is the last', async () => {
+      mockApi({ complete: incorrect(1) })
+      renderPage()
+
+      await enterAndSubmit('Wrong12345!')
+
+      expect(await screen.findByText(text.complete.passwordIncorrectAttempts_one)).toBeInTheDocument()
+    })
+
+    it('stays general when the server names no number', async () => {
+      mockApi({ complete: incorrect() })
+      renderPage()
+
+      await enterAndSubmit('Wrong12345!')
+
+      expect(await screen.findByText(text.complete.passwordIncorrect)).toBeInTheDocument()
+    })
+
+    it('replaces the form with the way to register again when no attempt is left', async () => {
+      keepCourse(COURSE)
+      mockApi({ complete: incorrect(0) })
+      renderPage()
+
+      await enterAndSubmit('Wrong12345!')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(text.complete.linkExhausted)
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: text.complete.registerAgain })).toHaveAttribute(
+        'href',
+        `/register?returnTo=${encodeURIComponent(INTENT)}`,
+      )
+      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).not.toBeNull()
     })
   })
 
   describe('a refused completion', () => {
-    it('keeps the form with password_weak under the password field', async () => {
-      mockApi({ complete: () => jsonResponse(400, { statusCode: 400, code: 'password_weak', problems: ['too common'] }) })
-      renderPage()
-
-      await chooseAndSubmit()
-
-      const message = i18n.t('account.errors.password_weak', { min: 10 })
-      expect(await screen.findByText(message)).toBeInTheDocument()
-      const field = screen.getByLabelText(ar.account.password)
-      expect(field).toHaveAttribute('aria-invalid', 'true')
-      expect(screen.queryByText('too common')).not.toBeInTheDocument()
-      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
-    })
-
-    it('keeps the form with registration_invalid under the name field', async () => {
+    it('keeps the form with registration_invalid under the password field', async () => {
       mockApi({
         complete: () =>
-          jsonResponse(400, { statusCode: 400, code: 'registration_invalid', fields: { fullName: ['too_long'] }, unknown: [] }),
+          jsonResponse(400, { statusCode: 400, code: 'registration_invalid', fields: { password: ['required'] }, unknown: [] }),
       })
       renderPage()
 
-      await chooseAndSubmit()
+      await enterAndSubmit()
 
-      expect(await screen.findByText(text.validation.fullName.too_long)).toBeInTheDocument()
-      expect(screen.getByLabelText(text.complete.fullName)).toHaveAttribute('aria-invalid', 'true')
-      expect(screen.getByLabelText(ar.account.password)).toBeInTheDocument()
+      expect(await screen.findByText(ar.account.validation.passwordRequired)).toBeInTheDocument()
+      expect(passwordField()).toHaveAttribute('aria-invalid', 'true')
     })
 
     it.each<[string, Answer, string]>([
@@ -349,14 +454,14 @@ describe('StudentRegisterCompletePage', () => {
     ])('keeps the form and what was typed on %s, and can send again', async (_label, complete, message) => {
       const fetchMock = mockApi({ complete })
       renderPage()
-      const user = await chooseAndSubmit()
+      const user = await enterAndSubmit()
 
       expect(await screen.findByRole('alert')).toHaveTextContent(message)
-      expect(screen.getByLabelText<HTMLInputElement>(ar.account.password).value).toBe(PASSWORD)
+      expect(passwordField().value).toBe(PASSWORD)
 
-      fetchMock.mockImplementation(async () => jsonResponse(200, { completed: true }))
+      fetchMock.mockImplementation(async () => jsonResponse(200, SESSION))
       await user.click(submitButton())
-      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/login')
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
     })
 
     it.each<[string, Answer, string]>([
@@ -368,10 +473,10 @@ describe('StudentRegisterCompletePage', () => {
       mockApi({ complete })
       renderPage()
 
-      await chooseAndSubmit()
+      await enterAndSubmit()
 
       expect(await screen.findByText(message)).toBeInTheDocument()
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.complete.password)).not.toBeInTheDocument()
     })
 
     it('does not use the kept course up on a refusal', async () => {
@@ -379,7 +484,7 @@ describe('StudentRegisterCompletePage', () => {
       mockApi({ complete: () => jsonResponse(500, { statusCode: 500 }) })
       renderPage()
 
-      await chooseAndSubmit()
+      await enterAndSubmit()
 
       await screen.findByRole('alert')
       expect(window.localStorage.getItem(KEPT_COURSE_KEY)).not.toBeNull()
@@ -387,59 +492,85 @@ describe('StudentRegisterCompletePage', () => {
   })
 
   describe('success', () => {
-    it('opens no session and goes to the sign-in page with the notice', async () => {
+    it('adopts the session the server returned, keeps its access token in memory, and goes home', async () => {
       mockApi()
       const { auth } = renderPage()
 
-      await chooseAndSubmit()
+      await enterAndSubmit()
 
-      const probe = await screen.findByTestId('location')
-      expect(probe).toHaveAttribute('data-pathname', '/login')
-      expect(locationState()).toEqual({ notice: 'registration_completed' })
-      expect(auth.adoptSession).not.toHaveBeenCalled()
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+      expect(auth.adoptSession).toHaveBeenCalledTimes(1)
+      expect(auth.adoptSession).toHaveBeenCalledWith(SESSION)
       expect(auth.login).not.toHaveBeenCalled()
-      expect(getAccessToken()).toBeNull()
+      expect(getAccessToken()).toBe(SESSION.accessToken)
+      expect(locationState()).toBeNull()
     })
 
-    it('shows the notice on the real sign-in page, with no form field of the password step filled', async () => {
+    it('goes on to the course kept on this device, and uses it up', async () => {
       keepCourse(COURSE)
       mockApi()
-      renderWithProviders(<StudentRegisterCompletePage />, {
-        route: `/register/complete/${TOKEN}`,
-        path: '/register/complete/:token',
-        routes: { '/login': <LoginPage /> },
-      })
+      renderPage()
 
-      await chooseAndSubmit()
+      await enterAndSubmit()
 
-      expect(await screen.findByText(text.notices.accountCreated)).toBeInTheDocument()
-      expect(screen.getByTestId('login-enroll-intent')).toBeInTheDocument()
-      expect(screen.getByLabelText<HTMLInputElement>(ar.login.password).value).toBe('')
+      expect((await screen.findByTestId('path')).textContent).toBe(INTENT)
+      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
+    })
+
+    it('follows a return path of this site that names a page', async () => {
+      mockApi()
+      renderPage(TOKEN, makeAuth(), `?returnTo=${encodeURIComponent('/my-school')}`)
+
+      await enterAndSubmit()
+
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/my-school')
+    })
+
+    it('never follows a return path to another site', async () => {
+      mockApi()
+      renderPage(TOKEN, makeAuth(), `?returnTo=${encodeURIComponent('https://evil.example/')}`)
+
+      await enterAndSubmit()
+
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+    })
+
+    it.each([
+      ['an expired kept course', () => keepCourse(COURSE, Date.now() - KEPT_COURSE_TTL_MS - 1000)],
+      ['a tampered kept course', () => window.localStorage.setItem(KEPT_COURSE_KEY, JSON.stringify({ courseId: '../evil', savedAt: Date.now() }))],
+    ])('ignores %s, goes home and clears it', async (_label, keep) => {
+      keep()
+      mockApi()
+      renderPage()
+
+      await enterAndSubmit()
+
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
+    })
+
+    it('stores neither the token, the password, the name nor the access token', async () => {
+      keepCourse(COURSE)
+      mockApi()
+      renderPage()
+
+      await enterAndSubmit()
+
+      await screen.findByTestId('path')
+      const stored = storedText()
+      expect(stored).not.toContain(TOKEN)
+      expect(stored).not.toContain(PASSWORD)
+      expect(stored).not.toContain(PREVIEW.fullName)
+      expect(stored).not.toContain(SESSION.accessToken)
     })
 
     it('drops the history entry that carries the token', async () => {
       mockApi()
-      const router = createMemoryRouter(
-        [
-          { path: '/home', element: <LocationProbe /> },
-          { path: '/login', element: <LocationProbe /> },
-          { path: '/register/complete/:token', element: <StudentRegisterCompletePage /> },
-        ],
-        { initialEntries: ['/home', `/register/complete/${TOKEN}`], initialIndex: 1 },
-      )
-      render(
-        <ConfigProvider>
-          <AntdApp>
-            <AuthContext value={makeAuth()}>
-              <RouterProvider router={router} />
-            </AuthContext>
-          </AntdApp>
-        </ConfigProvider>,
-      )
+      const router = renderInDataRouter(['/home', `/register/complete/${TOKEN}`])
 
-      await chooseAndSubmit()
+      await enterAndSubmit()
 
-      await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+      await waitFor(() => expect(router.state.location.pathname).toBe('/'))
       expect(router.state.historyAction).toBe('REPLACE')
       await act(async () => {
         await router.navigate(-1)
@@ -448,54 +579,17 @@ describe('StudentRegisterCompletePage', () => {
       expect(router.state.location.pathname).not.toContain(TOKEN)
     })
 
-    it('stores neither the token, the password nor the name', async () => {
+    it('reaches the kept course when the provider signs the learner in at once, not their classes', async () => {
       keepCourse(COURSE)
       mockApi()
-      renderPage()
+      const router = renderInDataRouter(['/home', `/register/complete/${TOKEN}`], true)
 
-      await chooseAndSubmit()
+      await enterAndSubmit()
 
-      await screen.findByTestId('location')
-      const stored = storedText()
-      expect(stored).not.toContain(TOKEN)
-      expect(stored).not.toContain(PASSWORD)
-      expect(stored).not.toContain(PREVIEW.fullName)
-      expect(JSON.stringify(locationState())).not.toContain(TOKEN)
-    })
-
-    it('hands a kept course to the sign-in page and clears it', async () => {
-      keepCourse(COURSE)
-      mockApi()
-      renderPage()
-
-      await chooseAndSubmit()
-
-      await screen.findByTestId('location')
-      expect(locationState()).toEqual({ notice: 'registration_completed', from: `/catalog/${COURSE}?intent=enroll` })
-      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
-    })
-
-    it('ignores an expired kept course and clears it', async () => {
-      keepCourse(COURSE, Date.now() - KEPT_COURSE_TTL_MS - 1000)
-      mockApi()
-      renderPage()
-
-      await chooseAndSubmit()
-
-      await screen.findByTestId('location')
-      expect(locationState()).toEqual({ notice: 'registration_completed' })
-      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
-    })
-
-    it('ignores a tampered kept course', async () => {
-      window.localStorage.setItem(KEPT_COURSE_KEY, JSON.stringify({ courseId: '../evil', savedAt: Date.now() }))
-      mockApi()
-      renderPage()
-
-      await chooseAndSubmit()
-
-      await screen.findByTestId('location')
-      expect(locationState()).toEqual({ notice: 'registration_completed' })
+      expect((await screen.findByTestId('path')).textContent).toBe(INTENT)
+      expect(router.state.location.pathname).toBe(`/catalog/${COURSE}`)
+      expect(router.state.historyAction).toBe('REPLACE')
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
     })
   })
 })

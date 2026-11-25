@@ -380,10 +380,13 @@ describe('MailService (TEST-017)', () => {
       ['registration_existing', 'ar'],
     ]);
     const [en, ar, tr, existingAr] = transport.sent;
-    expect(en!.subject).toBe('Complete your Arti Academy account');
+    expect(en!.subject).toBe('Confirm your e-mail to finish creating your Arti Academy account');
     expect(en!.text).toContain(`https://academy.example/register/complete/${TOKEN}`);
     expect(en!.text.startsWith('Hello,\n')).toBe(true);
-    expect(ar!.subject).toBe('أكمل إنشاء حسابك في أكاديمية آرتي');
+    // Contract v3: the link activates the account only with the password chosen at registration — the mail says so.
+    expect(en!.text).toContain('enter the password you chose when you registered');
+    expect(ar!.subject).toBe('أكّد بريدك الإلكتروني لإكمال إنشاء حسابك في أكاديمية آرتي');
+    expect(ar!.text).toContain('أدخل كلمة المرور التي اخترتها عند التسجيل');
     // The academy has no Turkish name: it falls back to the default locale's (D1).
     expect(tr!.subject).toBe('أكاديمية آرتي bünyesinde zaten bir hesabınız var');
     expect(tr!.text).toContain('https://academy.example/login');

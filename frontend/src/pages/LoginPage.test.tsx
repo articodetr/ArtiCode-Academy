@@ -99,6 +99,23 @@ describe('LoginPage', () => {
     expect(fields().submit).toBeEnabled()
   })
 
+  it('asks a student who registered to confirm the e-mail first (403 email_not_verified), in both languages', async () => {
+    const auth = makeAuth()
+    vi.mocked(auth.login).mockRejectedValue(
+      new ApiError(403, 'Forbidden', { statusCode: 403, code: 'email_not_verified', message: 'raw server words' }),
+    )
+    renderLogin(auth)
+    await submitCredentials('sara@example.test', 'Secret123!x')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(ar.login.errors.email_not_verified)
+    expect(ar.login.errors.email_not_verified).toContain('أكّد بريدك الإلكتروني أولًا')
+    expect(alert).not.toHaveTextContent('raw server words')
+    expect(alert).not.toHaveTextContent(ar.login.errors.generic)
+    expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+    expect(fields().submit).toBeEnabled()
+    expect(i18n.t('login.errors.email_not_verified', { lng: 'en' })).toMatch(/^Confirm your e-mail first/)
+  })
+
   it('tells a locked-out user how many minutes to wait (rounded up)', async () => {
     const auth = makeAuth()
     vi.mocked(auth.login).mockRejectedValue(

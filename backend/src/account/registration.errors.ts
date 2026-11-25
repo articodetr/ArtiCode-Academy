@@ -1,4 +1,4 @@
-// Error vocabulary of student self-registration (PORTAL-03, #207 contract v2). Same shape as the other module
+// Error vocabulary of student self-registration (PORTAL-03/04, #207 contract v3). Same shape as the other module
 // dictionaries: the body is `{ statusCode, error, code, message, ...details }` and the frontend maps the stable
 // `code` (`frontend/src/studentRegistration/registration.errors.ts`). The routes also answer `password_weak` and
 // `rate_limited` from the MOD-01 dictionary (auth.errors.ts) and `origin_forbidden` from the OriginGuard.
@@ -11,6 +11,8 @@ export const REGISTRATION_ERROR_CODES = [
   'registration_disabled',
   'registration_link_invalid',
   'registration_link_expired',
+  // Contract v3: the confirmation link activates the account only with the password chosen at registration.
+  'registration_password_incorrect',
 ] as const;
 
 export type RegistrationErrorCode = (typeof REGISTRATION_ERROR_CODES)[number];
@@ -44,7 +46,7 @@ export const registrationError = {
   /** 403: the academy does not take registrations (`settings.selfRegistration.enabled`, or no mail transport). */
   disabled: () =>
     new RegistrationHttpException(HttpStatus.FORBIDDEN, 'registration_disabled', 'This academy does not accept self-registration'),
-  /** 404: malformed, unknown, used, replaced, not a self-registration link, or the account can no longer be completed. */
+  /** 404: malformed, unknown, used, replaced, retired after too many wrong passwords, not a self-registration link, or the account can no longer be completed. */
   linkInvalid: () =>
     new RegistrationHttpException(HttpStatus.NOT_FOUND, 'registration_link_invalid', 'This registration link is not valid'),
   /** 410: the link ran out; the visitor registers again with the same address. */
@@ -52,4 +54,15 @@ export const registrationError = {
     new RegistrationHttpException(HttpStatus.GONE, 'registration_link_expired', 'This registration link has expired', {
       expiresAt: expiresAt.toISOString(),
     }),
+  /**
+   * 400: the password typed on the completion is not the one chosen at registration. `attemptsLeft` = how many more
+   * tries this link takes; at 0 the link is retired (the next try is `registration_link_invalid`).
+   */
+  passwordIncorrect: (attemptsLeft: number) =>
+    new RegistrationHttpException(
+      HttpStatus.BAD_REQUEST,
+      'registration_password_incorrect',
+      'This is not the password chosen at registration',
+      { attemptsLeft },
+    ),
 };

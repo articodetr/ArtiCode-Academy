@@ -441,10 +441,21 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
 
     const user = await prisma.user.findUniqueOrThrow({
       where: { email: address },
-      select: { id: true, status: true, emailVerifiedAt: true, passwordHash: true, fullName: true, roles: { select: { role: { select: { key: true } } } }, studentProfile: { select: { userId: true } } },
+      select: {
+        id: true,
+        status: true,
+        emailVerifiedAt: true,
+        selfRegisteredAt: true,
+        passwordHash: true,
+        fullName: true,
+        roles: { select: { role: { select: { key: true } } } },
+        studentProfile: { select: { userId: true } },
+      },
     });
     expect(user).toMatchObject({ status: 'active', passwordHash: null, fullName: 'New Learner' });
     expect(user.emailVerifiedAt).not.toBeNull();
+    // Contract v3: a Google sign-up is a self-registration — the marker is set.
+    expect(user.selfRegisteredAt).toBeInstanceOf(Date);
     expect(user.roles.map((grant) => grant.role.key)).toEqual(['student']);
     expect(user.studentProfile).not.toBeNull();
     const identity = await prisma.userIdentity.findUniqueOrThrow({ where: { provider_providerSubject: { provider: 'google', providerSubject: sub } } });
@@ -590,17 +601,32 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
 
   it('a pending self-registered account while sign-up is closed → registration_closed, the account stays pending and unlinked', async () => {
     await setSignUp(false);
-    const user = await createUser('pending-closed', { status: 'pending', passwordHash: null, emailVerifiedAt: null, roleKeys: ['student'] });
+    // Contract v3: a self-registered pending account holds the password chosen at registration and the marker.
+    const user = await createUser('pending-closed', { status: 'pending', selfRegisteredAt: new Date(), emailVerifiedAt: null, roleKeys: ['student'] });
     const res = await signIn({ sub: nextSub(), email: user.email }, { returnTo: '/catalog' });
     expect(locationOf(res).query).toEqual({ google: 'registration_closed', returnTo: '/catalog' });
     expect(cookieLine(res, REFRESH_COOKIE)).toBe('');
-    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { status: true, emailVerifiedAt: true } })).toEqual({ status: 'pending', emailVerifiedAt: null });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { status: true, emailVerifiedAt: true, passwordHash: true } })).toEqual({
+      status: 'pending',
+      emailVerifiedAt: null,
+      passwordHash,
+    });
     expect(await prisma.userIdentity.count({ where: { userId: user.id } })).toBe(0);
   });
 
-  it('a pending self-registered account (no password) becomes active with a confirmed address, its open links retired, and is linked', async () => {
+  it('a pending account nobody self-registered (awaiting approval, no marker) → link_required, nothing changes', async () => {
     await setSignUp(true);
-    const user = await createUser('pending', { status: 'pending', passwordHash: null, emailVerifiedAt: null, roleKeys: ['student'] });
+    const user = await createUser('pending-approval', { status: 'pending', emailVerifiedAt: null, roleKeys: ['student'] });
+    const res = await signIn({ sub: nextSub(), email: user.email });
+    expect(locationOf(res).query).toEqual({ google: 'link_required', returnTo: '/' });
+    expect(cookieLine(res, REFRESH_COOKIE)).toBe('');
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { status: true, passwordHash: true } })).toEqual({ status: 'pending', passwordHash });
+    expect(await prisma.userIdentity.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it('a pending self-registered account becomes active with a confirmed address, its open links retired and its unproven password cleared, and is linked', async () => {
+    await setSignUp(true);
+    const user = await createUser('pending', { status: 'pending', selfRegisteredAt: new Date(), emailVerifiedAt: null, roleKeys: ['student'] });
     const token = await prisma.verificationToken.create({
       data: {
         userId: user.id,
@@ -613,14 +639,23 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     const m = await mark();
     const res = await signIn({ sub: nextSub(), email: user.email });
     expect(locationOf(res).path).toBe('/auth/google/done');
-    const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { status: true, emailVerifiedAt: true, passwordHash: true } });
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { status: true, emailVerifiedAt: true, passwordHash: true, selfRegisteredAt: true },
+    });
     expect(after.status).toBe('active');
     expect(after.emailVerifiedAt).not.toBeNull();
+    expect(after.selfRegisteredAt).toBeInstanceOf(Date);
+    // The password typed at registration was never proven: it does not ride on Google's proof.
     expect(after.passwordHash).toBeNull();
     expect((await prisma.verificationToken.findUniqueOrThrow({ where: { id: token.id } })).consumedAt).not.toBeNull();
     const events = await eventsOf(m, user.id);
     expect(events.map((event) => event.action)).toEqual(['auth.google.linked', 'auth.login.succeeded']);
     expect(events[0]!.metadata).toEqual({ via: 'pending_registration' });
+    // So a password sign-in with it is refused like an unknown address — Google only from now on.
+    const viaPassword = await api().post('/api/auth/login').set('X-Forwarded-For', nextIp()).send({ identifier: user.email, password: PASSWORD });
+    expect(viaPassword.status).toBe(401);
+    expect(viaPassword.body.code).toBe('invalid_credentials');
   });
 
   it('a suspended, archived, soft-deleted or locked account → account_unavailable, no failed login counted', async () => {

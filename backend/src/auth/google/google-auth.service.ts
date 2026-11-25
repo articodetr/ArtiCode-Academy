@@ -17,12 +17,15 @@
 //      linked to ANOTHER Google subject → `link_conflict`; holding any role
 //      but `student`/`guardian` → `link_required`; then linked automatically
 //      only when the account is `active` with a confirmed address of its own,
-//      or `pending` from self-registration without a password while sign-up
-//      is open (it then becomes `active` with a confirmed address and its open
-//      confirmation links are retired; sign-up closed → `registration_closed`);
-//      anything else → `link_required`;
-//   3. else a new student account — only while the academy accepts
-//      self-registration (`settings.selfRegistration.enabled === true`, else
+//      or a self-registered `pending` account (`isPendingSelfRegistration()`)
+//      while sign-up is open (it then becomes `active` with a confirmed
+//      address, its open confirmation links are retired and the password typed
+//      at registration is CLEARED — it was never proven, so it never rides on
+//      Google's proof; the holder can set one later with a reset link; sign-up
+//      closed → `registration_closed`); anything else → `link_required`;
+//   3. else a new student account, marked `self_registered_at` — only while
+//      the academy accepts self-registration
+//      (`settings.selfRegistration.enabled === true`, else
 //      `registration_closed`) and only for an address Google is authoritative
 //      for (else `email_not_authoritative`).
 // Google is AUTHORITATIVE for an address when it is a Gmail address
@@ -109,7 +112,7 @@ const ACCOUNT_SELECT = {
   deletedAt: true,
   lockedUntil: true,
   emailVerifiedAt: true,
-  passwordHash: true,
+  selfRegisteredAt: true,
 } satisfies Prisma.UserSelect;
 type AccountRow = Prisma.UserGetPayload<{ select: typeof ACCOUNT_SELECT }>;
 
@@ -324,7 +327,13 @@ export class GoogleAuthService {
       // Activating a self-registered account is a registration: only while the academy accepts them (review #7).
       if (!signUpOpen) return { kind: 'refused', code: 'registration_closed' };
       via = 'pending_registration';
-      await tx.user.update({ where: { id: userId }, data: { status: 'active', emailVerifiedAt: now } });
+      // Contract v3: the password typed at registration was never proven (only its e-mailed link proves it), so it
+      // is cleared — a password someone else chose for this address can never ride on Google's proof. The holder
+      // signs in with Google, or sets a password later with a reset link.
+      await tx.user.update({
+        where: { id: userId },
+        data: { status: 'active', emailVerifiedAt: now, passwordHash: null, passwordChangedAt: now },
+      });
       // The address is proven now: every open confirmation link of the account is retired.
       await tx.verificationToken.updateMany({
         where: { userId, purpose: 'email_verification', consumedAt: null },
@@ -350,6 +359,7 @@ export class GoogleAuthService {
         fullName: fullNameFrom(claims),
         status: 'active',
         emailVerifiedAt: now,
+        selfRegisteredAt: now,
         roles: { create: { roleId: role.id } },
         studentProfile: { create: {} },
         identities: { create: { provider: 'google', providerSubject: claims.sub, email: claims.email, lastUsedAt: now } },

@@ -82,7 +82,15 @@ describe.skipIf(!available)('MOD-01 authentication (e2e, TEST-008)', () => {
 
   async function createUser(
     name: string,
-    options: { status?: UserStatus; password?: string | null; roleIds?: string[]; deleted?: boolean; username?: string } = {},
+    options: {
+      status?: UserStatus;
+      password?: string | null;
+      roleIds?: string[];
+      deleted?: boolean;
+      username?: string;
+      /** PORTAL-04 (contract v3): the marker of an account the visitor created on /register. */
+      selfRegistered?: boolean;
+    } = {},
   ): Promise<{ id: string; email: string }> {
     const passwordHash = options.password === null ? null : await passwords.hash(options.password ?? PASSWORD);
     const user = await prisma.user.create({
@@ -92,6 +100,7 @@ describe.skipIf(!available)('MOD-01 authentication (e2e, TEST-008)', () => {
         fullName: `Test ${name}`,
         passwordHash,
         status: options.status ?? 'active',
+        selfRegisteredAt: options.selfRegistered ? new Date() : null,
         deletedAt: options.deleted ? new Date() : null,
         roles: options.roleIds ? { create: options.roleIds.map((roleId) => ({ roleId })) } : undefined,
       },
@@ -180,6 +189,41 @@ describe.skipIf(!available)('MOD-01 authentication (e2e, TEST-008)', () => {
 
     const archived = await createUser('archived', { status: 'archived' });
     expect((await login(archived.email).expect(401)).body.code).toBe('invalid_credentials');
+  });
+
+  // PORTAL-04 (#207, contract v3): the visitor chose the password at registration; the e-mailed link activates the account.
+  it('answers a self-registered pending account email_not_verified only after its password matched; a wrong one is an ordinary failure', async () => {
+    const audit = (userId: string) =>
+      prisma.auditLog.findMany({ where: { entityId: userId, action: { startsWith: 'auth.login.' } }, orderBy: { id: 'asc' }, select: { action: true, metadata: true } });
+    const registered = await createUser('self-registered', { status: 'pending', selfRegistered: true });
+
+    const wrong = await login(registered.email, 'not-the-password').expect(401);
+    const unknown = await login(`nobody-v3-${RUN}@example.test`, 'not-the-password').expect(401);
+    expect(wrong.body).toEqual(unknown.body);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: registered.id }, select: { failedLoginCount: true } })).failedLoginCount).toBe(1);
+
+    const right = await login(registered.email).expect(403);
+    expect(right.body).toEqual({
+      statusCode: 403,
+      error: 'Forbidden',
+      code: 'email_not_verified',
+      message: 'Confirm your e-mail address first: open the link we sent and enter your password',
+    });
+    expect(refreshCookie(right)).toBeUndefined();
+    expect(await prisma.refreshToken.count({ where: { userId: registered.id } })).toBe(0);
+    expect(await audit(registered.id)).toEqual([
+      { action: 'auth.login.failed', metadata: { failedAttempts: 1, locked: false } },
+      { action: 'auth.login.rejected', metadata: { reason: 'pending' } },
+    ]);
+
+    // A self-registered pending account without a password (a v2 registration never finished) looks like an unknown address.
+    const legacy = await createUser('self-registered-v2', { status: 'pending', selfRegistered: true, password: null });
+    expect((await login(legacy.email).expect(401)).body).toEqual(unknown.body);
+    expect(await audit(legacy.id)).toEqual([]);
+
+    // Completed (active, the marker stays): an ordinary sign-in.
+    const completed = await createUser('self-registered-done', { status: 'active', selfRegistered: true });
+    await login(completed.email).expect(200);
   });
 
   it('protects routes: no token, bad token and expired token are rejected; a valid one reaches /me', async () => {

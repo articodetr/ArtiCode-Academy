@@ -1,9 +1,13 @@
-// What a refused registration request means for its screen (the agreed contract v2 in GitHub #207). Every message is a
-// translation key of this app: neither a server message nor a server-sent field value is ever shown. No React.
+// What a refused registration request means for its screen (PORTAL-04, contract v3: the password is chosen on /register
+// and typed again on the e-mailed link). Every message is a translation key of this app: neither a server message nor a
+// server-sent field value is ever shown. No React.
 import { REGISTRATION_PROBLEMS } from '../api/registration'
 import type { RegistrationProblem } from '../api/registration'
 import { ApiError } from '../api/client'
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../account/account.links'
+
+/** Wrong passwords a link takes before the server retires it (contract v3); a larger number is not believed. */
+export const COMPLETE_PASSWORD_ATTEMPTS = 5
 
 export interface RegistrationMessage {
   key: string
@@ -20,10 +24,12 @@ export interface RegistrationFieldError {
 export type RegistrationFailure =
   /** 403 registration_disabled: the academy is not taking registrations. */
   | { kind: 'closed' }
-  /** The link can never work: invalid, used or replaced. */
+  /** The link can never work: invalid, used, replaced — or retired after too many wrong passwords. */
   | { kind: 'link_invalid' }
   /** The link ran out: the visitor registers again with the same address. */
   | { kind: 'link_expired' }
+  /** The last wrong password the link allowed: the server retired it, and the visitor registers again. */
+  | { kind: 'link_exhausted' }
   /** Problems under their own fields; the form and what was typed stay. */
   | { kind: 'fields'; fields: RegistrationFieldError[] }
   /** Anything else: one message, and the form and what was typed stay. */
@@ -33,7 +39,10 @@ const PROBLEMS: ReadonlySet<string> = new Set(REGISTRATION_PROBLEMS)
 
 function fieldMessage(name: RegistrationField, problem: string): RegistrationMessage {
   if (name === 'password') {
-    return { key: 'account.validation.passwordPolicy', params: { min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH } }
+    // A missing password is asked for; every other problem is the policy in words.
+    return problem === 'required'
+      ? { key: 'account.validation.passwordRequired' }
+      : { key: 'account.validation.passwordPolicy', params: { min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH } }
   }
   // A problem code this build does not know reads as a wrong format, never as the raw code.
   const known: RegistrationProblem = PROBLEMS.has(problem) ? (problem as RegistrationProblem) : 'invalid_format'
@@ -70,6 +79,14 @@ export function rateLimitMessage(retryAfterSeconds: number | null): Registration
   return { key: 'studentRegistration.errors.rateLimitedMinutes', params: { count: Math.ceil(retryAfterSeconds / 60) } }
 }
 
+/** The attempts a refused password leaves, as the server counted them; null when it named no usable number. */
+export function attemptsLeftOf(body: unknown): number | null {
+  if (typeof body !== 'object' || body === null) return null
+  const { attemptsLeft } = body as { attemptsLeft?: unknown }
+  if (typeof attemptsLeft !== 'number' || !Number.isInteger(attemptsLeft)) return null
+  return attemptsLeft >= 0 && attemptsLeft <= COMPLETE_PASSWORD_ATTEMPTS ? attemptsLeft : null
+}
+
 function generalMessage(error: unknown): RegistrationMessage {
   if (!(error instanceof ApiError)) return { key: 'login.errors.network' }
   if (error.status === 429 || error.code === 'rate_limited') return rateLimitMessage(error.retryAfterSeconds)
@@ -81,6 +98,10 @@ function generalMessage(error: unknown): RegistrationMessage {
 function invalidFailure(error: ApiError, shown: readonly RegistrationField[]): RegistrationFailure {
   const fields = fieldErrorsOf(error.body, shown)
   return fields.length > 0 ? { kind: 'fields', fields } : { kind: 'message', key: 'studentRegistration.errors.invalid' }
+}
+
+function passwordFailure(message: RegistrationMessage): RegistrationFailure {
+  return { kind: 'fields', fields: [{ name: 'password', messages: [message] }] }
 }
 
 function linkVerdict(error: unknown): RegistrationFailure | null {
@@ -95,7 +116,11 @@ function linkVerdict(error: unknown): RegistrationFailure | null {
 export function describeRegisterFailure(error: unknown): RegistrationFailure {
   if (error instanceof ApiError) {
     if (error.code === 'registration_disabled') return { kind: 'closed' }
-    if (error.code === 'registration_invalid') return invalidFailure(error, ['fullName', 'email'])
+    if (error.code === 'registration_invalid') return invalidFailure(error, ['fullName', 'email', 'password'])
+    // The server's policy (the problems are its own words, never shown): the rules in this app's words instead.
+    if (error.code === 'password_weak') {
+      return passwordFailure({ key: 'account.errors.password_weak', params: { min: PASSWORD_MIN_LENGTH } })
+    }
   }
   return { kind: 'message', ...generalMessage(error) }
 }
@@ -110,15 +135,16 @@ export function describeCompleteFailure(error: unknown): RegistrationFailure {
   const verdict = linkVerdict(error)
   if (verdict) return verdict
   if (error instanceof ApiError) {
-    if (error.code === 'password_weak') {
-      return {
-        kind: 'fields',
-        fields: [
-          { name: 'password', messages: [{ key: 'account.errors.password_weak', params: { min: PASSWORD_MIN_LENGTH } }] },
-        ],
-      }
+    if (error.code === 'registration_password_incorrect') {
+      const attemptsLeft = attemptsLeftOf(error.body)
+      if (attemptsLeft === 0) return { kind: 'link_exhausted' }
+      return passwordFailure(
+        attemptsLeft === null
+          ? { key: 'studentRegistration.complete.passwordIncorrect' }
+          : { key: 'studentRegistration.complete.passwordIncorrectAttempts', params: { count: attemptsLeft } },
+      )
     }
-    if (error.code === 'registration_invalid') return invalidFailure(error, ['fullName', 'password'])
+    if (error.code === 'registration_invalid') return invalidFailure(error, ['password'])
   }
   return { kind: 'message', ...generalMessage(error) }
 }

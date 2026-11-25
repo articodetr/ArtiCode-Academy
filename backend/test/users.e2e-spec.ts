@@ -1772,9 +1772,19 @@ describe.skipIf(!available)('MOD-03 users list, detail, creation, update, accoun
     let studentRoleId: string;
     let linkedAt: Date;
 
-    /** A self-registered account awaiting its holder, as registration.service.ts creates it: pending, no password, the student role and profile, an open link. */
+    /**
+     * A self-registered account awaiting its holder, as registration.service.ts creates it (contract v3): pending, the
+     * password chosen at registration, the self-registration marker, the student role and profile, an open link.
+     */
     async function awaitingAccount(name: string, extra: Partial<Prisma.UserCreateInput> = {}): Promise<string> {
-      const id = await createUser(name, { status: 'pending', withPassword: false, roleIds: [studentRoleId], studentProfile: { create: {} }, ...extra });
+      const id = await createUser(name, {
+        status: 'pending',
+        selfRegisteredAt: new Date(),
+        passwordChangedAt: new Date(),
+        roleIds: [studentRoleId],
+        studentProfile: { create: {} },
+        ...extra,
+      });
       await prisma.verificationToken.create({
         data: {
           userId: id,
@@ -1815,9 +1825,17 @@ describe.skipIf(!available)('MOD-03 users list, detail, creation, update, accoun
         expect(awaiting.body, caller).toMatchObject({ status: 'pending', awaitingRegistration: true, googleLinkedAt: null });
         expect([...collectKeys(awaiting.body)].filter((key) => SENSITIVE_KEY.test(key)), caller).toEqual([]);
       }
-      // A pending account WITH a password is not awaiting a registration.
+      // An admin cannot activate it, although it has a password now (contract v3): only its link and that password do.
+      const refused = await api().post(`${USERS}/${fx['awaiting-shown']}/status`).set(bearer('manager')).send({ action: 'activate' }).expect(409);
+      expect(refused.body).toMatchObject({ code: 'invalid_transition', from: 'pending', action: 'activate', allowed: ['delete'] });
+      // A pending account nobody self-registered (no marker) is not awaiting a registration, with or without a password.
       const withPassword = await createUser('pending-with-password', { status: 'pending' });
       expect((await api().get(`${USERS}/${withPassword}`).set(bearer('manager')).expect(200)).body.awaitingRegistration).toBe(false);
+      const withoutPassword = await createUser('pending-without-password', { status: 'pending', withPassword: false });
+      expect((await api().get(`${USERS}/${withoutPassword}`).set(bearer('manager')).expect(200)).body.awaitingRegistration).toBe(false);
+      // Nor is a self-registered account once completed (active, the marker stays).
+      const completed = await createUser('self-registered-active', { status: 'active', selfRegisteredAt: new Date() });
+      expect((await api().get(`${USERS}/${completed}`).set(bearer('manager')).expect(200)).body.awaitingRegistration).toBe(false);
 
       const listed = await api().get(`${USERS}?q=${RUN}&limit=100`).set(bearer('manager')).expect(200);
       for (const item of listed.body.items as ListItem[]) {

@@ -16,6 +16,7 @@ const text = ar.studentRegistration
 const COURSE = '0192f0a0-0000-7000-8000-00000000c001'
 const NAME = 'سارة علي'
 const EMAIL = 'sara@example.test'
+const PASSWORD = 'Secret123!x'
 
 const OPEN: PublicAcademy = { name: { ar: 'الأكاديمية' }, logoUrl: null, defaultLocale: 'ar', selfRegistration: true }
 
@@ -44,16 +45,30 @@ function submitButton(label = text.register.submit): HTMLElement {
   return button
 }
 
-async function fillIn(name = NAME, email = EMAIL) {
+function passwordField(): HTMLInputElement {
+  return screen.getByLabelText<HTMLInputElement>(text.register.password)
+}
+
+function confirmField(): HTMLInputElement {
+  return screen.getByLabelText<HTMLInputElement>(text.register.confirmPassword)
+}
+
+function typePasswords(password = PASSWORD, confirmation = password) {
+  fireEvent.change(passwordField(), { target: { value: password } })
+  fireEvent.change(confirmField(), { target: { value: confirmation } })
+}
+
+async function fillIn(name = NAME, email = EMAIL, password = PASSWORD) {
   const user = userEvent.setup()
   await user.type(await screen.findByLabelText(text.register.fullName), name)
   await user.type(screen.getByLabelText(text.register.email), email)
+  typePasswords(password)
   await user.click(screen.getByLabelText(text.register.terms))
   return user
 }
 
-async function fillAndSend(name = NAME, email = EMAIL) {
-  const user = await fillIn(name, email)
+async function fillAndSend(name = NAME, email = EMAIL, password = PASSWORD) {
+  const user = await fillIn(name, email, password)
   await user.click(submitButton())
   return user
 }
@@ -142,13 +157,43 @@ describe('StudentRegisterPage', () => {
   })
 
   describe('the form', () => {
-    it('labels the two fields, with the e-mail left-to-right, and asks for no password', async () => {
+    it('labels the fields, with the e-mail left-to-right, and asks for the password twice with its rules in words', async () => {
       mockApi()
       renderPage()
 
       expect(await screen.findByLabelText(text.register.fullName)).toBeInTheDocument()
       expect(screen.getByLabelText(text.register.email)).toHaveAttribute('dir', 'ltr')
-      expect(screen.queryByLabelText(ar.account.password)).not.toBeInTheDocument()
+      expect(passwordField()).toHaveAttribute('type', 'password')
+      expect(passwordField()).toHaveAttribute('autocomplete', 'new-password')
+      expect(confirmField()).toHaveAttribute('type', 'password')
+      expect(confirmField()).toHaveAttribute('autocomplete', 'new-password')
+      // Both fields can show what was typed (Input.Password).
+      expect(document.querySelectorAll('.ant-input-password-icon')).toHaveLength(2)
+      expect(screen.getByText(i18n.t('studentRegistration.register.passwordHint', { min: 10 }))).toBeInTheDocument()
+      expect(screen.getByText(text.register.intro)).toBeInTheDocument()
+    })
+
+    it.each<[string, string, string, string]>([
+      ['no password', '', '', text.register.passwordRequired],
+      ['a short password', 'short', 'short', i18n.t('account.validation.passwordPolicy', { min: 10, max: 128 })],
+      ['a password of spaces only', ' '.repeat(12), ' '.repeat(12), i18n.t('account.validation.passwordPolicy', { min: 10, max: 128 })],
+      ['no confirmation', PASSWORD, '', text.register.confirmRequired],
+      ['a confirmation that differs', PASSWORD, 'Secret123!y', text.register.mismatch],
+      ['a confirmation that differs by a space', PASSWORD, `${PASSWORD} `, text.register.mismatch],
+    ])('refuses %s before sending anything', async (_label, password, confirmation, message) => {
+      const fetchMock = mockApi()
+      renderPage()
+      const user = userEvent.setup()
+      await user.type(await screen.findByLabelText(text.register.fullName), NAME)
+      await user.type(screen.getByLabelText(text.register.email), EMAIL)
+      if (password) fireEvent.change(passwordField(), { target: { value: password } })
+      if (confirmation) fireEvent.change(confirmField(), { target: { value: confirmation } })
+      await user.click(screen.getByLabelText(text.register.terms))
+
+      await user.click(submitButton())
+
+      expect(await screen.findByText(message)).toBeInTheDocument()
+      expect(posts(fetchMock)).toHaveLength(0)
     })
 
     it.each([
@@ -183,16 +228,16 @@ describe('StudentRegisterPage', () => {
       expect(posts(fetchMock)).toHaveLength(0)
     })
 
-    it('sends the trimmed name and e-mail with the UI language, without a bearer token', async () => {
+    it('sends the trimmed name and e-mail, the password as typed, with the UI language, without a bearer token', async () => {
       const fetchMock = mockApi()
       renderPage()
 
-      await fillAndSend(`  ${NAME} `, ` ${EMAIL}  `)
+      await fillAndSend(`  ${NAME} `, ` ${EMAIL}  `, ` ${PASSWORD} `)
 
       await screen.findByText(text.register.sentTitle)
       const [call] = posts(fetchMock)
       expect(String(call![0])).toBe('/api/account/register')
-      expect(JSON.parse(String(call![1]?.body))).toEqual({ fullName: NAME, email: EMAIL, locale: 'ar' })
+      expect(JSON.parse(String(call![1]?.body))).toEqual({ fullName: NAME, email: EMAIL, password: ` ${PASSWORD} `, locale: 'ar' })
       expect(new Headers(call![1]?.headers).has('Authorization')).toBe(false)
     })
 
@@ -201,8 +246,11 @@ describe('StudentRegisterPage', () => {
       await i18n.changeLanguage('en')
       renderPage()
       const user = userEvent.setup()
-      await user.type(await screen.findByLabelText(en.studentRegistration.register.fullName), NAME)
-      await user.type(screen.getByLabelText(en.studentRegistration.register.email), EMAIL)
+      const words = en.studentRegistration.register
+      await user.type(await screen.findByLabelText(words.fullName), NAME)
+      await user.type(screen.getByLabelText(words.email), EMAIL)
+      fireEvent.change(screen.getByLabelText(words.password), { target: { value: PASSWORD } })
+      fireEvent.change(screen.getByLabelText(words.confirmPassword), { target: { value: PASSWORD } })
       await user.click(screen.getByLabelText(en.studentRegistration.register.terms))
       await user.click(screen.getByText(en.studentRegistration.register.submit).closest('button')!)
 
@@ -241,9 +289,13 @@ describe('StudentRegisterPage', () => {
 
       const alert = (await screen.findByText(text.register.sentTitle)).closest<HTMLElement>('[role="alert"]')!
       expect(alert).toHaveTextContent(text.register.sentText)
-      expect(text.register.sentText).toContain('إن كان البريد صحيحًا')
+      // It says what to do next: open the link and type the password chosen here.
+      expect(text.register.sentText).toContain('افتح الرابط')
+      expect(text.register.sentText).toContain('كلمة مرورك')
       expect(alert).not.toHaveTextContent(EMAIL)
       expect(alert).not.toHaveTextContent(NAME)
+      expect(document.body).not.toHaveTextContent(PASSWORD)
+      expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
       for (const revealing of ['لديك حساب', 'موجود', 'مسجّل', 'مستخدم', 'جديد']) {
         expect(text.register.sentText).not.toContain(revealing)
       }
@@ -262,7 +314,7 @@ describe('StudentRegisterPage', () => {
       expect(await screen.findByRole('link', { name: text.register.goToSignIn })).toHaveAttribute('href', '/login')
     })
 
-    it('goes back for another address, keeping the name and sending again', async () => {
+    it('goes back for another address, keeping the name but not the password, and sending again', async () => {
       const fetchMock = mockApi()
       renderPage()
       const user = await fillAndSend()
@@ -274,12 +326,16 @@ describe('StudentRegisterPage', () => {
       expect(nameField.value).toBe(NAME)
       expect(emailField.value).toBe('')
       expect(emailField).toHaveFocus()
+      // The password is never kept after it was sent.
+      expect(passwordField().value).toBe('')
+      expect(confirmField().value).toBe('')
 
       await user.type(emailField, 'other@example.test')
+      typePasswords('Another123!x')
       await user.click(submitButton())
       await screen.findByText(text.register.sentTitle)
       expect(posts(fetchMock)).toHaveLength(2)
-      expect(JSON.parse(String(posts(fetchMock)[1]![1]?.body)).email).toBe('other@example.test')
+      expect(JSON.parse(String(posts(fetchMock)[1]![1]?.body))).toMatchObject({ email: 'other@example.test', password: 'Another123!x' })
     })
   })
 
@@ -308,6 +364,33 @@ describe('StudentRegisterPage', () => {
       expect(document.getElementById(describedBy!.split(' ')[0]!)).toHaveTextContent(text.validation.email.invalid_format)
       expect(screen.queryByText('invalid_format')).not.toBeInTheDocument()
       expect(screen.queryByText(text.register.sentTitle)).not.toBeInTheDocument()
+    })
+
+    it('puts password_weak under the password field, in this app’s words, and keeps the form', async () => {
+      mockApi({ register: () => jsonResponse(400, { statusCode: 400, code: 'password_weak', problems: ['at least 10 characters'] }) })
+      renderPage()
+
+      await fillAndSend()
+
+      expect(await screen.findByText(i18n.t('account.errors.password_weak', { min: 10 }))).toBeInTheDocument()
+      expect(passwordField()).toHaveAttribute('aria-invalid', 'true')
+      expect(passwordField()).toHaveFocus()
+      expect(screen.queryByText('at least 10 characters')).not.toBeInTheDocument()
+      expect(screen.getByLabelText<HTMLInputElement>(text.register.email).value).toBe(EMAIL)
+      expect(screen.queryByText(text.register.sentTitle)).not.toBeInTheDocument()
+    })
+
+    it('puts a password problem of registration_invalid under the password field', async () => {
+      mockApi({
+        register: () =>
+          jsonResponse(400, { statusCode: 400, code: 'registration_invalid', fields: { password: ['too_long'] }, unknown: [] }),
+      })
+      renderPage()
+
+      await fillAndSend()
+
+      expect(await screen.findByText(i18n.t('account.validation.passwordPolicy', { min: 10, max: 128 }))).toBeInTheDocument()
+      expect(passwordField()).toHaveAttribute('aria-invalid', 'true')
     })
 
     it('switches to the closed notice on 403 registration_disabled', async () => {
@@ -357,6 +440,8 @@ describe('StudentRegisterPage', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent(message)
       expect(screen.getByLabelText<HTMLInputElement>(text.register.fullName).value).toBe(NAME)
       expect(screen.getByLabelText<HTMLInputElement>(text.register.email).value).toBe(EMAIL)
+      expect(passwordField().value).toBe(PASSWORD)
+      expect(confirmField().value).toBe(PASSWORD)
 
       fetchMock.mockImplementation(async () => jsonResponse(202))
       await user.click(submitButton())
@@ -393,6 +478,7 @@ describe('StudentRegisterPage', () => {
       const all = storedText()
       expect(all).not.toContain(EMAIL)
       expect(all).not.toContain(NAME)
+      expect(all).not.toContain(PASSWORD)
     })
 
     it('keeps nothing when the server refused', async () => {
@@ -479,12 +565,13 @@ describe('StudentRegisterPage', () => {
   describe('the terms and Google (PORTAL-04)', () => {
     const GOOGLE_URL = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
 
-    it('refuses to send before the terms are accepted, and sends nothing about them', async () => {
+    it('refuses to send before the terms are accepted, and sends nothing about them nor the confirmation', async () => {
       const fetchMock = mockApi()
       renderPage()
       const user = userEvent.setup()
       await user.type(await screen.findByLabelText(text.register.fullName), NAME)
       await user.type(screen.getByLabelText(text.register.email), EMAIL)
+      typePasswords()
 
       await user.click(submitButton())
 
@@ -495,7 +582,7 @@ describe('StudentRegisterPage', () => {
       await user.click(submitButton())
 
       await screen.findByText(text.register.sentTitle)
-      expect(Object.keys(JSON.parse(String(posts(fetchMock)[0]![1]?.body))).sort()).toEqual(['email', 'fullName', 'locale'])
+      expect(Object.keys(JSON.parse(String(posts(fetchMock)[0]![1]?.body))).sort()).toEqual(['email', 'fullName', 'locale', 'password'])
     })
 
     it('words the terms as plain text: the academy has no pages to link to yet', async () => {
