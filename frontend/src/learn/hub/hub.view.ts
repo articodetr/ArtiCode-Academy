@@ -1,6 +1,6 @@
-// Pure rules of «دروسي» (J-F64): which courses the learner studies, the summary
-// counts, the lessons of a course as the list shows them, and what a row offers.
-// Every count and state is the server's (D-R133). Unit-tested in hub.view.test.ts.
+// Pure rules of the learner's courses (J-F64; since J-F67 shown on «فصولي», while «دروسي» keeps the summary counts):
+// which courses the learner studies, the summary counts, the lessons of a course as the list shows them, and what a
+// row offers. Every count and state is the server's (D-R133). Unit-tested in hub.view.test.ts.
 import type { LearningWorkspace, MyLearningCourse, ProgressCounts, WorkspaceItem, WorkspaceSection } from '../../api/learning'
 import { byRecentActivity, isCourseDone } from '../../mySchool/mySchool.view'
 
@@ -16,6 +16,11 @@ export const LESSON_PARAM = 'lesson'
 /** The address of the class-sessions table, which the learner home links to. */
 export const SESSIONS_PATH = `/my-lessons?${VIEW_PARAM}=${SESSIONS_VIEW}`
 
+/** A course whose lessons a card of «فصولي» shows below the cards (`studyCourses()`): the learner's own, and one they can open. */
+export function isStudyCourse(item: Pick<MyLearningCourse, 'relation' | 'canLearn'>): boolean {
+  return item.relation === 'self' && item.canLearn
+}
+
 /**
  * The learner's own courses they can open, once each: the unfinished ones by latest activity, then the finished ones.
  * A child's course is a guardian's to follow, not to study (API-230 refuses it).
@@ -23,7 +28,7 @@ export const SESSIONS_PATH = `/my-lessons?${VIEW_PARAM}=${SESSIONS_VIEW}`
 export function studyCourses(items: readonly MyLearningCourse[]): MyLearningCourse[] {
   const seen = new Set<string>()
   const unique = items
-    .filter((item) => item.relation === 'self' && item.canLearn)
+    .filter(isStudyCourse)
     .sort(byRecentActivity)
     .filter((item) => {
       if (seen.has(item.course.id)) return false
@@ -33,9 +38,9 @@ export function studyCourses(items: readonly MyLearningCourse[]): MyLearningCour
   return [...unique.filter((item) => !isCourseDone(item)), ...unique.filter(isCourseDone)]
 }
 
-/** The course the address names when the learner has it, else the first one. */
-export function selectedCourseOf(courses: readonly MyLearningCourse[], param: string | null): MyLearningCourse | null {
-  return courses.find((item) => item.course.id === param) ?? courses[0] ?? null
+/** The course the address names when the learner studies it; none otherwise — «فصولي» shows a course only once chosen. */
+export function chosenCourseOf(courses: readonly MyLearningCourse[], param: string | null): MyLearningCourse | null {
+  return param ? (courses.find((item) => item.course.id === param) ?? null) : null
 }
 
 /** The counts of a course: the latest answer of this page when there is one, else API-229's. */
@@ -59,15 +64,36 @@ export function hubTotals(courses: readonly MyLearningCourse[], live: Readonly<R
   )
 }
 
-/** A course's share on its card: the server's percent over the required lessons, 0 when it has none. */
-export function cardPercent(counts: ProgressCounts): number {
-  return counts.percent ?? 0
-}
-
 export function matchesFilter(item: Pick<WorkspaceItem, 'kind'>, filter: HubFilter): boolean {
   if (filter === 'live') return item.kind === 'live'
   if (filter === 'recorded') return item.kind !== 'live'
   return true
+}
+
+/** One lesson of «دروسي»'s single list (J-F67): the lesson with its course and level. */
+export interface MergedLesson {
+  course: MyLearningCourse
+  section: WorkspaceSection
+  item: WorkspaceItem
+}
+
+/**
+ * Every lesson of the given courses' workspaces in one list, newest first by `createdAt` (API-230); a lesson without
+ * it goes last. Ties keep the courses' order (the course the learner was on last first) and then the curriculum's.
+ * The filter narrows by type as in a course's panel.
+ */
+export function mergedLessonsOf(entries: readonly { course: MyLearningCourse; workspace: LearningWorkspace }[], filter: HubFilter): MergedLesson[] {
+  const rows = entries.flatMap(({ course, workspace }, courseIndex) =>
+    workspace.sections.flatMap((section) => section.items.map((item) => ({ course, section, item }))).map((row, position) => ({ row, courseIndex, position })),
+  )
+  const time = (item: WorkspaceItem) => {
+    const value = item.createdAt ? Date.parse(item.createdAt) : Number.NaN
+    return Number.isNaN(value) ? Number.NEGATIVE_INFINITY : value
+  }
+  return rows
+    .filter(({ row }) => matchesFilter(row.item, filter))
+    .sort((a, b) => time(b.row.item) - time(a.row.item) || a.courseIndex - b.courseIndex || a.position - b.position)
+    .map(({ row }) => row)
 }
 
 export interface HubRow {

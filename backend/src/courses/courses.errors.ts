@@ -56,6 +56,8 @@ export const COURSES_ERROR_CODES = [
   'subject_in_use',
   'subject_order_invalid',
   'subject_inactive',
+  // J-F67: the course's materials, checked as a lesson's resources.
+  'resources_invalid',
 ] as const;
 
 export type CoursesErrorCode = (typeof COURSES_ERROR_CODES)[number];
@@ -139,6 +141,10 @@ export const coursesError = {
       from,
       action,
       allowed: [...allowed],
+    }),
+  resourcesInvalid: (problems: readonly string[]) =>
+    new CoursesHttpException(HttpStatus.BAD_REQUEST, 'resources_invalid', 'resources must be [{ title: { ar, en?, tr? }, url: https }] with at most 20 items', {
+      problems: [...problems],
     }),
   ageRangeInvalid: (minAge: number, maxAge: number) =>
     new CoursesHttpException(HttpStatus.BAD_REQUEST, 'age_range_invalid', 'maxAge must not be below minAge', { minAge, maxAge }),

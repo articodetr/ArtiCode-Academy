@@ -26,6 +26,7 @@ describe('validateEnv', () => {
       AUTH_PASSWORD_RESET_TTL_MINUTES: 30,
       AUTH_EMAIL_VERIFICATION_TTL_HOURS: 48,
       AUTH_SELF_SERVICE_RESET_ENABLED: false,
+      MEDIA_STORAGE_DIR: 'storage/media',
       MAIL_TRANSPORT: 'none',
     });
   });
@@ -482,5 +483,23 @@ describe('validateEnv — Google sign-in (PORTAL-04)', () => {
   it('refuses client values with white space', () => {
     expect(() => validateEnv({ ...google, GOOGLE_OAUTH_CLIENT_ID: 'a b', APP_PUBLIC_URL: 'https://academy.example' })).toThrow(/GOOGLE_OAUTH_CLIENT_ID/);
     expect(() => validateEnv({ ...google, GOOGLE_OAUTH_CLIENT_SECRET: 'a b', APP_PUBLIC_URL: 'https://academy.example' })).toThrow(/GOOGLE_OAUTH_CLIENT_SECRET/);
+  });
+});
+
+describe('validateEnv — MEDIA_STORAGE_DIR (homepage images)', () => {
+  it('defaults to storage/media (relative to the working directory) and treats an empty value as absent', () => {
+    expect(validateEnv({}).MEDIA_STORAGE_DIR).toBe('storage/media');
+    expect(validateEnv({ MEDIA_STORAGE_DIR: '' }).MEDIA_STORAGE_DIR).toBe('storage/media');
+  });
+
+  it('keeps an absolute or a relative directory as given, trimmed', () => {
+    expect(validateEnv({ MEDIA_STORAGE_DIR: '/var/lib/articode/media' }).MEDIA_STORAGE_DIR).toBe('/var/lib/articode/media');
+    expect(validateEnv({ MEDIA_STORAGE_DIR: ' ../media ' }).MEDIA_STORAGE_DIR).toBe('../media');
+    expect(validateEnv({ MEDIA_STORAGE_DIR: 'C:\\data\\media' }).MEDIA_STORAGE_DIR).toBe('C:\\data\\media');
+  });
+
+  it('refuses a blank value or a NUL character and names the variable', () => {
+    expect(() => validateEnv({ MEDIA_STORAGE_DIR: '   ' })).toThrow(/MEDIA_STORAGE_DIR/);
+    expect(() => validateEnv({ MEDIA_STORAGE_DIR: 'media\u0000x' })).toThrow(/MEDIA_STORAGE_DIR: must not contain a NUL character/);
   });
 });

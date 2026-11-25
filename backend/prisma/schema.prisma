@@ -466,6 +466,9 @@ model Course {
   sessionsCount       Int?         @map("sessions_count") @db.SmallInt
   /// MOD-19 (D-R129): an absolute http(s) URL of the cover image, no upload (CHECK in SQL).
   coverImageUrl       String?      @map("cover_image_url")
+  /// J-F67: the course's own materials (its textbook) — `[{ title, url }]`, at most 20, https only (checked by the
+  /// app as a lesson's resources; CHECK `ck_courses_resources_array` in SQL). A lesson's attachments stay on the lesson.
+  resources           Json         @default("[]")
   /// MOD-19 (D-R122): the fee plan that prices a self-service enrollment; null = a free course.
   /// NO ACTION: a plan a course points to cannot be deleted (409 fee_plan_in_use).
   enrollmentFeePlanId String?      @map("enrollment_fee_plan_id") @db.Uuid
@@ -1267,10 +1270,10 @@ model Certificate {
   courseId         String            @map("course_id") @db.Uuid
   studentUserId    String            @map("student_user_id") @db.Uuid
   status           CertificateStatus @default(issued)
-  /// The final grade at issuance: 0..100 (CHECK in SQL).
-  percent          Decimal           @db.Decimal(5, 2)
-  /// The band's label at issuance; `ar` is required (CHECK in SQL).
-  bandLabel        Json              @map("band_label")
+  /// The final grade at issuance: 0..100 (CHECK in SQL); null for an automatic course-completion certificate (CH-0363).
+  percent          Decimal?          @db.Decimal(5, 2)
+  /// The band's label at issuance; `ar` is required (CHECK in SQL); null exactly when `percent` is.
+  bandLabel        Json?             @map("band_label")
   bandLetter       String?           @map("band_letter") @db.VarChar(4)
   /// Student, course, class, academy and dates at issuance — what is printed (D-R50).
   snapshot         Json

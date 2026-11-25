@@ -29,7 +29,8 @@ function makeService(row: typeof ROW | null, mailTransport = 'none', env: Record
   const transaction = vi.fn();
   const record = vi.fn();
   const prisma = { db: { academy: { findFirst }, $transaction: transaction } };
-  const config = { get: vi.fn((key: string) => (key === 'MAIL_TRANSPORT' ? mailTransport : env[key])) };
+  const values: Record<string, string> = { API_PREFIX: 'api', ...env, MAIL_TRANSPORT: mailTransport };
+  const config = { get: vi.fn((key: string) => values[key]) };
   const service = new AcademyService(prisma as never, { record } as never, config as never);
   return { service, findFirst, transaction, record };
 }
@@ -102,7 +103,7 @@ describe('AcademyService', () => {
     for (const [settings, expected] of cases) {
       const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings });
       const dto = await service.getPublic();
-      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'googleSignIn', 'googleSignUp', 'logoUrl', 'name', 'selfRegistration']);
+      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'googleSignIn', 'googleSignUp', 'homepageImages', 'logoUrl', 'name', 'selfRegistration']);
       expect(dto.catalogPublic, JSON.stringify(settings)).toBe(expected);
     }
   });
@@ -141,5 +142,18 @@ describe('AcademyService', () => {
       expect(dto.googleSignUp, label).toBe(signUp);
       expect(dto.selfRegistration, label).toBe(false);
     }
+  });
+
+  it('API-205 answers the public URL of each homepage image, null for a default or a corrupt reference — nothing else about the files', async () => {
+    const file = 'ab'.repeat(16) + '.png';
+    const settings = {
+      homepageImages: {
+        heroStudent: { file, contentType: 'image/png', width: 760, height: 981, bytes: 1234, updatedAt: '2026-11-24T10:00:00.000Z' },
+        aboutLearners: { file: '../etc/passwd', contentType: 'image/png', width: 1, height: 1, bytes: 1, updatedAt: '2026-11-24T10:00:00.000Z' },
+      },
+    };
+    const { service } = makeService({ ...ROW, settings: settings as unknown as typeof ROW.settings });
+    const dto = await service.getPublic();
+    expect(dto.homepageImages).toEqual({ heroStudent: `/api/academy/media/${file}`, aboutLearners: null, promoTraining: null, whyClassroom: null });
   });
 });

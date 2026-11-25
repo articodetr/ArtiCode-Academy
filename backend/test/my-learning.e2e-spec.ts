@@ -271,6 +271,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
     try {
       if (prisma) {
         if (createdUserIds.length > 0) {
+          await prisma.certificate.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
           await prisma.learningProgress.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
           await prisma.attendanceRecord.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         }
@@ -295,7 +296,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       [classes['B'], 'self'],
     ]); // no activity yet: the newest enrollment first
     expect(Object.keys(list[0]!).sort()).toEqual(COURSE_ITEM_KEYS);
-    expect(Object.keys(list[0]!.course).sort()).toEqual(['code', 'coverImageUrl', 'id', 'level', 'name', 'subject', 'summary']);
+    expect(Object.keys(list[0]!.course).sort()).toEqual(['code', 'coverImageUrl', 'id', 'level', 'name', 'resources', 'subject', 'summary']);
     expect(Object.keys(list[0]!.course.subject!).sort()).toEqual(['id', 'name']); // never the subject's code or state
     expect(list[0]).toMatchObject({
       enrollmentId: enrollments['A:sA'],
@@ -303,7 +304,7 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       student: { id: id('sA'), fullName: 'Test sA', displayName: null },
       enrollment: { status: 'active', enrolledAt: '2026-02-01T09:00:00.000Z', activatedAt: '2026-02-01T09:00:00.000Z', completedAt: null },
       class: { id: classes['A'], code: code('A'), name: { ar: 'فصل A' }, status: 'open', startsOn: null, endsOn: null },
-      course: { id: courseId, code: code('CRS'), name: { ar: 'دورة مدرستي', en: 'My School course' }, summary: { ar: 'ملخص الدورة' }, coverImageUrl: COVER, level: null, subject: { id: subjectId, name: { ar: 'الرياضيات', en: 'Mathematics' } } },
+      course: { id: courseId, code: code('CRS'), name: { ar: 'دورة مدرستي', en: 'My School course' }, summary: { ar: 'ملخص الدورة' }, coverImageUrl: COVER, resources: [], level: null, subject: { id: subjectId, name: { ar: 'الرياضيات', en: 'Mathematics' } } },
       leadTeacher: { fullName: 'Test teacher', displayName: null },
       progress: { total: 6, required: 5, completed: 0, completedRequired: 0, percent: 0, isComplete: false, completedAt: null },
       lastLesson: null,
@@ -365,6 +366,10 @@ describe.skipIf(!available)('MOD-20 my learning (e2e, TEST-247)', () => {
       state: 'not_started',
       completedAt: null,
       available: true,
+      createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      // J-F67: the lesson's own resources, as API-231 lists them (T1 carries one).
+      resources: [{ title: { ar: 'ملخص' }, url: 'https://cdn.example.org/handout.pdf' }],
+      exams: [],
     });
     expect(workspaceItem(body, 'V1')).toMatchObject({ kind: 'video', completionMode: 'playback', durationSeconds: 100 });
     expect(workspaceItem(body, 'Y1')).toMatchObject({ kind: 'video', completionMode: 'manual', durationSeconds: null });

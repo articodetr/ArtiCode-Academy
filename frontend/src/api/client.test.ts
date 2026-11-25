@@ -230,6 +230,54 @@ describe('apiRequest', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  // Homepage images: the picture's own bytes are the request body, never JSON.
+  it('sends a raw Blob as it is with the Content-Type it is given, and never JSON', async () => {
+    setAccessToken('access-1')
+    const picture = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'application/octet-stream' })
+    const fetchMock = mockFetch(() => jsonResponse(200, { ok: true }))
+
+    await apiRequest('/api/academy/homepage-images/heroStudent', { method: 'PUT', rawBody: picture, contentType: 'image/png', body: { ignored: true } })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/academy/homepage-images/heroStudent')
+    expect(init?.method).toBe('PUT')
+    expect(init?.body).toBe(picture)
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Content-Type')).toBe('image/png')
+    expect(headers.get('Authorization')).toBe('Bearer access-1')
+    expect(headers.get('Accept')).toBe('application/json')
+  })
+
+  it('takes the Content-Type of a raw Blob from the Blob itself when none is given', async () => {
+    const typed = new Blob(['x'], { type: 'image/webp' })
+    const untyped = new Blob(['x'])
+    const fetchMock = mockFetch(() => jsonResponse(200, {}))
+
+    await apiRequest('/api/upload', { method: 'PUT', rawBody: typed })
+    await apiRequest('/api/upload', { method: 'PUT', rawBody: untyped })
+
+    expect(fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get('Content-Type'))).toEqual(['image/webp', 'application/octet-stream'])
+  })
+
+  it('re-sends the same raw Blob with the same Content-Type after refreshing an expired access token', async () => {
+    setAccessToken('stale')
+    const picture = new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' })
+    const fetchMock = mockFetch((url, init) => {
+      if (url === '/api/auth/refresh') return jsonResponse(200, sessionResponse('fresh'))
+      const token = new Headers(init?.headers).get('Authorization')
+      return token === 'Bearer fresh' ? jsonResponse(200, { items: [] }) : jsonResponse(401, EXPIRED)
+    })
+
+    await expect(apiRequest('/api/academy/homepage-images/whyClassroom', { method: 'PUT', rawBody: picture, contentType: 'image/jpeg' })).resolves.toEqual({ items: [] })
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/academy/homepage-images/whyClassroom', '/api/auth/refresh', '/api/academy/homepage-images/whyClassroom'])
+    const [first, , retried] = fetchMock.mock.calls
+    expect(first?.[1]?.body).toBe(picture)
+    expect(retried?.[1]?.body).toBe(picture)
+    expect(new Headers(retried?.[1]?.headers).get('Content-Type')).toBe('image/jpeg')
+    expect(retried?.[1]?.method).toBe('PUT')
+  })
 })
 
 describe('refreshSession', () => {

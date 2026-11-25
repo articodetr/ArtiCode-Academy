@@ -44,7 +44,7 @@ describe('one class’s lessons (J-F62)', () => {
 
 describe('my lessons — views and parameters', () => {
   it('upcoming = from the start of the academy’s today, oldest first; the other filters pass through', () => {
-    const filters = { ...defaultMyLessonsFilters(), studentId: 's-1', classId: 'c-1', status: 'cancelled' as const, limit: 50 as const }
+    const filters = { ...defaultMyLessonsFilters(), view: 'upcoming' as const, studentId: 's-1', classId: 'c-1', status: 'cancelled' as const, limit: 50 as const }
     expect(myLessonsQuery(filters, ZONE, NOW)).toEqual({ classId: 'c-1', studentId: 's-1', status: 'cancelled', limit: 50, from: '2026-11-10T21:00:00.000Z', order: 'asc' })
     expect(todayStartInstant(ZONE, NOW)).toBe('2026-11-10T21:00:00.000Z')
     // In UTC that same instant is still the 10th.
@@ -65,6 +65,9 @@ describe('my lessons — views and parameters', () => {
 
   it('a narrowed list is one with a student, class, status or range day', () => {
     expect(isNarrowed(defaultMyLessonsFilters())).toBe(false)
+    // J-F67: «دروسي» opens on every lesson, newest first; a class's page on its lessons, oldest first.
+    expect(myLessonsQuery(defaultMyLessonsFilters(), ZONE, NOW)).toEqual({ classId: undefined, studentId: undefined, status: undefined, limit: 20, order: 'desc' })
+    expect(myLessonsQuery(classLessonsFilters('c-1'), ZONE, NOW).order).toBe('asc')
     expect(isNarrowed({ ...defaultMyLessonsFilters(), view: 'past' })).toBe(false)
     expect(isNarrowed({ ...defaultMyLessonsFilters(), view: 'range' })).toBe(false)
     expect(isNarrowed({ ...defaultMyLessonsFilters(), view: 'range', to: '2026-11-30' })).toBe(true)

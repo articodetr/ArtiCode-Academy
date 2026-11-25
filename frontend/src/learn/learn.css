@@ -876,6 +876,13 @@ a.learn-csession__lesson {
   font-size: 22px;
 }
 
+/* J-F67: the certificate also waits for the class's exams. */
+.learn-done__hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
 @media (max-width: 991.98px) {
   .learn-header,
   .learn-preview-banner {

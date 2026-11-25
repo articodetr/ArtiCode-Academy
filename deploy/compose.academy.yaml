@@ -11,7 +11,12 @@
 #   migrate      one shot before `api`: `prisma migrate deploy`, then the idempotent seed
 #                (the `tools` target of deploy/api.Dockerfile — D-R91). A failure keeps `api` stopped.
 #   api          the `runtime` target; healthy = readiness 200 (database up AND schema not
-#                behind the image — `GET /api/health/ready`, API-004).
+#                behind the image — `GET /api/health/ready`, API-004). The pictures the
+#                administration uploads (Settings → Homepage Images) live on the `media`
+#                volume, mounted on this service only at /var/lib/articode/media
+#                (MEDIA_STORAGE_DIR): they survive a new image, a restart and a redeploy.
+#                The nightly backup covers the database only — back the volume up by hand
+#                (the runbook, master doc 14.14).
 #   web          Caddy serving the built frontend and proxying /api to `api` on the same
 #                origin; automatic HTTPS for a real domain (deploy/web.Dockerfile, deploy/Caddyfile).
 #   backup       nightly pg_dump + retention + optional encrypted offsite copy + monthly
@@ -171,6 +176,13 @@ services:
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
+      # The uploaded homepage images: a fixed path, the mount point of the `media` volume
+      # below (never read from the env file). The image creates the directory owned by
+      # `node`, so Docker starts a new, empty volume with that owner — the API writes there
+      # without any capability.
+      MEDIA_STORAGE_DIR: /var/lib/articode/media
+    volumes:
+      - media:/var/lib/articode/media
     healthcheck:
       # Readiness, not liveness: 200 only when the database answers and its schema is not
       # behind the migrations this image carries (two queries of at most 5 s each).
@@ -260,3 +272,5 @@ volumes:
   backups:
   caddy_data:
   caddy_config:
+  # The uploaded homepage images (api only). Not in the nightly backup — see the runbook.
+  media:

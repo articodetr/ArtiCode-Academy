@@ -15,8 +15,8 @@
 // Under the search, four small facts: the server's figures once they are read,
 // plain words before and without them — never a number of its own. The picture
 // follows the reference: a pale disc, the student rising out of it (a stock photo
-// with its background removed), a drawn laptop in front and three small cards
-// that state what the platform offers.
+// with its background removed) and three small cards that state what the
+// platform offers.
 import {
   AppstoreOutlined,
   BookOutlined,
@@ -42,7 +42,7 @@ import { Link, useNavigate } from 'react-router'
 import { PUBLIC_SEARCH_MAX_LENGTH } from '../publicCatalog/publicCatalog.view'
 import { programsPathFor } from '../publicCatalog/publicViewer'
 import type { PublicViewer } from '../publicCatalog/publicViewer'
-import { HOME_IMAGES } from './homeImages'
+import { HomeImage } from './HomeImage'
 import { formatHomeStat } from './publicHome.view'
 import type { HomeStats } from './publicHome.view'
 
@@ -162,9 +162,8 @@ export function HomeHero({
         <div className="public-home__hero-visual">
           <span className="public-home__hero-disc" aria-hidden="true" />
           <div className="public-home__hero-figure">
-            <img src={HOME_IMAGES.heroStudent} alt="" width={760} height={981} decoding="async" fetchPriority="high" />
+            <HomeImage place="heroStudent" alt="" width={760} height={981} decoding="async" fetchPriority="high" />
           </div>
-          <HeroLaptop />
           <HeroBadge place="top" icon={<WifiOutlined />} title={t('publicHome.hero.badges.online')} text={t('publicHome.hero.badges.onlineText')} />
           <HeroBadge place="middle" icon={<SafetyCertificateOutlined />} title={t('publicHome.hero.badges.certificate')} text={t('publicHome.hero.badges.certificateText')} />
           <HeroBadge place="bottom" icon={<BookOutlined />} title={t('publicHome.hero.badges.programs')} text={t('publicHome.hero.badges.programsText')} />
@@ -185,28 +184,6 @@ function HeroBadge({ place, icon, title, text }: { place: 'top' | 'middle' | 'bo
         <span>{text}</span>
       </span>
     </div>
-  )
-}
-
-/** A drawn laptop in front of the student — decoration only. */
-function HeroLaptop() {
-  return (
-    <svg className="public-home__hero-laptop" viewBox="0 0 320 210" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="public-home-laptop-lid" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#f4f7f8" />
-          <stop offset="1" stopColor="#b7c5cb" />
-        </linearGradient>
-        <linearGradient id="public-home-laptop-base" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#c4d0d5" />
-          <stop offset="1" stopColor="#e6ecee" />
-        </linearGradient>
-      </defs>
-      <path d="M46 12 L262 5 Q273 5 275 16 L301 150 L60 165 L35 25 Q33 13 46 12 Z" fill="url(#public-home-laptop-lid)" stroke="#a3b3b9" strokeWidth="1.5" />
-      <path d="M60 165 L301 150 L317 177 Q320 185 309 186 L38 202 Q26 202 30 191 Z" fill="url(#public-home-laptop-base)" stroke="#a3b3b9" strokeWidth="1.5" />
-      <path d="M140 179 L212 175 L216 182 L138 187 Z" fill="#aebcc2" />
-      <circle cx="168" cy="84" r="14" fill="#ffffff" opacity="0.7" />
-    </svg>
   )
 }
 

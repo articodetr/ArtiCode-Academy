@@ -208,6 +208,7 @@ describe.skipIf(!available)('MOD-20 course curriculum (e2e, TEST-260)', () => {
   afterAll(async () => {
     try {
       if (prisma) {
+        if (createdUserIds.length > 0) await prisma.certificate.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         if (createdUserIds.length > 0) await prisma.learningProgress.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         await prisma.class.deleteMany({ where: { code: { startsWith: PREFIX } } });
         await prisma.course.deleteMany({ where: { code: { startsWith: PREFIX } } });

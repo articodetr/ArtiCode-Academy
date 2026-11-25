@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { ExamAttemptsSweeper } from './attempts.sweeper.js';
+import { AutoCertificatesModule } from '../certificates/auto-certificates.module.js';
 import { ExamAttemptDetailController, ExamAttemptsController } from './exam-attempts.controller.js';
 import { ExamAttemptsService } from './exam-attempts.service.js';
 import { ExamGradingService } from './exam-grading.service.js';
@@ -43,7 +44,8 @@ import { MyExamsService } from './my-exams.service.js';
  * (`ExamAttemptsService`).
  */
 @Module({
-  imports: [NotificationsModule],
+  // J-F67: an exam done may complete a course's automatic certificate (CH-0363).
+  imports: [NotificationsModule, AutoCertificatesModule],
   controllers: [
     ClassExamsController,
     ExamsController,

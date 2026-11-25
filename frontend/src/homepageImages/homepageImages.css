@@ -1,0 +1,160 @@
+/* Settings → «صور الصفحة الرئيسية»: four cards in a grid, each with its picture in the frame of its place on /home. */
+.homepage-images__intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 20px;
+}
+
+.homepage-images__intro-text {
+  min-width: 0;
+  max-width: 720px;
+}
+
+.homepage-images__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* Cards of one row share a height, and their buttons line up at the bottom. */
+.homepage-images__slot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.homepage-images__card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.homepage-images__card > .ant-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.homepage-images__card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.homepage-images__card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--c-text);
+}
+
+.homepage-images__meta {
+  color: var(--c-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/*
+ * The stage keeps every card the same height; the frame inside it has the shape of its place on /home
+ * (`aspect-ratio` inline) and is as large as the stage allows: its width is the smaller of the stage's width
+ * and `--frame-height × width ÷ height` (also inline), so its height never passes `--frame-height`.
+ */
+.homepage-images__stage {
+  --frame-height: 224px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(var(--frame-height) + 16px);
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--c-paper);
+}
+
+.homepage-images__stage--large {
+  --frame-height: min(64vh, 620px);
+}
+
+.homepage-images__frame {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  outline: 1px solid var(--c-line);
+  outline-offset: -1px;
+  background: var(--c-surface);
+}
+
+/* The hero's cut-out person: a checkerboard shows what is transparent, the pale disc of /home what visitors see behind it. */
+.homepage-images__frame--transparent {
+  background-color: #ffffff;
+  background-image: conic-gradient(#eef1f4 25%, transparent 0 50%, #eef1f4 0 75%, transparent 0);
+  background-size: 16px 16px;
+}
+
+.homepage-images__frame--transparent::before {
+  position: absolute;
+  inset: 9% 3% 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #e9f6f8 0%, #d7eef2 62%, #cce9ee 100%);
+  opacity: 0.85;
+  content: '';
+}
+
+.homepage-images__image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.homepage-images__marker {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  margin: 0;
+}
+
+.homepage-images__unavailable {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  color: var(--c-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.homepage-images__warnings {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.homepage-images__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.homepage-images__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

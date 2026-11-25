@@ -106,6 +106,8 @@ export interface MyLearningCourse {
     name: LocalizedLabel
     summary: LocalizedLabel | null
     coverImageUrl: string | null
+    /** J-F67: the course's own materials (its textbook); absent from an older server. */
+    resources?: LessonResource[]
     /** The course difficulty (MOD-04 `levels`) — kept in the contract; «My School» never shows it to learners. */
     level: { id: string; name: LocalizedLabel } | null
     /** PORTAL-04: the school subject the course teaches; null = not set. */
@@ -140,6 +142,28 @@ export interface WorkspaceItem {
   completedAt: string | null
   /** False while its level is not open yet (D-R145): listed, never opened, visited, played or completed. */
   available: boolean
+  /**
+   * ISO 8601: when the lesson was added to the curriculum (API-230 since J-F67 — «دروسي» lists every course's lessons
+   * newest first). Not the day it was published: a draft published later keeps the day it was written. Absent from a
+   * workspace built for the author's preview (API-226).
+   */
+  createdAt?: string
+  /** J-F67: the lesson's downloadable resources, as API-231 lists them. Absent from the author's preview. */
+  resources?: LessonResource[]
+  /** J-F67: the scheduled or published exams of the learner's class linked to a session of this lesson, soonest first. */
+  exams?: WorkspaceItemExam[]
+}
+
+/** An exam of the learner's class linked to a lesson (API-230 since J-F67) — what «my exams» already shows them. */
+export interface WorkspaceItemExam {
+  id: string
+  title: LocalizedLabel
+  delivery: 'manual' | 'online'
+  status: 'scheduled' | 'published'
+  scheduledAt: string | null
+  closesAt: string | null
+  /** The learner has taken it: a finished attempt (submitted or timed out) or a scored result. Absent from an older server. */
+  done?: boolean
 }
 
 export interface WorkspaceSection {
@@ -247,11 +271,19 @@ export interface LearningItem {
   exams: LessonExam[]
 }
 
+/** The certificate a completion issued automatically. */
+export interface LearningCertificate {
+  id: string
+  serial: string
+}
+
 export interface PlaybackResult {
   progress: ItemProgress
   course: ProgressCounts
   completedNow: boolean
   capped: boolean
+  /** The certificate this save earned, else null. */
+  certificate: LearningCertificate | null
 }
 
 export interface CompletionResult {
@@ -259,6 +291,8 @@ export interface CompletionResult {
   section: ProgressCounts
   course: ProgressCounts
   completedNow: boolean
+  /** The certificate this completion earned, else null. */
+  certificate: LearningCertificate | null
 }
 
 /** A played interval in seconds: [start, end). */

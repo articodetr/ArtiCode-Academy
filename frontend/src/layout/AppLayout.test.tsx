@@ -65,13 +65,14 @@ describe('AppLayout navigation', () => {
     expect(selected[0]).toHaveTextContent(ar.nav.roles)
   })
 
-  it('shows the grade schemes entry right after the settings entry to a holder of academy.settings.manage, and selects it on /settings/grade-schemes (J-F44)', () => {
+  it('shows the homepage images and grade schemes entries right after the settings entry to a holder of academy.settings.manage, and selects grade schemes on /settings/grade-schemes (J-F44)', () => {
     renderWithProviders(<AppLayout />, {
       auth: makeAuth({ user: makeUser({ permissions: ['academy.settings.read', 'academy.settings.manage'] }) }),
       route: '/settings/grade-schemes',
     })
     const labels = menuLabels()
-    expect(labels.indexOf(ar.nav.gradeSchemes)).toBe(labels.indexOf(ar.nav.settings) + 1)
+    expect(labels.indexOf(ar.nav.homepageImages)).toBe(labels.indexOf(ar.nav.settings) + 1)
+    expect(labels.indexOf(ar.nav.gradeSchemes)).toBe(labels.indexOf(ar.nav.homepageImages) + 1)
     const selected = document.querySelectorAll('.ant-menu-item-selected')
     expect(selected).toHaveLength(1)
     expect(selected[0]).toHaveTextContent(ar.nav.gradeSchemes)
@@ -89,15 +90,14 @@ describe('AppLayout navigation', () => {
     expect(selected[0]).toHaveTextContent(ar.nav.myLessons)
   })
 
-  it('shows a student «my assignments» in place of «assignments», right after «my lessons», and selects it on /my-assignments (J-F42)', () => {
+  it('keeps «assignments» and, since J-F67, «my assignments» out of a learner-only student’s menu; «my lessons» stays (J-F42)', () => {
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'assignments.read', 'assignments.submit', 'schedule.read', 'lessons.read'] })
     renderWithProviders(<AppLayout />, { auth: makeAuth({ user: student }), route: '/my-assignments' })
     const labels = menuLabels()
     expect(labels).not.toContain(ar.nav.assignments)
-    expect(labels.indexOf(ar.nav.myAssignments)).toBe(labels.indexOf(ar.nav.myLessons) + 1)
-    const selected = document.querySelectorAll('.ant-menu-item-selected')
-    expect(selected).toHaveLength(1)
-    expect(selected[0]).toHaveTextContent(ar.nav.myAssignments)
+    // LEARNER_MENU_HIDDEN (J-F67): the page stays reachable from its links, the horizontal bar stays short.
+    expect(labels).not.toContain(ar.nav.myAssignments)
+    expect(labels).toContain(ar.nav.myLessons)
   })
 
   it('shows a teacher «exams» right after «assignments» and selects it on /exams; a student holding exams.read does not see it (J-F45)', () => {
@@ -531,7 +531,7 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
       [ar.nav.groups.assessment, [ar.nav.assignments, ar.nav.exams, ar.nav.certificates]],
       [ar.nav.groups.finance, [ar.nav.payments]],
       [ar.nav.groups.followUp, [ar.nav.reports, ar.nav.notifications]],
-      [ar.nav.groups.system, [ar.nav.settings, ar.nav.gradeSchemes, ar.nav.roles, ar.nav.audit]],
+      [ar.nav.groups.system, [ar.nav.settings, ar.nav.homepageImages, ar.nav.gradeSchemes, ar.nav.roles, ar.nav.audit]],
     ])
     // «My pages» has nothing for an admin who is no learner: no empty heading.
     expect(headings(menu)).not.toContain(ar.nav.groups.mine)
@@ -546,17 +546,88 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
   })
 
-  it('keeps a learner-only viewer’s flat menu in the order of NAV_ITEMS, with no heading — expanded or on the rail', async () => {
+  it('gives a learner-only viewer a horizontal TabseetCourse pill bar instead of the vertical Sider on desktop, without Explore Courses and with no headings, and navigates from it (J-F66)', async () => {
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'schedule.read', 'lessons.read', 'assignments.read', 'exams.read'] })
-    renderShell(student)
-    const flat = [ar.nav.dashboard, ar.nav.myClasses, ar.nav.catalog, ar.nav.schedule, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates, ar.nav.notifications]
-    expect(labelsIn(siderMenu())).toEqual(flat)
-    expect(siderMenu().querySelector('.ant-menu-item-group')).toBeNull()
+    renderShell(student, { route: '/schedule' })
+    // J-F67: «واجباتي», «اختباراتي» and «درجاتي» are off the learner's menu (their pages stay).
+    const flat = [ar.nav.dashboard, ar.nav.myClasses, ar.nav.schedule, ar.nav.myLessons, ar.nav.myCertificates, ar.nav.notifications]
 
-    fireEvent.click(within(sider()).getByRole('button', { name: ar.nav.collapseMenu }))
-    await waitFor(() => expect(sider()).toHaveClass('ant-layout-sider-collapsed'))
-    expect(labelsIn(siderMenu())).toEqual(flat)
-    expect(siderMenu().querySelector('.ant-menu-item-divider')).toBeNull()
+    expect(document.querySelector('.app-sider')).toBeNull()
+    expect(document.querySelector('.ant-layout-sider')).toBeNull()
+    expect(document.querySelector('.app-shell')).toHaveClass('app-shell--learner')
+
+    const nav = screen.getByRole('navigation', { name: ar.nav.mainMenu })
+    expect(nav).toHaveClass('app-learner-nav')
+    const top = document.querySelector('.app-top') as HTMLElement
+    expect(top).not.toBeNull()
+    expect(top).toContainElement(header())
+    expect(top).toContainElement(nav)
+    expect(top.nextElementSibling).toHaveClass('app-content')
+    const menu = within(nav).getByRole('menu')
+    expect(menu).toHaveClass('ant-menu-horizontal')
+    expect(labelsIn(menu)).toEqual(flat)
+    expect(labelsIn(menu)).not.toContain(ar.nav.catalog)
+    expect(menu.querySelector('.ant-menu-item-group')).toBeNull()
+    expect(menu.querySelector('.ant-menu-item-divider')).toBeNull()
+
+    const selected = menu.querySelectorAll('.ant-menu-item-selected')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]).toHaveTextContent(ar.nav.schedule)
+
+    fireEvent.click(within(menu).getByText(ar.nav.myLessons))
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/my-lessons')
+  })
+
+  it('uses the phone drawer (not the desktop horizontal bar) for a learner-only viewer on a phone, without Explore Courses (J-F66)', async () => {
+    onPhone()
+    const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'schedule.read', 'lessons.read'] })
+    renderShell(student)
+
+    expect(document.querySelector('.app-sider')).toBeNull()
+    expect(document.querySelector('.app-learner-nav')).toBeNull()
+    const button = within(header()).getByRole('button', { name: ar.nav.openMenu })
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog')
+    const menu = within(dialog).getByRole('menu')
+    expect(labelsIn(menu)).toContain(ar.nav.myLessons)
+    expect(labelsIn(menu)).not.toContain(ar.nav.catalog)
+    expect(menu.querySelector('.ant-menu-item-group')).toBeNull()
+  })
+
+  it('styles the learner horizontal navigation bar with self-hosted Cairo 14px/700, 18px icons, TabseetCourse 1140px centered container, navy/gold active states, and print suppression (J-F66)', async () => {
+    const css = (await layoutCss()).replace(/\r\n/g, '\n')
+    expect(css).toContain('.app-learner-nav')
+    expect(css).toContain('--ac-learner-max: 1140px')
+    expect(css).toContain("'Public Cairo'")
+    expect(css).toContain('font-size: 14px')
+    expect(css).toContain('font-size: 18px')
+    expect(css).toContain('font-weight: 700')
+    expect(css).toContain('background: #113464')
+    expect(css).toContain('color: #c5a052')
+    expect(css).toMatch(/@media\s+print\s*\{[\s\S]*\.app-learner-nav[\s\S]*display:\s*none\s*!important/)
+  })
+
+  it('keeps the entire top header region (.app-top: .app-header and, on desktop learner pages, .app-learner-nav) sticky at top: 0 while scrolling and static on paper (J-F66)', async () => {
+    const { unmount } = renderShell()
+    const staffTop = document.querySelector('.app-top') as HTMLElement
+    expect(staffTop).not.toBeNull()
+    expect(staffTop).toContainElement(header())
+    expect(staffTop.nextElementSibling).toHaveClass('app-content')
+    unmount()
+
+    onPhone()
+    renderShell()
+    const phoneTop = document.querySelector('.app-top') as HTMLElement
+    expect(phoneTop).toContainElement(header())
+
+    const css = (await layoutCss()).replace(/\r\n/g, '\n')
+    const topRule = css.match(/\.app-top\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(topRule).toContain('position: sticky')
+    expect(topRule).toContain('top: 0')
+    expect(topRule).toContain('z-index: 100')
+    expect(css).toContain('--ac-sticky-offset: 88px')
+    expect(css).toContain('--ac-sticky-offset: 140px')
+    expect(css).toMatch(/@media\s+print\s*\{[\s\S]*\.app-top\s*\{[^}]*position:\s*static/)
   })
 
   it('folds the sections into dividers on the icon rail — headings do not fit 80 px — and the trigger is a button that says what it does', async () => {

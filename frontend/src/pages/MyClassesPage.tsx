@@ -4,175 +4,177 @@
 // `guardian` role — the server decides). Ownership, no permission key: the
 // page shows exactly what the server returns — the class, its course and its
 // lead teacher by name — and never contact fields, rosters or other students.
-// `active` and `completed` enrollments by default; the status filter asks the
-// server for one status (withdrawn or cancelled ones included).
-// Since J-F61 (CH-0237) it is also the learner's way into their courses, in place of «مدرستي»: each row carries the
-// progress and the action of API-229 (joined on the enrollment id; a failed read never hides the classes), and a
-// student has a second tab, «طلبات الاشتراك» (API-222/223), kept in the URL as `?section=requests`.
-import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, Badge, Button, Card, Flex, Select, Skeleton, Space, Table, Tabs, Tag, Typography } from 'antd'
-import type { TableProps } from 'antd'
-import type { ReactNode } from 'react'
+// `active` and `completed` enrollments (the server default).
+// Since J-F61 (CH-0237) it is also the learner's way into their courses, in place of «مدرستي»: each enrollment carries
+// the progress and the action of API-229 (joined on the enrollment id; a failed read never hides the classes).
+// Since J-F67 (CH-0243) the classes are cards on the look of «دروسي» (J-F64/J-F66 — `learn/hub/hub.css`, Cairo and
+// the scoped Ant Design theme) — one card per enrollment (`enrollments/MyClassCard.tsx`) — and nothing stands above
+// them: no page title (the top menu names the page; a screen reader gets a hidden heading), no tabs, no status filter.
+// A student's enrollment requests (API-222/223) open only from the links that ask for them, `?section=requests`
+// (the catalog course page and the learning workspace's access notice), with a way back to the cards.
+// Choosing a card of a course the learner studies (the card itself or its «استعراض الدروس») shows that course's lessons
+// below the cards, on this page, and scrolls to them (Jallal's request — what «دروسي» did with its cards until J-F67):
+// `learn/hub/HubLessons.tsx` — the levels, the «الكل / المباشرة / المسجلة» filter and the lesson playing inside the
+// page. The chosen course and the opened lesson live in the address (`?course=…&lesson=…`), so a reload keeps them;
+// without `?course=` no course is shown until one is chosen.
+// Since J-F68 «الشهادة» is on every card: before the certificate is issued it opens `CertificateGapsModal`, which reads
+// the certificates, the class's exams and (for the learner's own card) the course's lessons again and says what is
+// missing — the lessons left and how many exams are not passed yet; the exams themselves are listed only at the end of
+// the course's lessons below the cards («اختبارات الدورة» of HubLessons), which its «عرض الاختبارات» brings into view.
+import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons'
+import { Alert, Button, ConfigProvider, Skeleton } from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router'
-import { ENROLLMENT_STATUSES } from '../api/enrollments'
-import type { EnrollmentStatus, MyClassItem } from '../api/enrollments'
-import type { MyLearningCourse } from '../api/learning'
+import { useNavigate, useSearchParams } from 'react-router'
+import type { MyClassItem } from '../api/enrollments'
+import type { ProgressCounts } from '../api/learning'
+import { listMyCertificates } from '../api/myCertificates'
+import type { MyCertificateItem } from '../api/myCertificates'
 import { useAuth } from '../auth/auth-context'
 import { useMyRequests } from '../catalog/useMyRequests'
 import { describeClassesFailure, failureMessage } from '../classes/classes.errors'
 import { PageHeader } from '../components/PageHeader'
-import { StatusTag } from '../components/StatusTag'
-import { ClassLearnButton, ClassLearningProgress } from '../enrollments/MyClassLearning'
+import { CertificateGapsModal } from '../enrollments/CertificateGapsModal'
+import { certificateFor } from '../enrollments/certificateGaps'
+import { MyClassCard } from '../enrollments/MyClassCard'
 import { MyEnrollmentRequests } from '../enrollments/MyEnrollmentRequests'
 import { useMyClasses } from '../enrollments/useMyClasses'
-import { useLocalized } from '../i18n/useLocalized'
-import { classLessonsPath, hasClassLessons } from '../lessons/myLessons.view'
-import { SECTION_PARAM, isPendingRequest, mySchoolFailureKey } from '../mySchool/mySchool.view'
+import { HubLessons } from '../learn/hub/HubLessons'
+import { HUB_ANTD_THEME } from '../learn/hub/hub.theme'
+import { COURSE_PARAM, LESSON_PARAM, chosenCourseOf, countsOf, isStudyCourse, studyCourses } from '../learn/hub/hub.view'
+import { SECTION_PARAM, mySchoolFailureKey } from '../mySchool/mySchool.view'
 import { SourceAlert } from '../mySchool/SourceAlert'
-import { useIsPhone, useMyLearning } from '../mySchool/useMyLearning'
-import { displayNameOf, formatDateTime, formatDay, localizedLabel } from '../users/users.format'
+import { useMyLearning } from '../mySchool/useMyLearning'
+import '../publicCatalog/publicFonts.css'
+import '../learn/learn.css'
+import '../learn/hub/hub.css'
 
-const DASH = '—'
 const REQUESTS_SECTION = 'requests'
-const CLASSES_SECTION = 'classes'
 
 export function MyClassesPage() {
+  const { t, i18n } = useTranslation()
+  const { user } = useAuth()
+  const [params] = useSearchParams()
+  // Only a student has requests of their own: API-222 would answer a guardian an empty list.
+  const isStudent = user?.roles.includes('student') ?? false
+  const showRequests = isStudent && params.get(SECTION_PARAM) === REQUESTS_SECTION
+  const requests = useMyRequests(showRequests)
+  const navigate = useNavigate()
+
+  return (
+    <ConfigProvider theme={HUB_ANTD_THEME}>
+      <div className="hub-sessions">
+        {showRequests ? (
+          <section>
+            <PageHeader
+              title={t('myClasses.sections.requests')}
+              extra={
+                <Button icon={i18n.dir() === 'rtl' ? <ArrowRightOutlined aria-hidden /> : <ArrowLeftOutlined aria-hidden />} onClick={() => navigate('/my-classes')}>
+                  {t('myClasses.classLessons.back')}
+                </Button>
+              }
+            />
+            <MyEnrollmentRequests source={requests} />
+          </section>
+        ) : (
+          <MyClassCards />
+        )}
+      </div>
+    </ConfigProvider>
+  )
+}
+
+/**
+ * The caller's certificates (API-135) — for «الشهادة» on a card (J-F67): a card opens the issued certificate of its
+ * course for its student (`certificateFor()` — one per course, CH-0363). Read once; a failure or a missing key (403)
+ * leaves every card with the locked button (J-F68), whose window reads them again. `remember` adds a certificate that
+ * window found (issued since this read); `reload` reads them again (an exam was taken from the lessons below).
+ */
+function useMyCertificateItems(): { items: readonly MyCertificateItem[]; remember: (certificate: MyCertificateItem) => void; reload: () => void } {
+  const [items, setItems] = useState<readonly MyCertificateItem[]>([])
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    const controller = new AbortController()
+    listMyCertificates({}, controller.signal).then(
+      (list) => {
+        if (!controller.signal.aborted) setItems(list.items)
+      },
+      () => undefined,
+    )
+    return () => controller.abort()
+  }, [attempt])
+  const reload = useCallback(() => setAttempt((value) => value + 1), [])
+  const remember = useCallback((certificate: MyCertificateItem) => {
+    setItems((previous) => (previous.some((item) => item.id === certificate.id && item.status === certificate.status) ? previous : [certificate, ...previous.filter((item) => item.id !== certificate.id)]))
+  }, [])
+  return { items, remember, reload }
+}
+
+/** The id of the card's issued certificate, else null. */
+function issuedCertificateId(items: readonly MyCertificateItem[], row: MyClassItem): string | null {
+  const certificate = certificateFor(items, { enrollmentId: row.enrollmentId, studentId: row.student.id, courseId: row.class.course.id })
+  return certificate?.status === 'issued' ? certificate.id : null
+}
+
+/** Brings the chosen course's lessons into view, without the animation for a reader who asked for less motion. */
+function scrollToStart(element: HTMLElement | null) {
+  const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  element?.scrollIntoView?.({ behavior: calm ? 'auto' : 'smooth', block: 'start' })
+}
+
+function MyClassCards() {
   const { t } = useTranslation()
-  const { language } = useLocalized()
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const my = useMyClasses()
   const learning = useMyLearning()
-  const phone = useIsPhone()
-  // Only a student has requests of their own: API-222 would answer a guardian an empty list.
-  const isStudent = user?.roles.includes('student') ?? false
-  const requests = useMyRequests(isStudent)
-  const section = isStudent && params.get(SECTION_PARAM) === REQUESTS_SECTION ? REQUESTS_SECTION : CLASSES_SECTION
+  const [live, setLive] = useState<Readonly<Record<string, ProgressCounts>>>({})
+  const [reveal, setReveal] = useState(0)
+  // Asked from the window of «الشهادة» (J-F68): the chosen course's «اختبارات الدورة» comes into view once read.
+  const [examsFocus, setExamsFocus] = useState(0)
+  const panelRef = useRef<HTMLDivElement>(null)
   const learningOf = new Map((learning.data ?? []).map((item) => [item.enrollmentId, item]))
-  // The student column matters only to a guardian (or whenever the server returned a child's enrollment).
+  const certificates = useMyCertificateItems()
+  // The card whose «الشهادة» was pressed without a certificate (J-F68): its window says what the course still needs.
+  const [gapsOf, setGapsOf] = useState<string | null>(null)
+  const selected = chosenCourseOf(studyCourses(learning.data ?? []), params.get(COURSE_PARAM))
+  // The student line matters only to a guardian (or whenever the server returned a child's enrollment).
   const showStudent = (user?.roles.includes('guardian') ?? false) || my.items.some((item) => item.relation === 'child')
-
-  const chooseSection = (next: string) => {
-    const nextParams = new URLSearchParams(params)
-    if (next === REQUESTS_SECTION) nextParams.set(SECTION_PARAM, REQUESTS_SECTION)
-    else nextParams.delete(SECTION_PARAM)
-    setParams(nextParams, { replace: true })
-  }
-
-  const reloadClasses = () => {
-    my.reload()
-    learning.retry()
-  }
-
-  /** A row's API-229 cell: the answer, a placeholder while it is on its way, a dash for an enrollment it does not list. */
-  const learningCell = (row: MyClassItem, render: (item: MyLearningCourse) => ReactNode, empty: ReactNode) => {
-    const item = learningOf.get(row.enrollmentId)
-    if (item) return render(item)
-    return learning.loading ? <Skeleton.Input active size="small" style={{ width: 96, minWidth: 96 }} /> : empty
-  }
-
-  const columns: TableProps<MyClassItem>['columns'] = [
-    {
-      title: t('myClasses.columns.class'),
-      key: 'class',
-      render: (_, row) => (
-        <Space orientation="vertical" size={phone ? 6 : 0}>
-          {/* J-F62: the name opens the class's own lessons; API-101 has none for a withdrawn, cancelled or pending enrollment. */}
-          {hasClassLessons(row.enrollmentStatus) ? (
-            <Link to={classLessonsPath(row, my.items)} title={t('myClasses.classLessons.open')} style={{ fontWeight: 600 }}>
-              {localizedLabel(row.class.name, language)}
-            </Link>
-          ) : (
-            <Typography.Text strong>{localizedLabel(row.class.name, language)}</Typography.Text>
-          )}
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            <bdi dir="ltr">{row.class.code}</bdi>
-          </Typography.Text>
-          {/* On a phone the way into the lessons stays in the first column, never behind a sideways scroll of the table. */}
-          {phone
-            ? learningCell(
-                row,
-                (item) => (
-                  <>
-                    <ClassLearningProgress item={item} />
-                    <ClassLearnButton item={item} />
-                  </>
-                ),
-                null,
-              )
-            : null}
-        </Space>
-      ),
-    },
-    { title: t('common.course'), key: 'course', render: (_, row) => localizedLabel(row.class.course.name, language) },
-    ...(phone
-      ? []
-      : [
-          { title: t('myClasses.columns.progress'), key: 'progress', render: (_: unknown, row: MyClassItem) => learningCell(row, (item) => <ClassLearningProgress item={item} />, DASH) },
-          { title: t('myClasses.columns.learn'), key: 'learn', render: (_: unknown, row: MyClassItem) => learningCell(row, (item) => <ClassLearnButton item={item} />, null) },
-        ]),
-    {
-      title: t('common.teacher'),
-      key: 'teacher',
-      render: (_, row) => (row.class.leadTeacher ? displayNameOf(row.class.leadTeacher) : <Typography.Text type="secondary">{t('classes.noTeacher')}</Typography.Text>),
-    },
-    {
-      title: t('myClasses.columns.period'),
-      key: 'period',
-      render: (_, row) => (row.class.startsOn || row.class.endsOn ? `${formatDay(row.class.startsOn, language)} – ${formatDay(row.class.endsOn, language)}` : DASH),
-    },
-    { title: t('myClasses.columns.classStatus'), key: 'classStatus', render: (_, row) => <StatusTag value={row.class.status} /> },
-    {
-      title: t('myClasses.columns.enrollmentStatus'),
-      key: 'enrollmentStatus',
-      render: (_, row) => (
-        <Space orientation="vertical" size={0}>
-          <StatusTag value={row.enrollmentStatus} />
-          {row.enrollmentStatus === 'completed' && row.completedAt ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {formatDateTime(row.completedAt, language)}
-            </Typography.Text>
-          ) : null}
-          {row.enrollmentStatus === 'withdrawn' && row.withdrawnAt ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {formatDateTime(row.withdrawnAt, language)}
-            </Typography.Text>
-          ) : null}
-        </Space>
-      ),
-    },
-    { title: t('myClasses.columns.enrolledAt'), key: 'enrolledAt', render: (_, row) => formatDateTime(row.enrolledAt, language) },
-  ]
-  if (showStudent) {
-    columns.splice(1, 0, {
-      title: t('myClasses.columns.student'),
-      key: 'student',
-      render: (_, row) => (
-        <Space size={4} wrap>
-          <span>{displayNameOf(row.student)}</span>
-          <Tag color={row.relation === 'self' ? 'green' : 'blue'}>{t(`myClasses.relation.${row.relation}`)}</Tag>
-        </Space>
-      ),
-    })
-  }
-
   const failure = my.error ? describeClassesFailure(my.error) : null
+  const gapsRow = gapsOf ? (my.items.find((row) => row.enrollmentId === gapsOf) ?? null) : null
+  const gapsLearning = gapsRow ? (learningOf.get(gapsRow.enrollmentId) ?? null) : null
 
-  const classes = (
-    <Card>
-      <Flex gap={12} wrap style={{ marginBottom: 16 }}>
-        <Select<EnrollmentStatus | undefined>
-          allowClear
-          placeholder={t('myClasses.defaultStatuses')}
-          aria-label={t('myClasses.filterLabel')}
-          value={my.status}
-          onChange={(value) => my.setStatus(value)}
-          options={ENROLLMENT_STATUSES.map((status) => ({ value: status, label: t(`labels.${status}`) }))}
-          style={{ minWidth: 200 }}
-        />
-        <Button icon={<ReloadOutlined />} onClick={reloadClasses} aria-label={t('myClasses.refresh')} />
-      </Flex>
+  const onProgress = useCallback((courseId: string, counts: ProgressCounts) => {
+    setLive((previous) => (previous[courseId] === counts ? previous : { ...previous, [courseId]: counts }))
+  }, [])
+
+  // After a choice the panel is on screen (possibly still loading): scroll to its start.
+  useEffect(() => {
+    if (reveal > 0) scrollToStart(panelRef.current)
+  }, [reveal])
+
+  const selectCourse = (courseId: string, target: 'lessons' | 'exams' = 'lessons') => {
+    if (courseId !== selected?.course.id) {
+      setParams((previous) => {
+        const next = new URLSearchParams(previous)
+        next.set(COURSE_PARAM, courseId)
+        next.delete(LESSON_PARAM)
+        return next
+      })
+    }
+    if (target === 'exams') {
+      // The exams section scrolls itself into view once its list is read (CourseExams).
+      setExamsFocus((count) => count + 1)
+    } else {
+      setExamsFocus(0)
+      setReveal((count) => count + 1)
+    }
+  }
+
+  return (
+    <section aria-busy={my.loading}>
+      {/* The top menu names the page; the heading is for screen readers and the page outline only. */}
+      <h1 className="hub-sr-only">{t('myClasses.title')}</h1>
 
       {failure ? (
         <Alert
@@ -188,47 +190,55 @@ export function MyClassesPage() {
         />
       ) : null}
 
-      {learning.error ? <SourceAlert title={t('myClasses.learningError')} description={t(mySchoolFailureKey(learning.error))} onRetry={learning.retry} /> : null}
+      {learning.error ? (
+        <div style={{ marginBottom: 16 }}>
+          <SourceAlert title={t('myClasses.learningError')} description={t(mySchoolFailureKey(learning.error))} onRetry={learning.retry} />
+        </div>
+      ) : null}
 
-      <Table<MyClassItem>
-        rowKey="enrollmentId"
-        columns={columns}
-        dataSource={my.items}
-        loading={my.loading}
-        pagination={false}
-        // `true`, not 'max-content' (the users and courses tables — KI-094/KI-095): the table keeps its box's width
-        // wherever its columns fit, and only a screen too narrow for them scrolls it in its own box.
-        scroll={{ x: true }}
-        locale={{ emptyText: my.status ? t('myClasses.emptyFiltered') : t('myClasses.empty') }}
-      />
-    </Card>
-  )
-
-  return (
-    <>
-      <PageHeader title={t('myClasses.title')} subtitle={t('myClasses.subtitle')} />
-
-      {isStudent ? (
-        <Tabs
-          activeKey={section}
-          onChange={chooseSection}
-          items={[
-            { key: CLASSES_SECTION, label: t('myClasses.sections.classes'), children: classes },
-            {
-              key: REQUESTS_SECTION,
-              label: (
-                <Space size={6}>
-                  {t('myClasses.sections.requests')}
-                  <Badge count={requests.items.filter(isPendingRequest).length} size="small" />
-                </Space>
-              ),
-              children: <MyEnrollmentRequests source={requests} />,
-            },
-          ]}
-        />
-      ) : (
-        classes
+      {my.loading ? (
+        <Skeleton active paragraph={{ rows: 6 }} />
+      ) : my.items.length > 0 ? (
+        <div className="hub-grid">
+          {my.items.map((row) => {
+            const item = learningOf.get(row.enrollmentId) ?? null
+            const choosable = item !== null && isStudyCourse(item)
+            return (
+              <MyClassCard
+                key={row.enrollmentId}
+                row={row}
+                learning={item}
+                counts={item ? countsOf(item, live) : null}
+                learningLoading={learning.loading}
+                showStudent={showStudent}
+                onSelect={choosable ? () => selectCourse(item.course.id) : null}
+                active={choosable && item.course.id === selected?.course.id}
+                certificateId={issuedCertificateId(certificates.items, row)}
+                onShowCertificateGaps={() => setGapsOf(row.enrollmentId)}
+              />
+            )
+          })}
+        </div>
+      ) : failure ? null : (
+        <div className="hub-empty">
+          <p>{t('myClasses.empty')}</p>
+        </div>
       )}
-    </>
+
+      {gapsRow ? (
+        <CertificateGapsModal
+          key={gapsRow.enrollmentId}
+          row={gapsRow}
+          counts={gapsLearning ? countsOf(gapsLearning, live) : null}
+          onClose={() => setGapsOf(null)}
+          onBrowse={gapsLearning && isStudyCourse(gapsLearning) ? (target) => selectCourse(gapsLearning.course.id, target) : null}
+          onIssued={certificates.remember}
+        />
+      ) : null}
+
+      <div ref={panelRef} className="hub-panel-anchor">
+        {selected ? <HubLessons key={selected.course.id} course={selected} onProgress={onProgress} examsFocus={examsFocus} onExamClosed={certificates.reload} /> : null}
+      </div>
+    </section>
   )
 }

@@ -10,12 +10,14 @@ import { useAuth } from '../auth/auth-context'
 import { installMenuSpaceActivation } from '../common/menuSpaceKey'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { isLearnerOnly } from '../dashboard/learner.data'
+import { TABSEET_FONT_FAMILY } from '../learn/hub/hub.theme'
 import { HeaderBrand, SiderBrand } from './AcademyBrand'
 import { navFor, navGroupsFor } from './navigation'
 import type { NavItem, NavViewer } from './navigation'
 import { useIsPhone } from './useIsPhone'
 import { useUnreadCount } from '../notifications/useUnreadCount'
 import { GlobalSearch } from '../search/GlobalSearch'
+import '../publicCatalog/publicFonts.css'
 import './AppLayout.css'
 
 const { Header, Sider, Content } = Layout
@@ -59,16 +61,53 @@ const SIDE_MENU_THEME: ThemeConfig = {
   },
 }
 
+/**
+ * The horizontal pill navigation bar for learner-only viewers on desktop/tablet (J-F66), matching TabseetCourse's
+ * pill bar (#113464 navy active pill, #C5A052 gold active icon, self-hosted Cairo 14px/700).
+ */
+const LEARNER_NAV_THEME: ThemeConfig = {
+  token: {
+    fontFamily: TABSEET_FONT_FAMILY,
+    colorPrimary: '#113464',
+    borderRadius: 10,
+  },
+  components: {
+    Menu: {
+      horizontalItemBorderRadius: 10,
+      horizontalItemHoverBg: '#f1f5f9',
+      horizontalItemHoverColor: '#113464',
+      horizontalItemSelectedBg: '#113464',
+      horizontalItemSelectedColor: '#ffffff',
+      horizontalLineHeight: '36px',
+      itemColor: '#64748b',
+      itemBg: 'transparent',
+      activeBarHeight: 0,
+      activeBarBorderWidth: 0,
+      colorPrimaryBorder: '#c5a052',
+      lineWidthFocus: 2,
+    },
+  },
+}
+
 type MenuItems = NonNullable<MenuProps['items']>
 
 /**
- * The side menu's entries — exactly those of `navFor()`. A learner-only viewer (a student or a guardian and nothing
- * else) keeps the flat list in the order of NAV_ITEMS, without headings; anyone else gets the titled sections of
- * NAV_GROUPS, or — on the icon rail, where a heading does not fit — the same order with a divider between sections.
+ * The entries a learner-only viewer's menu leaves out; their pages stay reachable from their links. «explore courses»
+ * since J-F66; «واجباتي», «اختباراتي» and «درجاتي» since J-F67 (Jallal's request — a lesson's exam opens from its
+ * row in «دروسي»/«دوراتي», and «اختباراتي» from the exam popup).
+ */
+const LEARNER_MENU_HIDDEN: ReadonlySet<string> = new Set(['catalog', 'myAssignments', 'myExams', 'myGrades'])
+
+/**
+ * The side menu's entries — those of `navFor()`. A learner-only viewer (a student or a guardian and nothing
+ * else) keeps a flat list in the order of NAV_ITEMS, without headings and without the entries of LEARNER_MENU_HIDDEN
+ * (each page stays reachable from its links, without crowding the learner's horizontal bar — J-F66, J-F67); anyone else gets
+ * the titled sections of NAV_GROUPS, or — on the icon rail, where a heading does not fit — the same order with
+ * a divider between sections.
  */
 function sideMenuItems(viewer: NavViewer, rail: boolean, label: (key: string) => string): MenuItems {
   const entry = (item: NavItem) => ({ key: item.path, icon: item.icon, label: label(item.labelKey) })
-  if (isLearnerOnly(viewer.roles)) return navFor(viewer).map(entry)
+  if (isLearnerOnly(viewer.roles)) return navFor(viewer).filter((item) => !LEARNER_MENU_HIDDEN.has(item.key)).map(entry)
   const items: MenuItems = []
   navGroupsFor(viewer).forEach((group, index) => {
     if (rail) {
@@ -131,6 +170,7 @@ export function AppLayout() {
   if (!user) return <Navigate to="/login" replace />
 
   // Entries by permission where the module has an API, by the role matrix elsewhere (MOD-03-T15).
+  const learnerOnly = isLearnerOnly(user.roles)
   const navItems = navFor(user)
   const selected = selectedPath(
     location.pathname,
@@ -189,13 +229,15 @@ export function AppLayout() {
     if (document.activeElement instanceof HTMLElement && document.activeElement.closest('.app-user-menu')) userButton.current?.focus({ preventScroll: true })
   }
 
+  const hasDesktopSider = !phone && !learnerOnly
+
   return (
-    <Layout className="app-shell" hasSider={!phone} style={{ minHeight: '100vh', background: 'var(--ac-content-bg)' }}>
+    <Layout className={`app-shell${learnerOnly ? ' app-shell--learner' : ''}`} hasSider={hasDesktopSider} style={{ minHeight: '100vh', background: 'var(--ac-content-bg)' }}>
       {phone ? (
         <NavDrawer id={drawerId} open={drawerOpen} placement={rtl ? 'right' : 'left'} onClose={() => setDrawerOpenAt(null)}>
           <ConfigProvider theme={SIDE_MENU_THEME}>{sideMenu(false, () => setDrawerOpenAt(null))}</ConfigProvider>
         </NavDrawer>
-      ) : (
+      ) : hasDesktopSider ? (
         <ConfigProvider theme={SIDE_MENU_THEME}>
           {/* `app-sider`: the print rules of the reports page hide the side menu by this class (reports.css). */}
           <Sider
@@ -218,77 +260,95 @@ export function AppLayout() {
             {sideMenu(collapsed, undefined, siderNav)}
           </Sider>
         </ConfigProvider>
-      )}
+      ) : null}
 
       <Layout>
-        <Header className="app-header" style={{ background: 'var(--ac-card-bg)', borderBottom: '1px solid var(--ac-border)' }}>
-          <div className="app-header__start">
-            {phone ? (
-              <Button
-                type="text"
-                className="app-header__menu-button"
-                icon={<MenuOutlined />}
-                aria-label={t('nav.openMenu')}
-                aria-expanded={drawerOpen}
-                aria-controls={drawerId}
-                onClick={() => setDrawerOpenAt(location.key)}
-              />
-            ) : null}
-            {/* The academy's name and logo from API-035 (J-F13); no name until they arrive, the static one after a failure (J-F24). */}
-            <HeaderBrand />
-          </div>
+        <div className="app-top">
+          <Header className="app-header" style={{ background: 'var(--ac-card-bg)', borderBottom: '1px solid var(--ac-border)' }}>
+            <div className="app-header__start">
+              {phone ? (
+                <Button
+                  type="text"
+                  className="app-header__menu-button"
+                  icon={<MenuOutlined />}
+                  aria-label={t('nav.openMenu')}
+                  aria-expanded={drawerOpen}
+                  aria-controls={drawerId}
+                  onClick={() => setDrawerOpenAt(location.key)}
+                />
+              ) : null}
+              {/* The academy's name and logo from API-035 (J-F13); no name until they arrive, the static one after a failure (J-F24). */}
+              <HeaderBrand />
+            </div>
 
-          <div className="app-header__actions">
-            {/* The global search (Ctrl/Cmd+K or «/») and the unread bell — ported from the redesign branch. */}
-            <GlobalSearch />
-            <NotificationBell />
-            <LanguageSwitcher />
-            {/*
-              The user menu opens from a real button (KI-120): Tab reaches it and Enter or Space opens the menu (the
-              button's own click), ArrowDown too. `autoFocus` (antd's own prop) puts the focus on the menu's first item
-              once it is open, so the arrows, Enter and Space (common/menuSpaceKey.ts — on the items only, never on this
-              button) work at once, and Escape closes it back to the button (changeUserMenuOpen); a span left the
-              profile and the sign-out to the mouse.
-            */}
-            <Dropdown
-              menu={{
-                items: userMenu,
-                onKeyDown: (event) => {
-                  if (event.key === 'Escape') escapedUserMenu.current = true
-                },
-              }}
-              trigger={['click']}
-              open={userMenuOpen}
-              onOpenChange={changeUserMenuOpen}
-              autoFocus
-              // Unmounted once its closing motion ends, so a menu opened again starts on its first item (an open menu
-              // remembers the last item it focused).
-              destroyOnHidden
-              rootClassName="app-user-menu"
-            >
-              <button
-                ref={userButton}
-                type="button"
-                className="app-user"
-                aria-haspopup="menu"
-                aria-expanded={userMenuOpen}
-                onKeyDown={(event) => {
-                  if (event.key !== 'ArrowDown' || userMenuOpen) return
-                  // No page scroll: the arrow opens the menu, as Enter and Space do.
-                  event.preventDefault()
-                  setUserMenuOpen(true)
+            <div className="app-header__actions">
+              {/* The global search (Ctrl/Cmd+K or «/») and the unread bell — ported from the redesign branch. */}
+              <GlobalSearch />
+              <NotificationBell />
+              <LanguageSwitcher />
+              {/*
+                The user menu opens from a real button (KI-120): Tab reaches it and Enter or Space opens the menu (the
+                button's own click), ArrowDown too. `autoFocus` (antd's own prop) puts the focus on the menu's first item
+                once it is open, so the arrows, Enter and Space (common/menuSpaceKey.ts — on the items only, never on this
+                button) work at once, and Escape closes it back to the button (changeUserMenuOpen); a span left the
+                profile and the sign-out to the mouse.
+              */}
+              <Dropdown
+                menu={{
+                  items: userMenu,
+                  onKeyDown: (event) => {
+                    if (event.key === 'Escape') escapedUserMenu.current = true
+                  },
                 }}
+                trigger={['click']}
+                open={userMenuOpen}
+                onOpenChange={changeUserMenuOpen}
+                autoFocus
+                // Unmounted once its closing motion ends, so a menu opened again starts on its first item (an open menu
+                // remembers the last item it focused).
+                destroyOnHidden
+                rootClassName="app-user-menu"
               >
-                {/* Decorative: the user's name alone names the button. */}
-                <Avatar size="small" icon={<UserOutlined />} aria-hidden />
-                {/* An isolate in the name's own direction (KI-108): a name mixing Arabic and Latin words keeps its order in either UI. */}
-                <Typography.Text>
-                  <bdi dir="auto">{user.name}</bdi>
-                </Typography.Text>
-              </button>
-            </Dropdown>
-          </div>
-        </Header>
+                <button
+                  ref={userButton}
+                  type="button"
+                  className="app-user"
+                  aria-haspopup="menu"
+                  aria-expanded={userMenuOpen}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowDown' || userMenuOpen) return
+                    // No page scroll: the arrow opens the menu, as Enter and Space do.
+                    event.preventDefault()
+                    setUserMenuOpen(true)
+                  }}
+                >
+                  {/* Decorative: the user's name alone names the button. */}
+                  <Avatar size="small" icon={<UserOutlined />} aria-hidden />
+                  {/* An isolate in the name's own direction (KI-108): a name mixing Arabic and Latin words keeps its order in either UI. */}
+                  <Typography.Text>
+                    <bdi dir="auto">{user.name}</bdi>
+                  </Typography.Text>
+                </button>
+              </Dropdown>
+            </div>
+          </Header>
+
+          {!phone && learnerOnly ? (
+            <ConfigProvider theme={LEARNER_NAV_THEME}>
+              <nav className="app-learner-nav" aria-label={t('nav.mainMenu')}>
+                <div className="app-learner-nav__bar">
+                  <Menu
+                    mode="horizontal"
+                    disabledOverflow
+                    items={sideMenuItems(user, false, (key) => t(key))}
+                    selectedKeys={selected ? [selected] : []}
+                    onClick={({ key }) => navigate(key)}
+                  />
+                </div>
+              </nav>
+            </ConfigProvider>
+          ) : null}
+        </div>
 
         <Content className="app-content" style={{ background: 'var(--ac-content-bg)' }}>
           <Outlet />

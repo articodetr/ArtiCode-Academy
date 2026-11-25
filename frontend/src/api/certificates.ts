@@ -71,7 +71,8 @@ export interface CertificateSnapshot {
   class: { code: string; name: LocalizedLabel }
   /** The academy name at issuance. */
   academy: { name: LocalizedLabel }
-  grade: CertificateGrade
+  /** Null for an automatic course-completion certificate. */
+  grade: CertificateGrade | null
   /** ISO 8601 — when the enrollment was completed. */
   completedAt: string | null
   /** ISO 8601. */
@@ -91,7 +92,8 @@ export interface Certificate {
   course: CertificateRef
   /** Identity only. */
   student: CertificateStudent
-  grade: CertificateGrade
+  /** Null for an automatic course-completion certificate. */
+  grade: CertificateGrade | null
   snapshot: CertificateSnapshot
   /** ISO 8601. */
   issuedAt: string
@@ -203,7 +205,8 @@ export interface CertificateVerification {
   revokedAt: string | null
   student: { fullName: string; fullNameLatin: string | null }
   course: { code: string; name: LocalizedLabel }
-  grade: CertificateGrade
+  /** Null for an automatic course-completion certificate. */
+  grade: CertificateGrade | null
   academy: { name: LocalizedLabel }
 }
 

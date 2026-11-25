@@ -5,6 +5,7 @@ import { readLocalizedText } from '../authorization/localized-text.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { gradesError } from '../grades/grades.errors.js';
 import { toIso } from '../lessons/lessons.time.js';
+import { AutoCertificatesService } from '../certificates/auto-certificates.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { attemptDeadline, isAttemptOver, isResultReleased, isReviewReleased, remainingSeconds, takeState } from './attempts.policy.js';
@@ -118,6 +119,7 @@ export class MyAttemptsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly grading: ExamGradingService,
+    private readonly autoCertificates: AutoCertificatesService,
   ) {}
 
   /** API-276 — starts the caller's next attempt, or answers the one in progress. */
@@ -216,6 +218,9 @@ export class MyAttemptsService {
       if (isAttemptOver(attempt.expiresAt, now)) await this.grading.finish(tx, attempt, 'timed_out', now, null);
       else await this.grading.finish(tx, attempt, 'submitted', now, { userId: caller.id, ctx });
     }, ATTEMPT_TX);
+    // J-F67: the last exam of the class may complete the course's automatic certificate (after the commit; never fails the submit).
+    const owner = await this.prisma.db.examAttempt.findUnique({ where: { id: attemptId }, select: { studentUserId: true, exam: { select: { class: { select: { courseId: true } } } } } });
+    if (owner && owner.studentUserId === caller.id) await this.autoCertificates.awardIfComplete(caller.id, owner.exam.class.courseId);
     return this.read(attemptId, caller);
   }
 

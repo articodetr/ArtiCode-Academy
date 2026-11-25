@@ -1,8 +1,9 @@
-/* «دروسي» (J-F64) on the look of «برامجي التعليمية»: navy and gold, white cards,
-   a gradient header. Scoped under .hub and written in logical properties, so it
-   follows the page's direction; every grid shrinks to a 320 px phone. */
+/* «دروسي» (J-F64; Cairo typography & TabseetCourse scale refinement J-F66) on the look of «برامجي التعليمية»:
+   self-hosted Cairo font, navy and gold, white cards, a gradient header. Scoped under .hub / .hub-sessions and
+   written in logical properties, so it follows the page's direction; every grid shrinks to a 320 px phone. */
 
-.hub {
+.hub,
+.hub-sessions {
   --hub-navy: #113464;
   --hub-navy-2: #1a4b8c;
   --hub-gold: #c5a052;
@@ -11,8 +12,50 @@
   --hub-muted: #64748b;
   --hub-line: #e2e8f0;
   --hub-soft: #f8fafc;
+  --hub-font: 'Public Cairo', 'Public Poppins', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+  font-family: var(--hub-font);
   color: var(--hub-ink);
   min-inline-size: 0;
+}
+
+.hub .ant-typography,
+.hub .ant-btn,
+.hub .ant-alert,
+.hub .ant-tag,
+.hub-sessions .ant-typography,
+.hub-sessions .ant-btn,
+.hub-sessions .ant-select,
+.hub-sessions .ant-segmented,
+.hub-sessions .ant-table,
+.hub-sessions .ant-tag,
+.hub-sessions .ant-input,
+.hub-sessions .ant-alert {
+  font-family: var(--hub-font);
+}
+
+.hub-sessions h1,
+.hub-sessions h2,
+.hub-sessions h3.ant-typography {
+  font-family: var(--hub-font);
+  font-weight: 800;
+  color: var(--hub-navy);
+}
+
+.hub-sessions .ant-card {
+  border-color: var(--hub-line);
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgb(17 52 100 / 4%);
+}
+
+.hub-sessions .ant-table-thead > tr > th {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--hub-navy);
+  background: var(--hub-soft);
+}
+
+.hub-sessions .ant-table-tbody > tr > td {
+  font-size: 13.5px;
 }
 
 .hub-gold {
@@ -27,8 +70,9 @@
   align-items: center;
   gap: 8px;
   max-inline-size: 100%;
-  margin-block-end: 18px;
+  margin-block-end: 20px;
   padding: 6px 10px;
+  font-family: var(--hub-font, 'Public Cairo', 'Public Poppins', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif);
   background: #fff;
   border: 1px solid var(--hub-line, #e2e8f0);
   border-radius: 14px;
@@ -38,13 +82,19 @@
 .hub-tab {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
+  gap: 9px;
+  padding: 9px 18px;
   border-radius: 10px;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 700;
   color: #64748b;
+  text-decoration: none;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.hub-tab .anticon {
+  font-size: 18px;
 }
 
 .hub-tab:hover {
@@ -71,8 +121,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  margin-block-end: 26px;
-  padding: 26px 30px;
+  margin-block-end: 28px;
+  padding: 28px 32px;
   color: #fff;
   background: linear-gradient(135deg, var(--hub-navy) 0%, var(--hub-navy-2) 100%);
   border: 1px solid rgb(197 160 82 / 25%);
@@ -92,6 +142,7 @@
   margin: 0 0 8px;
   font-size: 26px;
   font-weight: 800;
+  line-height: 1.35;
   color: #fff;
 }
 
@@ -103,7 +154,7 @@
 .hub-header__text {
   margin: 0;
   font-size: 14.5px;
-  line-height: 1.7;
+  line-height: 1.6;
   color: #e2e8f0;
 }
 
@@ -121,6 +172,7 @@
   padding: 10px 18px;
   background: rgb(255 255 255 / 10%);
   border: 1px solid rgb(255 255 255 / 20%);
+  backdrop-filter: blur(4px);
   border-radius: 12px;
 }
 
@@ -133,7 +185,7 @@
   display: block;
   font-size: 18px;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1;
   color: #fff;
 }
 
@@ -147,7 +199,7 @@
 /* --- Course cards ---------------------------------------------------------- */
 
 .hub-section-head {
-  margin-block-end: 14px;
+  margin-block-end: 16px;
 }
 
 .hub-section-head h2 {
@@ -165,9 +217,9 @@
 
 .hub-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  gap: 18px;
-  margin-block-end: 28px;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 20px;
+  margin-block-end: 32px;
 }
 
 .hub-card {
@@ -176,7 +228,7 @@
   flex-direction: column;
   gap: 10px;
   min-inline-size: 0;
-  padding: 20px;
+  padding: 22px;
   background: #fff;
   border: 2px solid var(--hub-line);
   border-radius: 16px;
@@ -190,23 +242,6 @@
   box-shadow: 0 10px 22px rgb(17 52 100 / 9%);
 }
 
-.hub-card.is-active {
-  border-color: var(--hub-navy);
-  box-shadow: 0 0 0 3px rgb(17 52 100 / 12%), 0 10px 25px rgb(17 52 100 / 8%);
-}
-
-/* The whole card selects the course; the real button under it keeps it reachable by keyboard. */
-.hub-card__select {
-  position: absolute;
-  inset: 0;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 14px;
-  cursor: pointer;
-}
-
-.hub-card__select:focus-visible,
 .hub-card__browse:focus-visible,
 .hub-btn:focus-visible,
 .hub-pill:focus-visible {
@@ -333,10 +368,11 @@
 .hub-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
+  gap: 5px;
+  padding: 4px 10px;
   font-size: 11.5px;
   font-weight: 700;
+  border: 1px solid transparent;
   border-radius: 20px;
 }
 
@@ -345,21 +381,31 @@
 .hub-badge--done {
   color: #15803d;
   background: #dcfce7;
+  border-color: #bbf7d0;
 }
 
 .hub-badge--recorded {
   color: #1d4ed8;
   background: #eff6ff;
+  border-color: #bfdbfe;
 }
 
 .hub-badge--progress {
   color: #92400e;
   background: #fef7e6;
+  border-color: #fde68a;
 }
 
 .hub-badge--kind {
   color: #475569;
   background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.hub-row__badges .hub-badge {
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 6px;
 }
 
 .hub-btn {
@@ -390,6 +436,19 @@ a.hub-btn--play:hover {
   background: #0c2748;
 }
 
+.hub-btn--live,
+a.hub-btn--live {
+  color: #fff;
+  background: #16a34a;
+  box-shadow: 0 2px 8px rgb(22 163 74 / 20%);
+}
+
+.hub-btn--live:hover,
+a.hub-btn--live:hover {
+  color: #fff;
+  background: #15803d;
+}
+
 .hub-btn--open {
   color: var(--hub-navy);
   background: transparent;
@@ -404,17 +463,17 @@ a.hub-btn--play:hover {
 /* --- Lessons panel --------------------------------------------------------- */
 
 .hub-panel-anchor {
-  scroll-margin-block-start: 80px;
+  scroll-margin-block-start: var(--ac-sticky-offset, 88px);
 }
 
 .hub-panel {
   min-inline-size: 0;
-  padding: 24px 26px;
+  padding: 26px 28px;
   background: #fff;
   border: 1px solid var(--hub-line);
   border-radius: 18px;
   box-shadow: 0 4px 18px rgb(17 52 100 / 5%);
-  scroll-margin-block-start: 80px;
+  scroll-margin-block-start: var(--ac-sticky-offset, 88px);
 }
 
 .hub-panel__head {
@@ -422,9 +481,9 @@ a.hub-btn--play:hover {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin-block-end: 18px;
-  padding-block-end: 18px;
+  gap: 16px;
+  margin-block-end: 20px;
+  padding-block-end: 20px;
   border-block-end: 1px solid #f1f5f9;
 }
 
@@ -488,7 +547,7 @@ a.hub-btn--play:hover {
   background: var(--hub-soft);
   border: 1px solid var(--hub-line);
   border-radius: 16px;
-  scroll-margin-block-start: 80px;
+  scroll-margin-block-start: var(--ac-sticky-offset, 88px);
 }
 
 .hub-player__head {
@@ -519,7 +578,7 @@ a.hub-btn--play:hover {
 /* --- The list -------------------------------------------------------------- */
 
 .hub-list-anchor {
-  scroll-margin-block-start: 80px;
+  scroll-margin-block-start: var(--ac-sticky-offset, 88px);
 }
 
 .hub-level + .hub-level {
@@ -549,15 +608,16 @@ a.hub-btn--play:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
+  gap: 16px;
+  padding: 16px 20px;
   background: #fff;
   border: 1px solid var(--hub-line);
   border-radius: 14px;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
 .hub-row:hover {
+  background: #fdfefe;
   border-color: #cbd5e1;
   box-shadow: 0 4px 12px rgb(17 52 100 / 4%);
 }
@@ -670,7 +730,7 @@ a.hub-btn--play:hover {
 
 .hub-empty h3 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
   color: var(--hub-ink);
 }
@@ -681,6 +741,405 @@ a.hub-btn--play:hover {
   font-size: 14px;
   line-height: 1.6;
   color: var(--hub-muted);
+}
+
+.hub-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- «فصولي» as cards (J-F67) ------------------------------------------------
+   The course cards above, one per enrollment: no card-wide selector — the class name, «استعراض الدروس» and the
+   learning action are links of their own. */
+
+.hub-card--class .hub-card__name {
+  margin-block-start: 2px;
+}
+
+.hub-card.is-active {
+  background: #fdfefe;
+  border-color: var(--hub-navy);
+  box-shadow: 0 0 0 3px rgb(17 52 100 / 12%), 0 10px 25px rgb(17 52 100 / 8%);
+}
+
+/* A chosen card shows its course's lessons below: the whole card is the button; the links and buttons inside sit above it. */
+.hub-card__select {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.hub-card__select:focus-visible {
+  outline: 2px solid var(--hub-gold);
+  outline-offset: 2px;
+}
+
+.hub-card__actions > * {
+  position: relative;
+}
+
+.hub-card__actions > button {
+  flex: 1 1 140px;
+}
+
+/* --- «دروسي» as rows of the lessons panel (J-F67) --------------------------------------------------------------- */
+
+/* «دروسي» is both .hub and .hub-sessions: the navy heading rule of .hub-sessions must not darken the white title of
+   the summary header (it vanished on the navy gradient). */
+.hub-sessions .hub-header__title {
+  color: #fff;
+}
+
+/* «دروسي»: one list of every course's lessons; each row names its course and level above the badges (J-F67). */
+.hub-row__origin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--hub-gold-text);
+  overflow-wrap: anywhere;
+}
+
+.hub-badge--danger {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.hub-feed__pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-block-start: 18px;
+  font-size: 13px;
+  color: var(--hub-muted);
+}
+
+.hub-feed__pages .hub-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+a.hub-btn--live,
+a.hub-btn--live:visited {
+  text-decoration: none;
+}
+
+/* The lesson's exam and attachments beside its button (J-F67). */
+.hub-btn--exam,
+a.hub-btn--exam,
+a.hub-btn--exam:visited {
+  color: #92400e;
+  text-decoration: none;
+  background: #fef7e6;
+  border-color: #fde68a;
+}
+
+.hub-btn--exam:hover,
+a.hub-btn--exam:hover {
+  color: #78350f;
+  background: #fdefc8;
+}
+
+a.hub-btn--open,
+a.hub-btn--open:visited {
+  text-decoration: none;
+}
+
+/* «المقرّر» on a card of «دوراتي»: the course's own materials (J-F67). */
+.hub-card__actions .hub-btn--book,
+a.hub-btn--book,
+a.hub-btn--book:visited {
+  flex: 1 1 140px;
+  color: var(--hub-navy);
+  text-decoration: none;
+  background: #ebf5ff;
+  border-color: #d8e6f5;
+}
+
+a.hub-btn--book:hover,
+.hub-btn--book:hover {
+  background: #dcecfd;
+}
+
+/* «الشهادة» on a card of «دوراتي»: the enrollment's issued certificate, in a new tab (J-F67). */
+a.hub-btn--certificate,
+a.hub-btn--certificate:visited {
+  flex: 1 1 140px;
+  color: #8a6a24;
+  text-decoration: none;
+  background: #fdf8ec;
+  border-color: #ecd9a8;
+}
+
+a.hub-btn--certificate:hover {
+  color: #6b5118;
+  background: #f8edcf;
+}
+
+/* «الشهادة» before it is issued (J-F68): always there, muted and locked; pressing it says what the course still needs. */
+.hub-btn--certificate.is-locked {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  border-style: dashed;
+}
+
+.hub-btn--certificate.is-locked:hover {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+/* The window of the locked «الشهادة» (J-F68): the lessons and exams the certificate still waits for. */
+.hub-certgaps {
+  display: grid;
+  gap: 14px;
+}
+
+.hub-certgaps__intro {
+  margin: 0;
+  color: #475569;
+  line-height: 1.8;
+}
+
+.hub-certgaps__part {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.hub-certgaps__heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--hub-navy);
+}
+
+.hub-certgaps__summary {
+  margin: 0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.hub-certgaps__list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-certgaps__item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.hub-certgaps__item > .anticon {
+  margin-block-start: 4px;
+}
+
+.hub-certgaps__text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.hub-certgaps__name {
+  font-weight: 700;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.hub-certgaps__meta {
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.hub-certgaps__more {
+  padding-inline-start: 22px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.hub-certgaps__take {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+}
+
+.hub-certgaps__ok {
+  color: #15803d;
+}
+
+.hub-certgaps__missing {
+  color: #b91c1c;
+}
+
+.hub-certgaps__wait {
+  color: #b45309;
+}
+
+a.hub-certgaps__open {
+  margin-block-start: 6px;
+}
+
+/* «اختبارات الدورة» at the end of a course's lessons (J-F68): every exam of the class and where it stands. */
+.hub-exams {
+  margin-block-start: 24px;
+  scroll-margin-block-start: var(--ac-sticky-offset, 88px);
+}
+
+.hub-exams__summary {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.hub-exam-row .hub-row__number {
+  background: #f1f5f9;
+}
+
+.hub-exam-row.is-passed .hub-row__number {
+  background: #dcfce7;
+}
+
+.hub-exam-row .hub-row__number .anticon.hub-certgaps__ok {
+  color: #16a34a;
+}
+
+.hub-exam-row .hub-row__number .anticon.hub-certgaps__missing {
+  color: #b91c1c;
+}
+
+.hub-exam-row .hub-row__number .anticon.hub-certgaps__wait {
+  color: #b45309;
+}
+
+.hub-exam-row__note {
+  font-weight: 600;
+  color: #334155;
+}
+
+.hub-exam-row.is-failed .hub-exam-row__note,
+.hub-exam-row.is-absent .hub-exam-row__note {
+  color: #b91c1c;
+}
+
+.hub-exam-row__passed {
+  cursor: default;
+}
+
+/* The learner has taken the lesson's exam (J-F67): green, and still opens it (the result, another attempt). */
+.hub-btn--exam-done {
+  color: #15803d;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.hub-btn--exam-done:hover {
+  color: #166534;
+  background: #bbf7d0;
+}
+
+/* The lesson plays in a popup above the list (J-F67): the player fills it. */
+.hub-player-modal .ant-modal-container {
+  padding: 14px;
+  border-radius: 18px;
+}
+
+.hub-player-modal .hub-player {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.hub-card__link,
+.hub-card__link:visited {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hub-card__link:hover {
+  color: var(--hub-navy-2);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.hub-card__link:focus-visible,
+.hub-card__actions a:focus-visible {
+  outline: 2px solid var(--hub-gold);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.hub-card--class .hub-card__teacher {
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+.hub-card--class .hub-card__teacher > span {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.hub-badge--small {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.hub-card__note {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--hub-muted);
+  background: var(--hub-soft);
+  border: 1px solid var(--hub-line);
+  border-radius: 10px;
+}
+
+.hub-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: auto;
+  padding-block-start: 4px;
+}
+
+.hub-card__actions > a {
+  flex: 1 1 140px;
+  margin-block-start: 0;
+  text-decoration: none;
+}
+
+a.hub-card__browse,
+a.hub-card__browse:visited {
+  color: #334155;
+}
+
+a.hub-btn--open,
+a.hub-btn--open:visited {
+  color: var(--hub-navy);
 }
 
 @media (prefers-reduced-motion: reduce) {

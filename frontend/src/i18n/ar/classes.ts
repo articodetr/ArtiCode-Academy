@@ -137,9 +137,9 @@ export const classes = {
       cancel: 'يُلغى تسجيل الطالب ويتحرّر مقعده؛ يمكن إعادة تفعيله لاحقاً.',
       reactivate: 'يعود التسجيل نشطاً ويشغل مقعداً؛ يُفحص الطالب والفصل والسعة كتسجيل جديد.',
       approve: 'يصبح التسجيل نشطاً ويشغل مقعداً، فيصل الطالب إلى دروس الفصل وواجباته. يرفض الخادم الموافقة ما دامت على الطلب فاتورة غير مسدَّدة بالكامل.',
-      reject: 'يُرفض الطلب وتُلغى فاتورته غير المسدَّدة؛ يرى الطالب سبب الرفض في «فصولي» ← «طلبات الاشتراك». لا يُرفض طلب عليه دفعة مسجّلة قبل عكسها.',
+      reject: 'يُرفض الطلب وتُلغى فاتورته غير المسدَّدة؛ يرى الطالب سبب الرفض في «دوراتي» ← «طلبات الاشتراك». لا يُرفض طلب عليه دفعة مسجّلة قبل عكسها.',
       reasonRequired: 'السبب (مطلوب)',
-      reasonRequiredHint: 'يراه الطالب في «فصولي» ← «طلبات الاشتراك» ويُحفظ في سجل التدقيق؛ من حرف واحد إلى 500 حرف',
+      reasonRequiredHint: 'يراه الطالب في «دوراتي» ← «طلبات الاشتراك» ويُحفظ في سجل التدقيق؛ من حرف واحد إلى 500 حرف',
       reasonMissing: 'اكتب سبب الرفض',
       reactivateFull: 'الفصل ممتلئ حالياً ({{enrolledCount}} / {{capacity}})؛ سيرفض الخادم إعادة التفعيل حتى يتوفر مقعد.',
       reason: 'السبب (اختياري)',
@@ -245,35 +245,86 @@ export const classes = {
 }
 
 export const myClasses = {
-  title: 'فصولي',
-  subtitle: 'الفصول المسجَّل فيها أنت أو الطلاب المرتبطون بك',
-  filterLabel: 'حالة التسجيل',
-  defaultStatuses: 'النشطة والمكتملة',
+  title: 'دوراتي',
   refresh: 'تحديث',
   empty: 'لا فصول نشطة أو مكتملة بعد',
-  emptyFiltered: 'لا تسجيلات بهذه الحالة',
   // J-F61: the progress and the way into the lessons (API-229), and the student's requests (API-222).
-  learningError: 'تعذّر تحميل تقدّمك في الدورات. فصولك معروضة، وتعود نسب التقدّم بعد إعادة المحاولة.',
+  learningError: 'تعذّر تحميل تقدّمك في الدورات. دوراتك معروضة، وتعود نسب التقدّم بعد إعادة المحاولة.',
+  // J-F67: the requests open only from the links that ask for them (`?section=requests`).
   sections: {
-    classes: 'الفصول',
     requests: 'طلبات الاشتراك',
   },
   // J-F62: the lessons of one class (/my-classes/:classId).
   classLessons: {
     title: 'دروس الفصل',
     open: 'عرض دروس هذا الفصل',
-    back: 'العودة إلى فصولي',
+    back: 'العودة إلى دوراتي',
     notFound: 'هذا الفصل ليس ضمن فصولك النشطة أو المكتملة',
   },
-  columns: {
-    class: 'الفصل',
-    student: 'الطالب',
-    progress: 'التقدّم',
-    learn: 'الدروس',
-    period: 'الفترة',
-    classStatus: 'حالة الفصل',
-    enrollmentStatus: 'حالة التسجيل',
-    enrolledAt: 'تاريخ التسجيل',
+  // J-F67: one card per enrollment, on the look of the course cards of «دروسي».
+  card: {
+    select: 'عرض دروس {{course}}',
+    lessons: 'الدروس: {{total}}',
+    progress: 'الدروس المكتملة',
+    browse: 'استعراض الدروس',
+    certificate: 'الشهادة',
+    // J-F68: «الشهادة» before the certificate is issued (read after the course name by a screen reader).
+    certificateLocked: 'لم تُصدر بعد، اعرض ما ينقص',
+    materials: 'المقرّر',
+    materialsMany: 'المقرّر ({{n}})',
+  },
+  // J-F68: the window of «الشهادة» before the certificate is issued — what the course still needs. Neutral voice: a
+  // guardian reads it about their child. i18next plurals (CH-0297): 1 `_one`, 2 `_two`, 3..10 `_few`, 11..99
+  // `_many`, 100..102 `_other`; the plain key serves 0. `count` is a number.
+  certificateGaps: {
+    title: 'شهادة {{course}}',
+    intro: 'لم تُصدر شهادة هذه الدورة بعد. تُصدر تلقائياً عند إكمال كل الدروس الإلزامية واجتياز كل اختبارات الفصل. هذا ما بقي:',
+    failed: 'تعذّر جلب متطلبات الشهادة.',
+    retry: 'إعادة المحاولة',
+    close: 'إغلاق',
+    issued: 'صدرت شهادة هذه الدورة.',
+    open: 'عرض الشهادة',
+    revoked: 'سُحبت شهادة هذه الدورة. تواصل مع إدارة الأكاديمية لمعرفة التفاصيل.',
+    completeNoCertificate: 'اكتملت متطلبات الدورة كلها، لكن الشهادة لم تُصدر بعد. تواصل مع إدارة الأكاديمية لإصدارها.',
+    lessons: {
+      title: 'الدروس',
+      done: 'اكتملت كل الدروس الإلزامية ({{done}} من {{total}}).',
+      none: 'لا دروس إلزامية منشورة في هذه الدورة بعد.',
+      unknown: 'تعذّر معرفة تقدّم الدروس الآن.',
+      left: 'بقي {{count}} درس إلزامي من {{total}}.',
+      left_one: 'بقي درس إلزامي واحد من {{total}}.',
+      left_two: 'بقي درسان إلزاميان من {{total}}.',
+      left_few: 'بقيت {{count}} دروس إلزامية من {{total}}.',
+      left_many: 'بقي {{count}} درساً إلزامياً من {{total}}.',
+      left_other: 'بقي {{count}} درس إلزامي من {{total}}.',
+      opensOn: 'يُفتح مستواه في {{date}}',
+      more: 'و{{count}} درس آخر',
+      more_one: 'ودرس آخر',
+      more_two: 'ودرسان آخران',
+      more_few: 'و{{count}} دروس أخرى',
+      more_many: 'و{{count}} درساً آخر',
+      more_other: 'و{{count}} درس آخر',
+    },
+    exams: {
+      title: 'الاختبارات',
+      passed: 'تم اجتياز {{passed}} من {{total}}.',
+      // The exams are listed in one place: «اختبارات الدورة» at the end of the course's lessons on this page.
+      where: 'تجد كل اختبار وحالته في «اختبارات الدورة» أسفل دروس الدورة.',
+      show: 'عرض الاختبارات',
+      state: {
+        passed: 'ناجح',
+        failed: 'لم يُجتز: الدرجة {{score}} من {{max}} والمطلوب {{pass}}.',
+        failedNoMark: 'لم يُجتز.',
+        retry: 'يمكن إعادة المحاولة الآن.',
+        absent: 'سُجّل غياب في هذا الاختبار.',
+        inProgress: 'محاولة جارية لم تُسلَّم بعد.',
+        awaitingResult: 'بانتظار إعلان النتيجة.',
+        notStarted: 'لم يُقدَّم بعد.',
+        opensAt: 'لم يُقدَّم بعد، يُفتح في {{date}}.',
+        closed: 'انتهت مدة الاختبار دون تقديمه. تواصل مع المعلم.',
+        exhausted: 'استُنفدت المحاولات.',
+      },
+    },
   },
   relation: {
     self: 'أنا',

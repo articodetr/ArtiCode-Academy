@@ -100,7 +100,7 @@ describe('NAV_ITEMS', () => {
     const settings = NAV_ITEMS.find((item) => item.key === 'settings')!
     expect(settings.permissions).toEqual(['academy.settings.read', 'academy.settings.manage'])
     expect(keysFor(viewer(null, ['academy.settings.read']))).toEqual(['dashboard', 'settings'])
-    expect(keysFor(viewer(null, ['academy.settings.manage']))).toEqual(['dashboard', 'settings', 'gradeSchemes'])
+    expect(keysFor(viewer(null, ['academy.settings.manage']))).toEqual(['dashboard', 'settings', 'homepageImages', 'gradeSchemes'])
     expect(canAccess(viewer('admin', []), 'settings')).toBe(false)
   })
 
@@ -142,7 +142,7 @@ describe('NAV_ITEMS', () => {
     expect(branches.path).toBe('/settings/branches')
     expect(keysFor(viewer(null, ['branches.manage']))).toEqual(['dashboard', 'branches'])
     // The settings keys alone do not open the branches tab, and the role alone never does.
-    expect(keysFor(viewer(null, ['academy.settings.manage']))).toEqual(['dashboard', 'settings', 'gradeSchemes'])
+    expect(keysFor(viewer(null, ['academy.settings.manage']))).toEqual(['dashboard', 'settings', 'homepageImages', 'gradeSchemes'])
     expect(canAccess(viewer('admin', []), 'branches')).toBe(false)
     expect(canAccess(viewer('staff', ['branches.manage']), 'branches')).toBe(true)
   })
@@ -176,6 +176,25 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('teacher', [...SEEDED.teacher, 'grades.read_all', 'grades.manage']), 'gradeSchemes')).toBe(false)
     expect(canAccess(viewer('staff'), 'gradeSchemes')).toBe(false)
     expect(canAccess(viewer('student'), 'gradeSchemes')).toBe(false)
+  })
+
+  it('gates the homepage images tab (/settings/homepage-images) by academy.settings.manage alone — the key every route of /api/academy/homepage-images requires', () => {
+    const homepageImages = NAV_ITEMS.find((item) => item.key === 'homepageImages')!
+    expect(homepageImages.permissions).toEqual(['academy.settings.manage'])
+    expect(homepageImages.path).toBe('/settings/homepage-images')
+    expect(homepageImages.labelKey).toBe('nav.homepageImages')
+    // academy.settings.read opens the general tab only: the pictures are management.
+    expect(canAccess(viewer(null, ['academy.settings.read']), 'homepageImages')).toBe(false)
+    expect(canAccess(viewer(null, ['academy.settings.manage'], ['registrar']), 'homepageImages')).toBe(true)
+    // By seed only academy_admin holds the key; the role alone grants nothing.
+    expect(canAccess(viewer('admin'), 'homepageImages')).toBe(true)
+    expect(canAccess(viewer('admin', []), 'homepageImages')).toBe(false)
+    expect(canAccess(viewer('staff'), 'homepageImages')).toBe(false)
+    expect(canAccess(viewer('teacher'), 'homepageImages')).toBe(false)
+    expect(canAccess(viewer('student'), 'homepageImages')).toBe(false)
+    expect(canAccess(viewer('guardian'), 'homepageImages')).toBe(false)
+    // The grouped menu shows it right after the settings entry, in the «system» section.
+    expect(NAV_GROUPS.find((group) => group.key === 'system')?.items.slice(0, 2)).toEqual(['settings', 'homepageImages'])
   })
 
   it('gates the lessons screen by lessons.read alone since its API is real (J-F09) — lessons.manage only adds writes', () => {
@@ -351,8 +370,8 @@ describe('navFor', () => {
   })
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
-    // academy.settings.manage also opens the grade schemes tab (J-F44), right after the rooms tab.
-    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'rooms', 'gradeSchemes'])
+    // academy.settings.manage also opens the homepage images tab, right after the settings, and the grade schemes tab (J-F44), right after the rooms tab.
+    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'homepageImages', 'rooms', 'gradeSchemes'])
     // Staff gain the courses entry (MOD-04-T05) and the lessons entry (J-F09): the seed grants them courses.read and lessons.read;
     // and the certificates entry (J-F51): the seed grants them certificates.issue, which opens the list too (D-R57).
     expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications', 'reports'])
@@ -441,7 +460,7 @@ describe('NAV_GROUPS and navGroupsFor (the grouped side menu, 2026-11-22)', () =
       ['assessment', ['assignments', 'exams', 'certificates']],
       ['finance', ['payments']],
       ['followUp', ['reports', 'notifications']],
-      ['system', ['settings', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit']],
+      ['system', ['settings', 'homepageImages', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit']],
     ])
   })
 

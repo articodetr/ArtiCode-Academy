@@ -14,6 +14,7 @@ import type { AcademyPatch, AcademyUpdateData, CurrentAcademyRow } from './acade
 import type { AcademyDto, AcademyPublicDto, UpdateAcademyDto } from './academy.dto.js';
 import { academyError } from './academy.errors.js';
 import { isSelfRegistrationOpen, readSettings } from './academy.settings.js';
+import { publicHomepageImageUrls } from './homepage-images.settings.js';
 
 export const ACADEMY_AUDIT_ACTIONS = {
   updated: 'academy.updated',
@@ -43,8 +44,10 @@ type AcademyRow = Prisma.AcademyGetPayload<{ select: typeof ACADEMY_SELECT }>;
 
 // The public branding (API-205): the three answered fields, the slug only as the
 // last-resort name, and the settings only for the derived `catalogPublic`
-// (MOD-20, D-R138), `selfRegistration` (PORTAL-03) and `googleSignUp` (PORTAL-04) flags — nothing else is read for an
-// anonymous caller, and no setting is ever answered as such (`googleSignIn` comes from the server's configuration).
+// (MOD-20, D-R138), `selfRegistration` (PORTAL-03) and `googleSignUp` (PORTAL-04)
+// flags and the public URLs of the home page's pictures (`settings.homepageImages`,
+// the file names only) — nothing else is read for an anonymous caller, and no
+// setting is ever answered as such (`googleSignIn` comes from the server's configuration).
 const ACADEMY_PUBLIC_SELECT = {
   slug: true,
   name: true,
@@ -138,7 +141,9 @@ export class AcademyService {
    * transport), and whether Google sign-in is configured and may create an
    * account (PORTAL-04: `googleSignUp` = Google configured AND the setting —
    * Google proves the address, no mail transport needed). Read-only, no audit
-   * event; 503 `academy_not_configured` without the row.
+   * event; 503 `academy_not_configured` without the row. `homepageImages`
+   * names the URL of each of the four pictures of the public home page
+   * (`/<prefix>/academy/media/<file>`), null = the built-in default.
    */
   async getPublic(): Promise<AcademyPublicDto> {
     const row = await this.prisma.db.academy.findFirst({ select: ACADEMY_PUBLIC_SELECT });
@@ -153,6 +158,7 @@ export class AcademyService {
       logoUrl: row.logoUrl,
       defaultLocale: row.defaultLocale as LocaleCode,
       catalogPublic: settings.catalog.publicBrowsing === true,
+      homepageImages: publicHomepageImageUrls(row.settings, this.config.get('API_PREFIX', { infer: true })),
       selfRegistration: isSelfRegistrationOpen(settings, this.config.get('MAIL_TRANSPORT', { infer: true })),
       googleSignIn,
       googleSignUp: googleSignIn && settings.selfRegistration.enabled === true,

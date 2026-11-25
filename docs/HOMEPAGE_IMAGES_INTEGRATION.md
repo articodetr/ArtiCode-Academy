@@ -1,0 +1,5 @@
+# PORTAL-04-HOME-IMAGES — integration into main
+
+Source: feature/homepage-images, commits ca9e89f and 1a45060. The owner requested the homepage integration on 2026-11-24. The existing main master document and task ledger are preserved rather than replacing them with the older versions from the feature branch. Reconcile the feature's provisional identifiers and full master documentation separately.
+
+Administration can upload, preview, publish and restore the four homepage pictures. GET/PUT/DELETE /api/academy/homepage-images(/:key) requires academy.settings.manage; GET /api/academy/media/:file is public. PNG/JPEG/WebP up to 5 MiB. API-205 returns homepageImages. No database migration. MEDIA_STORAGE_DIR defaults to storage/media in development; the deployment mounts a named media volume at /var/lib/articode/media. Caddy allows 6 MB only for the image upload route. Nightly database backups do not cover this volume: arrange separate media backup and restore before production use. The hero laptop decoration is removed. Unfinished registration work in preview/portal-combined is excluded.

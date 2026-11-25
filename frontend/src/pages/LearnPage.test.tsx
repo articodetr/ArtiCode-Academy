@@ -148,7 +148,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
     renderLearn('/learn/c1')
 
     expect(await screen.findByRole('heading', { name: 'الدورة غير موجودة أو لم تعد متاحة' })).toBeInTheDocument()
-    const back = screen.getAllByRole('link', { name: /العودة إلى فصولي/ })
+    const back = screen.getAllByRole('link', { name: /العودة إلى دوراتي/ })
     expect(back.every((link) => link.getAttribute('href') === '/my-classes')).toBe(true)
   })
 
@@ -255,6 +255,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
         section: after.sections[1]!.progress,
         course: after.progress,
         completedNow: true,
+        certificate: null,
       }),
     })
     renderLearn('/learn/c1/i3')
@@ -290,6 +291,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
         section: makeCounts({ total: 2, required: 1, completed: 1, completedRequired: 1, percent: 100, isComplete: true }),
         course: done,
         completedNow: true,
+        certificate: null,
       }),
     })
     // Opening the last lesson of the course confirms nothing.
@@ -303,7 +305,7 @@ describe('LearnPage — the course player (TEST-251)', () => {
 
     const dialog = (await screen.findByText('أتممت جميع دروس الدورة المطلوبة')).closest('[role="dialog"]') as HTMLElement
     expect(dialog).not.toBeNull()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'العودة إلى فصولي' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'العودة إلى دوراتي' }))
     await waitFor(() => expect(screen.getByTestId('location')).toHaveAttribute('data-pathname', '/my-classes'))
   })
 

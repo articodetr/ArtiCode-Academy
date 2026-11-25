@@ -27,8 +27,9 @@ import type {
   SkippedEnrollmentDto,
 } from './certificates.dto.js';
 import { certificatesError } from './certificates.errors.js';
-import { CERTIFICATE_SEQUENCE_KEY, formatSerial, ineligibilityOf, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
+import { formatSerial, ineligibilityOf, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
 import type { IneligibleReason } from './certificates.policy.js';
+import { reserveCertificateSerials } from './certificates.serials.js';
 
 export const CERTIFICATES_AUDIT_ACTIONS = {
   issued: 'certificates.issued',
@@ -69,6 +70,12 @@ function localized(value: Prisma.JsonValue, fallback: string): LocalizedText {
   return readLocalizedText(value) ?? { ar: fallback };
 }
 
+/** The stored grade; null for an automatic course-completion certificate, which has none (CH-0363). */
+function gradeOf(row: { percent: Prisma.Decimal | null; bandLabel: Prisma.JsonValue; bandLetter: string | null }): CertificateDto['grade'] {
+  if (row.percent === null) return null;
+  return { percent: Number(row.percent), label: localized(row.bandLabel, ''), letter: row.bandLetter };
+}
+
 export function toCertificateDto(row: CertificateRow): CertificateDto {
   return {
     id: row.id,
@@ -79,7 +86,7 @@ export function toCertificateDto(row: CertificateRow): CertificateDto {
     class: { id: row.class.id, code: row.class.code, name: localized(row.class.name, row.class.code) },
     course: { id: row.course.id, code: row.course.code, name: localized(row.course.name, row.course.code) },
     student: row.student,
-    grade: { percent: Number(row.percent), label: localized(row.bandLabel, ''), letter: row.bandLetter },
+    grade: gradeOf(row),
     snapshot: row.snapshot as unknown as CertificateDto['snapshot'],
     issuedAt: row.issuedAt.toISOString(),
     issuedBy: row.issuedBy ? { fullName: row.issuedBy.fullName } : null,
@@ -202,7 +209,7 @@ export class CertificatesService {
       const academy = await tx.academy.findFirst({ select: { name: true, timezone: true, settings: true } });
       const prefix = readSettings(academy?.settings).certificates.serialPrefix ?? DEFAULT_CERTIFICATE_SERIAL_PREFIX;
       const year = yearIn(academy?.timezone ?? 'UTC', now);
-      const first = await this.reserveSerials(tx, year, eligible.length);
+      const first = await reserveCertificateSerials(tx, year, eligible.length);
       const details = await tx.class.findUniqueOrThrow({
         where: { id: classId },
         select: {
@@ -345,7 +352,7 @@ export class CertificatesService {
       revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
       student: { fullName: snapshot.student.fullName, fullNameLatin: snapshot.student.fullNameLatin ?? null },
       course: snapshot.course,
-      grade: { percent: Number(row.percent), label: localized(row.bandLabel, ''), letter: row.bandLetter },
+      grade: gradeOf(row),
       academy: snapshot.academy,
     };
   }
@@ -381,13 +388,4 @@ export class CertificatesService {
     return [...seen].map((id) => found.get(id)!);
   }
 
-  /** Reserves `count` consecutive numbers of the year (D-R53); returns the first. The row stays locked until commit. */
-  private async reserveSerials(tx: Tx, year: string, count: number): Promise<number> {
-    const rows = await tx.$queryRaw<{ last_value: bigint }[]>`
-      INSERT INTO number_sequences (key, period, last_value, updated_at)
-      VALUES (${CERTIFICATE_SEQUENCE_KEY}, ${year}, ${count}::bigint, now())
-      ON CONFLICT (key, period) DO UPDATE SET last_value = number_sequences.last_value + EXCLUDED.last_value, updated_at = now()
-      RETURNING last_value`;
-    return Number(rows[0]!.last_value) - count + 1;
-  }
 }

@@ -42,6 +42,8 @@ export const ITEM_SELECT = {
   resources: true,
   isRequired: true,
   isPublished: true,
+  /** J-F67: «دروسي» lists the lessons of every course newest first (API-230 `createdAt`). */
+  createdAt: true,
 } satisfies Prisma.CourseSyllabusItemSelect;
 
 export type SectionRow = Prisma.CourseSectionGetPayload<{ select: typeof SECTION_SELECT }> & CurriculumSectionRow;

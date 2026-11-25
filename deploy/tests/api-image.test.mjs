@@ -18,7 +18,11 @@
 //        any layer or config blob (`docker save`, every blob decompressed and searched);
 //   AC4  `runtime` holds exactly the production packages of backend/package-lock.json
 //        (no dev or dev-optional package — the Prisma CLI and TypeScript included);
-//   AC5  both images run as the non-root user `node`.
+//   AC5  both images run as the non-root user `node`;
+//   media `runtime` carries an empty /var/lib/articode/media owned by `node` (mode 755) —
+//        the mount point of the academy's `media` volume (the uploaded homepage images,
+//        MEDIA_STORAGE_DIR), whose owner Docker copies into a new volume — and, outside
+//        its home, `node` owns nothing else in the image.
 //
 // Prints PASS / FAIL / SKIP lines and, for the secret scan, counts only — never a
 // value. Every password and JWT secret it needs is random, generated here, handed to
@@ -168,6 +172,20 @@ function checkRuntimeLayout() {
   // prisma/platform/migrations: the platform readiness check (MOD-18-T06) — the same image runs the platform.
   if (app === 'dist node_modules package.json prisma' && prisma === 'migrations platform' && platform === 'migrations') pass('AC4 runtime holds dist, package.json and the migrations only', 'academy and platform migrations; no sources, no schema, no scripts');
   else fail('AC4 runtime holds dist, package.json and the migrations only', `/app: ${app}; /app/prisma: ${prisma}; /app/prisma/platform: ${platform}`);
+}
+
+// --- media -----------------------------------------------------------------------
+const MEDIA_DIR = '/var/lib/articode/media';
+
+function checkMediaDirectory() {
+  // As root, so the search sees every path; `node` itself is checked by the write test.
+  const owned = docker(['run', '--rm', '--user', '0', '--entrypoint', 'sh', RUNTIME, '-c', 'find / -xdev -user node -not -path "/home/node" -not -path "/home/node/*" -print']);
+  const dir = docker(['run', '--rm', '--entrypoint', 'sh', RUNTIME, '-c', 'stat -c "%U:%G %a" "$0"; ls -A "$0" | wc -l; f="$0/.t200-probe"; : > "$f" && rm "$f" && echo writable', MEDIA_DIR]);
+  const [ownership = '', entries = '', writable = ''] = dir.stdout.trim().split('\n').map((l) => l.trim());
+  const others = owned.stdout.trim().split('\n').filter((p) => p && p !== MEDIA_DIR);
+  if (owned.code === 0 && dir.code === 0 && ownership === 'node:node 755' && entries === '0' && writable === 'writable' && others.length === 0)
+    pass('media: runtime carries the media mount point, owned by node', `${MEDIA_DIR} ${ownership}, empty, writable by node; node owns nothing else outside /home/node`);
+  else fail('media: runtime carries the media mount point, owned by node', `${MEDIA_DIR}: ${ownership || 'missing'}, ${entries} entries, ${writable || 'not writable'} (exit ${dir.code}: ${tail(dir.stderr, 2)}); node also owns: ${others.slice(0, 6).join(', ') || 'nothing'}`);
 }
 
 const WALKER = [
@@ -443,6 +461,7 @@ async function main() {
   checkNoEnvFiles(RUNTIME);
   checkNoEnvFiles(TOOLS);
   checkRuntimeLayout();
+  checkMediaDirectory();
   checkProductionPackagesOnly();
 
   const { files, values } = secretValues();

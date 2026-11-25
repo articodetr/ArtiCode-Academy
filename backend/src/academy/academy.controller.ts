@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Patch, Req, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -45,11 +45,14 @@ export class AcademyController {
   @Public()
   @UseGuards(AuthThrottlerGuard)
   @Throttle(PUBLIC_READ_LIMIT)
+  // Revalidated on every load (the ETag answers 304): a picture or name the academy changes shows at once.
+  @Header('Cache-Control', 'no-cache')
   @ApiOperation({
     summary: 'Read the academy branding (public)',
     description:
       'No sign-in: the localized `name`, the `logoUrl` and the `defaultLocale` the sign-in page shows before anybody is authenticated, and `catalogPublic` ' +
-      '(true when `settings.catalog.publicBrowsing` is true — visitors may browse the published courses, API-236/237) and `selfRegistration` ' +
+      '(true when `settings.catalog.publicBrowsing` is true — visitors may browse the published courses, API-236/237), `homepageImages` ' +
+      '(the root-relative URL of the academy’s own picture for each of the four places of the public home page, null = the built-in default), `selfRegistration` ' +
       '(true when `settings.selfRegistration.enabled` is true and the server has a mail transport — PORTAL-03), `googleSignIn` (Google sign-in is configured on this server) and `googleSignUp` (`googleSignIn` and `settings.selfRegistration.enabled` is true — a new student account may be created through Google) — nothing else ' +
       '(no id, slug, contact details, time zone, currency or settings). 60 requests per minute per IP; no audit event.',
   })

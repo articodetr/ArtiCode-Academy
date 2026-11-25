@@ -70,6 +70,12 @@ describe('public academy (API-205)', () => {
     expect(new Headers(init?.headers).get('Authorization')).toBeNull()
   })
 
+  it('hands over the academy’s own homepage pictures as the server sends them (null = the default of a place)', async () => {
+    const homepageImages = { heroStudent: '/api/academy/media/0123456789abcdef0123456789abcdef.webp', aboutLearners: null, promoTraining: null, whyClassroom: null }
+    mockFetch(() => jsonResponse(200, makePublicAcademy({ homepageImages })))
+    await expect(getPublicAcademy()).resolves.toMatchObject({ homepageImages })
+  })
+
   it('never refreshes a session on a refusal: a 401 stays the one request', async () => {
     const fetchMock = mockFetch(() => jsonResponse(401, { statusCode: 401, code: 'token_expired', message: 'expired' }))
     await expect(getPublicAcademy()).rejects.toMatchObject({ status: 401 })

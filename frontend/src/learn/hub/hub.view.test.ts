@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeChildCourse, makeCompletedCourse, makeLearningCourse, makeProgress } from '../../mySchool/mySchool.fixtures'
 import { makeWorkspace } from '../learn.fixtures'
-import { cardPercent, countsOf, hubGroupsOf, hubTotals, matchesFilter, rowActionOf, selectedCourseOf, studyCourses } from './hub.view'
+import { chosenCourseOf, countsOf, hubGroupsOf, mergedLessonsOf, hubTotals, isStudyCourse, matchesFilter, rowActionOf, studyCourses } from './hub.view'
 
 describe('hub.view (J-F64)', () => {
   it('lists the learner’s own courses once each, the unfinished ones first — never a child’s', () => {
@@ -12,21 +12,36 @@ describe('hub.view (J-F64)', () => {
     expect(studyCourses([done, twin, child, active]).map((item) => item.enrollmentId)).toEqual([active.enrollmentId, done.enrollmentId])
   })
 
-  it('opens the course the address names, else the first', () => {
-    const first = makeLearningCourse()
-    const second = makeCompletedCourse()
-    expect(selectedCourseOf([first, second], second.course.id)).toBe(second)
-    expect(selectedCourseOf([first, second], 'unknown')).toBe(first)
-    expect(selectedCourseOf([], null)).toBeNull()
-  })
-
   it('sums the server’s counts, preferring this page’s latest answer', () => {
     const first = makeLearningCourse()
     const second = makeCompletedCourse()
     const live = { [first.course.id]: makeProgress({ total: 9, completed: 4 }) }
     expect(countsOf(first, live).completed).toBe(4)
     expect(hubTotals([first, second], live)).toEqual({ courses: 2, lessons: 15, completed: 10 })
-    expect(cardPercent(makeProgress({ percent: null }))).toBe(0)
+  })
+
+  it('shows a course only once the address names one the learner studies (J-F67)', () => {
+    const first = makeLearningCourse()
+    const second = makeCompletedCourse()
+    expect(chosenCourseOf([first, second], second.course.id)).toBe(second)
+    expect(chosenCourseOf([first, second], 'unknown')).toBeNull()
+    expect(chosenCourseOf([first, second], null)).toBeNull()
+  })
+
+  it('merges every course’s lessons newest first, ties by course then curriculum (J-F67)', () => {
+    const first = makeLearningCourse()
+    const second = makeCompletedCourse()
+    const rows = mergedLessonsOf([{ course: first, workspace: makeWorkspace() }, { course: second, workspace: makeWorkspace() }], 'all')
+    expect(rows.map((row) => [row.course.course.id, row.item.id])).toEqual([
+      [first.course.id, 'i4'], [second.course.id, 'i4'], [first.course.id, 'i3'], [second.course.id, 'i3'],
+      [first.course.id, 'i2'], [second.course.id, 'i2'], [first.course.id, 'i1'], [second.course.id, 'i1'],
+    ].filter(([, id]) => rows.some((row) => row.item.id === id)))
+  })
+
+  it('lets a card of «فصولي» show the lessons of the learner’s own courses only (J-F67)', () => {
+    expect(isStudyCourse(makeLearningCourse())).toBe(true)
+    expect(isStudyCourse(makeChildCourse())).toBe(false)
+    expect(isStudyCourse(makeLearningCourse({ canLearn: false }))).toBe(false)
   })
 
   it('filters live and recorded lessons', () => {

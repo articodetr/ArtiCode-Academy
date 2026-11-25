@@ -16,6 +16,8 @@ import {
   workingDaysSchema,
 } from './academy.settings.js';
 import type { AcademySettings } from './academy.settings.js';
+import { PublicHomepageImagesDto } from './homepage-images.dto.js';
+import type { HomepageImageKey } from './homepage-images.settings.js';
 
 /** Body values of the settings stay raw JSON: the implicit conversion must not turn "6" into 6. */
 function rawValue({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
@@ -254,11 +256,12 @@ export class AcademyDto {
 
 /**
  * The public branding of the academy (API-205, MOD-02-T04): what the sign-in
- * page shows before anybody is authenticated. Exactly these seven keys — never
+ * page shows before anybody is authenticated. Exactly these eight keys — never
  * the id, slug, contact details, time zone, currency or the settings
  * themselves (`catalogPublic` — MOD-20, D-R138 —, `selfRegistration` —
  * PORTAL-03 — and `googleSignIn`/`googleSignUp` — PORTAL-04 — are the derived
- * flags).
+ * flags, and `homepageImages` the public URLs of the home page's pictures,
+ * nothing else about the files).
  */
 export class AcademyPublicDto {
   @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }` (only the locales stored)', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
@@ -276,6 +279,13 @@ export class AcademyPublicDto {
     description: 'true when the academy lets visitors browse its published courses without signing in (`settings.catalog.publicBrowsing` — API-236/237, MOD-20)',
   })
   catalogPublic: boolean;
+
+  @ApiProperty({
+    type: () => PublicHomepageImagesDto,
+    description:
+      'The public home page /home: the root-relative URL of the academy’s own picture for each of the four places (GET /api/academy/media/:file), null = the built-in default',
+  })
+  homepageImages: Record<HomepageImageKey, string | null>;
 
   @ApiProperty({
     type: Boolean,

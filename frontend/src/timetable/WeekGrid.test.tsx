@@ -40,10 +40,14 @@ describe('WeekGrid', () => {
     fireEvent.click(within(grid).getByRole('button', { name: formatLongDate('2026-11-09', 'ar') }))
     expect(onSelectDate).toHaveBeenCalledWith('2026-11-09')
 
-    // The frame starts at 08:00, 64 px per hour.
+    // The full 24-hour frame starts at 00:00, 24 px per hour in jsdom, and lists 00:00 through 24:00.
+    const axisLabels = Array.from(grid.querySelectorAll('.tt-axis__hour')).map((el) => el.textContent)
+    expect(axisLabels).toHaveLength(25)
+    expect(axisLabels[0]).toBe('00:00')
+    expect(axisLabels[24]).toBe('24:00')
     const slot = card('09:00', '11:00').closest('li')!
-    expect(slot.style.top).toBe('64px')
-    expect(slot.style.height).toBe('128px')
+    expect(slot.style.top).toBe('216px')
+    expect(slot.style.height).toBe('48px')
     expect(slot.style.width).toBe('100%')
     expect(card('09:00', '11:00')).toHaveTextContent('أساسيات بايثون')
     expect(card('09:00', '11:00')).toHaveTextContent('PY-101-A')
@@ -52,8 +56,35 @@ describe('WeekGrid', () => {
     expect(onOpen).toHaveBeenCalledWith(nine, '2026-11-08')
     // "now" (10:00 academy time) sits on today's column only.
     expect(grid.querySelectorAll('.tt-now')).toHaveLength(1)
-    expect(grid.querySelector('.tt-now')).toHaveStyle({ top: '128px' })
+    expect(grid.querySelector('.tt-now')).toHaveStyle({ top: '240px' })
     expect(within(grid).getByRole('region', { name: `${formatLongDate('2026-11-09', 'ar')} — عدد الحصص: 0` })).toBeInTheDocument()
+  })
+
+  it('scales the 24-hour grid height to fit the viewport without scrolling down', () => {
+    const originalInnerHeight = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 702 })
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 268,
+      bottom: 844,
+      left: 0,
+      right: 780,
+      width: 780,
+      height: 576,
+      x: 0,
+      y: 268,
+      toJSON: () => ({}),
+    })
+    try {
+      renderGrid([gridDay('2026-11-08', [at('nine', '09:00', '10:00')], { isSelected: true, isToday: true })])
+      const body = document.querySelector<HTMLElement>('.tt-grid__body')!
+      // (702 - 268 - 42) = 392 px available -> floor(392 / 24) = 16 px/hour -> 384 px total height, inside the viewport.
+      expect(body.style.height).toBe('384px')
+      expect(card('09:00', '10:00').closest('li')!.style.top).toBe('144px')
+      expect(card('09:00', '10:00').closest('li')!.style.height).toBe('16px')
+    } finally {
+      rectSpy.mockRestore()
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
+    }
   })
 
   it('puts overlapping slots side by side, each with its own width', () => {

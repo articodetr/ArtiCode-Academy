@@ -166,6 +166,9 @@ export class MyLearningCourseSummaryDto {
   @ApiProperty({ type: String, nullable: true, description: 'Absolute URL of the cover image (MOD-19), or null' })
   coverImageUrl: string | null;
 
+  @ApiProperty({ type: () => [MyLearningResourceDto], description: 'J-F67: the course’s own materials (its textbook), as a lesson’s resources; [] when none' })
+  resources: MyLearningResourceDto[];
+
   @ApiProperty({ type: () => MyLearningCatalogLevelDto, nullable: true })
   level: MyLearningCatalogLevelDto | null;
 
@@ -335,6 +338,46 @@ export class WorkspaceItemDto {
 
   @ApiProperty({ description: 'True when its level is open for the caller (D-R145); a lesson of a closed level is listed but cannot be opened (`403 level_not_open`)' })
   available: boolean;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    description: 'When the lesson was added to the curriculum (J-F67 — «دروسي» lists every course’s lessons newest first). Not the day it was published: a draft published later keeps the day it was written',
+  })
+  createdAt: string;
+
+  @ApiProperty({ type: () => [MyLearningResourceDto], description: 'J-F67: the lesson’s downloadable resources, as API-231 lists them (at most 20)' })
+  resources: MyLearningResourceDto[];
+
+  @ApiProperty({
+    type: () => [WorkspaceItemExamDto],
+    description: 'J-F67: the scheduled or published exams of the learner’s class linked to a class session of this lesson (exam → session → `syllabusItemId`), soonest first — what «my exams» (API-121) already shows that learner',
+  })
+  exams: WorkspaceItemExamDto[];
+}
+
+/** An exam of the learner's class linked to a lesson (J-F67) — the fields «my exams» (API-121) already shows. */
+export class WorkspaceItemExamDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto })
+  title: LocalizedText;
+
+  @ApiProperty({ enum: ['manual', 'online'], description: '`online`: taken on the platform inside its window' })
+  delivery: 'manual' | 'online';
+
+  @ApiProperty({ enum: ['scheduled', 'published'], description: '`published`: the results are out' })
+  status: 'scheduled' | 'published';
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  scheduledAt: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'An online exam’s window closes then' })
+  closesAt: string | null;
+
+  @ApiProperty({ description: 'J-F67: the caller has taken it — a finished attempt of theirs (submitted or timed out), or a `scored` or `excused` result recorded for them (the rule of the automatic certificate)' })
+  done: boolean;
 }
 
 export class WorkspaceSectionDto {
@@ -670,6 +713,15 @@ export class LearningVisitResultDto {
   progress: MyLearningItemProgressDto;
 }
 
+/** The certificate this answer's completion issued automatically (CH-0363). */
+export class LearningCertificateDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ example: 'CERT-2026-00001' })
+  serial: string;
+}
+
 export class LearningPlaybackResultDto {
   @ApiProperty({ type: () => MyLearningItemProgressDto })
   progress: MyLearningItemProgressDto;
@@ -682,6 +734,9 @@ export class LearningPlaybackResultDto {
 
   @ApiProperty({ description: 'True when the server clock trimmed what the save claimed (more new seconds than could have played since the previous save)' })
   capped: boolean;
+
+  @ApiProperty({ type: () => LearningCertificateDto, nullable: true, description: 'The certificate this request earned, else null' })
+  certificate: LearningCertificateDto | null;
 }
 
 export class LearningCompleteResultDto {
@@ -696,4 +751,7 @@ export class LearningCompleteResultDto {
 
   @ApiProperty({ description: 'True when this request completed the lesson; false when it already was (nothing written)' })
   completedNow: boolean;
+
+  @ApiProperty({ type: () => LearningCertificateDto, nullable: true, description: 'The certificate this request earned, else null' })
+  certificate: LearningCertificateDto | null;
 }

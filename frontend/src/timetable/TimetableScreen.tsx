@@ -15,23 +15,19 @@ import { Alert, Badge, Button, ConfigProvider, Segmented, Spin, Switch, Tooltip 
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAcademy } from '../academy/useAcademy'
-import { PageHeader } from '../components/PageHeader'
 import { directionOf } from '../i18n/language'
 import { useLocalized } from '../i18n/useLocalized'
-import { MiniMonth } from './MiniMonth'
 import { DayTimeline, WeekAgenda, WeekStrip } from './MobileViews'
 import { SlotDrawer } from './SlotDrawer'
-import { addDays, calendarDateIn, datesFrom, minutesNowIn, monthOf, weekDatesOf, weekdayInWeek, weekdayOf } from './timetable.dates'
-import type { CalendarDate, CalendarMonth } from './timetable.dates'
+import { addDays, calendarDateIn, minutesNowIn, weekDatesOf, weekdayInWeek, weekdayOf } from './timetable.dates'
+import type { CalendarDate } from './timetable.dates'
 import { describeScheduleFailure, failureMessage } from './timetable.errors'
 import { formatDateRange, formatLongDate, weekdayOrder } from './timetable.format'
 import { visibleWeekdays } from './timetable.layout'
-import { upcomingOccurrences } from './timetable.model'
 import type { TimetableEntry, TimetableMode } from './timetable.model'
 import { timetableSettingsOf } from './timetable.settings'
 import { TimetableFilters } from './TimetableFilters'
 import { useTimetableBranches } from './useTimetableBranches'
-import { UpcomingPanel } from './UpcomingPanel'
 import { useNow } from './useNow'
 import { useTimetable } from './useTimetable'
 import type { AcademyFilters } from './useTimetable'
@@ -43,9 +39,6 @@ export type TimetableView = 'week' | 'day'
 
 /** The deep purple of the selected states; antd controls inside the calendar take it as their primary colour. */
 const ACCENT = '#6a4fe0'
-/** "Upcoming" looks this many days ahead (today included) and lists at most this many slots. */
-const UPCOMING_DAYS = 7
-const UPCOMING_LIMIT = 5
 const NO_FILTERS: AcademyFilters = {}
 
 const MOBILE_QUERY = '(max-width: 767.98px)'
@@ -99,19 +92,15 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const home = onFilteredDay(today)
   const [picked, setPicked] = useState<CalendarDate | null>(null)
   const selected = picked === null ? home : onFilteredDay(picked)
-  const [shownMonth, setShownMonth] = useState<CalendarMonth | null>(null)
-  const month = shownMonth ?? monthOf(selected)
   const [showAllDays, setShowAllDays] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [monthOpen, setMonthOpen] = useState(false)
   const [opened, setOpened] = useState<{ entry: TimetableEntry; date: CalendarDate } | null>(null)
   const branches = useTimetableBranches(canReadAcademy && mode === 'academy')
 
   const activeFilters = mode === 'academy' ? filters : NO_FILTERS
   const weekDates = weekDatesOf(selected, settings.weekStartsOn)
-  const upcomingDates = datesFrom(today, UPCOMING_DAYS)
-  // The whole week is read in both views (the day view's strip marks busy days), plus the next seven days.
-  const loadDates = [...new Set([...weekDates, ...upcomingDates])]
+  // The whole week is read in both views (the day view's strip marks busy days).
+  const loadDates = weekDates
   const data = useTimetable(mode, activeFilters, loadDates, settingsReady && (mode === 'academy' ? canReadAcademy : canReadMine))
 
   const entriesOf = (date: CalendarDate) => data.byDate.get(date) ?? []
@@ -142,21 +131,15 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const mainFailedDate = mainDates.find((date) => data.failedDates.has(date))
   const failure = mainFailedDate === undefined ? null : describeScheduleFailure(data.failedDates.get(mainFailedDate))
   const empty = !loading && failure === null && days.every((day) => day.entries.length === 0)
-  const upcoming = upcomingOccurrences(data.byDate, upcomingDates, now, UPCOMING_LIMIT)
-  const upcomingLoading = !settingsReady || upcomingDates.some((date) => data.pending.has(date))
-  // Only a failure among its own seven days empties the panel; another week date's failure is the grid's alert.
-  const upcomingFailed = upcomingDates.some((date) => data.failedDates.has(date))
 
   const pick = (date: CalendarDate) => {
     setPicked(date)
-    setShownMonth(null)
   }
   const select = (date: CalendarDate) => pick(onFilteredDay(date))
   const step = view === 'week' || onlyWeekday !== undefined ? 7 : 1
   const go = (direction: 1 | -1) => select(addDays(selected, direction * step))
   const goToday = () => {
     setPicked(null)
-    setShownMonth(null)
   }
   const changeFilters = (patch: Partial<AcademyFilters>) => {
     setFilters((current) => ({ ...current, ...patch }))
@@ -235,7 +218,6 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
       <div className="tt-toolbar__row tt-toolbar__row--actions">
         <div className="tt-toolbar__group">
           {todayButton}
-          <Button icon={<CalendarOutlined />} aria-label={t('schedule.calendar.pickDate')} aria-expanded={monthOpen} onClick={() => setMonthOpen((value) => !value)} />
         </div>
         <div className="tt-toolbar__group tt-toolbar__group--end">
           {viewSwitch}
@@ -293,34 +275,6 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
     </div>
   )
 
-  const miniMonth = (
-    <MiniMonth
-      month={month}
-      onMonthChange={setShownMonth}
-      selected={selected}
-      today={today}
-      weekStartsOn={settings.weekStartsOn}
-      band={view === 'week' ? { from: days[0]!.date, to: days[days.length - 1]!.date } : null}
-      onSelect={(date) => {
-        select(date)
-        setMonthOpen(false)
-      }}
-      language={language}
-    />
-  )
-
-  const upcomingPanel = (
-    <UpcomingPanel
-      occurrences={upcoming}
-      now={now}
-      loading={upcomingLoading}
-      failed={upcomingFailed}
-      language={language}
-      hint={mode === 'mine' ? t('schedule.upcoming.hintMine') : t('schedule.upcoming.hint')}
-      onOpen={open}
-    />
-  )
-
   const errorAlert = failure ? (
     <Alert
       type="error"
@@ -340,7 +294,6 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
   const phoneBody = (
     <>
       <WeekStrip dates={weekDates} selected={selected} today={today} busy={busyDates} workingDays={settings.workingDays} language={language} onSelect={select} />
-      {monthOpen ? <div style={{ marginBottom: 16 }}>{miniMonth}</div> : null}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
           <Spin aria-label={t('schedule.calendar.loading')} />
@@ -359,37 +312,30 @@ export function TimetableScreen({ canReadAcademy, canReadMine, canPickTeacher, c
         <WeekAgenda days={days} language={language} academyTimeZone={settings.timeZone} onOpen={open} />
       )}
       {note}
-      <div style={{ marginTop: 20 }}>{upcomingPanel}</div>
     </>
   )
 
   const desktopBody = (
-    <div className="tt-layout">
-      <div style={{ minWidth: 0 }}>
-        <WeekGrid
-          days={days}
-          language={language}
-          academyTimeZone={settings.timeZone}
-          nowMinutes={nowMinutes}
-          label={view === 'week' ? t('schedule.calendar.grid') : formatLongDate(selected, language)}
-          loading={loading}
-          empty={empty ? emptyCard : null}
-          onSelectDate={select}
-          onOpen={open}
-        />
-        {note}
-      </div>
-      <aside className="tt-side" aria-label={t('schedule.calendar.side')}>
-        {miniMonth}
-        {upcomingPanel}
-      </aside>
+    <div style={{ minWidth: 0 }}>
+      <WeekGrid
+        days={days}
+        language={language}
+        academyTimeZone={settings.timeZone}
+        nowMinutes={nowMinutes}
+        label={view === 'week' ? t('schedule.calendar.grid') : formatLongDate(selected, language)}
+        loading={loading}
+        empty={empty ? emptyCard : null}
+        onSelectDate={select}
+        onOpen={open}
+      />
+      {note}
     </div>
   )
 
   return (
     <ConfigProvider theme={{ token: { colorPrimary: ACCENT } }}>
       <div className={phone ? 'tt tt-mobile' : 'tt'}>
-        <PageHeader title={t('schedule.title')} subtitle={t('schedule.subtitle')} extra={modeSwitch} />
+        {modeSwitch ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>{modeSwitch}</div> : null}
         {academy.error && !academy.academy ? <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={t('schedule.calendar.settingsFallback')} /> : null}
         <div className="tt-surface">
           {toolbar}

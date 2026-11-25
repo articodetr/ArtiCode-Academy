@@ -9,6 +9,7 @@
 // keys move between cards: up/down inside a day, left/right to the
 // neighbouring day (mirrored in RTL). One column = the day view.
 import { Spin } from 'antd'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { directionOf } from '../i18n/language'
@@ -50,10 +51,33 @@ function classNames(...names: Array<string | false | null | undefined>): string 
   return names.filter(Boolean).join(' ')
 }
 
+/** Space below `.tt-grid__body` for the 24:00 label overhang, the recurring note and the card's bottom padding. */
+const GRID_BOTTOM_CLEARANCE = 42
+
 export function WeekGrid({ days, language, academyTimeZone, nowMinutes, label, loading, empty, onSelectDate, onOpen }: WeekGridProps) {
   const { t } = useTranslation()
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [availableHeight, setAvailableHeight] = useState<number | undefined>(undefined)
+
+  const hasEmpty = empty !== null
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = bodyRef.current
+      if (!el || typeof window === 'undefined') return
+      const rect = el.getBoundingClientRect()
+      // jsdom lays nothing out (zero box): keep the pure default height.
+      if (rect.width === 0 && rect.height === 0) return
+      const topInDoc = rect.top + window.scrollY
+      setAvailableHeight(window.innerHeight - topInDoc - GRID_BOTTOM_CLEARANCE)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [days.length, loading, hasEmpty])
+
   const range = hourRangeOf(days.flatMap((day) => day.entries))
-  const hourHeight = hourHeightOf(range)
+  const hourHeight = hourHeightOf(range, availableHeight)
   const height = (range.endHour - range.startHour) * hourHeight
   const origin = range.startHour * 60
   const nowInRange = nowMinutes >= origin && nowMinutes <= range.endHour * 60
@@ -88,7 +112,7 @@ export function WeekGrid({ days, language, academyTimeZone, nowMinutes, label, l
 
   return (
     <div className={days.length === 1 ? 'tt-grid is-single' : 'tt-grid'} style={style} role="region" aria-label={label} aria-busy={loading} onKeyDown={moveFocus}>
-      <div className="tt-grid__inner" style={{ paddingBottom: 10 }}>
+      <div className="tt-grid__inner" style={{ paddingBottom: 6 }}>
         <div className="tt-grid__head">
           <div className="tt-grid__corner" aria-hidden="true" />
           {days.map((day) => (
@@ -107,7 +131,7 @@ export function WeekGrid({ days, language, academyTimeZone, nowMinutes, label, l
             </button>
           ))}
         </div>
-        <div className="tt-grid__body" style={{ height }}>
+        <div ref={bodyRef} className="tt-grid__body" style={{ height }}>
           <div className="tt-axis" aria-hidden="true">
             {hoursOf(range).map((hour) => (
               <span key={hour} className="tt-axis__hour" style={{ top: (hour - range.startHour) * hourHeight }}>

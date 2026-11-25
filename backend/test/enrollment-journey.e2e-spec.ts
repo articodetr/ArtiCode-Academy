@@ -192,6 +192,7 @@ describe.skipIf(!available)('PORTAL-02 the enrollment journey (e2e)', () => {
         // The office notifications a request wrote for the academy's real holders of enrollments.manage.
         if (enrollmentIds.length > 0) await prisma.$executeRaw`DELETE FROM notifications WHERE data ->> 'enrollmentId' = ANY(${enrollmentIds}::text[])`;
         // A lesson with progress is never deleted (Restrict): the students' progress goes before the courses.
+        await prisma.certificate.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         await prisma.learningProgress.deleteMany({ where: { studentUserId: { in: createdUserIds } } });
         await prisma.payment.deleteMany({ where: { invoice: { studentUserId: { in: createdUserIds } } } });
         await prisma.invoice.deleteMany({ where: { studentUserId: { in: createdUserIds } } });

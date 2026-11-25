@@ -150,15 +150,19 @@ function VerificationResult({ result }: { result: CertificateVerification }) {
               </span>
             ),
           },
-          {
-            key: 'grade',
-            label: t('certificates.verify.fields.grade'),
-            children: (
-              <span>
-                <bdi dir="ltr">{formatPercent(result.grade.percent)}</bdi> — {bandOf(result.grade, language)}
-              </span>
-            ),
-          },
+          ...(result.grade
+            ? [
+                {
+                  key: 'grade',
+                  label: t('certificates.verify.fields.grade'),
+                  children: (
+                    <span>
+                      <bdi dir="ltr">{formatPercent(result.grade.percent)}</bdi> — {bandOf(result.grade, language)}
+                    </span>
+                  ),
+                },
+              ]
+            : []),
           { key: 'issuedAt', label: t('certificates.verify.fields.issuedAt'), children: formatCertificateDay(result.issuedAt, language) },
           { key: 'academy', label: t('certificates.verify.fields.academy'), children: localizedLabel(result.academy.name, language) || '—' },
         ]}

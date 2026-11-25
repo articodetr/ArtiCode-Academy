@@ -258,6 +258,26 @@ export const envSchema = z
         .optional(),
     ),
 
+    // --- Media (homepage images, Settings → «صور الصفحة الرئيسية») ----------
+    /**
+     * Directory of the uploaded pictures of the public home page: absolute, or
+     * relative to the working directory of the process (default
+     * `storage/media`, i.e. backend/storage/media in development —
+     * git-ignored). The deployment mounts the `media` volume at
+     * /var/lib/articode/media. Created when needed; when it cannot be written,
+     * uploads answer 503 media_storage_unavailable and the rest of the API
+     * keeps working.
+     */
+    MEDIA_STORAGE_DIR: z.preprocess(
+      emptyToUndefined,
+      z
+        .string()
+        .trim()
+        .min(1, 'must name a directory')
+        .refine((value) => !value.includes('\u0000'), 'must not contain a NUL character')
+        .default('storage/media'),
+    ),
+
     // --- Two-step verification (MOD-01-H06, MFA / TOTP — roadmap §4n) ------
     /**
      * The AES-256-GCM key that seals every TOTP secret in `users.mfa_secret`

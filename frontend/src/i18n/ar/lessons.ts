@@ -264,22 +264,12 @@ export const attendance = {
 
 // MOD-06 «my lessons» (J-F11, API-101); column, filter, pagination and attendance labels come from `lessons.*`.
 export const myLessons = {
-  // J-F64: the student's courses and their lessons, the video playing inside the page.
+  // J-F64: the student's courses and their lessons, the video playing inside the page (since J-F67 on «دوراتي»); the
+  // summary header stays on «دروسي» above all of the learner's lessons, newest first.
   hub: {
-    tabs: { label: 'أقسام دروسي', programs: 'دروسي', sessions: 'مواعيد الحصص' },
     title: 'دروسي',
-    description: 'تابع دوراتك، وشاهد دروسها داخل المنصة، واعرف كم أنجزت في كل درس.',
+    description: 'دروس كل دوراتك، الأحدث في الأعلى. شاهد الدروس داخل المنصة واعرف كم أنجزت.',
     stats: { courses: 'الدورات المسجلة', lessons: 'إجمالي الدروس', completed: 'الدروس المكتملة' },
-    coursesTitle: 'الدورات المسجلة',
-    coursesHint: 'اضغط على بطاقة أي دورة لعرض دروسها في الأسفل.',
-    card: {
-      select: 'عرض دروس {{course}}',
-      active: 'الاشتراك مفعّل',
-      done: 'مكتملة',
-      lessons: 'الدروس: {{total}}',
-      progress: 'الدروس المكتملة',
-      browse: 'استعراض الدروس',
-    },
     panel: {
       label: 'دروس {{course}}',
       title: 'دروس:',
@@ -300,8 +290,32 @@ export const myLessons = {
       attend: 'عرض الحصص',
       open: 'فتح الدرس',
       playing: 'مفتوح الآن',
+      // J-F67: the lesson's exam and attachments beside its button.
+      exam: 'الاختبار',
+      examDone: 'تم الاختبار',
+      exams: 'الاختبارات ({{n}})',
+      file: 'المرفق',
+      files: 'المرفقات ({{n}})',
     },
     player: { label: 'الدرس المفتوح', close: 'إغلاق الدرس' },
+    // J-F68: every exam of the class at the end of a course's lessons — what is not taken or passed yet.
+    courseExams: {
+      title: 'اختبارات الدورة',
+      summary: 'تم اجتياز {{passed}} من {{total}}. اجتيازها كلها مع إكمال الدروس يُصدر الشهادة.',
+      passed: 'ناجح',
+      take: 'ابدأ الاختبار',
+      resume: 'متابعة الاختبار',
+      lesson: 'الدرس: {{title}}',
+      loadFailed: 'تعذّر تحميل اختبارات الدورة.',
+      retry: 'إعادة المحاولة',
+    },
+    // J-F67: the exam of a lesson in a popup.
+    examPopup: {
+      toMyExams: 'اختباراتي',
+      loadFailed: 'تعذّر تحميل الاختبار.',
+      notFound: 'هذا الاختبار ليس ضمن اختباراتك الآن.',
+      manual: 'هذا الاختبار يُقدَّم في الفصل وتسجّل نتيجته المعلّمة، وتجده مع نتيجته في «اختباراتي».',
+    },
     emptyCourse: 'لا توجد دروس في هذه الدورة حالياً.',
     emptyFilter: 'لا توجد دروس من هذا النوع في هذه الدورة.',
     empty: {
@@ -309,6 +323,18 @@ export const myLessons = {
       text: 'عند تفعيل اشتراكك في أي دورة ستظهر هنا مع دروسها.',
       action: 'استكشف الدورات',
     },
+  },
+  // J-F67: «دروسي» — every lesson of the learner's classes, drawn like a course's lessons panel.
+  feed: {
+    title: 'كل دروسي',
+    hint: 'الأحدث في الأعلى، مع حالة كل درس وحضورك فيه.',
+    hintUpcoming: 'دروس اليوم والقادمة، الأقرب أولاً.',
+    // A student's single list of every course's lessons, newest first (API-230 createdAt).
+    allHint: 'دروس كل دوراتك في قائمة واحدة، الأحدث في الأعلى.',
+    emptyAll: 'لا توجد دروس في دوراتك حالياً.',
+    emptyFilter: 'لا توجد دروس من هذا النوع في دوراتك.',
+    someFailed: 'تعذّر تحميل دروس: {{courses}}',
+    join: 'الانضمام',
   },
   title: 'دروسي',
   subtitle: 'دروس الفصول المسجَّل فيها أنت أو الطلاب المرتبطون بك، مع حالة الحضور في كل درس',

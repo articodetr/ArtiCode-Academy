@@ -19,6 +19,7 @@ describe('certificates.format', () => {
     expect(bandOf({ label: { ar: ' ' }, letter: null }, 'ar')).toBe('—')
     expect(gradeLine(VERY_GOOD, 'ar')).toBe('86.4% — جيد جداً (B)')
     expect(gradeLine({ ...VERY_GOOD, label: { ar: '' }, letter: null }, 'ar')).toBe('86.4%')
+    expect(gradeLine(null, 'ar')).toBe('—')
   })
 
   it('prints the Latin name in English when there is one, the full name otherwise', () => {

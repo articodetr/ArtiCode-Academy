@@ -33,14 +33,16 @@ interface StartAttemptModalProps {
   onClose: () => void
   /** The server refused the start: the page reads its list again. */
   onRefused: () => void
+  /** J-F67: the attempt started — the popup of a lesson's exam shows it in place; absent = go to /take-exam/<id>. */
+  onStarted?: (attemptId: string) => void
 }
 
 /** Mounted per row, so every confirmation starts clean. */
-export function StartAttemptModal({ item, onClose, onRefused }: StartAttemptModalProps) {
-  return <StartAttemptDialog key={item ? myExamKey(item) : 'closed'} item={item} onClose={onClose} onRefused={onRefused} />
+export function StartAttemptModal({ item, onClose, onRefused, onStarted }: StartAttemptModalProps) {
+  return <StartAttemptDialog key={item ? myExamKey(item) : 'closed'} item={item} onClose={onClose} onRefused={onRefused} onStarted={onStarted} />
 }
 
-function StartAttemptDialog({ item, onClose, onRefused }: StartAttemptModalProps) {
+function StartAttemptDialog({ item, onClose, onRefused, onStarted }: StartAttemptModalProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const navigate = useNavigate()
@@ -68,7 +70,8 @@ function StartAttemptDialog({ item, onClose, onRefused }: StartAttemptModalProps
       // A JSON integer or no field at all — the server refuses `attemptNo: null` (which is what a non-number would
       // become on the wire) with a 400.
       const attempt = await startMyAttempt(item.id, Number.isInteger(attemptNo) ? attemptNo : undefined)
-      navigate(takeExamPath(attempt.id))
+      if (onStarted) onStarted(attempt.id)
+      else navigate(takeExamPath(attempt.id))
     } catch (error) {
       setFailure(describeTakeFailure(error))
       // Any refusal of the server: the row behind this dialog is out of date.

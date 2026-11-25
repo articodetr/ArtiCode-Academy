@@ -50,4 +50,10 @@ describe('timetable.css — the cascade of three or more overlapping slots (KI-1
     expect(declarations('.tt-slot.is-cascade > .tt-event').get('pointer-events')).toBe('auto')
     expect(declarations('.tt-slot:not(.is-cascade) .tt-event:not(.is-card) .tt-event__sub, .tt-slot:not(.is-cascade) .tt-event:not(.is-card) .tt-event__time').get('display')).toBe('none')
   })
+
+  it('keeps one-hour slots compact in the 24-hour grid without overlapping back-to-back hours or pushing the time off the row', () => {
+    expect(declarations('.tt-slot').get('min-height')).toBe('14px')
+    expect(declarations('.tt-event.is-tiny .tt-event__title').get('flex')).toBe('1 1 0')
+    expect(declarations('.tt-event.is-tiny .tt-event__time').get('flex')).toBe('none')
+  })
 })

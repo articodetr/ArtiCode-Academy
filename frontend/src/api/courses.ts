@@ -63,6 +63,8 @@ export interface Course {
   syllabusCount: number
   /** MOD-19 (D-R129): an absolute http(s) URL of the cover image, or null. */
   coverImageUrl: string | null
+  /** J-F67: the course's own materials (its textbook), shown on its card in «دوراتي»; absent from an older server. */
+  resources?: CourseResource[]
   /** MOD-19: paid exactly when `enrollmentFeePlan` is set. */
   pricing: CoursePricing
   enrollmentFeePlan: CourseFeePlan | null
@@ -128,6 +130,14 @@ export interface UpdateCourseInput {
   coverImageUrl?: string | null
   /** MOD-19 (D-R122): a fee plan of this course or a general one; null = free again. Needs `fee_plans.manage`. */
   enrollmentFeePlanId?: string | null
+  /** J-F67: the course's materials as a whole new list (at most 20, https only); [] removes them. */
+  resources?: CourseResource[]
+}
+
+/** One of a course's own materials (J-F67): a title and an https address, as a lesson's resource. */
+export interface CourseResource {
+  title: LocalizedLabel
+  url: string
 }
 
 export const COURSES_PATH = '/api/courses'

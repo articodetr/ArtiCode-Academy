@@ -12,6 +12,9 @@ coverage/
 .env.*
 !.env.example
 
+# Uploaded homepage images of the local development API (MEDIA_STORAGE_DIR default)
+backend/storage/
+
 # Local database backups (docs section 14.9)
 backup-*.dump
 postgres_data-*.tgz

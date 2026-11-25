@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { clockMinutes } from './timetable.dates'
-import { densityOf, hourHeightOf, hourRangeOf, hoursOf, layoutDay, nowMarkerIndex, slotBox, verticalBox, visibleWeekdays } from './timetable.layout'
+import {
+  DAY_FRAME,
+  DEFAULT_HOUR_HEIGHT,
+  MAX_HOUR_HEIGHT,
+  MIN_HOUR_HEIGHT,
+  densityOf,
+  hourHeightOf,
+  hourRangeOf,
+  hoursOf,
+  layoutDay,
+  nowMarkerIndex,
+  slotBox,
+  verticalBox,
+  visibleWeekdays,
+} from './timetable.layout'
 
 function slot(id: string, start: string, end: string) {
   return { id, startMinutes: clockMinutes(start), endMinutes: clockMinutes(end) }
@@ -11,40 +25,39 @@ function columnsOf(items: Array<ReturnType<typeof slot>>) {
 }
 
 describe('hour range and boxes', () => {
-  it('keeps the 08–17 frame and widens it to whole hours around early or late slots', () => {
-    expect(hourRangeOf([])).toEqual({ startHour: 8, endHour: 17 })
-    expect(hourRangeOf([slot('a', '09:00', '11:00')])).toEqual({ startHour: 8, endHour: 17 })
-    expect(hourRangeOf([slot('a', '07:30', '09:00'), slot('b', '18:00', '20:15')])).toEqual({ startHour: 7, endHour: 21 })
+  it('always shows the full 00–24 day and fits the 24 hours to the available viewport height without scrolling', () => {
+    expect(DAY_FRAME).toEqual({ startHour: 0, endHour: 24 })
+    expect(hourRangeOf([])).toEqual({ startHour: 0, endHour: 24 })
+    expect(hourRangeOf([slot('a', '09:00', '11:00')])).toEqual({ startHour: 0, endHour: 24 })
+    expect(hourRangeOf([slot('a', '07:30', '09:00'), slot('b', '18:00', '20:15')])).toEqual({ startHour: 0, endHour: 24 })
     expect(hourRangeOf([slot('a', '00:00', '23:59')])).toEqual({ startHour: 0, endHour: 24 })
+    expect(hoursOf({ startHour: 0, endHour: 24 })).toHaveLength(25)
     expect(hoursOf({ startHour: 8, endHour: 10 })).toEqual([8, 9, 10])
-    expect(hourHeightOf({ startHour: 8, endHour: 17 })).toBe(64)
-    expect(hourHeightOf({ startHour: 7, endHour: 21 })).toBe(52)
+    expect(hourHeightOf({ startHour: 0, endHour: 24 })).toBe(DEFAULT_HOUR_HEIGHT)
+    expect(hourHeightOf({ startHour: 0, endHour: 24 }, 408)).toBe(17)
+    expect(hourHeightOf({ startHour: 0, endHour: 24 }, 240)).toBe(MIN_HOUR_HEIGHT)
+    expect(hourHeightOf({ startHour: 0, endHour: 24 }, 1200)).toBe(MAX_HOUR_HEIGHT)
   })
 
   it('places a card at its start time with a height equal to its duration', () => {
-    const range = { startHour: 8, endHour: 17 }
-    expect(verticalBox(clockMinutes('09:00'), clockMinutes('11:00'), range, 64)).toEqual({ top: 64, height: 128 })
-    expect(verticalBox(clockMinutes('10:30'), clockMinutes('11:15'), range, 64)).toEqual({ top: 160, height: 48 })
-    expect(verticalBox(clockMinutes('08:00'), clockMinutes('08:30'), range, 52)).toEqual({ top: 0, height: 26 })
-    expect(densityOf(26)).toBe('tiny')
-    expect(densityOf(48)).toBe('compact')
-    expect(densityOf(96)).toBe('regular')
+    const range = { startHour: 0, endHour: 24 }
+    expect(verticalBox(clockMinutes('09:00'), clockMinutes('11:00'), range, 24)).toEqual({ top: 216, height: 48 })
+    expect(verticalBox(clockMinutes('10:30'), clockMinutes('11:15'), range, 24)).toEqual({ top: 252, height: 18 })
+    expect(verticalBox(clockMinutes('00:00'), clockMinutes('00:30'), range, 20)).toEqual({ top: 0, height: 10 })
+    expect(densityOf(12)).toBe('tiny')
+    expect(densityOf(36)).toBe('compact')
+    expect(densityOf(64)).toBe('regular')
     expect(densityOf(128)).toBe('regular')
   })
 
-  it('has three densities: one row under 44 px, a one-line course over the time under 84 px, else up to two lines (J-F22)', () => {
-    expect(densityOf(43.99)).toBe('tiny')
-    expect(densityOf(44)).toBe('compact')
-    // A one-hour slot of a long week (52 px per hour) and of an ordinary one (64): both compact — the
-    // short ones keep their time in a tightened card (timetable.css; browser-checked, jsdom has no
-    // container queries).
-    expect(densityOf(52)).toBe('compact')
-    expect(densityOf(64)).toBe('compact')
-    expect(densityOf(83.99)).toBe('compact')
-    expect(densityOf(84)).toBe('regular')
-    // The former `full` (from 124 px) was laid out exactly like `regular`: folded into it.
+  it('has three densities scaled to the compact 24-hour grid: one row under 16 px, compact under 56 px, else regular', () => {
+    expect(densityOf(15.99)).toBe('tiny')
+    expect(densityOf(16)).toBe('compact')
+    expect(densityOf(24)).toBe('compact')
+    expect(densityOf(55.99)).toBe('compact')
+    expect(densityOf(56)).toBe('regular')
     expect(densityOf(124)).toBe('regular')
-    expect(densityOf(24 * 64)).toBe('regular')
+    expect(densityOf(24 * 24)).toBe('regular')
   })
 })
 

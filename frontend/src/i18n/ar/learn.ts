@@ -5,8 +5,8 @@
 
 export const learn = {
   header: {
-    backToMySchool: 'العودة إلى فصولي',
-    mySchool: 'فصولي',
+    backToMySchool: 'العودة إلى دوراتي',
+    mySchool: 'دوراتي',
     breadcrumb: 'مسار التنقل',
     openContents: 'محتوى الدورة',
   },
@@ -220,8 +220,12 @@ export const learn = {
   done: {
     title: 'أتممت جميع دروس الدورة المطلوبة',
     text: 'أحسنت! يمكنك العودة إلى الدروس ومراجعتها متى شئت.',
-    backToMySchool: 'العودة إلى فصولي',
+    backToMySchool: 'العودة إلى دوراتي',
     keepReviewing: 'متابعة المراجعة',
+    certificateText: 'أحسنت! صدرت شهادتك بالرقم {{serial}}.',
+    // J-F67: the certificate is issued once the class's exams are done too.
+    examsHint: 'إن كانت للدورة اختبارات فانجح فيها، وتصدر شهادتك تلقائياً حين تظهر نتيجة نجاحك.',
+    viewCertificate: 'عرض شهادتي',
   },
   errors: {
     completion_by_playback: 'يكتمل هذا الدرس بمشاهدته، لا بالزر.',

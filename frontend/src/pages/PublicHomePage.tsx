@@ -26,6 +26,7 @@ import { HomeHero } from '../publicHome/HomeHero'
 import { HomePrograms } from '../publicHome/HomePrograms'
 import { HomeArticles, HomeTestimonials } from '../publicHome/HomeRealContent'
 import { HomeSteps } from '../publicHome/HomeSteps'
+import { HomeImagesContext } from '../publicHome/homeImagesContext'
 import { catalogOpenOf, homeProgramsPath } from '../publicHome/publicHome.view'
 import { useHomePrograms } from '../publicHome/useHomePrograms'
 import '../publicHome/publicHome.css'
@@ -55,22 +56,25 @@ export function PublicHomePage() {
     <PublicShell academy={academy} catalogOpen={catalogOpen} bleed>
       {/* The tab shows the academy's name while the page is open, and the description speaks in its name. */}
       <PublicTitle description={knownName ? t('publicHome.meta.descriptionNamed', { name: knownName }) : t('publicHome.meta.description')} />
-      <div className="public-home">
-        <HomeHero name={knownName} nameLoading={academy.loading} viewer={viewer} catalogOpen={catalogOpen} stats={programs.stats} registrationOpen={registrationOpen} />
-        <HomeFeatureStrip />
-        <HomePrograms programs={programs} viewer={viewer} />
-        <HomeTrustBand />
-        <HomeAbout programsPath={programsPath} />
-        <HomeTestimonials items={[]} />
-        <HomeSteps registrationOpen={registrationOpen} />
-        <HomeStatsBand stats={programs.stats} />
-        <HomeCertificate />
-        <HomePromo programsPath={programsPath} />
-        <HomeWhy />
-        {/* The closing strip invites to enroll, so it needs a course that takes a learner now. */}
-        <HomeCallToAction viewer={viewer} catalogOpen={catalogOpen} hasPrograms={programs.state === 'ready' && programs.joinable} />
-        <HomeArticles items={[]} />
-      </div>
+      {/* The four pictures follow the same reading: the academy's own (Settings → Homepage Images) or the defaults. */}
+      <HomeImagesContext value={academy}>
+        <div className="public-home">
+          <HomeHero name={knownName} nameLoading={academy.loading} viewer={viewer} catalogOpen={catalogOpen} stats={programs.stats} registrationOpen={registrationOpen} />
+          <HomeFeatureStrip />
+          <HomePrograms programs={programs} viewer={viewer} />
+          <HomeTrustBand />
+          <HomeAbout programsPath={programsPath} />
+          <HomeTestimonials items={[]} />
+          <HomeSteps registrationOpen={registrationOpen} />
+          <HomeStatsBand stats={programs.stats} />
+          <HomeCertificate />
+          <HomePromo programsPath={programsPath} />
+          <HomeWhy />
+          {/* The closing strip invites to enroll, so it needs a course that takes a learner now. */}
+          <HomeCallToAction viewer={viewer} catalogOpen={catalogOpen} hasPrograms={programs.state === 'ready' && programs.joinable} />
+          <HomeArticles items={[]} />
+        </div>
+      </HomeImagesContext>
     </PublicShell>
   )
 }

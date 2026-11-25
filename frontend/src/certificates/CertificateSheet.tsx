@@ -35,7 +35,6 @@ interface CertificateSheetProps {
 
 export function CertificateSheet({ serial, verificationCode, status, snapshot, language, t, timeZone, origin }: CertificateSheetProps) {
   const academy = localizedLabel(snapshot.academy.name, language)
-  const band = bandOf(snapshot.grade, language)
   return (
     <article className="certificate-sheet" dir={directionOf(language)} lang={language} aria-label={t('certificates.sheet.title')} data-testid="certificate-sheet">
       {status === 'revoked' ? (
@@ -57,9 +56,11 @@ export function CertificateSheet({ serial, verificationCode, status, snapshot, l
       <p className="certificate-sheet__lead">
         {t('certificates.sheet.inClass', { name: localizedLabel(snapshot.class.name, language) })} <BracketedCode code={snapshot.class.code} />
       </p>
-      <p className="certificate-sheet__grade">
-        {t('certificates.sheet.grade', { band })} — <bdi dir="ltr">{formatPercent(snapshot.grade.percent)}</bdi>
-      </p>
+      {snapshot.grade ? (
+        <p className="certificate-sheet__grade">
+          {t('certificates.sheet.grade', { band: bandOf(snapshot.grade, language) })} — <bdi dir="ltr">{formatPercent(snapshot.grade.percent)}</bdi>
+        </p>
+      ) : null}
       <dl className="certificate-sheet__facts">
         {snapshot.completedAt ? (
           <div>

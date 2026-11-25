@@ -84,11 +84,31 @@
 	# headers from helmet). The largest JSON body the API accepts is 1 MB
 	# (LARGE_JSON_ROUTES of backend/src/app.setup.ts); anything above 2 MB is
 	# refused here with 413 before it reaches Node.
+	# One exception: the upload of a homepage image (Settings → Homepage
+	# Images), whose body IS the picture. The API refuses one over 5 MiB
+	# (5,242,880 bytes) itself, with its own `413 image_too_large`; Caddy lets
+	# up to 6 MB (6,000,000 bytes) of a PUT to that path through, so the
+	# administration sees the API's answer, and refuses anything larger.
+	# The two inner handles are exclusive and the one without a matcher comes
+	# last, so every other /api/* request — another method on the same path
+	# included — keeps the 2 MB limit. TEST-201 checks both limits.
 	handle /api/* {
-		request_body {
-			max_size 2MB
+		@homepageImageUpload {
+			method PUT
+			path /api/academy/homepage-images/*
 		}
-		reverse_proxy {$API_UPSTREAM:api:3000}
+		handle @homepageImageUpload {
+			request_body {
+				max_size 6MB
+			}
+			reverse_proxy {$API_UPSTREAM:api:3000}
+		}
+		handle {
+			request_body {
+				max_size 2MB
+			}
+			reverse_proxy {$API_UPSTREAM:api:3000}
+		}
 	}
 
 	# --- the UI ----------------------------------------------------------------
@@ -115,6 +135,8 @@
 		# logo (logoUrl, any host) — and http: too, but only for a request over
 		# plain http (the local trial, SITE_ADDRESS=http://...), where the header
 		# shows an http logo; over https the UI never offers one (mixed content).
+		# The academy's own homepage images are /api/academy/media/<file> on this
+		# origin: 'self' covers them, nothing to add.
 		# Checked in a real browser (headless Edge) on the built UI with no
 		# violation: sign-in, the public token pages, the logo (https and http),
 		# every main screen, drawers, modals and the Ctrl+K search. A new inline
