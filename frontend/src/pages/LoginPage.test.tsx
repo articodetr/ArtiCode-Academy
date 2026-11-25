@@ -46,7 +46,9 @@ describe('LoginPage', () => {
 
   it('renders the sign-in form in Arabic (RTL) by default', () => {
     renderLogin()
-    expect(screen.getByText(ar.common.appName)).toBeInTheDocument()
+    // The card's heading; the frame names the academy, never the product (PORTAL-04).
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(ar.login.title)
+    expect(screen.queryByText(ar.common.appName)).not.toBeInTheDocument()
     const { identifier, password, submit } = fields()
     expect(identifier).toHaveAttribute('autocomplete', 'username')
     expect(password).toHaveAttribute('type', 'password')
@@ -95,6 +97,23 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(ar.login.errors.invalid_credentials)
     expect(screen.queryByTestId('location')).not.toBeInTheDocument()
     expect(fields().submit).toBeEnabled()
+  })
+
+  it('asks a student who registered to confirm the e-mail first (403 email_not_verified), in both languages', async () => {
+    const auth = makeAuth()
+    vi.mocked(auth.login).mockRejectedValue(
+      new ApiError(403, 'Forbidden', { statusCode: 403, code: 'email_not_verified', message: 'raw server words' }),
+    )
+    renderLogin(auth)
+    await submitCredentials('sara@example.test', 'Secret123!x')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(ar.login.errors.email_not_verified)
+    expect(ar.login.errors.email_not_verified).toContain('أكّد بريدك الإلكتروني أولًا')
+    expect(alert).not.toHaveTextContent('raw server words')
+    expect(alert).not.toHaveTextContent(ar.login.errors.generic)
+    expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+    expect(fields().submit).toBeEnabled()
+    expect(i18n.t('login.errors.email_not_verified', { lng: 'en' })).toMatch(/^Confirm your e-mail first/)
   })
 
   it('tells a locked-out user how many minutes to wait (rounded up)', async () => {
@@ -166,7 +185,7 @@ describe('LoginPage', () => {
       const { challenge, code, container } = await reachSecondStep(auth, '/users')
 
       // Same card, second step: the subtitle says so and nobody is signed in or sent anywhere yet.
-      expect(screen.getByText(ar.common.appName)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(ar.login.title)
       expect(screen.getByText(mfa.subtitle)).toBeInTheDocument()
       expect(screen.queryByText(ar.login.subtitle)).not.toBeInTheDocument()
       expect(screen.queryByTestId('location')).not.toBeInTheDocument()
@@ -488,5 +507,99 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
       expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
       unmount()
     }
+  })
+
+  describe('creating an account (PORTAL-04, the contract of #207)', () => {
+    const INTENT = '/catalog/c-1?intent=enroll'
+    const entry = ar.studentRegistration.entry
+    const registerLink = () => screen.queryByRole('link', { name: entry.createAccountNow })
+
+    it.each([
+      ['the field absent', makePublicAcademy(), 200],
+      ['false', makePublicAcademy({ selfRegistration: false }), 200],
+      ['a truthy non-boolean', { ...makePublicAcademy(), selfRegistration: 'true' }, 200],
+      ['a failed read', { statusCode: 503, code: 'academy_not_configured', message: 'none' }, 503],
+    ])('offers nothing and keeps the original words with %s', async (_case, body, status) => {
+      const fetchMock = mockPublicAcademy(body, status)
+      renderLogin(makeAuth(), INTENT)
+      await settle(fetchMock)
+      expect(registerLink()).not.toBeInTheDocument()
+      expect(screen.queryByTestId('login-register')).not.toBeInTheDocument()
+      expect(screen.queryByText(entry.noAccount)).not.toBeInTheDocument()
+      expect(screen.getByTestId('login-enroll-intent')).toHaveTextContent(ar.login.enrollIntent.text)
+      expect(screen.getByTestId('login-enroll-intent')).not.toHaveTextContent(entry.courseNote)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('links to /register with no return path when the visitor came for nothing in particular', async () => {
+      const fetchMock = mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, { auth: makeAuth(), route: '/login', routes: { '/register': <PathProbe /> } })
+      const link = await waitFor(() => {
+        const found = registerLink()
+        expect(found).not.toBeNull()
+        return found!
+      })
+      expect(link).toHaveAttribute('href', '/register')
+      expect(screen.getByText(entry.noAccount)).toBeInTheDocument()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      fireEvent.click(link)
+      expect((await screen.findByTestId('path')).textContent).toBe('/register')
+    })
+
+    it('carries the chosen course to /register as ?returnTo= and stops saying accounts come from the administration', async () => {
+      mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, {
+        auth: makeAuth(),
+        route: { pathname: '/login', state: { from: INTENT } },
+        routes: { '/register': <PathProbe /> },
+      })
+      const link = await screen.findByRole('link', { name: entry.createAccountNow })
+      const notice = screen.getByTestId('login-enroll-intent')
+      expect(notice).toHaveTextContent(entry.courseNote)
+      expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
+      fireEvent.click(link)
+      expect((await screen.findByTestId('path')).textContent).toBe(`/register?returnTo=${encodeURIComponent(INTENT)}`)
+    })
+
+    it('never carries a return path that leaves this site', async () => {
+      mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, {
+        auth: makeAuth(),
+        route: { pathname: '/login', state: { from: 'https://evil.example/x' } },
+        routes: { '/register': <PathProbe /> },
+      })
+      fireEvent.click(await screen.findByRole('link', { name: entry.createAccountNow }))
+      expect((await screen.findByTestId('path')).textContent).toBe('/register')
+    })
+
+    it('does not invite someone who has just finished registering to create another account', async () => {
+      const fetchMock = mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderWithProviders(<LoginPage />, {
+        auth: makeAuth(),
+        route: { pathname: '/login', state: { notice: 'registration_completed', from: INTENT } },
+      })
+      await settle(fetchMock)
+      expect(screen.getByText(ar.studentRegistration.notices.accountCreated)).toBeInTheDocument()
+      expect(registerLink()).not.toBeInTheDocument()
+      const notice = screen.getByTestId('login-enroll-intent')
+      expect(notice).toHaveTextContent(entry.courseAfterRegister)
+      expect(notice).not.toHaveTextContent(entry.courseNote)
+      expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
+    })
+
+    it('shows no way to register, and no talk of accounts, during the second step of a sign-in', async () => {
+      mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      const auth = makeAuth()
+      vi.mocked(auth.login).mockResolvedValue(mfaChallengeResponse())
+      renderLogin(auth, INTENT)
+      await screen.findByRole('link', { name: entry.createAccountNow })
+      await submitCredentials()
+      await screen.findByLabelText(ar.login.mfa.code)
+      expect(registerLink()).not.toBeInTheDocument()
+      const notice = screen.getByTestId('login-enroll-intent')
+      expect(notice).toHaveTextContent(ar.login.enrollIntent.title)
+      expect(notice).not.toHaveTextContent(entry.courseNote)
+      expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
+    })
   })
 })

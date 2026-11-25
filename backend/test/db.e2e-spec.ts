@@ -82,6 +82,9 @@ const TABLES = [
   'exam_questions',
   'exam_attempts',
   'exam_answers',
+  // PORTAL-04 (20261124134334_portal04_subjects_google_identities): course subjects and Google sign-in identities.
+  'subjects',
+  'user_identities',
 ] as const;
 
 // PostgreSQL SQLSTATE codes
@@ -162,7 +165,7 @@ describe.skipIf(!available)('database schema — first migration (e2e, TEST-007)
     return rows[0]!.id;
   }
 
-  it('records the applied migrations (first one first) and the 49 tables', async () => {
+  it('records the applied migrations (first one first) and the 51 tables', async () => {
     const migrations = await pool.query<{ migration_name: string; finished: boolean; rolled_back: boolean }>(
       `SELECT migration_name, finished_at IS NOT NULL AS finished, rolled_back_at IS NOT NULL AS rolled_back
          FROM _prisma_migrations ORDER BY started_at`,

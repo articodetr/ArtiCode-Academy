@@ -51,6 +51,8 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'auth.mfa.enabled',
   'auth.mfa.disabled',
   'auth.mfa.recovery_codes.regenerated',
+  // PORTAL-04 (provisional): an outside Google identity linked to an account
+  'auth.google.linked',
   'users.',
   'users.created',
   'users.updated',
@@ -63,6 +65,12 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'users.roles.changed',
   // MFA-T04 (CH-0284): the administrative reset of API-212
   'users.mfa.reset',
+  // PORTAL-03/PORTAL-04 (provisional): a student account created by the visitor (e-mail or Google) and its completion
+  'users.self_registered',
+  'users.self_registration.completed',
+  'users.self_registration.notice_sent',
+  // PORTAL-04 (provisional): an administrator removed a user's Google sign-in link
+  'users.identity.unlinked',
   'roles.',
   'roles.created',
   'roles.updated',
@@ -88,6 +96,12 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'levels.updated',
   'levels.deleted',
   'levels.reordered',
+  // PORTAL-04: the school subjects
+  'subjects.',
+  'subjects.created',
+  'subjects.updated',
+  'subjects.deleted',
+  'subjects.reordered',
   // MOD-04-T03 (CH-0045)
   'courses.',
   'courses.created',

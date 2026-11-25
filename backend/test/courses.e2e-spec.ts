@@ -46,6 +46,8 @@ const DTO_KEYS = [
   'resources',
   'sessionsCount',
   'status',
+  // PORTAL-04: the school subject.
+  'subject',
   'summary',
   'syllabusCount',
   'updatedAt',
@@ -155,6 +157,7 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
     try {
       await prisma.course.deleteMany({ where: { code: { startsWith: PREFIX } } });
       await prisma.level.deleteMany({ where: { id: levelId } });
+      await prisma.subject.deleteMany({ where: { code: { startsWith: PREFIX } } });
     } finally {
       if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
       if (createdRoleIds.length > 0) await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
@@ -191,6 +194,7 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
       description: null,
       syllabusCount: 0,
       level: { id: levelId, isActive: true },
+      subject: null,
     });
     const stored = await prisma.course.findUniqueOrThrow({ where: { id: res.body.id }, select: { createdById: true } });
     expect(stored.createdById).toBe(fx['manager']);
@@ -336,6 +340,62 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
     expect(await eventsSince(m2)).toEqual([]);
   });
 
+  it('PORTAL-04 — the school subject: given on create and PATCH (smallest diff, one courses.updated), cleared with null; unknown 404 subject_not_found, inactive 422 subject_inactive, no event', async () => {
+    const subjectAt = async (suffix: string, isActive: boolean) => {
+      const max = await prisma.subject.aggregate({ _max: { sortOrder: true } });
+      return prisma.subject.create({
+        data: { code: `${PREFIX}${suffix}`.slice(0, 16), name: { ar: `مادة ${suffix}`, en: `Subject ${suffix}` }, isActive, sortOrder: (max._max.sortOrder ?? -1) + 1 },
+        select: { id: true, code: true },
+      });
+    };
+    const math = await subjectAt('M', true);
+    const physics = await subjectAt('F', true);
+    const retired = await subjectAt('R', false);
+
+    const m = await mark();
+    const created = await createCourse('SB', { subjectId: math.id });
+    expect(created).toMatchObject({ subject: { id: math.id, code: math.code, name: { ar: 'مادة M', en: 'Subject M' } } });
+    expect(Object.keys((created as unknown as { subject: object }).subject).sort()).toEqual(['code', 'id', 'name']);
+    const withNull = await createCourse('SN', { subjectId: null });
+    expect(withNull).toMatchObject({ subject: null });
+    expect((await eventsSince(m)).map((event) => event.action)).toEqual(['courses.created', 'courses.created']);
+
+    const m2 = await mark();
+    const unknown = await api().post(COURSES).set(bearer('manager')).send({ code: code('SX'), name: { ar: 'م' }, subjectId: NIL_ID });
+    expect(unknown.status).toBe(404);
+    expect(unknown.body).toMatchObject({ code: 'subject_not_found', subjectId: NIL_ID });
+    const inactive = await api().post(COURSES).set(bearer('manager')).send({ code: code('SY'), name: { ar: 'م' }, subjectId: retired.id });
+    expect(inactive.status).toBe(422);
+    expect(inactive.body).toMatchObject({ code: 'subject_inactive', subjectId: retired.id });
+    await api().post(COURSES).set(bearer('manager')).send({ code: code('SZ'), name: { ar: 'م' }, subjectId: 'nope' }).expect(400);
+    expect(await prisma.course.count({ where: { code: { in: [code('SX'), code('SY'), code('SZ')] } } })).toBe(0);
+    const patchedUnknown = await api().patch(`${COURSES}/${created.id}`).set(bearer('manager')).send({ subjectId: NIL_ID });
+    expect(patchedUnknown.body).toMatchObject({ code: 'subject_not_found' });
+    const patchedInactive = await api().patch(`${COURSES}/${created.id}`).set(bearer('manager')).send({ subjectId: retired.id });
+    expect(patchedInactive.status).toBe(422);
+    expect(patchedInactive.body).toMatchObject({ code: 'subject_inactive', subjectId: retired.id });
+    // The same subject again is no change at all.
+    await api().patch(`${COURSES}/${created.id}`).set(bearer('manager')).send({ subjectId: math.id }).expect(200);
+    expect(await eventsSince(m2)).toEqual([]);
+
+    const m3 = await mark();
+    const moved = await api().patch(`${COURSES}/${created.id}`).set(bearer('manager')).send({ subjectId: physics.id, sessionsCount: 6 }).expect(200);
+    expect(moved.body.subject).toMatchObject({ id: physics.id, code: physics.code });
+    // A course keeps a subject deactivated later: other fields still change.
+    await prisma.subject.update({ where: { id: physics.id }, data: { isActive: false }, select: { id: true } });
+    const kept = await api().patch(`${COURSES}/${created.id}`).set(bearer('manager')).send({ sessionsCount: 7, subjectId: physics.id }).expect(200);
+    expect(kept.body).toMatchObject({ sessionsCount: 7, subject: { id: physics.id } });
+    const read = await api().get(`${COURSES}/${created.id}`).set(bearer('manager')).expect(200);
+    expect(read.body.subject).toMatchObject({ id: physics.id });
+    const cleared = await api().patch(`${COURSES}/${created.id}`).set(bearer('manager')).send({ subjectId: null }).expect(200);
+    expect(cleared.body.subject).toBeNull();
+    const events = await eventsSince(m3);
+    expect(events.map((event) => (event.metadata as { fields: string[] }).fields)).toEqual([['sessionsCount', 'subjectId'], ['sessionsCount'], ['subjectId']]);
+    expect(events.every((event) => event.action === 'courses.updated' && event.entityId === created.id)).toBe(true);
+    const stored = await prisma.course.findUniqueOrThrow({ where: { id: created.id }, select: { subjectId: true } });
+    expect(stored.subjectId).toBeNull();
+  });
+
   it('AC7 — keyset pages are stable in both sorts, a foreign cursor is 400 cursor_invalid, and % / _ in q are literal', async () => {
     for (const suffix of ['K1', 'K2', 'K3', 'K4', 'K5']) await createCourse(suffix);
     const walk = async (query: Record<string, unknown>): Promise<string[]> => {
@@ -400,7 +460,12 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
       expect(Object.keys(paths['/api/courses/{id}'] ?? {}).sort()).toEqual(['delete', 'get', 'patch']);
       expect(Object.keys(paths['/api/courses/{id}/status'] ?? {})).toEqual(['post']);
       const schemas = docs.body.components.schemas as Record<string, unknown>;
-      for (const name of ['CourseDto', 'CourseListDto', 'CreateCourseDto', 'UpdateCourseDto', 'ChangeCourseStatusDto']) expect(schemas).toHaveProperty(name);
+      for (const name of ['CourseDto', 'CourseListDto', 'CreateCourseDto', 'UpdateCourseDto', 'ChangeCourseStatusDto', 'CourseSubjectDto']) expect(schemas).toHaveProperty(name);
+      const props = (name: string) => Object.keys((schemas[name] as { properties?: Record<string, unknown> }).properties ?? {});
+      expect(props('CourseDto').sort()).toEqual(DTO_KEYS);
+      expect(props('CourseSubjectDto').sort()).toEqual(['code', 'id', 'name']);
+      expect(props('CreateCourseDto')).toContain('subjectId');
+      expect(props('UpdateCourseDto')).toContain('subjectId');
     },
     20_000, // the OpenAPI document is slow under a parallel e2e run (KI-040)
   );

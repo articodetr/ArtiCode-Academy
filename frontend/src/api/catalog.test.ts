@@ -24,6 +24,9 @@ describe('catalog API (API-219..API-223)', () => {
       ['cursor', 'c%1'],
     ])
     expect(catalogPath({ available: false })).toBe('/api/catalog/courses?available=false')
+    // PORTAL-04: the school subject.
+    expect(catalogPath({ subjectId: 'sb-1', limit: 24 })).toBe('/api/catalog/courses?subjectId=sb-1&limit=24')
+    expect(catalogPath({ subjectId: '' })).toBe('/api/catalog/courses')
   })
 
   it('reads the catalog, a course and «my requests» with the Bearer token and the abort signal', async () => {

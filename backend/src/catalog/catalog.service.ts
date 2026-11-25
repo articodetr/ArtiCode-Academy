@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
+import type { LocalizedText } from '../authorization/localized-text.js';
 import { classesError } from '../classes/classes.errors.js';
 import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.js';
 import { coursesError } from '../courses/courses.errors.js';
@@ -39,6 +40,8 @@ export const COURSE_CARD_SELECT = {
   durationHours: true,
   sessionsCount: true,
   level: { select: { id: true, code: true, name: true } },
+  // PORTAL-04: the school subject, read in the same query (its id and name only — never the code or the state).
+  subject: { select: { id: true, name: true } },
   enrollmentFeePlan: { select: COURSE_PLAN_SELECT },
   // MOD-20 (D-R135): an unpublished lesson is hidden from learners — the catalog counts and lists published lessons only.
   _count: { select: { syllabusItems: { where: { isPublished: true } } } },
@@ -101,6 +104,11 @@ export async function selfServiceClassesOf(db: Db, courseIds: readonly string[])
     select: CLASS_SELECT,
   });
   return rows.filter(isSelfServiceOpen);
+}
+
+/** PORTAL-04: the `subject` of a catalog card, signed-in or public — `{ id, name }` only. */
+export function catalogSubjectOf(row: { subject: { id: string; name: unknown } | null }): { id: string; name: LocalizedText } | null {
+  return row.subject ? { id: row.subject.id, name: readLocalizedText(row.subject.name) ?? { ar: '—' } } : null;
 }
 
 export interface CourseOffer {
@@ -177,6 +185,7 @@ export class CatalogService {
     const limit = query.limit ?? CATALOG_PAGE_DEFAULT;
     const filters: Prisma.CourseWhereInput[] = [{ status: 'published' }];
     if (query.levelId) filters.push({ levelId: query.levelId });
+    if (query.subjectId) filters.push({ subjectId: query.subjectId });
     if (query.pricing === 'free') filters.push({ enrollmentFeePlanId: null });
     if (query.pricing === 'paid') filters.push({ enrollmentFeePlanId: { not: null } });
     if (query.q) filters.push(await courseSearchFilter(db, query.q));
@@ -274,6 +283,7 @@ export class CatalogService {
       summary: readLocalizedText(row.summary),
       coverImageUrl: row.coverImageUrl,
       level: row.level ? { id: row.level.id, code: row.level.code, name: readLocalizedText(row.level.name) ?? { ar: row.level.code } } : null,
+      subject: catalogSubjectOf(row),
       durationHours: row.durationHours === null ? null : Number(row.durationHours),
       sessionsCount: row.sessionsCount,
       syllabusCount: row._count.syllabusItems,

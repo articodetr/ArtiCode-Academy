@@ -47,6 +47,8 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
   const courseName = localizedLabel(row.class.course.name, language)
   const cover = learning && isHttpsUrl(learning.course.coverImageUrl) ? learning.course.coverImageUrl : null
   const materials = learning?.course.resources ?? []
+  // PORTAL-04: the course's school subject (المادة) from API-229; omitted when the course has none.
+  const subject = learning?.course.subject ? localizedLabel(learning.course.subject.name, language) : null
 
   return (
     <article className={`hub-card hub-card--class${active ? ' is-active' : ''}`} data-testid={`class-card-${row.enrollmentId}`}>
@@ -57,6 +59,11 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
         <span className="hub-card__icon">{cover ? <img src={cover} alt="" referrerPolicy="no-referrer" decoding="async" /> : <ReadOutlined aria-hidden />}</span>
         {learning ? (
           <span className="hub-card__badges">
+            {subject ? (
+              <span className="hub-badge hub-badge--kind" data-testid="class-card-subject">
+                {subject}
+              </span>
+            ) : null}
             <span className="hub-badge hub-badge--kind">
               <PlayCircleOutlined aria-hidden /> {t('myClasses.card.lessons', { total: (counts ?? learning.progress).total })}
             </span>

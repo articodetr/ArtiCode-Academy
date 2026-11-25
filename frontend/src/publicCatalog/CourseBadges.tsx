@@ -1,12 +1,13 @@
-// The small badges of a course (courseBadgesOf()): on the picture of its card and at the top of its page.
-import { ClockCircleOutlined, ReadOutlined, RiseOutlined } from '@ant-design/icons'
+// The small badges of a course (courseBadgesOf()): on the picture of its card and at the top of its page — its type,
+// its school subject (PORTAL-04) and its duration.
+import { BookOutlined, ClockCircleOutlined, ReadOutlined } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import type { CourseBadge } from './publicCatalog.view'
 import './publicCourse.css'
 
 const ICONS: Readonly<Record<CourseBadge['key'], ReactNode>> = {
   type: <ReadOutlined />,
-  level: <RiseOutlined />,
+  subject: <BookOutlined />,
   duration: <ClockCircleOutlined />,
 }
 

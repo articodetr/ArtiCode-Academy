@@ -27,10 +27,10 @@ function PathProbe() {
 }
 
 /** Serves API-205 and API-236 (`list` gets the query of each list request) and records the list requests. */
-function mockPublicApi(list: (query: URLSearchParams) => Response) {
+function mockPublicApi(list: (query: URLSearchParams) => Response, academy: Parameters<typeof makePublicAcademy>[0] = {}) {
   const requests: { query: URLSearchParams; headers: Headers }[] = []
   const fetchMock = mockFetch((url, init) => {
-    if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(200, makePublicAcademy({ catalogPublic: true, name: { ar: 'أكاديمية النور', en: 'Al-Nour Academy' } }))
+    if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(200, makePublicAcademy({ catalogPublic: true, name: { ar: 'أكاديمية النور', en: 'Al-Nour Academy' }, ...academy }))
     if (url === PUBLIC_CATALOG_PATH || url.startsWith(`${PUBLIC_CATALOG_PATH}?`)) {
       const query = new URL(url, 'http://localhost').searchParams
       requests.push({ query, headers: new Headers(init?.headers) })
@@ -64,7 +64,7 @@ function renderPage(auth = makeAuth(), search = '') {
 const card = (id: string) => within(screen.getByTestId(`public-card-${id}`))
 
 describe('PublicCatalogPage', () => {
-  it('shows the published courses as cards — price, level, counts and open classes — read without a token', async () => {
+  it('shows the published courses as cards — price, subject, counts and open classes — read without a token', async () => {
     const paid = makePublicCard({
       id: PUBLIC_COURSE_IDS[1],
       code: 'WEB-201',
@@ -89,11 +89,13 @@ describe('PublicCatalogPage', () => {
     // The code is not shown on a card; a search by code still reaches the server (below).
     expect(free.queryByText('PY-101')).not.toBeInTheDocument()
     expect(free.getByText('مدخل عملي إلى البرمجة')).toBeInTheDocument()
-    expect(free.getByText('مبتدئ')).toBeInTheDocument()
+    // PORTAL-04: the school subject, never the difficulty level; no sessions and no age range.
+    expect(free.getByText('البرمجة')).toBeInTheDocument()
+    expect(free.queryByText('مبتدئ')).not.toBeInTheDocument()
     expect(free.getByText(pc.card.free)).toBeInTheDocument()
     expect(free.getByText(pc.card.available)).toBeInTheDocument()
     expect(free.getByText('24 ساعة')).toBeInTheDocument()
-    expect(free.getByText('12 جلسة')).toBeInTheDocument()
+    expect(screen.getByTestId(`public-card-${PUBLIC_COURSE_IDS[0]}`).textContent).not.toContain('جلس')
     expect(free.getByText('5 دروس')).toBeInTheDocument()
     expect(free.getByText('مستويان')).toBeInTheDocument()
     expect(free.getByTestId('course-cover')).toHaveAttribute('src', 'https://cdn.example.org/py.jpg')
@@ -310,6 +312,18 @@ describe('PublicCatalogPage', () => {
 
     fireEvent.click(within(closed).getByText(pc.closed.signIn).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/login')
+    expect(screen.queryByText(ar.studentRegistration.entry.createAccount)).not.toBeInTheDocument()
+  })
+
+  it('offers a new account on the closed panel only while the academy opens registration, reading API-205 once', async () => {
+    const { fetchMock } = mockPublicApi(() => jsonResponse(404, CATALOG_NOT_PUBLIC), { selfRegistration: true })
+    renderPage()
+
+    const closed = await screen.findByTestId('catalog-closed')
+    await waitFor(() => expect(within(closed).getByText(ar.studentRegistration.entry.accountsNote)).toBeInTheDocument())
+    expect(within(closed).queryByText(pc.closed.text)).not.toBeInTheDocument()
+    expect(within(closed).getByRole('link', { name: ar.studentRegistration.entry.createAccount })).toHaveAttribute('href', '/register')
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith(ACADEMY_PUBLIC_PATH))).toHaveLength(1)
   })
 
   it('reports another failure with a retry that asks again', async () => {

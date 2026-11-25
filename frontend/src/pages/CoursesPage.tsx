@@ -1,6 +1,7 @@
 // Courses list (MOD-04-T05): GET /api/courses with search, level/status
 // filters and keyset pagination; a detail drawer and a creation modal for
-// holders of `courses.manage`, who also get a levels tab (MOD-04-T06). Holders of `courses.read` alone receive
+// holders of `courses.manage`, who also get a levels tab (MOD-04-T06) and, since PORTAL-04, a «المواد» (school
+// subjects) tab beside it — read only for them, since only their forms pick a subject. Holders of `courses.read` alone receive
 // published courses only (D-R13) — the server decides, the page just hides
 // what they cannot use.
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -16,14 +17,18 @@ import { StatusTag } from '../components/StatusTag'
 import { CourseDrawer } from '../courses/CourseDrawer'
 import { CreateCourseModal } from '../courses/CreateCourseModal'
 import { LevelsManager } from '../courses/LevelsManager'
+import { SubjectsManager } from '../courses/SubjectsManager'
 import { describeCoursesFailure, failureMessage } from '../courses/courses.errors'
 import { COURSE_PAGE_SIZES, useCoursesList } from '../courses/useCoursesList'
 import type { CoursesListFilters } from '../courses/useCoursesList'
 import { useLevels } from '../courses/useLevels'
+import { useSubjects } from '../courses/useSubjects'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CREATE_COURSE, useCreateFromLink } from '../common/useCreateFromLink'
 import { useOpenFromSearch } from '../common/useOpenFromSearch'
+
+type CoursesTab = 'courses' | 'levels' | 'subjects'
 
 export function CoursesPage() {
   const { t } = useTranslation()
@@ -34,7 +39,9 @@ export function CoursesPage() {
   const list = useCoursesList()
   const levelsState = useLevels()
   const { levels } = levelsState
-  const [tab, setTab] = useState<'courses' | 'levels'>('courses')
+  const subjectsState = useSubjects(canManage)
+  const { subjects } = subjectsState
+  const [tab, setTab] = useState<CoursesTab>('courses')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // The global search opens a record here through `?open=<id>`.
   useOpenFromSearch(setSelectedId)
@@ -185,11 +192,13 @@ export function CoursesPage() {
       {canManage ? (
         <Tabs
           activeKey={tab}
-          onChange={(key) => setTab(key as 'courses' | 'levels')}
+          onChange={(key) => setTab(key as CoursesTab)}
           items={[
             { key: 'courses', label: t('courses.tabs.courses'), children: coursesCard },
             // A level renamed, deactivated or deleted changes the level column of the courses list.
             { key: 'levels', label: t('courses.tabs.levels'), children: <LevelsManager state={levelsState} onChanged={list.reload} /> },
+            // PORTAL-04: the school subjects; a subject renamed or deleted changes what the course drawer shows.
+            { key: 'subjects', label: t('courses.tabs.subjects'), children: <SubjectsManager state={subjectsState} onChanged={list.reload} /> },
           ]}
         />
       ) : (
@@ -199,6 +208,7 @@ export function CoursesPage() {
       <CourseDrawer
         courseId={selectedId}
         levels={levels}
+        subjects={subjects}
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
         onDeleted={list.removeItem}
@@ -207,6 +217,7 @@ export function CoursesPage() {
       <CreateCourseModal
         open={creating}
         levels={levels}
+        subjects={subjects}
         onClose={() => setCreating(false)}
         onCreated={(course) => {
           setCreating(false)

@@ -10,6 +10,7 @@ import { examAttempts } from './en/examAttempts'
 import { takeExam } from './en/takeExam'
 import { courseCover } from './en/courseCover'
 import { courseEnrollmentPanel } from './en/courseEnrollmentPanel'
+import { studentRegistration } from './en/studentRegistration'
 import { publicHome } from './en/publicHome'
 import { homepageImages } from './en/homepageImages'
 
@@ -152,7 +153,7 @@ export const en: Translation = {
   },
   login: {
     title: 'Sign in',
-    subtitle: 'Academy management & learning platform',
+    subtitle: 'Enter your account details to continue.',
     preview: {
       title: 'Your academy day, at a glance.',
       text: 'Lessons, attendance, assignments and payments in one place.',
@@ -171,6 +172,44 @@ export const en: Translation = {
     signingIn: 'Signing in...',
     identifierRequired: 'Enter your email or username',
     passwordRequired: 'Enter your password',
+    or: 'or',
+    layout: {
+      backHome: 'Back to home',
+      navLabel: 'Navigation',
+    },
+    google: {
+      button: 'Continue with Google',
+      redirecting: 'Taking you to Google…',
+      notEnabled: 'Signing in with Google is not enabled for this academy',
+      signUpNotEnabled: 'Creating an account with Google is not enabled for this academy',
+      errors: {
+        unavailable: 'Signing in with Google is not available for this academy right now.',
+        failed: 'Could not start signing in with Google. Try again.',
+      },
+      results: {
+        cancelled: 'Signing in with Google was cancelled. You can try again, or sign in with your password.',
+        failed: 'Could not finish signing in with Google. Try again.',
+        unavailable: 'Signing in with Google is not available for this academy right now.',
+        registration_closed:
+          'No account is linked to this Google account, and new accounts cannot be created right now. Sign in with your existing account, or contact the academy administration.',
+        link_required:
+          'An account with this e-mail already exists. Sign in with your password; to use Google later, confirm your e-mail from “My account” or ask the academy administration to do so.',
+        link_conflict:
+          'Your academy account is linked to another Google account. Sign in with your password or with the linked Google account.',
+        email_not_authoritative:
+          'An account cannot be created or linked through Google for this e-mail. Create your account with your e-mail, or sign in with your password.',
+        account_unavailable: 'This account cannot be signed in right now. Contact the academy administration.',
+        mfa_unavailable:
+          'Two-step verification is not available on the server right now, and this account cannot be opened without it. Contact the academy administration.',
+      },
+      done: {
+        subtitle: 'Signing in with Google',
+        waiting: 'Finishing signing in…',
+        failedTitle: 'Signing in with Google did not finish',
+        failedText: 'No session was found on this device after coming back from Google. Try again from the sign-in page.',
+        backToLogin: 'Back to sign in',
+      },
+    },
     // MOD-20 (D-R138): shown only while the academy opens its catalog to visitors (API-205 `catalogPublic`).
     browseCourses: 'Browse courses',
     // PORTAL-04, the learner journey: the visitor chose “Enroll in this course” on the public course page.
@@ -198,6 +237,7 @@ export const en: Translation = {
       account_suspended: 'This account is suspended. Contact the academy administration.',
       account_pending: 'This account is awaiting approval by the academy administration.',
       account_not_activated: 'This account has not been activated yet. Use the invitation link you received.',
+      email_not_verified: 'Confirm your e-mail first: open the confirmation message we sent you and enter your password.',
       rate_limited: 'Too many attempts in a short time. Wait a moment and try again.',
       mfa_unavailable:
         'Two-step verification is not available on the server right now, and this account cannot be opened without it. Contact the academy administration.',
@@ -811,6 +851,7 @@ export const en: Translation = {
         archive: 'The account is taken out of service and every session ends. It can be restored later.',
         restore: 'The archived account becomes active again.',
         unlock: 'The failed-attempt counter is reset and the sign-in lock removed.',
+        deleteForGood: 'Permanent delete: a visitor created this account and never completed it, so it is removed entirely and its e-mail address becomes free again. This cannot be undone.',
         delete: 'Soft delete: the account is archived, disappears from the lists and every session ends. This cannot be undone from the interface.',
       },
       done: {
@@ -834,6 +875,17 @@ export const en: Translation = {
         done: 'Two-step verification was reset and the user’s sessions ended (sessions ended: {{sessions}}).',
         doneNoSessions: 'Two-step verification was reset. The user had no open session.',
         notEnabled: 'Two-step verification was not on for this account; nothing changed.',
+      },
+    },
+    google: {
+      label: 'Sign-in with Google',
+      linkedSince: 'Linked to a Google account since {{date}}',
+      unlink: {
+        action: 'Unlink the Google account',
+        hint: 'The link between this account and its Google account is removed, so its owner cannot sign in with it until it is linked again. The account’s status and password do not change.',
+        noPassword: 'If the account has no password, issue its owner a password-reset link so they can sign in.',
+        confirm: 'Unlink',
+        done: 'The Google account was unlinked',
       },
     },
     links: {
@@ -937,6 +989,7 @@ export const en: Translation = {
     allLevels: 'All levels',
     allStatuses: 'All statuses',
     noLevel: 'No level',
+    noSubject: 'No subject',
     sort: 'Sort',
     sortByCode: 'By code',
     sortNewest: 'Newest first',
@@ -945,6 +998,7 @@ export const en: Translation = {
     tabs: {
       courses: 'Courses',
       levels: 'Levels',
+      subjects: 'Subjects',
     },
     columns: {
       updatedAt: 'Last updated',
@@ -966,11 +1020,9 @@ export const en: Translation = {
       summary: 'Summary',
       description: 'Description',
       level: 'Level',
+      subject: 'Subject',
       durationHours: 'Duration (hours)',
       sessionsCount: 'Sessions',
-      minAge: 'Minimum age',
-      maxAge: 'Maximum age',
-      ageRange: 'Age range',
       coverImageUrl: 'Cover image URL',
       resources: 'Course materials',
       resourceTitle: 'File title',
@@ -1009,7 +1061,6 @@ export const en: Translation = {
       codeFormat: 'Latin letters, digits and . _ -, starting with a letter or digit (up to 32)',
       nameArRequired: 'The Arabic name is required',
       arabicFirst: 'Enter the Arabic text first',
-      ageRange: 'The maximum age is below the minimum age',
       maxLength: 'At most {{max}} characters',
       coverUrl: 'Enter a full URL starting with http:// or https://, without spaces (up to 2048 characters)',
       resourceTitle: 'Enter the file’s title in Arabic',
@@ -1094,6 +1145,45 @@ export const en: Translation = {
       deleteConfirm: 'Delete level “{{name}}” permanently?',
       deleted: 'Level deleted',
     },
+    subjects: {
+      hint: 'An inactive subject is visible to course managers only. A subject used by a course cannot be deleted — deactivate it instead.',
+      add: 'Add subject',
+      empty: 'No subjects yet',
+      columns: {
+        order: '#',
+        code: 'Code',
+        name: 'Name',
+        status: 'Status',
+        courseCount: 'Courses',
+      },
+      fields: {
+        code: 'Subject code',
+        nameAr: 'Name (Arabic)',
+        nameEn: 'Name (English)',
+        isActive: 'Active',
+      },
+      hints: {
+        code: 'Saved in capitals: Latin letters, digits and . _ - (up to 16), unique',
+        isActive: 'An inactive subject disappears from non-manager lists and stays on its courses',
+      },
+      validation: {
+        codeRequired: 'Enter the subject code',
+        codeFormat: 'Latin letters, digits and . _ - starting with a letter or digit (up to 16)',
+        nameArRequired: 'The Arabic name is required',
+      },
+      createTitle: 'New subject',
+      editTitle: 'Edit subject “{{name}}”',
+      create: 'Create subject',
+      created: 'Subject “{{name}}” created',
+      saved: 'Subject saved',
+      nothingChanged: 'Nothing to save',
+      moveUp: 'Move up',
+      moveDown: 'Move down',
+      reordered: 'Subject order updated',
+      delete: 'Delete',
+      deleteConfirm: 'Delete subject “{{name}}” permanently?',
+      deleted: 'Subject deleted',
+    },
     syllabus: {
       empty: 'No syllabus items yet',
       emptyManager: 'No syllabus items yet. Press “Edit syllabus” to add the lessons and topics in order.',
@@ -1156,6 +1246,16 @@ export const en: Translation = {
       level_in_use_many: 'This level cannot be deleted: {{count}} courses use it. Deactivate it instead.',
       level_in_use_other: 'This level cannot be deleted: {{count}} courses use it. Deactivate it instead.',
       level_order_invalid: 'The level list changed elsewhere; it was reloaded.',
+      subject_not_found: 'The selected subject no longer exists.',
+      subject_code_taken: 'Another subject already uses this code.',
+      subject_in_use: 'This subject cannot be deleted: {{count}} courses use it. Deactivate it instead.',
+      subject_in_use_one: 'This subject cannot be deleted: {{count}} course uses it. Deactivate it instead.',
+      subject_in_use_two: 'This subject cannot be deleted: {{count}} courses use it. Deactivate it instead.',
+      subject_in_use_few: 'This subject cannot be deleted: {{count}} courses use it. Deactivate it instead.',
+      subject_in_use_many: 'This subject cannot be deleted: {{count}} courses use it. Deactivate it instead.',
+      subject_in_use_other: 'This subject cannot be deleted: {{count}} courses use it. Deactivate it instead.',
+      subject_order_invalid: 'The subject list changed elsewhere; it was reloaded.',
+      subject_inactive: 'The selected subject is inactive; choose an active one.',
       syllabus_invalid: 'The syllabus changed elsewhere; it was reloaded. Please redo your edits.',
       fee_plan_not_found: 'The chosen fee plan no longer exists.',
       fee_plan_inactive: 'The chosen fee plan is inactive.',
@@ -4399,6 +4499,7 @@ export const en: Translation = {
   },
   forgotPassword: {
     link: 'Forgot your password?',
+    title: 'Forgot your password?',
     subtitle: 'Forgot your password',
     intro: 'Enter the e-mail address or username of your account. If it can receive e-mail, we send it a link to choose a new password.',
     identifier: 'E-mail or username',
@@ -4406,10 +4507,11 @@ export const en: Translation = {
     identifierTooLong: 'This is too long for an e-mail address or a username',
     submit: 'Send the link',
     submitting: 'Sending...',
-    sent: 'If an account matches what you entered, a link to choose a new password is on its way to its e-mail address. The link works for a limited time; check your spam folder too.',
+    sentTitle: 'Check your e-mail',
+    sent: 'If the account exists, you will receive a message with a link to choose a new password. The link works for a limited time, so check your spam folder too.',
     backToLogin: 'Back to sign-in',
     errors: {
-      reset_disabled: 'Resetting your password yourself is not available yet. Ask the academy administration for a reset link.',
+      reset_disabled: 'Resetting your password from the website is not enabled yet. Contact the academy administration to have it reset.',
       rate_limited: 'Too many requests in a short time. Wait 15 minutes and try again.',
     },
   },
@@ -4431,6 +4533,7 @@ export const en: Translation = {
   publicHome,
   courseCover,
   courseEnrollmentPanel,
+  studentRegistration,
   // Settings → Homepage images: the four pictures of /home the administration may replace.
   homepageImages,
 }

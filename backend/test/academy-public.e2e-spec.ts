@@ -31,7 +31,9 @@ const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}
 const USER_AGENT = `TEST-223 supertest ${RUN}`;
 const PUBLIC = '/api/academy/public';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
-const PUBLIC_KEYS = ['catalogPublic', 'defaultLocale', 'homepageImages', 'logoUrl', 'name'];
+const PUBLIC_KEYS = ['catalogPublic', 'defaultLocale', 'googleSignIn', 'googleSignUp', 'homepageImages', 'logoUrl', 'name', 'selfRegistration'];
+// PORTAL-04: Google sign-in is on when both client values reach the app (the env files or the process).
+const GOOGLE_CONFIGURED = Boolean(process.env['GOOGLE_OAUTH_CLIENT_ID'] && process.env['GOOGLE_OAUTH_CLIENT_SECRET']);
 /** API-205: 60 requests per minute per IP. */
 const LIMIT = 60;
 
@@ -80,7 +82,7 @@ describe.skipIf(!available)('MOD-02-T04 public academy branding (e2e, TEST-223)'
     expect(privateRead.body.code).toBe('unauthenticated');
   });
 
-  it('AC2 — exactly name, logoUrl, defaultLocale, catalogPublic (MOD-20) and homepageImages, equal to the stored row; never an id, slug, contact, zone, currency or settings', async () => {
+  it('AC2 — exactly name, logoUrl, defaultLocale, catalogPublic (MOD-20), homepageImages, selfRegistration (PORTAL-03) and googleSignIn/googleSignUp (PORTAL-04), equal to the stored row; never an id, slug, contact, zone, currency or settings', async () => {
     const res = await anonymous().expect(200);
     const row = await prisma.academy.findFirstOrThrow({ select: { slug: true, name: true, logoUrl: true, defaultLocale: true, contactEmail: true, contactPhone: true, settings: true } });
     expect(Object.keys(res.body).sort()).toEqual(PUBLIC_KEYS);
@@ -92,8 +94,15 @@ describe.skipIf(!available)('MOD-02-T04 public academy branding (e2e, TEST-223)'
       catalogPublic: readSettings(row.settings).catalog.publicBrowsing === true,
       // Homepage images: the public URL of each of the four pictures, null = the built-in default.
       homepageImages: publicHomepageImageUrls(row.settings, 'api'),
+      // TEST-320: vitest.config.e2e.ts forces MAIL_TRANSPORT=none, so it stays closed whatever the setting says.
+      selfRegistration: false,
+      // PORTAL-04: the server's Google configuration, and sign-up only with the self-registration setting too.
+      googleSignIn: GOOGLE_CONFIGURED,
+      googleSignUp: GOOGLE_CONFIGURED && readSettings(row.settings).selfRegistration.enabled === true,
     });
     expect(typeof res.body.catalogPublic).toBe('boolean');
+    expect(typeof res.body.googleSignIn).toBe('boolean');
+    expect(typeof res.body.googleSignUp).toBe('boolean');
     expect(Object.keys(res.body.name as object).every((locale) => ['ar', 'en', 'tr'].includes(locale))).toBe(true);
     const text = JSON.stringify(res.body);
     for (const secret of [row.contactEmail, row.contactPhone]) if (secret) expect(text).not.toContain(secret);
@@ -122,7 +131,7 @@ describe.skipIf(!available)('MOD-02-T04 public academy branding (e2e, TEST-223)'
   });
 
   it(
-    'AC5 — the OpenAPI document shows the route without a security scheme and the five-field schema',
+    'AC5 — the OpenAPI document shows the route without a security scheme and the eight-field schema',
     async () => {
       const docs = await api().get('/api/docs-json').expect(200);
       const path = docs.body.paths[PUBLIC];

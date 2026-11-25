@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { makeUserDetail } from '../test/users'
-import { ACCOUNT_ACTIONS, accountStateOf, allowedActions, availableAccountActions, canResetMfa, isActionPermitted, nextStatus, signsOut } from './users.status'
+import {
+  ACCOUNT_ACTIONS,
+  accountStateOf,
+  allowedActions,
+  availableAccountActions,
+  canResetMfa,
+  canUnlinkGoogle,
+  isActionPermitted,
+  nextStatus,
+  signsOut,
+} from './users.status'
 import type { AccountAction } from './users.status'
 
 const ADMIN = ['users.read', 'users.deactivate']
@@ -59,6 +69,21 @@ describe('availableAccountActions', () => {
     expect(availableAccountActions(gone, { permissions: ADMIN, selfId: 'me', contact: true })).toEqual([])
     expect(availableAccountActions(makeUserDetail({ status: 'invited' }), { permissions: ADMIN, selfId: 'me', contact: true })).toEqual(['delete'])
   })
+
+  it('hides «activate» on a self-registration awaiting its owner — the server answers 409 { allowed: [delete] } — and keeps every other rule', () => {
+    const awaiting = makeUserDetail({ status: 'pending', awaitingRegistration: true })
+    expect(availableAccountActions(awaiting, { permissions: ADMIN, selfId: 'me', contact: true })).toEqual(['delete'])
+    // A pending account approved by the office keeps «activate».
+    const approval = makeUserDetail({ status: 'pending', awaitingRegistration: false })
+    expect(availableAccountActions(approval, { permissions: ADMIN, selfId: 'me', contact: true })).toEqual(['activate', 'delete'])
+    // A detail from an older server (no field) keeps the plain rule.
+    const { awaitingRegistration: _absent, ...older } = approval
+    expect(availableAccountActions(older, { permissions: ADMIN, selfId: 'me', contact: true })).toEqual(['activate', 'delete'])
+    // The flag touches «activate» only: the other states and rules are unchanged.
+    const suspended = makeUserDetail({ status: 'suspended', awaitingRegistration: true })
+    expect(availableAccountActions(suspended, { permissions: ADMIN, selfId: 'me', contact: true })).toEqual(['archive', 'delete'])
+    expect(allowedActions('pending')).toEqual(['activate', 'delete'])
+  })
 })
 
 describe('canResetMfa (API-212 — beside the state machine, not part of it)', () => {
@@ -98,5 +123,28 @@ describe('canResetMfa (API-212 — beside the state machine, not part of it)', (
     expect(ACCOUNT_ACTIONS).toEqual(['activate', 'suspend', 'archive', 'restore', 'unlock', 'delete'])
     const withMfa = makeUserDetail({ status: 'active', mfaEnabledAt: ON })
     expect(availableAccountActions(withMfa, { permissions: [...ADMIN, 'users.update'], selfId: 'me', contact: true })).toEqual(['suspend', 'archive', 'delete'])
+  })
+})
+
+describe('canUnlinkGoogle (DELETE /api/users/:id/google-identity — beside the state machine, not part of it)', () => {
+  const LINKED = '2026-11-20T08:00:00.000Z'
+
+  it('offers the unlink with users.update while a Google account is visibly linked, on oneself too', () => {
+    const user = makeUserDetail({ status: 'active', googleLinkedAt: LINKED })
+    expect(canUnlinkGoogle(user, { permissions: SUPPORT })).toBe(true)
+    // users.deactivate does not replace users.update here.
+    expect(canUnlinkGoogle(user, { permissions: ADMIN })).toBe(false)
+    expect(canUnlinkGoogle(user, { permissions: ['users.read'] })).toBe(false)
+    // None linked — or unknown: the server sends null to a caller without users.read_contact.
+    expect(canUnlinkGoogle({ ...user, googleLinkedAt: null }, { permissions: SUPPORT })).toBe(false)
+    const { googleLinkedAt: _absent, ...older } = user
+    expect(canUnlinkGoogle(older, { permissions: SUPPORT })).toBe(false)
+  })
+
+  it('offers nothing on a soft-deleted account, and stays out of the mirrored state machine', () => {
+    const gone = makeUserDetail({ status: 'archived', deletedAt: '2026-10-30T10:00:00.000Z', googleLinkedAt: LINKED })
+    expect(canUnlinkGoogle(gone, { permissions: SUPPORT })).toBe(false)
+    const linked = makeUserDetail({ status: 'active', googleLinkedAt: LINKED })
+    expect(availableAccountActions(linked, { permissions: [...ADMIN, 'users.update'], selfId: 'me', contact: true })).toEqual(['suspend', 'archive', 'delete'])
   })
 })

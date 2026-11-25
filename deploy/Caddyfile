@@ -52,14 +52,18 @@
 	# Authorization are redacted by Caddy itself; the one-time tokens of
 	# /invite/<token>, /reset-password/<token>, /verify-email/<token> and of
 	# their /api/account/... calls (43 base64url characters) are cut from the URI
-	# and from the Referer a page sends with its own requests. Ids (uuid, 36
-	# characters) and cursors (query string) stay readable.
+	# and from the Referer a page sends with its own requests, and the two-step
+	# challenge of a Google sign-in from the Location of the callback's 302
+	# (/login#google-mfa=<challenge> — a fragment the browser never sends, but
+	# the response header is logged). Ids (uuid, 36 characters) and cursors
+	# (query string) stay readable.
 	log {
 		output stdout
 		format filter {
 			request>uri regexp /[A-Za-z0-9_-]{40,} /REDACTED
 			request>headers>Referer regexp /[A-Za-z0-9_-]{40,} /REDACTED
 			error regexp /[A-Za-z0-9_-]{40,} /REDACTED
+			resp_headers>Location regexp [A-Za-z0-9_-]{40,} REDACTED
 			wrap json
 		}
 	}

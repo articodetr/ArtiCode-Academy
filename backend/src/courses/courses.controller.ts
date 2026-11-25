@@ -12,6 +12,7 @@ import {
   ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AuthErrorDto } from '../auth/auth.dto.js';
@@ -72,7 +73,8 @@ export class CoursesController {
   })
   @ApiCreatedResponse({ type: CourseDto })
   @ApiBadRequestResponse({ description: 'Validation failed or `age_range_invalid`' })
-  @ApiNotFoundResponse({ description: 'level_not_found — `levelId` does not exist' })
+  @ApiNotFoundResponse({ description: 'level_not_found — `levelId` does not exist | subject_not_found — `subjectId` does not exist | fee_plan_not_found' })
+  @ApiUnprocessableEntityResponse({ description: 'subject_inactive — the subject is deactivated | fee_plan_inactive | fee_plan_mismatch' })
   @ApiConflictResponse({ description: 'course_code_taken' })
   create(@Body() body: CreateCourseDto, @CurrentUser() caller: AuthPrincipal, @Req() req: Request): Promise<CourseDto> {
     return this.courses.create(body, caller, requestContext(req));
@@ -89,7 +91,8 @@ export class CoursesController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: CourseDto })
   @ApiBadRequestResponse({ description: 'Validation failed, `nothing_to_update` or `age_range_invalid`' })
-  @ApiNotFoundResponse({ description: 'course_not_found | level_not_found' })
+  @ApiNotFoundResponse({ description: 'course_not_found | level_not_found | subject_not_found | fee_plan_not_found' })
+  @ApiUnprocessableEntityResponse({ description: 'subject_inactive — a deactivated subject cannot be given (a course keeps one deactivated later) | fee_plan_inactive | fee_plan_mismatch' })
   @ApiConflictResponse({ description: 'course_code_taken' })
   update(
     @Param('id', new ParseUUIDPipe()) id: string,

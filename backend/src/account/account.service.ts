@@ -22,7 +22,7 @@ import type {
   RequestEmailVerificationResponseDto,
 } from './account.dto.js';
 import { maskEmail, maskUsername } from './account.masking.js';
-import { VerificationTokenService } from './verification-token.service.js';
+import { VerificationTokenService, isSelfRegistrationToken } from './verification-token.service.js';
 
 export const ACCOUNT_AUDIT_ACTIONS = {
   invitationIssued: 'users.invitation.issued',
@@ -549,7 +549,11 @@ export class AccountService {
       where: { tokenHash: this.tokens.hash(token) },
       select: VERIFICATION_SELECT,
     });
-    if (!row || row.purpose !== 'email_verification' || row.consumedAt !== null) throw usersError.verificationInvalid();
+    // A self-registration token (PORTAL-03) has the same purpose but only completes a registration
+    // (POST /api/account/register/:token/complete): this route never accepts it, whatever its state.
+    if (!row || row.purpose !== 'email_verification' || isSelfRegistrationToken(row) || row.consumedAt !== null) {
+      throw usersError.verificationInvalid();
+    }
     const now = new Date();
     if (row.expiresAt <= now) throw usersError.verificationExpired(row.expiresAt);
     const email = issuedForEmail(row.metadata);

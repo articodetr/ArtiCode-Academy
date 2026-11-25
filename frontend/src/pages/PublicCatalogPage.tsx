@@ -17,17 +17,28 @@
 // (`?q=`), so a refresh, a shared link and the browser's back button from a
 // course page keep it; each card's link carries it on to the course page
 // (`/explore/:id?q=`), whose «العودة إلى الدورات» leads back to the same
-// results. Only the server's filter exists — the search — so no
-// other filter is offered (a category or price filter needs API-236 to support
-// it first — #205).
+// results. Only the search is offered (a category or price filter needs API-236
+// to support it first — #205). PORTAL-04: API-236 now takes a `subjectId`, but
+// no subject filter is offered here: the subject list (GET /api/subjects) needs
+// a session, and options taken from the cards already read would name only the
+// subjects of those pages. The closed panel offers a new account while API-205
+// says one may be created by e-mail or through Google (accountCreationOpen()).
 import { DisconnectOutlined, InboxOutlined, LockOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Breadcrumb, Button, Col, Input, Row, Skeleton, Typography } from 'antd'
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { usePublicAcademy } from '../academy/usePublicAcademy'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import { PublicCourseCard } from '../publicCatalog/PublicCourseCard'
-import { PUBLIC_SEARCH_DELAY_MS, PUBLIC_SEARCH_MAX_LENGTH, exploreSearchOf, publicCoursePathFor, publicFailureKey } from '../publicCatalog/publicCatalog.view'
+import {
+  PUBLIC_SEARCH_DELAY_MS,
+  PUBLIC_SEARCH_MAX_LENGTH,
+  accountCreationOpen,
+  exploreSearchOf,
+  publicCoursePathFor,
+  publicFailureKey,
+} from '../publicCatalog/publicCatalog.view'
 import { PublicOnly, PublicShell } from '../publicCatalog/PublicShell'
 import { PublicTitle } from '../publicCatalog/PublicTitle'
 import { PublicAcademyNameContext } from '../publicCatalog/pageTitle'
@@ -42,14 +53,22 @@ const SKELETON_CARDS = 6
 export function PublicCatalogPage() {
   return (
     <PublicOnly signedInTo="/catalog">
-      <PublicShell bleed>
-        <PublicCatalogList />
-      </PublicShell>
+      <PublicCatalogFrame />
     </PublicOnly>
   )
 }
 
-function PublicCatalogList() {
+/** Reads API-205 once, for the shell and for whether the closed panel may offer a new account. */
+function PublicCatalogFrame() {
+  const academy = usePublicAcademy()
+  return (
+    <PublicShell academy={academy} bleed>
+      <PublicCatalogList registrationOpen={accountCreationOpen(academy.academy)} />
+    </PublicShell>
+  )
+}
+
+function PublicCatalogList({ registrationOpen }: { registrationOpen: boolean }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const academy = useContext(PublicAcademyNameContext)
@@ -152,11 +171,18 @@ function PublicCatalogList() {
               tone="info"
               icon={<LockOutlined />}
               title={t('publicCatalog.closed.title')}
-              text={t('publicCatalog.closed.text')}
+              text={t(registrationOpen ? 'studentRegistration.entry.accountsNote' : 'publicCatalog.closed.text')}
               action={
-                <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
-                  {t('publicCatalog.closed.signIn')}
-                </Button>
+                <>
+                  <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
+                    {t('publicCatalog.closed.signIn')}
+                  </Button>
+                  {registrationOpen ? (
+                    <Link to="/register" className="public-register-link">
+                      {t('studentRegistration.entry.createAccount')}
+                    </Link>
+                  ) : null}
+                </>
               }
             />
           ) : (

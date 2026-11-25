@@ -1,7 +1,8 @@
 // «Explore courses» (MOD-19, roadmap §4p): GET /api/catalog/courses (API-219)
 // for the learners — the published courses only, whatever the reader's other
 // keys (D-R129). A search box (sent ~300 ms after the last keystroke), the
-// course type (free / paid), the level and «open for enrollment now» filters,
+// course type (free / paid), the school subject (PORTAL-04 — it replaced the
+// difficulty level; options from GET /api/subjects) and «open for enrollment now» filters,
 // a responsive card grid and keyset pages. Every number is the server's; a
 // card leads to the course page (/catalog/:courseId), where a class is chosen
 // and the enrollment is made. The route opens to the `student`/`guardian`
@@ -17,7 +18,7 @@ import { CATALOG_SEARCH_DELAY_MS, CATALOG_SEARCH_MAX_LENGTH, isCatalogNarrowed }
 import { CourseCard } from '../catalog/CourseCard'
 import { useCatalogList } from '../catalog/useCatalogList'
 import { PageHeader } from '../components/PageHeader'
-import { useLevels } from '../courses/useLevels'
+import { useSubjects } from '../courses/useSubjects'
 import { useLocalized } from '../i18n/useLocalized'
 import { enrollIntentPath } from '../publicCatalog/publicCatalog.view'
 import { localizedLabel } from '../users/users.format'
@@ -30,7 +31,7 @@ export function CatalogPage() {
   const navigate = useNavigate()
   const list = useCatalogList()
   const { filters, setFilters } = list
-  const { levels } = useLevels()
+  const { subjects } = useSubjects()
   const [search, setSearch] = useState(filters.q ?? '')
 
   // The search box asks the server once the typing pauses.
@@ -44,7 +45,7 @@ export function CatalogPage() {
   const narrowed = isCatalogNarrowed(filters)
   const clearFilters = () => {
     setSearch('')
-    setFilters({ q: undefined, pricing: undefined, levelId: undefined, available: undefined })
+    setFilters({ q: undefined, pricing: undefined, subjectId: undefined, available: undefined })
   }
   const open = (courseId: string) => navigate(`/catalog/${courseId}`)
   const enroll = (courseId: string) => navigate(enrollIntentPath(courseId))
@@ -82,11 +83,11 @@ export function CatalogPage() {
           />
           <Select<string | undefined>
             allowClear
-            aria-label={t('catalog.levelLabel')}
-            placeholder={t('catalog.levelAll')}
-            value={filters.levelId}
-            onChange={(value) => setFilters({ levelId: value || undefined })}
-            options={levels.filter((level) => level.isActive).map((level) => ({ value: level.id, label: localizedLabel(level.name, language) }))}
+            aria-label={t('catalog.subjectLabel')}
+            placeholder={t('catalog.subjectAll')}
+            value={filters.subjectId}
+            onChange={(value) => setFilters({ subjectId: value || undefined })}
+            options={subjects.filter((subject) => subject.isActive).map((subject) => ({ value: subject.id, label: localizedLabel(subject.name, language) }))}
             style={{ minWidth: 160 }}
           />
           <Space size={6}>

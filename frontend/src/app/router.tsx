@@ -22,6 +22,7 @@ import { ClassesPage } from '../pages/ClassesPage'
 import { CoursesPage } from '../pages/CoursesPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { ExamsPage } from '../pages/ExamsPage'
+import { GoogleDonePage } from '../pages/GoogleDonePage'
 import { LessonsPage } from '../pages/LessonsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { MyAssignmentsPage } from '../pages/MyAssignmentsPage'
@@ -39,6 +40,8 @@ import { QuestionBanksPage } from '../pages/QuestionBanksPage'
 import { ReportsPage } from '../pages/ReportsPage'
 import { SchedulePage } from '../pages/SchedulePage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { StudentRegisterCompletePage } from '../pages/StudentRegisterCompletePage'
+import { StudentRegisterPage } from '../pages/StudentRegisterPage'
 import { TakeExamPage } from '../pages/TakeExamPage'
 import { UsersPage } from '../pages/UsersPage'
 import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
@@ -56,10 +59,16 @@ function ToMyClasses() {
 
 // Paths mirror NAV_ITEMS in ../layout/navigation.ts.
 const router = createBrowserRouter([
+  // `?returnTo=` (a path of this site — auth/returnPath.ts), and Google's verdicts `?google=<code>` and `#google-mfa=…`.
   { path: '/login', element: <LoginPage /> },
+  // PORTAL-04: Google's callback set the session cookie and sent the browser here (`?returnTo=`); waits for the session.
+  { path: '/auth/google/done', element: <GoogleDonePage /> },
   // Public token pages (MOD-03-T12): the one-time link is the only credential.
   { path: '/invite/:token', element: <InvitationPage /> },
   { path: '/reset-password/:token', element: <ResetPasswordPage /> },
+  // PORTAL-04 (#207): the e-mail way is closed unless API-205 says selfRegistration, Google's unless it says googleSignUp.
+  { path: '/register', element: <StudentRegisterPage /> },
+  { path: '/register/complete/:token', element: <StudentRegisterCompletePage /> }, // the e-mailed link; opens no session
   // Public certificate verification (J-F51 — API-134, D-R56): no sign-in; the printed code is the only input.
   // E-mail confirmation (API-166 — the link the server e-mails is <APP_PUBLIC_URL>/verify-email/<token>) and the
   // self-service reset request (API-021).

@@ -24,6 +24,13 @@
 //   fee_plan_not_found    404  — no fee plan with this id ({ feePlanId })
 //   fee_plan_inactive     422  — the plan is deactivated ({ feePlanId })
 //   fee_plan_mismatch     422  — the plan prices a class, or another course ({ feePlanId, courseId })
+//   -- PORTAL-04: the school subjects (/api/subjects) and the course subject --
+//   subject_not_found     404  — no subject with this id ({ subjectId })
+//   subject_code_taken    409  — another subject already uses the code ({ subjectCode })
+//   subject_in_use        409  — courses still point at the subject ({ courseCount })
+//   subject_order_invalid 400  — the order list is not a permutation of every
+//                                subject ({ missing, unknown, duplicates })
+//   subject_inactive      422  — a course may not be given a deactivated subject ({ subjectId })
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -44,6 +51,11 @@ export const COURSES_ERROR_CODES = [
   'fee_plan_not_found',
   'fee_plan_inactive',
   'fee_plan_mismatch',
+  'subject_not_found',
+  'subject_code_taken',
+  'subject_in_use',
+  'subject_order_invalid',
+  'subject_inactive',
   // J-F67: the course's materials, checked as a lesson's resources.
   'resources_invalid',
 ] as const;
@@ -80,6 +92,9 @@ export interface LevelOrderProblems {
   unknown: string[];
   duplicates: string[];
 }
+
+/** PORTAL-04: the same three lists for the subjects order. */
+export type SubjectOrderProblems = LevelOrderProblems;
 
 export const coursesError = {
   levelNotFound: (levelId: string) =>
@@ -157,4 +172,25 @@ export const coursesError = {
       'Only a general fee plan or a plan of this course (not of a class) can price the course',
       { feePlanId, courseId },
     ),
+  subjectNotFound: (subjectId: string) =>
+    new CoursesHttpException(HttpStatus.NOT_FOUND, 'subject_not_found', 'No subject with this id', { subjectId }),
+  // The detail is `subjectCode`, never `code`: a `code` detail would overwrite the error code.
+  subjectCodeTaken: (subjectCode: string) =>
+    new CoursesHttpException(HttpStatus.CONFLICT, 'subject_code_taken', 'Another subject already uses this code', { subjectCode }),
+  subjectInUse: (courseCount: number) =>
+    new CoursesHttpException(
+      HttpStatus.CONFLICT,
+      'subject_in_use',
+      'Courses still use this subject; move them to another subject or deactivate it instead',
+      { courseCount },
+    ),
+  subjectOrderInvalid: (problems: SubjectOrderProblems) =>
+    new CoursesHttpException(
+      HttpStatus.BAD_REQUEST,
+      'subject_order_invalid',
+      'The order must list every subject exactly once',
+      { ...problems },
+    ),
+  subjectInactive: (subjectId: string) =>
+    new CoursesHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'subject_inactive', 'The subject is deactivated', { subjectId }),
 };

@@ -143,6 +143,8 @@ model User {
   lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(6)
   passwordChangedAt  DateTime?  @map("password_changed_at") @db.Timestamptz(6)
   mustChangePassword Boolean    @default(false) @map("must_change_password")
+  /// PORTAL-04: set when the visitor created the account (e-mail self-registration or Google); null = created by the academy.
+  selfRegisteredAt   DateTime?  @map("self_registered_at") @db.Timestamptz(6)
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   /// Soft delete (D7): the row stays because history refers to it.
@@ -168,6 +170,7 @@ model User {
   guardians               GuardianStudent[]        @relation("GuardianStudentStudent")
   refreshTokens           RefreshToken[]
   verificationTokens      VerificationToken[]
+  identities              UserIdentity[]
   auditLogs               AuditLog[]
   /// Courses this user created (MOD-04); the link is cleared if the user row goes.
   coursesCreated          Course[]                 @relation("CourseCreatedBy")
@@ -471,6 +474,8 @@ model Course {
   /// MOD-19 (D-R122): the fee plan that prices a self-service enrollment; null = a free course.
   /// NO ACTION: a plan a course points to cannot be deleted (409 fee_plan_in_use).
   enrollmentFeePlanId String?      @map("enrollment_fee_plan_id") @db.Uuid
+  /// PORTAL-04: the school subject the course teaches (subjects); null = not set.
+  subjectId           String?      @map("subject_id") @db.Uuid
   minAge              Int?         @map("min_age") @db.SmallInt
   maxAge              Int?         @map("max_age") @db.SmallInt
   createdById         String?      @map("created_by") @db.Uuid
@@ -478,6 +483,7 @@ model Course {
   updatedAt           DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   level             Level?               @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  subject           Subject?             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   createdBy         User?                @relation("CourseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   syllabusItems     CourseSyllabusItem[]
   /// MOD-05: runs of this course (Restrict — a course with classes cannot be deleted).
@@ -499,6 +505,7 @@ model Course {
   @@index([levelId])
   @@index([createdById])
   @@index([enrollmentFeePlanId])
+  @@index([subjectId])
   @@map("courses")
 }
 
@@ -1948,4 +1955,52 @@ model ExamAnswer {
   @@id([attemptId, examQuestionId])
   @@index([examQuestionId])
   @@map("exam_answers")
+}
+
+// PORTAL-04 — course subjects and Google sign-in identities
+// (feature/student-registration-google-auth). Subjects are managed like levels
+// (MOD-04): a course picks at most one; the levels table stays the course's
+// difficulty and the curriculum levels stay course_sections.
+
+/// A school subject a course teaches (الرياضيات، الفيزياء …), managed in /courses like the levels.
+model Subject {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  code      String   @unique @db.VarChar(16)
+  /// Localized text `{ ar, en?, tr? }` (D1); `ar` is required (CHECK in SQL).
+  name      Json
+  sortOrder Int      @map("sort_order") @db.SmallInt
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  courses Course[]
+
+  @@unique([sortOrder], map: "uq_subjects_sort_order")
+  @@map("subjects")
+}
+
+/// An outside sign-in provider linked to an account.
+enum IdentityProvider {
+  google
+
+  @@map("identity_provider")
+}
+
+/// One outside identity of an account (Google sign-in): the provider's stable subject, never a credential.
+model UserIdentity {
+  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  provider        IdentityProvider
+  /// The provider's stable subject (`sub` of the ID token) — the key of the link, never the e-mail.
+  providerSubject String           @map("provider_subject") @db.VarChar(255)
+  /// The verified e-mail the provider reported when the identity was linked (lower-cased; informational).
+  email           String?          @db.VarChar(320)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt      DateTime?        @map("last_used_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject], map: "uq_user_identities_provider_subject")
+  @@unique([userId, provider], map: "uq_user_identities_user_provider")
+  @@map("user_identities")
 }

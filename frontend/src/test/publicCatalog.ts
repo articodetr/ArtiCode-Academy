@@ -12,6 +12,7 @@ export function makePublicCard(overrides: Partial<PublicCourseCard> = {}): Publi
     summary: { ar: 'مدخل عملي إلى البرمجة', en: 'A hands-on start in programming' },
     coverImageUrl: 'https://cdn.example.org/py.jpg',
     level: { id: '0194a000-0000-7000-8000-00000000b101', name: { ar: 'مبتدئ', en: 'Beginner' } },
+    subject: { id: '0194a000-0000-7000-8000-00000000a101', name: { ar: 'البرمجة', en: 'Programming' } },
     durationHours: 24,
     sessionsCount: 12,
     pricing: 'free',

@@ -24,12 +24,13 @@ const ROW = {
 const CALLER = { id: 'user-1', permissions: ['academy.settings.manage'] } as unknown as AuthPrincipal;
 const CTX = { ip: '127.0.0.1', userAgent: 'vitest' };
 
-function makeService(row: typeof ROW | null) {
+function makeService(row: typeof ROW | null, mailTransport = 'none', env: Record<string, string> = {}) {
   const findFirst = vi.fn().mockResolvedValue(row);
   const transaction = vi.fn();
   const record = vi.fn();
   const prisma = { db: { academy: { findFirst }, $transaction: transaction } };
-  const config = { get: () => 'api' };
+  const values: Record<string, string> = { API_PREFIX: 'api', ...env, MAIL_TRANSPORT: mailTransport };
+  const config = { get: vi.fn((key: string) => values[key]) };
   const service = new AcademyService(prisma as never, { record } as never, config as never);
   return { service, findFirst, transaction, record };
 }
@@ -81,6 +82,7 @@ describe('AcademyService', () => {
       certificates: { serialPrefix: null },
       learning: { videoCompletionPercent: null },
       catalog: { publicBrowsing: null },
+      selfRegistration: { enabled: null },
     });
 
     const same = await service.update({ currency: 'SAR', name: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' }, logoUrl: null }, CALLER, CTX);
@@ -101,8 +103,44 @@ describe('AcademyService', () => {
     for (const [settings, expected] of cases) {
       const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings });
       const dto = await service.getPublic();
-      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'homepageImages', 'logoUrl', 'name']);
+      expect(Object.keys(dto).sort()).toEqual(['catalogPublic', 'defaultLocale', 'googleSignIn', 'googleSignUp', 'homepageImages', 'logoUrl', 'name', 'selfRegistration']);
       expect(dto.catalogPublic, JSON.stringify(settings)).toBe(expected);
+    }
+  });
+
+  it('API-205 answers selfRegistration true only with the setting exactly true AND a mail transport (PORTAL-03, TEST-320)', async () => {
+    const cases: Array<[unknown, string, boolean]> = [
+      [{}, 'resend', false],
+      [{ selfRegistration: { enabled: false } }, 'resend', false],
+      [{ selfRegistration: { enabled: 'true' } }, 'resend', false],
+      [{ selfRegistration: { enabled: true } }, 'none', false],
+      [{ selfRegistration: { enabled: true } }, 'log', true],
+      [{ selfRegistration: { enabled: true } }, 'resend', true],
+    ];
+    for (const [settings, transport, expected] of cases) {
+      const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings }, transport);
+      expect((await service.getPublic()).selfRegistration, `${JSON.stringify(settings)} ${transport}`).toBe(expected);
+    }
+  });
+
+  it('API-205 answers googleSignIn when both Google client values are set, and googleSignUp only with the self-registration setting too — no mail transport needed (PORTAL-04)', async () => {
+    const both = { GOOGLE_OAUTH_CLIENT_ID: 'client.apps.googleusercontent.com', GOOGLE_OAUTH_CLIENT_SECRET: 'test-only-secret' };
+    const cases: Array<[unknown, Record<string, string>, boolean, boolean]> = [
+      [{ selfRegistration: { enabled: true } }, {}, false, false],
+      [{ selfRegistration: { enabled: true } }, { GOOGLE_OAUTH_CLIENT_ID: both.GOOGLE_OAUTH_CLIENT_ID }, false, false],
+      [{}, both, true, false],
+      [{ selfRegistration: { enabled: false } }, both, true, false],
+      [{ selfRegistration: { enabled: 'true' } }, both, true, false],
+      [{ selfRegistration: { enabled: true } }, both, true, true],
+    ];
+    for (const [settings, env, signIn, signUp] of cases) {
+      // MAIL_TRANSPORT=none: Google sign-up does not depend on a transport, the e-mail sign-up does.
+      const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings }, 'none', env);
+      const dto = await service.getPublic();
+      const label = `${JSON.stringify(settings)} ${Object.keys(env).join(',')}`;
+      expect(dto.googleSignIn, label).toBe(signIn);
+      expect(dto.googleSignUp, label).toBe(signUp);
+      expect(dto.selfRegistration, label).toBe(false);
     }
   });
 

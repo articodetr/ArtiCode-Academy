@@ -1,7 +1,8 @@
 // Maps a failed courses/levels/syllabus request to a translation key (and,
 // where the backend code points at one input, the form field that should carry
 // the message). Codes: backend/src/courses/courses.errors.ts plus the
-// auth/permission guards.
+// auth/permission guards. PORTAL-04: the subject codes (`subject_*`) of the same
+// dictionary (backend courses.errors.ts) — the subjects tab and the course subject.
 import { ApiError } from '../api/client'
 import { failureMessage as usersFailureMessage } from '../users/users.errors'
 import type { UsersFailure } from '../users/users.errors'
@@ -12,7 +13,8 @@ export type CoursesFailure = UsersFailure
 type Translate = (key: string, options?: Record<string, unknown>) => string
 
 /**
- * The failure's text (users.errors' `failureMessage`), except that the course count of `level_in_use` reaches i18next
+ * The failure's text (users.errors' `failureMessage`), except that the course count of `level_in_use` (and of
+ * `subject_in_use`) reaches i18next
  * as the number `count`, which picks the plural form — «تستخدمه دورة واحدة», «دورتان», «3 دورات»; a string count picks
  * none (CH-0297).
  */
@@ -33,6 +35,11 @@ const KNOWN_CODES = new Set([
   'level_code_taken',
   'level_in_use',
   'level_order_invalid',
+  'subject_not_found',
+  'subject_code_taken',
+  'subject_in_use',
+  'subject_order_invalid',
+  'subject_inactive',
   'syllabus_invalid',
   // MOD-19 (D-R122): the plan that prices a request
   'fee_plan_not_found',
@@ -47,8 +54,10 @@ const KNOWN_CODES = new Set([
 const FIELD_OF_CODE: Readonly<Record<string, string[]>> = {
   course_code_taken: ['code'],
   level_code_taken: ['code'],
-  age_range_invalid: ['maxAge'],
+  subject_code_taken: ['code'],
   level_not_found: ['levelId'],
+  subject_not_found: ['subjectId'],
+  subject_inactive: ['subjectId'],
   fee_plan_not_found: ['enrollmentFeePlanId'],
   fee_plan_inactive: ['enrollmentFeePlanId'],
   fee_plan_mismatch: ['enrollmentFeePlanId'],

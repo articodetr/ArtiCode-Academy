@@ -7,7 +7,7 @@ import { RequireAccess } from '../auth/RequireAuth'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
-import { makeChildCourse, makeLearningCourse, makeProgress } from '../mySchool/mySchool.fixtures'
+import { LEARNING_SUBJECT, makeChildCourse, makeLearningCourse, makeProgress } from '../mySchool/mySchool.fixtures'
 import { REQUEST_IDS, makeMyRequest, makeMyRequestList } from '../test/catalog'
 import { ENROLLMENT_IDS, ROSTER_TEACHER_PERMISSIONS, STUDENT_IDS, makeMyClassItem, makeMyClassList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
@@ -179,6 +179,25 @@ describe('MyClassesPage', () => {
       unmount()
     }
     expect(api.urls).toEqual([])
+  })
+
+  it('names the course’s school subject on its card and never its difficulty level (PORTAL-04)', async () => {
+    const base = makeLearningCourse().course
+    const withSubject = makeLearningCourse({ enrollmentId: own.enrollmentId, course: { ...base, subject: LEARNING_SUBJECT, level: { id: '0195a000-0000-7000-8000-00000000b201', name: { ar: 'مستوى متقدّم', en: 'Advanced' } } } })
+    mockMyClassesApi(makeMyClassList([own]), { learning: [withSubject] })
+    renderPage(['student'])
+
+    const subject = await screen.findByTestId('class-card-subject')
+    expect(screen.getByTestId(`class-card-${own.enrollmentId}`)).toContainElement(subject)
+    expect(subject).toHaveTextContent(LEARNING_SUBJECT.name.ar)
+    expect(screen.queryByText('مستوى متقدّم')).not.toBeInTheDocument()
+  })
+
+  it('shows no subject badge when the course has none (PORTAL-04)', async () => {
+    mockMyClassesApi(makeMyClassList([own]), { learning: [makeLearningCourse({ enrollmentId: own.enrollmentId })] })
+    renderPage(['student'])
+    await screen.findByTestId(`class-progress-${own.enrollmentId}`)
+    expect(screen.queryByTestId('class-card-subject')).not.toBeInTheDocument()
   })
 
   it('shows the progress of each class on its card and opens its lessons from there (J-F61, J-F67)', async () => {

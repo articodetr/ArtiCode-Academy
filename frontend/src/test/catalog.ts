@@ -24,6 +24,7 @@ export function makeCatalogCard(overrides: Partial<CatalogCourseCard> = {}): Cat
     summary: { ar: 'مدخل عملي إلى البرمجة', en: 'A hands-on start in programming' },
     coverImageUrl: 'https://cdn.example.org/py.jpg',
     level: { id: '0193a000-0000-7000-8000-00000000b001', code: 'BEG', name: { ar: 'مبتدئ', en: 'Beginner' } },
+    subject: { id: '0193a000-0000-7000-8000-00000000a001', name: { ar: 'البرمجة', en: 'Programming' } },
     durationHours: 24,
     sessionsCount: 12,
     syllabusCount: 3,

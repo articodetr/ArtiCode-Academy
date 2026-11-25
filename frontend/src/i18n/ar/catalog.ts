@@ -12,8 +12,9 @@ export const catalog = {
   pricingAll: 'كل الدورات',
   free: 'مجانية',
   paid: 'مدفوعة',
-  levelLabel: 'المستوى',
-  levelAll: 'كل المستويات',
+  // PORTAL-04: the list narrows by school subject (it replaced the difficulty level).
+  subjectLabel: 'المادة',
+  subjectAll: 'كل المواد',
   availableOnly: 'المتاح للتسجيل الآن',
   refresh: 'تحديث',
   retry: 'إعادة المحاولة',
@@ -25,9 +26,10 @@ export const catalog = {
   clearFilters: 'مسح المرشّحات',
   loadError: 'تعذّر تحميل الدورات.',
   card: {
-    level: 'مستوى الصعوبة',
+    // PORTAL-04: the course's school subject; the course page's facts read المادة · المدة · المحتوى · الرسوم.
+    subject: 'المادة',
     duration: 'المدة (ساعات)',
-    sessions: 'عدد الجلسات',
+    content: 'المحتوى',
     syllabus: 'محاور المنهج',
     price: 'الرسوم',
     priceUnavailable: 'الرسوم غير متاحة حالياً',
@@ -45,10 +47,6 @@ export const catalog = {
     back: 'العودة إلى الدورات',
     notFound: 'الدورة غير موجودة أو لم تعد منشورة.',
     loadError: 'تعذّر تحميل الدورة.',
-    age: 'الفئة العمرية',
-    ageRange: 'من {{min}} إلى {{max}} سنة',
-    ageFrom: 'من {{min}} سنة',
-    ageTo: 'حتى {{max}} سنة',
     installments: 'عدد الأقساط',
     lockedNote: 'الدروس والواجبات والاختبارات ومواد الدورة تُفتح لك بعد تفعيل تسجيلك.',
     classes: 'الفصول',
@@ -68,10 +66,10 @@ export const catalog = {
     mine: {
       studyingTitle: 'أنت ملتحق بهذه الدورة',
       studyingText: 'فصلك: «{{className}}». تابع دروسك في مساحة التعلم.',
-      continue: 'واصل التعلم',
+      // PORTAL-04: the way into the learning workspace of a course one studies or completed.
+      goToCourse: 'انتقل إلى الدورة',
       completedTitle: 'أكملت هذه الدورة',
       completedText: 'فصلك: «{{className}}». يمكنك مراجعة دروسها في مساحة التعلم.',
-      review: 'راجع الدورة',
       pendingTitle: 'لديك طلب التحاق بهذه الدورة',
       pendingText: 'فصل «{{className}}»:',
       requests: 'طلباتي',

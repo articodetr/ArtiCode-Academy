@@ -1,10 +1,10 @@
 // One course of «explore courses» (MOD-19, API-219), in the look of the public course card (the same classes and
 // CardMedia; `public-card--app` carries the tokens inside the signed-in layout and keeps the app's font). What the
-// server says of it: cover, name, summary, the badges (difficulty = `course.level`, duration), sessions, the syllabus,
-// the classes open with a seat, the lead teachers by name, the price, and the reader's own enrollment or pending
-// request. Both actions lead to the course page: «عرض الدورة» only opens it, while the enroll action carries the
-// intent, so the page asks for the confirmation when one class takes the reader.
-import { CalendarOutlined, ReadOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
+// server says of it: cover, name, summary, the badges (the school subject = `course.subject` since PORTAL-04, duration),
+// the syllabus, the classes open with a seat, the lead teachers by name, the price, and the reader's own enrollment or
+// pending request — no sessions since PORTAL-04. Both actions lead to the course page: «عرض الدورة» only opens it,
+// while the enroll action carries the intent, so the page asks for the confirmation when one class takes the reader.
+import { ReadOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
 import { Typography } from 'antd'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -56,11 +56,6 @@ export function CourseCard({ card, onOpen, onEnroll }: { card: CatalogCourseCard
           </Typography.Paragraph>
         ) : null}
         <ul className="public-card__facts">
-          {card.sessionsCount !== null ? (
-            <LabelledFact icon={<CalendarOutlined />} label={t('catalog.card.sessions')}>
-              <bdi dir="ltr">{card.sessionsCount}</bdi>
-            </LabelledFact>
-          ) : null}
           <LabelledFact icon={<ReadOutlined />} label={t('catalog.card.syllabus')}>
             <bdi dir="ltr">{card.syllabusCount}</bdi>
           </LabelledFact>

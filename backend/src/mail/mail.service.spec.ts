@@ -15,9 +15,11 @@ import {
   TEMPLATE_LOCALES,
   formatExpiry,
   renderEmailVerification,
+  renderExistingAccount,
   renderInvitation,
   renderNotificationMail,
   renderPasswordReset,
+  renderRegistration,
   subjectTitle,
   templateLocale,
 } from './mail.templates.js';
@@ -358,6 +360,58 @@ describe('MailService (TEST-017)', () => {
     expect(transport.sent[0]!.text).toContain(`https://academy.example/verify-email/${TOKEN}`);
     expect(transport.sent[1]!.subject).toBe('تأكيد بريدك الإلكتروني في أكاديمية آرتي');
     expect(service.emailVerificationLink(TOKEN)).toBe(`https://academy.example/verify-email/${TOKEN}`);
+  });
+
+  // PORTAL-03 (#207): the two self-registration e-mails carry nothing the visitor typed.
+  it('sends the registration link and the existing-account notice in the asked locale, with no name, and records their delivery', async () => {
+    const transport = new CapturingTransport();
+    const audit = recordingAudit();
+    const service = new MailService(transport, prismaWith(ACADEMY), configWith('https://academy.example'), audit);
+
+    await service.sendRegistration({ userId: USER_ID, to: 'sara@example.test', locale: 'en', token: TOKEN, expiresAt: EXPIRES });
+    await service.sendRegistration({ userId: USER_ID, to: 'sara@example.test', locale: null, token: TOKEN, expiresAt: EXPIRES });
+    await service.sendExistingAccountNotice({ userId: USER_ID, to: 'sara@example.test', locale: 'tr' });
+    await service.sendExistingAccountNotice({ userId: USER_ID, to: 'sara@example.test', locale: null });
+
+    expect(transport.sent.map((message) => [message.kind, message.locale])).toEqual([
+      ['registration', 'en'],
+      ['registration', 'ar'],
+      ['registration_existing', 'tr'],
+      ['registration_existing', 'ar'],
+    ]);
+    const [en, ar, tr, existingAr] = transport.sent;
+    expect(en!.subject).toBe('Confirm your e-mail to finish creating your Arti Academy account');
+    expect(en!.text).toContain(`https://academy.example/register/complete/${TOKEN}`);
+    expect(en!.text.startsWith('Hello,\n')).toBe(true);
+    // Contract v3: the link activates the account only with the password chosen at registration — the mail says so.
+    expect(en!.text).toContain('enter the password you chose when you registered');
+    expect(ar!.subject).toBe('أكّد بريدك الإلكتروني لإكمال إنشاء حسابك في أكاديمية آرتي');
+    expect(ar!.text).toContain('أدخل كلمة المرور التي اخترتها عند التسجيل');
+    // The academy has no Turkish name: it falls back to the default locale's (D1).
+    expect(tr!.subject).toBe('أكاديمية آرتي bünyesinde zaten bir hesabınız var');
+    expect(tr!.text).toContain('https://academy.example/login');
+    expect(existingAr!.subject).toBe('لديك حساب بالفعل في أكاديمية آرتي');
+    expect(existingAr!.text).not.toContain(TOKEN);
+    expect(service.registrationLink(TOKEN)).toBe(`https://academy.example/register/complete/${TOKEN}`);
+    expect(service.loginLink()).toBe('https://academy.example/login');
+    expect(audit.entries.map((entry) => entry.metadata)).toEqual([
+      { kind: 'registration', transport: 'fake', messageId: 'm-1' },
+      { kind: 'registration', transport: 'fake', messageId: 'm-2' },
+      { kind: 'registration_existing', transport: 'fake', messageId: 'm-3' },
+      { kind: 'registration_existing', transport: 'fake', messageId: 'm-4' },
+    ]);
+  });
+
+  it('has the two self-registration templates in every locale, with the link and without any typed text', () => {
+    for (const locale of TEMPLATE_LOCALES) {
+      const registration = renderRegistration(locale, { academyName: '{ACADEMY}', link: '{LINK}', expiresAt: '{EXPIRES}' });
+      for (const part of ['{ACADEMY}', '{LINK}', '{EXPIRES}']) expect(registration.text, `${locale} ${part}`).toContain(part);
+      expect(registration.subject).toContain('{ACADEMY}');
+      const notice = renderExistingAccount(locale, { academyName: '{ACADEMY}', link: '{LOGIN}' });
+      for (const part of ['{ACADEMY}', '{LOGIN}']) expect(notice.text, `${locale} ${part}`).toContain(part);
+      expect(notice.subject).toContain('{ACADEMY}');
+      expect(notice.text).not.toContain('{LINK}');
+    }
   });
 
   // TEST-175 — MOD-12-T02: the e-mail copy of a notification (D-R83/D-R86).

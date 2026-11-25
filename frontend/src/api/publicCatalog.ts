@@ -6,12 +6,20 @@
 // `404 catalog_not_public` while the academy keeps its catalog closed
 // (`settings.catalog.publicBrowsing` not true), published courses only, never a
 // teacher name, a class code or a schedule, and of the lessons the titles only.
+// PORTAL-04: every card and detail names the course's school subject (`subject`,
+// localized name only), and API-236 takes a `subjectId` filter (additive).
 import { ApiError, apiRequest } from './client'
 import type { CoursePricing } from './courses'
 import type { LearningItemKind } from './learning'
 import type { LocalizedLabel } from './users'
 
 export interface PublicCatalogLevel {
+  id: string
+  name: LocalizedLabel
+}
+
+/** PORTAL-04: the course's school subject — never its difficulty (`level`). */
+export interface PublicCatalogSubject {
   id: string
   name: LocalizedLabel
 }
@@ -30,6 +38,8 @@ export interface PublicCourseCard {
   summary: LocalizedLabel | null
   coverImageUrl: string | null
   level: PublicCatalogLevel | null
+  /** PORTAL-04: null for a course without a subject. */
+  subject: PublicCatalogSubject | null
   durationHours: number | null
   sessionsCount: number | null
   /** free = no course plan; paid = a course plan is set (its price may still be unavailable). */
@@ -75,6 +85,8 @@ export interface PublicCourseDetail extends PublicCourseCard {
 
 export interface ListPublicCatalogParams {
   q?: string
+  /** PORTAL-04 */
+  subjectId?: string
   /** 1–48, server default 24. */
   limit?: number
   cursor?: string
@@ -87,6 +99,7 @@ export function publicCatalogPath(params: ListPublicCatalogParams = {}): string 
   const search = new URLSearchParams()
   const q = params.q?.trim()
   if (q) search.set('q', q)
+  if (params.subjectId) search.set('subjectId', params.subjectId)
   if (params.limit !== undefined) search.set('limit', String(params.limit))
   if (params.cursor) search.set('cursor', params.cursor)
   const query = search.toString()

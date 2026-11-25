@@ -2,7 +2,7 @@
 
 export const login = {
   title: 'تسجيل الدخول',
-  subtitle: 'منصة إدارة الأكاديمية والتعلّم',
+  subtitle: 'أدخل بيانات حسابك للمتابعة.',
   // The illustration beside the form (redesign, 2026-11-14): a sample day, not real data.
   preview: {
     title: 'يومك في الأكاديمية، من أول نظرة.',
@@ -18,10 +18,52 @@ export const login = {
   },
   identifier: 'البريد الإلكتروني أو اسم المستخدم',
   password: 'كلمة المرور',
-  submit: 'دخول',
+  submit: 'تسجيل الدخول',
   signingIn: 'جارٍ تسجيل الدخول...',
   identifierRequired: 'أدخل البريد الإلكتروني أو اسم المستخدم',
   passwordRequired: 'أدخل كلمة المرور',
+  // The divider between the password form and the Google button.
+  or: 'أو',
+  // The frame of the sign-in, registration and forgotten-password pages (auth/AuthLayout.tsx).
+  layout: {
+    backHome: 'العودة إلى الرئيسية',
+    navLabel: 'التنقل',
+  },
+  // PORTAL-04: Google sign-in (POST /api/auth/google/start and the callback's verdicts in /login?google=<code>).
+  google: {
+    button: 'المتابعة باستخدام Google',
+    redirecting: 'جارٍ الانتقال إلى Google…',
+    notEnabled: 'تسجيل الدخول عبر Google غير مفعّل في هذه الأكاديمية',
+    signUpNotEnabled: 'إنشاء حساب عبر Google غير مفعّل في هذه الأكاديمية',
+    errors: {
+      unavailable: 'تسجيل الدخول عبر Google غير متاح حاليًا في هذه الأكاديمية.',
+      failed: 'تعذّر بدء تسجيل الدخول عبر Google. حاول مجددًا.',
+    },
+    results: {
+      cancelled: 'أُلغي تسجيل الدخول عبر Google. يمكنك المحاولة مجددًا، أو الدخول بكلمة المرور.',
+      failed: 'تعذّر إكمال تسجيل الدخول عبر Google. حاول مجددًا.',
+      unavailable: 'تسجيل الدخول عبر Google غير متاح حاليًا في هذه الأكاديمية.',
+      registration_closed:
+        'لا يوجد حساب مرتبط بحساب Google هذا، وإنشاء الحسابات غير متاح حاليًا. سجّل الدخول بحسابك الحالي، أو تواصل مع إدارة الأكاديمية.',
+      link_required:
+        'يوجد حساب بهذا البريد. سجّل الدخول بكلمة المرور؛ ولاستخدام Google لاحقًا أكّد بريدك من «حسابي» أو اطلب ذلك من إدارة الأكاديمية.',
+      link_conflict: 'حسابك في الأكاديمية مرتبط بحساب Google آخر. سجّل الدخول بكلمة المرور أو بحساب Google المرتبط.',
+      email_not_authoritative:
+        'لا يمكن إنشاء الحساب أو ربطه عبر Google لهذا البريد. أنشئ حسابك بالبريد الإلكتروني، أو سجّل الدخول بكلمة المرور.',
+      account_unavailable: 'لا يمكن الدخول إلى هذا الحساب حاليًا. تواصل مع إدارة الأكاديمية.',
+      // The wording of login.errors.mfa_unavailable: the same situation, reached through Google.
+      mfa_unavailable:
+        'التحقق بخطوتين غير متاح على الخادم حالياً، ولا يمكن الدخول إلى هذا الحساب بدونه. تواصل مع إدارة الأكاديمية.',
+    },
+    // /auth/google/done: Google's callback set the session cookie and sent the visitor here.
+    done: {
+      subtitle: 'تسجيل الدخول عبر Google',
+      waiting: 'جارٍ إكمال تسجيل الدخول…',
+      failedTitle: 'لم يكتمل تسجيل الدخول عبر Google',
+      failedText: 'لم نجد جلسة دخول على هذا الجهاز بعد العودة من Google. حاول مجددًا من صفحة تسجيل الدخول.',
+      backToLogin: 'العودة إلى تسجيل الدخول',
+    },
+  },
   // MOD-20 (D-R138): shown only while the academy opens its catalog to visitors (API-205 `catalogPublic`).
   browseCourses: 'تصفّح الدورات',
   // PORTAL-04, the learner journey: the visitor chose «سجّل في هذه الدورة» on the public course page.
@@ -49,6 +91,9 @@ export const login = {
     account_suspended: 'هذا الحساب موقوف. تواصل مع إدارة الأكاديمية.',
     account_pending: 'هذا الحساب بانتظار اعتماد إدارة الأكاديمية.',
     account_not_activated: 'لم يتم تفعيل هذا الحساب بعد. استخدم رابط الدعوة الذي وصلك.',
+    // A student who registered but has not opened the confirmation link yet (contract v3): said only after the
+    // password matched, so it reveals nothing to someone who does not know it.
+    email_not_verified: 'أكّد بريدك الإلكتروني أولًا: افتح رسالة التأكيد التي أرسلناها إليك وأدخل كلمة مرورك.',
     rate_limited: 'محاولات كثيرة في وقت قصير. انتظر قليلاً ثم حاول مجدداً.',
     mfa_unavailable:
       'التحقق بخطوتين غير متاح على الخادم حالياً، ولا يمكن الدخول إلى هذا الحساب بدونه. تواصل مع إدارة الأكاديمية.',
@@ -101,6 +146,7 @@ export const login = {
 
 export const forgotPassword = {
   link: 'نسيت كلمة المرور؟',
+  title: 'نسيت كلمة المرور؟',
   subtitle: 'نسيت كلمة المرور',
   intro: 'أدخل البريد الإلكتروني أو اسم المستخدم لحسابك. إن كان الحساب يستقبل البريد فسنرسل إليه رابطًا لاختيار كلمة مرور جديدة.',
   identifier: 'البريد الإلكتروني أو اسم المستخدم',
@@ -108,10 +154,11 @@ export const forgotPassword = {
   identifierTooLong: 'هذا أطول من أن يكون بريدًا إلكترونيًا أو اسم مستخدم',
   submit: 'أرسل الرابط',
   submitting: 'جارٍ الإرسال...',
-  sent: 'إن وُجد حساب يطابق ما أدخلته فرابط اختيار كلمة مرور جديدة في طريقه إلى بريده الإلكتروني. يعمل الرابط لمدة محدودة، وتفقّد مجلد الرسائل غير المرغوب فيها أيضًا.',
+  sentTitle: 'تحقّق من بريدك الإلكتروني',
+  sent: 'إن كان الحساب موجودًا فستصلك رسالة فيها رابط لاختيار كلمة مرور جديدة. يعمل الرابط لمدة محدودة، فتفقّد أيضًا مجلد الرسائل غير المرغوب فيها.',
   backToLogin: 'العودة إلى تسجيل الدخول',
   errors: {
-    reset_disabled: 'استعادة كلمة المرور بنفسك غير متاحة بعد. اطلب رابط إعادة التعيين من إدارة الأكاديمية.',
+    reset_disabled: 'استعادة كلمة المرور من الموقع غير مفعّلة بعد. تواصل مع إدارة الأكاديمية لإعادة ضبطها.',
     rate_limited: 'طلبات كثيرة في وقت قصير. انتظر 15 دقيقة ثم حاول مرة أخرى.',
   },
 }

@@ -10,6 +10,10 @@ export const INVITATION_PATH = '/invite';
 export const PASSWORD_RESET_PATH = '/reset-password';
 /** LR-01-T02: the page that confirms an address (frontend task). */
 export const EMAIL_VERIFICATION_PATH = '/verify-email';
+/** PORTAL-03 (#207): the page where a self-registered visitor chooses the password. */
+export const REGISTRATION_COMPLETE_PATH = '/register/complete';
+/** The sign-in page (the notice to an address that already has an account points there). */
+export const LOGIN_PATH = '/login';
 
 /** Locales that have templates — every locale of the `locale` enum since S6-C. */
 export const TEMPLATE_LOCALES = ['ar', 'en', 'tr'] as const satisfies readonly LocaleCode[];
@@ -162,6 +166,102 @@ export function renderPasswordReset(locale: TemplateLocale, input: AccountMailIn
 /** LR-01-T02 (D-R78): the only message whose link proves the recipient owns the address. */
 export function renderEmailVerification(locale: TemplateLocale, input: AccountMailInput): RenderedMail {
   return EMAIL_VERIFICATION[locale](input);
+}
+
+// ------------------------------------------------- PORTAL-03 — self-registration (#207)
+
+/**
+ * What a self-registration e-mail may say. Anybody can type any address on the
+ * public form, so these messages carry NOTHING the visitor typed — not even the
+ * name: only the academy's own name, the link and its expiry.
+ */
+export interface RegistrationMailInput {
+  /** Academy name in the chosen locale. */
+  academyName: string;
+  /** `<APP_PUBLIC_URL>/register/complete/<token>`. */
+  link: string;
+  /** Expiry, already formatted for the recipient. */
+  expiresAt: string;
+}
+
+/** The notice to an address that already has an account: the academy's name and the sign-in link only. */
+export interface ExistingAccountMailInput {
+  academyName: string;
+  /** `<APP_PUBLIC_URL>/login`. */
+  link: string;
+}
+
+const REGISTRATION: PerTemplateLocale<(input: RegistrationMailInput) => RenderedMail> = {
+  ar: (input) => ({
+    subject: `أكّد بريدك الإلكتروني لإكمال إنشاء حسابك في ${input.academyName}`,
+    text:
+      `مرحباً،\n\n` +
+      `طُلب إنشاء حساب طالب في ${input.academyName} بهذا البريد الإلكتروني. ` +
+      `لتأكيد بريدك وإكمال إنشاء حسابك افتح الرابط التالي وأدخل كلمة المرور التي اخترتها عند التسجيل:\n${input.link}\n\n` +
+      `تنتهي صلاحية هذا الرابط في ${input.expiresAt}. ` +
+      `إن لم تطلب إنشاء حساب فتجاهل هذه الرسالة؛ لا يُفعَّل أي حساب دون فتح هذا الرابط وإدخال كلمة المرور التي اختيرت عند التسجيل.`,
+  }),
+  en: (input) => ({
+    subject: `Confirm your e-mail to finish creating your ${input.academyName} account`,
+    text:
+      `Hello,\n\n` +
+      `A student account was requested at ${input.academyName} with this e-mail address. ` +
+      `To confirm your address and finish creating your account, open this link and enter the password you chose when you registered:\n${input.link}\n\n` +
+      `The link expires on ${input.expiresAt}. ` +
+      `If you did not ask for an account, you can ignore this message; no account is activated without this link and the password chosen at registration.`,
+  }),
+  tr: (input) => ({
+    subject: `${input.academyName} hesabınızı tamamlamak için e-posta adresinizi doğrulayın`,
+    text:
+      `Merhaba,\n\n` +
+      `${input.academyName} bünyesinde bu e-posta adresiyle bir öğrenci hesabı talep edildi. ` +
+      `E-posta adresinizi doğrulamak ve hesabınızı tamamlamak için şu bağlantıyı açın ve kayıt olurken belirlediğiniz şifreyi girin:\n${input.link}\n\n` +
+      `Bu bağlantı ${input.expiresAt} tarihine kadar geçerlidir. ` +
+      `Hesap talebinde bulunmadıysanız bu e-postayı dikkate almayabilirsiniz; bu bağlantı açılıp kayıtta belirlenen şifre girilmeden hiçbir hesap etkinleştirilmez.`,
+  }),
+};
+
+const EXISTING_ACCOUNT: PerTemplateLocale<(input: ExistingAccountMailInput) => RenderedMail> = {
+  ar: (input) => ({
+    subject: `لديك حساب بالفعل في ${input.academyName}`,
+    text:
+      `مرحباً،\n\n` +
+      `طُلب إنشاء حساب في ${input.academyName} بهذا البريد الإلكتروني، لكن لديك حساب بالفعل بهذا العنوان؛ ` +
+      `فلم يُنشأ حساب جديد ولم يتغير شيء في حسابك. لتسجيل الدخول افتح الرابط التالي:\n${input.link}\n\n` +
+      `إن لم تتذكر كلمة المرور فاستخدم «نسيت كلمة المرور» في صفحة الدخول أو تواصل مع الأكاديمية. ` +
+      `إن لم تطلب ذلك فتجاهل هذه الرسالة.`,
+  }),
+  en: (input) => ({
+    subject: `You already have an account at ${input.academyName}`,
+    text:
+      `Hello,\n\n` +
+      `Someone asked to create an account at ${input.academyName} with this e-mail address, but an account with this address already exists, ` +
+      `so no new account was created and nothing in your account changed. To sign in, open this link:\n${input.link}\n\n` +
+      `If you do not remember your password, use "Forgot your password?" on the sign-in page or contact the academy. ` +
+      `If you did not ask for this, you can ignore this message.`,
+  }),
+  tr: (input) => ({
+    subject: `${input.academyName} bünyesinde zaten bir hesabınız var`,
+    text:
+      `Merhaba,\n\n` +
+      `${input.academyName} bünyesinde bu e-posta adresiyle bir hesap oluşturulması istendi; ancak bu adresle kayıtlı bir hesap zaten var, ` +
+      `bu nedenle yeni bir hesap oluşturulmadı ve hesabınızda hiçbir şey değişmedi. Giriş yapmak için şu bağlantıyı açın:\n${input.link}\n\n` +
+      `Şifrenizi hatırlamıyorsanız giriş sayfasındaki "Şifremi unuttum" seçeneğini kullanın veya akademiyle iletişime geçin. ` +
+      `Bu talebi siz yapmadıysanız bu e-postayı dikkate almayabilirsiniz.`,
+  }),
+};
+
+/**
+ * PORTAL-03/04 (contract v3): «أكّد بريدك الإلكتروني لإكمال إنشاء حسابك» — opening its link proves the address, and
+ * typing there the password chosen at registration activates the account.
+ */
+export function renderRegistration(locale: TemplateLocale, input: RegistrationMailInput): RenderedMail {
+  return REGISTRATION[locale](input);
+}
+
+/** PORTAL-03: «لديك حساب بالفعل» — the address already belongs to an account; nothing changed. */
+export function renderExistingAccount(locale: TemplateLocale, input: ExistingAccountMailInput): RenderedMail {
+  return EXISTING_ACCOUNT[locale](input);
 }
 
 /** MOD-12: the notifications page — where a notification e-mail sends its reader when the notification has no page of its own. */

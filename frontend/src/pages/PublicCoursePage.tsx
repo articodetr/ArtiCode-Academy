@@ -1,14 +1,21 @@
 // One course of the public catalog (MOD-20, D-R138): /explore/:courseId,
 // outside the app layout and without a sign-in. GET
 // /api/public/catalog/courses/:id (API-237 — no token, 60/min per IP): the
-// course (cover, level, duration, sessions, price, age range, overview) and its
-// outline by level (D-R130 — «المستوى الأول — …») with the lesson titles, kinds
-// and lengths only; the content opens after an enrollment. No teacher, class or
-// schedule is ever shown. «سجّل في هذه الدورة» sends the visitor to the sign-in
-// page with `from` = the course in the signed-in catalog plus the enroll intent
-// (`/catalog/<id>?intent=enroll`), which scrolls to its classes once signed in —
-// nothing enrolls by itself, and no account is created here (accounts come from
-// the academy). Since PORTAL-04 PR-2 the button shows only while a visitor can go
+// course (cover, subject, duration, content, price, overview) and its outline by
+// level (D-R130 — «المستوى الأول — …») with the lesson titles, kinds and lengths
+// only; the content opens after an enrollment. No teacher, class or schedule is
+// ever shown, and since PORTAL-04 neither the age range nor the sessions; the
+// school subject (`course.subject`) replaced the difficulty. The facts read
+// المادة · المدة · المحتوى (the published lessons), then الرسوم and the buttons.
+// «سجّل في هذه الدورة» keeps the course on this device (keepCourse()) and sends
+// the visitor to /login?returnTo=<the course in the signed-in catalog plus the
+// enroll intent, `/catalog/<id>?intent=enroll`>, which scrolls to its classes
+// once signed in — nothing enrolls by itself. While API-205 says an account may
+// be created (`selfRegistration` or `googleSignUp` — accountCreationOpen()), a
+// quiet «إنشاء حساب» beside it leads to /register?returnTo=… the same way and
+// the note under them says so; otherwise the note only invites the sign-in (the
+// page reads API-205 once and hands it to the shell). Both links still carry the
+// return path in the router state too (`from`), as before. Since PORTAL-04 PR-2 the button shows only while a visitor can go
 // on to enroll (`publicEnrollStateOf()`: a class open, a free seat, a usable price);
 // otherwise «التسجيل غير متاح حالياً» says why and the details stay readable. A
 // paid course says that it becomes a request with an invoice, activated after
@@ -24,21 +31,12 @@
 // title, badges, counts, short text and availability; the enrollment card beside
 // it; «الوصف» and «الخطة الدراسية» below, each only with real data. API-237 has no
 // learning outcomes and no teacher, so neither section exists.
-import {
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
-  CalendarOutlined,
-  ClockCircleOutlined,
-  InfoCircleOutlined,
-  LoginOutlined,
-  ReadOutlined,
-  RiseOutlined,
-  TeamOutlined,
-} from '@ant-design/icons'
+import { ArrowLeftOutlined, ArrowRightOutlined, BookOutlined, ClockCircleOutlined, InfoCircleOutlined, LoginOutlined, ReadOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Collapse, Skeleton } from 'antd'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { usePublicAcademy } from '../academy/usePublicAcademy'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { PublicCourseDetail, PublicOutlineLevel } from '../api/publicCatalog'
 import { useLocalized } from '../i18n/useLocalized'
@@ -47,8 +45,8 @@ import { CourseEnrollCard, CoursePageLayout } from '../publicCatalog/CoursePageL
 import type { CoursePageSection } from '../publicCatalog/CoursePageLayout'
 import { PublicPriceText } from '../publicCatalog/PublicPriceTag'
 import {
+  accountCreationOpen,
   availabilityOf,
-  cardSubscribeTarget,
   courseBadgesOf,
   courseTextsOf,
   durationMinutes,
@@ -59,24 +57,36 @@ import {
   levelNameOf,
   publicEnrollStateOf,
   publicFailureKey,
+  subjectNameOf,
+  visitorRegisterPath,
+  visitorSignInPath,
 } from '../publicCatalog/publicCatalog.view'
 import { PublicOnly, PublicShell } from '../publicCatalog/PublicShell'
 import { PublicTitle } from '../publicCatalog/PublicTitle'
 import { usePublicCourse } from '../publicCatalog/usePublicCourse'
+import { keepCourse } from '../studentRegistration/keptCourse'
 import { localizedLabel } from '../users/users.format'
 
 export function PublicCoursePage() {
   const { courseId = '' } = useParams()
   return (
     <PublicOnly signedInTo={`/catalog/${encodeURIComponent(courseId)}`}>
-      <PublicShell bleed>
-        <PublicCourse courseId={courseId} />
-      </PublicShell>
+      <PublicCourseFrame courseId={courseId} />
     </PublicOnly>
   )
 }
 
-function PublicCourse({ courseId }: { courseId: string }) {
+/** Inside `PublicOnly`, so a signed-in user reads nothing; the shell gets this one reading of API-205. */
+function PublicCourseFrame({ courseId }: { courseId: string }) {
+  const academy = usePublicAcademy()
+  return (
+    <PublicShell academy={academy} bleed>
+      <PublicCourse courseId={courseId} accountsOpen={accountCreationOpen(academy.academy)} />
+    </PublicShell>
+  )
+}
+
+function PublicCourse({ courseId, accountsOpen }: { courseId: string; accountsOpen: boolean }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const navigate = useNavigate()
@@ -90,7 +100,7 @@ function PublicCourse({ courseId }: { courseId: string }) {
     return (
       <div className="course-page-state">
         <PublicTitle />
-        <CatalogClosed />
+        <CatalogClosed registrationOpen={accountsOpen} />
       </div>
     )
   }
@@ -164,7 +174,17 @@ function PublicCourse({ courseId }: { courseId: string }) {
             </span>
           ) : null
         }
-        aside={<CourseEnrollment course={course} counts={counts} onEnroll={() => navigate('/login', { state: { from: enrollIntentPath(course.id) } })} />}
+        aside={
+          <CourseEnrollment
+            course={course}
+            accountsOpen={accountsOpen}
+            onEnroll={() => {
+              // The chosen course waits on this device for the way back (the agreed contract of #207 has no server `next`).
+              keepCourse(course.id)
+              navigate(visitorSignInPath(course.id), { state: { from: enrollIntentPath(course.id) } })
+            }}
+          />
+        }
         sections={sections}
         navLabel={t('publicCatalog.course.sectionsNav')}
       />
@@ -200,27 +220,19 @@ function CourseFact({ icon, label, children }: { icon: ReactNode; label: string;
   )
 }
 
-function ageTextOf(course: PublicCourseDetail, t: (key: string, options?: Record<string, unknown>) => string): string | null {
-  if (course.minAge !== null && course.maxAge !== null) return t('publicCatalog.course.ageRange', { min: course.minAge, max: course.maxAge })
-  if (course.minAge !== null) return t('publicCatalog.course.ageFrom', { min: course.minAge })
-  if (course.maxAge !== null) return t('publicCatalog.course.ageTo', { max: course.maxAge })
-  return null
-}
-
-function CourseEnrollment({ course, counts, onEnroll }: { course: PublicCourseDetail; counts: string; onEnroll: () => void }) {
+function CourseEnrollment({ course, accountsOpen, onEnroll }: { course: PublicCourseDetail; accountsOpen: boolean; onEnroll: () => void }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const enrollState = publicEnrollStateOf(course)
-  const age = ageTextOf(course, t)
-  // This page is a visitor's (PublicOnly sends a signed-in user to /catalog/:id).
-  const subscribe = cardSubscribeTarget(course, 'visitor', false)
+  const subject = subjectNameOf(course, language)
 
+  // PORTAL-04: المادة · المدة · المحتوى, then الرسوم under them — each only with a real value (the lessons always have one).
   return (
     <CourseEnrollCard courseId={course.id} coverUrl={course.coverImageUrl} testId="public-enroll-card">
       <dl className="course-facts">
-        {course.level ? (
-          <CourseFact icon={<RiseOutlined />} label={t('publicCatalog.course.level')}>
-            {localizedLabel(course.level.name, language)}
+        {subject ? (
+          <CourseFact icon={<BookOutlined />} label={t('publicCatalog.course.subject')}>
+            {subject}
           </CourseFact>
         ) : null}
         {course.durationHours !== null ? (
@@ -228,19 +240,9 @@ function CourseEnrollment({ course, counts, onEnroll }: { course: PublicCourseDe
             {t('publicCatalog.card.hours', { count: course.durationHours })}
           </CourseFact>
         ) : null}
-        {course.sessionsCount !== null ? (
-          <CourseFact icon={<CalendarOutlined />} label={t('publicCatalog.card.sessions')}>
-            {t('publicCatalog.card.sessionsCount', { count: course.sessionsCount })}
-          </CourseFact>
-        ) : null}
         <CourseFact icon={<ReadOutlined />} label={t('publicCatalog.card.content')}>
-          {counts}
+          {t('publicCatalog.card.lessons', { count: course.lessonCount })}
         </CourseFact>
-        {age ? (
-          <CourseFact icon={<TeamOutlined />} label={t('publicCatalog.course.age')}>
-            {age}
-          </CourseFact>
-        ) : null}
       </dl>
       <div className="course-enroll__price">
         <span className="course-enroll__price-label">{t('publicCatalog.card.price')}</span>
@@ -252,13 +254,21 @@ function CourseEnrollment({ course, counts, onEnroll }: { course: PublicCourseDe
             <Button type="primary" size="large" icon={<LoginOutlined />} onClick={onEnroll}>
               {t('publicCatalog.course.enroll')}
             </Button>
-            {subscribe ? (
-              <Link to={subscribe.to} state={subscribe.state} className="course-enroll__subscribe" data-testid={`public-subscribe-${course.id}`}>
-                {t(course.pricing === 'paid' ? 'publicCatalog.card.subscribePaid' : 'publicCatalog.card.subscribeFree')}
+            {accountsOpen ? (
+              <Link
+                to={visitorRegisterPath(course.id)}
+                state={{ from: enrollIntentPath(course.id) }}
+                onClick={() => keepCourse(course.id)}
+                className="course-enroll__subscribe"
+                data-testid="public-course-register"
+              >
+                {t('publicCatalog.course.createAccount')}
               </Link>
             ) : null}
           </div>
-          <p className="course-enroll__note">{t('publicCatalog.course.enrollNote')}</p>
+          <p className="course-enroll__note" data-testid="public-enroll-note">
+            {t(accountsOpen ? 'publicCatalog.course.signInOrRegisterNote' : 'publicCatalog.course.signInNote')}
+          </p>
           {course.pricing === 'paid' ? <p className="course-enroll__note">{t('publicCatalog.course.paidNote')}</p> : null}
         </div>
       ) : (

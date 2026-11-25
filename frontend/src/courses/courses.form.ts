@@ -4,6 +4,9 @@
 // value differs from the loaded course (null clears an optional field); a
 // localized text travels as a whole object and keeps a Turkish text the form
 // does not edit; nothing changed → null (no request).
+// PORTAL-04: the form edits the school subject (`subjectId`, null clears it) and no
+// longer the age range — neither body carries `minAge`/`maxAge`, so a PATCH leaves
+// the stored ages alone; the sessions stay.
 import type { Course, CoursePricing, CourseResource, CreateCourseInput, UpdateCourseInput } from '../api/courses'
 import type { FeePlan } from '../api/feePlans'
 import type { LocalizedLabel } from '../api/users'
@@ -13,7 +16,6 @@ export const COURSE_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,31}$/
 export const COURSE_TEXT_MAX_LENGTH = 200
 export const DURATION_HOURS_MAX = 99999.9
 export const SESSIONS_MAX = 10000
-export const AGE_MAX = 120
 /** MOD-19 (D-R129): COVER_IMAGE_URL_MAX of courses.dto.ts and ck_courses_cover_image_url. */
 export const COVER_IMAGE_URL_MAX = 2048
 
@@ -26,10 +28,10 @@ export interface CourseFormValues {
   descriptionAr?: string
   descriptionEn?: string
   levelId?: string | null
+  /** PORTAL-04: the school subject; null/absent = none. */
+  subjectId?: string | null
   durationHours?: number | null
   sessionsCount?: number | null
-  minAge?: number | null
-  maxAge?: number | null
   /** MOD-19: an absolute http(s) URL; '' = no cover. */
   coverImageUrl?: string
   /** MOD-19 (D-R122): shown only to holders of `fee_plans.manage`; absent = the form does not edit the price. */
@@ -85,10 +87,9 @@ export function courseFormValuesOf(course: Course): CourseFormValues {
     descriptionAr: text(course.description?.ar),
     descriptionEn: text(course.description?.en),
     levelId: course.level?.id ?? null,
+    subjectId: course.subject?.id ?? null,
     durationHours: course.durationHours,
     sessionsCount: course.sessionsCount,
-    minAge: course.minAge,
-    maxAge: course.maxAge,
     coverImageUrl: course.coverImageUrl ?? '',
     pricing: course.pricing,
     enrollmentFeePlanId: course.enrollmentFeePlan?.id ?? null,
@@ -150,11 +151,6 @@ export function sameLabel(a: LocalizedLabel | null, b: LocalizedLabel | null): b
   return a.ar === b.ar && (a.en ?? null) === (b.en ?? null) && (a.tr ?? null) === (b.tr ?? null)
 }
 
-/** True when both ages are set and the maximum is below the minimum. */
-export function invalidAgeRange(minAge: number | null | undefined, maxAge: number | null | undefined): boolean {
-  return minAge !== null && minAge !== undefined && maxAge !== null && maxAge !== undefined && maxAge < minAge
-}
-
 export function buildCreateCourseInput(values: CourseFormValues): CreateCourseInput {
   const input: CreateCourseInput = {
     code: normaliseCourseCode(values.code),
@@ -165,10 +161,9 @@ export function buildCreateCourseInput(values: CourseFormValues): CreateCourseIn
   if (summary) input.summary = summary
   if (description) input.description = description
   if (values.levelId) input.levelId = values.levelId
+  if (values.subjectId) input.subjectId = values.subjectId
   if (values.durationHours !== undefined && values.durationHours !== null) input.durationHours = values.durationHours
   if (values.sessionsCount !== undefined && values.sessionsCount !== null) input.sessionsCount = values.sessionsCount
-  if (values.minAge !== undefined && values.minAge !== null) input.minAge = values.minAge
-  if (values.maxAge !== undefined && values.maxAge !== null) input.maxAge = values.maxAge
   const cover = coverOf(values.coverImageUrl)
   if (cover) input.coverImageUrl = cover
   return input
@@ -189,7 +184,11 @@ export function planCoursePatch(course: Course, values: CourseFormValues): Updat
 
   const levelId = values.levelId || null
   if (levelId !== (course.level?.id ?? null)) body.levelId = levelId
-  const numbers = ['durationHours', 'sessionsCount', 'minAge', 'maxAge'] as const
+  // An emptied picker (antd answers undefined on clear) clears the subject, as the level.
+  const subjectId = values.subjectId || null
+  if (subjectId !== (course.subject?.id ?? null)) body.subjectId = subjectId
+  // The age range is no longer edited here (PORTAL-04): the stored values stay untouched.
+  const numbers = ['durationHours', 'sessionsCount'] as const
   for (const field of numbers) {
     const next = blankToNull(values[field])
     if (next !== course[field]) body[field] = next

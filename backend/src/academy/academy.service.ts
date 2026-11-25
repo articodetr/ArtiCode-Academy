@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
 import type { LocaleCode, LocalizedText } from '../authorization/localized-text.js';
+import { isGoogleConfigured } from '../auth/google/google.config.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import type { Env } from '../config/env.schema.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -12,7 +13,7 @@ import { isEmptyAcademyPatch, planAcademyUpdate } from './academy.changes.js';
 import type { AcademyPatch, AcademyUpdateData, CurrentAcademyRow } from './academy.changes.js';
 import type { AcademyDto, AcademyPublicDto, UpdateAcademyDto } from './academy.dto.js';
 import { academyError } from './academy.errors.js';
-import { readSettings } from './academy.settings.js';
+import { isSelfRegistrationOpen, readSettings } from './academy.settings.js';
 import { publicHomepageImageUrls } from './homepage-images.settings.js';
 
 export const ACADEMY_AUDIT_ACTIONS = {
@@ -42,10 +43,11 @@ const ACADEMY_SELECT = {
 type AcademyRow = Prisma.AcademyGetPayload<{ select: typeof ACADEMY_SELECT }>;
 
 // The public branding (API-205): the three answered fields, the slug only as the
-// last-resort name, and the settings only for the derived `catalogPublic` flag
-// (MOD-20, D-R138) and the public URLs of the home page's pictures
-// (`settings.homepageImages`, the file names only) — nothing else is read for
-// an anonymous caller, and no setting is ever answered as such.
+// last-resort name, and the settings only for the derived `catalogPublic`
+// (MOD-20, D-R138), `selfRegistration` (PORTAL-03) and `googleSignUp` (PORTAL-04)
+// flags and the public URLs of the home page's pictures (`settings.homepageImages`,
+// the file names only) — nothing else is read for an anonymous caller, and no
+// setting is ever answered as such (`googleSignIn` comes from the server's configuration).
 const ACADEMY_PUBLIC_SELECT = {
   slug: true,
   name: true,
@@ -135,20 +137,31 @@ export class AcademyService {
    * API-205: the branding of the sign-in page for an anonymous caller — the
    * name (only its string locales), the logo, the default locale and whether
    * the public catalog is open (`settings.catalog.publicBrowsing === true`,
-   * MOD-20). Read-only, no audit event; 503 `academy_not_configured` without
-   * the row. `homepageImages` names the URL of each of the four pictures of
-   * the public home page (`/<prefix>/academy/media/<file>`), null = the
-   * built-in default.
+   * MOD-20) and visitors may register (PORTAL-03: the setting AND a mail
+   * transport), and whether Google sign-in is configured and may create an
+   * account (PORTAL-04: `googleSignUp` = Google configured AND the setting —
+   * Google proves the address, no mail transport needed). Read-only, no audit
+   * event; 503 `academy_not_configured` without the row. `homepageImages`
+   * names the URL of each of the four pictures of the public home page
+   * (`/<prefix>/academy/media/<file>`), null = the built-in default.
    */
   async getPublic(): Promise<AcademyPublicDto> {
     const row = await this.prisma.db.academy.findFirst({ select: ACADEMY_PUBLIC_SELECT });
     if (!row) throw academyError.notConfigured();
+    const settings = readSettings(row.settings);
+    const googleSignIn = isGoogleConfigured({
+      GOOGLE_OAUTH_CLIENT_ID: this.config.get('GOOGLE_OAUTH_CLIENT_ID', { infer: true }),
+      GOOGLE_OAUTH_CLIENT_SECRET: this.config.get('GOOGLE_OAUTH_CLIENT_SECRET', { infer: true }),
+    });
     return {
       name: readLocalizedText(row.name) ?? { ar: row.slug },
       logoUrl: row.logoUrl,
       defaultLocale: row.defaultLocale as LocaleCode,
-      catalogPublic: readSettings(row.settings).catalog.publicBrowsing === true,
+      catalogPublic: settings.catalog.publicBrowsing === true,
       homepageImages: publicHomepageImageUrls(row.settings, this.config.get('API_PREFIX', { infer: true })),
+      selfRegistration: isSelfRegistrationOpen(settings, this.config.get('MAIL_TRANSPORT', { infer: true })),
+      googleSignIn,
+      googleSignUp: googleSignIn && settings.selfRegistration.enabled === true,
     };
   }
 

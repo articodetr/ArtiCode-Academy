@@ -171,6 +171,11 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
       AUTH_SELF_SERVICE_RESET_ENABLED: ${AUTH_SELF_SERVICE_RESET_ENABLED:-false}
+      # Google sign-in (PORTAL-04): on only with both the client id and the secret; empty = off.
+      # The redirect URI defaults to <ACADEMY_ORIGIN>/api/auth/google/callback (from APP_PUBLIC_URL).
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-}
       # The uploaded homepage images: a fixed path, the mount point of the `media` volume
       # below (never read from the env file). The image creates the directory owned by
       # `node`, so Docker starts a new, empty volume with that owner — the API writes there

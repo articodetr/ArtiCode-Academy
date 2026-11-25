@@ -14,6 +14,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
+import { canCreateAccount } from '../api/academy'
 import { useAuth } from '../auth/auth-context'
 import { PublicShell } from '../publicCatalog/PublicShell'
 import { PublicTitle } from '../publicCatalog/PublicTitle'
@@ -40,6 +41,8 @@ export function PublicHomePage() {
   const knownName = academy.academy ? name : ''
   const catalogOpen = catalogOpenOf(programs.state, academy.academy)
   const programsPath = homeProgramsPath(viewer, catalogOpen, hasPermission('courses.read'))
+  // Only the server's `true`: the page then stops saying that accounts come from the administration alone.
+  const registrationOpen = canCreateAccount(academy.academy)
   const { hash, key } = useLocation()
   const programsState = programs.state
 
@@ -56,13 +59,13 @@ export function PublicHomePage() {
       {/* The four pictures follow the same reading: the academy's own (Settings → Homepage Images) or the defaults. */}
       <HomeImagesContext value={academy}>
         <div className="public-home">
-          <HomeHero name={knownName} nameLoading={academy.loading} viewer={viewer} catalogOpen={catalogOpen} stats={programs.stats} />
+          <HomeHero name={knownName} nameLoading={academy.loading} viewer={viewer} catalogOpen={catalogOpen} stats={programs.stats} registrationOpen={registrationOpen} />
           <HomeFeatureStrip />
           <HomePrograms programs={programs} viewer={viewer} />
           <HomeTrustBand />
           <HomeAbout programsPath={programsPath} />
           <HomeTestimonials items={[]} />
-          <HomeSteps />
+          <HomeSteps registrationOpen={registrationOpen} />
           <HomeStatsBand stats={programs.stats} />
           <HomeCertificate />
           <HomePromo programsPath={programsPath} />

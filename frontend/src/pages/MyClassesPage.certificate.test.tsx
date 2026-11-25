@@ -37,7 +37,7 @@ function learningOf(row: MyClassItem, counts = makeCounts({ total: 4, required: 
     relation: row.relation,
     student: row.student,
     class: { id: row.class.id, code: row.class.code, name: row.class.name, status: 'running', startsOn: null, endsOn: null },
-    course: { id: row.class.course.id, code: row.class.course.code, name: row.class.course.name, summary: null, coverImageUrl: null, level: null },
+    course: { id: row.class.course.id, code: row.class.course.code, name: row.class.course.name, summary: null, coverImageUrl: null, level: null, subject: null },
     progress: counts,
   })
 }

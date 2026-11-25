@@ -9,6 +9,7 @@ import { CURRENCY_PATTERN, IsIanaTimeZone, TIME_ZONE_MAX_LENGTH, currencyParam }
 import {
   MatchesSchema,
   publicBrowsingSchema,
+  selfRegistrationEnabledSchema,
   serialPrefixSchema,
   videoCompletionPercentSchema,
   weekStartsOnSchema,
@@ -82,6 +83,20 @@ export class CatalogSettingsPatchDto {
   publicBrowsing?: boolean | null;
 }
 
+/** `settings.selfRegistration` of a PATCH (PORTAL-03, #207): absent = unchanged, `null` = clear (off). */
+export class SelfRegistrationSettingsPatchDto {
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    example: false,
+    description: 'true = visitors may create their own student account, once the server can also send the confirmation e-mail; a JSON boolean; null clears it (off)',
+  })
+  @ValidateIf((dto: SelfRegistrationSettingsPatchDto) => dto.enabled !== undefined && dto.enabled !== null)
+  @Transform(rawValue)
+  @MatchesSchema(selfRegistrationEnabledSchema, 'settings.selfRegistration.enabled must be a JSON boolean or null')
+  enabled?: boolean | null;
+}
+
 /** `settings` of a PATCH: the known domains only (unknown keys are 400 through forbidNonWhitelisted). */
 export class AcademySettingsPatchDto {
   @ApiPropertyOptional({ type: SchedulingSettingsPatchDto })
@@ -111,6 +126,13 @@ export class AcademySettingsPatchDto {
   @ValidateNested()
   @Type(() => CatalogSettingsPatchDto)
   catalog?: CatalogSettingsPatchDto;
+
+  @ApiPropertyOptional({ type: SelfRegistrationSettingsPatchDto })
+  @ValidateIf((dto: AcademySettingsPatchDto) => dto.selfRegistration !== undefined)
+  @IsObject({ message: 'settings.selfRegistration must be an object' })
+  @ValidateNested()
+  @Type(() => SelfRegistrationSettingsPatchDto)
+  selfRegistration?: SelfRegistrationSettingsPatchDto;
 }
 
 /** Upper bound of the logo URL in a request (`logo_url` is unbounded text). */
@@ -234,11 +256,12 @@ export class AcademyDto {
 
 /**
  * The public branding of the academy (API-205, MOD-02-T04): what the sign-in
- * page shows before anybody is authenticated. Exactly these five keys — never
+ * page shows before anybody is authenticated. Exactly these eight keys — never
  * the id, slug, contact details, time zone, currency or the settings
- * themselves (`catalogPublic` is a derived flag — MOD-20, D-R138 — and
- * `homepageImages` the public URLs of the home page's pictures, nothing else
- * about the files).
+ * themselves (`catalogPublic` — MOD-20, D-R138 —, `selfRegistration` —
+ * PORTAL-03 — and `googleSignIn`/`googleSignUp` — PORTAL-04 — are the derived
+ * flags, and `homepageImages` the public URLs of the home page's pictures,
+ * nothing else about the files).
  */
 export class AcademyPublicDto {
   @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }` (only the locales stored)', example: { ar: 'أكاديمية آرتي كود', en: 'ArtiCode Academy' } })
@@ -263,6 +286,29 @@ export class AcademyPublicDto {
       'The public home page /home: the root-relative URL of the academy’s own picture for each of the four places (GET /api/academy/media/:file), null = the built-in default',
   })
   homepageImages: Record<HomepageImageKey, string | null>;
+
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description: 'true when visitors may create their own student account: `settings.selfRegistration.enabled` is true AND the server has a mail transport (PORTAL-03)',
+  })
+  selfRegistration: boolean;
+
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description:
+      'true when Google sign-in is configured on this server (GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET — PORTAL-04): the sign-in page offers «Continue with Google»',
+  })
+  googleSignIn: boolean;
+
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description:
+      'true when Google sign-in may also create a new student account: `googleSignIn` AND `settings.selfRegistration.enabled` is true (Google proves the address, so no mail transport is needed — PORTAL-04)',
+  })
+  googleSignUp: boolean;
 }
 
 export class SchedulingSettingsDto {
@@ -288,6 +334,11 @@ export class CatalogSettingsDto {
   publicBrowsing: boolean | null;
 }
 
+export class SelfRegistrationSettingsDto {
+  @ApiProperty({ type: Boolean, nullable: true, example: false, description: 'The academy allows visitors to create their own student account; null = off. Effective only with a mail transport (see `selfRegistration` of API-205)' })
+  enabled: boolean | null;
+}
+
 export class AcademySettingsDto {
   @ApiProperty({ type: SchedulingSettingsDto })
   scheduling: SchedulingSettingsDto;
@@ -300,4 +351,7 @@ export class AcademySettingsDto {
 
   @ApiProperty({ type: CatalogSettingsDto })
   catalog: CatalogSettingsDto;
+
+  @ApiProperty({ type: SelfRegistrationSettingsDto })
+  selfRegistration: SelfRegistrationSettingsDto;
 }

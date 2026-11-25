@@ -33,14 +33,14 @@ describe('courses API (API-042..API-047) and levels (API-037)', () => {
 
   it('writes with the documented methods and bodies; DELETE resolves on 204', async () => {
     const fetchMock = mockFetch((_url, init) => (init?.method === 'DELETE' ? jsonResponse(204) : jsonResponse(200, makeCourse())))
-    await createCourse({ code: 'PY-101', name: { ar: 'بايثون' } })
-    await updateCourse(COURSE_ID, { summary: null, maxAge: 15 })
+    await createCourse({ code: 'PY-101', name: { ar: 'بايثون' }, subjectId: 's-1' })
+    await updateCourse(COURSE_ID, { summary: null, subjectId: null })
     await changeCourseStatus(COURSE_ID, 'publish')
     await expect(deleteCourse(COURSE_ID)).resolves.toBeUndefined()
     const calls = fetchMock.mock.calls.map(([url, init]) => [url, init?.method, init?.body])
     expect(calls).toEqual([
-      ['/api/courses', 'POST', JSON.stringify({ code: 'PY-101', name: { ar: 'بايثون' } })],
-      [`/api/courses/${COURSE_ID}`, 'PATCH', JSON.stringify({ summary: null, maxAge: 15 })],
+      ['/api/courses', 'POST', JSON.stringify({ code: 'PY-101', name: { ar: 'بايثون' }, subjectId: 's-1' })],
+      [`/api/courses/${COURSE_ID}`, 'PATCH', JSON.stringify({ summary: null, subjectId: null })],
       [`/api/courses/${COURSE_ID}/status`, 'POST', JSON.stringify({ action: 'publish' })],
       [`/api/courses/${COURSE_ID}`, 'DELETE', undefined],
     ])

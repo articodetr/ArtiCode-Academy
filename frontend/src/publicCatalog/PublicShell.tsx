@@ -5,7 +5,9 @@
 // page (/home), the main links («الرئيسية», «البرامج», «الشهادات», «من نحن»), the
 // language switch and one action that follows the session — «تسجيل الدخول» for a
 // visitor, «فصولي» for a learner, «لوحة التحكم» for staff, nothing while the
-// session is still being restored — then the page and a turquoise footer with the
+// session is still being restored; while the server says the academy lets a visitor
+// register (`selfRegistration`), a visitor also gets a quiet «إنشاء حساب» beside the
+// sign-in from desktop widths and in the phone menu — then the page and a turquoise footer with the
 // academy's name, a line about it, the same links and the copyright in the
 // academy's name. There is no blog, contact or social link: the server holds none.
 // A page that reads API-205 itself hands its reading in (`academy`), so the
@@ -28,7 +30,7 @@ import { Link, Navigate, NavLink, useNavigate } from 'react-router'
 import { brandLogoSrc } from '../academy/academy.brand'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
 import type { PublicAcademyReading } from '../academy/usePublicAcademy'
-import { isCatalogPublic } from '../api/academy'
+import { canCreateAccount, isCatalogPublic } from '../api/academy'
 import { useAuth } from '../auth/auth-context'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useLocalized } from '../i18n/useLocalized'
@@ -114,12 +116,14 @@ export function PublicShell({
   const [menuOpen, setMenuOpen] = useState(false)
   const viewer = viewerOf(status, user)
   const programs = showsProgramsLink(viewer, catalogOpen ?? isCatalogPublic(reading.academy))
+  // A visitor only: `pending` may still turn out to be a signed-in user.
+  const offersRegistration = viewer === 'visitor' && canCreateAccount(reading.academy)
 
   return (
     <ConfigProvider theme={PUBLIC_THEME}>
       <div className="public-catalog">
         <header className="public-catalog__header">
-          <div className="public-catalog__header-inner">
+          <div className={offersRegistration ? 'public-catalog__header-inner public-catalog__header-inner--register' : 'public-catalog__header-inner'}>
             <Link to="/home" className="public-catalog__brand" title={name || undefined}>
               {logo ? (
                 <img className="public-catalog__logo" src={logo} alt="" referrerPolicy="no-referrer" decoding="async" onError={() => setBrokenLogo(logo)} />
@@ -144,6 +148,11 @@ export function PublicShell({
               <LanguageSwitcher />
             </div>
             <div className="public-catalog__actions">
+              {offersRegistration ? (
+                <Link to="/register" className="public-catalog__register">
+                  {t('studentRegistration.entry.createAccount')}
+                </Link>
+              ) : null}
               <ViewerAction viewer={viewer} />
             </div>
             <Button
@@ -166,6 +175,11 @@ export function PublicShell({
         >
           <nav className="public-menu__nav" aria-label={t('publicCatalog.header.navLabel')}>
             <MainLinks viewer={viewer} programs={programs} onNavigate={() => setMenuOpen(false)} />
+            {offersRegistration ? (
+              <Link to="/register" className="public-catalog__nav-link" onClick={() => setMenuOpen(false)}>
+                {t('studentRegistration.entry.createAccount')}
+              </Link>
+            ) : null}
           </nav>
           <div className="public-menu__language">
             <LanguageSwitcher />

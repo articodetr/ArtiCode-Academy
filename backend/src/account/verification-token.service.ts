@@ -2,11 +2,40 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.schema.js';
+import type { Prisma } from '../generated/prisma/client.js';
 
 /** 256 random bits per token. */
 export const VERIFICATION_TOKEN_BYTES = 32;
 /** base64url of 32 bytes is exactly 43 characters; anything else is rejected before touching the database. */
 export const VERIFICATION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+/**
+ * PORTAL-03 (#207): the `via` of a self-registration token. Such a token has the purpose `email_verification`
+ * (opening its link proves the address) and the metadata `{ via: 'self_registration', email, attempts? }` — `attempts`
+ * = the wrong passwords typed on its completion (contract v3, registration.service.ts); it is the only kind the
+ * registration routes accept, and the confirmation route API-166 refuses it. An API-165/166 token carries
+ * `via: 'self' | 'invitation'`.
+ */
+export const SELF_REGISTRATION_VIA = 'self_registration';
+
+/** The `via` stored in a token's metadata, or null. */
+export function tokenVia(metadata: Prisma.JsonValue | null | undefined): string | null {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata) && typeof metadata['via'] === 'string') {
+    return metadata['via'];
+  }
+  return null;
+}
+
+/** The token kind guard: true only for a self-registration token (purpose AND `via`). */
+export function isSelfRegistrationToken(row: { purpose: string; metadata: Prisma.JsonValue | null }): boolean {
+  return row.purpose === 'email_verification' && tokenVia(row.metadata) === SELF_REGISTRATION_VIA;
+}
+
+/** The self-registration tokens of an account as a Prisma filter (add `userId` and `consumedAt: null` to retire the open ones). */
+export const SELF_REGISTRATION_TOKEN_WHERE = {
+  purpose: 'email_verification',
+  metadata: { path: ['via'], equals: SELF_REGISTRATION_VIA },
+} satisfies Prisma.VerificationTokenWhereInput;
 
 export interface GeneratedVerificationToken {
   /** The raw token handed over once (in the API response, D-R01). Never stored. */

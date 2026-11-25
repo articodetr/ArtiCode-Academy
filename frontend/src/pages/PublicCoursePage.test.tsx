@@ -1,9 +1,11 @@
 // MOD-20 (D-R138) — one course of the public catalog (/explore/:courseId, API-237): the course and its outline by level
 // (titles only), the price, «سجّل في هذه الدورة» → the sign-in page with the enroll intent, the closed catalog, a missing
-// course, a failure, and that a signed-in user goes to the signed-in course page instead.
+// course, a failure, and that a signed-in user goes to the signed-in course page instead. PORTAL-04: the subject instead
+// of the difficulty, no age range and no sessions, the facts order, /login?returnTo=… with the course kept, and the note
+// and «إنشاء حساب» while API-205 lets a visitor create an account (by e-mail or through Google).
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { ACADEMY_PUBLIC_PATH } from '../api/academy'
 import { PUBLIC_CATALOG_PATH } from '../api/publicCatalog'
 import type { PublicCourseDetail } from '../api/publicCatalog'
@@ -13,6 +15,7 @@ import { makePublicAcademy } from '../test/academy'
 import { jsonResponse, mockFetch } from '../test/http'
 import { CATALOG_NOT_PUBLIC, PUBLIC_COURSE_IDS, makePublicDetail } from '../test/publicCatalog'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { KEPT_COURSE_KEY } from '../studentRegistration/keptCourse'
 import { PublicCoursePage } from './PublicCoursePage'
 
 const pc = ar.publicCatalog
@@ -61,19 +64,32 @@ const SUMMARY = 'مدخل عملي إلى البرمجة'
 const DESCRIPTION = 'تتعلم في هذه الدورة المتغيرات والدوال والحلقات.'
 const SECTIONS_NAV = { name: pc.course.sectionsNav }
 const label = (ar: string) => ({ ar })
+/** Where the visitor's buttons lead: the page and the enroll intent as `returnTo`. */
+const INTENT = `/catalog/${COURSE_ID}?intent=enroll`
+const SIGN_IN = `/login?returnTo=${encodeURIComponent(INTENT)}`
+const REGISTER = `/register?returnTo=${encodeURIComponent(INTENT)}`
+const keptCourseId = () => {
+  const raw = window.localStorage.getItem(KEPT_COURSE_KEY)
+  return raw ? (JSON.parse(raw) as { courseId: string }).courseId : null
+}
 
 describe('PublicCoursePage', () => {
+  beforeEach(() => window.localStorage.clear())
+
   it('shows the course and its outline by level — titles, kinds and lengths only — read without a token', async () => {
     const { api } = mockCourseApi(serve(makePublicDetail()))
     renderPage()
 
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
     // The band: the badges, the counts, the short text and the availability.
-    for (const text of [pc.card.courseType, 'مبتدئ', '24 ساعة', '5 دروس · مستويان', SUMMARY, pc.card.available]) expect(band().getByText(text)).toBeInTheDocument()
-    // The enrollment card: the difficulty, the compact facts, the price and the code.
+    for (const text of [pc.card.courseType, 'البرمجة', '24 ساعة', '5 دروس · مستويان', SUMMARY, pc.card.available]) expect(band().getByText(text)).toBeInTheDocument()
+    // The enrollment card: the subject, the compact facts, the price and the code (PORTAL-04: no difficulty, age or sessions).
     const card = within(screen.getByTestId('public-enroll-card'))
-    expect(card.getByText(pc.course.level)).toBeInTheDocument()
-    for (const text of ['PY-101', 'مبتدئ', pc.card.free, '24 ساعة', '12 جلسة', '5 دروس · مستويان', 'من 12 إلى 18 سنة']) expect(card.getByText(text)).toBeInTheDocument()
+    expect(card.getByText(pc.course.subject)).toBeInTheDocument()
+    for (const text of ['PY-101', 'البرمجة', pc.card.free, '24 ساعة', '5 دروس']) expect(card.getByText(text)).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('مبتدئ')
+    expect(document.body.textContent).not.toContain('جلس')
+    expect(document.body.textContent).not.toContain('سنة')
     expect(screen.getByText(DESCRIPTION)).toBeInTheDocument()
 
     const outline = within(screen.getByTestId('public-outline'))
@@ -143,43 +159,61 @@ describe('PublicCoursePage', () => {
     expect(screen.queryByText(pc.card.free)).not.toBeInTheDocument()
   })
 
-  it('sends the visitor to the sign-in page with the course and the enroll intent as the way back, and creates no account', async () => {
+  it('keeps the course and sends the visitor to /login?returnTo=<the course with the enroll intent> (PORTAL-04)', async () => {
     mockCourseApi(serve(makePublicDetail()))
     renderPage()
     await screen.findByText('أساسيات بايثون')
 
     const enroll = within(screen.getByTestId('public-enroll'))
-    expect(enroll.getByText(pc.course.enrollNote)).toBeInTheDocument()
+    // Nobody can create an account here: the note invites the sign-in alone.
+    expect(enroll.getByTestId('public-enroll-note')).toHaveTextContent(pc.course.signInNote)
+    expect(document.body.textContent).not.toContain('إدارة الأكاديمية')
     // A free course says nothing about a request or an invoice.
     expect(enroll.queryByText(pc.course.paidNote)).not.toBeInTheDocument()
+    expect(keptCourseId()).toBeNull()
     fireEvent.click(enroll.getByText(pc.course.enroll).closest('button')!)
 
     const probe = await screen.findByTestId('path')
-    expect(probe.textContent).toBe('/login')
-    expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: `/catalog/${COURSE_ID}?intent=enroll` })
+    expect(probe.textContent).toBe(SIGN_IN)
+    // The router state still carries the same way back (the sign-in page of before PORTAL-04 reads it).
+    expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: INTENT })
+    expect(keptCourseId()).toBe(COURSE_ID)
   })
 
-  it('offers «اشترك مجانًا» beside the enroll button, leading through the sign-in with the course kept', async () => {
-    mockCourseApi(serve(makePublicDetail()))
-    renderPage()
-    await screen.findByText('أساسيات بايثون')
-
-    const buttons = screen.getByTestId('public-enroll').querySelector<HTMLElement>('.course-enroll__buttons')!
-    expect(within(buttons).getByText(pc.course.enroll)).toBeInTheDocument()
-    const subscribe = within(buttons).getByTestId(`public-subscribe-${COURSE_ID}`)
-    expect(subscribe.tagName).toBe('A')
-    expect(subscribe).toHaveTextContent(pc.card.subscribeFree)
-    fireEvent.click(subscribe)
-
-    const probe = await screen.findByTestId('path')
-    expect(probe.textContent).toBe('/login')
-    expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: `/catalog/${COURSE_ID}?intent=enroll` })
+  it('offers one way to enroll and nothing that duplicates it, free or paid', async () => {
+    for (const overrides of [{}, { pricing: 'paid', price: { amount: 1200, currency: 'SAR' } }] as const) {
+      mockCourseApi(serve(makePublicDetail(overrides)))
+      const { unmount } = renderPage()
+      await screen.findByText('أساسيات بايثون')
+      const buttons = screen.getByTestId('public-enroll').querySelector<HTMLElement>('.course-enroll__buttons')!
+      expect(within(buttons).getAllByRole('button')).toHaveLength(1)
+      expect(within(buttons).queryAllByRole('link')).toHaveLength(0)
+      expect(screen.queryByTestId(`public-subscribe-${COURSE_ID}`)).not.toBeInTheDocument()
+      expect(screen.queryByText(pc.card.subscribeFree)).not.toBeInTheDocument()
+      expect(screen.queryByText(pc.card.subscribePaid)).not.toBeInTheDocument()
+      unmount()
+    }
   })
 
-  it('words the same action «طلب الاشتراك» for a paid course', async () => {
-    mockCourseApi(serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
+  it('reads المادة · المدة · المحتوى in the facts, then the fees, each only with a real value', async () => {
+    const card = () => screen.getByTestId('public-enroll-card')
+    const labels = () => [...card().querySelectorAll('.course-facts dt')].map((node) => node.textContent)
+    mockCourseApi(serve(makePublicDetail({ lessonCount: 12 })))
+    const first = renderPage()
+    await screen.findByTestId('public-enroll')
+    expect(labels()).toEqual([pc.course.subject, pc.card.duration, pc.card.content])
+    // The published lessons, with the Arabic plural forms.
+    expect(within(card()).getByText('12 درساً')).toBeInTheDocument()
+    // The fees come right after the facts, before the buttons.
+    const order = [...card().querySelectorAll('.course-facts, .course-enroll__price, .course-enroll__action')].map((node) => node.className)
+    expect(order).toEqual(['course-facts', 'course-enroll__price', 'course-enroll__action'])
+    first.unmount()
+
+    mockCourseApi(serve(makePublicDetail({ subject: null, durationHours: null, lessonCount: 1 })))
     renderPage()
-    expect(await screen.findByTestId(`public-subscribe-${COURSE_ID}`)).toHaveTextContent(pc.card.subscribePaid)
+    await screen.findByTestId('public-enroll')
+    expect(labels()).toEqual([pc.card.content])
+    expect(within(card()).getByText('درس واحد')).toBeInTheDocument()
   })
 
   it('shows the calm «closed» page when the academy does not open its catalog (404 catalog_not_public)', async () => {
@@ -411,6 +445,122 @@ describe('PublicCoursePage', () => {
     mockCourseApi(() => jsonResponse(404, { statusCode: 404, code: 'course_not_found', message: 'gone' }))
     renderPage()
     expect((await screen.findByText(pc.course.notFound)).closest('.course-page-state')).not.toBeNull()
+  })
+
+  describe('creating an account (PORTAL-04, the contract of #207)', () => {
+    const entry = ar.studentRegistration.entry
+    const academyReads = (fetchMock: ReturnType<typeof mockFetch>) => fetchMock.mock.calls.filter(([url]) => url === ACADEMY_PUBLIC_PATH).length
+
+    /** API-205 with `academy` (or the failure `status`) and API-237 with `detail`. */
+    function mockRegistrationApi(academy: unknown, detail: () => Response, status = 200) {
+      return mockFetch((url) => {
+        if (url === ACADEMY_PUBLIC_PATH) return jsonResponse(status, academy)
+        if (url === COURSE_PATH) return detail()
+        return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
+      })
+    }
+
+    function renderForRegister() {
+      return renderWithProviders(<PublicCoursePage />, {
+        auth: makeAuth(),
+        route: `/explore/${COURSE_ID}`,
+        path: '/explore/:courseId',
+        routes: { '/register': <PathProbe />, '/login': <PathProbe /> },
+      })
+    }
+
+    const open = () => makePublicAcademy({ catalogPublic: true, selfRegistration: true })
+
+    it.each([
+      ['the field absent', makePublicAcademy({ catalogPublic: true }), 200],
+      ['false', makePublicAcademy({ catalogPublic: true, selfRegistration: false }), 200],
+      ['a failed read', { statusCode: 503, code: 'academy_not_configured', message: 'none' }, 503],
+    ])('keeps the original note and offers no account with %s, reading API-205 once', async (_case, academy, status) => {
+      const fetchMock = mockRegistrationApi(academy, serve(makePublicDetail()), status)
+      renderForRegister()
+      const enroll = within(await screen.findByTestId('public-enroll'))
+      await waitFor(() => expect(academyReads(fetchMock)).toBe(1))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(enroll.getByTestId('public-enroll-note')).toHaveTextContent(pc.course.signInNote)
+      expect(enroll.queryByText(pc.course.signInOrRegisterNote)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+      expect(document.querySelector('a[href^="/register"]')).toBeNull()
+      expect(document.body.textContent).not.toContain(entry.courseNote)
+      expect(academyReads(fetchMock)).toBe(1)
+    })
+
+    it.each([
+      ['by e-mail (selfRegistration)', { selfRegistration: true }],
+      ['through Google alone (googleSignUp)', { selfRegistration: false, googleSignUp: true }],
+    ])('offers «إنشاء حساب» to /register?returnTo=… and the note that says so when an account can be created %s', async (_case, flags) => {
+      const fetchMock = mockRegistrationApi({ ...makePublicAcademy({ catalogPublic: true }), ...flags }, serve(makePublicDetail()))
+      renderForRegister()
+      const link = await screen.findByTestId('public-course-register')
+      const enroll = within(screen.getByTestId('public-enroll'))
+      expect(enroll.getByTestId('public-enroll-note')).toHaveTextContent(pc.course.signInOrRegisterNote)
+      expect(enroll.queryByText(pc.course.signInNote)).not.toBeInTheDocument()
+      // The way in stays, and the new account is the quiet link beside it.
+      expect(enroll.getByText(pc.course.enroll)).toBeInTheDocument()
+      expect(screen.queryByTestId(`public-subscribe-${COURSE_ID}`)).not.toBeInTheDocument()
+      expect(academyReads(fetchMock)).toBe(1)
+
+      expect(link).toHaveTextContent(pc.course.createAccount)
+      expect(link).toHaveAttribute('href', REGISTER)
+      expect(keptCourseId()).toBeNull()
+      fireEvent.click(link)
+      const probe = await screen.findByTestId('path')
+      expect(probe.textContent).toBe(REGISTER)
+      expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: INTENT })
+      expect(keptCourseId()).toBe(COURSE_ID)
+    })
+
+    it('keeps the paid note beside the new one', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
+      renderForRegister()
+      await screen.findByTestId('public-course-register')
+      expect(within(screen.getByTestId('public-enroll')).getByText(pc.course.paidNote)).toBeInTheDocument()
+    })
+
+    it('offers no course link for a course that takes nobody now', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail({ openClasses: 0, hasFreeSeat: false })))
+      renderForRegister()
+      await screen.findByTestId('public-not-enrollable')
+      await waitFor(() => expect(document.querySelector('.public-catalog__register')).not.toBeNull())
+      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+    })
+
+    it('words the closed catalog truthfully, with the way to register, only while registration is open', async () => {
+      const opened = mockRegistrationApi(open(), () => jsonResponse(404, CATALOG_NOT_PUBLIC))
+      const first = renderForRegister()
+      const closed = within(await screen.findByTestId('catalog-closed'))
+      expect(await closed.findByText(entry.accountsNote)).toBeInTheDocument()
+      expect(closed.queryByText(pc.closed.text)).not.toBeInTheDocument()
+      expect(closed.getByRole('link', { name: entry.createAccount })).toHaveAttribute('href', '/register')
+      expect(closed.getByText(pc.closed.signIn)).toBeInTheDocument()
+      expect(academyReads(opened)).toBe(1)
+      first.unmount()
+
+      mockRegistrationApi(makePublicAcademy({ catalogPublic: false }), () => jsonResponse(404, CATALOG_NOT_PUBLIC))
+      renderForRegister()
+      const shut = within(await screen.findByTestId('catalog-closed'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(shut.getByText(pc.closed.text)).toBeInTheDocument()
+      expect(shut.queryByText(entry.accountsNote)).not.toBeInTheDocument()
+      expect(shut.queryByRole('link', { name: entry.createAccount })).not.toBeInTheDocument()
+    })
+
+    it('reads nothing for a signed-in user, whatever the academy allows', async () => {
+      const fetchMock = mockRegistrationApi(open(), serve(makePublicDetail()))
+      renderWithProviders(<PublicCoursePage />, {
+        auth: makeAuth({ user: makeUser({ role: 'student', roles: ['student'] }) }),
+        route: `/explore/${COURSE_ID}`,
+        path: '/explore/:courseId',
+        routes: { '/catalog/:courseId': <PathProbe /> },
+      })
+      await screen.findByTestId('path')
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(document.querySelector('a[href^="/register"]')).toBeNull()
+    })
   })
 })
 

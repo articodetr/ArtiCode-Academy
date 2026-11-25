@@ -58,10 +58,11 @@ export function apiUrl(path: string): string {
  * The wait a response asks for, in whole seconds: the standard `Retry-After`
  * (seconds or an HTTP date), else the header @nestjs/throttler names after the
  * blocking throttler — the academy's are `login` (a 429 carries `Retry-After-login`)
- * and, on the session refresh alone, the per-IP ceiling `refresh_ip` (D-R140).
+ * and, on the session refresh alone, the per-IP ceiling `refresh_ip` (D-R140); the self-registration adds `register_ip`
+ * (PORTAL-03, contract v2).
  */
 function retryAfterFrom(headers: Headers): number | null {
-  for (const name of ['Retry-After', 'Retry-After-login', 'Retry-After-refresh_ip']) {
+  for (const name of ['Retry-After', 'Retry-After-login', 'Retry-After-refresh_ip', 'Retry-After-register_ip']) {
     const value = headers.get(name)?.trim()
     if (!value) continue
     if (/^\d+$/.test(value)) return Number(value)

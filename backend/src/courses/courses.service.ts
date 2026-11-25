@@ -56,6 +56,8 @@ const COURSE_SELECT = {
   coverImageUrl: true,
   resources: true,
   level: { select: { id: true, code: true, name: true, isActive: true } },
+  // PORTAL-04: the school subject, read in the same query.
+  subject: { select: { id: true, code: true, name: true } },
   enrollmentFeePlan: { select: COURSE_PLAN_SELECT },
   _count: { select: { syllabusItems: true } },
 } satisfies Prisma.CourseSelect;
@@ -73,6 +75,7 @@ function toCourseDto(row: CourseRow, currency: string): CourseDto {
     level: row.level
       ? { id: row.level.id, code: row.level.code, name: readLocalizedText(row.level.name) ?? { ar: row.level.code }, isActive: row.level.isActive }
       : null,
+    subject: row.subject ? { id: row.subject.id, code: row.subject.code, name: readLocalizedText(row.subject.name) ?? { ar: row.subject.code } } : null,
     status: row.status,
     durationHours: row.durationHours === null ? null : Number(row.durationHours),
     sessionsCount: row.sessionsCount,
@@ -101,6 +104,7 @@ function valuesOf(row: CourseRow): CourseValues {
     maxAge: row.maxAge,
     coverImageUrl: row.coverImageUrl,
     enrollmentFeePlanId: row.enrollmentFeePlan?.id ?? null,
+    subjectId: row.subject?.id ?? null,
     resources: readLessonResources(row.resources),
   };
 }
@@ -123,6 +127,7 @@ function toUpdateInput(data: CoursePatch): Prisma.CourseUncheckedUpdateInput {
   if (data.maxAge !== undefined) input.maxAge = data.maxAge;
   if (data.coverImageUrl !== undefined) input.coverImageUrl = data.coverImageUrl;
   if (data.enrollmentFeePlanId !== undefined) input.enrollmentFeePlanId = data.enrollmentFeePlanId;
+  if (data.subjectId !== undefined) input.subjectId = data.subjectId;
   if (data.resources !== undefined) input.resources = data.resources as unknown as Prisma.InputJsonValue;
   return input;
 }
@@ -132,11 +137,19 @@ function toUpdateInput(data: CoursePatch): Prisma.CourseUncheckedUpdateInput {
  * a level deleted meanwhile (P2003 on courses.level_id) or a course deleted
  * meanwhile (P2025).
  */
-function translateKnownError(error: unknown, courseId: string | null, code: string | null, levelId: string | null, feePlanId: string | null = null): unknown {
+function translateKnownError(
+  error: unknown,
+  courseId: string | null,
+  code: string | null,
+  levelId: string | null,
+  feePlanId: string | null = null,
+  subjectId: string | null = null,
+): unknown {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return error;
   if (error.code === 'P2002' && code !== null) return coursesError.courseCodeTaken(code);
-  // A foreign key failed: the level, or (MOD-19) the fee plan deleted meanwhile.
+  // A foreign key failed: the level, (MOD-19) the fee plan or (PORTAL-04) the subject deleted meanwhile.
   if (error.code === 'P2003' && feePlanId !== null && JSON.stringify(error.meta ?? {}).includes('enrollment_fee_plan')) return coursesError.feePlanNotFound(feePlanId);
+  if (error.code === 'P2003' && subjectId !== null && JSON.stringify(error.meta ?? {}).includes('subject_id')) return coursesError.subjectNotFound(subjectId);
   if (error.code === 'P2003' && levelId !== null) return coursesError.levelNotFound(levelId);
   if (error.code === 'P2025' && courseId !== null) return coursesError.courseNotFound(courseId);
   return error;
@@ -227,6 +240,7 @@ export class CoursesService {
     const clash = await this.prisma.db.course.findUnique({ where: { code: input.code }, select: { id: true } });
     if (clash) throw coursesError.courseCodeTaken(input.code);
     if (input.levelId) await this.assertLevelExists(input.levelId);
+    if (input.subjectId) await this.assertSubjectUsable(input.subjectId);
     if (input.enrollmentFeePlanId !== undefined) await this.assertPricingAllowed(input.enrollmentFeePlanId, null, caller);
 
     let courseId: string;
@@ -245,6 +259,7 @@ export class CoursesService {
             maxAge,
             coverImageUrl: input.coverImageUrl ?? null,
             enrollmentFeePlanId: input.enrollmentFeePlanId ?? null,
+            subjectId: input.subjectId ?? null,
             createdById: caller.id,
           },
           select: { id: true },
@@ -263,7 +278,7 @@ export class CoursesService {
         return course.id;
       });
     } catch (error) {
-      throw translateKnownError(error, null, input.code, input.levelId ?? null, input.enrollmentFeePlanId ?? null);
+      throw translateKnownError(error, null, input.code, input.levelId ?? null, input.enrollmentFeePlanId ?? null, input.subjectId ?? null);
     }
     return this.getForManager(courseId);
   }
@@ -285,6 +300,7 @@ export class CoursesService {
     if (input.maxAge !== undefined) patch.maxAge = input.maxAge;
     if (input.coverImageUrl !== undefined) patch.coverImageUrl = input.coverImageUrl;
     if (input.enrollmentFeePlanId !== undefined) patch.enrollmentFeePlanId = input.enrollmentFeePlanId;
+    if (input.subjectId !== undefined) patch.subjectId = input.subjectId;
     if (input.resources !== undefined) {
       // J-F67: the rules of a lesson's resources (https, a localized title, at most 20).
       const check = parseLessonResources(input.resources);
@@ -303,6 +319,8 @@ export class CoursesService {
       if (clash && clash.id !== id) throw coursesError.courseCodeTaken(plan.data.code);
     }
     if (plan.data.levelId) await this.assertLevelExists(plan.data.levelId);
+    // PORTAL-04: only a subject that changes is checked — a course keeps a subject deactivated later.
+    if (plan.data.subjectId) await this.assertSubjectUsable(plan.data.subjectId);
     // MOD-19 (D-R122): a price change also needs fee_plans.manage; clearing it (free again) too.
     if (plan.data.enrollmentFeePlanId !== undefined) await this.assertPricingAllowed(plan.data.enrollmentFeePlanId, id, caller);
 
@@ -322,7 +340,7 @@ export class CoursesService {
         );
       });
     } catch (error) {
-      throw translateKnownError(error, id, plan.data.code ?? null, plan.data.levelId ?? null, plan.data.enrollmentFeePlanId ?? null);
+      throw translateKnownError(error, id, plan.data.code ?? null, plan.data.levelId ?? null, plan.data.enrollmentFeePlanId ?? null, plan.data.subjectId ?? null);
     }
     return this.getForManager(id);
   }
@@ -421,5 +439,12 @@ export class CoursesService {
   private async assertLevelExists(levelId: string): Promise<void> {
     const level = await this.prisma.db.level.findUnique({ where: { id: levelId }, select: { id: true } });
     if (!level) throw coursesError.levelNotFound(levelId);
+  }
+
+  /** PORTAL-04: a course is given an existing (404 subject_not_found), active (422 subject_inactive) subject. */
+  private async assertSubjectUsable(subjectId: string): Promise<void> {
+    const subject = await this.prisma.db.subject.findUnique({ where: { id: subjectId }, select: { isActive: true } });
+    if (!subject) throw coursesError.subjectNotFound(subjectId);
+    if (!subject.isActive) throw coursesError.subjectInactive(subjectId);
   }
 }

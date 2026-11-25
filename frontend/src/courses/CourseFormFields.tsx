@@ -2,6 +2,8 @@
 // course drawer (MOD-04-T05). Rendered inside the caller's <Form>; local rules
 // mirror the server (CreateCourseDto/UpdateCourseDto) — the server decides —
 // and every rule words its own message (J-F23: no antd default text).
+// PORTAL-04: a school-subject picker beside the difficulty level; the age range
+// is no longer asked (the stored values stay), the sessions stay.
 import { Col, Form, Input, InputNumber, Row, Select, Tag } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -9,14 +11,17 @@ import type { Level } from '../api/levels'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
 import { CourseCoverField } from './CourseCoverField'
-import { AGE_MAX, COURSE_CODE_PATTERN, COURSE_TEXT_MAX_LENGTH, DURATION_HOURS_MAX, SESSIONS_MAX, invalidAgeRange, isCoverImageUrl, normaliseCourseCode } from './courses.form'
+import { COURSE_CODE_PATTERN, COURSE_TEXT_MAX_LENGTH, DURATION_HOURS_MAX, SESSIONS_MAX, isCoverImageUrl, normaliseCourseCode } from './courses.form'
+import type { SubjectChoice } from './subjects.form'
 
 interface CourseFormFieldsProps {
   form: FormInstance
   levels: Level[]
+  /** PORTAL-04: the subjects to choose from (GET /api/subjects — a manager reads the inactive ones too; subjectChoicesFor()). */
+  subjects: readonly SubjectChoice[]
 }
 
-export function CourseFormFields({ form, levels }: CourseFormFieldsProps) {
+export function CourseFormFields({ form, levels, subjects }: CourseFormFieldsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   /** The length rule of every text field, worded by the courses dictionary (J-F23). */
@@ -108,6 +113,22 @@ export function CourseFormFields({ form, levels }: CourseFormFieldsProps) {
       >
         <CourseCoverField />
       </Form.Item>
+      <Form.Item name="subjectId" label={t('courses.fields.subject')}>
+        <Select
+          allowClear
+          placeholder={t('courses.noSubject')}
+          options={subjects.map((subject) => ({
+            value: subject.id,
+            label: (
+              <>
+                {localizedLabel(subject.name, language)} <span dir="ltr">({subject.code})</span>
+                {subject.isActive === false ? <Tag style={{ marginInlineStart: 8 }}>{t('labels.inactive')}</Tag> : null}
+              </>
+            ),
+          }))}
+          style={{ maxWidth: 360 }}
+        />
+      </Form.Item>
       <Form.Item name="levelId" label={t('courses.fields.level')}>
         <Select
           allowClear
@@ -133,28 +154,6 @@ export function CourseFormFields({ form, levels }: CourseFormFieldsProps) {
         <Col xs={12} md={6}>
           <Form.Item name="sessionsCount" label={t('courses.fields.sessionsCount')}>
             <InputNumber min={1} max={SESSIONS_MAX} precision={0} style={{ width: '100%' }} />
-          </Form.Item>
-        </Col>
-        <Col xs={12} md={6}>
-          <Form.Item name="minAge" label={t('courses.fields.minAge')}>
-            <InputNumber min={0} max={AGE_MAX} precision={0} style={{ width: '100%' }} />
-          </Form.Item>
-        </Col>
-        <Col xs={12} md={6}>
-          <Form.Item
-            name="maxAge"
-            label={t('courses.fields.maxAge')}
-            dependencies={['minAge']}
-            rules={[
-              {
-                validator: (_, value: number | null | undefined) =>
-                  invalidAgeRange(form.getFieldValue('minAge') as number | null | undefined, value)
-                    ? Promise.reject(new Error(t('courses.validation.ageRange')))
-                    : Promise.resolve(),
-              },
-            ]}
-          >
-            <InputNumber min={0} max={AGE_MAX} precision={0} style={{ width: '100%' }} />
           </Form.Item>
         </Col>
       </Row>

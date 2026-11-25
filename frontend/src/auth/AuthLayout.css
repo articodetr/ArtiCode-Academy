@@ -1,0 +1,280 @@
+/* The frame of the sign-in and account-creation pages (auth/AuthLayout.tsx): a light page with a slim top bar and one
+   centred card. The colours are the public pages' (publicCatalog/publicCatalog.css — `.public-catalog`), copied as the
+   frame's own custom properties because those live on `.public-catalog` alone. The page covers the viewport by itself:
+   Ant Design's App wrapper has no height (LoginPage.css), so `100vh`, then `100dvh` for a phone's collapsing bar. */
+.auth-layout {
+  --auth-primary: #039092;
+  --auth-primary-strong: #047c83;
+  --auth-primary-softer: #f0f9fa;
+  --auth-ink: #1d2a30;
+  --auth-text: #33454b;
+  --auth-muted: #62757b;
+  --auth-line: #e3ecee;
+  --auth-page: #f4f7f8;
+  --auth-surface: #ffffff;
+  --auth-gutter: 24px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--auth-page);
+  color: var(--auth-text);
+  font-family: 'Public Poppins', 'Public Cairo', 'Segoe UI', Tahoma, 'Noto Sans Arabic', 'Noto Sans', system-ui, sans-serif;
+}
+
+.auth-layout__loading {
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.auth-layout__loading-label {
+  margin: 0;
+  color: var(--auth-muted);
+  font-size: 15px;
+}
+
+/* ---------- Top bar ---------- */
+
+.auth-layout__bar {
+  background: var(--auth-surface);
+  border-bottom: 1px solid var(--auth-line);
+}
+
+.auth-layout__bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 1200px;
+  min-height: 64px;
+  margin: 0 auto;
+  padding: 0 var(--auth-gutter);
+  box-sizing: border-box;
+}
+
+/* The academy's logo and name; the name is the link's accessible name (the logo or the book badge is decorative). */
+.auth-layout__brand {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--auth-ink);
+  text-decoration: none;
+}
+
+.auth-layout__brand:hover,
+.auth-layout__brand:focus-visible {
+  color: var(--auth-primary);
+}
+
+.auth-layout__brand:focus-visible,
+.auth-layout__back:focus-visible {
+  outline: 2px solid var(--auth-primary);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.auth-layout__brand-logo {
+  display: block;
+  height: 36px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+.auth-layout__brand-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--auth-primary);
+  color: #fff;
+  font-size: 17px;
+}
+
+.auth-layout__brand-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-layout__bar-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-layout__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--auth-text);
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.auth-layout__back:hover {
+  background: var(--auth-primary-softer);
+  color: var(--auth-primary-strong);
+}
+
+/* ---------- The card ---------- */
+
+.auth-layout__main {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px var(--auth-gutter) 56px;
+  box-sizing: border-box;
+}
+
+.auth-layout__card {
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 32px 32px;
+  box-sizing: border-box;
+  border: 1px solid var(--auth-line);
+  border-radius: 12px;
+  background: var(--auth-surface);
+  box-shadow: 0 3px 12px rgba(58, 52, 110, 0.06);
+}
+
+.auth-layout__head {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.auth-layout__card-logo {
+  display: block;
+  width: auto;
+  max-width: 160px;
+  max-height: 56px;
+  margin: 0 auto 16px;
+  object-fit: contain;
+}
+
+.auth-layout__title {
+  margin: 0;
+  color: var(--auth-ink);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.auth-layout__subtitle {
+  margin: 8px 0 0;
+  color: var(--auth-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* A plain link of the card (not an Ant Design button rendered as a link). */
+.auth-layout__card a:not(.ant-btn) {
+  color: var(--auth-primary-strong);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.auth-layout__card a:not(.ant-btn):hover,
+.auth-layout__card a:not(.ant-btn):focus-visible {
+  text-decoration: underline;
+}
+
+/* «سؤال؟ رابط» on one centred line that wraps on a phone. */
+.auth-layout__prompt {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin: 20px 0 0;
+  color: var(--auth-muted);
+  text-align: center;
+}
+
+/* Right under the heading: closer to it than to the controls below. */
+.auth-layout__prompt--top {
+  margin: -12px 0 24px;
+}
+
+/* The «نسيت كلمة المرور؟» line under the password, at the reading end. */
+.auth-layout__aside {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 20px;
+  font-size: 14px;
+}
+
+/* «أو» between the password form and Google. */
+.auth-layout__card .auth-layout__divider.ant-divider {
+  margin: 20px 0;
+  color: var(--auth-muted);
+  font-size: 14px;
+}
+
+.auth-layout__links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 560px) {
+  .auth-layout {
+    --auth-gutter: 16px;
+  }
+
+  .auth-layout__main {
+    padding: 24px var(--auth-gutter) 32px;
+  }
+
+  .auth-layout__card {
+    padding: 28px 20px 24px;
+    border-radius: 10px;
+  }
+
+  .auth-layout__title {
+    font-size: 22px;
+  }
+
+  /* The link keeps its accessible name; only the arrow shows beside the language switch. */
+  .auth-layout__back {
+    padding: 6px;
+  }
+
+  .auth-layout__back-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .auth-layout__bar-actions {
+    gap: 4px;
+  }
+
+  .auth-layout__card {
+    padding: 24px 16px 20px;
+  }
+}

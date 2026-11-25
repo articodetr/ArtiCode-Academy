@@ -1,12 +1,14 @@
 // Creation of a course (MOD-04-T05) through POST /api/courses (API-044): the
 // course starts as a draft. A server error that names a field (taken code,
-// unknown level, age range) is shown on that field; anything else above the form.
+// unknown level or subject) is shown on that field; anything else above the form.
+// PORTAL-04: the subject picker; no age range.
 import { Alert, Form, Modal } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createCourse } from '../api/courses'
 import type { Course } from '../api/courses'
 import type { Level } from '../api/levels'
+import type { Subject } from '../api/subjects'
 import { CourseFormFields } from './CourseFormFields'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { buildCreateCourseInput } from './courses.form'
@@ -15,11 +17,13 @@ import type { CourseFormValues } from './courses.form'
 interface CreateCourseModalProps {
   open: boolean
   levels: Level[]
+  /** PORTAL-04 */
+  subjects: Subject[]
   onClose: () => void
   onCreated: (course: Course) => void
 }
 
-export function CreateCourseModal({ open, levels, onClose, onCreated }: CreateCourseModalProps) {
+export function CreateCourseModal({ open, levels, subjects, onClose, onCreated }: CreateCourseModalProps) {
   const { t } = useTranslation()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
@@ -64,7 +68,7 @@ export function CreateCourseModal({ open, levels, onClose, onCreated }: CreateCo
     >
       {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
       <Form form={form} layout="vertical" requiredMark={false} onFinish={(values) => void submit(values as CourseFormValues)} disabled={saving}>
-        <CourseFormFields form={form} levels={levels} />
+        <CourseFormFields form={form} levels={levels} subjects={subjects} />
       </Form>
     </Modal>
   )

@@ -51,8 +51,9 @@ export class AcademyController {
     summary: 'Read the academy branding (public)',
     description:
       'No sign-in: the localized `name`, the `logoUrl` and the `defaultLocale` the sign-in page shows before anybody is authenticated, and `catalogPublic` ' +
-      '(true when `settings.catalog.publicBrowsing` is true — visitors may browse the published courses, API-236/237) and `homepageImages` ' +
-      '(the root-relative URL of the academy’s own picture for each of the four places of the public home page, null = the built-in default) — nothing else ' +
+      '(true when `settings.catalog.publicBrowsing` is true — visitors may browse the published courses, API-236/237), `homepageImages` ' +
+      '(the root-relative URL of the academy’s own picture for each of the four places of the public home page, null = the built-in default), `selfRegistration` ' +
+      '(true when `settings.selfRegistration.enabled` is true and the server has a mail transport — PORTAL-03), `googleSignIn` (Google sign-in is configured on this server) and `googleSignUp` (`googleSignIn` and `settings.selfRegistration.enabled` is true — a new student account may be created through Google) — nothing else ' +
       '(no id, slug, contact details, time zone, currency or settings). 60 requests per minute per IP; no audit event.',
   })
   @ApiOkResponse({ type: AcademyPublicDto })
@@ -70,7 +71,7 @@ export class AcademyController {
       'Identity and settings of this deployment: `slug`, localized `name`, `logoUrl`, `defaultLocale`, `timezone`, `currency`, contact details. ' +
       'Every authenticated user may read it (the frontend needs the name, logo, locale, time zone and currency in every role). ' +
       '`settings` carries every known key, `null` when not set (MOD-02-T03: `scheduling.weekStartsOn`, `scheduling.workingDays`; MOD-10: `certificates.serialPrefix`; ' +
-      'MOD-20: `learning.videoCompletionPercent` (null = 90), `catalog.publicBrowsing` (null = off)); `platformAcademyId` is not exposed.',
+      'MOD-20: `learning.videoCompletionPercent` (null = 90), `catalog.publicBrowsing` (null = off); PORTAL-03: `selfRegistration.enabled` (null = off)); `platformAcademyId` is not exposed.',
   })
   @ApiOkResponse({ type: AcademyDto })
   get(): Promise<AcademyDto> {

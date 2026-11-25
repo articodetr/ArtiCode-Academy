@@ -7,6 +7,7 @@ import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeC
 import { makeCurriculum } from '../test/curriculum'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeFeePlan } from '../test/payments'
+import { SUBJECT_IDS, makeSubject } from '../test/subjects'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CourseDrawer } from './CourseDrawer'
 
@@ -32,7 +33,7 @@ function renderDrawer(permissions: string[]) {
   const onUpdated = vi.fn()
   const onDeleted = vi.fn()
   const onClose = vi.fn()
-  renderWithProviders(<CourseDrawer courseId={COURSE_ID} levels={[makeLevel()]} onClose={onClose} onUpdated={onUpdated} onDeleted={onDeleted} />, {
+  renderWithProviders(<CourseDrawer courseId={COURSE_ID} levels={[makeLevel()]} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={onUpdated} onDeleted={onDeleted} />, {
     auth: makeAuth({ user: makeUser({ permissions }) }),
     route: '/courses',
   })
@@ -179,6 +180,50 @@ describe('CourseDrawer', () => {
     expect(await screen.findByText('الحد الأقصى 200 حرفاً')).toBeInTheDocument()
     expect(ar.courses.validation.maxLength.replace('{{max}}', '200')).toBe('الحد الأقصى 200 حرفاً')
     expect(calls.every((call) => call.method === 'GET')).toBe(true)
+  })
+})
+
+describe('CourseDrawer — the school subject, no age range (PORTAL-04)', () => {
+  it('shows the subject beside the difficulty level and keeps the sessions, with no age range', async () => {
+    mockCourseApi(() => makeCourse({ minAge: 10, maxAge: 14 }))
+    renderDrawer(COURSE_READER_PERMISSIONS)
+    expect(await screen.findByText('البرمجة (PROG)')).toBeInTheDocument()
+    expect(screen.getByText(ar.courses.fields.subject)).toBeInTheDocument()
+    expect(screen.getByText('مبتدئ (BEG)')).toBeInTheDocument()
+    expect(screen.getByText(ar.courses.fields.sessionsCount)).toBeInTheDocument()
+    expect(screen.getByText('12')).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('الفئة العمرية')
+    expect(document.body.textContent).not.toContain('10 – 14')
+  })
+
+  it('edits the subject in the smallest PATCH, never names the ages, and asks no age at all', async () => {
+    const saved = makeCourse({ subject: { id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } }, updatedAt: '2026-11-24T10:00:00.000Z' })
+    const calls = mockCourseApi(() => makeCourse({ minAge: 10, maxAge: 14 }), { PATCH: jsonResponse(200, saved) })
+    const { onUpdated } = renderDrawer(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101')
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+
+    const picker = await screen.findByRole('combobox', { name: ar.courses.fields.subject })
+    expect(screen.queryByText('أصغر عمر')).not.toBeInTheDocument()
+    expect(screen.queryByText('أكبر عمر')).not.toBeInTheDocument()
+    expect(screen.getByLabelText(ar.courses.fields.sessionsCount)).toBeInTheDocument()
+    fireEvent.mouseDown(picker)
+    fireEvent.click(await screen.findByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(saved))
+    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ subjectId: SUBJECT_IDS[1] }])
+  })
+
+  it('names the course\'s own subject in the picker even when the subjects list lacks it', async () => {
+    mockCourseApi(() => makeCourse({ subject: { id: 'hidden-subject', code: 'OLD', name: { ar: 'مادة قديمة' } } }))
+    renderDrawer(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('مادة قديمة (OLD)')
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    const picker = await screen.findByRole('combobox', { name: ar.courses.fields.subject })
+    const field = picker.closest('.ant-select') as HTMLElement
+    expect(within(field).getByText(/مادة قديمة/)).toBeInTheDocument()
+    expect(field.textContent).not.toContain('hidden-subject')
   })
 })
 

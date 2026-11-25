@@ -125,7 +125,7 @@ describe('homepage images — the stored references', () => {
 
   it('is invisible to the PATCH-able settings: readSettings ignores the domain and applySettingsChanges keeps it', () => {
     const stored = { learning: { videoCompletionPercent: 80 }, homepageImages: { heroStudent: reference() } };
-    expect(Object.keys(readSettings(stored))).toEqual(['scheduling', 'certificates', 'learning', 'catalog']);
+    expect(Object.keys(readSettings(stored))).toEqual(['scheduling', 'certificates', 'learning', 'catalog', 'selfRegistration']);
     const patched = applySettingsChanges(stored, [['settings.learning.videoCompletionPercent', null]]);
     expect(patched).toEqual({ homepageImages: { heroStudent: reference() } });
   });

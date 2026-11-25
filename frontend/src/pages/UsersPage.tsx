@@ -254,6 +254,10 @@ export function UsersPage() {
         loadedRoles={roles.items}
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
+        onRemoved={() => {
+          setSelectedId(null)
+          list.reload()
+        }}
       />
 
       <CreateUserWizard

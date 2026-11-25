@@ -20,6 +20,8 @@ export const COURSE_PATCH_FIELDS = [
   // MOD-19 (D-R122/D-R129): the cover and the plan that prices a request.
   'coverImageUrl',
   'enrollmentFeePlanId',
+  // PORTAL-04: the school subject the course teaches.
+  'subjectId',
   // J-F67: the course's own materials (its textbook), replaced as a whole.
   'resources',
 ] as const;
@@ -40,6 +42,7 @@ export interface CourseValues {
   maxAge: number | null;
   coverImageUrl: string | null;
   enrollmentFeePlanId: string | null;
+  subjectId: string | null;
   resources: LessonResource[];
 }
 

@@ -682,7 +682,10 @@ export class GuardianLinkDto {
  * The detail adds `mfaEnabledAt` to the summary (not in the list items): it is
  * an account-security timestamp, so it follows D-R07 like `lockedUntil` — null
  * without `users.read_contact`. The MFA secrets, the replay step and the
- * recovery codes are never read for a users response.
+ * recovery codes are never read for a users response. PORTAL-03 adds
+ * `googleLinkedAt` (D-R07 too — never the Google subject or its address) and
+ * `awaitingRegistration` (always present; read with a filter, the password
+ * hash is never loaded).
  */
 export class UserDetailDto extends UserSummaryDto {
   @ApiProperty({
@@ -692,6 +695,21 @@ export class UserDetailDto extends UserSummaryDto {
     description: 'ISO 8601; when two-step verification was turned on, null while it is off; null without `users.read_contact`',
   })
   mfaEnabledAt: string | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'ISO 8601; when the account was linked to a Google account (the creation of the link), null while none is linked; null without `users.read_contact`',
+  })
+  googleLinkedAt: string | null;
+
+  @ApiProperty({
+    type: Boolean,
+    description:
+      'True for a self-registered account whose holder has not opened the e-mailed link yet (`pending` without a password): `activate` does not apply to it (409), only `delete`, which removes it for good while nothing else refers to it',
+  })
+  awaitingRegistration: boolean;
 
   @ApiProperty({ type: [UserRoleSummaryDto] })
   roles: UserRoleSummaryDto[];

@@ -17,6 +17,8 @@ describe('public catalog API calls', () => {
     expect(publicCatalogPath()).toBe(PUBLIC_CATALOG_PATH)
     expect(publicCatalogPath({ q: '  ', limit: 24 })).toBe(`${PUBLIC_CATALOG_PATH}?limit=24`)
     expect(publicCatalogPath({ q: ' بايثون ', limit: 24, cursor: 'abc' })).toBe(`${PUBLIC_CATALOG_PATH}?q=${encodeURIComponent('بايثون')}&limit=24&cursor=abc`)
+    // PORTAL-04: the school subject (no screen sends it yet — the subject list needs a session).
+    expect(publicCatalogPath({ subjectId: 'sb-1', limit: 24 })).toBe(`${PUBLIC_CATALOG_PATH}?subjectId=sb-1&limit=24`)
   })
 
   it('listPublicCatalog sends GET without the bearer token and returns the page', async () => {

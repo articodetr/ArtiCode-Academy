@@ -1,0 +1,156 @@
+// PORTAL-04 — GoogleAuthService without a database: the pure account rules
+// (availability, Google's authority over an address, the roles that may be
+// linked by e-mail, the name of a new account), the order of the callback's
+// checks before anything touches Google or the database (unconfigured, refused
+// at Google, the state cookie), and how a refused session is answered.
+import { authError } from '../auth.errors.js';
+import {
+  GoogleAuthService,
+  fullNameFrom,
+  holdsOnlyAutoLinkableRoles,
+  isGoogleAuthoritative,
+  isPendingSelfRegistration,
+  isUnavailable,
+} from './google-auth.service.js';
+import { deriveStateKey, newGoogleAttempt, signGoogleState } from './google-state.js';
+
+const NOW = new Date('2026-11-24T10:00:00.000Z');
+const SECRET = 'google-service-test-secret-'.repeat(2);
+const CONFIG = { clientId: 'client.apps.googleusercontent.com', clientSecret: 'test-only-secret', redirectUri: 'https://academy.example/api/auth/google/callback' };
+const CTX = { ip: '127.0.0.1', userAgent: 'vitest' };
+
+function makeService(config: typeof CONFIG | null = CONFIG) {
+  const authenticate = vi.fn();
+  const beginSession = vi.fn();
+  // Just enough database for step 1 of the resolution: an identity of an active account.
+  const tx = {
+    userIdentity: { findUnique: vi.fn(async () => ({ id: 'identity-1', userId: 'user-1' })), update: vi.fn(async () => ({})) },
+    user: { findUnique: vi.fn(async () => ({ id: 'user-1', status: 'active', deletedAt: null, lockedUntil: null, emailVerifiedAt: NOW, selfRegisteredAt: NOW })) },
+  };
+  const prisma = { db: { academy: { findFirst: vi.fn(async () => null) }, $transaction: vi.fn(async (run: (client: typeof tx) => unknown) => run(tx)) } };
+  const env = { get: vi.fn((key: string) => (key === 'JWT_SECRET' ? SECRET : undefined)) };
+  const service = new GoogleAuthService(prisma as never, { record: vi.fn() } as never, { beginSession } as never, { authenticate } as never, config, env as never);
+  return { service, authenticate, beginSession };
+}
+
+describe('the account rules', () => {
+  const active = { status: 'active' as const, deletedAt: null, lockedUntil: null };
+
+  it('treats suspended, archived, soft-deleted and locked accounts as unavailable — a lock only while it lasts', () => {
+    expect(isUnavailable(active, NOW)).toBe(false);
+    expect(isUnavailable({ ...active, status: 'suspended' }, NOW)).toBe(true);
+    expect(isUnavailable({ ...active, status: 'archived' }, NOW)).toBe(true);
+    expect(isUnavailable({ ...active, deletedAt: NOW }, NOW)).toBe(true);
+    expect(isUnavailable({ ...active, lockedUntil: new Date(NOW.getTime() + 60_000) }, NOW)).toBe(true);
+    expect(isUnavailable({ ...active, lockedUntil: new Date(NOW.getTime() - 60_000) }, NOW)).toBe(false);
+    // Invited and pending accounts are not "unavailable": they get link_required or the activation.
+    expect(isUnavailable({ ...active, status: 'invited' }, NOW)).toBe(false);
+    expect(isUnavailable({ ...active, status: 'pending' }, NOW)).toBe(false);
+  });
+
+  it('recognises a pending self-registered account by its self-registration marker (contract v3), not by its password', () => {
+    expect(isPendingSelfRegistration({ status: 'pending', selfRegisteredAt: NOW })).toBe(true);
+    // A pending account nobody self-registered (awaiting approval) is not one, with or without a password.
+    expect(isPendingSelfRegistration({ status: 'pending', selfRegisteredAt: null })).toBe(false);
+    expect(isPendingSelfRegistration({ status: 'invited', selfRegisteredAt: null })).toBe(false);
+    // Completed (or created by Google): active, the marker stays.
+    expect(isPendingSelfRegistration({ status: 'active', selfRegisteredAt: NOW })).toBe(false);
+  });
+
+  it('is authoritative for Gmail addresses, and for another address only when hd is exactly its domain', () => {
+    expect(isGoogleAuthoritative({ email: 'learner@gmail.com', hd: null })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'learner@googlemail.com', hd: null })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'Learner@GMAIL.com', hd: null })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'school.example' })).toBe(true);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'School.Example' })).toBe(true);
+    // A consumer Google account made with another address, or a Workspace of another domain, proves nothing today.
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: null })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'other.example' })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'teacher@mail.school.example', hd: 'school.example' })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'teacher@school.example', hd: 'mail.school.example' })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'learner@gmail.com.evil.example', hd: null })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'learner@notgmail.com', hd: null })).toBe(false);
+    expect(isGoogleAuthoritative({ email: 'no-domain@', hd: '' })).toBe(false);
+  });
+
+  it('links by e-mail only accounts whose roles are all student or guardian', () => {
+    expect(holdsOnlyAutoLinkableRoles([])).toBe(true);
+    expect(holdsOnlyAutoLinkableRoles(['student'])).toBe(true);
+    expect(holdsOnlyAutoLinkableRoles(['guardian', 'student'])).toBe(true);
+    for (const key of ['teacher', 'staff', 'academy_admin', 'custom_reviewer']) {
+      expect(holdsOnlyAutoLinkableRoles(['student', key]), key).toBe(false);
+    }
+  });
+
+  it('names a new account from Google, cleaned, else from the e-mail', () => {
+    expect(fullNameFrom({ name: '  Sara   Ahmed ', email: 'sara@example.test' })).toBe('Sara Ahmed');
+    expect(fullNameFrom({ name: 'سارة\u0000أحمد\n', email: 'sara@example.test' })).toBe('سارة أحمد');
+    expect(fullNameFrom({ name: null, email: 'sara.ahmed@example.test' })).toBe('sara.ahmed');
+    expect(fullNameFrom({ name: ' x ', email: 'sara@example.test' })).toBe('sara');
+    expect(fullNameFrom({ name: null, email: 'a@example.test' })).toBe('a@example.test');
+    expect([...fullNameFrom({ name: 'ب'.repeat(300), email: 'a@example.test' })]).toHaveLength(200);
+  });
+});
+
+describe('GoogleAuthService', () => {
+  it('start refuses with 503 google_unavailable when Google is not configured', async () => {
+    const { service } = makeService(null);
+    expect(service.configured).toBe(false);
+    await expect(service.start('/')).rejects.toMatchObject({ status: 503, code: 'google_unavailable' });
+  });
+
+  it('start answers the authorization URL and a state token that carries the safe returnTo', async () => {
+    const { service } = makeService();
+    const { url, stateToken } = await service.start('//evil.example');
+    expect(new URL(url).searchParams.get('client_id')).toBe(CONFIG.clientId);
+    expect(stateToken.split('.')).toHaveLength(3);
+    // Without a code from Google the callback goes no further than the state check.
+    const outcome = await service.callback({ state: new URL(url).searchParams.get('state'), error: 'access_denied' }, stateToken, CTX);
+    expect(outcome).toEqual({ kind: 'failure', code: 'cancelled', returnTo: '/' });
+  });
+
+  it('callback: unavailable, then cancelled/failed for a Google error, then failed without a valid matching state — Google is never asked', async () => {
+    const unconfigured = makeService(null);
+    expect(await unconfigured.service.callback({ code: 'c', state: 's' }, undefined, CTX)).toMatchObject({ kind: 'failure', code: 'unavailable' });
+
+    const { service, authenticate } = makeService();
+    const attempt = newGoogleAttempt('/catalog');
+    const cookie = await signGoogleState(deriveStateKey(SECRET), attempt);
+    expect(await service.callback({ error: 'access_denied' }, cookie, CTX)).toEqual({ kind: 'failure', code: 'cancelled', returnTo: '/catalog' });
+    expect(await service.callback({ error: 'server_error' }, cookie, CTX)).toEqual({ kind: 'failure', code: 'failed', returnTo: '/catalog' });
+    expect(await service.callback({ code: 'c', state: attempt.state }, undefined, CTX)).toEqual({ kind: 'failure', code: 'failed', returnTo: '/' });
+    expect(await service.callback({ code: 'c', state: attempt.state }, 'forged.cookie.value', CTX)).toEqual({ kind: 'failure', code: 'failed', returnTo: '/' });
+    const otherKey = await signGoogleState(deriveStateKey(`${SECRET}-other`), attempt);
+    expect(await service.callback({ code: 'c', state: attempt.state }, otherKey, CTX)).toMatchObject({ code: 'failed' });
+    expect(await service.callback({ code: 'c', state: 'another-state' }, cookie, CTX)).toEqual({ kind: 'failure', code: 'failed', returnTo: '/catalog' });
+    expect(await service.callback({ code: 'c', state: [attempt.state] }, cookie, CTX)).toMatchObject({ code: 'failed' });
+    expect(await service.callback({ state: attempt.state }, cookie, CTX)).toMatchObject({ code: 'failed' });
+    expect(await service.callback({ code: ['a', 'b'], state: attempt.state }, cookie, CTX)).toMatchObject({ code: 'failed' });
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  it('callback: a failure at Google (exchange or ID token) is failed, with the returnTo of the attempt', async () => {
+    const { service, authenticate } = makeService();
+    const attempt = newGoogleAttempt('/my-school');
+    const cookie = await signGoogleState(deriveStateKey(SECRET), attempt);
+    authenticate.mockRejectedValueOnce(new Error('network'));
+    expect(await service.callback({ code: 'c', state: attempt.state }, cookie, CTX)).toEqual({ kind: 'failure', code: 'failed', returnTo: '/my-school' });
+    expect(authenticate).toHaveBeenCalledWith({ code: 'c', codeVerifier: attempt.codeVerifier, nonce: attempt.nonce });
+  });
+
+  it('callback: a session refused for a missing MFA key is mfa_unavailable, another refusal account_unavailable, anything else failed', async () => {
+    const { service, authenticate, beginSession } = makeService();
+    const attempt = newGoogleAttempt('/my-school');
+    const cookie = await signGoogleState(deriveStateKey(SECRET), attempt);
+    authenticate.mockResolvedValue({ sub: 'sub-1', email: 'learner@gmail.com', name: null, hd: null });
+    const answer = () => service.callback({ code: 'c', state: attempt.state }, cookie, CTX);
+
+    beginSession.mockRejectedValueOnce(authError.mfaUnavailable());
+    expect(await answer()).toEqual({ kind: 'failure', code: 'mfa_unavailable', returnTo: '/my-school' });
+    beginSession.mockRejectedValueOnce(authError.accountSuspended());
+    expect(await answer()).toEqual({ kind: 'failure', code: 'account_unavailable', returnTo: '/my-school' });
+    beginSession.mockRejectedValueOnce(new Error('database gone'));
+    expect(await answer()).toEqual({ kind: 'failure', code: 'failed', returnTo: '/my-school' });
+    expect(beginSession).toHaveBeenCalledWith('user-1', 'google', CTX);
+  });
+});

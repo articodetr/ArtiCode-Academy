@@ -2,6 +2,9 @@
 // backend/src/courses/courses.dto.ts; every call goes through apiRequest
 // (Bearer header, refresh-and-retry on 401). Holders of `courses.read` alone
 // only ever receive published courses (D-R13) — the server decides.
+// PORTAL-04: a course names its school subject (`subject`, api/subjects.ts) beside
+// its difficulty (`level`). The age range stays in the DTO and the API, but no
+// form sends it any more (a PATCH that leaves it out keeps the stored values).
 import { apiRequest } from './client'
 import type { LocalizedLabel } from './users'
 
@@ -19,6 +22,13 @@ export interface CourseLevel {
   code: string
   name: LocalizedLabel
   isActive: boolean
+}
+
+/** PORTAL-04: the course's school subject (`subjects`), never its difficulty (`level`). */
+export interface CourseSubject {
+  id: string
+  code: string
+  name: LocalizedLabel
 }
 
 /** MOD-19 (D-R122): `free` unless the course names the fee plan that prices a request. */
@@ -43,6 +53,8 @@ export interface Course {
   summary: LocalizedLabel | null
   description: LocalizedLabel | null
   level: CourseLevel | null
+  /** PORTAL-04: null for a course without a subject. */
+  subject: CourseSubject | null
   status: CourseStatus
   durationHours: number | null
   sessionsCount: number | null
@@ -87,8 +99,11 @@ export interface CreateCourseInput {
   summary?: LocalizedLabel
   description?: LocalizedLabel
   levelId?: string
+  /** PORTAL-04: an active subject (`404 subject_not_found` / `422 subject_inactive` otherwise). */
+  subjectId?: string
   durationHours?: number
   sessionsCount?: number
+  /** Still accepted by the server; the course forms no longer send it (PORTAL-04). */
   minAge?: number
   maxAge?: number
   /** MOD-19: an absolute http(s) URL (no upload). */
@@ -104,8 +119,11 @@ export interface UpdateCourseInput {
   summary?: LocalizedLabel | null
   description?: LocalizedLabel | null
   levelId?: string | null
+  /** PORTAL-04: null clears the subject. */
+  subjectId?: string | null
   durationHours?: number | null
   sessionsCount?: number | null
+  /** Still accepted by the server; the course forms no longer send it (PORTAL-04). */
   minAge?: number | null
   maxAge?: number | null
   /** MOD-19: null clears the cover. */

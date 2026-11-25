@@ -88,11 +88,11 @@ describe('CatalogCoursePage', () => {
     renderPage()
 
     expect(await screen.findByText('أساسيات بايثون')).toBeInTheDocument()
-    // The difficulty is both a badge of the band and a fact of the enrollment card.
-    expect(within(document.querySelector<HTMLElement>('.course-page__hero')!).getByText('مبتدئ')).toBeInTheDocument()
-    expect(within(screen.getByTestId('catalog-enroll-card')).getByText('مبتدئ')).toBeInTheDocument()
+    // PORTAL-04: the school subject is both a badge of the band and a fact of the enrollment card — never the difficulty.
+    expect(within(document.querySelector<HTMLElement>('.course-page__hero')!).getByText('البرمجة')).toBeInTheDocument()
+    expect(within(screen.getByTestId('catalog-enroll-card')).getByText('البرمجة')).toBeInTheDocument()
+    expect(screen.queryByText('مبتدئ')).not.toBeInTheDocument()
     expect(screen.getByText(ar.catalog.free)).toBeInTheDocument()
-    expect(screen.getByText('من 12 إلى 18 سنة')).toBeInTheDocument()
     expect(screen.getByText('تتعلم في هذه الدورة المتغيرات والدوال والحلقات.')).toBeInTheDocument()
     expect(screen.getByText('المتغيرات')).toBeInTheDocument()
     expect(screen.getByText('تعريف الدوال واستدعاؤها')).toBeInTheDocument()
@@ -610,7 +610,7 @@ describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R
     expect(api.posts).toEqual([])
   })
 
-  it('offers «واصل التعلم» to a student who already studies the course, instead of a second request', async () => {
+  it('offers «انتقل إلى الدورة» to a student who already studies the course, instead of a second request', async () => {
     const api = mockCourseApi(
       makeCatalogDetail({
         mine: { enrolled: true, pending: false },
@@ -626,17 +626,19 @@ describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R
     expect(screen.queryByText(ar.catalog.detail.unavailable)).not.toBeInTheDocument()
     // «opens after your enrollment is activated» is no news to an enrolled student.
     expect(screen.queryByText(ar.catalog.detail.lockedNote)).not.toBeInTheDocument()
-    fireEvent.click(within(standing).getByText(ar.catalog.detail.mine.continue).closest('button')!)
+    // No enroll button anywhere: the server would refuse a second enrollment anyway.
+    expect(within(classCard()).queryByText(ar.catalog.class.enroll)).not.toBeInTheDocument()
+    fireEvent.click(within(standing).getByText(ar.catalog.detail.mine.goToCourse).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe(`/learn/${CATALOG_COURSE_IDS[0]}`)
     expect(api.posts).toEqual([])
   })
 
-  it('offers the review of a completed course, and the way to «my requests» for a pending one', async () => {
+  it('leads a completed course to the course too, and a pending one to «my requests» with its state', async () => {
     mockCourseApi(makeCatalogDetail({ classes: [makeCatalogClass({ enrollable: false, blocker: 'already_enrolled', myEnrollment: { id: 'e-1', status: 'completed', state: 'completed' } })] }))
     const { unmount } = renderWithIntent('?intent=enroll')
     const completed = await screen.findByTestId('catalog-standing')
     expect(completed).toHaveAttribute('data-standing', 'completed')
-    expect(within(completed).getByText(ar.catalog.detail.mine.review)).toBeInTheDocument()
+    expect(within(completed).getByText(ar.catalog.detail.mine.goToCourse)).toBeInTheDocument()
     unmount()
 
     mockCourseApi(
@@ -650,11 +652,42 @@ describe('CatalogCoursePage — the enroll intent after the sign-in (MOD-20, D-R
     expect(pending).toHaveAttribute('data-standing', 'pending')
     expect(pending).toHaveTextContent(ar.catalog.states.pending_approval)
     // A pending request is no place to study: no way into the learning space from here.
-    expect(within(pending).queryByText(ar.catalog.detail.mine.continue)).not.toBeInTheDocument()
+    expect(within(pending).queryByText(ar.catalog.detail.mine.goToCourse)).not.toBeInTheDocument()
+    expect(within(classCard()).queryByText(ar.catalog.class.enroll)).not.toBeInTheDocument()
+    expect(within(classCard()).queryByText(ar.catalog.class.request)).not.toBeInTheDocument()
     expect(screen.queryByTestId('catalog-intent-notice')).not.toBeInTheDocument()
     // Awaiting the approval: nothing to pay, so no «my invoices» here.
     expect(within(pending).queryByText(ar.catalog.result.invoices)).not.toBeInTheDocument()
     fireEvent.click(within(pending).getByText(ar.catalog.detail.mine.requests).closest('button')!)
     expect((await screen.findByTestId('path')).textContent).toBe('/my-classes?section=requests')
+  })
+})
+
+describe('CatalogCoursePage — the facts (PORTAL-04)', () => {
+  /** The labels of the enrollment card's facts, in order. */
+  const factLabels = () => [...screen.getByTestId('catalog-enroll-card').querySelectorAll('.ant-descriptions-item-label')].map((node) => node.textContent)
+
+  it('reads المادة · المدة · المحتوى · الرسوم, with no difficulty, sessions or age range', async () => {
+    mockCourseApi(makeCatalogDetail({ minAge: 12, maxAge: 18, sessionsCount: 12 }))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+
+    expect(factLabels()).toEqual([ar.catalog.card.subject, ar.catalog.card.duration, ar.catalog.card.content, ar.catalog.card.price])
+    const card = within(screen.getByTestId('catalog-enroll-card'))
+    expect(card.getByText('البرمجة')).toBeInTheDocument()
+    expect(card.getByText('درسان')).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('مستوى الصعوبة')
+    expect(document.body.textContent).not.toContain('الفئة العمرية')
+    expect(document.body.textContent).not.toContain('سنة')
+    expect(document.body.textContent).not.toContain('جلس')
+  })
+
+  it('omits the subject and the duration when the server has none, and keeps the installments after the fees', async () => {
+    mockCourseApi(makeCatalogDetail({ subject: null, durationHours: null, pricing: 'paid', price: { amount: 1200, currency: 'SAR', installments: 3 } }))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+
+    expect(factLabels()).toEqual([ar.catalog.card.content, ar.catalog.card.price, ar.catalog.detail.installments])
+    expect(screen.getByTestId('catalog-enroll-card').textContent).toContain(formatMoney(1200, 'SAR', 'ar'))
   })
 })

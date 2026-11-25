@@ -5,7 +5,7 @@
 // code or schedule, no lesson id or content.
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { COURSE_PRICINGS } from '../courses/courses.dto.js';
 import type { CoursePricing } from '../courses/courses.dto.js';
@@ -25,6 +25,11 @@ export class ListPublicCatalogQueryDto {
   @Length(1, 100)
   q?: string;
 
+  @ApiPropertyOptional({ format: 'uuid', description: 'PORTAL-04: the courses of this school subject (an unknown id matches nothing)' })
+  @IsOptional()
+  @IsUUID('all')
+  subjectId?: string;
+
   @ApiPropertyOptional({ default: PUBLIC_CATALOG_PAGE_DEFAULT, minimum: 1, maximum: PUBLIC_CATALOG_PAGE_MAX })
   @IsOptional()
   @IsInt()
@@ -32,7 +37,7 @@ export class ListPublicCatalogQueryDto {
   @Max(PUBLIC_CATALOG_PAGE_MAX)
   limit?: number;
 
-  @ApiPropertyOptional({ maxLength: 512, description: 'Opaque `nextCursor` of the previous page; send it with the same `q`' })
+  @ApiPropertyOptional({ maxLength: 512, description: 'Opaque `nextCursor` of the previous page; send it with the same `q` and `subjectId`' })
   @IsOptional()
   @IsString()
   @Length(1, 512)
@@ -40,6 +45,15 @@ export class ListPublicCatalogQueryDto {
 }
 
 export class PublicCatalogLevelDto {
+  @ApiProperty({ format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ type: () => LocalizedTextDto })
+  name: LocalizedText;
+}
+
+/** PORTAL-04: the school subject of a course — its id and localized name only (never its code or state). */
+export class PublicCatalogSubjectDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
 
@@ -73,6 +87,9 @@ export class PublicCatalogCourseDto {
 
   @ApiProperty({ type: PublicCatalogLevelDto, nullable: true, description: 'The catalog level of the course (not a curriculum level)' })
   level: PublicCatalogLevelDto | null;
+
+  @ApiProperty({ type: PublicCatalogSubjectDto, nullable: true, description: 'PORTAL-04: the school subject the course teaches; null = not set' })
+  subject: PublicCatalogSubjectDto | null;
 
   @ApiProperty({ type: Number, nullable: true })
   durationHours: number | null;

@@ -3,6 +3,7 @@
 import type { Course, CourseList } from '../api/courses'
 import type { Level, LevelList } from '../api/levels'
 import type { Syllabus, SyllabusItem } from '../api/syllabus'
+import { SUBJECT_ID } from './subjects'
 
 export const COURSE_ID = '0193a000-0000-7000-8000-00000000c001'
 export const LEVEL_ID = '0193a000-0000-7000-8000-00000000b001'
@@ -40,6 +41,7 @@ export function makeCourse(overrides: Partial<Course> = {}): Course {
     summary: null,
     description: null,
     level: { id: LEVEL_ID, code: 'BEG', name: { ar: 'مبتدئ', en: 'Beginner' }, isActive: true },
+    subject: { id: SUBJECT_ID, code: 'PROG', name: { ar: 'البرمجة', en: 'Programming' } },
     status: 'draft',
     durationHours: 24,
     sessionsCount: 12,

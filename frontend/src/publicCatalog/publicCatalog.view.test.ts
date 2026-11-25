@@ -20,7 +20,12 @@ import {
   orderPublicPage,
   publicCatalogParams,
   publicEnrollStateOf,
-  publicFailureKey, cardSubscribeTarget } from './publicCatalog.view'
+  publicFailureKey,
+  subjectNameOf,
+  accountCreationOpen,
+  visitorRegisterPath,
+  visitorSignInPath,
+} from './publicCatalog.view'
 
 const t = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('ar')(key, options)
 const tEn = (key: string, options?: Record<string, unknown>) => i18n.getFixedT('en')(key, options)
@@ -54,21 +59,33 @@ describe('publicCatalog.view', () => {
   })
 
   describe('courseBadgesOf', () => {
-    const level = { name: { ar: 'مبتدئ', en: 'Beginner' } }
+    const subject = { name: { ar: 'البرمجة', en: 'Programming' } }
 
-    it('names the course, its difficulty and its duration, in that order', () => {
-      expect(courseBadgesOf({ level, durationHours: 24 }, t, 'ar')).toEqual([
+    it('names the course, its school subject and its duration, in that order (PORTAL-04: no difficulty)', () => {
+      expect(courseBadgesOf({ subject, durationHours: 24 }, t, 'ar')).toEqual([
         { key: 'type', text: 'دورة' },
-        { key: 'level', text: 'مبتدئ' },
+        { key: 'subject', text: 'البرمجة' },
         { key: 'duration', text: '24 ساعة' },
       ])
-      expect(courseBadgesOf({ level, durationHours: 1 }, tEn, 'en').map((badge) => badge.text)).toEqual(['Course', 'Beginner', tEn('publicCatalog.card.hours', { count: 1 })])
+      expect(courseBadgesOf({ subject, durationHours: 1 }, tEn, 'en').map((badge) => badge.text)).toEqual(['Course', 'Programming', tEn('publicCatalog.card.hours', { count: 1 })])
     })
 
-    it('shows a badge only for what the server has', () => {
-      expect(courseBadgesOf({ level: null, durationHours: null }, t, 'ar').map((badge) => badge.key)).toEqual(['type'])
-      expect(courseBadgesOf({ level, durationHours: null }, t, 'ar').map((badge) => badge.key)).toEqual(['type', 'level'])
-      expect(courseBadgesOf({ level: null, durationHours: 3 }, t, 'ar').map((badge) => badge.key)).toEqual(['type', 'duration'])
+    it('shows a badge only for what the server has — never the difficulty level', () => {
+      expect(courseBadgesOf({ subject: null, durationHours: null }, t, 'ar').map((badge) => badge.key)).toEqual(['type'])
+      expect(courseBadgesOf({ subject, durationHours: null }, t, 'ar').map((badge) => badge.key)).toEqual(['type', 'subject'])
+      expect(courseBadgesOf({ subject: null, durationHours: 3 }, t, 'ar').map((badge) => badge.key)).toEqual(['type', 'duration'])
+      // A server before PORTAL-04 sends no subject at all; a course's difficulty level never makes a badge.
+      expect(courseBadgesOf({ durationHours: null }, t, 'ar').map((badge) => badge.key)).toEqual(['type'])
+      expect(courseBadgesOf(makePublicCard({ subject: null }), t, 'ar').map((badge) => badge.text)).not.toContain('مبتدئ')
+    })
+
+    it('names the subject in the reading language, Arabic when it has no other, nothing for a blank name', () => {
+      expect(subjectNameOf({ subject }, 'ar')).toBe('البرمجة')
+      expect(subjectNameOf({ subject }, 'en')).toBe('Programming')
+      expect(subjectNameOf({ subject: { name: { ar: 'الفنون' } } }, 'en')).toBe('الفنون')
+      expect(subjectNameOf({ subject: { name: { ar: '  ' } } }, 'ar')).toBeNull()
+      expect(subjectNameOf({ subject: null }, 'ar')).toBeNull()
+      expect(subjectNameOf({}, 'ar')).toBeNull()
     })
   })
 
@@ -202,20 +219,25 @@ describe('publicCatalog.view', () => {
     expect(availabilityOf(makePublicCard({ openClasses: 0, hasFreeSeat: false, pricing: 'paid', price: null }))).toBe('closed')
   })
 
-  it('offers the subscribe button only to whoever can enroll, in a course that takes an enrollment now', () => {
-    const open = { id: 'c-1', openClasses: 1, hasFreeSeat: true, pricing: 'free', price: null } as const
-    const paid = { ...open, pricing: 'paid', price: { amount: 150, currency: 'USD', installments: 1 } } as const
-    const path = '/catalog/c-1?intent=enroll'
-    expect(cardSubscribeTarget(open, 'visitor', false)).toEqual({ to: '/login', state: { from: path } })
-    expect(cardSubscribeTarget(paid, 'visitor', false)).toEqual({ to: '/login', state: { from: path } })
-    expect(cardSubscribeTarget(open, 'learner', true)).toEqual({ to: path })
-    // A guardian holds no student role; staff never enroll; an unknown session shows nothing yet.
-    expect(cardSubscribeTarget(open, 'learner', false)).toBeNull()
-    expect(cardSubscribeTarget(open, 'staff', false)).toBeNull()
-    expect(cardSubscribeTarget(open, 'pending', false)).toBeNull()
-    // No open class, every seat taken, or a paid course without a usable price.
-    expect(cardSubscribeTarget({ ...open, openClasses: 0, hasFreeSeat: false }, 'visitor', false)).toBeNull()
-    expect(cardSubscribeTarget({ ...open, hasFreeSeat: false }, 'visitor', false)).toBeNull()
-    expect(cardSubscribeTarget({ ...paid, price: null, hasFreeSeat: false }, 'visitor', false)).toBeNull()
+  it('leads a visitor to the sign-in and the new-account pages with the enroll intent as returnTo (PORTAL-04)', () => {
+    const intent = `/catalog/${PUBLIC_COURSE_IDS[0]}?intent=enroll`
+    expect(visitorSignInPath(PUBLIC_COURSE_IDS[0])).toBe(`/login?returnTo=${encodeURIComponent(intent)}`)
+    expect(visitorRegisterPath(PUBLIC_COURSE_IDS[0])).toBe(`/register?returnTo=${encodeURIComponent(intent)}`)
+    // Read back, the value is the intent itself: one leading slash, a path of this site.
+    const returnTo = new URL(visitorSignInPath('a/b'), 'https://academy.example').searchParams.get('returnTo')!
+    expect(returnTo).toBe('/catalog/a%2Fb?intent=enroll')
+    expect(returnTo.startsWith('/') && !returnTo.startsWith('//')).toBe(true)
+  })
+
+  it('lets a visitor create an account only when API-205 says so — by e-mail or through Google', () => {
+    expect(accountCreationOpen({ selfRegistration: true })).toBe(true)
+    expect(accountCreationOpen({ googleSignUp: true })).toBe(true)
+    expect(accountCreationOpen({ selfRegistration: false, googleSignUp: true })).toBe(true)
+    expect(accountCreationOpen({ selfRegistration: false, googleSignUp: false })).toBe(false)
+    expect(accountCreationOpen({})).toBe(false)
+    expect(accountCreationOpen(null)).toBe(false)
+    expect(accountCreationOpen(undefined)).toBe(false)
+    // Only a literal true opens it.
+    expect(accountCreationOpen({ selfRegistration: 'true', googleSignUp: 1 })).toBe(false)
   })
 })
