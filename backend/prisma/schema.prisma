@@ -143,6 +143,8 @@ model User {
   lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(6)
   passwordChangedAt  DateTime?  @map("password_changed_at") @db.Timestamptz(6)
   mustChangePassword Boolean    @default(false) @map("must_change_password")
+  /// PORTAL-04: set when the visitor created the account (e-mail self-registration or Google); null = created by the academy.
+  selfRegisteredAt   DateTime?  @map("self_registered_at") @db.Timestamptz(6)
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   /// Soft delete (D7): the row stays because history refers to it.
