@@ -122,6 +122,58 @@ describe('«فصولي» — a course’s lessons below the cards (J-F67)', () =
     }
   })
 
+  // KI-160: on the first choice the panel is empty and the page too short to scroll, so the first scroll
+  // goes nowhere — the page scrolls again while the lessons fill the panel, until the reader scrolls.
+  it('scrolls again to the lessons while they fill the panel, and stops once the reader scrolls', async () => {
+    serve()
+    const anchorScrolls: number[] = []
+    const observers: Array<{ callback: ResizeObserverCallback; target: Element | null }> = []
+    const originalScroll = Element.prototype.scrollIntoView
+    const originalObserver = window.ResizeObserver
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      if (this.classList.contains('hub-panel-anchor')) anchorScrolls.push(Date.now())
+    }
+    window.ResizeObserver = class {
+      private entry: { callback: ResizeObserverCallback; target: Element | null }
+      constructor(callback: ResizeObserverCallback) {
+        this.entry = { callback, target: null }
+        observers.push(this.entry)
+      }
+      observe(target: Element) {
+        this.entry.target = target
+      }
+      unobserve() {}
+      disconnect() {
+        this.entry.target = null
+      }
+    } as unknown as typeof ResizeObserver
+    const grow = (height: number) => {
+      for (const entry of observers) {
+        if (!entry.target?.classList.contains('hub-panel-anchor')) continue
+        Object.defineProperty(entry.target, 'offsetHeight', { configurable: true, value: height })
+        entry.callback([], entry as unknown as ResizeObserver)
+      }
+    }
+    try {
+      renderClasses()
+      const card = await screen.findByTestId(`class-card-${CLASS.enrollmentId}`)
+      await waitFor(() => expect(within(card).getByRole('progressbar')).toBeInTheDocument())
+      fireEvent.click(within(card).getByText(ar.myClasses.card.browse).closest('button')!)
+      expect(await screen.findByText(TITLES.i2)).toBeInTheDocument()
+      expect(anchorScrolls).toHaveLength(1)
+      grow(400)
+      expect(anchorScrolls).toHaveLength(2)
+      grow(400) // the same height: nothing to follow
+      expect(anchorScrolls).toHaveLength(2)
+      fireEvent.wheel(window)
+      grow(900)
+      expect(anchorScrolls).toHaveLength(2)
+    } finally {
+      Element.prototype.scrollIntoView = originalScroll
+      window.ResizeObserver = originalObserver
+    }
+  })
+
   it('plays a YouTube lesson inside the page, keeps the list and closes back to it', async () => {
     const { paths } = serve()
     const { container } = renderClasses('/my-classes?course=c1')
