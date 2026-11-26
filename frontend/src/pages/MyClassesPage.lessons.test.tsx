@@ -3,7 +3,8 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { LearningItem, LearningWorkspace, MyLearningCourse } from '../api/learning'
+import type { LearningItem, LearningWorkspace, MyLearningCourse, WorkspaceItemExam } from '../api/learning'
+import type { MyExamItem } from '../api/myExams'
 import { ar } from '../i18n/ar'
 import { TITLES, makeItem, makeWorkspace, withSecondLevelClosed } from '../learn/learn.fixtures'
 import { resetWatchedMemory } from '../learn/watched.store'
@@ -11,6 +12,7 @@ import { makeLearningCourse } from '../mySchool/mySchool.fixtures'
 import { makeAcademy } from '../test/academy'
 import { makeMyClassItem, makeMyClassList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
+import { makeMyExam, makePublishedMyExam } from '../test/myExams'
 import { makeMyLessonList } from '../test/myLessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { MyClassesPage } from './MyClassesPage'
@@ -20,8 +22,8 @@ const hub = ar.myLessons.hub
 const COURSE = makeLearningCourse({ course: { ...makeLearningCourse().course, id: 'c1', name: { ar: 'أساسيات البرمجة' } } })
 const CLASS = makeMyClassItem({ enrollmentId: COURSE.enrollmentId })
 
-function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWorkspace; items?: Record<string, LearningItem> } = {}) {
-  const { courses = [COURSE], workspace = makeWorkspace(), items = { i2: makeItem('i2'), i3: makeItem('i3') } } = options
+function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWorkspace; items?: Record<string, LearningItem>; exams?: MyExamItem[] } = {}) {
+  const { courses = [COURSE], workspace = makeWorkspace(), items = { i2: makeItem('i2'), i3: makeItem('i3') }, exams = [] } = options
   const paths: string[] = []
   const lessonQueries: URLSearchParams[] = []
   mockFetch((url, init) => {
@@ -40,7 +42,7 @@ function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWork
     }
     if (pathname === '/api/me/classes') return jsonResponse(200, makeMyClassList([CLASS]))
     // J-F68: «اختبارات الدورة» at the end of a course's lessons (none here) and the cards' certificates.
-    if (pathname === '/api/me/exams') return jsonResponse(200, { items: [], nextCursor: null })
+    if (pathname === '/api/me/exams') return jsonResponse(200, { items: exams, nextCursor: null })
     if (pathname === '/api/me/certificates') return jsonResponse(200, { items: [] })
     return jsonResponse(404, { statusCode: 404, message: 'nope' })
   })
@@ -213,5 +215,118 @@ describe('«دروسي» after J-F67 — one list of every course’s lessons, n
     expect(lessonQueries.at(-1)!.get('order')).toBe('desc')
     expect(paths).not.toContain('GET /api/me/learning')
     expect(screen.getByRole('heading', { name: ar.myLessons.title })).toBeInTheDocument()
+  })
+})
+
+
+/** The fixture workspace with `exams` on its lesson i2 (API-230 since J-F67). */
+function withLessonExams(exams: WorkspaceItemExam[]): LearningWorkspace {
+  const workspace = makeWorkspace()
+  return {
+    ...workspace,
+    sections: workspace.sections.map((section) => ({ ...section, items: section.items.map((item) => (item.id === 'i2' ? { ...item, exams } : item)) })),
+  }
+}
+
+/** The learner's row of an exam of their class in «my exams» (API-121): the workspace's class `k1`, the card's student. */
+function ownExam(item: MyExamItem): MyExamItem {
+  return { ...item, class: { ...item.class, id: 'k1' }, student: { ...item.student, id: COURSE.student.id } }
+}
+
+function lessonExamOf(item: MyExamItem, done: boolean): WorkspaceItemExam {
+  return { id: item.id, title: item.title, delivery: 'manual', status: item.status === 'published' ? 'published' : 'scheduled', scheduledAt: item.scheduledAt, closesAt: null, done }
+}
+
+describe('the lesson popup as in Jallal’s reference (J-F69)', () => {
+  const popup = () => screen.findByRole('region', { name: hub.player.label })
+  const facts = hub.player.facts
+
+  it('heads the popup with the lesson’s title and «×», then the card of the course, level, teacher, kind and time', async () => {
+    serve()
+    renderClasses('/my-classes?course=c1&lesson=i2')
+    const player = await popup()
+    expect(await within(player).findByRole('heading', { name: TITLES.i2 })).toBeInTheDocument()
+    expect(within(player).getByRole('button', { name: hub.player.close })).toBeInTheDocument()
+
+    const card = within(player).getByLabelText(facts.label)
+    const fact = (label: string) => within(card).getByText(label).closest('div')!
+    expect(fact(facts.course)).toHaveTextContent('أساسيات البرمجة')
+    expect(fact(facts.level)).toHaveTextContent('المستوى الأول — أساسيات')
+    expect(fact(facts.teacher)).toHaveTextContent('خالد المعلم')
+    expect(fact(facts.kind)).toHaveTextContent(facts.kinds.recorded)
+    expect(fact(facts.when)).toHaveTextContent(facts.noDate)
+
+    // The video in its dark frame, «مشاهدة على YouTube» and «المشاهدة المحتسبة» under it; no bottom navigation.
+    await waitFor(() => expect(player.querySelector('.learn-embed--framed iframe')).not.toBeNull())
+    expect(within(player).getByRole('link', { name: new RegExp(ar.learn.lesson.watch.openOnYouTube) })).toBeInTheDocument()
+    expect(within(player).getByText(ar.learn.lesson.watch.counted)).toBeInTheDocument()
+    expect(within(player).queryByText(ar.learn.nav.backToContents)).not.toBeInTheDocument()
+  })
+
+  it('says «غير محدد» without a lead teacher', async () => {
+    serve({ courses: [{ ...COURSE, leadTeacher: null }] })
+    renderClasses('/my-classes?course=c1&lesson=i2')
+    const player = await popup()
+    const card = await within(player).findByLabelText(facts.label)
+    expect(within(card).getByText(facts.teacher).closest('div')).toHaveTextContent(facts.noTeacher)
+  })
+
+  it('steps to the next and the previous lesson with the side arrows, the popup staying open', async () => {
+    const { paths } = serve({ items: { i1: makeItem('i1'), i2: makeItem('i2'), i3: makeItem('i3') } })
+    renderClasses('/my-classes?course=c1&lesson=i2')
+    const player = await popup()
+    await within(player).findByRole('heading', { name: TITLES.i2 })
+
+    const steps = within(player).getByRole('navigation', { name: ar.learn.nav.label })
+    const next = within(steps).getByRole('button', { name: hub.player.next.replace('{{title}}', TITLES.i3) })
+    expect(next).toHaveClass('hub-player__step--next')
+    fireEvent.click(next)
+
+    expect(await within(player).findByRole('heading', { name: TITLES.i3 })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/my-classes?course=c1&lesson=i3')
+    expect(screen.getByRole('region', { name: hub.player.label })).toBe(player)
+    expect(paths).toContain('GET /api/me/learning/items/i3')
+
+    fireEvent.click(within(steps).getByRole('button', { name: hub.player.previous.replace('{{title}}', TITLES.i2) }))
+    expect(await within(player).findByRole('heading', { name: TITLES.i2 })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/my-classes?course=c1&lesson=i2')
+
+    // The first lesson has no previous one: no arrow on that side.
+    fireEvent.click(within(steps).getByRole('button', { name: hub.player.previous.replace('{{title}}', TITLES.i1) }))
+    expect(await within(player).findByRole('heading', { name: TITLES.i1 })).toBeInTheDocument()
+    await waitFor(() => expect(within(steps).queryByRole('button', { name: /الدرس السابق/ })).not.toBeInTheDocument())
+    expect(within(steps).getByRole('button', { name: hub.player.next.replace('{{title}}', TITLES.i2) })).toBeInTheDocument()
+  })
+
+  it('disables the arrow toward a lesson whose level is not open yet', async () => {
+    const locked = makeItem('i2', { neighbors: { previous: { id: 'i1', title: { ar: TITLES.i1 }, available: true }, next: { id: 'i3', title: { ar: TITLES.i3 }, available: false } } })
+    const { paths } = serve({ items: { i2: locked } })
+    renderClasses('/my-classes?course=c1&lesson=i2')
+    const player = await popup()
+    await within(player).findByRole('heading', { name: TITLES.i2 })
+    const label = `${hub.player.next.replace('{{title}}', TITLES.i3)} — ${ar.learn.nav.locked}`
+    const next = within(player).getByRole('button', { name: label })
+    expect(next).toBeDisabled()
+    fireEvent.click(next)
+    expect(paths).not.toContain('GET /api/me/learning/items/i3')
+  })
+
+  it('shows «تم الاجتياز» in green once the learner’s result passes the lesson’s exam', async () => {
+    const passed = ownExam(makePublishedMyExam())
+    serve({ workspace: withLessonExams([lessonExamOf(passed, true)]), exams: [passed] })
+    renderClasses('/my-classes?course=c1&lesson=i2')
+    const player = await popup()
+    const box = await within(player).findByText(hub.player.exam.passed.replace('{{title}}', passed.title.ar))
+    expect(box.closest('li')).toHaveClass('is-passed')
+  })
+
+  it('says where an exam not passed yet stands, with no button for an exam taken in class', async () => {
+    const pending = ownExam(makeMyExam())
+    serve({ workspace: withLessonExams([lessonExamOf(pending, false)]), exams: [pending] })
+    renderClasses('/my-classes?course=c1&lesson=i2')
+    const player = await popup()
+    const box = (await within(player).findByText(hub.player.exam.title.replace('{{title}}', pending.title.ar))).closest('li')!
+    await waitFor(() => expect(box).toHaveTextContent(ar.myClasses.certificateGaps.exams.state.awaitingResult))
+    expect(within(box).queryByRole('button')).not.toBeInTheDocument()
   })
 })

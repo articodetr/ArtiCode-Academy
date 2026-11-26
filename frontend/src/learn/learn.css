@@ -614,29 +614,93 @@ a.learn-csession__lesson {
   border: 0;
 }
 
-/* How much of a YouTube lesson the learner has watched (J-F64). */
-.learn-watch {
-  padding: 10px 14px;
-  color: #113464;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+/* A YouTube lesson in its dark frame (J-F69 — Jallal's reference): a video YouTube refuses to play here says so
+   inside the frame, with the red «مشاهدة على YouTube»; the same link sits under the frame. */
+.learn-embed--framed {
+  background: #111827;
+  border-radius: 14px;
+}
+
+.learn-embed__blocked {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  background: #111827;
+}
+
+.learn-embed__blocked p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.learn-youtube__button,
+.learn-youtube__button:visited {
+  display: inline-flex;
+  align-items: center;
+  padding-block: 12px;
+  padding-inline: 22px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  text-decoration: none;
+  background: #f00;
   border-radius: 10px;
 }
 
-.learn-watch--done {
-  color: #166534;
-  background: #dcfce7;
-  border-color: #bbf7d0;
+.learn-youtube__button:hover {
+  color: #fff;
+  background: #c00;
+}
+
+.learn-youtube__button:focus-visible,
+.learn-youtube__link:focus-visible {
+  outline: 3px solid #c5a052;
+  outline-offset: 3px;
+}
+
+.learn-youtube__link,
+.learn-youtube__link:visited {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #113464;
+  text-decoration: none;
+}
+
+.learn-youtube__link:hover {
+  color: #1a4b8c;
+  text-decoration: underline;
+}
+
+/* How much of a YouTube lesson the learner has watched (J-F64; «المشاهدة المحتسبة» since J-F69): always the blue
+   box — whether the lesson is completed is the completion panel's to say; the bar turns green then. */
+.learn-watch {
+  padding-block: 12px;
+  padding-inline: 16px;
+  color: #113464;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
 }
 
 .learn-watch__line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 12px;
-  margin-block-end: 7px;
-  font-size: 13.5px;
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.learn-watch__value {
+  font-weight: 700;
 }
 
 .learn-watch__track {
