@@ -170,7 +170,7 @@ export function LevelsManager({ state, onChanged }: LevelsManagerProps) {
 
       {/* Mounted per session: its form starts from the chosen level, never from the values of an earlier session. */}
       {editing !== null ? (
-        <LevelModal key={editing === 'new' ? 'new' : editing.id} open level={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />
+        <LevelModal takenCodes={levels.map((item) => item.code)} key={editing === 'new' ? 'new' : editing.id} open level={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />
       ) : null}
     </Card>
   )

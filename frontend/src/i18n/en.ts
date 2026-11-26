@@ -1024,6 +1024,7 @@ export const en: Translation = {
     sortNewest: 'Newest first',
     refresh: 'Refresh',
     empty: 'No courses',
+    generateCode: 'Generate a code',
     tabs: {
       courses: 'Courses',
       levels: 'Levels',
@@ -1149,7 +1150,7 @@ export const en: Translation = {
         isActive: 'Active',
       },
       hints: {
-        code: 'Saved in capitals: Latin letters, digits and . _ - (up to 16), unique',
+        code: 'A unique code is filled in for you; type your own or press “Generate a code”. Capital Latin letters, digits and . _ - (up to 16)',
         isActive: 'An inactive level disappears from non-manager lists and stays on its courses',
       },
       validation: {
@@ -1188,7 +1189,7 @@ export const en: Translation = {
         isActive: 'Active',
       },
       hints: {
-        code: 'Saved in capitals: Latin letters, digits and . _ - (up to 16), unique',
+        code: 'A unique code is filled in for you; type your own or press “Generate a code”. Capital Latin letters, digits and . _ - (up to 16)',
         isActive: 'An inactive subject disappears from non-manager lists and stays on its courses',
       },
       validation: {

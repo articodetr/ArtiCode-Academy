@@ -4,13 +4,15 @@
 // any other refusal shows inside the modal. The parent mounts it per session
 // (a form instance kept across sessions would bring back an earlier level's values).
 // Every length rule words its own message (courses.validation.maxLength — J-F23).
-import { Alert, App, Col, Form, Input, Modal, Row, Switch } from 'antd'
+import { ThunderboltOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Col, Form, Input, Modal, Row, Space, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createLevel, updateLevel } from '../api/levels'
 import type { Level } from '../api/levels'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
+import { LEVEL_CODE_PREFIX, generateUniqueCode } from './codeGenerator'
 import { COURSE_TEXT_MAX_LENGTH, normaliseCourseCode } from './courses.form'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { EMPTY_LEVEL_FORM, LEVEL_CODE_MAX_LENGTH, LEVEL_CODE_PATTERN, buildCreateLevelInput, levelFormValuesOf, planLevelPatch } from './levels.form'
@@ -23,15 +25,19 @@ interface LevelModalProps {
   onClose: () => void
   /** The level as the server returned it; `created` tells a new level from an edit. */
   onSaved: (level: Level, created: boolean) => void
+  /** The codes already in the list (CH-0372): a generated code is never one of them. */
+  takenCodes?: readonly string[]
 }
 
-export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
+export function LevelModal({ open, level, onClose, onSaved, takenCodes = [] }: LevelModalProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
+  // Drawn once per modal, so a re-render never changes the code the user sees.
+  const [startCode] = useState(() => generateUniqueCode(LEVEL_CODE_PREFIX, takenCodes))
   const [error, setError] = useState<string | null>(null)
   /** The length rule of every text field, worded by the courses dictionary (J-F23). */
   const maxLength = { max: COURSE_TEXT_MAX_LENGTH, message: t('courses.validation.maxLength', { max: COURSE_TEXT_MAX_LENGTH }) }
@@ -88,7 +94,8 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={level ? levelFormValuesOf(level) : EMPTY_LEVEL_FORM}
+        // A new level starts with a generated code (CH-0372); the user may type their own instead.
+        initialValues={level ? levelFormValuesOf(level) : { ...EMPTY_LEVEL_FORM, code: startCode }}
         onFinish={(values) => void submit(values as LevelFormValues)}
         disabled={saving}
       >
@@ -109,6 +116,17 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
         >
           <Input dir="ltr" maxLength={LEVEL_CODE_MAX_LENGTH} placeholder="BEG" style={{ maxWidth: 200 }} />
         </Form.Item>
+        <Space style={{ marginTop: -16, marginBottom: 16 }}>
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
+            onClick={() => {
+              form.setFields([{ name: 'code', value: generateUniqueCode(LEVEL_CODE_PREFIX, takenCodes), errors: [] }])
+            }}
+          >
+            {t('courses.generateCode')}
+          </Button>
+        </Space>
         <Row gutter={12}>
           <Col xs={24}>
             <Form.Item

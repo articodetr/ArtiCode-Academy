@@ -162,7 +162,7 @@ export function SubjectsManager({ state, onChanged }: SubjectsManagerProps) {
 
       {/* Mounted per session: its form starts from the chosen subject, never from the values of an earlier session. */}
       {editing !== null ? (
-        <SubjectModal key={editing === 'new' ? 'new' : editing.id} open subject={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />
+        <SubjectModal takenCodes={subjects.map((item) => item.code)} key={editing === 'new' ? 'new' : editing.id} open subject={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />
       ) : null}
     </Card>
   )

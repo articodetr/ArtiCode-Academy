@@ -78,6 +78,8 @@ describe('SubjectsManager (PORTAL-04)', () => {
     const dialog = (await screen.findByText(sub.createTitle)).closest('[role="dialog"]') as HTMLElement
     // A subject has no description.
     expect(within(dialog).queryByLabelText(ar.courses.levels.fields.descriptionAr)).not.toBeInTheDocument()
+    // A new one starts with a generated code (CH-0372): the user replaces it with their own.
+    await userEvent.clear(within(dialog).getByLabelText(sub.fields.code))
     await userEvent.type(within(dialog).getByLabelText(sub.fields.code), 'sci')
     await userEvent.type(within(dialog).getByLabelText(sub.fields.nameAr), 'العلوم')
     fireEvent.click(within(dialog).getByText(sub.create).closest('button')!)

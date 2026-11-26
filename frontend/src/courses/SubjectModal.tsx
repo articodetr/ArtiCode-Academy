@@ -2,13 +2,15 @@
 // new subject (appended at the end of the order), PATCH /api/subjects/:id with the smallest body for an existing one (no
 // request when nothing changed). A taken code lands on the code field; any other refusal shows inside the modal. The
 // parent mounts it per session (a form instance kept across sessions would bring back an earlier subject's values).
-import { Alert, App, Col, Form, Input, Modal, Row, Switch } from 'antd'
+import { ThunderboltOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Col, Form, Input, Modal, Row, Space, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createSubject, updateSubject } from '../api/subjects'
 import type { Subject } from '../api/subjects'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
+import { SUBJECT_CODE_PREFIX, generateUniqueCode } from './codeGenerator'
 import { COURSE_TEXT_MAX_LENGTH, normaliseCourseCode } from './courses.form'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { EMPTY_SUBJECT_FORM, SUBJECT_CODE_MAX_LENGTH, SUBJECT_CODE_PATTERN, buildCreateSubjectInput, planSubjectPatch, subjectFormValuesOf } from './subjects.form'
@@ -21,15 +23,19 @@ interface SubjectModalProps {
   onClose: () => void
   /** The subject as the server returned it; `created` tells a new subject from an edit. */
   onSaved: (subject: Subject, created: boolean) => void
+  /** The codes already in the list (CH-0372): a generated code is never one of them. */
+  takenCodes?: readonly string[]
 }
 
-export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalProps) {
+export function SubjectModal({ open, subject, onClose, onSaved, takenCodes = [] }: SubjectModalProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
+  // Drawn once per modal, so a re-render never changes the code the user sees.
+  const [startCode] = useState(() => generateUniqueCode(SUBJECT_CODE_PREFIX, takenCodes))
   const [error, setError] = useState<string | null>(null)
   const maxLength = { max: COURSE_TEXT_MAX_LENGTH, message: t('courses.validation.maxLength', { max: COURSE_TEXT_MAX_LENGTH }) }
 
@@ -78,7 +84,8 @@ export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalPr
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={subject ? subjectFormValuesOf(subject) : EMPTY_SUBJECT_FORM}
+        // A new subject starts with a generated code (CH-0372); the user may type their own instead.
+        initialValues={subject ? subjectFormValuesOf(subject) : { ...EMPTY_SUBJECT_FORM, code: startCode }}
         onFinish={(values) => void submit(values as SubjectFormValues)}
         disabled={saving}
       >
@@ -99,6 +106,17 @@ export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalPr
         >
           <Input dir="ltr" maxLength={SUBJECT_CODE_MAX_LENGTH} placeholder="MATH" style={{ maxWidth: 200 }} />
         </Form.Item>
+        <Space style={{ marginTop: -16, marginBottom: 16 }}>
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
+            onClick={() => {
+              form.setFields([{ name: 'code', value: generateUniqueCode(SUBJECT_CODE_PREFIX, takenCodes), errors: [] }])
+            }}
+          >
+            {t('courses.generateCode')}
+          </Button>
+        </Space>
         <Row gutter={12}>
           <Col xs={24}>
             <Form.Item
