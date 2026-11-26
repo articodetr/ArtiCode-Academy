@@ -401,7 +401,7 @@ describe('navFor', () => {
   })
 
   it('hides the users page from a teacher although the seed grants teachers users.read (J-F70)', () => {
-    expect(keysFor(viewer('teacher'))).toEqual(['dashboard', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'notifications'])
+    expect(keysFor(viewer('teacher'))).toEqual(['dashboard', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'notifications'])
     expect(canAccess(viewer('teacher'), 'users')).toBe(false)
     // Only teacher and learner keys: a teacher who is also a guardian (or a student) gets no entry either…
     expect(canAccess(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']), 'users')).toBe(false)
@@ -411,6 +411,17 @@ describe('navFor', () => {
     expect(canAccess(viewer('admin'), 'users')).toBe(true)
     expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.staff], ['teacher', 'staff']), 'users')).toBe(true)
     expect(canAccess(viewer(null, ['users.read'], ['auditor']), 'users')).toBe(true)
+  })
+
+  it('hides «courses and levels» from a teacher although the seed grants teachers courses.read (J-F71)', () => {
+    expect(canAccess(viewer('teacher'), 'courses')).toBe(false)
+    // Only teacher and learner keys: a teacher who is also a guardian gets no entry either…
+    expect(canAccess(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']), 'courses')).toBe(false)
+    // …while any other role key keeps it: staff, an admin, a teacher who is also staff, a custom role holding the key.
+    expect(canAccess(viewer('staff'), 'courses')).toBe(true)
+    expect(canAccess(viewer('admin'), 'courses')).toBe(true)
+    expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.staff], ['teacher', 'staff']), 'courses')).toBe(true)
+    expect(canAccess(viewer(null, ['courses.read'], ['catalog_editor']), 'courses')).toBe(true)
   })
 })
 
