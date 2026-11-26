@@ -538,10 +538,11 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     expect(menu.querySelector('.ant-menu-item-divider')).toBeNull()
   })
 
-  it('shows a teacher who is also a guardian their own pages under «my pages», between the academy and teaching sections', () => {
+  it('shows a teacher who is also a guardian their own pages under «my pages», before the teaching sections, and no users page (J-F70)', () => {
     renderShell(makeUser({ role: 'teacher', roles: ['teacher', 'guardian'], permissions: ['users.read', 'classes.read', 'lessons.read', 'schedule.read'] }))
     const menu = siderMenu()
-    expect(headings(menu)).toEqual([ar.nav.groups.academy, ar.nav.groups.mine, ar.nav.groups.academics, ar.nav.groups.followUp])
+    expect(headings(menu)).toEqual([ar.nav.groups.mine, ar.nav.groups.academics, ar.nav.groups.followUp])
+    expect(labelsIn(menu)).not.toContain(ar.nav.users)
     const mine = sections(menu).find(([heading]) => heading === ar.nav.groups.mine)!
     expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
   })
