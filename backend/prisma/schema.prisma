@@ -476,6 +476,10 @@ model Course {
   enrollmentFeePlanId String?      @map("enrollment_fee_plan_id") @db.Uuid
   /// PORTAL-04: the school subject the course teaches (subjects); null = not set.
   subjectId           String?      @map("subject_id") @db.Uuid
+  /// PORTAL-04-COURSE-ORDER: the course's place in the catalogs and in the office list, set with the arrows
+  /// (POST /api/courses/:id/move). A new course goes last (the sequence default); a move swaps two places inside one
+  /// transaction, so the unique is a deferred constraint (`uq_courses_sort_order`, hand-written — ADR-046).
+  sortOrder           Int          @default(autoincrement()) @map("sort_order")
   minAge              Int?         @map("min_age") @db.SmallInt
   maxAge              Int?         @map("max_age") @db.SmallInt
   createdById         String?      @map("created_by") @db.Uuid
@@ -506,6 +510,7 @@ model Course {
   @@index([createdById])
   @@index([enrollmentFeePlanId])
   @@index([subjectId])
+  @@unique([sortOrder], map: "uq_courses_sort_order")
   @@map("courses")
 }
 

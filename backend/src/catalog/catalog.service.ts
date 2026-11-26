@@ -28,12 +28,14 @@ import { classBlocker, isSelfServiceOpen, seatsLeft, selfServiceReason } from '.
 import { COURSE_PLAN_SELECT, coursePlanUsable, toCourseFeePlan } from './course-pricing.js';
 import type { CourseFeePlan, CoursePlanRow } from './course-pricing.js';
 
-const CATALOG_SORT = 'code';
+// PORTAL-04-COURSE-ORDER: the catalogs list the courses in the order the office sets with the arrows (courses.sort_order).
+const CATALOG_SORT = 'position';
 const CATALOG_ORDER = 'asc';
 
 export const COURSE_CARD_SELECT = {
   id: true,
   code: true,
+  sortOrder: true,
   name: true,
   summary: true,
   coverImageUrl: true,
@@ -81,17 +83,26 @@ export async function courseSearchFilter(db: Db, q: string): Promise<Prisma.Cour
   return { OR: [{ code: { contains: pattern, mode: 'insensitive' } }, { id: { in: await courseIdsByName(db, pattern) } }] };
 }
 
-/** The code keyset of API-219: the courses after the cursor; 400 cursor_invalid for a malformed or foreign one. */
-export function codeCursorFilter(cursor: string): Prisma.CourseWhereInput {
+/** The catalogs' order (PORTAL-04-COURSE-ORDER): the office's arrows, `courses.sort_order` ascending. */
+export const CATALOG_ORDER_BY: Prisma.CourseOrderByWithRelationInput[] = [{ sortOrder: 'asc' }];
+
+/**
+ * The position keyset of API-219/236: the courses after the cursor's place; 400 cursor_invalid for a malformed or
+ * foreign one — a cursor of the former code order included (the client starts again from the first page).
+ */
+export function positionCursorFilter(cursor: string): Prisma.CourseWhereInput {
   const decoded = decodeKeysetCursor(cursor, CATALOG_SORT, CATALOG_ORDER, true, () => coursesError.cursorInvalid());
-  return { code: { gt: String(decoded.key) } };
+  const key = String(decoded.key);
+  if (!/^[1-9][0-9]{0,9}$/.test(key) || !Number.isSafeInteger(Number(key))) throw coursesError.cursorInvalid();
+  return { sortOrder: { gt: Number(key) } };
 }
 
-/** The page of rows read with `take: limit + 1` (by code), and the cursor of the next page. */
-export function codePageOf<T extends { id: string; code: string }>(rows: readonly T[], limit: number): { page: T[]; nextCursor: string | null } {
+/** The page of rows read with `take: limit + 1` (by place), and the cursor of the next page. */
+export function positionPageOf<T extends { id: string; sortOrder: number }>(rows: readonly T[], limit: number): { page: T[]; nextCursor: string | null } {
   const page = rows.slice(0, limit);
   const last = page.at(-1);
-  const nextCursor = rows.length > limit && last ? encodeKeysetCursor({ sort: CATALOG_SORT, order: CATALOG_ORDER, key: last.code, id: last.id }) : null;
+  const nextCursor =
+    rows.length > limit && last ? encodeKeysetCursor({ sort: CATALOG_SORT, order: CATALOG_ORDER, key: String(last.sortOrder), id: last.id }) : null;
   return { page, nextCursor };
 }
 
@@ -193,9 +204,9 @@ export class CatalogService {
       const ids = await this.availableCourseIds();
       filters.push(query.available ? { id: { in: ids } } : { id: { notIn: ids } });
     }
-    if (query.cursor) filters.push(codeCursorFilter(query.cursor));
-    const rows = await db.course.findMany({ where: { AND: filters }, orderBy: [{ code: 'asc' }], take: limit + 1, select: COURSE_CARD_SELECT });
-    const { page, nextCursor } = codePageOf(rows, limit);
+    if (query.cursor) filters.push(positionCursorFilter(query.cursor));
+    const rows = await db.course.findMany({ where: { AND: filters }, orderBy: CATALOG_ORDER_BY, take: limit + 1, select: COURSE_CARD_SELECT });
+    const { page, nextCursor } = positionPageOf(rows, limit);
 
     const courseIds = page.map((row) => row.id);
     const [classes, mine, currency] = await Promise.all([this.openClasses(courseIds), this.mineIn(caller.id, courseIds), this.currency()]);

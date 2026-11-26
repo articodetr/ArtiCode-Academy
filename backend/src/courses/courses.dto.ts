@@ -12,7 +12,8 @@ import { codeParam, COURSE_CODE_PATTERN, optionalCodeParam } from './courses.val
 
 export const COURSES_PAGE_DEFAULT = 20;
 export const COURSES_PAGE_MAX = 100;
-export const COURSE_SORT_FIELDS = ['code', 'createdAt'] as const;
+// PORTAL-04-COURSE-ORDER: `position` = the order the office sets with the arrows (the catalogs’ order).
+export const COURSE_SORT_FIELDS = ['code', 'createdAt', 'position'] as const;
 export type CourseSortField = (typeof COURSE_SORT_FIELDS)[number];
 export const COURSE_STATUSES = Object.values(CourseStatus) as CourseStatus[];
 
@@ -62,12 +63,16 @@ export class ListCoursesQueryDto {
   @IsUUID('all')
   levelId?: string;
 
-  @ApiPropertyOptional({ enum: COURSE_SORT_FIELDS, default: 'code', description: '`code` = alphabetical; `createdAt` = creation order (time-ordered primary key)' })
+  @ApiPropertyOptional({
+    enum: COURSE_SORT_FIELDS,
+    default: 'code',
+    description: '`code` = alphabetical; `createdAt` = creation order (time-ordered primary key); `position` = the order set with POST /api/courses/:id/move (the catalogs’ order)',
+  })
   @IsOptional()
   @IsIn(COURSE_SORT_FIELDS)
   sort?: CourseSortField;
 
-  @ApiPropertyOptional({ enum: ['asc', 'desc'], description: 'Default: `asc` for code, `desc` for createdAt (newest first)' })
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], description: 'Default: `asc` for code and position, `desc` for createdAt (newest first)' })
   @IsOptional()
   @IsIn(['asc', 'desc'])
   order?: SortOrder;
@@ -318,6 +323,16 @@ export class UpdateCourseDto {
   subjectId?: string | null;
 }
 
+/** PORTAL-04-COURSE-ORDER: one step of the course’s place — `up` = before the course above it, `down` = after the one below. */
+export const COURSE_MOVE_DIRECTIONS = ['up', 'down'] as const;
+export type CourseMoveDirection = (typeof COURSE_MOVE_DIRECTIONS)[number];
+
+export class MoveCourseDto {
+  @ApiProperty({ enum: COURSE_MOVE_DIRECTIONS, description: '`up` swaps the course with the one before it in the order, `down` with the one after it' })
+  @IsIn(COURSE_MOVE_DIRECTIONS)
+  direction: CourseMoveDirection;
+}
+
 export class ChangeCourseStatusDto {
   @ApiProperty({ enum: COURSE_STATUS_ACTIONS, description: 'publish: draft→published · unpublish: published→draft · archive: draft|published→archived · restore: archived→draft' })
   @IsIn(COURSE_STATUS_ACTIONS)
@@ -414,6 +429,13 @@ export class CourseDto {
 
   @ApiProperty({ description: 'Number of syllabus items (MOD-04-T04)' })
   syllabusCount: number;
+
+  @ApiProperty({
+    type: 'integer',
+    minimum: 1,
+    description: 'PORTAL-04-COURSE-ORDER: the course’s place (smaller = earlier) in the catalogs and in `sort=position`; unique, with gaps after a deletion — compare, never count',
+  })
+  sortOrder: number;
 
   @ApiProperty({ type: String, nullable: true, description: 'MOD-19: an absolute http(s) URL of the cover image' })
   coverImageUrl: string | null;

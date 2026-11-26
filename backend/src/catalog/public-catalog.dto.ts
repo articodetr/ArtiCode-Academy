@@ -117,7 +117,7 @@ export class PublicCatalogCourseDto {
 }
 
 export class PublicCatalogListDto {
-  @ApiProperty({ type: [PublicCatalogCourseDto], description: 'Published courses by code' })
+  @ApiProperty({ type: [PublicCatalogCourseDto], description: 'Published courses in the office’s order (PORTAL-04-COURSE-ORDER)' })
   items: PublicCatalogCourseDto[];
 
   @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })

@@ -44,7 +44,7 @@ export class CatalogController {
   @ApiOperation({
     summary: 'Explore the published courses (API-219)',
     description:
-      'Published courses only, whatever the caller’s other keys (D-R129), by code, keyset-paginated (`limit` 1–100, default 24). Filters `q` (code or Arabic/English name, ' +
+      'Published courses only, whatever the caller’s other keys (D-R129), in the order the office sets with the arrows (PORTAL-04-COURSE-ORDER — `courses.sort_order`), keyset-paginated (`limit` 1–100, default 24). Filters `q` (code or Arabic/English name, ' +
       'literal), `levelId`, `subjectId` (PORTAL-04), `pricing` free|paid, `available` true|false (a class takes a self-service enrollment now). Each card: cover, level, ' +
       'the school subject (id and name), duration, sessions, syllabus ' +
       'count, the price (the course plan total in the academy currency — D-R122), the classes open to self-service and how many have a free seat, the lead teachers by name, ' +

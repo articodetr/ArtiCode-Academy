@@ -31,7 +31,7 @@ export class PublicCatalogController {
   @ApiOperation({
     summary: 'Browse the published courses without signing in (API-236)',
     description:
-      'Only while the academy opened its catalog to visitors (`settings.catalog.publicBrowsing` true — else 404 catalog_not_public). Published courses by code, ' +
+      'Only while the academy opened its catalog to visitors (`settings.catalog.publicBrowsing` true — else 404 catalog_not_public). Published courses in the office’s order (PORTAL-04-COURSE-ORDER), ' +
       'keyset-paginated (`limit` 1–48, default 24; `cursor`), `q` on the code or the Arabic/English name (literal), `subjectId` (PORTAL-04: the courses of one school subject). ' +
       'Each card: cover, catalog level, the school subject (id and name), duration, sessions, ' +
       'the price (the course plan total in the academy currency — null for a free course or a price unavailable now), how many classes are open to self-service and ' +

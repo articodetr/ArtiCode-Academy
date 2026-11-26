@@ -19,7 +19,7 @@ import { AuthErrorDto } from '../auth/auth.dto.js';
 import { requestContext } from '../auth/cookies.js';
 import { CurrentUser, RequirePermissions } from '../auth/decorators.js';
 import type { AuthPrincipal } from '../auth/principal.js';
-import { ChangeCourseStatusDto, CourseDto, CourseListDto, CreateCourseDto, ListCoursesQueryDto, UpdateCourseDto } from './courses.dto.js';
+import { ChangeCourseStatusDto, CourseDto, CourseListDto, CreateCourseDto, ListCoursesQueryDto, MoveCourseDto, UpdateCourseDto } from './courses.dto.js';
 import { MANAGE_COURSES_PERMISSION, READ_COURSES_PERMISSION } from './courses.policy.js';
 import { CoursesService } from './courses.service.js';
 
@@ -45,7 +45,7 @@ export class CoursesController {
   @ApiOperation({
     summary: 'List courses',
     description:
-      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) sorted by `code` (default, ascending) or `createdAt` (newest first), with search `q` (code, Arabic or English name) and filters `status` and `levelId`. ' +
+      'Keyset-paginated list (`limit` 1–100, opaque `cursor`) sorted by `code` (default, ascending), `createdAt` (newest first) or `position` (the order set with the arrows, ascending — the catalogs’ order), with search `q` (code, Arabic or English name) and filters `status` and `levelId`. ' +
       'Holders of `courses.read` alone see published courses only (a `status` other than `published` is 403); holders of `courses.manage` see every state.',
   })
   @ApiOkResponse({ type: CourseListDto })
@@ -125,6 +125,24 @@ export class CoursesController {
     @Req() req: Request,
   ): Promise<CourseDto> {
     return this.courses.changeStatus(id, body, caller, requestContext(req));
+  }
+
+  @Post(':id/move')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(MANAGE_COURSES_PERMISSION)
+  @ApiOperation({
+    summary: 'Move a course one place up or down (PORTAL-04-COURSE-ORDER)',
+    description:
+      'Swaps the course with the one just before it (`up`) or just after it (`down`) in the order of every course, the order the catalogs (API-219, API-236) and `sort=position` follow, ' +
+      'in one transaction under an advisory lock with the audit event `courses.reordered { code, direction, from, to, swappedWith }`. ' +
+      'At the top (or the bottom) nothing changes: 200 with the course, no event. Requires `courses.manage`.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: CourseDto, description: 'The course with its new `sortOrder`' })
+  @ApiBadRequestResponse({ description: 'Validation failed — `direction` must be `up` or `down`' })
+  @ApiNotFoundResponse({ description: 'course_not_found' })
+  move(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: MoveCourseDto, @CurrentUser() caller: AuthPrincipal, @Req() req: Request): Promise<CourseDto> {
+    return this.courses.move(id, body, caller, requestContext(req));
   }
 
   @Delete(':id')

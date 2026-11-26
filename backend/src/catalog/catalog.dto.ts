@@ -168,7 +168,7 @@ export class CatalogCourseCardDto {
 }
 
 export class CatalogListDto {
-  @ApiProperty({ type: [CatalogCourseCardDto], description: 'Published courses by code' })
+  @ApiProperty({ type: [CatalogCourseCardDto], description: 'Published courses in the office’s order (PORTAL-04-COURSE-ORDER)' })
   items: CatalogCourseCardDto[];
 
   @ApiProperty({ type: String, nullable: true, description: 'Cursor of the next page; null on the last page' })

@@ -46,6 +46,8 @@ const DTO_KEYS = [
   // J-F67: the course's own materials.
   'resources',
   'sessionsCount',
+  // PORTAL-04-COURSE-ORDER: the course's place.
+  'sortOrder',
   'status',
   // PORTAL-04: the school subject.
   'subject',
