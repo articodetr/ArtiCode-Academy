@@ -38,6 +38,7 @@ import {
   extraRoleKeys,
   extraRoleProfileProblem,
   profileKindFor,
+  teacherVisibleUsersWhere,
 } from './users.policy.js';
 import type { RoleGrants } from './users.policy.js';
 import { SELF_FORBIDDEN_ROLES_ACTION, diffRoleKeys, planProfiles, removesAcademyAdmin } from './users.roles.js';
@@ -186,6 +187,17 @@ const MFA_RESET_TARGET_SELECT = {
 type SummaryRow = Prisma.UserGetPayload<{ select: typeof SUMMARY_SELECT }>;
 type ListRow = Prisma.UserGetPayload<{ select: typeof LIST_SELECT }>;
 type DetailRow = Prisma.UserGetPayload<{ select: typeof DETAIL_SELECT }>;
+
+/** KI-153: for a limited teacher the linked people of a detail obey the same scope as the detail itself. */
+function detailSelectFor(teacherScope: string | null): typeof DETAIL_SELECT {
+  if (!teacherScope) return DETAIL_SELECT;
+  const visible = { deletedAt: null, AND: [teacherVisibleUsersWhere(teacherScope)] };
+  return {
+    ...DETAIL_SELECT,
+    guardians: { ...DETAIL_SELECT.guardians, where: { guardian: visible } },
+    guardianOf: { ...DETAIL_SELECT.guardianOf, where: { student: visible } },
+  } as typeof DETAIL_SELECT;
+}
 type StateRow = Prisma.UserGetPayload<{ select: typeof STATE_SELECT }>;
 type RolesTargetRow = Prisma.UserGetPayload<{ select: typeof ROLES_TARGET_SELECT }>;
 type RoleRow = Prisma.RoleGetPayload<{ select: typeof ROLE_GRANT_SELECT }>;
@@ -336,13 +348,14 @@ export class UsersService {
     private readonly mfa: MfaCore,
   ) {}
 
-  async list(query: ListUsersQueryDto, view: UsersProjection): Promise<UserListDto> {
+  async list(query: ListUsersQueryDto, view: UsersProjection, teacherScope: string | null = null): Promise<UserListDto> {
     const sort: UserSortField = query.sort ?? 'createdAt';
     const order: SortOrder = query.order ?? (sort === 'createdAt' ? 'desc' : 'asc');
     const limit = query.limit ?? USERS_PAGE_DEFAULT;
     const cursor = query.cursor ? decodeUserCursor(query.cursor, sort, order) : null;
 
     const conditions: Prisma.UserWhereInput[] = [];
+    if (teacherScope) conditions.push(teacherVisibleUsersWhere(teacherScope));
     if (!query.includeDeleted) conditions.push({ deletedAt: null });
     if (query.status) conditions.push({ status: query.status });
     if (query.role) conditions.push({ roles: { some: { role: { key: query.role } } } });
@@ -366,10 +379,10 @@ export class UsersService {
   }
 
   /** Throws `user_not_found` (404) for unknown ids and, unless `includeDeleted`, for soft-deleted users. */
-  async getById(id: string, includeDeleted: boolean, view: UsersProjection): Promise<UserDetailDto> {
+  async getById(id: string, includeDeleted: boolean, view: UsersProjection, teacherScope: string | null = null): Promise<UserDetailDto> {
     const row = await this.prisma.db.user.findFirst({
-      where: includeDeleted ? { id } : { id, deletedAt: null },
-      select: DETAIL_SELECT,
+      where: { ...(includeDeleted ? { id } : { id, deletedAt: null }), ...(teacherScope ? { AND: [teacherVisibleUsersWhere(teacherScope)] } : {}) },
+      select: detailSelectFor(teacherScope),
     });
     if (!row) throw usersError.userNotFound();
     return toDetail(row, view, isPendingSelfRegistration(row));
@@ -569,6 +582,13 @@ export class UsersService {
           },
           select: { id: true },
         });
+        // KI-159: a link was sent to the previous address, so it stops working with the change.
+        const retired = plan.fields.includes('email')
+          ? await tx.verificationToken.updateMany({
+              where: { userId: id, purpose: { in: ['invitation', 'password_reset'] }, consumedAt: null },
+              data: { consumedAt: new Date() },
+            })
+          : { count: 0 };
         // Field names only — never the old or new values.
         await this.audit.record(
           {
@@ -576,7 +596,7 @@ export class UsersService {
             actorUserId: caller.id,
             entityType: 'users',
             entityId: id,
-            metadata: { fields: plan.fields },
+            metadata: { fields: plan.fields, ...(retired.count > 0 ? { retiredLinks: retired.count } : {}) },
             ...ctx,
           },
           tx,

@@ -19,7 +19,7 @@ import { AuthErrorDto } from '../auth/auth.dto.js';
 import { requestContext } from '../auth/cookies.js';
 import { CurrentUser, RequirePermissions } from '../auth/decorators.js';
 import type { AuthPrincipal } from '../auth/principal.js';
-import { READ_CONTACT_PERMISSION } from '../users/users.policy.js';
+import { READ_CONTACT_PERMISSION, teacherUsersScope } from '../users/users.policy.js';
 import type { UsersProjection } from '../users/users.service.js';
 import { GuardianLinkItemDto, GuardianLinkListDto, LinkGuardianDto, UpdateGuardianLinkDto } from './guardians.dto.js';
 import { LINK_GUARDIANS_PERMISSION, READ_GUARDIANS_PERMISSION } from './guardians.policy.js';
@@ -57,7 +57,7 @@ export class GuardiansController {
   @ApiForbiddenResponse({ type: AuthErrorDto, description: 'permission_denied — `users.read`' })
   @ApiNotFoundResponse({ description: 'user_not_found (unknown or soft-deleted)' })
   listGuardians(@Param('studentId', new ParseUUIDPipe()) studentId: string, @CurrentUser() caller: AuthPrincipal): Promise<GuardianLinkListDto> {
-    return this.guardians.listGuardians(studentId, projectionFor(caller));
+    return this.guardians.listGuardians(studentId, projectionFor(caller), teacherUsersScope(caller));
   }
 
   @Get(':guardianId/students')
@@ -74,7 +74,7 @@ export class GuardiansController {
   @ApiForbiddenResponse({ type: AuthErrorDto, description: 'permission_denied — `users.read`' })
   @ApiNotFoundResponse({ description: 'user_not_found (unknown or soft-deleted)' })
   listStudents(@Param('guardianId', new ParseUUIDPipe()) guardianId: string, @CurrentUser() caller: AuthPrincipal): Promise<GuardianLinkListDto> {
-    return this.guardians.listStudents(guardianId, projectionFor(caller));
+    return this.guardians.listStudents(guardianId, projectionFor(caller), teacherUsersScope(caller));
   }
 
   @Post(':studentId/guardians')

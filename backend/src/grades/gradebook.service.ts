@@ -74,6 +74,23 @@ interface Loaded {
   students: StudentRow[];
 }
 
+/**
+ * A final grade is out of date when a source changed after it was fixed, or
+ * when a component it counted is no longer in the gradebook (KI-157: a removed
+ * exam leaves no `updatedAt` behind).
+ */
+function isFinalStale(student: Pick<StudentRow, 'final' | 'sourcesChangedAt'>, components: readonly { id: string }[]): boolean {
+  const final = student.final;
+  if (!final) return false;
+  if (student.sourcesChangedAt > final.finalizedAt.getTime()) return true;
+  const present = new Set(components.map((component) => component.id));
+  const counted = Array.isArray(final.breakdown) ? final.breakdown : [];
+  return counted.some((row) => {
+    const id = row !== null && typeof row === 'object' && !Array.isArray(row) ? (row as Record<string, unknown>)['id'] : undefined;
+    return typeof id === 'string' && !present.has(id);
+  });
+}
+
 function decimalText(value: Prisma.Decimal | null): string | null {
   return value === null ? null : value.toString();
 }
@@ -178,7 +195,11 @@ export class GradebookService {
     const view = rosterProjectionOf(caller);
     const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const klass = await this.lockClass(tx, classId, caller);
-      await this.assertNotCertified(tx, classId);
+      // D-R54: a class with an issued certificate takes no new or changed final grade. KI-156: re-confirming grades whose
+      // values did not change is still allowed, so a grade marked out of date is not stuck behind the certificates.
+      const certificateCount = await tx.certificate.count({ where: { classId, status: 'issued' } });
+      const refuseCertified = () => gradesError.gradesCertified(classId, certificateCount);
+      if (certificateCount > 0 && !GRADABLE_CLASS_STATUSES.includes(klass.status)) throw refuseCertified();
       if (!GRADABLE_CLASS_STATUSES.includes(klass.status)) throw gradesError.classNotGradable(classId, klass.status);
       // KI-076: the scheme is read and used under the writers' lock (shared) until the commit, so it still exists, is
       // still active (or still the default) and keeps its bands when the grades are inserted. Lock order: the class row,
@@ -186,18 +207,22 @@ export class GradebookService {
       // After a wait, READ COMMITTED gives `schemeFor()` a fresh snapshot: a scheme deleted or deactivated meanwhile is
       // the documented 404 `grade_scheme_not_found` (or 409 `grade_scheme_missing` without any default), never a 500.
       await lockSchemesShared(tx);
-      const scheme = await this.schemeFor(tx, input.schemeId);
+      const scheme = await this.schemeFor(tx, input.schemeId).catch((error: unknown) => {
+        throw certificateCount > 0 ? refuseCertified() : error;
+      });
       const finalizedAt = new Date(); // before the sources are read: a later change marks the result stale
       const loaded = await this.load(tx, classId);
       const readiness = readinessOf(
         loaded.components,
         loaded.students.map((student) => student.outcomes),
       );
+      if (certificateCount > 0 && (readiness.weightedComponents === 0 || !isReady(readiness))) throw refuseCertified();
       if (readiness.weightedComponents === 0) throw gradesError.gradesNotReady(readiness, 'no_weighted_components');
       if (!isReady(readiness)) throw gradesError.gradesNotReady(readiness);
 
       let created = 0;
       let updated = 0;
+      let refreshed = 0;
       let skipped = 0;
       // MOD-12-T03: the final grades this run writes, each worth one notification.
       const written: FinalizedNotice[] = [];
@@ -217,6 +242,7 @@ export class GradebookService {
           breakdown: breakdownOf(loaded.components, student.outcomes),
         };
         const current = student.final;
+        if (certificateCount > 0 && current === null) throw refuseCertified();
         if (current === null) {
           await tx.finalGrade.create({
             data: { enrollmentId: student.enrollmentId, ...next, bandLabel: next.bandLabel as Prisma.InputJsonValue, breakdown: next.breakdown as Prisma.InputJsonValue, finalizedById: caller.id, finalizedAt },
@@ -226,14 +252,32 @@ export class GradebookService {
           written.push(finalizedNotice(loaded.klass, student.student.id, next));
           continue;
         }
-        const same =
+        const sameResult =
           percentText(current.percent) === next.percent &&
           current.schemeId === next.schemeId &&
           sameLocalizedText(current.bandLabel, next.bandLabel) &&
           current.bandLetter === next.bandLetter &&
-          current.isPass === next.isPass &&
-          canonicalJson(current.breakdown) === canonicalJson(next.breakdown);
-        if (same) continue;
+          current.isPass === next.isPass;
+        const same = sameResult && canonicalJson(current.breakdown) === canonicalJson(next.breakdown);
+        if (same) {
+          // KI-156: the same result, confirmed after a source changed — only the moment moves; nobody is notified.
+          if (isFinalStale(student, loaded.components)) {
+            await tx.finalGrade.update({ where: { enrollmentId: student.enrollmentId }, data: { finalizedById: caller.id, finalizedAt }, select: { enrollmentId: true } });
+            refreshed += 1;
+          }
+          continue;
+        }
+        if (certificateCount > 0) {
+          // Only the details changed (a renamed exam, say): the certified result stands. Another result needs a revocation first.
+          if (!sameResult) throw refuseCertified();
+          await tx.finalGrade.update({
+            where: { enrollmentId: student.enrollmentId },
+            data: { breakdown: next.breakdown as Prisma.InputJsonValue, finalizedById: caller.id, finalizedAt },
+            select: { enrollmentId: true },
+          });
+          refreshed += 1;
+          continue;
+        }
         await tx.finalGrade.update({
           where: { enrollmentId: student.enrollmentId },
           data: { ...next, bandLabel: next.bandLabel as Prisma.InputJsonValue, breakdown: next.breakdown as Prisma.InputJsonValue, finalizedById: caller.id, finalizedAt },
@@ -249,14 +293,15 @@ export class GradebookService {
           current.isPass !== next.isPass;
         if (outcomeChanged) written.push(finalizedNotice(loaded.klass, student.student.id, next));
       }
-      if (created + updated > 0) {
+      if (certificateCount > 0 && refreshed === 0) throw refuseCertified(); // nothing to re-confirm: the D-R54 answer
+      if (created + updated + refreshed > 0) {
         await this.audit.record(
           {
             action: GRADES_AUDIT_ACTIONS.finalized,
             actorUserId: caller.id,
             entityType: GRADES_ENTITY_TYPE,
             entityId: classId,
-            metadata: { code: klass.code, schemeId: scheme.id, created, updated, ...(skipped > 0 ? { skipped } : {}) },
+            metadata: { code: klass.code, schemeId: scheme.id, created, updated, ...(refreshed > 0 ? { refreshed } : {}), ...(skipped > 0 ? { skipped } : {}) },
             ...ctx,
           },
           tx,
@@ -305,7 +350,7 @@ export class GradebookService {
             bandLetter: student.final.bandLetter,
             isPass: student.final.isPass,
             finalizedAt: student.final.finalizedAt,
-            stale: student.sourcesChangedAt > student.final.finalizedAt.getTime(),
+            stale: isFinalStale(student, loaded.components),
           }
         : null,
     }));
@@ -501,7 +546,7 @@ export class GradebookService {
             isPass: student.final.isPass,
             finalizedAt: student.final.finalizedAt.toISOString(),
             finalizedBy: student.final.finalizedBy ? { userId: student.final.finalizedBy.id, fullName: student.final.finalizedBy.fullName } : null,
-            stale: student.sourcesChangedAt > student.final.finalizedAt.getTime(),
+            stale: isFinalStale(student, loaded.components),
           }
         : null,
     }));

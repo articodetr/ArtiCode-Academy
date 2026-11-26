@@ -68,6 +68,14 @@ export function paymentSettled(state: RequestPaymentState): boolean {
   return state === 'paid' || state === 'not_required';
 }
 
+/**
+ * KI-155: a paid course's enrollment that was refunded and has nothing paid now
+ * is not reactivated for free. A part-paid installment plan stays reactivatable.
+ */
+export function refundLeftNothingPaid(reversedPayments: number, state: RequestPaymentState): boolean {
+  return reversedPayments > 0 && (state === 'missing' || state === 'unpaid');
+}
+
 export interface RequestRow {
   status: EnrollmentStatus;
   activatedAt: Date | null;

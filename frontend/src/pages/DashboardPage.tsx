@@ -26,7 +26,7 @@ import type { ReportsOverview } from '../api/reports'
 import { useAuth } from '../auth/auth-context'
 import { academyTimeZoneOf } from '../common/timeZone'
 import { PageHeader } from '../components/PageHeader'
-import { ServerStatusCard } from '../components/ServerStatusCard'
+import { SERVER_STATUS_PERMISSION, ServerStatusCard } from '../components/ServerStatusCard'
 import { StatusTag } from '../components/StatusTag'
 import { AdminDashboardHome } from '../dashboard/admin/AdminDashboardHome'
 import { CardContent, CardFailure, RECENT_NOTIFICATIONS, RecentNotifications } from '../dashboard/DashboardCards'
@@ -94,7 +94,7 @@ function TeacherDashboard() {
         subtitle={t('dashboard.subtitle')}
       />
 
-      <ServerStatusCard />
+      {hasPermission(SERVER_STATUS_PERMISSION) ? <ServerStatusCard /> : null}
 
       {canReadOverview ? <OverviewCards overview={overview} withMoney={hasPermission('reports.financial.view')} /> : null}
 

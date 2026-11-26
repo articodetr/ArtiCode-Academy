@@ -10,6 +10,7 @@
 //   extra system roles must stay consistent with the profile the kind creates
 import { LEARNER_BASELINE_PERMISSIONS } from '../authorization/system-roles.js';
 import type { KindRoleKey } from '../authorization/system-roles.js';
+import type { Prisma } from '../generated/prisma/client.js';
 
 export const ASSIGN_ROLES_PERMISSION = 'users.roles.assign';
 export const CREATE_USERS_PERMISSION = 'users.create';
@@ -90,4 +91,29 @@ export function exceedingPermissions(
     if (!held.has(key) && !baseline.has(key)) exceeding.add(key);
   }
   return [...exceeding].sort();
+}
+
+/**
+ * KI-153: a teacher reads only the people of their own classes. The teacher's
+ * id when the caller is limited that way; null for anyone who manages classes
+ * or may read contact details (administrators and staff), and for custom roles.
+ */
+export function teacherUsersScope(caller: { id: string; roles: readonly string[]; permissions: readonly string[] }): string | null {
+  if (!caller.roles.includes('teacher')) return null;
+  if (caller.permissions.includes(READ_CONTACT_PERMISSION) || caller.permissions.includes('classes.manage')) return null;
+  return caller.id;
+}
+
+/** The teacher, the students and co-teachers of the classes they teach, and those students' guardians. */
+export function teacherVisibleUsersWhere(teacherId: string): Prisma.UserWhereInput {
+  const taught: Prisma.ClassWhereInput = { teachers: { some: { teacherUserId: teacherId } } };
+  const enrolled: Prisma.EnrollmentWhereInput = { status: { in: ['active', 'completed'] }, class: taught };
+  return {
+    OR: [
+      { id: teacherId },
+      { enrollments: { some: enrolled } },
+      { classTeacherships: { some: { class: taught } } },
+      { guardianOf: { some: { student: { enrollments: { some: enrolled } } } } },
+    ],
+  };
 }

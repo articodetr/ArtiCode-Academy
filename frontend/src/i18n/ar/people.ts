@@ -16,7 +16,7 @@ export const users = {
   refresh: 'تحديث',
   empty: 'لا مستخدمين مطابقين',
   deleted: 'محذوف',
-  reducedHint: 'بيانات الاتصال مخفية لأن حسابك لا يحمل صلاحية users.read_contact.',
+  reducedHint: 'بيانات الاتصال مخفية عن حسابك.',
   columns: {
     contact: 'بيانات الاتصال',
     roles: 'الأدوار',

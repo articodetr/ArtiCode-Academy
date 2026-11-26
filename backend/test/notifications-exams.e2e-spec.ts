@@ -355,7 +355,7 @@ describe.skipIf(!available)('MOD-12 notifications of the exams module (e2e, TEST
       );
       expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
       // D-R41: the zone of the lesson's room branch, not the academy's.
-      expect(created.res.body).toMatchObject({ status: 'draft', scheduledAt: AT, timeZone: zone.name, activeStudents: 3 });
+      expect(created.res.body).toMatchObject({ status: 'draft', scheduledAt: AT, timeZone: zone.name, activeStudents: 4 });
       expect(zone.name).not.toBe(academyTimeZone);
       exams['A1'] = created.res.body.id as string;
       expect(created.rows).toEqual([]);
@@ -385,7 +385,7 @@ describe.skipIf(!available)('MOD-12 notifications of the exams module (e2e, TEST
       // The route answers and records what it always did.
       expect(res.status, JSON.stringify(res.body)).toBe(200);
       expect(Object.keys(res.body).sort()).toEqual(EXAM_KEYS);
-      expect(res.body).toMatchObject({ id: exam('A1'), status: 'scheduled', publishedAt: null, scheduledAt: AT, timeZone: zone.name, results: { students: 0, scored: 0, absent: 0, excused: 0 }, activeStudents: 3 });
+      expect(res.body).toMatchObject({ id: exam('A1'), status: 'scheduled', publishedAt: null, scheduledAt: AT, timeZone: zone.name, results: { students: 0, scored: 0, absent: 0, excused: 0 }, activeStudents: 4 });
       expect(events.map((event) => [event.action, event.entityType, event.entityId, event.actorUserId, event.metadata])).toEqual([
         ['exams.status.changed', 'exams', exam('A1'), id('teacher'), { classId: classes['A'], code: code('A'), action: 'schedule', from: 'draft', to: 'scheduled', reason: REASON_MARK }],
       ]);

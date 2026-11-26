@@ -38,6 +38,7 @@ import {
   DEACTIVATE_USERS_PERMISSION,
   READ_CONTACT_PERMISSION,
   UPDATE_USERS_PERMISSION,
+  teacherUsersScope,
 } from './users.policy.js';
 import { UsersService } from './users.service.js';
 import type { UsersProjection } from './users.service.js';
@@ -94,7 +95,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid query parameter, or a cursor from another sort/order (`cursor_invalid`)' })
   list(@Query() query: ListUsersQueryDto, @CurrentUser() caller: AuthPrincipal): Promise<UserListDto> {
     assertMayIncludeDeleted(caller, query.includeDeleted);
-    return this.users.list(query, projectionFor(caller));
+    return this.users.list(query, projectionFor(caller), teacherUsersScope(caller));
   }
 
   @Post()
@@ -136,7 +137,7 @@ export class UsersController {
     @CurrentUser() caller: AuthPrincipal,
   ): Promise<UserDetailDto> {
     assertMayIncludeDeleted(caller, query.includeDeleted);
-    return this.users.getById(id, query.includeDeleted === true, projectionFor(caller));
+    return this.users.getById(id, query.includeDeleted === true, projectionFor(caller), teacherUsersScope(caller));
   }
 
   @Patch(':id')

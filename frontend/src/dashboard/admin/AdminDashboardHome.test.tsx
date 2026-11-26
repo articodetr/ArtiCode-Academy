@@ -208,6 +208,22 @@ describe('AdminDashboardHome — the admin home (J-F59)', () => {
 })
 
 describe('DashboardPage — three homes kept apart (J-F59)', () => {
+  it('TEST-324 — shows the server details to an academy administrator only (KI-152)', async () => {
+    mockAdminApi()
+    const admin = renderHome([...FULL_ADMIN, 'academy.settings.manage'], { role: 'admin', roles: ['academy_admin'] })
+    expect(screen.getByText(ar.server.title)).toBeInTheDocument()
+    admin.unmount()
+
+    const staff = renderHome(['reports.financial.view', 'payments.record'], { role: 'staff', roles: ['staff'] })
+    expect(screen.getByText(A.title)).toBeInTheDocument()
+    expect(screen.queryByText(ar.server.title)).toBeNull()
+    staff.unmount()
+
+    renderHome(['lessons.read', 'classes.read'], { role: 'teacher', roles: ['teacher'] })
+    expect(await screen.findByText(ar.dashboard.todayLessons)).toBeInTheDocument()
+    expect(screen.queryByText(ar.server.title)).toBeNull()
+  })
+
   it('keeps a teacher on the teacher’s dashboard, without the admin home', async () => {
     mockAdminApi()
     renderHome(['lessons.read', 'classes.read'], { role: 'teacher', roles: ['teacher'] })

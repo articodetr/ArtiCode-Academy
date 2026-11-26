@@ -362,7 +362,7 @@ export class AssignmentDto {
   @ApiProperty({ type: SubmissionCountsDto })
   submissions: SubmissionCountsDto;
 
-  @ApiProperty({ example: 18, description: 'Active enrollments of the class (the «total» of «submitted / total»)' })
+  @ApiProperty({ example: 18, description: 'Active and completed enrollments of the class (the «total» of «submitted / total»)' })
   activeStudents: number;
 
   @ApiProperty({ description: 'ISO 8601' })

@@ -729,7 +729,7 @@ export const en: Translation = {
     refresh: 'Refresh',
     empty: 'No matching users',
     deleted: 'Deleted',
-    reducedHint: 'Contact details are hidden because your account lacks the users.read_contact permission.',
+    reducedHint: 'Contact details are hidden for your account.',
     columns: {
       contact: 'Contact',
       roles: 'Roles',

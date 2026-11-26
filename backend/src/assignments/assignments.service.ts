@@ -28,6 +28,7 @@ import { assignmentsError } from './assignments.errors.js';
 import { ASSIGNMENT_SORT_FIELD, afterDueCursor, dueCursorKey, dueOrderBy } from './assignments.keyset.js';
 import { isClassOpenForAssignments, seesEveryClass, visibleAssignmentsWhere } from './assignments.policy.js';
 import { actionNeedsOpenClass, allowedAssignmentActions, isAssignmentDeletable, lockedAssignmentFields, nextAssignmentStatus } from './assignments.status.js';
+import { SUBMISSION_ROSTER_ENROLLMENT_STATUSES } from './submissions.policy.js';
 
 export const ASSIGNMENTS_AUDIT_ACTIONS = {
   created: 'assignments.created',
@@ -434,9 +435,9 @@ export class AssignmentsService {
     return counts;
   }
 
-  /** Active enrollments per class (the «total» of «submitted / total»). */
+  /** Active and completed enrollments per class (the «total» of «submitted / total»), so a completed class keeps its roster — KI-151. */
   private async activeStudents(db: Db, classIds: readonly string[]): Promise<Record<string, number>> {
-    const grouped = await db.enrollment.groupBy({ by: ['classId'], where: { classId: { in: [...new Set(classIds)] }, status: 'active' }, _count: { _all: true } });
+    const grouped = await db.enrollment.groupBy({ by: ['classId'], where: { classId: { in: [...new Set(classIds)] }, status: { in: [...SUBMISSION_ROSTER_ENROLLMENT_STATUSES] } }, _count: { _all: true } });
     return Object.fromEntries(grouped.map((group) => [group.classId, group._count._all]));
   }
 

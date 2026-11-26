@@ -10,6 +10,9 @@ const DB_BADGE: Record<DatabaseStatus, 'success' | 'error' | 'warning'> = {
   not_configured: 'warning',
 }
 
+/** Technical details for the academy's administrators only (KI-152): the key only `academy_admin` holds by seed. */
+export const SERVER_STATUS_PERMISSION = 'academy.settings.manage'
+
 /** Live checks against GET /api/health (process) and GET /api/health/ready (database). */
 export function ServerStatusCard() {
   const { t } = useTranslation()

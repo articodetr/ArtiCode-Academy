@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { toDecimalText } from '../assignments/assignments.changes.js';
 import { toInstructionsText } from '../assignments/assignments.dto.js';
+import { SUBMISSION_ROSTER_ENROLLMENT_STATUSES } from '../assignments/submissions.policy.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthPrincipal, RequestContext } from '../auth/principal.js';
 import { readLocalizedText } from '../authorization/localized-text.js';
@@ -567,7 +568,7 @@ export class ExamsService {
       entry[group.status] += group._count._all;
       entry.students += group._count._all;
     }
-    const actives = await db.enrollment.groupBy({ by: ['classId'], where: { classId: { in: [...new Set(rows.map((row) => row.classId))] }, status: 'active' }, _count: { _all: true } });
+    const actives = await db.enrollment.groupBy({ by: ['classId'], where: { classId: { in: [...new Set(rows.map((row) => row.classId))] }, status: { in: [...SUBMISSION_ROSTER_ENROLLMENT_STATUSES] } }, _count: { _all: true } });
     const active = Object.fromEntries(actives.map((group) => [group.classId, group._count._all]));
     const academy = await db.academy.findFirst({ select: { timezone: true } });
     const timeZone = academy?.timezone ?? FALLBACK_TIME_ZONE;
