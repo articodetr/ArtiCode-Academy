@@ -10,7 +10,6 @@ import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse } from '../test/cours
 import { makeCurriculum } from '../test/curriculum'
 import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
-import { SUBJECT_IDS, makeSubject } from '../test/subjects'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CourseDrawer } from './CourseDrawer'
 
@@ -30,7 +29,7 @@ function mockCourseApi() {
 
 function renderDrawer() {
   const onClose = vi.fn()
-  renderWithProviders(<CourseDrawer courseId={COURSE_ID} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
+  renderWithProviders(<CourseDrawer courseId={COURSE_ID} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
     auth: makeAuth({ user: makeUser({ permissions: COURSE_MANAGER_PERMISSIONS }) }),
     route: '/courses',
   })

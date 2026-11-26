@@ -8,10 +8,11 @@ import { availableCourseActions, isDangerousCourseAction, nextCourseStatus } fro
 
 describe('course form helpers', () => {
   it('builds the create body from what was filled in only: no code, no English, no level, hours or sessions', () => {
-    expect(buildCreateCourseInput({ nameAr: ' بايثون ', summaryAr: '', descriptionAr: '  ', subjectId: null, coverImageUrl: '' })).toEqual({ name: { ar: 'بايثون' } })
-    const full = buildCreateCourseInput({ nameAr: 'أ', summaryAr: ' م ', descriptionAr: 'و', subjectId: 's-1', coverImageUrl: 'https://cdn.example.org/a.jpg', pricing: 'free' })
-    expect(full).toEqual({ name: { ar: 'أ' }, summary: { ar: 'م' }, description: { ar: 'و' }, subjectId: 's-1', coverImageUrl: 'https://cdn.example.org/a.jpg' })
-    for (const key of ['code', 'levelId', 'durationHours', 'sessionsCount', 'minAge', 'maxAge', 'enrollmentFeePlanId']) expect(full).not.toHaveProperty(key)
+    expect(buildCreateCourseInput({ nameAr: ' بايثون ', summaryAr: '', descriptionAr: '  ', coverImageUrl: '' })).toEqual({ name: { ar: 'بايثون' } })
+    const full = buildCreateCourseInput({ nameAr: 'أ', summaryAr: ' م ', descriptionAr: 'و', coverImageUrl: 'https://cdn.example.org/a.jpg', pricing: 'free' })
+    expect(full).toEqual({ name: { ar: 'أ' }, summary: { ar: 'م' }, description: { ar: 'و' }, coverImageUrl: 'https://cdn.example.org/a.jpg' })
+    // PORTAL-04-COURSE-ORDER: no subject either.
+    for (const key of ['code', 'levelId', 'durationHours', 'sessionsCount', 'minAge', 'maxAge', 'enrollmentFeePlanId', 'subjectId']) expect(full).not.toHaveProperty(key)
   })
 
   it('creates a paid course with its plan, and a free one (or a paid one without a plan) with none', () => {
@@ -51,19 +52,17 @@ describe('course form helpers', () => {
     expect(planCoursePatch(course, { ...courseFormValuesOf(course), summaryAr: ' ', descriptionAr: '' })).toEqual({ summary: null, description: null })
   })
 
-  it('reads the subject from the course and sends it only when it changes; an emptied picker clears it (PORTAL-04)', () => {
+  it('never reads nor sends the subject: a course keeps the one stored on it (PORTAL-04-COURSE-ORDER)', () => {
     const course = makeCourse()
     const values = courseFormValuesOf(course)
-    expect(values.subjectId).toBe(course.subject!.id)
+    expect(values).not.toHaveProperty('subjectId')
     expect(planCoursePatch(course, values)).toBeNull()
-    expect(planCoursePatch(course, { ...values, subjectId: 'other-subject' })).toEqual({ subjectId: 'other-subject' })
-    // antd answers undefined when a Select is cleared.
-    expect(planCoursePatch(course, { ...values, subjectId: undefined })).toEqual({ subjectId: null })
-    expect(planCoursePatch(course, { ...values, subjectId: null })).toEqual({ subjectId: null })
-    const none = makeCourse({ subject: null })
-    expect(courseFormValuesOf(none).subjectId).toBeNull()
-    expect(planCoursePatch(none, { ...courseFormValuesOf(none), subjectId: 's-1' })).toEqual({ subjectId: 's-1' })
-    expect(courseFormHasChanges(none, { ...courseFormValuesOf(none), subjectId: 's-1' })).toBe(true)
+    expect(courseFormHasChanges(course, values)).toBe(false)
+    const edited = planCoursePatch(course, { ...values, summaryAr: 'ملخص' })
+    expect(edited).toEqual({ summary: { ar: 'ملخص' } })
+    expect(edited).not.toHaveProperty('subjectId')
+    // A subject error of the server has no field on the form any more: it shows above the form.
+    expect(courseFormField(['subjectId'])).toBeUndefined()
   })
 
   it('reads localized text like the server', () => {
@@ -75,7 +74,8 @@ describe('course form helpers', () => {
   })
 
   it('puts a server error on a field only when the form still has that field', () => {
-    expect(courseFormField(['subjectId'])).toEqual(['subjectId'])
+    // PORTAL-04-COURSE-ORDER: the form has no subject field any more.
+    expect(courseFormField(['subjectId'])).toBeUndefined()
     expect(courseFormField(['enrollmentFeePlanId'])).toEqual(['enrollmentFeePlanId'])
     expect(courseFormField(['code'])).toBeUndefined()
     expect(courseFormField(['levelId'])).toBeUndefined()

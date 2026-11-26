@@ -17,11 +17,11 @@
 // the fee plan's total in the academy currency); the edit form takes the cover
 // URL, and — for holders of `fee_plans.manage` only, as the server requires —
 // the course type and its fee plan (CoursePricingFields).
-// PORTAL-04: the details and the edit form gain the school subject beside the
-// difficulty level; the age range is no longer shown or edited (the stored
-// values stay — the PATCH never names them).
+// PORTAL-04: the age range is no longer shown or edited (the stored values stay — the
+// PATCH never names them). PORTAL-04-COURSE-ORDER: the edit form no longer picks a
+// school subject; a stored subject shows in the details like the level.
 // The simplified course form: the edit form asks what the create modal asks (Arabic
-// name, summary and description, cover, subject, price) plus the course's materials;
+// name, summary and description, cover, price) plus the course's materials;
 // the code, the English texts, the level, the hours and the sessions stay stored and
 // are shown in the details when they hold a value (an empty row is not shown).
 import { DeleteOutlined, DownOutlined, EditOutlined, InboxOutlined, RocketOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
@@ -32,7 +32,6 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { changeCourseStatus, deleteCourse, getCourse, updateCourse } from '../api/courses'
 import type { Course } from '../api/courses'
-import type { Subject } from '../api/subjects'
 import { useAuth } from '../auth/auth-context'
 import { NavigationBlocker } from '../common/NavigationBlocker'
 import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
@@ -53,7 +52,6 @@ import { courseFormField, courseFormHasChanges, courseFormValuesOf, planCoursePa
 import { CourseResourcesField } from './CourseResourcesField'
 import type { CourseFormValues } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction } from './courses.status'
-import { subjectChoicesFor } from './subjects.form'
 import type { CourseMenuAction } from './courses.status'
 import './courseDrawer.css'
 
@@ -80,8 +78,6 @@ const NOTHING_UNSAVED: Readonly<Record<EditorPart, boolean>> = { details: false,
 
 interface CourseDrawerProps {
   courseId: string | null
-  /** PORTAL-04: the subject picker's list. */
-  subjects: Subject[]
   onClose: () => void
   /** The course the server returned after an edit or a status change. */
   onUpdated: (course: Course) => void
@@ -89,7 +85,7 @@ interface CourseDrawerProps {
   onDeleted: (courseId: string) => void
 }
 
-export function CourseDrawer({ courseId, subjects, onClose, onUpdated, onDeleted }: CourseDrawerProps) {
+export function CourseDrawer({ courseId, onClose, onUpdated, onDeleted }: CourseDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -201,7 +197,6 @@ export function CourseDrawer({ courseId, subjects, onClose, onUpdated, onDeleted
         // Remount per server version so the form starts from what the server holds.
         key={`${course.id}:${course.updatedAt}`}
         course={course}
-        subjects={subjects}
         onSaved={(updated) => {
           applyUpdate(updated)
           setEditing(false)
@@ -221,9 +216,9 @@ export function CourseDrawer({ courseId, subjects, onClose, onUpdated, onDeleted
         {/* The form no longer asks the English name, the level, the hours or the sessions: a stored value stays
             visible as data, an empty row is not shown. */}
         {course.name.en ? <Descriptions.Item label={t('courses.fields.nameEn')}>{course.name.en}</Descriptions.Item> : null}
-        <Descriptions.Item label={t('courses.fields.subject')}>
-          {course.subject ? `${localizedLabel(course.subject.name, language)} (${course.subject.code})` : DASH}
-        </Descriptions.Item>
+        {course.subject ? (
+          <Descriptions.Item label={t('courses.fields.subject')}>{`${localizedLabel(course.subject.name, language)} (${course.subject.code})`}</Descriptions.Item>
+        ) : null}
         {course.level ? (
           <Descriptions.Item label={t('courses.fields.level')}>{`${localizedLabel(course.level.name, language)} (${course.level.code})`}</Descriptions.Item>
         ) : null}
@@ -386,7 +381,6 @@ export function CourseDrawer({ courseId, subjects, onClose, onUpdated, onDeleted
 
 interface CourseEditFormProps {
   course: Course
-  subjects: Subject[]
   onSaved: (course: Course) => void
   onCancel: () => void
   /** Whether a field holds a change (KI-054): reported on every edit, false once the form is left. */
@@ -399,7 +393,7 @@ interface CourseEditFormProps {
  * sessions would merge the values typed in a cancelled session over the new
  * initial values (rc-field-form keeps unmounted values — CH-0049).
  */
-function CourseEditForm({ course, subjects, onSaved, onCancel, onUnsavedChange }: CourseEditFormProps) {
+function CourseEditForm({ course, onSaved, onCancel, onUnsavedChange }: CourseEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { hasPermission } = useAuth()
@@ -445,7 +439,7 @@ function CourseEditForm({ course, subjects, onSaved, onCancel, onUnsavedChange }
       disabled={saving}
     >
       {/* The simplified course form: the fields of the create modal, then the course's materials. */}
-      <CourseFormFields subjects={subjectChoicesFor(subjects, course.subject)} />
+      <CourseFormFields />
       {canPrice ? (
         <CoursePricingFields course={course} />
       ) : (

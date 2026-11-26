@@ -1,8 +1,8 @@
 // Courses list (MOD-04-T05): GET /api/courses with search, a status filter and keyset pagination; a detail drawer and
 // a creation modal for holders of `courses.manage`. Holders of `courses.read` alone receive published courses only
 // (D-R13) — the server decides, the page just hides what they cannot use.
-// PORTAL-04-COURSE-ORDER: no levels or subjects tab and no level column or filter any more (the tables stay — the
-// course form still picks a subject among the existing ones); the list opens in the office's order («ترتيب العرض»,
+// PORTAL-04-COURSE-ORDER: no levels or subjects tab, no level column or filter and no subject in the course form
+// any more (the tables and the stored values stay); the list opens in the office's order («ترتيب العرض»,
 // API-042 `sort=position`), the order the catalogs show, and a manager moves a course one place up or down with the
 // arrows (POST /api/courses/:id/move). The arrows work only on the plain order — no search, no status filter — so a
 // move is always between the rows the manager sees; every move reads the page again from the server.
@@ -22,7 +22,6 @@ import { describeCoursesFailure, failureMessage } from '../courses/courses.error
 import { canReorderCourses } from '../courses/courses.order'
 import { COURSE_PAGE_SIZES, useCoursesList } from '../courses/useCoursesList'
 import type { CoursesListFilters } from '../courses/useCoursesList'
-import { useSubjects } from '../courses/useSubjects'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CREATE_COURSE, useCreateFromLink } from '../common/useCreateFromLink'
@@ -35,8 +34,6 @@ export function CoursesPage() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('courses.manage')
   const list = useCoursesList()
-  // The course form still picks a subject among the existing ones (a manager reads the inactive ones too).
-  const { subjects } = useSubjects(canManage)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // The course being moved: every arrow waits for its answer.
   const [movingId, setMovingId] = useState<string | null>(null)
@@ -228,7 +225,6 @@ export function CoursesPage() {
 
       <CourseDrawer
         courseId={selectedId}
-        subjects={subjects}
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
         onDeleted={list.removeItem}
@@ -236,7 +232,6 @@ export function CoursesPage() {
 
       <CreateCourseModal
         open={creating}
-        subjects={subjects}
         onClose={() => setCreating(false)}
         onCreated={(course) => {
           setCreating(false)

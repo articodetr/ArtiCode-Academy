@@ -7,7 +7,6 @@ import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeC
 import { makeCurriculum } from '../test/curriculum'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeFeePlan } from '../test/payments'
-import { SUBJECT_IDS, makeSubject } from '../test/subjects'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { CourseDrawer } from './CourseDrawer'
 
@@ -33,7 +32,7 @@ function renderDrawer(permissions: string[]) {
   const onUpdated = vi.fn()
   const onDeleted = vi.fn()
   const onClose = vi.fn()
-  renderWithProviders(<CourseDrawer courseId={COURSE_ID} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={onUpdated} onDeleted={onDeleted} />, {
+  renderWithProviders(<CourseDrawer courseId={COURSE_ID} onClose={onClose} onUpdated={onUpdated} onDeleted={onDeleted} />, {
     auth: makeAuth({ user: makeUser({ permissions }) }),
     route: '/courses',
   })
@@ -185,7 +184,7 @@ describe('CourseDrawer', () => {
 })
 
 describe('CourseDrawer — the school subject, no age range (PORTAL-04)', () => {
-  it('shows the subject beside the difficulty level and keeps the sessions, with no age range', async () => {
+  it('shows a stored subject beside the difficulty level and keeps the sessions, with no age range', async () => {
     mockCourseApi(() => makeCourse({ minAge: 10, maxAge: 14 }))
     renderDrawer(COURSE_READER_PERMISSIONS)
     expect(await screen.findByText('البرمجة (PROG)')).toBeInTheDocument()
@@ -197,35 +196,32 @@ describe('CourseDrawer — the school subject, no age range (PORTAL-04)', () => 
     expect(document.body.textContent).not.toContain('10 – 14')
   })
 
-  it('edits the subject in the smallest PATCH, never names the ages, and asks no age at all', async () => {
-    const saved = makeCourse({ subject: { id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } }, updatedAt: '2026-11-24T10:00:00.000Z' })
+  it('shows no subject row for a course without one (PORTAL-04-COURSE-ORDER)', async () => {
+    mockCourseApi(() => makeCourse({ subject: null }))
+    renderDrawer(COURSE_READER_PERMISSIONS)
+    await screen.findByText('PY-101')
+    expect(screen.queryByText(ar.courses.fields.subject)).not.toBeInTheDocument()
+  })
+
+  it('asks no subject and no age, and a saved edit keeps the stored subject — the PATCH never names it (PORTAL-04-COURSE-ORDER)', async () => {
+    const saved = makeCourse({ summary: { ar: 'ملخص جديد' }, updatedAt: '2026-11-24T10:00:00.000Z' })
     const calls = mockCourseApi(() => makeCourse({ minAge: 10, maxAge: 14 }), { PATCH: jsonResponse(200, saved) })
     const { onUpdated } = renderDrawer(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
     fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
 
-    const picker = await screen.findByRole('combobox', { name: ar.courses.fields.subject })
+    const summary = await screen.findByLabelText(ar.courses.fields.summary)
+    expect(screen.queryByRole('combobox', { name: ar.courses.fields.subject })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(ar.courses.fields.subject)).not.toBeInTheDocument()
     expect(screen.queryByText('أصغر عمر')).not.toBeInTheDocument()
     expect(screen.queryByText('أكبر عمر')).not.toBeInTheDocument()
     // The simplified form asks no sessions either.
     expect(screen.queryByLabelText(ar.courses.fields.sessionsCount)).not.toBeInTheDocument()
-    fireEvent.mouseDown(picker)
-    fireEvent.click(await screen.findByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
+    fireEvent.change(summary, { target: { value: 'ملخص جديد' } })
     fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
 
     await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(saved))
-    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ subjectId: SUBJECT_IDS[1] }])
-  })
-
-  it('names the course\'s own subject in the picker even when the subjects list lacks it', async () => {
-    mockCourseApi(() => makeCourse({ subject: { id: 'hidden-subject', code: 'OLD', name: { ar: 'مادة قديمة' } } }))
-    renderDrawer(COURSE_MANAGER_PERMISSIONS)
-    await screen.findByText('مادة قديمة (OLD)')
-    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
-    const picker = await screen.findByRole('combobox', { name: ar.courses.fields.subject })
-    const field = picker.closest('.ant-select') as HTMLElement
-    expect(within(field).getByText(/مادة قديمة/)).toBeInTheDocument()
-    expect(field.textContent).not.toContain('hidden-subject')
+    expect(calls.filter((call) => call.method === 'PATCH').map((call) => call.body)).toEqual([{ summary: { ar: 'ملخص جديد' } }])
   })
 })
 
@@ -311,7 +307,7 @@ describe('CourseDrawer — cover and price (MOD-19)', () => {
 describe('CourseDrawer — the simplified course form', () => {
   const plan = makeFeePlan({ id: 'plan-1', name: { ar: 'رسوم الدورة الكاملة' }, total: 1000 })
 
-  it('asks the name, summary, description, cover, subject, type and price in that order, then the materials — no code, English, level, hours or sessions', async () => {
+  it('asks the name, summary, description, cover, type and price in that order, then the materials — no code, English, level, hours, sessions or subject', async () => {
     mockFetch((url) =>
       url.startsWith('/api/fee-plans')
         ? jsonResponse(200, { items: [plan] })
@@ -328,7 +324,6 @@ describe('CourseDrawer — the simplified course form', () => {
       ar.courses.fields.summary,
       ar.courses.fields.description,
       ar.courses.fields.coverImageUrl,
-      ar.courses.fields.subject,
       ar.courses.fields.pricing,
       ar.courses.fields.price,
       ar.courses.fields.resources,

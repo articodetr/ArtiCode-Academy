@@ -9,7 +9,7 @@ import { COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, make
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeFeePlan } from '../test/payments'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { SUBJECT_IDS, THREE_SUBJECTS } from '../test/subjects'
+import { THREE_SUBJECTS } from '../test/subjects'
 import { CoursesPage } from './CoursesPage'
 
 const python = makeCourse({ status: 'published' })
@@ -153,21 +153,6 @@ describe('CoursesPage', () => {
     expect(api.posts).toEqual([{ name: { ar: 'مكرر' } }])
   })
 
-  it('shows an inactive subject on the subject field', async () => {
-    mockCoursesApi(makeCourseList([python]), jsonResponse(422, { statusCode: 422, code: 'subject_inactive', subjectId: SUBJECT_IDS[1], message: 'off' }))
-    renderPage(COURSE_MANAGER_PERMISSIONS)
-    await screen.findByText('PY-101')
-
-    fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
-    const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة')
-    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.subject }))
-    fireEvent.click(await screen.findByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
-    fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
-
-    const shown = await within(dialog).findByText(ar.courses.errors.subject_inactive)
-    expect(shown.closest('.ant-form-item')).toHaveTextContent(ar.courses.fields.subject)
-  })
 
   it('refuses locally an empty name, a too long summary and a bad cover link, each under its field, before any request', async () => {
     const api = mockCoursesApi(makeCourseList([]))
@@ -186,7 +171,7 @@ describe('CoursesPage', () => {
     expect(api.posts).toEqual([])
   })
 
-  it('creates a course with its subject and asks no age range (PORTAL-04)', async () => {
+  it('creates a course with no subject and no age range, and reads no subjects list (PORTAL-04-COURSE-ORDER)', async () => {
     const api = mockCoursesApi(makeCourseList([python]))
     renderPage(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
@@ -195,14 +180,12 @@ describe('CoursesPage', () => {
     const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
     expect(within(dialog).queryByText('أصغر عمر')).not.toBeInTheDocument()
     expect(within(dialog).queryByText('أكبر عمر')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(ar.courses.fields.subject)).not.toBeInTheDocument()
     await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة جديدة')
-    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.subject }))
-    // A manager reads the inactive subjects too: they are marked, not hidden.
-    expect(await screen.findByText(/الفنون/, { selector: '.ant-select-item-option-content' })).toHaveTextContent(ar.labels.inactive)
-    fireEvent.click(screen.getByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
     fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
 
-    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة جديدة' }, subjectId: SUBJECT_IDS[1] }]))
+    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة جديدة' } }]))
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/subjects'))).toBe(false)
   })
 
   it('creates a paid course with a general fee plan as its price; only the general active plans are offered (fee_plans.manage)', async () => {
@@ -265,8 +248,9 @@ describe('CoursesPage', () => {
     expect(headers).not.toContain(ar.courses.level)
     expect(screen.queryByRole('combobox', { name: ar.courses.level })).not.toBeInTheDocument()
     expect(within(bodyRows()[0]!).queryByText('مبتدئ')).not.toBeInTheDocument()
-    // The levels list is no longer read; the subjects still are, for the course form's picker.
+    // Neither the levels nor the subjects are read any more.
     expect(api.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/levels'))).toBe(false)
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/subjects'))).toBe(false)
   })
 
   it('moves a course with the arrows: POST …/move with the direction, then the page is read again; the first row cannot go up nor the last down', async () => {

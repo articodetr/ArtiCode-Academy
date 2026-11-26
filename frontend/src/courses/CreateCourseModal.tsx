@@ -1,8 +1,7 @@
 // Creation of a course (MOD-04-T05) through POST /api/courses (API-044): the
-// course starts as a draft. A server error that names a field (unknown or
-// inactive subject, a refused fee plan) is shown on that field; anything else above the form.
-// PORTAL-04: the subject picker; no age range.
-// The simplified course form: the Arabic texts, the cover, the subject and — for holders of
+// course starts as a draft. A server error that names a field (a refused fee plan) is shown on
+// that field; anything else above the form. PORTAL-04: no age range; PORTAL-04-COURSE-ORDER: no subject.
+// The simplified course form: the Arabic texts, the cover and — for holders of
 // `fee_plans.manage`, which the server needs besides `courses.manage` — the course type with
 // a general fee plan as its price (CoursePricingFields without a course). No code: the server
 // generates one. Without the key the course is created free, as before.
@@ -11,7 +10,6 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createCourse } from '../api/courses'
 import type { Course } from '../api/courses'
-import type { Subject } from '../api/subjects'
 import { useAuth } from '../auth/auth-context'
 import { CourseFormFields } from './CourseFormFields'
 import { CoursePricingFields } from './CoursePricingFields'
@@ -21,8 +19,6 @@ import type { CourseFormValues } from './courses.form'
 
 interface CreateCourseModalProps {
   open: boolean
-  /** PORTAL-04 */
-  subjects: Subject[]
   onClose: () => void
   onCreated: (course: Course) => void
 }
@@ -30,7 +26,7 @@ interface CreateCourseModalProps {
 /** A new course is free until the manager says otherwise. */
 const INITIAL_VALUES: Partial<CourseFormValues> = { pricing: 'free' }
 
-export function CreateCourseModal({ open, subjects, onClose, onCreated }: CreateCourseModalProps) {
+export function CreateCourseModal({ open, onClose, onCreated }: CreateCourseModalProps) {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   // MOD-19 (D-R122): the price needs fee_plans.manage besides courses.manage.
@@ -86,7 +82,7 @@ export function CreateCourseModal({ open, subjects, onClose, onCreated }: Create
         onFinish={(values) => void submit(values as CourseFormValues)}
         disabled={saving}
       >
-        <CourseFormFields subjects={subjects} />
+        <CourseFormFields />
         {canPrice ? <CoursePricingFields /> : null}
       </Form>
     </Modal>
