@@ -1,0 +1,235 @@
+/* «الاختبارات والشهادة» of «دروسي» (J-F67): the look of the lessons panel, in
+   logical properties; every row stacks on a phone. */
+
+.hub-finish-anchor {
+  scroll-margin-block-start: 80px;
+}
+
+.hub-finish {
+  margin-block-start: 22px;
+  padding-block-start: 20px;
+  border-block-start: 1px solid #f1f5f9;
+}
+
+.hub-finish__head {
+  margin-block-end: 14px;
+}
+
+.hub-finish__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #113464;
+}
+
+.hub-finish__title .anticon {
+  color: #c5a052;
+}
+
+.hub-finish__hint,
+.hub-finish__empty {
+  margin: 0;
+  font-size: 13.5px;
+  color: #64748b;
+}
+
+.hub-finish__empty {
+  margin-block-end: 14px;
+}
+
+/* --- The three steps ------------------------------------------------------- */
+
+.hub-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.hub-step.is-done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.hub-step__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: 30px;
+  block-size: 30px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #8a6a24;
+  background: #fef7e6;
+  border-radius: 50%;
+}
+
+.hub-step.is-done .hub-step__mark {
+  font-size: 20px;
+  color: #16a34a;
+  background: transparent;
+}
+
+.hub-step__text {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.hub-step__label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.hub-step__value {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+/* --- The exams ------------------------------------------------------------- */
+
+.hub-exams {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-exam {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 14px 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.hub-exam.is-done {
+  border-color: #bbf7d0;
+}
+
+.hub-exam__main {
+  flex: 1 1 240px;
+  min-inline-size: 0;
+}
+
+.hub-exam__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-block-end: 5px;
+}
+
+.hub-exam__title {
+  margin: 0 0 3px;
+  font-size: 15.5px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: #1e293b;
+  overflow-wrap: anywhere;
+}
+
+.hub-exam__result {
+  margin: 0;
+  font-size: 13px;
+  color: #113464;
+}
+
+.hub-exam__result.is-muted {
+  color: #64748b;
+}
+
+.hub-exam__action {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+
+/* --- The certificate ------------------------------------------------------- */
+
+.hub-cert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 16px 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.hub-cert--ok {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef7e6 100%);
+  border-color: #c5a052;
+}
+
+.hub-cert__icon {
+  flex: none;
+  font-size: 30px;
+  color: #c5a052;
+}
+
+.hub-cert__body {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+  font-size: 13.5px;
+  color: #475569;
+}
+
+.hub-cert__body strong {
+  font-size: 15px;
+  color: #113464;
+}
+
+.hub-cert__serial {
+  font-weight: 700;
+  color: #113464;
+}
+
+.hub-cert__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .hub-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-exam {
+    padding: 12px;
+  }
+
+  .hub-exam__action,
+  .hub-cert__actions,
+  .hub-cert__actions .ant-btn {
+    inline-size: 100%;
+  }
+}

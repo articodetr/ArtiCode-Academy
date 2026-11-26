@@ -111,6 +111,7 @@ export const takeExam: typeof arTakeExam = {
 
   page: {
     back: 'Back to my exams',
+    backToLessons: 'Back to the course and certificate',
     attemptNo: 'Attempt {{number}}',
     loading: 'Loading the exam…',
     loadFailed: 'The attempt could not be loaded',

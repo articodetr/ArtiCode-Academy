@@ -15,6 +15,10 @@
 //   certificate_revoked           409 — the certificate is already revoked
 //                                       ({ certificateId, revokedAt })
 //   cursor_invalid                400 — the list cursor does not belong to this order
+//   enrollment_not_found          404 — no active or completed enrollment of the caller's
+//                                       own with this id (API-070/071, ADR-049)
+//   certificate_not_ready         409 — the student cannot take this certificate now
+//                                       ({ state }: `COMPLETION_STATES` of certificates.policy.ts)
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -25,6 +29,8 @@ export const CERTIFICATES_ERROR_CODES = [
   'certificate_not_found',
   'certificate_revoked',
   'cursor_invalid',
+  'enrollment_not_found',
+  'certificate_not_ready',
 ] as const;
 
 export type CertificatesErrorCode = (typeof CERTIFICATES_ERROR_CODES)[number];
@@ -62,4 +68,7 @@ export const certificatesError = {
     new CertificatesHttpException(HttpStatus.CONFLICT, 'certificate_revoked', 'The certificate is already revoked', { certificateId, revokedAt }),
   cursorInvalid: () =>
     new CertificatesHttpException(HttpStatus.BAD_REQUEST, 'cursor_invalid', 'The cursor is invalid or belongs to a different order; restart from the first page'),
+  enrollmentNotFound: (enrollmentId: string) =>
+    new CertificatesHttpException(HttpStatus.NOT_FOUND, 'enrollment_not_found', 'No active or completed enrollment of yours with this id', { enrollmentId }),
+  notReady: (state: string) => new CertificatesHttpException(HttpStatus.CONFLICT, 'certificate_not_ready', 'This certificate cannot be taken yet', { state }),
 };

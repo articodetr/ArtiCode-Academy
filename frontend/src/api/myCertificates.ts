@@ -11,6 +11,7 @@
 import type { Certificate } from './certificates'
 import { apiRequest } from './client'
 import type { MyClassRelation } from './enrollments'
+import type { LocalizedLabel } from './users'
 
 /** `MyCertificateItemDto`: a certificate as its owner sees it — everything to print it, nothing about who issued or revoked it, or why. */
 export interface MyCertificateItem extends Omit<Certificate, 'issuedBy' | 'revokedBy' | 'revokeReason'> {
@@ -44,4 +45,55 @@ export function myCertificatesPath(params: ListMyCertificatesParams = {}): strin
 /** API-135. */
 export function listMyCertificates(params: ListMyCertificatesParams = {}, signal?: AbortSignal): Promise<MyCertificateList> {
   return apiRequest<MyCertificateList>(myCertificatesPath(params), { signal })
+}
+
+// --- API-070/071 (ADR-049, J-F67): the student's way to their own certificate. ---
+
+/** `COMPLETION_STATES` of backend/src/certificates/certificates.policy.ts — keep in sync; the order the server checks them. */
+export const COMPLETION_STATES = ['issued', 'revoked', 'not_offered', 'class_not_running', 'lessons_pending', 'no_assessments', 'assessments_pending', 'not_passed', 'ready'] as const
+export type CompletionState = (typeof COMPLETION_STATES)[number]
+
+/** `CompletionWorkDto`: one weighted assessment of the class. */
+export interface CompletionWork {
+  kind: 'exam' | 'assignment'
+  id: string
+  title: LocalizedLabel
+  maxScore: number
+  /** Finished and visible to the student: a released exam result, a graded assignment. */
+  done: boolean
+  /** The student's own score once `done`; null for an excused exam. */
+  score: number | null
+}
+
+/** `EnrollmentCompletionDto` (API-070). */
+export interface EnrollmentCompletion {
+  enrollmentId: string
+  classId: string
+  courseId: string
+  state: CompletionState
+  lessons: { required: number; completed: number }
+  work: CompletionWork[]
+  /** Only once every assessment is finished — never a running average (D-R48). */
+  grade: { percent: number; label: LocalizedLabel; letter: string | null; isPass: boolean } | null
+  /** The issued certificate, else the latest revoked one. */
+  certificate: { id: string; serial: string; status: 'issued' | 'revoked' } | null
+}
+
+/** `ClaimCertificateResultDto` (API-071). */
+export interface ClaimCertificateResult {
+  /** false = the student already held this certificate and nothing was written. */
+  created: boolean
+  certificate: MyCertificateItem
+}
+
+const enrollmentPath = (enrollmentId: string) => `/api/me/enrollments/${encodeURIComponent(enrollmentId)}`
+
+/** API-070 — where the student stands on the way to their certificate. */
+export function getEnrollmentCompletion(enrollmentId: string, signal?: AbortSignal): Promise<EnrollmentCompletion> {
+  return apiRequest<EnrollmentCompletion>(`${enrollmentPath(enrollmentId)}/completion`, { signal })
+}
+
+/** API-071 — takes the certificate; 409 `certificate_not_ready { state }` while the server's state is not `ready`. */
+export function claimCertificate(enrollmentId: string): Promise<ClaimCertificateResult> {
+  return apiRequest<ClaimCertificateResult>(`${enrollmentPath(enrollmentId)}/certificate`, { method: 'POST', body: {} })
 }

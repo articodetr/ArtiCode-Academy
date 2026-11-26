@@ -20,6 +20,7 @@ describe('settingsFormValuesOf', () => {
       weekStartsOn: undefined,
       workingDays: [],
       serialPrefix: '',
+      selfIssue: false,
       videoCompletionPercent: null,
       publicBrowsing: false,
     })
@@ -101,6 +102,20 @@ describe('planAcademyPatch', () => {
     expect(settingsFormValuesOf(academy).serialPrefix).toBe('')
     expect(planAcademyPatch(academy, settingsFormValuesOf(academy))).toBeNull()
     expect(planAcademyPatch(academy, { ...settingsFormValuesOf(academy), serialPrefix: 'ACA' })).toEqual({ settings: { certificates: { serialPrefix: 'ACA' } } })
+  })
+
+  it('sends the self-issue switch with the prefix in one settings.certificates, and off clears it (J-F67)', () => {
+    const academy = makeAcademy()
+    const values = settingsFormValuesOf(academy)
+    expect(values.selfIssue).toBe(false)
+    expect(planAcademyPatch(academy, values)).toBeNull()
+    expect(planAcademyPatch(academy, { ...values, selfIssue: true })).toEqual({ settings: { certificates: { selfIssue: true } } })
+    expect(planAcademyPatch(academy, { ...values, selfIssue: true, serialPrefix: 'ACA' })).toEqual({ settings: { certificates: { serialPrefix: 'ACA', selfIssue: true } } })
+    const on = makeAcademy({ settings: { ...academy.settings, certificates: { serialPrefix: null, selfIssue: true } } })
+    expect(settingsFormValuesOf(on).selfIssue).toBe(true)
+    expect(planAcademyPatch(on, settingsFormValuesOf(on))).toBeNull()
+    expect(planAcademyPatch(on, { ...settingsFormValuesOf(on), selfIssue: false })).toEqual({ settings: { certificates: { selfIssue: null } } })
+    expect(planAcademyPatch(on, { ...settingsFormValuesOf(on), selfIssue: undefined })).toBeNull()
   })
 
   it('adds the playback share under settings.learning and the catalog switch under settings.catalog in the same body (MOD-20)', () => {

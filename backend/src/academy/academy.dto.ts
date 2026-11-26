@@ -9,6 +9,7 @@ import { CURRENCY_PATTERN, IsIanaTimeZone, TIME_ZONE_MAX_LENGTH, currencyParam }
 import {
   MatchesSchema,
   publicBrowsingSchema,
+  selfIssueSchema,
   serialPrefixSchema,
   videoCompletionPercentSchema,
   weekStartsOnSchema,
@@ -48,6 +49,17 @@ export class CertificatesSettingsPatchDto {
   @Transform(rawValue)
   @MatchesSchema(serialPrefixSchema, 'settings.certificates.serialPrefix must be 2–10 upper-case letters or digits, or null')
   serialPrefix?: string | null;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    nullable: true,
+    example: true,
+    description: 'true = a student who has finished the required lessons and passed the assessments takes their own certificate (API-071, ADR-049); a JSON boolean; null clears it (off)',
+  })
+  @ValidateIf((dto: CertificatesSettingsPatchDto) => dto.selfIssue !== undefined && dto.selfIssue !== null)
+  @Transform(rawValue)
+  @MatchesSchema(selfIssueSchema, 'settings.certificates.selfIssue must be a JSON boolean or null')
+  selfIssue?: boolean | null;
 }
 
 /** `settings.learning` of a PATCH (MOD-20, D-R134): absent = unchanged, `null` = clear (the default 90). */
@@ -265,6 +277,9 @@ export class SchedulingSettingsDto {
 export class CertificatesSettingsDto {
   @ApiProperty({ type: String, nullable: true, example: 'ACA', description: 'Prefix of the certificate serials; null = the default CERT' })
   serialPrefix: string | null;
+
+  @ApiProperty({ type: Boolean, nullable: true, example: false, description: 'A student who finished the lessons and passed the assessments takes their own certificate (ADR-049); null = off' })
+  selfIssue: boolean | null;
 }
 
 export class LearningSettingsDto {

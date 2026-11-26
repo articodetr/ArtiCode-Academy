@@ -5,8 +5,11 @@ import { readLocalizedText, sameLocalizedText } from '../authorization/localized
 import type { LocalizedText } from '../authorization/localized-text.js';
 import { canManageClasses } from '../classes/classes.policy.js';
 import { ROSTER_STUDENT_SELECT, rosterProjectionOf, toRosterStudentDto } from '../enrollments/roster-student.js';
+import type { ExamDeliveryValue, ExamResultsReleaseValue } from '../exams/exams.online.js';
+import { visibleResult } from '../exams/my-exams.policy.js';
+import type { ResultSourceValue } from '../exams/my-exams.policy.js';
 import { Prisma } from '../generated/prisma/client.js';
-import type { ClassStatus } from '../generated/prisma/client.js';
+import type { ClassStatus, ExamStatus } from '../generated/prisma/client.js';
 import type { NotificationEventParams } from '../notifications/notifications.events.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { formatNumber } from '../notifications/notifications.templates.js';
@@ -38,6 +41,8 @@ type Db = GradesDb;
 interface ComponentRow extends GradeComponent {
   title: LocalizedText;
   updatedAt: Date;
+  /** An exam's release settings — how a learner comes to see a result (ADR-049); null for an assignment. */
+  release: { delivery: ExamDeliveryValue; resultsRelease: ExamResultsReleaseValue } | null;
 }
 
 interface StudentRow {
@@ -45,6 +50,8 @@ interface StudentRow {
   enrollmentStatus: (typeof GRADED_ENROLLMENT_STATUSES)[number];
   student: Prisma.UserGetPayload<{ select: typeof ROSTER_STUDENT_SELECT }>;
   outcomes: CellOutcome[];
+  /** Aligned with the components: whether the student may see their own outcome — the rule of «my exams» (ADR-049). */
+  visible: boolean[];
   /** The latest change of anything this student's grade reads. */
   sourcesChangedAt: number;
   final: {
@@ -66,6 +73,35 @@ export interface FinalGradeState {
   /** The roster projection source (ROSTER_STUDENT_SELECT). */
   student: StudentRow['student'];
   final: { percent: string; bandLabel: LocalizedText; bandLetter: string | null; isPass: boolean; finalizedAt: Date; stale: boolean } | null;
+}
+
+/** One weighted assessment as its student sees it on the way to a certificate (ADR-049). */
+export interface LearnerWork {
+  kind: GradeComponent['kind'];
+  id: string;
+  title: LocalizedText;
+  maxScore: number;
+  /** Finished and visible to the student: a released exam result, a graded assignment. */
+  done: boolean;
+  /** The student's own score once `done`; null for an excused exam. */
+  score: number | null;
+}
+
+/** What one student's assessments come to (ADR-049). `grade` only once nothing is pending — never a running average (D-R48). */
+export interface LearnerGrade {
+  work: LearnerWork[];
+  pending: number;
+  grade: { percent: string; bandLabel: LocalizedText; bandLetter: string | null; isPass: boolean } | null;
+}
+
+/** The columns a final grade is written with. */
+interface FinalWrite {
+  percent: string;
+  schemeId: string;
+  bandLabel: LocalizedText;
+  bandLetter: string | null;
+  isPass: boolean;
+  breakdown: Record<string, unknown>[];
 }
 
 interface Loaded {
@@ -118,6 +154,24 @@ function breakdownOf(components: readonly ComponentRow[], outcomes: readonly Cel
     });
   });
   return rows;
+}
+
+/** True when the stored final grade already says what would be written. */
+function sameFinal(current: NonNullable<StudentRow['final']>, next: FinalWrite): boolean {
+  return (
+    percentText(current.percent) === next.percent &&
+    current.schemeId === next.schemeId &&
+    sameLocalizedText(current.bandLabel, next.bandLabel) &&
+    current.bandLetter === next.bandLetter &&
+    current.isPass === next.isPass &&
+    canonicalJson(current.breakdown) === canonicalJson(next.breakdown)
+  );
+}
+
+/** Finished for the student and visible to them. */
+function isWorkDone(component: ComponentRow, outcome: CellOutcome, visible: boolean): boolean {
+  if (component.kind === 'assignment') return outcome.status === 'graded';
+  return visible && outcome.counts !== 'missing';
 }
 
 /** One `grades.finalized` notification: the student and what the event is worded from. */
@@ -178,7 +232,7 @@ export class GradebookService {
     const view = rosterProjectionOf(caller);
     const { dto, batch } = await this.prisma.db.$transaction(async (tx) => {
       const klass = await this.lockClass(tx, classId, caller);
-      await this.assertNotCertified(tx, classId);
+      const selfCertified = await this.selfCertifiedEnrollments(tx, classId);
       if (!GRADABLE_CLASS_STATUSES.includes(klass.status)) throw gradesError.classNotGradable(classId, klass.status);
       // KI-076: the scheme is read and used under the writers' lock (shared) until the commit, so it still exists, is
       // still active (or still the default) and keeps its bands when the grades are inserted. Lock order: the class row,
@@ -202,6 +256,8 @@ export class GradebookService {
       // MOD-12-T03: the final grades this run writes, each worth one notification.
       const written: FinalizedNotice[] = [];
       for (const student of loaded.students) {
+        // ADR-049: a student who took their own certificate keeps the grade printed on it.
+        if (selfCertified.has(student.enrollmentId)) continue;
         const percent = weightedPercent(loaded.components, student.outcomes, 'final');
         if (percent === null) {
           skipped += 1; // every weighted component excused: nothing to grade
@@ -226,14 +282,7 @@ export class GradebookService {
           written.push(finalizedNotice(loaded.klass, student.student.id, next));
           continue;
         }
-        const same =
-          percentText(current.percent) === next.percent &&
-          current.schemeId === next.schemeId &&
-          sameLocalizedText(current.bandLabel, next.bandLabel) &&
-          current.bandLetter === next.bandLetter &&
-          current.isPass === next.isPass &&
-          canonicalJson(current.breakdown) === canonicalJson(next.breakdown);
-        if (same) continue;
+        if (sameFinal(current, next)) continue;
         await tx.finalGrade.update({
           where: { enrollmentId: student.enrollmentId },
           data: { ...next, bandLabel: next.bandLabel as Prisma.InputJsonValue, breakdown: next.breakdown as Prisma.InputJsonValue, finalizedById: caller.id, finalizedAt },
@@ -311,7 +360,88 @@ export class GradebookService {
     }));
   }
 
+  /**
+   * ADR-049 — one student's weighted assessments and, once nothing is pending,
+   * the grade they come to on the scheme of their final grade (else the
+   * default one). Read with the caller's `db`; null when the enrollment is not
+   * an active or completed one of the class.
+   */
+  async learnerGrade(db: Db, classId: string, enrollmentId: string): Promise<LearnerGrade | null> {
+    const loaded = await this.load(db, classId);
+    const student = loaded.students.find((row) => row.enrollmentId === enrollmentId);
+    if (!student) return null;
+    const work: LearnerWork[] = [];
+    loaded.components.forEach((component, index) => {
+      if (!isWeighted(component)) return;
+      const outcome = student.outcomes[index]!;
+      const done = isWorkDone(component, outcome, student.visible[index]!);
+      work.push({ kind: component.kind, id: component.id, title: component.title, maxScore: Number(component.maxScore), done, score: done ? numberOrNull(outcome.effectiveScore) : null });
+    });
+    const pending = work.filter((item) => !item.done).length;
+    if (work.length === 0 || pending > 0) return { work, pending, grade: null };
+    const percent = weightedPercent(loaded.components, student.outcomes, 'final');
+    const scheme = percent === null ? null : await this.learnerScheme(db, student.final?.schemeId ?? null);
+    if (percent === null || !scheme) return { work, pending, grade: null };
+    const band = bandOf(scheme.bands, Number(percent))!;
+    return { work, pending, grade: { percent, bandLabel: band.label, bandLetter: band.letter, isPass: band.isPass } };
+  }
+
+  /** ADR-049: the grade-scheme writers' lock in its shared form (KI-076), held by a certificate a student takes. */
+  async lockGradeSchemes(tx: Tx): Promise<void> {
+    await lockSchemesShared(tx);
+  }
+
+  /**
+   * ADR-049 — fixes one student's final grade, inside the caller's transaction,
+   * after the class-row lock and `lockGradeSchemes()`. Writes only what differs
+   * and records nothing: the certificate's event names the request.
+   */
+  async fixLearnerGrade(tx: Tx, classId: string, enrollmentId: string, actorId: string): Promise<FinalGradeState> {
+    const finalizedAt = new Date(); // before the sources are read, as a class finalization
+    const loaded = await this.load(tx, classId);
+    const student = loaded.students.find((row) => row.enrollmentId === enrollmentId);
+    const percent = student ? weightedPercent(loaded.components, student.outcomes, 'final') : null;
+    const scheme = await this.learnerScheme(tx, student?.final?.schemeId ?? null);
+    if (!scheme) throw gradesError.gradeSchemeMissing();
+    if (!student || percent === null) throw new Error(`enrollment ${enrollmentId} has no computable grade`);
+    const band = bandOf(scheme.bands, Number(percent))!;
+    const next: FinalWrite = { percent, schemeId: scheme.id, bandLabel: band.label, bandLetter: band.letter, isPass: band.isPass, breakdown: breakdownOf(loaded.components, student.outcomes) };
+    const current = student.final;
+    const data = { ...next, bandLabel: next.bandLabel as Prisma.InputJsonValue, breakdown: next.breakdown as Prisma.InputJsonValue, finalizedById: actorId, finalizedAt };
+    if (current === null) await tx.finalGrade.create({ data: { enrollmentId, ...data }, select: { enrollmentId: true } });
+    else if (!sameFinal(current, next)) await tx.finalGrade.update({ where: { enrollmentId }, data, select: { enrollmentId: true } });
+    const kept = current !== null && sameFinal(current, next);
+    return {
+      enrollmentId,
+      enrollmentStatus: student.enrollmentStatus,
+      student: student.student,
+      final: { percent, bandLabel: next.bandLabel, bandLetter: next.bandLetter, isPass: next.isPass, finalizedAt: kept ? current.finalizedAt : finalizedAt, stale: false },
+    };
+  }
+
   // ---------------------------------------------------------------------------
+
+  /**
+   * D-R54, refined by ADR-049: a certificate the office issued stops a new
+   * finalization of the class; those the students took themselves only keep
+   * their own grades (returned here, skipped by the finalization).
+   */
+  private async selfCertifiedEnrollments(tx: Tx, classId: string): Promise<Set<string>> {
+    const rows = await tx.certificate.findMany({ where: { classId, status: 'issued' }, select: { enrollmentId: true, issuedById: true, studentUserId: true } });
+    if (rows.some((row) => row.issuedById !== row.studentUserId)) throw gradesError.gradesCertified(classId, rows.length);
+    return new Set(rows.map((row) => row.enrollmentId));
+  }
+
+  /** The stored grade's scheme, whatever its state, else the default one; null without any. */
+  private async learnerScheme(db: Db, schemeId: string | null) {
+    const select = { id: true, bands: { select: { minPercent: true, label: true, letter: true, isPass: true } } } as const;
+    const scheme = schemeId ? await db.gradeScheme.findUnique({ where: { id: schemeId }, select }) : await db.gradeScheme.findFirst({ where: { isDefault: true }, select });
+    if (!scheme) return null;
+    return {
+      id: scheme.id,
+      bands: scheme.bands.map((band) => ({ minPercent: percentText(band.minPercent.toString()), label: readLocalizedText(band.label) ?? { ar: '' }, letter: band.letter, isPass: band.isPass })),
+    };
+  }
 
   /** D-R54: no new final grades and no withdrawal while the class has an issued certificate. */
   private async assertNotCertified(tx: Tx, classId: string): Promise<void> {
@@ -360,7 +490,7 @@ export class GradebookService {
     const exams = await db.exam.findMany({
       where: { classId, status: { not: 'draft' } },
       orderBy: [{ scheduledAt: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
-      select: { id: true, title: true, weight: true, maxScore: true, status: true, updatedAt: true },
+      select: { id: true, title: true, weight: true, maxScore: true, status: true, delivery: true, resultsRelease: true, updatedAt: true },
     });
     const components: ComponentRow[] = [
       ...assignments.map((row) => ({
@@ -372,6 +502,7 @@ export class GradebookService {
         latePenaltyPercent: decimalText(row.latePenaltyPercent),
         status: row.status,
         updatedAt: row.updatedAt,
+        release: null,
       })),
       ...exams.map((row) => ({
         kind: 'exam' as const,
@@ -382,6 +513,7 @@ export class GradebookService {
         latePenaltyPercent: null,
         status: row.status,
         updatedAt: row.updatedAt,
+        release: { delivery: row.delivery, resultsRelease: row.resultsRelease },
       })),
     ];
     const enrollments = await db.enrollment.findMany({
@@ -410,7 +542,7 @@ export class GradebookService {
         ? []
         : await db.examResult.findMany({
             where: { examId: { in: exams.map((row) => row.id) }, studentUserId: { in: studentIds } },
-            select: { examId: true, studentUserId: true, status: true, score: true, updatedAt: true },
+            select: { examId: true, studentUserId: true, status: true, score: true, source: true, updatedAt: true },
           });
 
     // Per (assignment, student): the latest attempt's status and the latest GRADED attempt (D-R36).
@@ -432,9 +564,9 @@ export class GradebookService {
       attempts.set(key, entry);
       touch(row.studentUserId, row.updatedAt);
     }
-    const examResults = new Map<string, { status: 'scored' | 'absent' | 'excused'; score: string | null }>();
+    const examResults = new Map<string, { status: 'scored' | 'absent' | 'excused'; score: string | null; source: ResultSourceValue }>();
     for (const row of results) {
-      examResults.set(`${row.examId}|${row.studentUserId}`, { status: row.status, score: row.score === null ? null : row.score.toString() });
+      examResults.set(`${row.examId}|${row.studentUserId}`, { status: row.status, score: row.score === null ? null : row.score.toString(), source: row.source });
       touch(row.studentUserId, row.updatedAt);
     }
     const componentsChangedAt = Math.max(0, ...components.map((component) => component.updatedAt.getTime()));
@@ -451,6 +583,13 @@ export class GradebookService {
           cell = { kind: 'exam', status: entry?.status ?? null, score: entry?.score ?? null };
         }
         return cellOutcome(component, cell);
+      });
+      const visible = components.map((component) => {
+        if (component.release === null) return true; // a learner reads their own graded assignments
+        const entry = examResults.get(`${component.id}|${row.studentUserId}`);
+        if (!entry) return false;
+        const view = { status: entry.status, score: entry.score === null ? null : Number(entry.score), feedback: null };
+        return visibleResult(component.status as ExamStatus, view, component.release, entry.source) !== null;
       });
       const final = row.finalGrade
         ? {
@@ -469,6 +608,7 @@ export class GradebookService {
         enrollmentStatus: row.status as StudentRow['enrollmentStatus'],
         student: row.student,
         outcomes,
+        visible,
         sourcesChangedAt: Math.max(componentsChangedAt, changedAt.get(row.studentUserId) ?? 0),
         final,
       };

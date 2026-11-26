@@ -429,11 +429,11 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
       expect(bad.status, JSON.stringify(serialPrefix)).toBe(400);
     }
     const set = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix: 'ACA26' } } }).expect(200);
-    expect(set.body.settings.certificates).toEqual({ serialPrefix: 'ACA26' });
+    expect(set.body.settings.certificates).toEqual({ serialPrefix: 'ACA26', selfIssue: null });
     await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix: 'ACA26' } } }).expect(200); // same value: nothing
     expect((await api().patch(ACADEMY).set(bearer('reader')).send({ settings: { certificates: { serialPrefix: 'XX' } } })).status).toBe(403);
     const cleared = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { certificates: { serialPrefix: null } } }).expect(200);
-    expect(cleared.body.settings.certificates).toEqual({ serialPrefix: null });
+    expect(cleared.body.settings.certificates).toEqual({ serialPrefix: null, selfIssue: null });
     expect((await eventsSince(m)).map((event) => event.metadata)).toEqual([
       { fields: ['settings.certificates.serialPrefix'] },
       { fields: ['settings.certificates.serialPrefix'] },

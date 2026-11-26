@@ -27,6 +27,7 @@ import { useLearningItem } from '../useLearningItem'
 import { useLearningWorkspace } from '../useLearningWorkspace'
 import { useWatchedPercent } from '../watched.store'
 import { COURSE_PARAM, HUB_FILTERS, LESSON_PARAM, hubGroupsOf, rowActionOf } from './hub.view'
+import { HubCompletion } from './HubCompletion'
 import type { HubFilter } from './hub.view'
 
 export interface HubLessonsProps {
@@ -51,6 +52,7 @@ export function HubLessons({ course, onProgress }: HubLessonsProps) {
   const [courseDone, setCourseDone] = useState(false)
   const playerRef = useRef<HTMLElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const finishRef = useRef<HTMLDivElement>(null)
 
   const reading = useLearningWorkspace(courseId)
   const { workspace, update: updateWorkspace, reload: reloadWorkspace } = reading
@@ -255,7 +257,20 @@ export function HubLessons({ course, onProgress }: HubLessonsProps) {
           ))
         )}
       </div>
-      <CourseDoneModal open={courseDone} onClose={() => setCourseDone(false)} />
+      <div ref={finishRef} className="hub-finish-anchor">
+        <HubCompletion course={course} version={workspace?.progress.completedRequired ?? 0} />
+      </div>
+      <CourseDoneModal
+        open={courseDone}
+        onClose={() => setCourseDone(false)}
+        next={{
+          label: t('myLessons.hub.finish.goToExams'),
+          onClick: () => {
+            setCourseDone(false)
+            scrollToStart(finishRef.current)
+          },
+        }}
+      />
     </section>
   )
 }

@@ -57,6 +57,44 @@ export function ineligibilityOf(input: EligibilityInput): IneligibleReason | nul
   return null;
 }
 
+/**
+ * ADR-049 — where a student stands on the way to taking their own certificate
+ * (API-070/071), checked in this order: a certificate issued or revoked (only
+ * the office issues again after a revocation — D-R55) → the academy has not
+ * turned it on → the class is not running or completed → required lessons left
+ * → no weighted assessment → one of them is not finished and visible to the
+ * student → the grade does not pass.
+ */
+export const COMPLETION_STATES = ['issued', 'revoked', 'not_offered', 'class_not_running', 'lessons_pending', 'no_assessments', 'assessments_pending', 'not_passed', 'ready'] as const;
+export type CompletionState = (typeof COMPLETION_STATES)[number];
+
+export interface CompletionInput {
+  certificate: 'issued' | 'revoked' | null;
+  /** `settings.certificates.selfIssue` is on. */
+  selfIssue: boolean;
+  classStatus: string;
+  /** Every required published lesson is completed (the server's `isComplete`, D-R135). */
+  lessonsComplete: boolean;
+  /** The class's weighted assessments. */
+  workCount: number;
+  /** Of them, the ones not finished and visible to the student. */
+  pending: number;
+  /** The band of the computed grade; null when no grade can be computed (every assessment excused). */
+  isPass: boolean | null;
+}
+
+export function completionStateOf(input: CompletionInput): CompletionState {
+  if (input.certificate === 'issued') return 'issued';
+  if (input.certificate === 'revoked') return 'revoked';
+  if (!input.selfIssue) return 'not_offered';
+  if (input.classStatus !== 'running' && input.classStatus !== 'completed') return 'class_not_running';
+  if (!input.lessonsComplete) return 'lessons_pending';
+  if (input.workCount === 0) return 'no_assessments';
+  if (input.pending > 0) return 'assessments_pending';
+  if (input.isPass === null) return 'no_assessments';
+  return input.isPass ? 'ready' : 'not_passed';
+}
+
 /** The `number_sequences` key of the certificate serials; the period is the year. */
 export const CERTIFICATE_SEQUENCE_KEY = 'certificate';
 

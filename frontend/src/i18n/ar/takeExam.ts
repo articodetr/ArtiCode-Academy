@@ -125,6 +125,7 @@ export const takeExam = {
   // The exam page.
   page: {
     back: 'العودة إلى اختباراتي',
+    backToLessons: 'العودة إلى الدورة والشهادة',
     attemptNo: 'المحاولة {{number}}',
     loading: 'جارٍ تحميل الاختبار…',
     loadFailed: 'تعذّر تحميل المحاولة',

@@ -95,6 +95,27 @@ describe('MyLessonsPage — the student’s lessons (J-F64)', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/my-lessons?course=c1')
   })
 
+  it('leads from the last required lesson to the exams and the certificate (J-F67)', async () => {
+    serve({ items: { i2: makeItem('i2'), i3: makeItem('i3') } })
+    const done = { total: 4, required: 3, completed: 3, completedRequired: 3, percent: 100, isComplete: true, completedAt: '2026-11-24T10:00:00.000Z' }
+    const inner = globalThis.fetch
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/api/me/learning/items/i3/complete')
+        ? Promise.resolve(jsonResponse(200, { progress: { state: 'completed', completedAt: done.completedAt, completionSource: 'manual', positionSeconds: null, watchedSeconds: 0, watchedPercent: null }, section: done, course: done, completedNow: true }))
+        : inner(input, init)) as typeof fetch
+    renderHub()
+    await screen.findByText(TITLES.i3)
+
+    fireEvent.click(within(row(TITLES.i3)).getByRole('button', { name: new RegExp(hub.row.open) }))
+    fireEvent.click(await screen.findByRole('button', { name: ar.learn.completion.markComplete }))
+
+    const next = await screen.findByRole('button', { name: hub.finish.goToExams })
+    expect(screen.queryByRole('button', { name: ar.learn.done.backToMySchool })).not.toBeInTheDocument()
+    fireEvent.click(next)
+    await waitFor(() => expect(screen.queryByRole('button', { name: hub.finish.goToExams })).not.toBeInTheDocument())
+    expect(screen.getByTestId('location')).toHaveTextContent('/my-lessons')
+  })
+
   it('opens the lesson the address names', async () => {
     serve()
     renderHub('/my-lessons?course=c1&lesson=i2')

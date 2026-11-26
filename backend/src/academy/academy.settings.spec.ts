@@ -19,17 +19,18 @@ import {
 /** Every known key unset. */
 const EMPTY = {
   scheduling: { weekStartsOn: null, workingDays: null },
-  certificates: { serialPrefix: null },
+  certificates: { serialPrefix: null, selfIssue: null },
   learning: { videoCompletionPercent: null },
   catalog: { publicBrowsing: null },
 };
 
 describe('academy settings (TEST-068)', () => {
-  it('knows exactly the five keys, in a fixed order', () => {
+  it('knows exactly the six keys, in a fixed order', () => {
     expect(SETTINGS_FIELDS.map((entry) => entry.field)).toEqual([
       'settings.scheduling.weekStartsOn',
       'settings.scheduling.workingDays',
       'settings.certificates.serialPrefix',
+      'settings.certificates.selfIssue',
       'settings.learning.videoCompletionPercent',
       'settings.catalog.publicBrowsing',
     ]);

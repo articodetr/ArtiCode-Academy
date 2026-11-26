@@ -7,7 +7,14 @@ import { Button, Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
-export function CourseDoneModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export interface CourseDoneModalProps {
+  open: boolean
+  onClose: () => void
+  /** What comes next where the page has its own step (J-F67: the exams and the certificate of «دروسي»); «back to my classes» otherwise. */
+  next?: { label: string; onClick: () => void }
+}
+
+export function CourseDoneModal({ open, onClose, next }: CourseDoneModalProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   return (
@@ -19,9 +26,15 @@ export function CourseDoneModal({ open, onClose }: { open: boolean; onClose: () 
         <Button key="review" onClick={onClose}>
           {t('learn.done.keepReviewing')}
         </Button>,
-        <Button key="school" type="primary" onClick={() => navigate('/my-classes')}>
-          {t('learn.done.backToMySchool')}
-        </Button>,
+        next ? (
+          <Button key="next" type="primary" onClick={next.onClick}>
+            {next.label}
+          </Button>
+        ) : (
+          <Button key="school" type="primary" onClick={() => navigate('/my-classes')}>
+            {t('learn.done.backToMySchool')}
+          </Button>
+        ),
       ]}
       destroyOnHidden
     >

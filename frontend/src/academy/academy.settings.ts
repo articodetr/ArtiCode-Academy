@@ -120,6 +120,20 @@ export function exampleSerial(value: string | null | undefined, year: number): s
   return `${prefix}-${year}-00001`
 }
 
+/** `settings.certificates.selfIssue` (ADR-049): only `true` lets a student take their own certificate; anything else reads as not set. */
+export function selfIssueOf(settings: unknown): boolean | null {
+  const certificates = typeof settings === 'object' && settings !== null ? (settings as { certificates?: unknown }).certificates : undefined
+  const value = typeof certificates === 'object' && certificates !== null ? (certificates as { selfIssue?: unknown }).selfIssue : undefined
+  return typeof value === 'boolean' ? value : null
+}
+
+/** The PATCH of the switch: off clears the key; nothing when it does not change, or for a form without the field. */
+export function planSelfIssuePatch(current: boolean | null, checked: boolean | undefined): { selfIssue: true | null } | null {
+  if (checked === undefined) return null
+  if (checked === (current === true)) return null
+  return { selfIssue: checked ? true : null }
+}
+
 // --- Learning (MOD-20, D-R134) ---
 
 /**

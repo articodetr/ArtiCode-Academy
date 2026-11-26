@@ -228,6 +228,11 @@ export function AttemptFinished({ attempt, endedBy, lostAnswers, headingRef }: A
         <Link to={MY_EXAMS_ROUTE} className="take-back-link">
           {t('takeExam.page.back')}
         </Link>
+        {' · '}
+        {/* J-F67: back to the course, where the certificate is taken. */}
+        <Link to={`/my-lessons?course=${encodeURIComponent(exam.class.course.id)}`} className="take-back-link">
+          {t('takeExam.page.backToLessons')}
+        </Link>
       </p>
     </div>
   )

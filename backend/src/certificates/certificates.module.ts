@@ -6,6 +6,7 @@ import { ClassCertificatesController } from './certificates.controller.js';
 import { CertificatesService } from './certificates.service.js';
 import { MyCertificatesController } from './my-certificates.controller.js';
 import { MyCertificatesService } from './my-certificates.service.js';
+import { SelfCertificatesService } from './self-certificates.service.js';
 
 /**
  * MOD-10 — certificates (roadmap §4h.10): issuing and the class preview since
@@ -14,12 +15,14 @@ import { MyCertificatesService } from './my-certificates.service.js';
  * exported GradebookService of GradesModule (the same computation and the same
  * class-row lock); relies on the global guards, PrismaModule and AuditModule.
  * Since MOD-12-T03 issuing and revoking tell the student and their guardians
- * through the NotificationsService of NotificationsModule.
+ * through the NotificationsService of NotificationsModule. Since J-F67 (ADR-049)
+ * a student takes their own certificate once the lessons and assessments are
+ * done, where the academy turned it on (API-070/071, SelfCertificatesService).
  */
 @Module({
   imports: [GradesModule, NotificationsModule],
   controllers: [ClassCertificatesController, CertificatesController, CertificateVerificationController, MyCertificatesController],
-  providers: [CertificatesService, MyCertificatesService],
+  providers: [CertificatesService, MyCertificatesService, SelfCertificatesService],
   exports: [CertificatesService],
 })
 export class CertificatesModule {}

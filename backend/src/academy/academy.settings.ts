@@ -49,6 +49,13 @@ export const videoCompletionPercentSchema = z.number().int().min(50).max(100);
 export const publicBrowsingSchema = z.boolean();
 
 /**
+ * ADR-049 (J-F67): whether a student who has finished a course's required
+ * lessons and passed its assessments may take their certificate themself
+ * (API-071) — a JSON boolean; `null` = off (the office issues them, D-R52).
+ */
+export const selfIssueSchema = z.boolean();
+
+/**
  * Every known key with its dotted name (used in the audit `fields`) and its
  * path in the stored object, in the fixed order of the audit metadata.
  */
@@ -56,6 +63,7 @@ export const SETTINGS_FIELDS = [
   { field: 'settings.scheduling.weekStartsOn', domain: 'scheduling', key: 'weekStartsOn', schema: weekStartsOnSchema },
   { field: 'settings.scheduling.workingDays', domain: 'scheduling', key: 'workingDays', schema: workingDaysSchema },
   { field: 'settings.certificates.serialPrefix', domain: 'certificates', key: 'serialPrefix', schema: serialPrefixSchema },
+  { field: 'settings.certificates.selfIssue', domain: 'certificates', key: 'selfIssue', schema: selfIssueSchema },
   { field: 'settings.learning.videoCompletionPercent', domain: 'learning', key: 'videoCompletionPercent', schema: videoCompletionPercentSchema },
   { field: 'settings.catalog.publicBrowsing', domain: 'catalog', key: 'publicBrowsing', schema: publicBrowsingSchema },
 ] as const;
@@ -70,6 +78,8 @@ export interface SchedulingSettings {
 
 export interface CertificatesSettings {
   serialPrefix: string | null;
+  /** null = off (only `true` lets a student take their own certificate — ADR-049). */
+  selfIssue: boolean | null;
 }
 
 export interface LearningSettings {
@@ -98,6 +108,7 @@ export interface SettingsPatch {
   };
   certificates?: {
     serialPrefix?: string | null;
+    selfIssue?: boolean | null;
   };
   learning?: {
     videoCompletionPercent?: number | null;

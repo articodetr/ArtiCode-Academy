@@ -13,8 +13,10 @@ import {
   planCertificatesPatch,
   planLearningPatch,
   planSchedulingPatch,
+  planSelfIssuePatch,
   publicBrowsingOf,
   schedulingFormValuesOf,
+  selfIssueOf,
   serialPrefixOf,
   videoCompletionPercentOf,
 } from './academy.settings'
@@ -25,6 +27,8 @@ import { normaliseCurrency } from './academy.validation'
 export interface GeneralSettingsFormValues extends SchedulingFormValues {
   /** `settings.certificates.serialPrefix` as typed; blank = not set (the default `CERT`). */
   serialPrefix?: string
+  /** `settings.certificates.selfIssue` as a switch (ADR-049): off = not set. */
+  selfIssue?: boolean
   /** `settings.learning.videoCompletionPercent`; `null` (an empty field) = not set (the default 90). */
   videoCompletionPercent?: number | null
   /** `settings.catalog.publicBrowsing` as a switch: off = not set. */
@@ -56,6 +60,7 @@ export function settingsFormValuesOf(academy: Academy): GeneralSettingsFormValue
     contactPhone: text(academy.contactPhone),
     ...schedulingFormValuesOf(academy.settings.scheduling),
     serialPrefix: text(serialPrefixOf(academy.settings)),
+    selfIssue: selfIssueOf(academy.settings) === true,
     videoCompletionPercent: videoCompletionPercentOf(academy.settings),
     publicBrowsing: publicBrowsingOf(academy.settings) === true,
   }
@@ -115,8 +120,8 @@ export function planAcademyPatch(current: Academy, values: GeneralSettingsFormVa
   const settings: AcademySettingsInput = {}
   const scheduling = planSchedulingPatch(current.settings.scheduling, values)
   if (scheduling) settings.scheduling = scheduling
-  const certificates = planCertificatesPatch(serialPrefixOf(current.settings), values.serialPrefix)
-  if (certificates) settings.certificates = certificates
+  const certificates = { ...planCertificatesPatch(serialPrefixOf(current.settings), values.serialPrefix), ...planSelfIssuePatch(selfIssueOf(current.settings), values.selfIssue) }
+  if (Object.keys(certificates).length > 0) settings.certificates = certificates
   const learning = planLearningPatch(videoCompletionPercentOf(current.settings), values.videoCompletionPercent)
   if (learning) settings.learning = learning
   const catalog = planCatalogPatch(publicBrowsingOf(current.settings), values.publicBrowsing)

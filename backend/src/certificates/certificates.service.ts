@@ -11,6 +11,7 @@ import { GradebookService } from '../grades/gradebook.service.js';
 import type { FinalGradeState } from '../grades/gradebook.service.js';
 import type { NotificationEventParams } from '../notifications/notifications.events.js';
 import { EMPTY_BATCH, NotificationsService } from '../notifications/notifications.service.js';
+import type { NotificationBatch } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { decodeKeysetCursor, encodeKeysetCursor } from '../common/keyset-cursor.js';
 import { escapeLikePattern } from '../users/users.validation.js';
@@ -198,56 +199,7 @@ export class CertificatesService {
       }
       if (eligible.length === 0) return { result: { issued: [], skipped }, batch: EMPTY_BATCH }; // nothing issued: nobody is told
 
-      const now = new Date();
-      const academy = await tx.academy.findFirst({ select: { name: true, timezone: true, settings: true } });
-      const prefix = readSettings(academy?.settings).certificates.serialPrefix ?? DEFAULT_CERTIFICATE_SERIAL_PREFIX;
-      const year = yearIn(academy?.timezone ?? 'UTC', now);
-      const first = await this.reserveSerials(tx, year, eligible.length);
-      const details = await tx.class.findUniqueOrThrow({
-        where: { id: classId },
-        select: {
-          code: true,
-          name: true,
-          course: { select: { id: true, code: true, name: true } },
-          enrollments: { where: { id: { in: eligible.map((state) => state.enrollmentId) } }, select: { id: true, completedAt: true } },
-        },
-      });
-      const completedAt = new Map(details.enrollments.map((row) => [row.id, row.completedAt]));
-      const academyName = academy ? localized(academy.name, '') : { ar: '' };
-
-      const created: CertificateRow[] = [];
-      for (const [index, state] of eligible.entries()) {
-        const final = state.final!;
-        const percent = Number(final.percent);
-        const snapshot = {
-          student: { fullName: state.student.fullName, fullNameLatin: state.student.fullNameLatin, displayName: state.student.displayName },
-          course: { code: details.course.code, name: localized(details.course.name, details.course.code) },
-          class: { code: details.code, name: localized(details.name, details.code) },
-          academy: { name: academyName },
-          grade: { percent, label: final.bandLabel, letter: final.bandLetter },
-          completedAt: completedAt.get(state.enrollmentId)?.toISOString() ?? null,
-          issuedAt: now.toISOString(),
-        };
-        created.push(
-          await tx.certificate.create({
-            data: {
-              serial: formatSerial(prefix, year, first + index),
-              verificationCode: newVerificationCode(),
-              enrollmentId: state.enrollmentId,
-              classId,
-              courseId: details.course.id,
-              studentUserId: state.student.id,
-              percent: final.percent,
-              bandLabel: final.bandLabel as unknown as Prisma.InputJsonValue,
-              bandLetter: final.bandLetter,
-              snapshot: snapshot as unknown as Prisma.InputJsonValue,
-              issuedAt: now,
-              issuedById: caller.id,
-            },
-            select: CERTIFICATE_SELECT,
-          }),
-        );
-      }
+      const created = await this.writeCertificates(tx, classId, eligible, caller.id);
       await this.audit.record(
         {
           action: CERTIFICATES_AUDIT_ACTIONS.issued,
@@ -265,6 +217,30 @@ export class CertificatesService {
     });
     this.notifications.dispatch(batch); // after the commit
     return result;
+  }
+
+  /**
+   * ADR-049 (API-071) — the one certificate a student takes themself, inside
+   * the caller's transaction after the class-row lock. One
+   * `certificates.issued` event with `via: self_service`, the student as actor,
+   * and the usual `certificate.issued` notification; the caller dispatches the
+   * batch after the commit.
+   */
+  async issueToLearner(tx: Tx, klass: { id: string; code: string }, state: FinalGradeState, caller: AuthPrincipal, ctx: RequestContext): Promise<{ row: CertificateRow; batch: NotificationBatch }> {
+    const [row] = await this.writeCertificates(tx, klass.id, [state], caller.id);
+    await this.audit.record(
+      {
+        action: CERTIFICATES_AUDIT_ACTIONS.issued,
+        actorUserId: caller.id,
+        entityType: CERTIFICATES_CLASS_ENTITY_TYPE,
+        entityId: klass.id,
+        metadata: { code: klass.code, count: 1, certificateIds: [row!.id], via: 'self_service', enrollmentId: state.enrollmentId },
+        ...ctx,
+      },
+      tx,
+    );
+    const batch = await this.notifications.notifyStudents(tx, 'certificate.issued', [certificateNotice(row!)]);
+    return { row: row!, batch };
   }
 
   /** API-130 — newest first by the UUIDv7 id (insertion order), keyset pages. */
@@ -351,6 +327,61 @@ export class CertificatesService {
   }
 
   // ---------------------------------------------------------------------------
+
+  /** The certificates of `eligible`: serials (D-R53) and the snapshot (D-R50). Inside the caller's transaction, after its class-row lock. */
+  private async writeCertificates(tx: Tx, classId: string, eligible: readonly FinalGradeState[], issuerId: string): Promise<CertificateRow[]> {
+    const now = new Date();
+    const academy = await tx.academy.findFirst({ select: { name: true, timezone: true, settings: true } });
+    const prefix = readSettings(academy?.settings).certificates.serialPrefix ?? DEFAULT_CERTIFICATE_SERIAL_PREFIX;
+    const year = yearIn(academy?.timezone ?? 'UTC', now);
+    const first = await this.reserveSerials(tx, year, eligible.length);
+    const details = await tx.class.findUniqueOrThrow({
+      where: { id: classId },
+      select: {
+        code: true,
+        name: true,
+        course: { select: { id: true, code: true, name: true } },
+        enrollments: { where: { id: { in: eligible.map((state) => state.enrollmentId) } }, select: { id: true, completedAt: true } },
+      },
+    });
+    const completedAt = new Map(details.enrollments.map((row) => [row.id, row.completedAt]));
+    const academyName = academy ? localized(academy.name, '') : { ar: '' };
+
+    const created: CertificateRow[] = [];
+    for (const [index, state] of eligible.entries()) {
+      const final = state.final!;
+      const percent = Number(final.percent);
+      const snapshot = {
+        student: { fullName: state.student.fullName, fullNameLatin: state.student.fullNameLatin, displayName: state.student.displayName },
+        course: { code: details.course.code, name: localized(details.course.name, details.course.code) },
+        class: { code: details.code, name: localized(details.name, details.code) },
+        academy: { name: academyName },
+        grade: { percent, label: final.bandLabel, letter: final.bandLetter },
+        completedAt: completedAt.get(state.enrollmentId)?.toISOString() ?? null,
+        issuedAt: now.toISOString(),
+      };
+      created.push(
+        await tx.certificate.create({
+          data: {
+            serial: formatSerial(prefix, year, first + index),
+            verificationCode: newVerificationCode(),
+            enrollmentId: state.enrollmentId,
+            classId,
+            courseId: details.course.id,
+            studentUserId: state.student.id,
+            percent: final.percent,
+            bandLabel: final.bandLabel as unknown as Prisma.InputJsonValue,
+            bandLetter: final.bandLetter,
+            snapshot: snapshot as unknown as Prisma.InputJsonValue,
+            issuedAt: now,
+            issuedById: issuerId,
+          },
+          select: CERTIFICATE_SELECT,
+        }),
+      );
+    }
+    return created;
+  }
 
   private reasonOf(state: FinalGradeState, issued: boolean): IneligibleReason | null {
     return ineligibilityOf({ issued, enrollmentStatus: state.enrollmentStatus, final: state.final ? { isPass: state.final.isPass, stale: state.final.stale } : null });

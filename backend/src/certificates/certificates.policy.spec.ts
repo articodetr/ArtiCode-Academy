@@ -2,7 +2,31 @@
 // eligibility order, the serial format and year, the verification code and
 // its normalisation, and the read keys.
 import { describe, expect, it } from 'vitest';
-import { certificatesReadMissing, formatSerial, ineligibilityOf, myCertificatesAccess, myCertificatesMissing, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
+import { certificatesReadMissing, completionStateOf, formatSerial, ineligibilityOf, myCertificatesAccess, myCertificatesMissing, newVerificationCode, normalizeVerificationCode, yearIn } from './certificates.policy.js';
+
+describe('a student on the way to their own certificate (TEST-189 — ADR-049)', () => {
+  const ready = { certificate: null, selfIssue: true, classStatus: 'running', lessonsComplete: true, workCount: 2, pending: 0, isPass: true } as const;
+
+  it('is ready only when every condition holds, in a running or a completed class', () => {
+    expect(completionStateOf(ready)).toBe('ready');
+    expect(completionStateOf({ ...ready, classStatus: 'completed' })).toBe('ready');
+  });
+
+  it('gives the first reason in the server’s order', () => {
+    expect(completionStateOf({ ...ready, certificate: 'issued', selfIssue: false, lessonsComplete: false })).toBe('issued');
+    expect(completionStateOf({ ...ready, certificate: 'revoked' })).toBe('revoked');
+    expect(completionStateOf({ ...ready, selfIssue: false, classStatus: 'cancelled' })).toBe('not_offered');
+    for (const classStatus of ['planned', 'open', 'cancelled']) expect(completionStateOf({ ...ready, classStatus, lessonsComplete: false }), classStatus).toBe('class_not_running');
+    expect(completionStateOf({ ...ready, lessonsComplete: false, workCount: 0 })).toBe('lessons_pending');
+    expect(completionStateOf({ ...ready, workCount: 0, isPass: null })).toBe('no_assessments');
+    expect(completionStateOf({ ...ready, pending: 1, isPass: null })).toBe('assessments_pending');
+    expect(completionStateOf({ ...ready, isPass: false })).toBe('not_passed');
+  });
+
+  it('has nothing to give when every assessment is excused (no grade can be computed)', () => {
+    expect(completionStateOf({ ...ready, isPass: null })).toBe('no_assessments');
+  });
+});
 
 describe('certificate rules (TEST-135)', () => {
   it('gives the first reason in order: already issued, not completed, no final grade, not passed, stale; null when eligible', () => {

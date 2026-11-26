@@ -7,7 +7,8 @@
 // the certificate serials too (`settings.certificates.serialPrefix`, D-R51), and
 // since MOD-20 the playback share that completes a video or audio lesson
 // (`settings.learning.videoCompletionPercent`, D-R134) and the public catalog
-// switch (`settings.catalog.publicBrowsing`, D-R138).
+// switch (`settings.catalog.publicBrowsing`, D-R138). Since J-F67 the switch that
+// lets a student take their own certificate (`settings.certificates.selfIssue`, ADR-049).
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, AutoComplete, Button, Card, Checkbox, Flex, Form, Input, InputNumber, Select, Skeleton, Space, Switch, Typography } from 'antd'
 import { useState } from 'react'
@@ -215,6 +216,9 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
         ]}
       >
         <Input dir="ltr" maxLength={SERIAL_PREFIX_MAX_LENGTH} placeholder={DEFAULT_CERTIFICATE_SERIAL_PREFIX} style={{ maxWidth: 200 }} />
+      </Form.Item>
+      <Form.Item name="selfIssue" label={t('certificates.settings.selfIssue')} extra={t('certificates.settings.selfIssueHint')} valuePropName="checked">
+        <Switch />
       </Form.Item>
 
       <Typography.Title level={5} style={{ marginTop: 8 }}>

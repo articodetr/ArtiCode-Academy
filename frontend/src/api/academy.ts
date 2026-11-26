@@ -27,6 +27,8 @@ export interface SchedulingSettings {
 export interface CertificatesSettings {
   /** Prefix of the certificate serials `PREFIX-YYYY-NNNNN`: 2–10 upper-case letters or digits; `null` = the default `CERT`. */
   serialPrefix: string | null
+  /** A student who finished the lessons and passed the assessments takes their own certificate (ADR-049); `null` = off. A server before it sends nothing. */
+  selfIssue?: boolean | null
 }
 
 /** `LearningSettingsDto` (MOD-20, D-R134): the self-paced learning of «My School». */
@@ -60,6 +62,7 @@ export interface AcademySettingsInput {
   }
   certificates?: {
     serialPrefix?: string | null
+    selfIssue?: boolean | null
   }
   learning?: {
     videoCompletionPercent?: number | null

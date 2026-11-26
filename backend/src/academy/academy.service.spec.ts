@@ -77,7 +77,7 @@ describe('AcademyService', () => {
     expect(dto.createdAt).toBe('2026-10-29T12:00:00.000Z');
     expect(dto.settings).toEqual({
       scheduling: { weekStartsOn: 6, workingDays: null },
-      certificates: { serialPrefix: null },
+      certificates: { serialPrefix: null, selfIssue: null },
       learning: { videoCompletionPercent: null },
       catalog: { publicBrowsing: null },
     });

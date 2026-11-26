@@ -5,7 +5,28 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { myCertificatesAccess } from './certificates.policy.js';
 import { CERTIFICATE_SELECT, toCertificateDto } from './certificates.service.js';
+import type { CertificateRow } from './certificates.service.js';
 import type { ListMyCertificatesQueryDto, MyCertificateItemDto, MyCertificateListDto } from './my-certificates.dto.js';
+
+/** A certificate as its owner sees it: everything to print it, never the issuer, the revoker or the reason. */
+export function toMyCertificateItem(row: CertificateRow, callerId: string): MyCertificateItemDto {
+  const full = toCertificateDto(row);
+  return {
+    id: full.id,
+    serial: full.serial,
+    verificationCode: full.verificationCode,
+    status: full.status,
+    enrollmentId: full.enrollmentId,
+    class: full.class,
+    course: full.course,
+    student: full.student,
+    grade: full.grade,
+    snapshot: full.snapshot,
+    issuedAt: full.issuedAt,
+    revokedAt: full.revokedAt,
+    relation: relationOf(row.student.id, callerId),
+  };
+}
 
 /**
  * MOD-10-T04 — «my certificates» (`GET /api/me/certificates`, API-135; owner
@@ -31,25 +52,6 @@ export class MyCertificatesService {
     if (query.classId) where.classId = query.classId;
     if (query.studentId) where.studentUserId = query.studentId;
     const rows = await this.prisma.db.certificate.findMany({ where, orderBy: { id: 'desc' }, select: CERTIFICATE_SELECT });
-    return {
-      items: rows.map((row): MyCertificateItemDto => {
-        const full = toCertificateDto(row);
-        return {
-          id: full.id,
-          serial: full.serial,
-          verificationCode: full.verificationCode,
-          status: full.status,
-          enrollmentId: full.enrollmentId,
-          class: full.class,
-          course: full.course,
-          student: full.student,
-          grade: full.grade,
-          snapshot: full.snapshot,
-          issuedAt: full.issuedAt,
-          revokedAt: full.revokedAt,
-          relation: relationOf(row.student.id, caller.id),
-        };
-      }),
-    };
+    return { items: rows.map((row) => toMyCertificateItem(row, caller.id)) };
   }
 }
