@@ -117,6 +117,11 @@ function issuedCertificateId(items: readonly MyCertificateItem[], row: MyClassIt
 }
 
 /** Brings the chosen course's lessons into view, without the animation for a reader who asked for less motion. */
+/** How long after «استعراض الدروس» the page keeps the lessons' start in view while they load. */
+const REVEAL_FOLLOW_MS = 2000
+/** The reader's own scrolling ends that follow-up. */
+const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'keydown'] as const
+
 function scrollToStart(element: HTMLElement | null) {
   const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   element?.scrollIntoView?.({ behavior: calm ? 'auto' : 'smooth', block: 'start' })
@@ -148,9 +153,29 @@ function MyClassCards() {
     setLive((previous) => (previous[courseId] === counts ? previous : { ...previous, [courseId]: counts }))
   }, [])
 
-  // After a choice the panel is on screen (possibly still loading): scroll to its start.
+  // After a choice, scroll to the panel's start. On the first choice the panel is still empty and the page
+  // too short to scroll (KI-160), so the scroll is repeated while the panel grows — until the reader
+  // scrolls or types themselves, or REVEAL_FOLLOW_MS has passed.
   useEffect(() => {
-    if (reveal > 0) scrollToStart(panelRef.current)
+    const panel = panelRef.current
+    if (reveal === 0 || !panel) return
+    scrollToStart(panel)
+    if (typeof ResizeObserver !== 'function') return
+    let height = panel.offsetHeight
+    const observer = new ResizeObserver(() => {
+      if (panel.offsetHeight === height) return
+      height = panel.offsetHeight
+      scrollToStart(panel)
+    })
+    const stop = () => {
+      observer.disconnect()
+      window.clearTimeout(timer)
+      for (const type of USER_SCROLL_EVENTS) window.removeEventListener(type, stop)
+    }
+    const timer = window.setTimeout(stop, REVEAL_FOLLOW_MS)
+    observer.observe(panel)
+    for (const type of USER_SCROLL_EVENTS) window.addEventListener(type, stop, { passive: true })
+    return stop
   }, [reveal])
 
   const selectCourse = (courseId: string, target: 'lessons' | 'exams' = 'lessons') => {
