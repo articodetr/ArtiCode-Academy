@@ -1,10 +1,14 @@
 // A YouTube lesson inside the page, with how much of it the learner has watched
 // (J-F64): the privacy-enhanced player, reopened where they stopped, and a bar
 // of the part really played. Reaching the academy's share completes the lesson
-// on the server. A video YouTube refuses to play here gets a clear message and
-// a link to watch it there.
-import { CheckCircleFilled, ExportOutlined } from '@ant-design/icons'
-import { Alert, Button } from 'antd'
+// on the server. Since J-F69 (Jallal's reference of the lesson popup) the video
+// sits in a dark frame; a video YouTube refuses to play here says so inside the
+// frame — «صاحب الفيديو لا يسمح بتشغيله خارج موقع YouTube» when its owner turned
+// embedding off (errors 101/150) — with a red «مشاهدة على YouTube»; the same link
+// sits under the frame, and «المشاهدة المحتسبة: 00:04 من 01:00 (6٪)» under it is
+// the part this device really played (the bar too, full once the lesson is
+// completed; the completion panel says when it was).
+import { ExportOutlined } from '@ant-design/icons'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LearningItem } from '../api/learning'
@@ -13,6 +17,9 @@ import { formatClockDuration, isHttpsUrl } from './learn.format'
 import { useYouTubeProgress } from './useYouTubeProgress'
 import { readWatched, resumeSecondsOf } from './watched.store'
 import { trackedYoutubeEmbedUrl } from './youtube.bridge'
+
+/** The player's errors for a video whose owner does not allow it to play on other sites. */
+const OWNER_REFUSED = new Set([101, 150])
 
 export interface YouTubeLessonProps {
   item: LearningItem
@@ -35,14 +42,17 @@ export function YouTubeLesson({ item, videoId, watchUrl, title, onComplete }: Yo
   const onReached = useCallback(() => onComplete(itemId), [onComplete, itemId])
   const watch = useYouTubeProgress({ frameRef, userId, itemId, completionPercent: item.completionPercent, completed, onReached })
   const percent = watch.percent ?? 0
-  // A completed lesson reads as full, however it was completed (the learner may have pressed the button).
+  // A completed lesson reads as full on the bar, however it was completed (the learner may have pressed the button);
+  // the line keeps the part this device measured.
   const shownPercent = completed ? 100 : percent
-  const watched = formatClockDuration(watch.watchedSeconds)
-  const total = formatClockDuration(watch.durationSeconds)
+  const watched = formatClockDuration(watch.watchedSeconds, { padMinutes: true })
+  const total = formatClockDuration(watch.durationSeconds, { padMinutes: true })
+  const link = isHttpsUrl(watchUrl) ? watchUrl : null
+  const blocked = watch.errorCode !== null
 
   return (
-    <div className="learn-media">
-      <div className="learn-embed">
+    <div className="learn-media learn-youtube">
+      <div className={`learn-embed learn-embed--framed${blocked ? ' is-blocked' : ''}`}>
         <iframe
           ref={frameRef}
           src={src}
@@ -51,38 +61,39 @@ export function YouTubeLesson({ item, videoId, watchUrl, title, onComplete }: Yo
           allowFullScreen
           referrerPolicy="strict-origin-when-cross-origin"
         />
-      </div>
-      {watch.errorCode !== null ? (
-        <Alert
-          type="warning"
-          showIcon
-          title={t('learn.lesson.watch.blocked')}
-          action={
-            isHttpsUrl(watchUrl) ? (
-              <Button size="small" icon={<ExportOutlined aria-hidden />} href={watchUrl} target="_blank" rel="noopener noreferrer">
+        {blocked ? (
+          <div className="learn-embed__blocked" role="alert">
+            <p>{t(OWNER_REFUSED.has(watch.errorCode ?? 0) ? 'learn.lesson.watch.blockedOwner' : 'learn.lesson.watch.blocked')}</p>
+            {link ? (
+              <a className="learn-youtube__button" href={link} target="_blank" rel="noopener noreferrer">
                 {t('learn.lesson.watch.openOnYouTube')}
-              </Button>
-            ) : undefined
-          }
-        />
+                <span className="learn-sr-only"> {t('learn.lesson.newTab')}</span>
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {link ? (
+        <a className="learn-youtube__link" href={link} target="_blank" rel="noopener noreferrer">
+          <ExportOutlined aria-hidden /> {t('learn.lesson.watch.openOnYouTube')}
+          <span className="learn-sr-only"> {t('learn.lesson.newTab')}</span>
+        </a>
       ) : null}
       <div className={`learn-watch${completed ? ' learn-watch--done' : ''}`}>
-        <div className="learn-watch__line">
-          {completed ? (
-            <strong>
-              <CheckCircleFilled aria-hidden /> {t('learn.lesson.watch.done')}
-            </strong>
-          ) : watch.percent === null ? (
-            <span>{t('learn.lesson.watch.notStarted')}</span>
-          ) : (
-            <strong>{t('learn.lesson.watch.percent', { percent })}</strong>
-          )}
+        <p className="learn-watch__line">
+          <strong>{t('learn.lesson.watch.counted')}</strong>{' '}
           {watch.percent !== null && watched && total ? (
-            <span className="learn-muted">
-              <bdi dir="ltr">{watched}</bdi> {t('learn.lesson.watch.of')} <bdi dir="ltr">{total}</bdi>
+            <span className="learn-watch__value">
+              <bdi dir="ltr">{watched}</bdi> {t('learn.lesson.watch.of')} <bdi dir="ltr">{total}</bdi> {t('learn.lesson.watch.share', { percent })}
             </span>
-          ) : null}
-        </div>
+          ) : watch.percent !== null ? (
+            <span className="learn-watch__value">{t('learn.lesson.watch.share', { percent })}</span>
+          ) : completed ? (
+            <span className="learn-watch__value">{t('learn.lesson.watch.done')}</span>
+          ) : (
+            <span className="learn-muted">{t('learn.lesson.watch.notStarted')}</span>
+          )}
+        </p>
         <div
           className="learn-watch__track"
           role="progressbar"

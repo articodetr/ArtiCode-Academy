@@ -38,6 +38,14 @@ describe('lesson lengths', () => {
     expect(formatClockDuration(-1)).toBeNull()
   })
 
+  it('writes the minutes in two digits for the watched share (J-F69)', () => {
+    expect(formatClockDuration(4, { padMinutes: true })).toBe('00:04')
+    expect(formatClockDuration(60, { padMinutes: true })).toBe('01:00')
+    expect(formatClockDuration(720, { padMinutes: true })).toBe('12:00')
+    expect(formatClockDuration(3725, { padMinutes: true })).toBe('1:02:05')
+    expect(formatClockDuration(null, { padMinutes: true })).toBeNull()
+  })
+
   it('shows a video or audio by its clock and anything else by its minutes', () => {
     expect(itemDurationLabel({ kind: 'video', durationSeconds: 245, estimatedMinutes: 5 }, ar)).toEqual({ text: '4:05', clock: true })
     expect(itemDurationLabel({ kind: 'audio', durationSeconds: 90, estimatedMinutes: null }, ar)).toEqual({ text: '1:30', clock: true })

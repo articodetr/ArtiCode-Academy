@@ -22,15 +22,19 @@ export function levelName(section: { number: number; title: LocalizedLabel | nul
   return title ? t('learn.level.named', { ordinal, title }) : t('learn.level.name', { ordinal })
 }
 
-/** A media length as a clock: `4:05`, `12:00`, or `1:02:05` from an hour on. Null for a missing or negative value. */
-export function formatClockDuration(seconds: number | null | undefined): string | null {
+/**
+ * A media length as a clock: `4:05`, `12:00`, or `1:02:05` from an hour on. Null for a missing or negative value.
+ * `padMinutes` writes the minutes in two digits under an hour (`04:05`, `00:04`) — the watched share of a video (J-F69).
+ */
+export function formatClockDuration(seconds: number | null | undefined, options: { padMinutes?: boolean } = {}): string | null {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return null
   const total = Math.round(seconds)
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const rest = total % 60
   const two = (value: number) => String(value).padStart(2, '0')
-  return hours > 0 ? `${hours}:${two(minutes)}:${two(rest)}` : `${minutes}:${two(rest)}`
+  if (hours > 0) return `${hours}:${two(minutes)}:${two(rest)}`
+  return `${options.padMinutes ? two(minutes) : minutes}:${two(rest)}`
 }
 
 export interface DurationLabel {

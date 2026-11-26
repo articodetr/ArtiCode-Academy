@@ -297,7 +297,39 @@ export const myLessons = {
       file: 'المرفق',
       files: 'المرفقات ({{n}})',
     },
-    player: { label: 'الدرس المفتوح', close: 'إغلاق الدرس' },
+    player: {
+      label: 'الدرس المفتوح',
+      close: 'إغلاق الدرس',
+      // J-F69: the side arrows of the lesson popup.
+      previous: 'الدرس السابق: {{title}}',
+      next: 'الدرس التالي: {{title}}',
+      // J-F69: the card at the top of the lesson popup (Jallal's reference).
+      facts: {
+        label: 'معلومات الدرس',
+        course: 'المادة:',
+        level: 'المستوى:',
+        teacher: 'المعلم:',
+        kind: 'نوع المحاضرة:',
+        when: 'الموعد:',
+        noTeacher: 'غير محدد',
+        noDate: 'موعد غير محدد',
+        kinds: {
+          live: 'محاضرة مباشرة',
+          recorded: 'محاضرة مسجلة',
+          text: 'درس مقروء',
+          pdf: 'مستند PDF',
+          image: 'صورة',
+          file: 'ملف',
+        },
+      },
+      // J-F69: a box per exam of the lesson.
+      exam: {
+        label: 'اختبار الدرس',
+        passed: 'تم الاجتياز: {{title}}',
+        taken: 'تم الاختبار: {{title}}',
+        title: 'اختبار الدرس: {{title}}',
+      },
+    },
     // J-F68: every exam of the class at the end of a course's lessons — what is not taken or passed yet.
     courseExams: {
       title: 'اختبارات الدورة',

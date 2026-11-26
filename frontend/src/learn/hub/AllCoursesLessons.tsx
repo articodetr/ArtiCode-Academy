@@ -8,7 +8,7 @@
 // answers land in the right course. Every count is the server's (D-R133).
 import { PlayCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import type { LearningWorkspace, MyLearningCourse, ProgressCounts } from '../../api/learning'
@@ -25,7 +25,6 @@ import './hub.css'
 import { HubPlayer } from './HubPlayer'
 import { HubRow } from './HubRow'
 import { HubSummary } from './HubSummary'
-import { scrollToStart } from './hub.scroll'
 import { COURSE_PARAM, HUB_FILTERS, LESSON_PARAM, mergedLessonsOf, studyCourses } from './hub.view'
 import type { HubFilter } from './hub.view'
 
@@ -95,7 +94,6 @@ function AllLessonsPanel({ courses, sources }: { courses: readonly MyLearningCou
   const [params, setParams] = useSearchParams()
   const [filter, setFilter] = useState<HubFilter>('all')
   const [notice, setNotice] = useState<string | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
 
   const loaded: { course: MyLearningCourse; workspace: LearningWorkspace }[] = []
   for (const course of courses) {
@@ -174,7 +172,7 @@ function AllLessonsPanel({ courses, sources }: { courses: readonly MyLearningCou
       {opened && openedSource ? (
         <HubPlayer
           key={opened.course.course.id}
-          courseName={localizedLabel(opened.course.course.name, language)}
+          course={opened.course}
           lessonId={opened.item.id}
           workspace={openedSource.workspace}
           updateWorkspace={openedSource.update}
@@ -182,10 +180,6 @@ function AllLessonsPanel({ courses, sources }: { courses: readonly MyLearningCou
           onOpen={(id) => openLesson(opened.course.course.id, id)}
           onClose={closeLesson}
           onNotice={setNotice}
-          onBackToContents={() => {
-            closeLesson()
-            scrollToStart(listRef.current)
-          }}
         />
       ) : null}
 
@@ -203,7 +197,7 @@ function AllLessonsPanel({ courses, sources }: { courses: readonly MyLearningCou
         />
       ) : null}
 
-      <div ref={listRef} className="hub-list-anchor">
+      <div className="hub-list-anchor">
         {rows.length === 0 ? (
           pending ? (
             <Skeleton active paragraph={{ rows: 5 }} />

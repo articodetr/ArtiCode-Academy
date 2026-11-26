@@ -91,7 +91,11 @@ export const learn: typeof arLearn = {
       done: 'This lesson is complete',
       rule: 'The lesson completes by itself after you watch {{percent}}% of it. The watched share is kept on this device.',
       blocked: 'This video cannot be played inside the platform.',
+      // J-F69: the player's errors 101/150 — the video's owner turned embedding off.
+      blockedOwner: 'The owner of this video does not allow it to play outside YouTube.',
       openOnYouTube: 'Watch on YouTube',
+      counted: 'Counted watching:',
+      share: '({{percent}}%)',
     },
     documentTitle: 'Lesson document',
     documentHint: 'The document opens in a new tab.',

@@ -1061,10 +1061,13 @@ a.hub-certgaps__open {
   background: #bbf7d0;
 }
 
-/* The lesson plays in a popup above the list (J-F67): the player fills it. */
+/* The lesson plays in a popup above the list (J-F67): the player fills it. Since J-F69 (Jallal's reference) the popup
+   is the lesson's title with «×», a card of what the lesson is, the content in its frame, the watched share and the
+   exam's state in boxes, and two round arrows beside the popup for the previous and the next lesson. */
 .hub-player-modal .ant-modal-container {
-  padding: 14px;
-  border-radius: 18px;
+  padding-block: 22px 26px;
+  padding-inline: 26px;
+  border-radius: 20px;
 }
 
 .hub-player-modal .hub-player {
@@ -1072,6 +1075,254 @@ a.hub-certgaps__open {
   border: 0;
   background: transparent;
   padding: 0;
+}
+
+.hub-player-modal .hub-player__head {
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-block-end: 16px;
+}
+
+.hub-player__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--hub-navy);
+  overflow-wrap: anywhere;
+}
+
+.hub-player-modal .hub-player__close {
+  flex: none;
+  color: var(--hub-muted);
+  font-size: 16px;
+}
+
+.hub-lesson {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hub-lesson__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-block: 16px;
+  padding-inline: 20px;
+  background: var(--hub-soft);
+  border: 1px solid var(--hub-line);
+  border-radius: 14px;
+}
+
+.hub-lesson__fact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.hub-lesson__fact dt {
+  font-weight: 800;
+  color: var(--hub-ink);
+}
+
+.hub-lesson__fact dd {
+  margin: 0;
+  color: var(--hub-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The content in its frame: a video in the dark rounded frame of the reference. */
+.hub-lesson .learn-embed,
+.hub-lesson .learn-media__video {
+  background: #111827;
+  border-radius: 14px;
+}
+
+/* How the lesson completes, as the boxes of the reference: «تم …» in green, the button and the rule as they are. */
+.hub-lesson .learn-completion {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.hub-lesson .learn-completion:empty {
+  display: none;
+}
+
+.hub-lesson .learn-completion__done {
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding-block: 12px;
+  padding-inline: 16px;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+}
+
+.hub-lesson .learn-completion__check {
+  color: #16a34a;
+}
+
+.hub-lesson__exams {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hub-lesson__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block: 14px;
+  padding-inline: 16px;
+  font-weight: 700;
+  color: var(--hub-ink);
+  background: var(--hub-soft);
+  border: 1px solid var(--hub-line);
+  border-radius: 12px;
+}
+
+.hub-lesson__status.is-passed,
+.hub-lesson__status.is-taken {
+  justify-content: center;
+  color: #166534;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.hub-lesson__status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.hub-lesson__status-note {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hub-muted);
+}
+
+/* The previous and the next lesson: round arrows beside the popup, centred on the screen («السابق» on the start side —
+   the right in Arabic). The popup is min(920px, 100vw - 160px) wide, so each arrow sits 12px from its edge. */
+.hub-player__step {
+  position: fixed;
+  inset-block-start: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  inline-size: 52px;
+  block-size: 52px;
+  padding: 0;
+  font-size: 20px;
+  color: var(--hub-navy);
+  cursor: pointer;
+  background: #fff;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 28%);
+  transform: translateY(-50%);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.hub-player__step--previous {
+  inset-inline-start: max(16px, calc(50vw - 524px));
+}
+
+.hub-player__step--next {
+  inset-inline-end: max(16px, calc(50vw - 524px));
+}
+
+.hub-player__step:hover:not(:disabled, [aria-disabled='true']) {
+  color: #fff;
+  background: var(--hub-navy);
+}
+
+.hub-player__step:focus-visible {
+  outline: 3px solid var(--hub-gold);
+  outline-offset: 3px;
+}
+
+.hub-player__step:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hub-player__step[aria-disabled='true'] {
+  cursor: progress;
+}
+
+.hub-player__step-lock {
+  position: absolute;
+  inset-block-start: 7px;
+  font-size: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-player__step {
+    transition: none;
+  }
+}
+
+/* A phone: the popup takes the width, the arrows float at the bottom corners and the popup keeps room for them. */
+@media (max-width: 767.98px) {
+  .hub-player-modal .ant-modal-container {
+    padding-block: 16px 80px;
+    padding-inline: 14px;
+  }
+
+  .hub-player-modal .hub-player__head {
+    padding-inline: 0;
+  }
+
+  .hub-player__title {
+    font-size: 19px;
+  }
+
+  .hub-lesson__facts {
+    padding-inline: 14px;
+  }
+
+  .hub-player__step {
+    inset-block: auto 16px;
+    inline-size: 48px;
+    block-size: 48px;
+    font-size: 18px;
+    transform: none;
+  }
+
+  .hub-player__step--previous {
+    inset-inline-start: 16px;
+  }
+
+  .hub-player__step--next {
+    inset-inline-end: 16px;
+  }
+
+  /* In the popup the video keeps its frame (the in-page player let it run to the edges). */
+  .hub-player-modal .hub-player .learn-embed {
+    inline-size: 100%;
+    margin-inline: 0;
+    border-radius: 14px;
+  }
 }
 
 .hub-card__link,

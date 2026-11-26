@@ -29,7 +29,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-export function LessonSections({ item, examZone }: { item: LearningItem; examZone: string | undefined }) {
+/**
+ * `showExams` false leaves the lesson's exams out: the lesson popup of «دوراتي» and «دروسي» shows them as boxes with
+ * where each stands (J-F69 — HubLessonBody).
+ */
+export function LessonSections({ item, examZone, showExams = true }: { item: LearningItem; examZone: string | undefined; showExams?: boolean }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const description = item.description ? localizedLabel(item.description, language) : ''
@@ -79,7 +83,7 @@ export function LessonSections({ item, examZone }: { item: LearningItem; examZon
           </Link>
         </Section>
       ) : null}
-      {item.exams.length > 0 ? (
+      {showExams && item.exams.length > 0 ? (
         <Section title={t('learn.sections.exams')}>
           <ul className="learn-list">
             {item.exams.map((exam) => (

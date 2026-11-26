@@ -96,7 +96,11 @@ export const learn = {
       done: 'اكتمل هذا الدرس',
       rule: 'يكتمل الدرس تلقائياً بعد مشاهدة {{percent}}٪ منه. تُحفظ نسبة المشاهدة على هذا الجهاز.',
       blocked: 'تعذّر تشغيل هذا الفيديو داخل المنصة.',
+      // J-F69: the player's errors 101/150 — the video's owner turned embedding off.
+      blockedOwner: 'صاحب الفيديو لا يسمح بتشغيله خارج موقع YouTube.',
       openOnYouTube: 'مشاهدة على YouTube',
+      counted: 'المشاهدة المحتسبة:',
+      share: '({{percent}}٪)',
     },
     documentTitle: 'مستند الدرس',
     documentHint: 'يفتح المستند في نافذة جديدة.',

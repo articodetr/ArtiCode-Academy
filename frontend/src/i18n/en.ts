@@ -4048,7 +4048,36 @@ export const en: Translation = {
         file: 'Attachment',
         files: 'Attachments ({{n}})',
       },
-      player: { label: 'The open lesson', close: 'Close the lesson' },
+      player: {
+        label: 'The open lesson',
+        close: 'Close the lesson',
+        previous: 'Previous lesson: {{title}}',
+        next: 'Next lesson: {{title}}',
+        facts: {
+          label: 'About the lesson',
+          course: 'Subject:',
+          level: 'Level:',
+          teacher: 'Teacher:',
+          kind: 'Lecture type:',
+          when: 'Time:',
+          noTeacher: 'Not set',
+          noDate: 'No time set',
+          kinds: {
+            live: 'Live lecture',
+            recorded: 'Recorded lecture',
+            text: 'Reading',
+            pdf: 'PDF document',
+            image: 'Image',
+            file: 'File',
+          },
+        },
+        exam: {
+          label: 'The lesson exam',
+          passed: 'Passed: {{title}}',
+          taken: 'Exam taken: {{title}}',
+          title: 'Lesson exam: {{title}}',
+        },
+      },
       // J-F68: every exam of the class at the end of a course's lessons.
       courseExams: {
         title: 'Course exams',

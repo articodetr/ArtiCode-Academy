@@ -8,7 +8,7 @@
 // and the exams again and tells the page (`onExamClosed` — a certificate may have been issued).
 import { LockOutlined, PlayCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 import type { MyLearningCourse, ProgressCounts } from '../../api/learning'
@@ -22,7 +22,6 @@ import { useLearningWorkspace } from '../useLearningWorkspace'
 import { CourseExams } from './CourseExams'
 import { HubPlayer } from './HubPlayer'
 import { HubRow } from './HubRow'
-import { scrollToStart } from './hub.scroll'
 import { COURSE_PARAM, HUB_FILTERS, LESSON_PARAM, hubGroupsOf } from './hub.view'
 import type { HubFilter } from './hub.view'
 
@@ -43,7 +42,6 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }:
   const [params, setParams] = useSearchParams()
   const [filter, setFilter] = useState<HubFilter>('all')
   const [notice, setNotice] = useState<string | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
 
   const reading = useLearningWorkspace(courseId)
   const { workspace, update: updateWorkspace, reload: reloadWorkspace } = reading
@@ -54,6 +52,11 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }:
     setExamsRefresh((value) => value + 1)
     onExamClosed?.()
   }, [reloadWorkspace, onExamClosed])
+  // An exam taken from the lesson popup (J-F69): the player reads the lessons again itself; the exams and the card follow.
+  const playerExamClosed = useCallback(() => {
+    setExamsRefresh((value) => value + 1)
+    onExamClosed?.()
+  }, [onExamClosed])
 
   const requested = params.get(LESSON_PARAM) ?? undefined
   const place = placeOf(workspace, requested)
@@ -126,7 +129,7 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }:
 
       {lessonId ? (
         <HubPlayer
-          courseName={courseName}
+          course={course}
           lessonId={lessonId}
           workspace={workspace}
           updateWorkspace={updateWorkspace}
@@ -134,14 +137,11 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }:
           onOpen={openLesson}
           onClose={closeLesson}
           onNotice={setNotice}
-          onBackToContents={() => {
-            closeLesson()
-            scrollToStart(listRef.current)
-          }}
+          onExamClosed={playerExamClosed}
         />
       ) : null}
 
-      <div ref={listRef} className="hub-list-anchor">
+      <div className="hub-list-anchor">
         {access ? (
           <LearnAccessNotice failure={access} courseId={courseId} />
         ) : workspace === null ? (

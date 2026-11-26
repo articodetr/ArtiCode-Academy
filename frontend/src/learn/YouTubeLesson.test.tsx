@@ -41,7 +41,7 @@ beforeEach(() => {
   resetWatchedMemory()
 })
 
-describe('YouTubeLesson (J-F64)', () => {
+describe('YouTubeLesson (J-F64; its frame and «المشاهدة المحتسبة» since J-F69)', () => {
   it('plays inside the page and shows how much was really watched', () => {
     const { frame } = renderLesson()
     expect(frame.getAttribute('src')).toContain('youtube-nocookie.com/embed/dQw4w9WgXcQ')
@@ -50,9 +50,20 @@ describe('YouTubeLesson (J-F64)', () => {
     play(frame, 0, 25)
 
     expect(bar()).toHaveAttribute('aria-valuenow', '25')
-    expect(screen.getByText('شاهدت 25٪')).toBeInTheDocument()
-    expect(screen.getByText('0:25')).toBeInTheDocument()
-    expect(screen.getByText('1:40')).toBeInTheDocument()
+    // J-F69: «المشاهدة المحتسبة: 00:25 من 01:40 (25٪)», the clocks in two-digit minutes.
+    expect(screen.getByText(ar.learn.lesson.watch.counted)).toBeInTheDocument()
+    expect(bar().closest('.learn-watch')).toHaveTextContent('00:25 من 01:40 (25٪)')
+    expect(screen.getByText('00:25')).toHaveAttribute('dir', 'ltr')
+  })
+
+  it('sits in its dark frame with «مشاهدة على YouTube» under it (J-F69)', () => {
+    const { container } = renderLesson()
+    expect(container.querySelector('.learn-embed--framed iframe')).not.toBeNull()
+    const link = screen.getByRole('link', { name: new RegExp(ar.learn.lesson.watch.openOnYouTube) })
+    expect(link).toHaveAttribute('href', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(container.querySelector('.learn-embed__blocked')).toBeNull()
   })
 
   it('does not credit the part a jump skipped', () => {
@@ -87,6 +98,15 @@ describe('YouTubeLesson (J-F64)', () => {
     const { frame, onComplete } = renderLesson(vi.fn(() => Promise.resolve()), completed)
     play(frame, 0, 95)
     expect(onComplete).not.toHaveBeenCalled()
+    // The bar reads as full; the line keeps the part this device measured, and the rule is gone.
+    expect(bar()).toHaveAttribute('aria-valuenow', '100')
+    expect(bar().closest('.learn-watch')).toHaveTextContent('01:35 من 01:40 (95٪)')
+    expect(screen.queryByText(/يكتمل الدرس تلقائياً/)).not.toBeInTheDocument()
+  })
+
+  it('says a completed lesson is complete before this device measured anything', () => {
+    const completed = makeItem('i2', { progress: makeProgress({ state: 'completed', completedAt: '2026-11-20T10:00:00.000Z', completionSource: 'manual' }) })
+    renderLesson(vi.fn(() => Promise.resolve()), completed)
     expect(screen.getByText(ar.learn.lesson.watch.done)).toBeInTheDocument()
     expect(bar()).toHaveAttribute('aria-valuenow', '100')
   })
@@ -98,11 +118,24 @@ describe('YouTubeLesson (J-F64)', () => {
     expect(bar()).toHaveAttribute('aria-valuenow', '40')
   })
 
-  it('says so and links to YouTube when the video refuses to play here', () => {
-    const { frame } = renderLesson()
+  it('says inside the frame that the owner does not allow it, with the red link to YouTube (J-F69)', () => {
+    const { frame, container } = renderLesson()
     fromPlayer(frame, { event: 'onError', info: 150 })
-    expect(screen.getByText(ar.learn.lesson.watch.blocked)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: new RegExp(ar.learn.lesson.watch.openOnYouTube) })).toHaveAttribute('href', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    const notice = screen.getByRole('alert')
+    expect(container.querySelector('.learn-embed--framed')).toContainElement(notice)
+    expect(notice).toHaveTextContent(ar.learn.lesson.watch.blockedOwner)
+    const links = screen.getAllByRole('link', { name: new RegExp(ar.learn.lesson.watch.openOnYouTube) })
+    // The red button inside the frame and the link under it.
+    expect(links).toHaveLength(2)
+    for (const link of links) expect(link).toHaveAttribute('href', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    expect(notice.querySelector('.learn-youtube__button')).not.toBeNull()
+  })
+
+  it('says only that it cannot play here for any other refusal', () => {
+    const { frame } = renderLesson()
+    fromPlayer(frame, { event: 'onError', info: 100 })
+    expect(screen.getByRole('alert')).toHaveTextContent(ar.learn.lesson.watch.blocked)
+    expect(screen.queryByText(ar.learn.lesson.watch.blockedOwner)).not.toBeInTheDocument()
   })
 
   it('asks the player to report once it has loaded', () => {
