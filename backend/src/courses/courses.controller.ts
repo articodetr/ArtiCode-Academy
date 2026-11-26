@@ -69,7 +69,9 @@ export class CoursesController {
   @ApiOperation({
     summary: 'Create a course',
     description:
-      'Creates a `draft` course (code trimmed and upper-cased, unique) with the caller as `created_by`, in one transaction with the audit event `courses.created`. Requires `courses.manage`.',
+      'Creates a `draft` course (code trimmed and upper-cased, unique) with the caller as `created_by`, in one transaction with the audit event `courses.created`. ' +
+      'Without `code` the server generates the next free `CRS-NNNNN` from the `number_sequences` counter `course` in the same transaction (a number a hand-typed code already holds is skipped). ' +
+      'Requires `courses.manage`.',
   })
   @ApiCreatedResponse({ type: CourseDto })
   @ApiBadRequestResponse({ description: 'Validation failed or `age_range_invalid`' })

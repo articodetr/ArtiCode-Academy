@@ -16,6 +16,7 @@ import { AppModule } from '../src/app.module.js';
 import { APP_CREATE_OPTIONS, configureApp } from '../src/app.setup.js';
 import { PasswordService } from '../src/auth/password.service.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
+import { COURSE_CODE_SEQUENCE_KEY, COURSE_CODE_SEQUENCE_PERIOD, formatCourseCode } from '../src/courses/course-code.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 
@@ -74,6 +75,8 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
   let levelId: string;
   const createdUserIds: string[] = [];
   const createdRoleIds: string[] = [];
+  // Courses whose code does not carry the fixture prefix (generated `CRS-…` codes, a hand-typed one).
+  const otherCourseIds: string[] = [];
   const fx: Record<string, string> = {};
   const tokens: Record<string, string> = {};
 
@@ -156,6 +159,7 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
   afterAll(async () => {
     try {
       await prisma.course.deleteMany({ where: { code: { startsWith: PREFIX } } });
+      if (otherCourseIds.length > 0) await prisma.course.deleteMany({ where: { id: { in: otherCourseIds } } });
       await prisma.level.deleteMany({ where: { id: levelId } });
       await prisma.subject.deleteMany({ where: { code: { startsWith: PREFIX } } });
     } finally {
@@ -227,6 +231,64 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
       expect(bad.status, JSON.stringify(body)).toBe(400);
     }
     expect(await eventsSince(m2)).toEqual([]);
+  });
+
+  it('a body without code gets the next free CRS-NNNNN (a hand-typed one is skipped), one courses.created each; null or a blank code is 400 without an event', async () => {
+    const counter = async (): Promise<number> => {
+      const row = await prisma.numberSequence.findUnique({ where: { key_period: { key: COURSE_CODE_SEQUENCE_KEY, period: COURSE_CODE_SEQUENCE_PERIOD } } });
+      return Number(row?.lastValue ?? 0);
+    };
+    const createWithoutCode = async (name: string) => {
+      const res = await api().post(COURSES).set(bearer('manager')).send({ name: { ar: name } }).expect(201);
+      otherCourseIds.push(res.body.id as string);
+      return res.body as { id: string; code: string; status: string };
+    };
+
+    const m = await mark();
+    const first = await createWithoutCode('دورة بلا رمز 1');
+    const second = await createWithoutCode('دورة بلا رمز 2');
+    expect(Object.keys(first).sort()).toEqual(DTO_KEYS);
+    expect(first).toMatchObject({ status: 'draft', name: { ar: 'دورة بلا رمز 1' }, level: null, durationHours: null, sessionsCount: null });
+    expect(first.code).toMatch(/^CRS-\d{5,}$/);
+    expect(second.code).toMatch(/^CRS-\d{5,}$/);
+    expect(second.code).not.toBe(first.code);
+    const events = await eventsSince(m);
+    expect(events.map((event) => [event.action, event.entityId, (event.metadata as { code: string }).code])).toEqual([
+      ['courses.created', first.id, first.code],
+      ['courses.created', second.id, second.code],
+    ]);
+
+    // A course typed by hand with the NEXT number the counter would hand out: the generator skips it.
+    let next = (await counter()) + 1;
+    while (await prisma.course.findUnique({ where: { code: formatCourseCode(next) }, select: { id: true } })) next++;
+    const m2 = await mark();
+    const typed = await api().post(COURSES).set(bearer('manager')).send({ code: formatCourseCode(next).toLowerCase(), name: { ar: 'رمز مكتوب يدوياً' } }).expect(201);
+    otherCourseIds.push(typed.body.id as string);
+    expect(typed.body.code).toBe(formatCourseCode(next));
+    let expected = (await counter()) + 1;
+    while (await prisma.course.findUnique({ where: { code: formatCourseCode(expected) }, select: { id: true } })) expected++;
+    const skipped = await createWithoutCode('دورة بعد الرمز اليدوي');
+    expect(skipped.code).toBe(formatCourseCode(expected));
+    expect(skipped.code).not.toBe(typed.body.code);
+    expect(await counter()).toBeGreaterThanOrEqual(expected);
+    const events2 = await eventsSince(m2);
+    expect(events2.map((event) => [event.action, event.entityId, (event.metadata as { code: string }).code])).toEqual([
+      ['courses.created', typed.body.id, formatCourseCode(next)],
+      ['courses.created', skipped.id, skipped.code],
+    ]);
+
+    // A typed code keeps its rules: a generated code is taken like any other.
+    const m3 = await mark();
+    const taken = await api().post(COURSES).set(bearer('manager')).send({ code: ` ${first.code.toLowerCase()} `, name: { ar: 'مكرر' } });
+    expect(taken.status).toBe(409);
+    expect(taken.body).toMatchObject({ code: 'course_code_taken', courseCode: first.code });
+    for (const bad of [null, '', '   ', 42, 'HAS SPACE']) {
+      const res = await api().post(COURSES).set(bearer('manager')).send({ code: bad, name: { ar: 'م' } });
+      expect(res.status, JSON.stringify(bad)).toBe(400);
+    }
+    const noName = await api().post(COURSES).set(bearer('manager')).send({});
+    expect(noName.status).toBe(400);
+    expect(await eventsSince(m3)).toEqual([]);
   });
 
   it('AC1/AC2 — courses.read alone sees published courses only (list and detail), may not filter other states; the manager sees and filters every state', async () => {
@@ -465,6 +527,10 @@ describe.skipIf(!available)('MOD-04 courses (e2e, TEST-041)', () => {
       expect(props('CourseDto').sort()).toEqual(DTO_KEYS);
       expect(props('CourseSubjectDto').sort()).toEqual(['code', 'id', 'name']);
       expect(props('CreateCourseDto')).toContain('subjectId');
+      // The code is optional on create (generated when absent); the Arabic name stays required.
+      const createRequired = (schemas['CreateCourseDto'] as { required?: string[] }).required ?? [];
+      expect(createRequired).toContain('name');
+      expect(createRequired).not.toContain('code');
       expect(props('UpdateCourseDto')).toContain('subjectId');
     },
     20_000, // the OpenAPI document is slow under a parallel e2e run (KI-040)
