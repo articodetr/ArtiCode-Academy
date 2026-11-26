@@ -70,7 +70,7 @@ describe('GlobalSearch (redesign)', () => {
     expect(document.querySelector('.gsearch-group')?.textContent ?? '').not.toContain('الفصول')
   })
 
-  it('offers a teacher-only viewer no assignment page, action or record, even with the keys — exams and lessons are still searched; an admin keeps them (2026-11-26)', async () => {
+  it('offers a teacher-only viewer no assignment, exam or lesson page, action or record, even with the keys — they are inside each class (CH-0374); their classes are still searched; an admin keeps them (2026-11-26)', async () => {
     const urls: string[] = []
     mockFetch((url) => {
       urls.push(url)
@@ -86,13 +86,14 @@ describe('GlobalSearch (redesign)', () => {
       const { unmount } = renderWithProviders(<GlobalSearch />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles, permissions: teacherKeys }) }), route: '/' })
       fireEvent.click(screen.getByLabelText(ar.search.open))
       const input = await screen.findByLabelText(ar.search.placeholder)
-      // Before typing: the exam action is offered, the review of submissions is not.
-      expect(await screen.findByText(ar.search.actions.enterResults)).toBeInTheDocument()
+      // Before typing: neither the exam action nor the review of submissions (CH-0374: both live in the class's page).
+      expect(screen.queryByText(ar.search.actions.enterResults)).not.toBeInTheDocument()
       expect(screen.queryByText(ar.search.actions.reviewSubmissions)).not.toBeInTheDocument()
 
       fireEvent.change(input, { target: { value: 'الواجبات' } })
-      await waitFor(() => expect(urls.some((url) => url.startsWith('/api/exams?'))).toBe(true))
-      expect(urls.some((url) => url.startsWith('/api/lessons?'))).toBe(true)
+      await waitFor(() => expect(urls.some((url) => url.startsWith('/api/classes?'))).toBe(true))
+      expect(urls.some((url) => url.startsWith('/api/exams?'))).toBe(false)
+      expect(urls.some((url) => url.startsWith('/api/lessons?'))).toBe(false)
       expect(urls.some((url) => url.startsWith('/api/assignments'))).toBe(false)
       expect(screen.queryByText(ar.nav.assignments)).not.toBeInTheDocument()
       expect(screen.queryByText('واجب الحلقات')).not.toBeInTheDocument()
