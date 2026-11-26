@@ -21,6 +21,16 @@ export const classPage = {
     attendance_many: 'حضور {{count}} طالبًا مسجّل',
     attendance_other: 'حضور {{count}} طالب مسجّل',
     attendance: 'لم يُسجَّل الحضور',
+    // J-F75: the three buttons of a lesson card.
+    edit: 'تعديل',
+    delete: 'حذف',
+    addExam: 'إضافة اختبار',
+    editCancelled: 'لا يُعدَّل درس ملغى. افتح الدرس واختر «استعادة» أولاً.',
+    deleteCompleted: 'لا يُحذف درس مكتمل.',
+    deleteCancelled: 'لا يُحذف درس ملغى.',
+    deleteHasAttendance: 'سُجّل حضور هذا الدرس فلا يُحذف. يمكنك إلغاؤه من نافذة الدرس.',
+    deleteConfirmTitle: 'حذف الدرس «{{title}}»؟',
+    deleteConfirmContent: 'سيُحذف هذا الدرس من الفصل نهائياً، ولا يمكن التراجع عن ذلك.',
   },
   assignments: {
     title: 'واجبات هذا الفصل',

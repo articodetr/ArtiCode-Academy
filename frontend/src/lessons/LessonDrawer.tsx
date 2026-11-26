@@ -25,6 +25,9 @@
 // reload or a tab close gets the browser's own prompt (useUnsavedChangesGuard).
 // Switching between the two tabs is no close: both keep their work. The edit
 // form's Cancel and the sheet's confirmed reload stay explicit discards.
+// J-F75 (CH-0382): `startEditing` — a lesson card's «تعديل» on the class page —
+// opens the edit form as soon as the lesson is loaded, when it may be edited at
+// all (lessonEditability); a lesson that may not opens on its details.
 import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, LinkOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -83,9 +86,11 @@ interface LessonDrawerProps {
   onUpdated: (lesson: Lesson) => void
   /** A scheduled lesson was deleted. */
   onDeleted: (lessonId: string) => void
+  /** J-F75: open on the edit form (applied once the lesson is loaded, when it may be edited). */
+  startEditing?: boolean
 }
 
-export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: LessonDrawerProps) {
+export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted, startEditing = false }: LessonDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { hasPermission } = useAuth()
@@ -157,6 +162,16 @@ export function LessonDrawer({ lessonId, onClose, onUpdated, onDeleted }: Lesson
   }
 
   const editability = lesson ? lessonEditability(lesson, canManage) : { editable: false, timingLocked: true }
+
+  // J-F75: the lesson this drawer was opened for, and whether that opening asked for the edit form — adjusted
+  // during render (no effect), and applied once that lesson is loaded; a re-read of the same lesson never reopens it.
+  const [opening, setOpening] = useState<{ lessonId: string | null; edit: boolean }>({ lessonId: null, edit: false })
+  if (opening.lessonId !== lessonId) setOpening({ lessonId, edit: startEditing && lessonId !== null })
+  else if (opening.edit && lesson !== null && lesson.id === lessonId) {
+    setOpening({ lessonId, edit: false })
+    if (editability.editable) setEditing(true)
+  }
+
   const actions = lesson && !editing ? availableLessonActions(lesson, canManage) : []
   const menu: MenuProps['items'] = actions.map((action) => ({
     key: action,

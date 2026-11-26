@@ -25,12 +25,16 @@ export interface ExamFormContext {
   zone: ExamZone
 }
 
-export function useExamFormContext(form: FormInstance, classId: string | undefined, current?: Exam): ExamFormContext {
+/**
+ * `preset` (J-F75): the lesson a creation starts with (a lesson card's «إضافة اختبار») — its zone counts while it
+ * is chosen and the class's lessons have not loaded it (yet, or beyond their one page).
+ */
+export function useExamFormContext(form: FormInstance, classId: string | undefined, current?: Exam, preset?: { id: string; timeZone?: string }): ExamFormContext {
   const canReadLessons = useAuth().hasPermission('lessons.read')
   const lessons = useClassLessons(classId, canReadLessons)
   const lessonId = Form.useWatch('lessonId', form) as string | undefined
   const { academy } = useAcademy()
-  const lessonZone = lessonZoneOf(lessons.lessons.find((lesson) => lesson.id === lessonId))
+  const lessonZone = lessonZoneOf(lessons.lessons.find((lesson) => lesson.id === lessonId) ?? (preset !== undefined && preset.id === lessonId ? preset : undefined))
   const zone = examZoneOf({
     lessonId,
     lessonZone,

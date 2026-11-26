@@ -1,7 +1,8 @@
 // One class's own page (CH-0374): the drawer's tabs plus the class's lessons, homework and exams, each read with the
 // class's id, each «add» bound to this class, and «رجوع» back to the list. Since J-F74 (CH-0381) the lessons tab
-// comes first and the page opens on it.
-import { fireEvent, screen, within } from '@testing-library/react'
+// comes first and the page opens on it; since J-F75 (CH-0382) an exam added from a lesson card renews the exams tab.
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
 import { makeAssignment, makeAssignmentList } from '../test/assignments'
@@ -23,6 +24,8 @@ function mockPageApi(status: 'running' | 'completed' = 'running') {
     if (url.startsWith('/api/lessons?')) return jsonResponse(200, makeLessonList([makeLesson({ id: 'l-1', title: { ar: 'الدرس الأول' } })]))
     if (url.startsWith('/api/assignments?')) return jsonResponse(200, makeAssignmentList([makeAssignment({ id: 'a-1', title: { ar: 'واجب الدرس الأول' } })]))
     if (url.startsWith('/api/exams?')) return jsonResponse(200, makeExamList([makeExam({ id: 'e-1', title: { ar: 'اختبار قصير' } })]))
+    // J-F75: an exam added from a lesson card (POST — API-115).
+    if (url === `/api/classes/${CLASS_ID}/exams`) return jsonResponse(201, makeExam({ id: 'e-new', title: { ar: 'اختبار الدرس الأول' } }))
     return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
   })
   return { urls }
@@ -39,6 +42,7 @@ function renderPage(permissions: string[] = TEACHER_PERMISSIONS) {
 
 const tabNames = () => [...document.querySelectorAll('.ant-tabs-tab')].map((tab) => tab.textContent ?? '')
 const activeTab = () => document.querySelector('.ant-tabs-tab-active')?.textContent ?? null
+const activePane = () => document.querySelector('[role="tabpanel"][aria-hidden="false"]') as HTMLElement
 
 /** The page has read its class: the class's name heads it (the class code shows in the details tab only). */
 const pageLoaded = () => screen.findByText('بايثون — الفصل أ', { selector: 'h3 bdi' })
@@ -84,7 +88,32 @@ describe('ClassPage (CH-0374)', () => {
     fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.exams }))
     expect(await screen.findByText('اختبار قصير')).toBeInTheDocument()
     expect(urls.some((url) => url.startsWith('/api/exams?') && url.includes(`classId=${CLASS_ID}`))).toBe(true)
-    expect(screen.getByText(ar.exams.addExam)).toBeInTheDocument()
+    // The lessons tab, still mounted, has the same words on each lesson card (J-F75): read the shown tab only.
+    expect(within(activePane()).getByText(ar.exams.addExam)).toBeInTheDocument()
+  })
+
+  it('renews the exams tab after an exam is added from a lesson card (J-F75)', async () => {
+    const { urls } = mockPageApi()
+    renderPage()
+    await pageLoaded()
+    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.exams }))
+    expect(await screen.findByText('اختبار قصير')).toBeInTheDocument()
+    const examReads = () => urls.filter((url) => url.startsWith('/api/exams?')).length
+    expect(examReads()).toBe(1)
+
+    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.lessons }))
+    const lessonCard = await screen.findByTestId('class-lesson-l-1')
+    fireEvent.click(within(lessonCard).getByText(ar.classPage.lessons.addExam).closest('button')!)
+    const dialog = (await screen.findByText(ar.exams.create.title)).closest('[role="dialog"]') as HTMLElement
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.exams.fields.type))
+    fireEvent.click(await screen.findByText(ar.exams.types.quiz, { selector: '.ant-select-item-option-content' }))
+    await userEvent.type(within(dialog).getByLabelText(ar.exams.fields.titleAr), 'اختبار الدرس الأول')
+    await userEvent.type(within(dialog).getByLabelText(ar.exams.fields.maxScore), '10')
+    fireEvent.click(within(dialog).getByText(ar.exams.create.submit).closest('button')!)
+
+    // The exams tab mounts anew and reads its list again (it was read once before the exam was added).
+    await waitFor(() => expect(examReads()).toBeGreaterThanOrEqual(2))
+    expect(urls.some((url) => url === `/api/classes/${CLASS_ID}/exams`)).toBe(true)
   })
 
   it('offers no «add» for a completed class, nor to a reader without the manage key', async () => {
