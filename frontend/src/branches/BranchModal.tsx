@@ -124,7 +124,7 @@ export function BranchModal({ open, branch, onClose, onSaved }: BranchModalProps
           <Input dir="ltr" maxLength={BRANCH_CODE_MAX_LENGTH} placeholder="MAIN" style={{ maxWidth: 200 }} />
         </Form.Item>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item
               name="nameAr"
               label={t('branches.fields.nameAr')}
@@ -133,19 +133,19 @@ export function BranchModal({ open, branch, onClose, onSaved }: BranchModalProps
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('branches.fields.nameEn')} rules={[{ max: BRANCH_TEXT_MAX_LENGTH }]}>
               <Input dir="ltr" />
             </Form.Item>
           </Col>
         </Row>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item name="addressAr" label={t('branches.fields.addressAr')} rules={[{ max: BRANCH_TEXT_MAX_LENGTH }]}>
               <Input.TextArea rows={2} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item
               name="addressEn"
               label={t('branches.fields.addressEn')}

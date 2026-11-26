@@ -49,7 +49,7 @@ export function ClassFormFields({ form, mode, enrolledCount = 0 }: ClassFormFiel
         <Input dir="ltr" maxLength={32} placeholder="PY-101-A" style={{ maxWidth: 220 }} />
       </Form.Item>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item
             name="nameAr"
             label={t('classes.fields.nameAr')}
@@ -58,7 +58,7 @@ export function ClassFormFields({ form, mode, enrolledCount = 0 }: ClassFormFiel
             <Input />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item name="nameEn" label={t('classes.fields.nameEn')} rules={[{ max: CLASS_NAME_MAX_LENGTH }]}>
             <Input dir="ltr" />
           </Form.Item>

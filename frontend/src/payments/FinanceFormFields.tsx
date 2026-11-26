@@ -33,7 +33,7 @@ export function LinesField({ currency }: { currency: string }) {
               >
                 <Input placeholder={t('payments.form.descriptionAr')} aria-label={`${t('payments.form.descriptionAr')} ${index + 1}`} dir="auto" />
               </Form.Item>
-              <Form.Item name={[field.name, 'descriptionEn']} rules={[{ max: 200, message: t('payments.record.tooLong', { max: 200 }) }]} style={{ flex: '2 1 160px', marginBottom: 8 }}>
+              <Form.Item hidden name={[field.name, 'descriptionEn']} rules={[{ max: 200, message: t('payments.record.tooLong', { max: 200 }) }]} style={{ flex: '2 1 160px', marginBottom: 8 }}>
                 <Input placeholder={t('payments.form.descriptionEn')} aria-label={`${t('payments.form.descriptionEn')} ${index + 1}`} dir="auto" />
               </Form.Item>
               <Form.Item name={[field.name, 'descriptionTr']} hidden>

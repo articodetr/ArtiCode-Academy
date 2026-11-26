@@ -123,7 +123,7 @@ export function BankFormModal({ bank, onClose, onSaved, onStale }: BankFormModal
         disabled={saving}
       >
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item
               name="nameAr"
               label={t('questionBanks.bankForm.fields.nameAr')}
@@ -132,19 +132,19 @@ export function BankFormModal({ bank, onClose, onSaved, onStale }: BankFormModal
               <Input maxLength={BANK_NAME_MAX_LENGTH} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('questionBanks.bankForm.fields.nameEn')} dependencies={['nameAr']} rules={[maxLength(BANK_NAME_MAX_LENGTH), arabicFirst('nameAr')]}>
               <Input dir="ltr" maxLength={BANK_NAME_MAX_LENGTH} />
             </Form.Item>
           </Col>
         </Row>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item name="descriptionAr" label={t('questionBanks.bankForm.fields.descriptionAr')} rules={[maxLength(QUESTION_TEXT_MAX_LENGTH)]}>
               <Input.TextArea rows={3} maxLength={QUESTION_TEXT_MAX_LENGTH} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item
               name="descriptionEn"
               label={t('questionBanks.bankForm.fields.descriptionEn')}

@@ -161,7 +161,7 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
         </Col>
       </Row>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item
             name="titleAr"
             label={t('exams.fields.titleAr')}
@@ -170,19 +170,19 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
             <Input maxLength={EXAM_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item name="titleEn" label={t('exams.fields.titleEn')} dependencies={['titleAr']} rules={[maxLength(EXAM_TITLE_MAX_LENGTH), arabicFirst('titleAr')]}>
             <Input dir="ltr" maxLength={EXAM_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
       </Row>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item name="descriptionAr" label={t('exams.fields.descriptionAr')} rules={[maxLength(EXAM_DESCRIPTION_MAX_LENGTH)]}>
             <Input.TextArea rows={3} maxLength={EXAM_DESCRIPTION_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item
             name="descriptionEn"
             label={t('exams.fields.descriptionEn')}

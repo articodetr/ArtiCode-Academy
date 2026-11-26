@@ -112,7 +112,7 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
         </Form.Item>
       ) : null}
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item
             name="titleAr"
             label={t('lessons.fields.titleAr')}
@@ -121,7 +121,7 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
             <Input maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item name="titleEn" label={t('lessons.fields.titleEn')} dependencies={['titleAr']} rules={[maxLength, arabicFirst('titleAr')]}>
             <Input dir="ltr" maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
@@ -214,12 +214,12 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
         <Input dir="ltr" placeholder="https://meet.example.com/…" />
       </Form.Item>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item name="descriptionAr" label={t('lessons.fields.descriptionAr')} rules={[maxLength]}>
             <Input.TextArea rows={2} maxLength={LESSON_TEXT_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item
             name="descriptionEn"
             label={t('lessons.fields.descriptionEn')}

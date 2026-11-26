@@ -130,7 +130,7 @@ function AcademyForm({ academy, canManage, onSaved }: AcademyFormProps) {
       <Form.Item name="nameAr" label={t('settings.academyNameAr')} rules={[{ required: true, whitespace: true, message: t('settings.validation.nameArRequired') }, { max: 200 }]}>
         <Input />
       </Form.Item>
-      <Form.Item name="nameEn" label={t('settings.academyNameEn')} rules={[{ max: 200 }]}>
+      <Form.Item hidden name="nameEn" label={t('settings.academyNameEn')} rules={[{ max: 200 }]}>
         <Input dir="ltr" />
       </Form.Item>
       <Form.Item name="nameTr" label={t('settings.academyNameTr')} rules={[{ max: 200 }]}>

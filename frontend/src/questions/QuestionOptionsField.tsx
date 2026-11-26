@@ -199,7 +199,7 @@ function OptionRowFields({ form, index, claimFocus }: OptionRowFieldsProps) {
 
   return (
     <Row gutter={12}>
-      <Col xs={24} md={14}>
+      <Col xs={24}>
         <Form.Item
           name={[index, 'textAr']}
           label={t('questionBanks.editor.fields.optionAr')}
@@ -219,7 +219,7 @@ function OptionRowFields({ form, index, claimFocus }: OptionRowFieldsProps) {
           <Input maxLength={OPTION_TEXT_MAX_LENGTH} />
         </Form.Item>
       </Col>
-      <Col xs={24} md={10}>
+      <Col span={0}>
         <Form.Item name={[index, 'textEn']} label={t('questionBanks.editor.fields.optionEn')} rules={[maxLength]}>
           <Input dir="ltr" maxLength={OPTION_TEXT_MAX_LENGTH} />
         </Form.Item>

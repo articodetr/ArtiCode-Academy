@@ -48,7 +48,7 @@ export const curriculum = {
     fields: {
       titleAr: 'عنوان المستوى (عربي، اختياري)',
       titleEn: 'عنوان المستوى (إنجليزي)',
-      descriptionAr: 'وصف المستوى (عربي)',
+      descriptionAr: 'وصف المستوى',
       descriptionEn: 'وصف المستوى (إنجليزي)',
     },
     add: 'إضافة مستوى',
@@ -82,9 +82,9 @@ export const curriculum = {
   lesson: {
     number: 'الدرس {{number}}',
     fields: {
-      titleAr: 'عنوان الدرس (عربي)',
+      titleAr: 'عنوان الدرس',
       titleEn: 'عنوان الدرس (إنجليزي)',
-      descriptionAr: 'وصف الدرس (عربي)',
+      descriptionAr: 'وصف الدرس',
       descriptionEn: 'وصف الدرس (إنجليزي)',
       estimatedMinutes: 'المدة التقديرية (دقائق)',
       required: 'مطلوب',
@@ -168,7 +168,7 @@ export const curriculum = {
       vimeo: 'Vimeo',
     },
     plainText: 'نص عادي، دون تنسيق HTML؛ يُفصل بين الفقرات بسطر فارغ.',
-    bodyAr: 'النص (عربي)',
+    bodyAr: 'النص',
     bodyEn: 'النص (إنجليزي)',
     url: 'الرابط',
     urlHints: {
@@ -197,7 +197,7 @@ export const curriculum = {
       en: 'الإنجليزية',
       tr: 'التركية',
     },
-    altAr: 'النص البديل للصورة (عربي)',
+    altAr: 'النص البديل للصورة',
     altEn: 'النص البديل (إنجليزي)',
     altHint: 'يصف الصورة لمن لا يراها.',
     fileName: 'اسم الملف (اختياري)',
@@ -205,7 +205,7 @@ export const curriculum = {
     noteEn: 'ملاحظة الحصة (إنجليزي)',
     resources: 'المرفقات',
     resourcesHint: 'روابط للتحميل أو القراءة، حتى {{max}} رابطاً.',
-    resourceTitleAr: 'عنوان المرفق (عربي)',
+    resourceTitleAr: 'عنوان المرفق',
     resourceTitleEn: 'عنوان المرفق (إنجليزي)',
     resourceUrl: 'رابط المرفق',
     addResource: 'إضافة مرفق',

@@ -110,7 +110,7 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
           <Input dir="ltr" maxLength={LEVEL_CODE_MAX_LENGTH} placeholder="BEG" style={{ maxWidth: 200 }} />
         </Form.Item>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item
               name="nameAr"
               label={t('courses.levels.fields.nameAr')}
@@ -119,19 +119,19 @@ export function LevelModal({ open, level, onClose, onSaved }: LevelModalProps) {
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('courses.levels.fields.nameEn')} rules={[maxLength]}>
               <Input dir="ltr" />
             </Form.Item>
           </Col>
         </Row>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item name="descriptionAr" label={t('courses.levels.fields.descriptionAr')} rules={[maxLength]}>
               <Input.TextArea rows={2} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item
               name="descriptionEn"
               label={t('courses.levels.fields.descriptionEn')}

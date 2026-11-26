@@ -137,12 +137,12 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
           </Col>
         </Row>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item name="nameAr" label={t('rooms.fields.nameAr')} rules={[{ max: ROOM_TEXT_MAX_LENGTH }]}>
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('rooms.fields.nameEn')} dependencies={['nameAr']} rules={[{ max: ROOM_TEXT_MAX_LENGTH }, arabicFirst]}>
               <Input dir="ltr" />
             </Form.Item>

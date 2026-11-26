@@ -297,7 +297,7 @@ export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: Qu
         >
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} maxLength={QUESTION_TEXT_MAX_LENGTH} />
         </Form.Item>
-        <Form.Item name="promptEn" label={t('questionBanks.editor.fields.promptEn')} dependencies={['promptAr']} rules={[maxLength(QUESTION_TEXT_MAX_LENGTH), arabicFirst('promptAr')]}>
+        <Form.Item hidden name="promptEn" label={t('questionBanks.editor.fields.promptEn')} dependencies={['promptAr']} rules={[maxLength(QUESTION_TEXT_MAX_LENGTH), arabicFirst('promptAr')]}>
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} dir="ltr" maxLength={QUESTION_TEXT_MAX_LENGTH} />
         </Form.Item>
 
@@ -374,7 +374,7 @@ export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: Qu
         <Form.Item name="explanationAr" label={t('questionBanks.editor.fields.explanationAr')} extra={t('questionBanks.editor.hints.explanation')} rules={[maxLength(QUESTION_TEXT_MAX_LENGTH)]}>
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} maxLength={QUESTION_TEXT_MAX_LENGTH} />
         </Form.Item>
-        <Form.Item
+        <Form.Item hidden
           name="explanationEn"
           label={t('questionBanks.editor.fields.explanationEn')}
           dependencies={['explanationAr']}

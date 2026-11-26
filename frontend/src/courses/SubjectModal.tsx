@@ -100,7 +100,7 @@ export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalPr
           <Input dir="ltr" maxLength={SUBJECT_CODE_MAX_LENGTH} placeholder="MATH" style={{ maxWidth: 200 }} />
         </Form.Item>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item
               name="nameAr"
               label={t('courses.subjects.fields.nameAr')}
@@ -109,7 +109,7 @@ export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalPr
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('courses.subjects.fields.nameEn')} rules={[maxLength]}>
               <Input dir="ltr" />
             </Form.Item>

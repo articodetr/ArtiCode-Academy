@@ -85,7 +85,7 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
         <AssignmentLessonSelect lessons={lessons} hasClass={hasClass} canRead={canReadLessons} current={current?.lesson} currentZone={current?.timeZone} />
       </Form.Item>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item
             name="titleAr"
             label={t('assignments.fields.titleAr')}
@@ -94,19 +94,19 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
             <Input maxLength={ASSIGNMENT_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item name="titleEn" label={t('assignments.fields.titleEn')} dependencies={['titleAr']} rules={[maxLength(ASSIGNMENT_TITLE_MAX_LENGTH), arabicFirst('titleAr')]}>
             <Input dir="ltr" maxLength={ASSIGNMENT_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
       </Row>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item name="instructionsAr" label={t('assignments.fields.instructionsAr')} rules={[maxLength(ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH)]}>
             <Input.TextArea rows={3} maxLength={ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item
             name="instructionsEn"
             label={t('assignments.fields.instructionsEn')}

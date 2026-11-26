@@ -39,7 +39,7 @@ export const classes = {
   fields: {
     course: 'الدورة',
     code: 'رمز الفصل',
-    nameAr: 'الاسم (عربي)',
+    nameAr: 'الاسم',
     nameEn: 'الاسم (إنجليزي)',
     capacity: 'السعة (مقعد)',
     seats: 'المقاعد المشغولة',
