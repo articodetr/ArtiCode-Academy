@@ -75,7 +75,8 @@ interface PermissionGatedItem extends NavItemBase {
    * `exams.read` — J-F45) by seed but are assigned to no class, so API-102 (and
    * API-113) answer them an empty list (D-R16, D-R40, D-R48) — their own work
    * comes through ownership instead. A viewer holding any other role key (a
-   * teacher who is also a guardian) keeps the entry.
+   * teacher who is also a guardian) keeps the entry. The users page excepts
+   * teachers too (J-F70).
    */
   exceptRoleKeysOnly?: readonly string[]
   roles?: undefined
@@ -104,7 +105,10 @@ const KNOWN_ROLES: readonly Role[] = ROLES
 export const NAV_ITEMS: readonly NavItem[] = [
   // The landing page of every signed-in user (and the exit of the 403 page).
   { key: 'dashboard', path: '/', labelKey: 'nav.dashboard', icon: createElement(DashboardOutlined), roles: 'everyone', module: 'MOD-FE-01' },
-  { key: 'users', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], module: 'MOD-03' },
+  // J-F70 (Jallal's request, 2026-11-26): the users page is the office's — a teacher holds `users.read` by seed (the reduced
+  // projection, which other screens read) but has no use for the page, so a viewer whose role keys are only teacher and/or
+  // learner keys gets no entry, no route (403), no search group and no «add» card; any other role key keeps it.
+  { key: 'users', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], exceptRoleKeysOnly: ['teacher', 'student', 'guardian'], module: 'MOD-03' },
   { key: 'roles', path: '/settings/roles', labelKey: 'nav.roles', icon: createElement(SafetyOutlined), permissions: ['roles.manage'], module: 'MOD-03' },
   // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too.
   { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-04' },
