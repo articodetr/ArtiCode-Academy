@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { useLocation } from 'react-router'
 import type { CourseList } from '../api/courses'
+import type { FeePlan } from '../api/feePlans'
 import { ar } from '../i18n/ar'
 import { COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, makeCourseList, makeLevelList } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
+import { makeFeePlan } from '../test/payments'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { SUBJECT_IDS, THREE_SUBJECTS } from '../test/subjects'
 import { CoursesPage } from './CoursesPage'
@@ -13,8 +15,12 @@ import { CoursesPage } from './CoursesPage'
 const python = makeCourse({ status: 'published' })
 const web = makeCourse({ id: '0193a000-0000-7000-8000-00000000c002', code: 'WEB-201', name: { ar: 'تطوير الويب' }, level: null, status: 'draft' })
 
-/** Serves the list (recording its queries), the levels, the detail and POST /api/courses. */
-function mockCoursesApi(list: CourseList | Response, created: Response = jsonResponse(201, makeCourse({ id: 'new-1', code: 'NEW-1', name: { ar: 'دورة جديدة' } }))) {
+/** Serves the list (recording its queries), the levels, the fee plans, the detail and POST /api/courses. */
+function mockCoursesApi(
+  list: CourseList | Response,
+  created: Response = jsonResponse(201, makeCourse({ id: 'new-1', code: 'CRS-00001', name: { ar: 'دورة جديدة' } })),
+  feePlans: FeePlan[] = [],
+) {
   const queries: URLSearchParams[] = []
   const posts: unknown[] = []
   const fetchMock = mockFetch((url, init) => {
@@ -22,6 +28,7 @@ function mockCoursesApi(list: CourseList | Response, created: Response = jsonRes
     const method = init?.method ?? 'GET'
     if (parsed.pathname === '/api/levels') return jsonResponse(200, makeLevelList())
     if (parsed.pathname === '/api/subjects') return jsonResponse(200, { items: THREE_SUBJECTS() })
+    if (parsed.pathname === '/api/fee-plans') return jsonResponse(200, { items: feePlans })
     if (parsed.pathname === '/api/courses' && method === 'GET') {
       queries.push(parsed.searchParams)
       return list instanceof Response ? list : jsonResponse(200, list)
@@ -100,51 +107,74 @@ describe('CoursesPage', () => {
     expect(api.queries.at(-1)?.get('status')).toBe('draft')
   })
 
-  it('creates a draft through the modal: POST with the normalised body, then the list reloads and the success message shows', async () => {
+  it('creates a draft through the simplified modal: POST without a code, English, level, hours or sessions, then the list reloads and the success message shows', async () => {
     const api = mockCoursesApi(makeCourseList([python]))
     renderPage(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
 
     fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
     const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.code), 'new-1')
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.nameAr), 'دورة جديدة')
+    for (const removed of [ar.courses.fields.code, ar.courses.fields.nameEn, ar.courses.fields.level, ar.courses.fields.durationHours, ar.courses.fields.sessionsCount]) {
+      expect(within(dialog).queryByLabelText(removed)).not.toBeInTheDocument()
+    }
+    // Without fee_plans.manage the course type is not asked: the course is created free.
+    expect(within(dialog).queryByText(ar.courses.fields.pricing)).not.toBeInTheDocument()
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), ' دورة جديدة ')
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.summary), 'ملخص قصير')
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.description), 'وصف الدورة كاملاً')
     const before = api.queries.length
     fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
 
-    await waitFor(() => expect(api.posts).toEqual([{ code: 'NEW-1', name: { ar: 'دورة جديدة' } }]))
+    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة جديدة' }, summary: { ar: 'ملخص قصير' }, description: { ar: 'وصف الدورة كاملاً' } }]))
     expect(await screen.findByText('تم إنشاء الدورة «دورة جديدة» كمسودة')).toBeInTheDocument()
     await waitFor(() => expect(api.queries.length).toBeGreaterThan(before))
   })
 
-  it('shows a taken code on the code field and keeps the modal open', async () => {
-    mockCoursesApi(makeCourseList([python]), jsonResponse(409, { statusCode: 409, code: 'course_code_taken', courseCode: 'PY-101', message: 'taken' }))
+  it('shows a refusal that names a field the form no longer has (a taken code) above the form, and keeps the modal open', async () => {
+    const api = mockCoursesApi(makeCourseList([python]), jsonResponse(409, { statusCode: 409, code: 'course_code_taken', courseCode: 'CRS-00001', message: 'taken' }))
     renderPage(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
 
     fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
     const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.code), 'py-101')
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.nameAr), 'مكرر')
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'مكرر')
     fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
 
-    expect(await within(dialog).findByText(ar.courses.errors.course_code_taken)).toBeInTheDocument()
+    const shown = await within(dialog).findByText(ar.courses.errors.course_code_taken)
+    expect(shown.closest('.ant-alert')).toBeInTheDocument()
+    expect(api.posts).toEqual([{ name: { ar: 'مكرر' } }])
   })
 
-  it('refuses locally a code with a space and an English summary without Arabic, before any request', async () => {
+  it('shows an inactive subject on the subject field', async () => {
+    mockCoursesApi(makeCourseList([python]), jsonResponse(422, { statusCode: 422, code: 'subject_inactive', subjectId: SUBJECT_IDS[1], message: 'off' }))
+    renderPage(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101')
+
+    fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
+    const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة')
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.subject }))
+    fireEvent.click(await screen.findByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
+
+    const shown = await within(dialog).findByText(ar.courses.errors.subject_inactive)
+    expect(shown.closest('.ant-form-item')).toHaveTextContent(ar.courses.fields.subject)
+  })
+
+  it('refuses locally an empty name, a too long summary and a bad cover link, each under its field, before any request', async () => {
     const api = mockCoursesApi(makeCourseList([]))
     renderPage(COURSE_MANAGER_PERMISSIONS)
     await waitFor(() => expect(api.queries).toHaveLength(1))
 
     fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
     const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.code), 'PY 101')
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.nameAr), 'بايثون')
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.summaryEn), 'English only')
+    fireEvent.change(within(dialog).getByLabelText(ar.courses.fields.summary), { target: { value: 'م'.repeat(201) } })
+    fireEvent.change(within(dialog).getByLabelText(ar.courses.fields.coverImageUrl), { target: { value: 'cdn.example.org/a.jpg' } })
     fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
 
-    expect(await within(dialog).findByText(ar.courses.validation.codeFormat)).toBeInTheDocument()
-    expect(await within(dialog).findByText(ar.courses.validation.arabicFirst)).toBeInTheDocument()
+    expect((await within(dialog).findByText(ar.courses.validation.nameRequired)).closest('.ant-form-item')).toHaveTextContent(ar.courses.fields.name)
+    expect((await within(dialog).findByText('الحد الأقصى 200 حرفاً')).closest('.ant-form-item')).toHaveTextContent(ar.courses.fields.summary)
+    expect((await within(dialog).findByText(ar.courses.validation.coverUrl)).closest('.ant-form-item')).toHaveTextContent(ar.courses.fields.coverImageUrl)
     expect(api.posts).toEqual([])
   })
 
@@ -157,16 +187,62 @@ describe('CoursesPage', () => {
     const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
     expect(within(dialog).queryByText('أصغر عمر')).not.toBeInTheDocument()
     expect(within(dialog).queryByText('أكبر عمر')).not.toBeInTheDocument()
-    expect(within(dialog).getByLabelText(ar.courses.fields.sessionsCount)).toBeInTheDocument()
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.code), 'new-1')
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.nameAr), 'دورة جديدة')
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة جديدة')
     fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.subject }))
     // A manager reads the inactive subjects too: they are marked, not hidden.
     expect(await screen.findByText(/الفنون/, { selector: '.ant-select-item-option-content' })).toHaveTextContent(ar.labels.inactive)
     fireEvent.click(screen.getByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
     fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
 
-    await waitFor(() => expect(api.posts).toEqual([{ code: 'NEW-1', name: { ar: 'دورة جديدة' }, subjectId: SUBJECT_IDS[1] }]))
+    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة جديدة' }, subjectId: SUBJECT_IDS[1] }]))
+  })
+
+  it('creates a paid course with a general fee plan as its price; only the general active plans are offered (fee_plans.manage)', async () => {
+    const general = makeFeePlan({ id: 'plan-general', name: { ar: 'رسوم عامة' }, total: 750 })
+    const ofCourse = makeFeePlan({ id: 'plan-course', name: { ar: 'رسوم دورة أخرى' }, course: { id: 'other', code: 'X', name: { ar: 'أخرى' } } })
+    const ofClass = makeFeePlan({ id: 'plan-class', name: { ar: 'رسوم فصل' }, class: { id: 'cls', code: 'X-A', name: { ar: 'فصل' } } })
+    const off = makeFeePlan({ id: 'plan-off', name: { ar: 'رسوم معطلة' }, isActive: false })
+    const api = mockCoursesApi(makeCourseList([python]), undefined, [general, ofCourse, ofClass, off])
+    renderPage([...COURSE_MANAGER_PERMISSIONS, 'fee_plans.manage'])
+    await screen.findByText('PY-101')
+
+    fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
+    const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة مدفوعة')
+    // Free by default: no price field until «مدفوعة» is chosen.
+    expect(within(dialog).queryByLabelText(ar.courses.fields.price)).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByText(ar.courses.pricing.paid))
+
+    // Paid without a plan: the error under the price field, nothing sent.
+    fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
+    expect((await within(dialog).findByText(ar.courses.validation.feePlanRequired)).closest('.ant-form-item')).toHaveTextContent(ar.courses.fields.price)
+    expect(api.posts).toEqual([])
+
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.price }))
+    await waitFor(() => expect(document.querySelectorAll('.ant-select-item-option')).toHaveLength(1))
+    // The option names the plan and its total.
+    fireEvent.click(screen.getByText(/رسوم عامة — 750\.00/, { selector: '.ant-select-item-option-content' }))
+    fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
+
+    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة مدفوعة' }, enrollmentFeePlanId: 'plan-general' }]))
+  })
+
+  it('creates a free course with no plan when the type stays «مجانية», and explains where a price comes from when no general plan exists', async () => {
+    const ofClass = makeFeePlan({ id: 'plan-class', name: { ar: 'رسوم فصل' }, class: { id: 'cls', code: 'X-A', name: { ar: 'فصل' } } })
+    const api = mockCoursesApi(makeCourseList([python]), undefined, [ofClass])
+    renderPage([...COURSE_MANAGER_PERMISSIONS, 'fee_plans.manage'])
+    await screen.findByText('PY-101')
+
+    fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
+    const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
+    fireEvent.click(within(dialog).getByText(ar.courses.pricing.paid))
+    const warning = await within(dialog).findByTestId('course-no-fee-plans')
+    expect(warning).toHaveTextContent(ar.courses.hints.noFeePlansCreate)
+
+    fireEvent.click(within(dialog).getByText(ar.courses.pricing.free))
+    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة مجانية')
+    fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
+    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة مجانية' } }]))
   })
 
   it('gives a manager the subjects tab beside the levels tab; a reader neither the tab nor a read of the subjects (PORTAL-04)', async () => {

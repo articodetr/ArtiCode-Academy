@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { useLocation } from 'react-router'
+import type { IssuedLink } from '../api/account'
 import type { RoleList } from '../api/roles'
 import type { UserDetail, UserList } from '../api/users'
 import { ar } from '../i18n/ar'
@@ -15,6 +16,13 @@ const omar = makeListItem({ id: '0192f0a0-0000-7000-8000-000000000002', fullName
 /** Holds the custom role `librarian` of the fixture roles (API-022) besides a system role. */
 const layla = makeListItem({ id: '0192f0a0-0000-7000-8000-000000000004', fullName: 'ليلى حسن', email: 'layla@test.local', username: 'layla', roles: ['librarian', 'teacher'] })
 
+/** The account the one-step form creates, and its one-time invitation (API-015). */
+const CREATED_ID = '0192f0a0-0000-7000-8000-0000000000aa'
+const TOKEN = 'tok_'.padEnd(43, 'q')
+function issuedFor(userId: string): IssuedLink {
+  return { userId, token: TOKEN, link: `/invite/${TOKEN}`, expiresAt: '2026-11-28T10:00:00.000Z', delivery: { transport: 'none', status: 'skipped' } }
+}
+
 /** The labels of the five system roles as the role filter lists them, in menu order. */
 const SYSTEM_ROLE_OPTIONS = [ar.roles.admin, ar.roles.staff, ar.roles.teacher, ar.roles.guardian, ar.roles.student]
 
@@ -27,12 +35,16 @@ function mockUsersApi(
   pages: Record<string, UserList | Response>,
   detail: UserDetail = makeUserDetail(),
   roles: RoleList | Response | ((attempt: number) => RoleList | Response) = makeRoleList(),
+  /** Answers the writes (POST …) it knows; anything it leaves undefined falls through to the 404 below. */
+  writes?: (url: string, init: RequestInit | undefined) => Response | undefined,
 ) {
   const queries: URLSearchParams[] = []
   const rolesRequests: string[] = []
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
+    const written = method !== 'GET' ? writes?.(url, init) : undefined
+    if (written) return written
     if (parsed.pathname === '/api/roles' && method === 'GET') {
       rolesRequests.push(url)
       const answer = typeof roles === 'function' ? roles(rolesRequests.length) : roles
@@ -97,7 +109,12 @@ describe('UsersPage', () => {
     expect(within(rows[1]).getByText(ar.roles.student)).toBeInTheDocument()
 
     expect(Object.fromEntries(api.queries[0])).toEqual({ sort: 'createdAt', limit: '20' })
-    expect(screen.getByRole('button', { name: new RegExp(ar.users.addUser) })).toBeInTheDocument()
+    // «إضافة طالب» first and primary, «إضافة مدرس», then the less prominent «حساب آخر».
+    const header = screen.getByRole('heading', { name: ar.users.title }).parentElement!.parentElement!
+    const buttons = Array.from(header.querySelectorAll('button'), (button) => button.textContent?.trim())
+    expect(buttons).toEqual([ar.users.addStudent, ar.users.addTeacher, ar.users.addOther])
+    expect(screen.getByText(ar.users.addStudent).closest('button')).toHaveClass('ant-btn-primary')
+    expect(screen.getByText(ar.users.addOther).closest('button')).not.toHaveClass('ant-btn-primary')
     expect(screen.getByRole('checkbox', { name: ar.users.includeDeleted })).toBeInTheDocument()
   })
 
@@ -137,7 +154,7 @@ describe('UsersPage', () => {
     expect(await screen.findByText(sara.fullName)).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: ar.users.columns.contact })).not.toBeInTheDocument()
     expect(screen.queryByText('sara@test.local')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: new RegExp(ar.users.addUser) })).not.toBeInTheDocument()
+    for (const add of [ar.users.addStudent, ar.users.addTeacher, ar.users.addOther]) expect(screen.queryByText(add)).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: ar.users.includeDeleted })).not.toBeInTheDocument()
     expect(screen.getByText(ar.users.reducedHint)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(ar.users.searchByName)).toBeInTheDocument()
@@ -223,16 +240,92 @@ describe('UsersPage', () => {
     expect(api.fetchMock.mock.calls.some(([url]) => String(url) === `/api/users/${sara.id}`)).toBe(true)
   })
 
-  it('opens the creation wizard from the add button', async () => {
+  it('opens the full wizard from «حساب آخر», offering staff and guardian only (staff first)', async () => {
     mockUsersApi({ first: makeUserList([]) })
     renderPage()
     await screen.findByText(ar.users.empty)
 
-    await userEvent.click(screen.getByRole('button', { name: new RegExp(ar.users.addUser) }))
+    await userEvent.click(screen.getByText(ar.users.addOther).closest('button')!)
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(ar.users.create.title)).toBeInTheDocument()
-    expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.teacher}`) })).toBeInTheDocument()
+    expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.staff}`) })).toBeChecked()
+    expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.guardian}`) })).not.toBeChecked()
+    expect(within(dialog).getAllByRole('radio')).toHaveLength(2)
+  })
+
+  it('opens the one-step form from «إضافة طالب» and «إضافة مدرس»', async () => {
+    mockUsersApi({ first: makeUserList([]) })
+    renderPage()
+    await screen.findByText(ar.users.empty)
+
+    await userEvent.click(screen.getByText(ar.users.addTeacher).closest('button')!)
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(ar.users.quick.title.teacher, { selector: '.ant-modal-title' })).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(ar.users.quick.fields.phone)).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
+  })
+
+  it('creates a student in one step, shows the invitation link once, then opens the new account and the newest list', async () => {
+    const created = makeUserDetail({ id: CREATED_ID, fullName: 'عمر خالد', email: 'omar@test.local', username: null, status: 'invited', guardians: [] })
+    const posts: { url: string; body: unknown }[] = []
+    const api = mockUsersApi({ first: makeUserList([]) }, created, undefined, (url, init) => {
+      posts.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      if (url === '/api/users') return jsonResponse(201, created)
+      if (url === `/api/users/${CREATED_ID}/invitations`) return jsonResponse(201, issuedFor(CREATED_ID))
+      return undefined
+    })
+    renderPage()
+    await screen.findByText(ar.users.empty)
+    const listRequests = api.queries.length
+
+    await userEvent.click(screen.getByText(ar.users.addStudent).closest('button')!)
+    const form = await screen.findByRole('dialog')
+    await userEvent.type(within(form).getByLabelText(ar.users.fields.fullName), 'عمر خالد')
+    await userEvent.type(within(form).getByLabelText(ar.users.fields.email), 'omar@test.local')
+    await userEvent.click(within(form).getByText(ar.users.quick.submit.student, { selector: 'button span' }).closest('button')!)
+
+    expect(await screen.findByText('تمت إضافة الطالب عمر خالد')).toBeInTheDocument()
+    expect(posts).toEqual([
+      { url: '/api/users', body: { kind: 'student', fullName: 'عمر خالد', email: 'omar@test.local' } },
+      { url: `/api/users/${CREATED_ID}/invitations`, body: undefined },
+    ])
+    const link = await screen.findByLabelText(ar.account.issued.link)
+    expect(link).toHaveValue(`${window.location.origin}/invite/${TOKEN}`)
+    await waitFor(() => expect(api.queries.length).toBeGreaterThan(listRequests))
+    // The drawer waits until the link has been seen.
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url) === `/api/users/${CREATED_ID}`)).toBe(false)
+
+    fireEvent.click(within(link.closest('[role="dialog"]') as HTMLElement).getByText(ar.account.issued.close).closest('button')!)
+
+    await waitFor(() => expect(api.fetchMock.mock.calls.some(([url]) => String(url) === `/api/users/${CREATED_ID}`)).toBe(true))
+    expect(await screen.findByText(ar.users.detail.title)).toBeInTheDocument()
+  })
+
+  it('reports the account and a warning when the invitation fails, and opens the new account at once', async () => {
+    const created = makeUserDetail({ id: CREATED_ID, fullName: 'سارة أحمد', email: 'sara@test.local', username: null, phone: '+966500000002', status: 'invited', studentProfile: null, guardians: [] })
+    const api = mockUsersApi({ first: makeUserList([]) }, created, undefined, (url) => {
+      if (url === '/api/users') return jsonResponse(201, created)
+      if (url === `/api/users/${CREATED_ID}/invitations`) return jsonResponse(429, { statusCode: 429, code: 'rate_limited', message: 'Too many requests' })
+      return undefined
+    })
+    renderPage()
+    await screen.findByText(ar.users.empty)
+
+    await userEvent.click(screen.getByText(ar.users.addTeacher).closest('button')!)
+    const form = await screen.findByRole('dialog')
+    await userEvent.type(within(form).getByLabelText(ar.users.fields.fullName), 'سارة أحمد')
+    await userEvent.type(within(form).getByLabelText(ar.users.fields.email), 'sara@test.local')
+    await userEvent.type(within(form).getByLabelText(ar.users.quick.fields.phone), '+966500000002')
+    await userEvent.click(within(form).getByText(ar.users.quick.submit.teacher, { selector: 'button span' }).closest('button')!)
+
+    expect(await screen.findByText('تمت إضافة المدرس سارة أحمد')).toBeInTheDocument()
+    expect(
+      await screen.findByText(ar.users.quick.invitationFailed.replace('{{reason}}', ar.users.errors.rate_limited)),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText(ar.account.issued.link)).not.toBeInTheDocument()
+    await waitFor(() => expect(api.fetchMock.mock.calls.some(([url]) => String(url) === `/api/users/${CREATED_ID}`)).toBe(true))
+    expect(await screen.findByText(ar.users.detail.title)).toBeInTheDocument()
   })
 
   it('shows a custom role by its server label in the list and offers it in the role filter, from one GET /api/roles (J-F12)', async () => {
@@ -309,19 +402,42 @@ describe('UsersPage', () => {
     expect(await screen.findByText(ROLE_LABELS.librarian.ar, { selector: '.ant-select-dropdown .ant-select-item-option-content' })).toBeInTheDocument()
   })
 
-  it('opens the wizard on the teacher kind from ?create=teacher (the dashboard’s quick action) and drops the parameter (J-F59)', async () => {
+  it('opens the one-step form from ?create=student and ?create=teacher (the dashboard’s quick actions) and drops the parameter (J-F59)', async () => {
     mockUsersApi({ first: makeUserList([]) })
+    const auth = makeAuth({ user: makeUser({ permissions: ADMIN_PERMISSIONS }) })
+    const { unmount } = renderWithProviders(
+      <>
+        <UsersPage />
+        <SearchProbe />
+      </>,
+      { auth, route: '/users?create=student' },
+    )
+    let dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(ar.users.quick.title.student, { selector: '.ant-modal-title' })).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(new RegExp(ar.users.quick.fields.backupPhone))).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    unmount()
+
     renderWithProviders(
       <>
         <UsersPage />
         <SearchProbe />
       </>,
-      { auth: makeAuth({ user: makeUser({ permissions: ADMIN_PERMISSIONS }) }), route: '/users?create=teacher' },
+      { auth, route: '/users?create=teacher' },
     )
+    dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(ar.users.quick.title.teacher, { selector: '.ant-modal-title' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+  })
+
+  it('opens the wizard on the guardian kind from ?create=guardian', async () => {
+    mockUsersApi({ first: makeUserList([]) })
+    renderWithProviders(<UsersPage />, { auth: makeAuth({ user: makeUser({ permissions: ADMIN_PERMISSIONS }) }), route: '/users?create=guardian' })
 
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.teacher}`) })).toBeChecked()
-    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''))
+    expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.guardian}`) })).toBeChecked()
+    expect(within(dialog).getAllByRole('radio')).toHaveLength(2)
   })
 
   it('opens no wizard from ?create= without users.create or for an unknown kind, and drops the parameter either way (J-F59)', async () => {

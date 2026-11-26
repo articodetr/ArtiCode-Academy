@@ -4,7 +4,6 @@
 // own «add» button (no «add» card for a read-only viewer). Every destination is an existing route; the creation links
 // (`?create=`) open the existing creation forms (common/useCreateFromLink.ts). The server stays the boundary.
 import {
-  AppstoreTwoTone,
   BookTwoTone,
   CalendarTwoTone,
   CarryOutTwoTone,
@@ -26,7 +25,6 @@ export const QUICK_ACTION_KEYS = [
   'addStudent',
   'addTeacher',
   'createCourse',
-  'classes',
   'assignTeacher',
   'lessons',
   'schedule',
@@ -60,9 +58,10 @@ const RULES: readonly QuickActionRule[] = [
   { key: 'addTeacher', to: createLink('/users', 'teacher'), icon: ContactsTwoTone, allowed: (viewer, has) => canAccess(viewer, 'users') && has('users.create') },
   // /courses needs courses.read; creating needs courses.manage (API-044).
   { key: 'createCourse', to: createLink('/courses', CREATE_COURSE), icon: BookTwoTone, allowed: (viewer, has) => canAccess(viewer, 'courses') && has('courses.manage') },
-  { key: 'classes', to: '/classes', icon: AppstoreTwoTone, allowed: (viewer) => canAccess(viewer, 'classes') },
-  // A class's teachers are assigned from its drawer on /classes (API-056, classes.teachers.assign).
-  { key: 'assignTeacher', to: '/classes', icon: InteractionTwoTone, allowed: (viewer, has) => canAccess(viewer, 'classes') && has('classes.teachers.assign') },
+  // No «classes» card since 2026-11-26: classes are an internal mechanism, not a section of the interface. A course's
+  // teachers are assigned from its drawer on /courses (its teachers tab writes its classes' teachers — API-056, which
+  // needs classes.teachers.assign, and the classes are read with classes.read).
+  { key: 'assignTeacher', to: '/courses', icon: InteractionTwoTone, allowed: (viewer, has) => canAccess(viewer, 'courses') && has('classes.teachers.assign') && has('classes.read') },
   { key: 'lessons', to: '/lessons', icon: PlayCircleTwoTone, allowed: (viewer) => canAccess(viewer, 'lessons') },
   { key: 'schedule', to: '/schedule', icon: CalendarTwoTone, allowed: (viewer) => canAccess(viewer, 'schedule') },
   { key: 'enrollmentRequests', to: '/enrollment-requests', icon: ReconciliationTwoTone, allowed: (viewer) => canAccess(viewer, 'enrollmentRequests') },
@@ -78,5 +77,8 @@ export function quickActionsFor(viewer: NavViewer, has: HasPermission): QuickAct
   return RULES.filter((rule) => rule.allowed(viewer, has)).map(({ key, to, icon }) => ({ key, to, icon }))
 }
 
-/** How many actions a phone shows before «show more» (the rest stay one tap away). */
+/**
+ * How many actions a phone shows before «show more» (the rest stay one tap away): three full rows of two — a full admin
+ * has eleven, so «show more» opens five.
+ */
 export const PHONE_VISIBLE_ACTIONS = 6

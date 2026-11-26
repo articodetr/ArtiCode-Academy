@@ -1,6 +1,9 @@
 // Creation wizard (MOD-03-T11): kind → identity → profile and extra roles,
 // then POST /api/users (API-014). The account is created as `invited`; the
-// invitation link itself is issued from the user details (T12).
+// invitation link itself is issued from the user details (T12). Since the
+// one-step «إضافة طالب» / «إضافة مدرس» (QuickCreateUserModal) the users page
+// opens it for the other kinds only («حساب آخر»: staff and guardian — an admin
+// is one of them plus `academy_admin` in the extra roles), through `kinds`.
 import { Alert, Button, Flex, Form, Modal, Radio, Select, Space, Steps, Typography } from 'antd'
 import { useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -21,18 +24,20 @@ interface CreateUserWizardProps {
   /** Called with the created detail (full projection, status `invited`). */
   onCreated: (user: UserDetail) => void
   /**
-   * The kind chosen when the wizard opens (J-F59: `/users?create=teacher` from the dashboard's quick actions); the
-   * first step still shows it and lets the user change it. Default `student`.
+   * The kind chosen when the wizard opens (`/users?create=staff`); the first step still shows it and lets the user
+   * change it. Default — and for a kind outside `kinds` — the first of `kinds`.
    */
   initialKind?: UserKind
+  /** The kinds the first step offers, in order; default every kind of API-014. */
+  kinds?: readonly UserKind[]
 }
 
-export function CreateUserWizard({ open, onClose, onCreated, initialKind }: CreateUserWizardProps) {
+export function CreateUserWizard({ open, onClose, onCreated, initialKind, kinds }: CreateUserWizardProps) {
   const { t } = useTranslation()
   return (
     <Modal open={open} onCancel={onClose} title={t('users.create.title')} footer={null} width={640} mask={{ closable: false }} destroyOnHidden>
       {/* Mounted per opening (destroyOnHidden), so each opening starts from `initialKind`. */}
-      <WizardBody onClose={onClose} onCreated={onCreated} initialKind={initialKind} />
+      <WizardBody onClose={onClose} onCreated={onCreated} initialKind={initialKind} kinds={kinds} />
     </Modal>
   )
 }
@@ -48,13 +53,13 @@ const STEP_TITLES: Readonly<Record<StepKey, string>> = {
 /** Fields mounted on the identity step (validated before moving on). */
 const IDENTITY_FIELDS = ['fullName', 'fullNameLatin', 'displayName', 'email', 'username', 'phone', 'locale']
 
-function WizardBody({ onClose, onCreated, initialKind = 'student' }: Omit<CreateUserWizardProps, 'open'>) {
+function WizardBody({ onClose, onCreated, initialKind, kinds = USER_KINDS }: Omit<CreateUserWizardProps, 'open'>) {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const contact = hasPermission('users.read_contact')
   const canAssignRoles = hasPermission('users.roles.assign')
   const [form] = Form.useForm()
-  const [kind, setKind] = useState<UserKind>(initialKind)
+  const [kind, setKind] = useState<UserKind>(() => (initialKind && kinds.includes(initialKind) ? initialKind : (kinds[0] ?? 'student')))
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -118,7 +123,7 @@ function WizardBody({ onClose, onCreated, initialKind = 'student' }: Omit<Create
         {current === 'kind' ? (
           <Radio.Group value={kind} onChange={(event) => setKind(event.target.value as UserKind)} style={{ width: '100%' }}>
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              {USER_KINDS.map((option) => (
+              {kinds.map((option) => (
                 <Radio key={option} value={option}>
                   <Typography.Text strong>{t(`users.kinds.${option}`)}</Typography.Text>
                   <br />

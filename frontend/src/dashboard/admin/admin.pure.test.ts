@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { makeLesson } from '../../test/lessons'
 import { makeUser } from '../../test/render'
-import { QUICK_ACTION_KEYS, quickActionsFor } from './admin.actions'
+import { PHONE_VISIBLE_ACTIONS, QUICK_ACTION_KEYS, quickActionsFor } from './admin.actions'
 import { formatCount, formatDayHeading, formatRate } from './admin.format'
+import { ACTION_COLUMNS, STAT_COLUMNS, balancedColumns, columnsStyle } from './admin.layout'
 import { WEEK_LESSONS_SHOWN, byDay, lessonsToShow } from './admin.lessons'
 
-/** Every key the twelve actions need (the academy_admin seed holds them all). */
+/** Every key the eleven actions need (the academy_admin seed holds them all). */
 const FULL_ADMIN = [
   'users.read',
   'users.create',
@@ -29,15 +30,14 @@ function actionsOf(permissions: string[], roles: string[] = ['academy_admin']) {
 }
 
 describe('quickActionsFor — the admin home’s quick actions (J-F59)', () => {
-  it('gives a full admin the twelve actions in the spec’s order, each to an existing page', () => {
+  it('gives a full admin the eleven actions in the spec’s order, each to an existing page — none to /classes', () => {
     const actions = actionsOf(FULL_ADMIN)
     expect(actions.map((action) => action.key)).toEqual([...QUICK_ACTION_KEYS])
     expect(Object.fromEntries(actions.map((action) => [action.key, action.to]))).toEqual({
       addStudent: '/users?create=student',
       addTeacher: '/users?create=teacher',
       createCourse: '/courses?create=course',
-      classes: '/classes',
-      assignTeacher: '/classes',
+      assignTeacher: '/courses',
       lessons: '/lessons',
       schedule: '/schedule',
       enrollmentRequests: '/enrollment-requests',
@@ -46,11 +46,26 @@ describe('quickActionsFor — the admin home’s quick actions (J-F59)', () => {
       payments: '/payments',
       certificates: '/certificates',
     })
+    expect(actions).toHaveLength(11)
+    expect(QUICK_ACTION_KEYS).not.toContain('classes')
+    expect(actions.some((action) => action.to.startsWith('/classes'))).toBe(false)
+  })
+
+  it('opens «assign a teacher» on /courses (the course drawer’s teachers) — with courses.read, classes.teachers.assign and classes.read', () => {
+    const keys = (permissions: string[], roles?: string[]) => actionsOf(permissions, roles).map((action) => action.key)
+    expect(keys(['courses.read', 'classes.read', 'classes.teachers.assign'])).toEqual(['assignTeacher'])
+    expect(actionsOf(['courses.read', 'classes.read', 'classes.teachers.assign'])[0]!.to).toBe('/courses')
+    // Each of the three keys is needed: the page, the write of a class’s teachers, the read of the course’s classes.
+    expect(keys(['classes.read', 'classes.teachers.assign'])).toEqual([])
+    expect(keys(['courses.read', 'classes.teachers.assign'])).toEqual([])
+    expect(keys(['courses.read', 'classes.read'])).toEqual([])
+    // A learner-only viewer never gets the courses page (canAccess), whatever the keys.
+    expect(keys(['courses.read', 'classes.read', 'classes.teachers.assign'], ['student'])).toEqual([])
   })
 
   it('shows no «add» card to a viewer who may only read: no users.create, no courses.manage, no classes.teachers.assign', () => {
     const keys = actionsOf(['users.read', 'courses.read', 'classes.read', 'lessons.read']).map((action) => action.key)
-    expect(keys).toEqual(['classes', 'lessons'])
+    expect(keys).toEqual(['lessons'])
   })
 
   it('needs the page’s own read key too: users.create without users.read opens no /users card', () => {
@@ -60,6 +75,29 @@ describe('quickActionsFor — the admin home’s quick actions (J-F59)', () => {
   it('opens /payments only in its office view — a learner key (invoices.read_own) is no admin action', () => {
     expect(actionsOf(['invoices.read_own'], ['staff']).map((action) => action.key)).toEqual([])
     expect(actionsOf(['payments.record'], ['staff']).map((action) => action.key)).toEqual(['payments'])
+  })
+})
+
+describe('admin.layout — rows balanced so none ends on a gap (2026-11-26)', () => {
+  it('spreads the cards evenly over as few rows as the width allows', () => {
+    // Eleven actions (a full admin): 6 + 5, 4 + 4 + 3, 3 + 3 + 3 + 2, two per row.
+    expect(ACTION_COLUMNS.map((max) => balancedColumns(11, max))).toEqual([2, 3, 4, 6])
+    // Seven: 4 + 3 rather than 6 + 1; eight: 4 + 4 rather than 6 + 2.
+    expect(balancedColumns(7, 6)).toBe(4)
+    expect(balancedColumns(8, 6)).toBe(4)
+    // Fewer cards than a row holds share that one row.
+    expect(balancedColumns(3, 6)).toBe(3)
+    expect(balancedColumns(1, 2)).toBe(1)
+    // Five figures (every key): one row of 5, then 3 + 2, then two per row.
+    expect(STAT_COLUMNS.map((max) => balancedColumns(5, max))).toEqual([2, 3, 3, 5])
+  })
+
+  it('hands admin.css one custom property per column count', () => {
+    expect(columnsStyle('admin-stats-cols', 4, STAT_COLUMNS)).toEqual({ '--admin-stats-cols-2': '2', '--admin-stats-cols-3': '2', '--admin-stats-cols-4': '4', '--admin-stats-cols-5': '4' })
+  })
+
+  it('keeps three full rows of two on a phone before «show more»', () => {
+    expect(PHONE_VISIBLE_ACTIONS % balancedColumns(11, 2)).toBe(0)
   })
 })
 

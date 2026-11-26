@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Course } from '../api/courses'
 import { ar } from '../i18n/ar'
-import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, makeLevel } from '../test/courses'
+import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse } from '../test/courses'
 import { makeCurriculum } from '../test/curriculum'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeFeePlan } from '../test/payments'
@@ -33,7 +33,7 @@ function renderDrawer(permissions: string[]) {
   const onUpdated = vi.fn()
   const onDeleted = vi.fn()
   const onClose = vi.fn()
-  renderWithProviders(<CourseDrawer courseId={COURSE_ID} levels={[makeLevel()]} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={onUpdated} onDeleted={onDeleted} />, {
+  renderWithProviders(<CourseDrawer courseId={COURSE_ID} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={onUpdated} onDeleted={onDeleted} />, {
     auth: makeAuth({ user: makeUser({ permissions }) }),
     route: '/courses',
   })
@@ -63,19 +63,20 @@ describe('CourseDrawer', () => {
 
   it('edits with the smallest PATCH and hands the saved course back', async () => {
     let current = makeCourse()
-    const calls = mockCourseApi(() => current, { PATCH: jsonResponse(200, makeCourse({ name: { ar: 'أساسيات بايثون', en: 'Python 3' }, updatedAt: '2026-11-02T10:00:00.000Z' })) })
+    const calls = mockCourseApi(() => current, { PATCH: jsonResponse(200, makeCourse({ name: { ar: 'بايثون للمبتدئين', en: 'Python Basics' }, updatedAt: '2026-11-02T10:00:00.000Z' })) })
     const { onUpdated } = renderDrawer(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
 
     fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
-    const english = await screen.findByLabelText(ar.courses.fields.nameEn)
-    await userEvent.clear(english)
-    await userEvent.type(english, 'Python 3')
+    const name = await screen.findByLabelText(ar.courses.fields.name)
+    await userEvent.clear(name)
+    await userEvent.type(name, 'بايثون للمبتدئين')
     fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
 
     await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1))
+    // The stored English name travels back untouched (the form no longer shows it).
     expect(calls.filter((call) => call.method === 'PATCH')).toEqual([
-      { method: 'PATCH', url: `/api/courses/${COURSE_ID}`, body: { name: { ar: 'أساسيات بايثون', en: 'Python 3' } } },
+      { method: 'PATCH', url: `/api/courses/${COURSE_ID}`, body: { name: { ar: 'بايثون للمبتدئين', en: 'Python Basics' } } },
     ])
     current = onUpdated.mock.calls[0]![0] as Course
     expect(await screen.findByText(ar.courses.drawer.saved)).toBeInTheDocument()
@@ -143,13 +144,13 @@ describe('CourseDrawer', () => {
     await screen.findByText('PY-101')
 
     fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
-    const english = await screen.findByLabelText(ar.courses.fields.nameEn)
-    await userEvent.clear(english)
-    await userEvent.type(english, 'Unsaved draft')
+    const name = await screen.findByLabelText(ar.courses.fields.name)
+    await userEvent.clear(name)
+    await userEvent.type(name, 'مسودة غير محفوظة')
     fireEvent.click(screen.getByText(ar.common.cancel).closest('button')!)
 
     fireEvent.click((await screen.findByText(ar.common.edit)).closest('button')!)
-    expect(await screen.findByLabelText(ar.courses.fields.nameEn)).toHaveValue('Python Basics')
+    expect(await screen.findByLabelText(ar.courses.fields.name)).toHaveValue('أساسيات بايثون')
   })
 
   it('shows the curriculum tab (MOD-20): its levels and lessons, read-only for a teacher of the course (canManage false), read only once it opens', async () => {
@@ -174,7 +175,7 @@ describe('CourseDrawer', () => {
     renderDrawer(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
     fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
-    fireEvent.change(await screen.findByLabelText(ar.courses.fields.summaryAr), { target: { value: 'م'.repeat(201) } })
+    fireEvent.change(await screen.findByLabelText(ar.courses.fields.summary), { target: { value: 'م'.repeat(201) } })
     fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
 
     expect(await screen.findByText('الحد الأقصى 200 حرفاً')).toBeInTheDocument()
@@ -206,7 +207,8 @@ describe('CourseDrawer — the school subject, no age range (PORTAL-04)', () => 
     const picker = await screen.findByRole('combobox', { name: ar.courses.fields.subject })
     expect(screen.queryByText('أصغر عمر')).not.toBeInTheDocument()
     expect(screen.queryByText('أكبر عمر')).not.toBeInTheDocument()
-    expect(screen.getByLabelText(ar.courses.fields.sessionsCount)).toBeInTheDocument()
+    // The simplified form asks no sessions either.
+    expect(screen.queryByLabelText(ar.courses.fields.sessionsCount)).not.toBeInTheDocument()
     fireEvent.mouseDown(picker)
     fireEvent.click(await screen.findByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
     fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
@@ -275,7 +277,7 @@ describe('CourseDrawer — cover and price (MOD-19)', () => {
     expect(calls.filter((call) => call.method === 'PATCH')).toHaveLength(0)
 
     fireEvent.change(cover, { target: { value: '' } })
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.courses.fields.feePlan }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.courses.fields.price }))
     // The class plan does not fit a course and is not offered.
     await waitFor(() => expect(document.querySelectorAll('.ant-select-item-option')).toHaveLength(1))
     fireEvent.click(screen.getByText(/رسوم الدورة الكاملة/, { selector: '.ant-select-item-option-content' }))
@@ -300,8 +302,82 @@ describe('CourseDrawer — cover and price (MOD-19)', () => {
     expect(warning).toHaveTextContent(ar.courses.hints.noFeePlans)
     // The plan made for one class is recognised — and still not offered.
     expect(warning).toHaveTextContent('خطط مرتبطة بفصل واحد ولا تصلح رسوماً للدورة: «خطة فصل» (PY-101-A).')
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.courses.fields.feePlan }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.courses.fields.price }))
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(document.querySelectorAll('.ant-select-item-option')).toHaveLength(0)
+  })
+})
+
+describe('CourseDrawer — the simplified course form', () => {
+  const plan = makeFeePlan({ id: 'plan-1', name: { ar: 'رسوم الدورة الكاملة' }, total: 1000 })
+
+  it('asks the name, summary, description, cover, subject, type and price in that order, then the materials — no code, English, level, hours or sessions', async () => {
+    mockFetch((url) =>
+      url.startsWith('/api/fee-plans')
+        ? jsonResponse(200, { items: [plan] })
+        : jsonResponse(200, url.endsWith('/curriculum') ? makeCurriculum() : makeCourse({ pricing: 'paid', enrollmentFeePlan: { id: 'plan-1', name: plan.name, isActive: true, total: 1000, currency: 'SAR', installments: 2 } })),
+    )
+    renderDrawer([...COURSE_MANAGER_PERMISSIONS, 'fee_plans.manage'])
+    await screen.findByText('PY-101')
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+    await screen.findByLabelText(ar.courses.fields.price)
+
+    const labels = Array.from(document.querySelectorAll('.ant-form-item-label label'), (label) => label.textContent)
+    expect(labels).toEqual([
+      ar.courses.fields.name,
+      ar.courses.fields.summary,
+      ar.courses.fields.description,
+      ar.courses.fields.coverImageUrl,
+      ar.courses.fields.subject,
+      ar.courses.fields.pricing,
+      ar.courses.fields.price,
+      ar.courses.fields.resources,
+    ])
+    expect(labels.some((label) => label?.includes('عربي'))).toBe(false)
+    for (const removed of [ar.courses.fields.code, ar.courses.fields.nameEn, ar.courses.fields.level, ar.courses.fields.durationHours, ar.courses.fields.sessionsCount]) {
+      expect(screen.queryByLabelText(removed)).not.toBeInTheDocument()
+    }
+  })
+
+  it('keeps the stored English and Turkish name, the code, level, hours and sessions when only the Arabic name changes', async () => {
+    const stored = makeCourse({ name: { ar: 'أساسيات بايثون', en: 'Python Basics', tr: 'Python Temelleri' }, summary: { ar: 'ملخص', en: 'Summary' } })
+    const saved = makeCourse({ ...stored, name: { ar: 'بايثون للمبتدئين', en: 'Python Basics', tr: 'Python Temelleri' }, updatedAt: '2026-11-26T10:00:00.000Z' })
+    const calls = mockCourseApi(() => stored, { PATCH: jsonResponse(200, saved) })
+    const { onUpdated } = renderDrawer(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('PY-101')
+    fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
+
+    const name = await screen.findByLabelText(ar.courses.fields.name)
+    expect(name).toHaveValue('أساسيات بايثون')
+    await userEvent.clear(name)
+    await userEvent.type(name, 'بايثون للمبتدئين')
+    fireEvent.click(screen.getByText(ar.common.save).closest('button')!)
+
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(saved))
+    const bodies = calls.filter((call) => call.method === 'PATCH').map((call) => call.body)
+    expect(bodies).toEqual([{ name: { ar: 'بايثون للمبتدئين', en: 'Python Basics', tr: 'Python Temelleri' } }])
+    for (const key of ['code', 'levelId', 'durationHours', 'sessionsCount', 'summary', 'minAge', 'maxAge']) expect(bodies[0]).not.toHaveProperty(key)
+  })
+
+  it('shows a stored English name, level, hours and sessions in the details, and no empty row for them', async () => {
+    mockCourseApi(() => makeCourse({ name: { ar: 'دورة جديدة' }, level: null, durationHours: null, sessionsCount: null }))
+    renderDrawer(COURSE_READER_PERMISSIONS)
+    await screen.findByText('PY-101')
+    expect(screen.getByText(ar.courses.fields.name).closest('tr')).toHaveTextContent('دورة جديدة')
+    // The generated code stays visible as data.
+    expect(screen.getByText(ar.courses.fields.code)).toBeInTheDocument()
+    for (const hidden of [ar.courses.fields.nameEn, ar.courses.fields.level, ar.courses.fields.durationHours, ar.courses.fields.sessionsCount]) {
+      expect(screen.queryByText(hidden)).not.toBeInTheDocument()
+    }
+  })
+
+  it('shows the stored English name, level and hours of an older course as data', async () => {
+    mockCourseApi(() => makeCourse())
+    renderDrawer(COURSE_READER_PERMISSIONS)
+    expect(await screen.findByText('Python Basics')).toBeInTheDocument()
+    expect(screen.getByText(ar.courses.fields.nameEn)).toBeInTheDocument()
+    expect(screen.getByText('مبتدئ (BEG)')).toBeInTheDocument()
+    expect(screen.getByText(ar.courses.fields.durationHours)).toBeInTheDocument()
+    expect(screen.getByText('24')).toBeInTheDocument()
   })
 })

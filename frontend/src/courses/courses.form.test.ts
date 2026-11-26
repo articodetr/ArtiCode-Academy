@@ -3,29 +3,29 @@ import { ApiError } from '../api/client'
 import { COURSE_ID, makeCourse } from '../test/courses'
 import { makeFeePlan } from '../test/payments'
 import { describeCoursesFailure } from './courses.errors'
-import { buildCreateCourseInput, courseFormHasChanges, courseFormValuesOf, englishWithoutArabic, isCoverImageUrl, localizedOf, planCoursePatch, plansFittingCourse } from './courses.form'
+import { arabicTextOf, buildCreateCourseInput, courseFormField, courseFormHasChanges, courseFormValuesOf, englishWithoutArabic, isCoverImageUrl, localizedOf, planCoursePatch, plansFittingCourse } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction, nextCourseStatus } from './courses.status'
 
 describe('course form helpers', () => {
-  it('builds the create body from what was filled in only, with a normalised code', () => {
-    expect(buildCreateCourseInput({ code: ' py-101 ', nameAr: ' بايثون ', nameEn: '', summaryAr: '', levelId: null, subjectId: null, durationHours: null })).toEqual({
-      code: 'PY-101',
-      name: { ar: 'بايثون' },
-    })
-    expect(
-      buildCreateCourseInput({ code: 'A', nameAr: 'أ', nameEn: 'A', summaryAr: 'م', summaryEn: 'S', levelId: 'l-1', subjectId: 's-1', durationHours: 12.5, sessionsCount: 4 }),
-    ).toEqual({ code: 'A', name: { ar: 'أ', en: 'A' }, summary: { ar: 'م', en: 'S' }, levelId: 'l-1', subjectId: 's-1', durationHours: 12.5, sessionsCount: 4 })
+  it('builds the create body from what was filled in only: no code, no English, no level, hours or sessions', () => {
+    expect(buildCreateCourseInput({ nameAr: ' بايثون ', summaryAr: '', descriptionAr: '  ', subjectId: null, coverImageUrl: '' })).toEqual({ name: { ar: 'بايثون' } })
+    const full = buildCreateCourseInput({ nameAr: 'أ', summaryAr: ' م ', descriptionAr: 'و', subjectId: 's-1', coverImageUrl: 'https://cdn.example.org/a.jpg', pricing: 'free' })
+    expect(full).toEqual({ name: { ar: 'أ' }, summary: { ar: 'م' }, description: { ar: 'و' }, subjectId: 's-1', coverImageUrl: 'https://cdn.example.org/a.jpg' })
+    for (const key of ['code', 'levelId', 'durationHours', 'sessionsCount', 'minAge', 'maxAge', 'enrollmentFeePlanId']) expect(full).not.toHaveProperty(key)
   })
 
-  it('never sends an age range (PORTAL-04): neither on create nor in a PATCH, so the stored ages stay', () => {
-    const created = buildCreateCourseInput({ code: 'A', nameAr: 'أ', durationHours: 2, sessionsCount: 3 })
-    expect(created).not.toHaveProperty('minAge')
-    expect(created).not.toHaveProperty('maxAge')
-    const course = makeCourse({ minAge: 10, maxAge: 14 })
-    const values = courseFormValuesOf(course)
-    expect(values).not.toHaveProperty('minAge')
-    expect(values).not.toHaveProperty('maxAge')
-    expect(planCoursePatch(course, { ...values, sessionsCount: 20 })).toEqual({ sessionsCount: 20 })
+  it('creates a paid course with its plan, and a free one (or a paid one without a plan) with none', () => {
+    expect(buildCreateCourseInput({ nameAr: 'أ', pricing: 'paid', enrollmentFeePlanId: 'plan-1' })).toEqual({ name: { ar: 'أ' }, enrollmentFeePlanId: 'plan-1' })
+    expect(buildCreateCourseInput({ nameAr: 'أ', pricing: 'free', enrollmentFeePlanId: 'plan-1' })).not.toHaveProperty('enrollmentFeePlanId')
+    expect(buildCreateCourseInput({ nameAr: 'أ', pricing: 'paid', enrollmentFeePlanId: null })).not.toHaveProperty('enrollmentFeePlanId')
+    // Without fee_plans.manage the type field is not there at all: free.
+    expect(buildCreateCourseInput({ nameAr: 'أ' })).not.toHaveProperty('enrollmentFeePlanId')
+  })
+
+  it('reads only the fields it shows from a course: no code, English, level, hours, sessions or ages', () => {
+    const values = courseFormValuesOf(makeCourse({ summary: { ar: 'ملخص', en: 'Summary' } }))
+    expect(values).toMatchObject({ nameAr: 'أساسيات بايثون', summaryAr: 'ملخص', descriptionAr: '' })
+    for (const key of ['code', 'nameEn', 'summaryEn', 'descriptionEn', 'levelId', 'durationHours', 'sessionsCount', 'minAge', 'maxAge']) expect(values).not.toHaveProperty(key)
   })
 
   it('sends no PATCH when nothing changed', () => {
@@ -33,16 +33,22 @@ describe('course form helpers', () => {
     expect(planCoursePatch(course, courseFormValuesOf(course))).toBeNull()
   })
 
-  it('sends only the changed fields: null clears, a localized text travels whole and keeps its Turkish text', () => {
-    const course = makeCourse({ name: { ar: 'بايثون', en: 'Python', tr: 'Python TR' }, summary: { ar: 'ملخص' } })
-    const values = { ...courseFormValuesOf(course), nameEn: 'Python 3', summaryAr: '', levelId: null, sessionsCount: null, code: 'py-102' }
-    expect(planCoursePatch(course, values)).toEqual({
-      code: 'PY-102',
-      name: { ar: 'بايثون', en: 'Python 3', tr: 'Python TR' },
-      summary: null,
-      levelId: null,
-      sessionsCount: null,
+  it('keeps the stored English and Turkish texts when the Arabic text changes, and never names the code, level, hours or sessions', () => {
+    const course = makeCourse({
+      name: { ar: 'بايثون', en: 'Python', tr: 'Python TR' },
+      summary: { ar: 'ملخص', en: 'Summary' },
+      description: { ar: 'وصف', tr: 'Açıklama' },
     })
+    const values = courseFormValuesOf(course)
+    expect(planCoursePatch(course, { ...values, nameAr: ' بايثون 3 ' })).toEqual({ name: { ar: 'بايثون 3', en: 'Python', tr: 'Python TR' } })
+    const all = planCoursePatch(course, { ...values, nameAr: 'ب', summaryAr: 'م', descriptionAr: 'و' })
+    expect(all).toEqual({ name: { ar: 'ب', en: 'Python', tr: 'Python TR' }, summary: { ar: 'م', en: 'Summary' }, description: { ar: 'و', tr: 'Açıklama' } })
+    for (const key of ['code', 'levelId', 'durationHours', 'sessionsCount', 'minAge', 'maxAge']) expect(all).not.toHaveProperty(key)
+  })
+
+  it('clears a whole summary or description when its Arabic text is emptied (the server requires ar)', () => {
+    const course = makeCourse({ summary: { ar: 'ملخص', en: 'Summary' }, description: { ar: 'وصف', en: 'Description' } })
+    expect(planCoursePatch(course, { ...courseFormValuesOf(course), summaryAr: ' ', descriptionAr: '' })).toEqual({ summary: null, description: null })
   })
 
   it('reads the subject from the course and sends it only when it changes; an emptied picker clears it (PORTAL-04)', () => {
@@ -63,6 +69,17 @@ describe('course form helpers', () => {
   it('reads localized text like the server', () => {
     expect(localizedOf('  ', 'only english')).toBeNull()
     expect(localizedOf('أ', '  ')).toEqual({ ar: 'أ' })
+    expect(arabicTextOf('  ', { ar: 'أ', en: 'A' })).toBeNull()
+    expect(arabicTextOf(' ب ', { ar: 'أ', en: 'A', tr: 'T' })).toEqual({ ar: 'ب', en: 'A', tr: 'T' })
+    expect(arabicTextOf('ب', null)).toEqual({ ar: 'ب' })
+  })
+
+  it('puts a server error on a field only when the form still has that field', () => {
+    expect(courseFormField(['subjectId'])).toEqual(['subjectId'])
+    expect(courseFormField(['enrollmentFeePlanId'])).toEqual(['enrollmentFeePlanId'])
+    expect(courseFormField(['code'])).toBeUndefined()
+    expect(courseFormField(['levelId'])).toBeUndefined()
+    expect(courseFormField(undefined)).toBeUndefined()
   })
 })
 
@@ -107,21 +124,18 @@ describe('courseFormHasChanges (KI-054 — J-F23)', () => {
 
   it('holds nothing for the stored values or a change typed back', () => {
     expect(courseFormHasChanges(course, courseFormValuesOf(course))).toBe(false)
-    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), code: 'py-101', nameEn: 'Python Basics ' })).toBe(false)
+    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), nameAr: 'أساسيات بايثون ', summaryAr: ' ملخص' })).toBe(false)
   })
 
-  it('holds a field that differs from the stored course, text or number', () => {
-    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), nameEn: 'Python 3' })).toBe(true)
-    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), sessionsCount: null })).toBe(true)
+  it('holds a field that differs from the stored course', () => {
+    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), nameAr: 'بايثون 3' })).toBe(true)
+    expect(courseFormHasChanges(course, { ...courseFormValuesOf(course), descriptionAr: 'وصف' })).toBe(true)
   })
 
-  it('holds what the save refuses instead of sending: an emptied code or Arabic name, English without its Arabic text', () => {
+  it('holds what the save refuses instead of sending: an emptied name', () => {
     const values = courseFormValuesOf(course)
     expect(planCoursePatch(course, { ...values, nameAr: ' ' })).toBeNull()
     expect(courseFormHasChanges(course, { ...values, nameAr: ' ' })).toBe(true)
-    expect(courseFormHasChanges(course, { ...values, code: '' })).toBe(true)
-    expect(planCoursePatch(course, { ...values, descriptionEn: 'English only' })).toBeNull()
-    expect(courseFormHasChanges(course, { ...values, descriptionEn: 'English only' })).toBe(true)
     expect(englishWithoutArabic('', ' ')).toBe(false)
     expect(englishWithoutArabic('عربي', 'English')).toBe(false)
   })
@@ -141,8 +155,8 @@ describe('course cover and pricing (MOD-19, D-R122/D-R129)', () => {
   })
 
   it('creates with a trimmed cover only when one was typed', () => {
-    expect(buildCreateCourseInput({ code: 'a', nameAr: 'أ', coverImageUrl: '  https://cdn.example.org/a.jpg ' })).toMatchObject({ coverImageUrl: 'https://cdn.example.org/a.jpg' })
-    expect(buildCreateCourseInput({ code: 'a', nameAr: 'أ', coverImageUrl: '  ' })).not.toHaveProperty('coverImageUrl')
+    expect(buildCreateCourseInput({ nameAr: 'أ', coverImageUrl: '  https://cdn.example.org/a.jpg ' })).toMatchObject({ coverImageUrl: 'https://cdn.example.org/a.jpg' })
+    expect(buildCreateCourseInput({ nameAr: 'أ', coverImageUrl: '  ' })).not.toHaveProperty('coverImageUrl')
   })
 
   it('sends the cover and the plan only when they change; free sends null, paid without a plan sends nothing', () => {
@@ -177,5 +191,7 @@ describe('course cover and pricing (MOD-19, D-R122/D-R129)', () => {
       makeFeePlan({ id: 'off', isActive: false }),
     ]
     expect(plansFittingCourse(plans, COURSE_ID).map((item) => item.id)).toEqual(['general', 'mine'])
+    // The create modal: no course yet, so the general plans only.
+    expect(plansFittingCourse(plans, null).map((item) => item.id)).toEqual(['general'])
   })
 })

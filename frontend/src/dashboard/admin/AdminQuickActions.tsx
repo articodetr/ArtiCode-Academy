@@ -1,5 +1,6 @@
 // The quick actions of the admin home (J-F59): the cards the viewer may use (admin.actions.ts), 6 per row on a wide
-// screen down to 2 on a phone (admin.css — container queries on the section's own width). A phone shows the first
+// screen down to 2 on a phone (admin.css — container queries on the section's own width), the rows balanced for the
+// number of cards so none ends on a gap (admin.layout.ts). A phone shows the first
 // PHONE_VISIBLE_ACTIONS and a «show more» button for the rest; wider screens show every card and no button.
 import { DownOutlined, UpOutlined } from '@ant-design/icons'
 import { Button, Typography } from 'antd'
@@ -7,6 +8,7 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PHONE_VISIBLE_ACTIONS } from './admin.actions'
 import type { QuickAction } from './admin.actions'
+import { ACTION_COLUMNS, columnsStyle } from './admin.layout'
 import { useTwoTone } from './admin.tones'
 import { QuickActionCard } from './QuickActionCard'
 
@@ -27,7 +29,11 @@ export function AdminQuickActions({ actions }: { actions: QuickAction[] }) {
         <Typography.Text type="secondary">{t('dashboard.admin.noActions')}</Typography.Text>
       ) : (
         <>
-          <ul id={listId} className={expanded ? 'admin-actions__grid' : 'admin-actions__grid admin-actions__grid--collapsed'}>
+          <ul
+            id={listId}
+            className={expanded ? 'admin-actions__grid' : 'admin-actions__grid admin-actions__grid--collapsed'}
+            style={columnsStyle('admin-actions-cols', actions.length, ACTION_COLUMNS)}
+          >
             {actions.map((action, index) => (
               <QuickActionCard
                 key={action.key}

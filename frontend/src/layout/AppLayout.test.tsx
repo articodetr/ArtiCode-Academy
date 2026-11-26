@@ -527,12 +527,14 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     expect(menu.firstElementChild).toHaveTextContent(ar.nav.dashboard)
     expect(sections(menu)).toEqual([
       [ar.nav.groups.academy, [ar.nav.users, ar.nav.enrollmentRequests]],
-      [ar.nav.groups.academics, [ar.nav.courses, ar.nav.classes, ar.nav.lessons, ar.nav.schedule]],
+      // No «classes» entry although the viewer holds classes.read: classes are an internal mechanism (2026-11-26).
+      [ar.nav.groups.academics, [ar.nav.courses, ar.nav.lessons, ar.nav.schedule]],
       [ar.nav.groups.assessment, [ar.nav.assignments, ar.nav.exams, ar.nav.certificates]],
       [ar.nav.groups.finance, [ar.nav.payments]],
       [ar.nav.groups.followUp, [ar.nav.reports, ar.nav.notifications]],
       [ar.nav.groups.system, [ar.nav.settings, ar.nav.homepageImages, ar.nav.gradeSchemes, ar.nav.roles, ar.nav.audit]],
     ])
+    expect(labelsIn(menu)).not.toContain(ar.nav.classes)
     // «My pages» has nothing for an admin who is no learner: no empty heading.
     expect(headings(menu)).not.toContain(ar.nav.groups.mine)
     expect(menu.querySelector('.ant-menu-item-divider')).toBeNull()

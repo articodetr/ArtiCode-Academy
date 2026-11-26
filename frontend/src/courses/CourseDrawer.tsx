@@ -19,7 +19,11 @@
 // the course type and its fee plan (CoursePricingFields).
 // PORTAL-04: the details and the edit form gain the school subject beside the
 // difficulty level; the age range is no longer shown or edited (the stored
-// values stay — the PATCH never names them); the sessions stay.
+// values stay — the PATCH never names them).
+// The simplified course form: the edit form asks what the create modal asks (Arabic
+// name, summary and description, cover, subject, price) plus the course's materials;
+// the code, the English texts, the level, the hours and the sessions stay stored and
+// are shown in the details when they hold a value (an empty row is not shown).
 import { DeleteOutlined, DownOutlined, EditOutlined, InboxOutlined, RocketOutlined, StopOutlined, UndoOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -28,7 +32,6 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { changeCourseStatus, deleteCourse, getCourse, updateCourse } from '../api/courses'
 import type { Course } from '../api/courses'
-import type { Level } from '../api/levels'
 import type { Subject } from '../api/subjects'
 import { useAuth } from '../auth/auth-context'
 import { NavigationBlocker } from '../common/NavigationBlocker'
@@ -41,8 +44,12 @@ import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CourseFormFields } from './CourseFormFields'
 import { CoursePricingFields } from './CoursePricingFields'
 import { OpenEnrollmentPanel } from './OpenEnrollmentPanel'
+import { CourseClassTabPane } from './CourseClassTabPane'
+import { COURSE_CLASS_TAB_LABELS, isCourseClassTab, visibleCourseClassTabs } from './courses.classScope'
+import type { CourseClassTab } from './courses.classScope'
+import { useCourseClass } from './useCourseClass'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
-import { courseFormHasChanges, courseFormValuesOf, planCoursePatch } from './courses.form'
+import { courseFormField, courseFormHasChanges, courseFormValuesOf, planCoursePatch } from './courses.form'
 import { CourseResourcesField } from './CourseResourcesField'
 import type { CourseFormValues } from './courses.form'
 import { availableCourseActions, isDangerousCourseAction } from './courses.status'
@@ -60,14 +67,19 @@ const ICONS: Readonly<Record<CourseMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'curriculum'
+// The class tabs work on the course's class (the teachers, the students, … of the former class drawer).
+type DrawerTab = 'details' | 'curriculum' | CourseClassTab
 
-/** The editors of the drawer that report unsaved work (KI-054): the edit form and the curriculum editor. */
-const NOTHING_UNSAVED: Readonly<Record<DrawerTab, boolean>> = { details: false, curriculum: false }
+/**
+ * The editors of the drawer that report unsaved work (KI-054): the edit form, the curriculum editor, and
+ * the class tabs' teachers editor, enroll form and weekly schedule editor.
+ */
+type EditorPart = 'details' | 'curriculum' | 'teachers' | 'students' | 'schedule'
+
+const NOTHING_UNSAVED: Readonly<Record<EditorPart, boolean>> = { details: false, curriculum: false, teachers: false, students: false, schedule: false }
 
 interface CourseDrawerProps {
   courseId: string | null
-  levels: Level[]
   /** PORTAL-04: the subject picker's list. */
   subjects: Subject[]
   onClose: () => void
@@ -77,7 +89,7 @@ interface CourseDrawerProps {
   onDeleted: (courseId: string) => void
 }
 
-export function CourseDrawer({ courseId, levels, subjects, onClose, onUpdated, onDeleted }: CourseDrawerProps) {
+export function CourseDrawer({ courseId, subjects, onClose, onUpdated, onDeleted }: CourseDrawerProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -91,15 +103,22 @@ export function CourseDrawer({ courseId, levels, subjects, onClose, onUpdated, o
   const [pending, setPending] = useState<CourseMenuAction | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<DrawerTab, boolean>>>(NOTHING_UNSAVED)
+  const [unsavedParts, setUnsavedParts] = useState<Readonly<Record<EditorPart, boolean>>>(NOTHING_UNSAVED)
 
   // One stable reporter per editor (the editors report from an effect that depends on it).
   const reportUnsaved = useMemo(() => {
-    const reporter = (part: DrawerTab) => (unsaved: boolean) => setUnsavedParts((current) => (current[part] === unsaved ? current : { ...current, [part]: unsaved }))
-    return { details: reporter('details'), curriculum: reporter('curriculum') }
+    const reporter = (part: EditorPart) => (unsaved: boolean) => setUnsavedParts((current) => (current[part] === unsaved ? current : { ...current, [part]: unsaved }))
+    return { details: reporter('details'), curriculum: reporter('curriculum'), teachers: reporter('teachers'), students: reporter('students'), schedule: reporter('schedule') }
   }, [])
+  // The class tabs' editors: their class selector waits while they hold work.
+  const classUnsaved = unsavedParts.teachers || unsavedParts.students || unsavedParts.schedule
   // KI-054: while an editor holds unsaved work, Escape and a mask click must not drop it with the drawer.
-  const unsaved = (editing && unsavedParts.details) || unsavedParts.curriculum
+  const unsaved = (editing && unsavedParts.details) || unsavedParts.curriculum || classUnsaved
+  // The course's class behind the class tabs: only for classes.read (API-050 needs it), read when a class tab opens.
+  const classScope = useCourseClass(hasPermission('classes.read') ? courseId : null)
+  // Moved when the details tab opens after a class tab: the «فتح الاشتراك» panel then reads the classes afresh
+  // (a class prepared or a student enrolled there changes what it shows).
+  const [panelVisit, setPanelVisit] = useState(0)
 
   useEffect(() => {
     if (!courseId) return
@@ -175,7 +194,6 @@ export function CourseDrawer({ courseId, levels, subjects, onClose, onUpdated, o
   }))
 
   const name = course ? localizedLabel(course.name, language) : t('courses.drawer.title')
-  const optional = (value: string | number | null | undefined) => (value === null || value === undefined || value === '' ? DASH : String(value))
 
   const details = course ? (
     editing ? (
@@ -183,7 +201,6 @@ export function CourseDrawer({ courseId, levels, subjects, onClose, onUpdated, o
         // Remount per server version so the form starts from what the server holds.
         key={`${course.id}:${course.updatedAt}`}
         course={course}
-        levels={levels}
         subjects={subjects}
         onSaved={(updated) => {
           applyUpdate(updated)
@@ -200,16 +217,18 @@ export function CourseDrawer({ courseId, levels, subjects, onClose, onUpdated, o
         <Descriptions.Item label={t('common.status')}>
           <StatusTag value={course.status} />
         </Descriptions.Item>
-        <Descriptions.Item label={t('courses.fields.nameAr')}>{course.name.ar}</Descriptions.Item>
-        <Descriptions.Item label={t('courses.fields.nameEn')}>{optional(course.name.en)}</Descriptions.Item>
+        <Descriptions.Item label={t('courses.fields.name')}>{course.name.ar}</Descriptions.Item>
+        {/* The form no longer asks the English name, the level, the hours or the sessions: a stored value stays
+            visible as data, an empty row is not shown. */}
+        {course.name.en ? <Descriptions.Item label={t('courses.fields.nameEn')}>{course.name.en}</Descriptions.Item> : null}
         <Descriptions.Item label={t('courses.fields.subject')}>
           {course.subject ? `${localizedLabel(course.subject.name, language)} (${course.subject.code})` : DASH}
         </Descriptions.Item>
-        <Descriptions.Item label={t('courses.fields.level')}>
-          {course.level ? `${localizedLabel(course.level.name, language)} (${course.level.code})` : DASH}
-        </Descriptions.Item>
-        <Descriptions.Item label={t('courses.fields.durationHours')}>{optional(course.durationHours)}</Descriptions.Item>
-        <Descriptions.Item label={t('courses.fields.sessionsCount')}>{optional(course.sessionsCount)}</Descriptions.Item>
+        {course.level ? (
+          <Descriptions.Item label={t('courses.fields.level')}>{`${localizedLabel(course.level.name, language)} (${course.level.code})`}</Descriptions.Item>
+        ) : null}
+        {typeof course.durationHours === 'number' ? <Descriptions.Item label={t('courses.fields.durationHours')}>{course.durationHours}</Descriptions.Item> : null}
+        {typeof course.sessionsCount === 'number' ? <Descriptions.Item label={t('courses.fields.sessionsCount')}>{course.sessionsCount}</Descriptions.Item> : null}
         <Descriptions.Item label={t('courses.fields.pricing')}>
           {course.enrollmentFeePlan ? (
             <Space direction="vertical" size={2}>
@@ -318,12 +337,26 @@ export function CourseDrawer({ courseId, levels, subjects, onClose, onUpdated, o
       {course ? (
         <Tabs
           activeKey={tab}
-          onChange={(key) => setTab(key as DrawerTab)}
+          onChange={(key) => {
+            // Entering the class tabs from another tab reads the course's classes again: the «فتح الاشتراك»
+            // panel of the details tab may have just created or changed the general class.
+            if (isCourseClassTab(key) && !isCourseClassTab(tab)) void classScope.refresh()
+            if (key === 'details' && isCourseClassTab(tab)) setPanelVisit((visit) => visit + 1)
+            setTab(key as DrawerTab)
+          }}
           items={[
             // PORTAL-04: the «فتح الاشتراك» panel gates itself on classes.manage + classes.read.
-            { key: 'details', label: t('courses.drawer.tabs.details'), children: <>{editing ? null : <OpenEnrollmentPanel course={course} />}{details}</> },
+            { key: 'details', label: t('courses.drawer.tabs.details'), children: <>{editing ? null : <OpenEnrollmentPanel key={panelVisit} course={course} />}{details}</> },
             // MOD-20: the server decides who reads (courses.manage or a teacher of the course) and who edits (`canManage`).
             { key: 'curriculum', label: t('curriculum.tab'), children: <CurriculumTab courseId={course.id} onUnsavedChange={reportUnsaved.curriculum} />, disabled: editing },
+            // The class drawer's tabs, on the course's class, with its gates (classes.read first); waiting, like
+            // «المنهج», while the edit form is open.
+            ...visibleCourseClassTabs(hasPermission).map((key) => ({
+              key,
+              label: t(COURSE_CLASS_TAB_LABELS[key]),
+              children: <CourseClassTabPane tab={key} course={course} scope={classScope} locked={classUnsaved} onUnsavedChange={reportUnsaved} />,
+              disabled: editing,
+            })),
           ]}
         />
       ) : null}
@@ -353,7 +386,6 @@ export function CourseDrawer({ courseId, levels, subjects, onClose, onUpdated, o
 
 interface CourseEditFormProps {
   course: Course
-  levels: Level[]
   subjects: Subject[]
   onSaved: (course: Course) => void
   onCancel: () => void
@@ -367,7 +399,7 @@ interface CourseEditFormProps {
  * sessions would merge the values typed in a cancelled session over the new
  * initial values (rc-field-form keeps unmounted values — CH-0049).
  */
-function CourseEditForm({ course, levels, subjects, onSaved, onCancel, onUnsavedChange }: CourseEditFormProps) {
+function CourseEditForm({ course, subjects, onSaved, onCancel, onUnsavedChange }: CourseEditFormProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { hasPermission } = useAuth()
@@ -394,7 +426,8 @@ function CourseEditForm({ course, levels, subjects, onSaved, onCancel, onUnsaved
     } catch (caught) {
       const failure = describeCoursesFailure(caught)
       const text = failureMessage(t, failure)
-      if (failure.field) form.setFields([{ name: failure.field, errors: [text] }])
+      const field = courseFormField(failure.field)
+      if (field) form.setFields([{ name: field, errors: [text] }])
       else message.error(text)
       setSaving(false)
     }
@@ -411,14 +444,15 @@ function CourseEditForm({ course, levels, subjects, onSaved, onCancel, onUnsaved
       onFinish={(values) => void save(values as CourseFormValues)}
       disabled={saving}
     >
-      <CourseFormFields form={form} levels={levels} subjects={subjectChoicesFor(subjects, course.subject)} />
-      {/* J-F67: the course's own materials (its textbook), edited here only — the create form has none. */}
-      <CourseResourcesField />
+      {/* The simplified course form: the fields of the create modal, then the course's materials. */}
+      <CourseFormFields subjects={subjectChoicesFor(subjects, course.subject)} />
       {canPrice ? (
         <CoursePricingFields course={course} />
       ) : (
         <Alert type="info" showIcon title={t('courses.hints.pricingReadOnly')} style={{ marginBottom: 16 }} />
       )}
+      {/* J-F67: the course's own materials (its textbook), edited here only — the create form has none. */}
+      <CourseResourcesField />
       <Flex gap={8} justify="flex-end">
         <Button onClick={onCancel} disabled={saving}>
           {t('common.cancel')}

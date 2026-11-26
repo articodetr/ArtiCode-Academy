@@ -207,7 +207,6 @@ export function CoursesPage() {
 
       <CourseDrawer
         courseId={selectedId}
-        levels={levels}
         subjects={subjects}
         onClose={() => setSelectedId(null)}
         onUpdated={list.replaceItem}
@@ -216,7 +215,6 @@ export function CoursesPage() {
 
       <CreateCourseModal
         open={creating}
-        levels={levels}
         subjects={subjects}
         onClose={() => setCreating(false)}
         onCreated={(course) => {

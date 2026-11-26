@@ -1,37 +1,29 @@
 // Course form ↔ API bodies (MOD-04-T05), on the pattern of
 // academy/academy.patch.ts and users/users.patch.ts: the create body carries
 // only what was filled in; the PATCH body carries only fields whose normalised
-// value differs from the loaded course (null clears an optional field); a
-// localized text travels as a whole object and keeps a Turkish text the form
-// does not edit; nothing changed → null (no request).
+// value differs from the loaded course (null clears an optional field);
+// nothing changed → null (no request).
 // PORTAL-04: the form edits the school subject (`subjectId`, null clears it) and no
 // longer the age range — neither body carries `minAge`/`maxAge`, so a PATCH leaves
-// the stored ages alone; the sessions stay.
+// the stored ages alone.
+// The simplified course form: the form asks the Arabic name, summary and description, the cover,
+// the subject and the price only. Neither body names the code (the server generates one when the
+// create body has none), the level, the hours or the sessions, so a PATCH keeps the stored values;
+// a localized text keeps its stored English and Turkish texts when its Arabic text changes.
 import type { Course, CoursePricing, CourseResource, CreateCourseInput, UpdateCourseInput } from '../api/courses'
 import type { FeePlan } from '../api/feePlans'
 import type { LocalizedLabel } from '../api/users'
 
-/** Course codes: trimmed and upper-cased, 1–32 of A–Z 0–9 . _ - (mirror of COURSE_CODE_PATTERN). */
-export const COURSE_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]{0,31}$/
 export const COURSE_TEXT_MAX_LENGTH = 200
-export const DURATION_HOURS_MAX = 99999.9
-export const SESSIONS_MAX = 10000
 /** MOD-19 (D-R129): COVER_IMAGE_URL_MAX of courses.dto.ts and ck_courses_cover_image_url. */
 export const COVER_IMAGE_URL_MAX = 2048
 
 export interface CourseFormValues {
-  code: string
   nameAr: string
-  nameEn?: string
   summaryAr?: string
-  summaryEn?: string
   descriptionAr?: string
-  descriptionEn?: string
-  levelId?: string | null
   /** PORTAL-04: the school subject; null/absent = none. */
   subjectId?: string | null
-  durationHours?: number | null
-  sessionsCount?: number | null
   /** MOD-19: an absolute http(s) URL; '' = no cover. */
   coverImageUrl?: string
   /** MOD-19 (D-R122): shown only to holders of `fee_plans.manage`; absent = the form does not edit the price. */
@@ -69,27 +61,20 @@ export function resourcesOfRows(rows: readonly CourseResourceRow[], current: rea
     })
 }
 
+/** Codes of levels, subjects and rooms: trimmed and upper-cased (the course form itself asks no code any more). */
 export function normaliseCourseCode(value: string | undefined): string {
   return (value ?? '').trim().toUpperCase()
 }
 
 const text = (value: string | null | undefined) => value ?? ''
-const blankToNull = (value: number | null | undefined) => (value === undefined || value === null ? null : value)
 
-/** Initial form values of a loaded course (null → empty). */
+/** Initial form values of a loaded course (null → empty): the fields the form shows, nothing else. */
 export function courseFormValuesOf(course: Course): CourseFormValues {
   return {
-    code: course.code,
     nameAr: course.name.ar,
-    nameEn: text(course.name.en),
     summaryAr: text(course.summary?.ar),
-    summaryEn: text(course.summary?.en),
     descriptionAr: text(course.description?.ar),
-    descriptionEn: text(course.description?.en),
-    levelId: course.level?.id ?? null,
     subjectId: course.subject?.id ?? null,
-    durationHours: course.durationHours,
-    sessionsCount: course.sessionsCount,
     coverImageUrl: course.coverImageUrl ?? '',
     pricing: course.pricing,
     enrollmentFeePlanId: course.enrollmentFeePlan?.id ?? null,
@@ -119,10 +104,11 @@ const coverOf = (value: string | undefined) => (value ?? '').trim() || null
 /**
  * Mirror of `coursePlanFits()` (backend/src/catalog/course-pricing.ts): the
  * ACTIVE plans that can price a request for this course — a plan of this
- * course, or a general plan (no course and no class). The server decides.
+ * course, or a general plan (no course and no class). Without a course (the
+ * create modal: it does not exist yet) only the general plans fit. The server decides.
  */
-export function plansFittingCourse(plans: readonly FeePlan[], courseId: string): FeePlan[] {
-  return plans.filter((plan) => plan.isActive && plan.class === null && (plan.course === null || plan.course.id === courseId))
+export function plansFittingCourse(plans: readonly FeePlan[], courseId: string | null): FeePlan[] {
+  return plans.filter((plan) => plan.isActive && plan.class === null && (plan.course === null || (courseId !== null && plan.course.id === courseId)))
 }
 
 /** The plan the form asks for: none for a free course, the chosen one for a paid course (null while none is chosen). */
@@ -133,7 +119,7 @@ function chosenPlanOf(values: CourseFormValues): string | null {
 /**
  * `{ ar, en? }` from two inputs; an empty Arabic text means "no text" (null) —
  * the form refuses English without Arabic. `keepTr` carries a stored Turkish
- * text the form does not show.
+ * text the form does not show. (Shared by the other modules' forms.)
  */
 export function localizedOf(ar: string | undefined, en: string | undefined, keepTr?: string): LocalizedLabel | null {
   const arabic = (ar ?? '').trim()
@@ -145,54 +131,68 @@ export function localizedOf(ar: string | undefined, en: string | undefined, keep
   return label
 }
 
+/**
+ * A course text from its Arabic input alone, keeping the stored English and
+ * Turkish texts the form no longer shows. An empty Arabic text means "no text"
+ * (null): the server requires `ar`, so emptying it clears the whole text.
+ */
+export function arabicTextOf(ar: string | undefined, stored?: LocalizedLabel | null): LocalizedLabel | null {
+  const arabic = (ar ?? '').trim()
+  if (!arabic) return null
+  const label: LocalizedLabel = { ar: arabic }
+  if (typeof stored?.en === 'string') label.en = stored.en
+  if (typeof stored?.tr === 'string') label.tr = stored.tr
+  return label
+}
+
+/** The fields of the course forms. */
+const COURSE_FORM_FIELDS: ReadonlySet<string> = new Set(['nameAr', 'summaryAr', 'descriptionAr', 'coverImageUrl', 'subjectId', 'pricing', 'enrollmentFeePlanId', 'resources'])
+
+/**
+ * The form field a server error belongs on, or undefined when the form has no
+ * such field any more (a taken code, an unknown level): that error then shows
+ * above the form instead of on a field nobody sees.
+ */
+export function courseFormField(field: readonly string[] | undefined): string[] | undefined {
+  return field !== undefined && field.length > 0 && COURSE_FORM_FIELDS.has(field[0]!) ? [...field] : undefined
+}
+
 /** Equal when every locale matches (an absent locale equals a missing one) — the server's `sameLocalizedText`. */
 export function sameLabel(a: LocalizedLabel | null, b: LocalizedLabel | null): boolean {
   if (a === null || b === null) return a === b
   return a.ar === b.ar && (a.en ?? null) === (b.en ?? null) && (a.tr ?? null) === (b.tr ?? null)
 }
 
+/** The body of API-044: no code (the server generates it), Arabic texts only, the plan of a paid course. */
 export function buildCreateCourseInput(values: CourseFormValues): CreateCourseInput {
-  const input: CreateCourseInput = {
-    code: normaliseCourseCode(values.code),
-    name: localizedOf(values.nameAr, values.nameEn) ?? { ar: values.nameAr.trim() },
-  }
-  const summary = localizedOf(values.summaryAr, values.summaryEn)
-  const description = localizedOf(values.descriptionAr, values.descriptionEn)
+  const input: CreateCourseInput = { name: { ar: (values.nameAr ?? '').trim() } }
+  const summary = arabicTextOf(values.summaryAr)
+  const description = arabicTextOf(values.descriptionAr)
   if (summary) input.summary = summary
   if (description) input.description = description
-  if (values.levelId) input.levelId = values.levelId
-  if (values.subjectId) input.subjectId = values.subjectId
-  if (values.durationHours !== undefined && values.durationHours !== null) input.durationHours = values.durationHours
-  if (values.sessionsCount !== undefined && values.sessionsCount !== null) input.sessionsCount = values.sessionsCount
   const cover = coverOf(values.coverImageUrl)
   if (cover) input.coverImageUrl = cover
+  if (values.subjectId) input.subjectId = values.subjectId
+  // A paid course without a chosen plan is refused by the form; free sends no plan at all.
+  const plan = chosenPlanOf(values)
+  if (plan) input.enrollmentFeePlanId = plan
   return input
 }
 
-/** The smallest PATCH body (API-045), or null when nothing changed. */
+/** The smallest PATCH body (API-045), or null when nothing changed. Never names a field the form does not show. */
 export function planCoursePatch(course: Course, values: CourseFormValues): UpdateCourseInput | null {
   const body: UpdateCourseInput = {}
-  const code = normaliseCourseCode(values.code)
-  if (code && code !== course.code) body.code = code
 
-  const name = localizedOf(values.nameAr, values.nameEn, course.name.tr)
+  const name = arabicTextOf(values.nameAr, course.name)
   if (name && !sameLabel(name, course.name)) body.name = name
-  const summary = localizedOf(values.summaryAr, values.summaryEn, course.summary?.tr)
+  const summary = arabicTextOf(values.summaryAr, course.summary)
   if (!sameLabel(summary, course.summary)) body.summary = summary
-  const description = localizedOf(values.descriptionAr, values.descriptionEn, course.description?.tr)
+  const description = arabicTextOf(values.descriptionAr, course.description)
   if (!sameLabel(description, course.description)) body.description = description
 
-  const levelId = values.levelId || null
-  if (levelId !== (course.level?.id ?? null)) body.levelId = levelId
-  // An emptied picker (antd answers undefined on clear) clears the subject, as the level.
+  // An emptied picker (antd answers undefined on clear) clears the subject.
   const subjectId = values.subjectId || null
   if (subjectId !== (course.subject?.id ?? null)) body.subjectId = subjectId
-  // The age range is no longer edited here (PORTAL-04): the stored values stay untouched.
-  const numbers = ['durationHours', 'sessionsCount'] as const
-  for (const field of numbers) {
-    const next = blankToNull(values[field])
-    if (next !== course[field]) body[field] = next
-  }
   // MOD-19: the cover (null clears it) and — only when the form edits the price — the plan (null = free again).
   if (values.coverImageUrl !== undefined) {
     const cover = coverOf(values.coverImageUrl)
@@ -216,6 +216,7 @@ export function planCoursePatch(course: Course, values: CourseFormValues): Updat
 /**
  * An English text typed without its Arabic text: localizedOf() drops it (the
  * server requires `ar`) and the form refuses it on save, yet it is typed work.
+ * (Shared by the other modules' forms; the course form has no English field.)
  */
 export function englishWithoutArabic(ar: string | undefined, en: string | undefined): boolean {
   return (en ?? '').trim() !== '' && (ar ?? '').trim() === ''
@@ -225,16 +226,13 @@ export function englishWithoutArabic(ar: string | undefined, en: string | undefi
  * Whether the edit form of the course drawer holds unsaved work (KI-054 — J-F23,
  * the rule of J-F21's classFormHasChanges()): the smallest PATCH is non-empty,
  * or the form holds what the save would refuse instead of sending — an emptied
- * code or Arabic name, an English summary or description without its Arabic
- * text. A field changed back to its stored value counts as no change.
+ * name, a paid course without its plan, a cover the save refuses. A field
+ * changed back to its stored value counts as no change.
  */
 export function courseFormHasChanges(course: Course, values: CourseFormValues): boolean {
   const blank = (value: string | undefined) => typeof value === 'string' && value.trim() === ''
   return (
-    blank(values.code) ||
     blank(values.nameAr) ||
-    englishWithoutArabic(values.summaryAr, values.summaryEn) ||
-    englishWithoutArabic(values.descriptionAr, values.descriptionEn) ||
     // MOD-19: a course switched to paid without a plan yet, or a cover the save would refuse, is typed work too.
     (values.pricing !== undefined && values.pricing !== course.pricing) ||
     !isCoverImageUrl(values.coverImageUrl) ||

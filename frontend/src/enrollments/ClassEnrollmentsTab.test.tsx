@@ -156,7 +156,7 @@ describe('ClassEnrollmentsTab', () => {
     await waitFor(() => expect(onClassChanged).toHaveBeenCalledTimes(1))
     expect(api.writes()).toEqual([{ method: 'POST', url: `/api/classes/${CLASS_ID}/enrollments`, body: { studentId: layla.id } }])
     expect(onClassChanged).toHaveBeenCalledWith(expect.objectContaining({ id: CLASS_ID, enrolledCount: 2 }))
-    expect(await screen.findByText('تم تسجيل «ليلى سعيد» في الفصل')).toBeInTheDocument()
+    expect(await screen.findByText('تم تسجيل «ليلى سعيد»')).toBeInTheDocument()
     expect(await within(screen.getByRole('table')).findByText('ليلى سعيد')).toBeInTheDocument()
     expect(api.rosterQueries).toHaveLength(2)
     expect(screen.getByText(ar.classes.enrollments.pickStudent)).toBeInTheDocument()
@@ -170,7 +170,7 @@ describe('ClassEnrollmentsTab', () => {
 
     await pickStudent('ليلى سعيد')
     fireEvent.click(screen.getByText(ar.classes.enrollments.enroll).closest('button')!)
-    const alert = await screen.findByText('الفصل ممتلئ (20 / 20)؛ لا مقعد متاحاً.')
+    const alert = await screen.findByText('المقاعد كلها مشغولة (20 / 20)؛ لا مقعد متاحاً.')
     expect(alert).toBeInTheDocument()
     expect(onStale).toHaveBeenCalledTimes(1)
     expect(onClassChanged).not.toHaveBeenCalled()
@@ -178,7 +178,7 @@ describe('ClassEnrollmentsTab', () => {
 
     mockRosterApi(() => [omar], { POST: jsonResponse(409, { statusCode: 409, code: 'already_enrolled', enrollmentId: ENROLLMENT_IDS[1], status: 'withdrawn', message: 'dup' }) })
     fireEvent.click(screen.getByText(ar.classes.enrollments.enroll).closest('button')!)
-    expect(await screen.findByText('للطالب تسجيل سابق في هذا الفصل (منسحب)؛ أعد تفعيله من القائمة بدلاً من تسجيله مجدداً.')).toBeInTheDocument()
+    expect(await screen.findByText('للطالب تسجيل سابق (منسحب)؛ أعد تفعيله من القائمة بدلاً من تسجيله مجدداً.')).toBeInTheDocument()
   })
 
   it('offers no enroll form for a planned or a full class, and sends nothing', async () => {
@@ -187,13 +187,13 @@ describe('ClassEnrollmentsTab', () => {
       auth: makeAuth({ user: makeUser({ permissions: ROSTER_MANAGER_PERMISSIONS }) }),
       route: '/classes',
     })
-    expect(await screen.findByText('التسجيل ممكن في فصل مفتوح أو جارٍ فقط (الحالة الحالية: مخطَّط).')).toBeInTheDocument()
+    expect(await screen.findByText('التسجيل ممكن في مجموعة مفتوحة أو جارية فقط (الحالة الحالية: مخطَّط).')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: ar.classes.enrollments.add })).not.toBeInTheDocument()
     expect(await screen.findByText(ar.classes.enrollments.empty)).toBeInTheDocument()
     unmount()
 
     renderTab(ROSTER_MANAGER_PERMISSIONS, makeClass({ status: 'running', capacity: 2, enrolledCount: 2 }))
-    expect(await screen.findByText('الفصل ممتلئ (2 / 2)؛ لا يمكن تسجيل طالب جديد قبل توفر مقعد.')).toBeInTheDocument()
+    expect(await screen.findByText('المقاعد كلها مشغولة (2 / 2)؛ لا يمكن تسجيل طالب جديد قبل توفر مقعد.')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: ar.classes.enrollments.add })).not.toBeInTheDocument()
     expect(api.writes()).toEqual([])
     expect(api.calls.some((call) => call.url.startsWith('/api/users'))).toBe(false)
@@ -231,7 +231,7 @@ describe('ClassEnrollmentsTab', () => {
     fireEvent.click(within(items[0]!).getByText(ar.classes.enrollments.actions.reactivate))
 
     const dialog = dialogOf(ar.classes.enrollments.confirm.reactivate)
-    expect(within(dialog).getByText('الفصل ممتلئ حالياً (1 / 1)؛ سيرفض الخادم إعادة التفعيل حتى يتوفر مقعد.')).toBeInTheDocument()
+    expect(within(dialog).getByText('المقاعد كلها مشغولة حالياً (1 / 1)؛ سيرفض الخادم إعادة التفعيل حتى يتوفر مقعد.')).toBeInTheDocument()
     fireEvent.click(within(dialog).getByText(ar.classes.enrollments.actions.reactivate, { selector: 'button span' }).closest('button')!)
 
     await waitFor(() => expect(onClassChanged).toHaveBeenCalledWith(expect.objectContaining({ enrolledCount: 2 })))

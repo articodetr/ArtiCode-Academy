@@ -1,12 +1,14 @@
 // The academy's figures on the admin home (J-F59), smaller horizontal tiles under the quick actions. Every number is
 // the server's — none is computed or invented here:
-//   - API-164 GET /api/reports/overview (any reports.* key): active students, running classes, open classes and
-//     today's lessons from its `general` section; the attendance rate of the last 30 days from `attendance` (only for
-//     reports.attendance.view); the money still owed from `financial` (only for reports.financial.view), one line per
-//     currency as the server sums it — amounts in different currencies are never added together;
+//   - API-164 GET /api/reports/overview (any reports.* key): active students and today's lessons from its `general`
+//     section (not its running and open classes since 2026-11-26 — classes are an internal mechanism, not a section of
+//     the interface); the attendance rate of the last 30 days from `attendance` (only for reports.attendance.view); the
+//     money still owed from `financial` (only for reports.financial.view), one line per currency as the server sums
+//     it — amounts in different currencies are never added together;
 //   - API-224 GET /api/enrollment-requests (enrollments.manage): `pendingCount`, the academy's pending requests.
 // A figure the viewer cannot read is left out; a failed read says so with a retry and leaves the other tiles alone.
-import { AppstoreAddOutlined, AppstoreOutlined, CalendarOutlined, CheckCircleOutlined, SolutionOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons'
+// The rows are balanced for the number of tiles, so none ends on a gap (admin.layout.ts).
+import { CalendarOutlined, CheckCircleOutlined, SolutionOutlined, TeamOutlined, WalletOutlined } from '@ant-design/icons'
 import { Skeleton, Typography } from 'antd'
 import { useId } from 'react'
 import type { ReactNode } from 'react'
@@ -19,6 +21,7 @@ import { CardFailure } from '../DashboardCards'
 import { formatMoney } from '../dashboard.data'
 import type { Reloadable } from '../useLoad'
 import { formatCount, formatRate } from './admin.format'
+import { STAT_COLUMNS, columnsStyle } from './admin.layout'
 
 type Tone = 'blue' | 'gold' | 'green' | 'violet'
 
@@ -71,8 +74,6 @@ export function AdminOverviewCards({ overview, pending, expects }: AdminOverview
     const general = data?.general
     tiles.push(
       <StatTile key="activeStudents" testId="stat-activeStudents" icon={<TeamOutlined />} tone="blue" loading={overviewLoading} label={t('dashboard.admin.stats.activeStudents')} value={formatCount(general?.activeStudents ?? 0, language)} />,
-      <StatTile key="runningClasses" testId="stat-runningClasses" icon={<AppstoreOutlined />} tone="violet" loading={overviewLoading} label={t('dashboard.admin.stats.runningClasses')} value={formatCount(general?.runningClasses ?? 0, language)} />,
-      <StatTile key="openClasses" testId="stat-openClasses" icon={<AppstoreAddOutlined />} tone="green" loading={overviewLoading} label={t('dashboard.admin.stats.openClasses')} value={formatCount(general?.openClasses ?? 0, language)} />,
       <StatTile key="lessonsToday" testId="stat-lessonsToday" icon={<CalendarOutlined />} tone="gold" loading={overviewLoading} label={t('dashboard.admin.stats.lessonsToday')} value={formatCount(general?.lessonsToday ?? 0, language)} />,
     )
     const attendance = data ? data.attendance : null
@@ -150,7 +151,11 @@ export function AdminOverviewCards({ overview, pending, expects }: AdminOverview
           <CardFailure onRetry={pending.retry} />
         </div>
       ) : null}
-      {tiles.length ? <ul className="admin-stats__grid">{tiles}</ul> : null}
+      {tiles.length ? (
+        <ul className="admin-stats__grid" style={columnsStyle('admin-stats-cols', tiles.length, STAT_COLUMNS)}>
+          {tiles}
+        </ul>
+      ) : null}
     </section>
   )
 }

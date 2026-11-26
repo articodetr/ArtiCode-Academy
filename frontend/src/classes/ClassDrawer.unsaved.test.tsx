@@ -209,7 +209,7 @@ describe('ClassDrawer — unsaved editors (KI-052)', () => {
     expect(enroll).toBeEnabled()
 
     fireEvent.click(enroll)
-    expect(await screen.findByText('تم تسجيل «ليلى سعيد» في الفصل')).toBeInTheDocument()
+    expect(await screen.findByText('تم تسجيل «ليلى سعيد»')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(ar.classes.enrollments.enroll).closest('button')).toBeDisabled())
     await clickWhenSettled(closeButton)
     expect(onClose).toHaveBeenCalledTimes(1)

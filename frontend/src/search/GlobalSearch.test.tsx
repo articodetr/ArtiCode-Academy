@@ -52,6 +52,23 @@ describe('GlobalSearch (redesign)', () => {
     fireEvent.change(input, { target: { value: 'فاتوره' } })
     expect(await screen.findByText(ar.nav.payments)).toBeInTheDocument()
   })
+  it('searches no classes and offers no class action or page, even to a holder of every classes key (2026-11-26)', async () => {
+    const urls = mockApi()
+    renderWithProviders(<GlobalSearch />, { auth: makeAuth({ user: makeUser({ permissions: ['classes.read', 'classes.manage', 'classes.teachers.assign', 'courses.read'] }) }), route: '/' })
+    fireEvent.click(screen.getByLabelText(ar.search.open))
+    const input = await screen.findByLabelText(ar.search.placeholder)
+    // Before typing: the suggestions hold no «create a class».
+    expect(screen.queryByText('إنشاء فصل')).not.toBeInTheDocument()
+
+    // A word that named the classes page (its label and its keywords) finds no page now, and asks the courses only.
+    fireEvent.change(input, { target: { value: 'الفصول' } })
+    await waitFor(() => expect(urls.some((url) => url.startsWith('/api/courses?'))).toBe(true))
+    expect(urls.some((url) => url.startsWith('/api/classes'))).toBe(false)
+    expect(screen.queryByText(ar.nav.classes)).not.toBeInTheDocument()
+    expect(screen.queryByText('إنشاء فصل')).not.toBeInTheDocument()
+    expect(document.querySelector('.gsearch-group')?.textContent ?? '').not.toContain('الفصول')
+  })
+
   it('finds lessons by title (q, CH-0226) through the lessons list and opens them on their page', async () => {
     const urls: string[] = []
     mockFetch((url) => {

@@ -51,6 +51,12 @@ interface NavItemBase {
   icon: ReactNode
   /** Documentation module this screen belongs to. */
   module: string
+  /**
+   * `'teacherOnly'` keeps the screen out of every menu (the grouped one and the learners' flat one) and out of the
+   * search's pages for every viewer but a teacher-only one (`teachesOnly()`), while `canAccess()` — the route's guard —
+   * still answers for it: for the others the page opens by its address only.
+   */
+  inMenu?: 'teacherOnly'
 }
 
 /**
@@ -121,7 +127,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
   // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16). J-F72 (Jallal's request,
   // 2026-11-26): a teacher-only viewer, who has no «الدورات والمستويات» since J-F71, reads this entry as «الدورات».
-  { key: 'classes', path: '/classes', labelKey: 'nav.classes', teacherLabelKey: 'nav.classesForTeacher', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
+  // PORTAL-04-ADMIN-SIMPLIFY (2026-11-26): classes are an internal mechanism, not a section of the admin interface (a
+  // course opens for subscription through its automatic general class — courses/courses.openEnrollment.ts; teachers are
+  // assigned and students enrolled from the course drawer): the entry stays in the menu of a teacher-only viewer alone
+  // (their «الدورات»), and for everyone else the route opens by its address only, behind this same gate.
+  { key: 'classes', path: '/classes', labelKey: 'nav.classes', teacherLabelKey: 'nav.classesForTeacher', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], inMenu: 'teacherOnly', module: 'MOD-05' },
   // MOD-05 (J-F04): «my classes» (API-060) needs no permission key — ownership; shown to whoever holds the
   // `student` or `guardian` server role, as the server reads them (an admin or a teacher alone gets an empty list).
   { key: 'myClasses', path: '/my-classes', labelKey: 'nav.myClasses', icon: createElement(ReadOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-05' },
@@ -241,8 +251,9 @@ export function sees(item: NavItem, viewer: NavViewer): boolean {
   return viewer.role !== null && item.roles.includes(viewer.role)
 }
 
+/** The menu's entries for this viewer: those they may open, less the ones kept out of their menu (`inMenu`). */
 export function navFor(viewer: NavViewer): NavItem[] {
-  return NAV_ITEMS.filter((item) => sees(item, viewer))
+  return NAV_ITEMS.filter((item) => (item.inMenu !== 'teacherOnly' || teachesOnly(viewer)) && sees(item, viewer))
 }
 
 /** The role keys of a teacher-only viewer: a teacher, possibly also a student or a guardian, and nothing else (J-F70..J-F72). */
@@ -270,8 +281,8 @@ interface NavGroupDefinition {
 }
 
 /**
- * Where each entry sits in the grouped menu: every `NAV_ITEMS` key in exactly one section (navigation.test.ts). The
- * sections only arrange what `navFor()` lets through — they never show or hide an entry. «My pages» holds the
+ * Where each entry sits in the grouped menu: every `NAV_ITEMS` key in exactly one
+ * section (navigation.test.ts). The sections only arrange what `navFor()` lets through — they never show or hide an entry. «My pages» holds the
  * ownership pages, which only a teacher or an admin who is also a student or a guardian sees beside the staff ones; a
  * learner-only viewer keeps the flat menu (AppLayout).
  */
@@ -306,7 +317,10 @@ export function navGroupsFor(viewer: NavViewer): NavGroup[] {
   })).filter((group) => group.items.length > 0)
 }
 
-/** UI-level gate behind `RequireAccess` (not a security boundary — the server enforces permissions). */
+/**
+ * UI-level gate behind `RequireAccess` (not a security boundary — the server enforces permissions). It answers for an
+ * entry kept out of the viewer's menu too (`inMenu`), so that page still opens by its address.
+ */
 export function canAccess(viewer: NavViewer, navKey: string): boolean {
   const item = NAV_ITEMS.find((entry) => entry.key === navKey)
   return item ? sees(item, viewer) : false

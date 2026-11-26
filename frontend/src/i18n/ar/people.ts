@@ -4,6 +4,9 @@ export const users = {
   title: 'المستخدمون',
   subtitle: 'حسابات المعلمين والطلاب وأولياء الأمور والموظفين',
   addUser: 'إضافة مستخدم',
+  addStudent: 'إضافة طالب',
+  addTeacher: 'إضافة مدرس',
+  addOther: 'حساب آخر',
   role: 'الدور',
   joinedAt: 'تاريخ الانضمام',
   searchByName: 'بحث بالاسم',
@@ -221,6 +224,37 @@ export const users = {
     extraRolesHint: 'أدوار نظامية أو مخصّصة تُضاف إلى دور النوع. لا يمكن منح صلاحية لا تحملها أنت.',
     noDetails: 'ولي الأمر بلا ملف تعريفي. يمكنك ربطه بالطلاب من تفاصيل الحساب بعد الإنشاء.',
     created: 'تم إنشاء حساب {{name}} بحالة «مدعو». أصدر رابط الدعوة لتفعيله.',
+  },
+  // The one-step «إضافة طالب» / «إضافة مدرس» (QuickCreateUserModal): three fields, then the invitation at once.
+  quick: {
+    title: {
+      student: 'إضافة طالب',
+      teacher: 'إضافة مدرس',
+    },
+    submit: {
+      student: 'إضافة طالب',
+      teacher: 'إضافة مدرس',
+    },
+    hint: {
+      student: 'يُنشأ حساب بدور الطالب، ثم يُصدَر رابط دعوة يختار به صاحبه كلمة المرور بنفسه.',
+      teacher: 'يُنشأ حساب بدور المدرس، ثم يُصدَر رابط دعوة يختار به صاحبه كلمة المرور بنفسه.',
+    },
+    fields: {
+      phone: 'رقم الهاتف',
+      backupPhone: 'رقم الهاتف الاحتياطي',
+    },
+    optional: 'اختياري',
+    validation: {
+      emailRequired: 'أدخل البريد الإلكتروني',
+      phoneRequired: 'أدخل رقم الهاتف',
+      // The example sits in an LTR isolate (U+2066 … U+2069), so its «+» stays in front of the digits in Arabic text.
+      phone: 'أدخل الرقم بالصيغة الدولية مع رمز الدولة، مثل \u2066+9665XXXXXXXX\u2069',
+    },
+    created: {
+      student: 'تمت إضافة الطالب {{name}}',
+      teacher: 'تمت إضافة المدرس {{name}}',
+    },
+    invitationFailed: 'لم يُصدَر رابط الدعوة؛ يمكنك إصداره من تفاصيل المستخدم. السبب: {{reason}}',
   },
   validation: {
     fullName: 'أدخل الاسم الكامل (حرفان على الأقل)',

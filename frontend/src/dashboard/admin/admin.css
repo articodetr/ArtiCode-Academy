@@ -69,10 +69,13 @@
 }
 
 .admin-actions__grid {
-  display: grid;
-  /* 2 per row on a phone, 3 on a narrow tablet, 4 on a small laptop, 6 from a wide content area (the spec's table). */
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  --admin-actions-gap: 14px;
+  /* 2 per row on a phone, 3 on a narrow tablet, 4 on a small laptop, 6 from a wide content area (the spec's table) —
+     each balanced for the number of cards by the component (`--admin-actions-cols-<max>`, admin.layout.ts). */
+  --admin-actions-cols: var(--admin-actions-cols-2, 2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--admin-actions-gap);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -80,23 +83,26 @@
 
 @container (min-width: 520px) {
   .admin-actions__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --admin-actions-cols: var(--admin-actions-cols-3, 3);
   }
 }
 
 @container (min-width: 700px) {
   .admin-actions__grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    --admin-actions-cols: var(--admin-actions-cols-4, 4);
   }
 }
 
 @container (min-width: 1000px) {
   .admin-actions__grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    --admin-actions-cols: var(--admin-actions-cols-6, 6);
   }
 }
 
 .admin-action {
+  /* One column of the row, less a gap so rounding never pushes a card onto the next row; the cards of a shorter last
+     row grow to close it, so no row ends on an empty slot. */
+  flex: 1 1 calc(100% / var(--admin-actions-cols) - var(--admin-actions-gap));
   min-width: 0;
 }
 
@@ -203,15 +209,39 @@
 }
 
 .admin-stats__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
-  gap: 14px;
+  --admin-stats-gap: 14px;
+  /* 2 per row on a phone, then 3, 4 and 5 as the section widens (a tile keeps about 200 px) — each balanced for the
+     number of tiles by the component (`--admin-stats-cols-<max>`, admin.layout.ts). */
+  --admin-stats-cols: var(--admin-stats-cols-2, 2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--admin-stats-gap);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+@container (min-width: 620px) {
+  .admin-stats__grid {
+    --admin-stats-cols: var(--admin-stats-cols-3, 3);
+  }
+}
+
+@container (min-width: 840px) {
+  .admin-stats__grid {
+    --admin-stats-cols: var(--admin-stats-cols-4, 4);
+  }
+}
+
+@container (min-width: 1040px) {
+  .admin-stats__grid {
+    --admin-stats-cols: var(--admin-stats-cols-5, 5);
+  }
+}
+
 .admin-stat {
+  /* As a quick action: one column less a gap, a shorter last row closed by growing. */
+  flex: 1 1 calc(100% / var(--admin-stats-cols) - var(--admin-stats-gap));
   display: flex;
   align-items: center;
   gap: 14px;
@@ -281,11 +311,11 @@
   color: color-mix(in srgb, var(--ac-text, #17243d) 60%, transparent);
 }
 
-/* Two tiles per row on a phone (seven stacked tiles made the page long); a smaller icon leaves the number its room. */
+/* Two tiles per row on a phone (stacked tiles made the page long); a smaller icon leaves the number its room. */
 @media (max-width: 767.98px) {
   .admin-stats__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    --admin-stats-cols: var(--admin-stats-cols-2, 2);
+    --admin-stats-gap: 10px;
   }
   .admin-stat {
     gap: 10px;

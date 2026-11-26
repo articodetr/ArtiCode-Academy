@@ -1,18 +1,21 @@
 // The home page — three homes, kept apart (J-F59): a student or a guardian with no other role gets the learner home
 // (LearnerHome, built from the «my …» reads); a teacher (the UI role `teacher`: no admin or staff role) keeps the
-// teacher's dashboard below, unchanged — the four number cards, today's lessons beside the latest notifications, then
-// the open and running classes; everyone else — the academy's admins and staff, and custom-role holders — gets the
+// teacher's dashboard below — the number cards, today's lessons beside the latest notifications, then the open and
+// running classes; everyone else — the academy's admins and staff, and custom-role holders — gets the
 // admin home (dashboard/admin/AdminDashboardHome.tsx: quick actions, the academy's figures, the coming lessons and the
 // latest notifications). On the teacher's dashboard every card reads the server and shows only to a holder of the
 // keys its read needs (the server stays the boundary):
-//   - the number cards: API-164 GET /api/reports/overview, for any of the three reports.* keys — its `general`
-//     section for everyone of them, `financial` (the money card) only for reports.financial.view;
+//   - the number cards: API-164 GET /api/reports/overview, for any of the three reports.* keys — the active students
+//     and today's lessons of its `general` section for everyone of them (not its running classes since 2026-11-26:
+//     classes are an internal mechanism, not a section of the interface), `financial` (the money card) only for
+//     reports.financial.view;
 //   - today's lessons: API-093 GET /api/lessons, for lessons.read (a teacher gets the lessons of their classes);
-//   - the classes: API-050 GET /api/classes (running, then open), for classes.read (D-R16: a teacher's own);
+//   - the classes: API-050 GET /api/classes (running, then open), for classes.read (D-R16: a teacher's own) — a list
+//     to read, without a link to the classes page (2026-11-26);
 //   - the notifications: API-167 GET /api/me/notifications, by ownership (no key).
 // A card that cannot be read is left out, never filled with invented numbers; a failed card says so and offers
 // to try again without breaking the others.
-import { AppstoreOutlined, CalendarOutlined, CreditCardOutlined, UserOutlined } from '@ant-design/icons'
+import { CalendarOutlined, CreditCardOutlined, UserOutlined } from '@ant-design/icons'
 import { Card, Col, Empty, Row, Statistic, Table, Tag, Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -38,7 +41,7 @@ import { useLoad } from '../dashboard/useLoad'
 import type { Reloadable } from '../dashboard/useLoad'
 import { useNow } from '../dashboard/useNow'
 import { useLocalized } from '../i18n/useLocalized'
-import { canAccess } from '../layout/navigation'
+import { canAccess, teachesOnly } from '../layout/navigation'
 import { formatLessonTimes } from '../lessons/lessons.format'
 import { LessonZoneNote } from '../lessons/LessonZone'
 import { addDays, calendarDateIn, minutesNowIn } from '../timetable/timetable.dates'
@@ -65,7 +68,7 @@ export function DashboardPage() {
   return user?.role === 'teacher' ? <TeacherDashboard /> : <AdminDashboardHome />
 }
 
-/** The teacher's home (the classic staff dashboard, unchanged by J-F59 — it served every staff member before). */
+/** The teacher's home (the classic staff dashboard, kept by J-F59 — it served every staff member before). */
 function TeacherDashboard() {
   const { t } = useTranslation()
   const { user, hasPermission } = useAuth()
@@ -116,7 +119,9 @@ function TeacherDashboard() {
       {canReadClasses ? (
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24}>
-            <Card title={t('dashboard.classes.title')} extra={linkTo('classes', '/classes', t('dashboard.classes.all'))}>
+            {/* A teacher-only viewer's «الدورات» is the classes page (J-F72): the card links there for them alone — classes
+                management is not part of the admin interface (PORTAL-04-ADMIN-SIMPLIFY). */}
+            <Card title={t('dashboard.classes.title')} extra={user && teachesOnly(user) ? linkTo('classes', '/classes', t('nav.classesForTeacher')) : undefined}>
               <CardContent loaded={classes}>{(items) => <ActiveClassesTable classes={items} />}</CardContent>
             </Card>
           </Col>
@@ -127,8 +132,9 @@ function TeacherDashboard() {
 }
 
 /**
- * The four number cards of API-164: three from its `general` section, and the money still owed — per currency,
- * as the server sums it — only while its `financial` section comes (a holder of reports.financial.view).
+ * The number cards of API-164: the active students and today's lessons from its `general` section, and the money still
+ * owed — per currency, as the server sums it — only while its `financial` section comes (a holder of
+ * reports.financial.view). Two or three cards share the row evenly, so it never ends on an empty slot.
  */
 function OverviewCards({ overview, withMoney }: { overview: Reloadable<ReportsOverview>; withMoney: boolean }) {
   const { t } = useTranslation()
@@ -155,26 +161,22 @@ function OverviewCards({ overview, withMoney }: { overview: Reloadable<ReportsOv
   const moneyLines = owed.length
     ? owed.map((row) => ({ key: row.currency, text: formatMoney(row.balance, row.currency, language) }))
     : [{ key: 'none', text: academy?.currency ? formatMoney(0, academy.currency, language) : '0' }]
+  const span = 24 / (showMoney ? 3 : 2)
 
   return (
     <Row gutter={[16, 16]}>
-      <Col xs={24} sm={12} xl={6}>
+      <Col xs={24} sm={span}>
         <Card>
           <Statistic loading={loading} title={t('dashboard.stats.activeStudents')} value={data?.general.activeStudents ?? 0} prefix={<UserOutlined />} />
         </Card>
       </Col>
-      <Col xs={24} sm={12} xl={6}>
-        <Card>
-          <Statistic loading={loading} title={t('dashboard.stats.runningClasses')} value={data?.general.runningClasses ?? 0} prefix={<AppstoreOutlined />} />
-        </Card>
-      </Col>
-      <Col xs={24} sm={12} xl={6}>
+      <Col xs={24} sm={span}>
         <Card>
           <Statistic loading={loading} title={t('dashboard.stats.lessonsToday')} value={data?.general.lessonsToday ?? 0} prefix={<CalendarOutlined />} />
         </Card>
       </Col>
       {showMoney ? (
-        <Col xs={24} sm={12} xl={6}>
+        <Col xs={24} sm={span}>
           <Card>
             <Statistic
               loading={loading}

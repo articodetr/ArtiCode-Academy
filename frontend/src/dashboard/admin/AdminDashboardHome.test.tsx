@@ -90,7 +90,7 @@ function renderHome(permissions: string[], overrides: Parameters<typeof makeUser
 const actionLink = (title: string) => screen.getByText(title, { selector: '.admin-action__title' }).closest('a') as HTMLAnchorElement
 
 describe('AdminDashboardHome — the admin home (J-F59)', () => {
-  it('greets the admin and links the twelve quick actions to the existing pages, the creation forms through ?create=', async () => {
+  it('greets the admin and links the eleven quick actions to the existing pages, the creation forms through ?create=', async () => {
     mockAdminApi()
     renderHome(FULL_ADMIN)
 
@@ -100,8 +100,8 @@ describe('AdminDashboardHome — the admin home (J-F59)', () => {
       addStudent: '/users?create=student',
       addTeacher: '/users?create=teacher',
       createCourse: '/courses?create=course',
-      classes: '/classes',
-      assignTeacher: '/classes',
+      // Teachers are assigned from the course drawer; classes management is no section of the interface (2026-11-26).
+      assignTeacher: '/courses',
       lessons: '/lessons',
       schedule: '/schedule',
       enrollmentRequests: '/enrollment-requests',
@@ -113,8 +113,17 @@ describe('AdminDashboardHome — the admin home (J-F59)', () => {
     for (const [key, href] of Object.entries(expected)) {
       expect(actionLink(A.actions[key as keyof typeof A.actions])).toHaveAttribute('href', href)
     }
-    // Six cards a phone shows, then «show more» for the other six (CSS hides them on a phone only).
-    const more = screen.getByText(A.showMore.replace('{{n}}', '6')).closest('button') as HTMLButtonElement
+    // Exactly these cards: none opens /classes, and no «manage classes» card is left.
+    const cards = Array.from(document.querySelectorAll('.admin-action__link'))
+    expect(cards).toHaveLength(Object.keys(expected).length)
+    expect(cards.some((card) => card.getAttribute('href')?.startsWith('/classes'))).toBe(false)
+    expect(screen.queryByText('إدارة الفصول')).toBeNull()
+    // The rows are balanced for the eleven cards (admin.layout.ts → admin.css): 6 + 5 on a wide screen, 4 + 4 + 3 below.
+    const grid = document.querySelector('.admin-actions__grid') as HTMLElement
+    expect(grid.style.getPropertyValue('--admin-actions-cols-6')).toBe('6')
+    expect(grid.style.getPropertyValue('--admin-actions-cols-4')).toBe('4')
+    // Six cards a phone shows, then «show more» for the other five (CSS hides them on a phone only).
+    const more = screen.getByText(A.showMore.replace('{{n}}', '5')).closest('button') as HTMLButtonElement
     expect(more).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(more)
     expect(screen.getByText(A.showLess).closest('button')).toHaveAttribute('aria-expanded', 'true')
@@ -126,8 +135,11 @@ describe('AdminDashboardHome — the admin home (J-F59)', () => {
     renderHome(FULL_ADMIN)
 
     await waitFor(() => expect(within(screen.getByTestId('stat-activeStudents')).getByText('42')).toBeInTheDocument())
-    expect(within(screen.getByTestId('stat-runningClasses')).getByText('3')).toBeInTheDocument()
-    expect(within(screen.getByTestId('stat-openClasses')).getByText('2')).toBeInTheDocument()
+    // No class figures: the running and open classes the server still counts are not shown (2026-11-26).
+    expect(screen.queryByTestId('stat-runningClasses')).toBeNull()
+    expect(screen.queryByTestId('stat-openClasses')).toBeNull()
+    expect(screen.queryByText('الفصول الجارية')).toBeNull()
+    expect(screen.queryByText('الفصول المفتوحة')).toBeNull()
     expect(within(screen.getByTestId('stat-lessonsToday')).getByText('7')).toBeInTheDocument()
     expect(within(screen.getByTestId('stat-attendanceRate')).getByText(/90/)).toBeInTheDocument()
     // Each currency on its own line, never summed.
@@ -136,6 +148,11 @@ describe('AdminDashboardHome — the admin home (J-F59)', () => {
     expect(owed).toContain(formatMoney(12.5, 'USD', 'ar'))
     await waitFor(() => expect(within(screen.getByTestId('stat-pendingRequests')).getByText('5')).toBeInTheDocument())
     expect(within(screen.getByTestId('stat-pendingRequests')).getByText(A.stats.review).closest('a')).toHaveAttribute('href', '/enrollment-requests')
+    // Five tiles, balanced so no row ends on a gap: 5 on a wide section, 3 + 2 below.
+    const tiles = document.querySelector('.admin-stats__grid') as HTMLElement
+    expect(tiles.children).toHaveLength(5)
+    expect(tiles.style.getPropertyValue('--admin-stats-cols-5')).toBe('5')
+    expect(tiles.style.getPropertyValue('--admin-stats-cols-4')).toBe('3')
 
     expect(urls.filter((url) => url.startsWith('/api/reports/overview'))).toHaveLength(1)
     expect(urls.some((url) => url.startsWith('/api/enrollment-requests') && url.includes('limit=1'))).toBe(true)
@@ -167,7 +184,9 @@ describe('AdminDashboardHome — the admin home (J-F59)', () => {
     const urls = mockAdminApi()
     renderHome(['users.read', 'courses.read', 'classes.read'])
 
-    expect(actionLink(A.actions.classes)).toHaveAttribute('href', '/classes')
+    // classes.read opens no card (no «manage classes» since 2026-11-26): nothing here creates, so no action at all.
+    expect(document.querySelectorAll('.admin-action__link')).toHaveLength(0)
+    expect(screen.getByText(A.noActions)).toBeInTheDocument()
     expect(screen.queryByText(A.actions.addStudent)).toBeNull()
     expect(screen.queryByText(A.actions.createCourse)).toBeNull()
     expect(screen.queryByText(A.actions.assignTeacher)).toBeNull()
