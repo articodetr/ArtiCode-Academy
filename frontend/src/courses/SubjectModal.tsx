@@ -9,6 +9,8 @@ import { createSubject, updateSubject } from '../api/subjects'
 import type { Subject } from '../api/subjects'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
+import { SUBJECT_CODE_PREFIX, generateUniqueCode } from '../common/codeGenerator'
+import { GenerateCodeButton } from '../common/GenerateCodeButton'
 import { COURSE_TEXT_MAX_LENGTH, normaliseCourseCode } from './courses.form'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { EMPTY_SUBJECT_FORM, SUBJECT_CODE_MAX_LENGTH, SUBJECT_CODE_PATTERN, buildCreateSubjectInput, planSubjectPatch, subjectFormValuesOf } from './subjects.form'
@@ -21,15 +23,19 @@ interface SubjectModalProps {
   onClose: () => void
   /** The subject as the server returned it; `created` tells a new subject from an edit. */
   onSaved: (subject: Subject, created: boolean) => void
+  /** The codes already in the list (CH-0372): a generated code is never one of them. */
+  takenCodes?: readonly string[]
 }
 
-export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalProps) {
+export function SubjectModal({ open, subject, onClose, onSaved, takenCodes = [] }: SubjectModalProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
+  // Drawn once per modal, so a re-render never changes the code the user sees.
+  const [startCode] = useState(() => generateUniqueCode(SUBJECT_CODE_PREFIX, takenCodes))
   const [error, setError] = useState<string | null>(null)
   const maxLength = { max: COURSE_TEXT_MAX_LENGTH, message: t('courses.validation.maxLength', { max: COURSE_TEXT_MAX_LENGTH }) }
 
@@ -78,7 +84,8 @@ export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalPr
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={subject ? subjectFormValuesOf(subject) : EMPTY_SUBJECT_FORM}
+        // A new subject starts with a generated code (CH-0372); the user may type their own instead.
+        initialValues={subject ? subjectFormValuesOf(subject) : { ...EMPTY_SUBJECT_FORM, code: startCode }}
         onFinish={(values) => void submit(values as SubjectFormValues)}
         disabled={saving}
       >
@@ -99,8 +106,11 @@ export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalPr
         >
           <Input dir="ltr" maxLength={SUBJECT_CODE_MAX_LENGTH} placeholder="MATH" style={{ maxWidth: 200 }} />
         </Form.Item>
+        <div style={{ marginTop: -16, marginBottom: 16 }}>
+          <GenerateCodeButton form={form} prefix={SUBJECT_CODE_PREFIX} takenCodes={takenCodes} />
+        </div>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item
               name="nameAr"
               label={t('courses.subjects.fields.nameAr')}
@@ -109,7 +119,7 @@ export function SubjectModal({ open, subject, onClose, onSaved }: SubjectModalPr
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('courses.subjects.fields.nameEn')} rules={[maxLength]}>
               <Input dir="ltr" />
             </Form.Item>

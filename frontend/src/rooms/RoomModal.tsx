@@ -10,6 +10,8 @@
 import { Alert, App, Col, Form, Input, InputNumber, Modal, Row, Select, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ROOM_CODE_PREFIX, generateUniqueCode } from '../common/codeGenerator'
+import { GenerateCodeButton } from '../common/GenerateCodeButton'
 import type { Branch } from '../api/branches'
 import { createRoom, ROOM_KINDS, updateRoom } from '../api/rooms'
 import type { Room } from '../api/rooms'
@@ -40,14 +42,18 @@ interface RoomModalProps {
   onClose: () => void
   /** The room as the server returned it; `created` tells a new room from an edit. */
   onSaved: (room: Room, created: boolean) => void
+  /** The codes already in the list (CH-0373): a generated code is never one of them. */
+  takenCodes?: readonly string[]
 }
 
-export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalProps) {
+export function RoomModal({ open, room, branches, onClose, onSaved, takenCodes = [] }: RoomModalProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
+  // CH-0373: a new room starts with a generated code, drawn once per opening; the user may type their own.
+  const [startCode] = useState(() => generateUniqueCode(ROOM_CODE_PREFIX, takenCodes))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -108,7 +114,7 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={room ? roomFormValuesOf(room) : EMPTY_ROOM_FORM}
+        initialValues={room ? roomFormValuesOf(room) : { ...EMPTY_ROOM_FORM, code: startCode }}
         onFinish={(values) => void submit(values as RoomFormValues)}
         disabled={saving}
       >
@@ -129,6 +135,9 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
             >
               <Input dir="ltr" maxLength={ROOM_CODE_MAX_LENGTH} placeholder="LAB-1" />
             </Form.Item>
+            <div style={{ marginTop: -16, marginBottom: 16 }}>
+              <GenerateCodeButton form={form} prefix={ROOM_CODE_PREFIX} takenCodes={takenCodes} />
+            </div>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item name="kind" label={t('rooms.fields.kind')}>
@@ -137,12 +146,12 @@ export function RoomModal({ open, room, branches, onClose, onSaved }: RoomModalP
           </Col>
         </Row>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item name="nameAr" label={t('rooms.fields.nameAr')} rules={[{ max: ROOM_TEXT_MAX_LENGTH }]}>
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('rooms.fields.nameEn')} dependencies={['nameAr']} rules={[{ max: ROOM_TEXT_MAX_LENGTH }, arabicFirst]}>
               <Input dir="ltr" />
             </Form.Item>

@@ -331,10 +331,10 @@ export const rolesAdmin = {
   },
   fields: {
     key: 'مفتاح الدور',
-    labelAr: 'التسمية (عربي)',
+    labelAr: 'التسمية',
     labelEn: 'التسمية (إنجليزي)',
     description: 'الوصف',
-    descriptionAr: 'الوصف (عربي)',
+    descriptionAr: 'الوصف',
     descriptionEn: 'الوصف (إنجليزي)',
     permissions: 'الصلاحيات',
   },

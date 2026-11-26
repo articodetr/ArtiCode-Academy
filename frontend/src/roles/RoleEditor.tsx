@@ -214,7 +214,7 @@ function RoleEditorBody({ target, groups, onClose, onSaved, onUnsavedChange }: R
             <Form.Item name="labelAr" label={t('rolesAdmin.fields.labelAr')} rules={[{ required: true, whitespace: true, message: t('rolesAdmin.validation.labelAr') }, maxLengthRule]}>
               <Input maxLength={LOCALIZED_TEXT_MAX_LENGTH} />
             </Form.Item>
-            <Form.Item name="labelEn" label={t('rolesAdmin.fields.labelEn')} rules={[maxLengthRule]}>
+            <Form.Item hidden name="labelEn" label={t('rolesAdmin.fields.labelEn')} rules={[maxLengthRule]}>
               <Input dir="ltr" maxLength={LOCALIZED_TEXT_MAX_LENGTH} />
             </Form.Item>
             <Form.Item
@@ -235,7 +235,7 @@ function RoleEditorBody({ target, groups, onClose, onSaved, onUnsavedChange }: R
             >
               <Input.TextArea rows={2} maxLength={LOCALIZED_TEXT_MAX_LENGTH} />
             </Form.Item>
-            <Form.Item name="descriptionEn" label={t('rolesAdmin.fields.descriptionEn')} rules={[maxLengthRule]}>
+            <Form.Item hidden name="descriptionEn" label={t('rolesAdmin.fields.descriptionEn')} rules={[maxLengthRule]}>
               <Input.TextArea rows={2} dir="ltr" maxLength={LOCALIZED_TEXT_MAX_LENGTH} />
             </Form.Item>
           </>

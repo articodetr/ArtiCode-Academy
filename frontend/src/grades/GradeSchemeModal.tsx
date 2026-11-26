@@ -128,7 +128,7 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
         disabled={saving}
       >
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item
               name="nameAr"
               label={t('gradeSchemes.fields.nameAr')}
@@ -137,7 +137,7 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('gradeSchemes.fields.nameEn')} rules={[textMax]}>
               <Input dir="ltr" />
             </Form.Item>
@@ -191,7 +191,7 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
                           <InputNumber min={0} max={100} style={{ width: '100%' }} />
                         </Form.Item>
                       </Col>
-                      <Col xs={24} md={7}>
+                      <Col xs={24} md={13}>
                         <Form.Item
                           name={[field.name, 'labelAr']}
                           label={t('gradeSchemes.fields.labelAr')}
@@ -200,7 +200,7 @@ export function GradeSchemeModal({ scheme, firstScheme, onClose, onSaved, onStal
                           <Input />
                         </Form.Item>
                       </Col>
-                      <Col xs={24} md={6}>
+                      <Col span={0}>
                         <Form.Item name={[field.name, 'labelEn']} label={t('gradeSchemes.fields.labelEn')} rules={[textMax]}>
                           <Input dir="ltr" />
                         </Form.Item>

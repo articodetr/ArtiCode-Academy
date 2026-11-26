@@ -100,18 +100,24 @@ describe('AppLayout navigation', () => {
     expect(labels).toContain(ar.nav.myLessons)
   })
 
-  it('shows a teacher «exams» — no «assignments» since 2026-11-26, even with the key — and selects it on /exams; a student holding exams.read does not see it (J-F45)', () => {
-    // A session from before the seed change still carries assignments.read: the teacher gets no assignments entry all the same.
-    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['classes.read', 'assignments.read', 'exams.read', 'exams.manage', 'exams.grade', 'questions.manage'] })
-    const { unmount } = renderWithProviders(<AppLayout />, { auth: makeAuth({ user: teacher }), route: '/exams' })
+  it('shows an admin «assignments» and «exams» and selects «exams» on /exams; a teacher (CH-0374 — inside each class) and a student holding exams.read do not see them (J-F45)', () => {
+    const admin = makeUser({ role: 'admin', roles: ['academy_admin'], permissions: ['classes.read', 'assignments.read', 'exams.read', 'exams.manage', 'exams.grade', 'questions.manage'] })
+    const { unmount } = renderWithProviders(<AppLayout />, { auth: makeAuth({ user: admin }), route: '/exams' })
     const labels = menuLabels()
-    expect(labels).not.toContain(ar.nav.assignments)
+    expect(labels).toContain(ar.nav.assignments)
     expect(labels).toContain(ar.nav.exams)
     expect(labels.indexOf(ar.nav.questionBanks)).toBe(labels.indexOf(ar.nav.exams) + 1)
     const selected = document.querySelectorAll('.ant-menu-item-selected')
     expect(selected).toHaveLength(1)
     expect(selected[0]).toHaveTextContent(ar.nav.exams)
     unmount()
+
+    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['classes.read', 'lessons.read', 'assignments.read', 'exams.read', 'exams.manage', 'exams.grade'] })
+    const shown = renderWithProviders(<AppLayout />, { auth: makeAuth({ user: teacher }), route: '/' })
+    expect(menuLabels()).not.toContain(ar.nav.exams)
+    expect(menuLabels()).not.toContain(ar.nav.assignments)
+    expect(menuLabels()).not.toContain(ar.nav.lessons)
+    shown.unmount()
 
     const student = makeUser({ role: 'student', roles: ['student'], permissions: ['courses.read', 'assignments.read', 'exams.read', 'exams.take'] })
     renderWithProviders(<AppLayout />, { auth: makeAuth({ user: student }), route: '/' })
@@ -548,9 +554,10 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     const menu = siderMenu()
     expect(headings(menu)).toEqual([ar.nav.groups.mine, ar.nav.groups.academics, ar.nav.groups.followUp])
     expect(labelsIn(menu)).not.toContain(ar.nav.users)
-    // J-F72: «الفصول والمجموعات» reads «الدورات» for a teacher.
+    // J-F72: «الفصول والمجموعات» reads «فصولي» for a teacher (J-F72, CH-0375).
     const academics = sections(menu).find(([heading]) => heading === ar.nav.groups.academics)!
-    expect(academics[1]).toEqual([ar.nav.classesForTeacher, ar.nav.lessons, ar.nav.schedule])
+    // CH-0374: the lessons are inside each class's page, so no «الدروس» entry.
+    expect(academics[1]).toEqual([ar.nav.classesForTeacher, ar.nav.myStudents, ar.nav.schedule])
     const mine = sections(menu).find(([heading]) => heading === ar.nav.groups.mine)!
     expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
   })
@@ -561,8 +568,9 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     const menu = siderMenu()
     expect(labelsIn(menu)).not.toContain(ar.nav.assignments)
     expect(sections(menu)).toEqual([
-      [ar.nav.groups.academics, [ar.nav.classesForTeacher, ar.nav.lessons, ar.nav.schedule]],
-      [ar.nav.groups.assessment, [ar.nav.exams, ar.nav.questionBanks]],
+      // CH-0374: the lessons and exams are inside each class's page; CH-0370: «طلابي».
+      [ar.nav.groups.academics, [ar.nav.classesForTeacher, ar.nav.myStudents, ar.nav.schedule]],
+      [ar.nav.groups.assessment, [ar.nav.questionBanks]],
       [ar.nav.groups.followUp, [ar.nav.notifications]],
     ])
     unmount()

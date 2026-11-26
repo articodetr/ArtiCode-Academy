@@ -41,9 +41,9 @@ export const lessons = {
   },
   fields: {
     class: 'الفصل',
-    titleAr: 'العنوان (عربي)',
+    titleAr: 'العنوان',
     titleEn: 'العنوان (إنجليزي)',
-    descriptionAr: 'الوصف (عربي)',
+    descriptionAr: 'الوصف',
     descriptionEn: 'الوصف (إنجليزي)',
     deliveryMode: 'نمط التقديم',
     date: 'التاريخ',

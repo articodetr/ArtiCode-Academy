@@ -131,7 +131,7 @@ function FeePlanBody({ plan, currency, onClose, onSaved }: { plan: FeePlan | nul
           >
             <Input dir="auto" />
           </Form.Item>
-          <Form.Item name="nameEn" label={t('payments.feePlans.nameEn')} rules={[{ max: 200, message: t('payments.record.tooLong', { max: 200 }) }]} style={{ flex: '1 1 220px' }}>
+          <Form.Item hidden name="nameEn" label={t('payments.feePlans.nameEn')} rules={[{ max: 200, message: t('payments.record.tooLong', { max: 200 }) }]} style={{ flex: '1 1 220px' }}>
             <Input dir="auto" />
           </Form.Item>
         </Flex>

@@ -104,6 +104,7 @@ describe('BranchesManager (MOD-02-T06 screen, API-080..API-083)', () => {
 
     fireEvent.click(screen.getByText(ar.branches.add).closest('button')!)
     const dialog = (await screen.findByText(ar.branches.createTitle)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.clear(within(dialog).getByLabelText(ar.branches.fields.code)) // a new one starts with a generated code (CH-0373)
     await userEvent.type(within(dialog).getByLabelText(ar.branches.fields.code), 'west')
     await userEvent.type(within(dialog).getByLabelText(ar.branches.fields.nameAr), 'الفرع الغربي')
     await userEvent.type(within(dialog).getByLabelText(ar.branches.fields.phone), '+966500000009')
@@ -159,6 +160,7 @@ describe('BranchesManager (MOD-02-T06 screen, API-080..API-083)', () => {
 
     fireEvent.click(screen.getByText(ar.branches.add).closest('button')!)
     const dialog = (await screen.findByText(ar.branches.createTitle)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.clear(within(dialog).getByLabelText(ar.branches.fields.code)) // a new one starts with a generated code (CH-0373)
     await userEvent.type(within(dialog).getByLabelText(ar.branches.fields.code), 'north')
     await userEvent.type(within(dialog).getByLabelText(ar.branches.fields.nameAr), 'مكرر')
     fireEvent.click(within(dialog).getByText(ar.branches.create).closest('button')!)

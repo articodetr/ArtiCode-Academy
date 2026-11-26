@@ -1,0 +1,37 @@
+// English texts of one class's own page (CH-0374): part of the `en` object, assembled in ../en.ts (the keys of ../ar/classPage.ts).
+
+export const classPage = {
+  back: 'Back to classes',
+  loadError: 'Could not load. Press «Refresh» to try again.',
+  forClass: 'Will be added to the class: {{name}}',
+  tabs: {
+    lessons: 'Lessons',
+    assignments: 'Homework',
+    exams: 'Exams',
+  },
+  lessons: {
+    title: "This class's lessons",
+    empty: 'No lessons in this class yet.',
+    emptyManage: 'No lessons in this class yet. Press «Add lesson» to add the first one.',
+    attendance_zero: 'Attendance not taken',
+    attendance_one: 'Attendance of 1 student recorded',
+    attendance_two: 'Attendance of 2 students recorded',
+    attendance_few: 'Attendance of {{count}} students recorded',
+    attendance_many: 'Attendance of {{count}} students recorded',
+    attendance_other: 'Attendance of {{count}} students recorded',
+    attendance: 'Attendance not taken',
+  },
+  assignments: {
+    title: "This class's homework",
+    empty: 'No homework in this class yet.',
+    emptyManage: 'No homework in this class yet. Press «Add assignment» to add the first one.',
+    due: 'Due:',
+    submitted: 'Submitted:',
+  },
+  exams: {
+    title: "This class's exams",
+    empty: 'No exams in this class yet.',
+    emptyManage: 'No exams in this class yet. Press «Add exam» to add the first one.',
+    results: 'Results:',
+  },
+}

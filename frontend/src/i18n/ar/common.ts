@@ -30,6 +30,8 @@ export const common = {
   notImplemented: 'هذه الوظيفة غير منفّذة بعد (نموذج أولي).',
   // KI-054 (J-F23): the «discard?» question of a drawer that holds unsaved work, asked by its close button and,
   // since J-F27 (KI-055), by a browser back/forward; the class drawer's too since then (classes.drawer.discard.* is gone).
+  // CH-0372/CH-0373: the button beside every code field — a random code never already in the list.
+  generateCode: 'توليد رمز',
   unsaved: {
     title: 'تجاهل التعديلات غير المحفوظة؟',
     content: 'في هذا الدرج محرّر مفتوح لم تُحفظ تعديلاته بعد. إغلاق الدرج يتجاهلها.',
@@ -123,7 +125,7 @@ export const nav = {
   courses: 'الدورات والمستويات',
   classes: 'الفصول والمجموعات',
   // J-F72: the same entry for a teacher-only viewer.
-  classesForTeacher: 'الدورات',
+  classesForTeacher: 'فصولي',
   myClasses: 'دوراتي',
   // MOD-19: the learner's catalog and courses, the office's requests.
   catalog: 'استكشف الدورات',
@@ -136,6 +138,7 @@ export const nav = {
   myAssignments: 'واجباتي',
   myExams: 'اختباراتي',
   myGrades: 'درجاتي',
+  myStudents: 'طلابي',
   exams: 'الاختبارات والدرجات',
   questionBanks: 'بنك الأسئلة',
   certificates: 'الشهادات',

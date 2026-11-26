@@ -38,9 +38,9 @@ export const assignments = {
   fields: {
     class: 'الفصل',
     lesson: 'الدرس المرتبط',
-    titleAr: 'العنوان (عربي)',
+    titleAr: 'العنوان',
     titleEn: 'العنوان (إنجليزي)',
-    instructionsAr: 'التعليمات (عربي)',
+    instructionsAr: 'التعليمات',
     instructionsEn: 'التعليمات (إنجليزي)',
     maxScore: 'الدرجة القصوى',
     weight: 'الوزن',

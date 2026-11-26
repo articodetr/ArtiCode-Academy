@@ -18,6 +18,7 @@ import { PublicHomePage } from '../pages/PublicHomePage'
 import { PublicCoursePage } from '../pages/PublicCoursePage'
 import { CertificatePrintPage } from '../pages/CertificatePrintPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
+import { ClassPage } from '../pages/ClassPage'
 import { ClassesPage } from '../pages/ClassesPage'
 import { CoursesPage } from '../pages/CoursesPage'
 import { DashboardPage } from '../pages/DashboardPage'
@@ -43,6 +44,7 @@ import { SettingsPage } from '../pages/SettingsPage'
 import { StudentRegisterCompletePage } from '../pages/StudentRegisterCompletePage'
 import { StudentRegisterPage } from '../pages/StudentRegisterPage'
 import { TakeExamPage } from '../pages/TakeExamPage'
+import { MyStudentPage, MyStudentsPage } from '../pages/MyStudentsPage'
 import { UsersPage } from '../pages/UsersPage'
 import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
 
@@ -108,6 +110,7 @@ const router = createBrowserRouter([
       { path: 'users', element: guarded('users', <UsersPage />) },
       { path: 'courses', element: guarded('courses', <CoursesPage />) },
       { path: 'classes', element: guarded('classes', <ClassesPage />) },
+      { path: 'classes/:classId', element: guarded('classes', <ClassPage />) }, // CH-0374: one class's page with its lessons, homework and exams
       { path: 'my-classes', element: guarded('myClasses', <MyClassesPage />) }, // `student`/`guardian` role keys (J-F04, API-060 — ownership)
       { path: 'my-classes/:classId', element: guarded('myClasses', <MyClassLessonsPage />) }, // J-F62: one class's lessons (API-101 with classId)
       { path: 'catalog', element: guarded('catalog', <CatalogPage />) }, // MOD-19: `student`/`guardian` role keys (API-219 reads with courses.read)
@@ -118,6 +121,8 @@ const router = createBrowserRouter([
       { path: 'enrollment-requests', element: guarded('enrollmentRequests', <EnrollmentRequestsPage />) }, // MOD-19: `enrollments.manage` (API-224/225)
       { path: 'schedule', element: guarded('schedule', <SchedulePage />) },
       { path: 'lessons', element: guarded('lessons', <LessonsPage />) },
+      { path: 'my-students', element: guarded('myStudents', <MyStudentsPage />) }, // CH-0370: the `teacher` role key (API-301 — the classes the caller teaches)
+      { path: 'my-students/:studentId', element: guarded('myStudents', <MyStudentPage />) }, // CH-0370: one student (API-302)
       { path: 'my-lessons', element: guarded('myLessons', <MyLessonsPage />) }, // `student`/`guardian` role keys (J-F11, API-101 — ownership)
       { path: 'assignments', element: guarded('assignments', <AssignmentsPage />) },
       { path: 'my-assignments', element: guarded('myAssignments', <MyAssignmentsPage />) }, // `student`/`guardian` role keys (J-F42, API-112 — ownership)

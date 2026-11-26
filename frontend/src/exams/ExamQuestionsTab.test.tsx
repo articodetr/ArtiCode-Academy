@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ExamQuestions } from '../api/examQuestions'
 import type { Exam } from '../api/exams'
+import type { QuestionBank } from '../api/questionBanks'
 import { ar } from '../i18n/ar'
 import {
   BANK_QUESTION_IDS,
@@ -43,10 +44,12 @@ interface TabApiOptions {
   questions: () => ExamQuestions | Response
   /** The answer of a write; any other write fails. */
   respond?: (method: string, url: string, body: unknown) => Response | undefined
+  /** GET /api/question-banks — one bank by default (CH-0376: the course's bank of «كتابة سؤال جديد»). */
+  banks?: () => QuestionBank[]
 }
 
 /** The exam's questions (API-270), one bank (API-260) and its ready questions for the picker (API-265); `calls` records every request. */
-function mockTabApi({ questions, respond = () => undefined }: TabApiOptions) {
+function mockTabApi({ questions, respond = () => undefined, banks = () => [makeQuestionBank()] }: TabApiOptions) {
   const calls: Call[] = []
   mockFetch((url, init) => {
     const method = init?.method ?? 'GET'
@@ -57,7 +60,7 @@ function mockTabApi({ questions, respond = () => undefined }: TabApiOptions) {
       const answer = questions()
       return answer instanceof Response ? answer : jsonResponse(200, answer)
     }
-    if (method === 'GET' && parsed.pathname === '/api/question-banks') return jsonResponse(200, { items: [makeQuestionBank()], nextCursor: null })
+    if (method === 'GET' && parsed.pathname === '/api/question-banks') return jsonResponse(200, { items: banks(), nextCursor: null })
     // The bank's ready questions: the power question (already linked), then the two that wait.
     if (method === 'GET' && parsed.pathname === '/api/questions') return jsonResponse(200, makeQuestionList([makeBankQuestion({ id: first, prompt: threeExamQuestions()[0]!.question.prompt, points: 4 }), makeBankQuestion(), makeLenQuestion()]))
     return respond(method, parsed.pathname, body) ?? jsonResponse(500, { statusCode: 500, message: 'unexpected' })
@@ -79,6 +82,8 @@ const rows = () => screen.getAllByTestId('exam-question-row')
 const pointsOf = (number: number) => screen.getByLabelText(fill(words.editor.pointsOf, { number }))
 const total = () => screen.getByTestId('exam-questions-total')
 const totalText = (sum: string | number, max: number = 10) => fill(words.editor.total, { total: sum, max })
+/** «اختيار من بنك الأسئلة» — the toolbar's button (an empty set shows a card with the same words too). */
+const pickButton = () => screen.getAllByText(words.editor.pickFromBank).map((element) => element.closest('button')).find((button) => button !== null)!
 const saveButton = () => screen.getByText(words.editor.save).closest('button')!
 const writes = (calls: Call[], method: string) => calls.filter((call) => call.method === method)
 const reads = (calls: Call[]) => calls.filter((call) => call.method === 'GET' && call.url === QUESTIONS_URL)
@@ -89,9 +94,9 @@ async function typePoints(number: number, value: string) {
   if (value) await userEvent.type(input, value)
 }
 
-/** Opens «إضافة أسئلة», chooses the bank and waits for its questions. */
+/** Opens «اختيار من بنك الأسئلة», chooses the bank and waits for its questions. */
 async function openPicker() {
-  fireEvent.click(screen.getByText(words.editor.add).closest('button')!)
+  fireEvent.click(pickButton())
   const dialog = (await screen.findByText(words.picker.title)).closest('[role="dialog"]') as HTMLElement
   fireEvent.mouseDown(within(dialog).getByLabelText(words.picker.bank))
   fireEvent.click(await screen.findByText(fill(words.picker.bankOption, { name: makeQuestionBank().name.ar, ready: 5 }), { selector: '.ant-select-item-option-content' }))
@@ -220,8 +225,8 @@ describe('ExamQuestionsTab — the editor of an online draft', () => {
     fireEvent.click(remove(2))
     await waitFor(() => expect(remove(1)).toHaveFocus())
     fireEvent.click(remove(1))
-    await waitFor(() => expect(screen.getByText(words.editor.add).closest('button')).toHaveFocus())
-    expect(screen.getByText(words.editor.empty)).toBeInTheDocument()
+    await waitFor(() => expect(pickButton()).toHaveFocus())
+    expect(screen.getByTestId('exam-questions-choose')).toHaveTextContent(words.editor.empty)
   })
 
   it('puts the saved set back on «discard», after asking', async () => {
@@ -330,10 +335,14 @@ describe('ExamQuestionsTab — the editor of an online draft', () => {
   it('starts an empty set with the way to add questions, and no verdict on a total of nothing', async () => {
     mockTabApi({ questions: () => makeExamQuestions({ items: [], totalPoints: 0, problems: ['no_questions'] }) })
     renderTab()
-    expect(await screen.findByText(words.editor.empty)).toBeInTheDocument()
+    const choose = await screen.findByTestId('exam-questions-choose')
+    expect(choose).toHaveTextContent(words.editor.empty)
     expect(total()).toHaveTextContent(totalText(0))
     expect(within(total()).queryByText(words.editor.totalMismatch)).not.toBeInTheDocument()
-    expect(screen.getByText(words.editor.add).closest('button')).toBeEnabled()
+    expect(pickButton()).toBeEnabled()
+    // CH-0376: the two ways as two cards.
+    expect(within(choose).getByText(words.editor.pickFromBankHint)).toBeInTheDocument()
+    expect(within(choose).getByText(words.editor.writeNewHint)).toBeInTheDocument()
   })
 
   it('says why the questions cannot be read, with a way to try again', async () => {
@@ -363,7 +372,7 @@ describe('ExamQuestionsTab — a draft the caller may not compose', () => {
     expect(screen.queryByLabelText(fill(words.editor.pointsOf, { number: 1 }))).not.toBeInTheDocument()
     expect(screen.queryByLabelText(fill(words.editor.moveUp, { number: 2 }))).not.toBeInTheDocument()
     expect(screen.queryByLabelText(fill(words.editor.remove, { number: 1 }))).not.toBeInTheDocument()
-    expect(screen.queryByText(words.editor.add)).not.toBeInTheDocument()
+    expect(screen.queryByText(words.editor.pickFromBank)).not.toBeInTheDocument()
     expect(screen.queryByText(words.editor.save)).not.toBeInTheDocument()
     expect(onUnsavedChange).toHaveBeenLastCalledWith(false)
     expect(calls.filter((call) => call.method !== 'GET')).toEqual([])
@@ -383,7 +392,7 @@ describe('ExamQuestionsTab — a draft the caller may not compose', () => {
     await waitFor(() => expect(rows()).toHaveLength(3))
     expect(screen.getByText(words.editor.readOnlyClass)).toBeInTheDocument()
     expect(screen.queryByText(words.editor.readOnlyKeys)).not.toBeInTheDocument()
-    expect(screen.queryByText(words.editor.add)).not.toBeInTheDocument()
+    expect(screen.queryByText(words.editor.pickFromBank)).not.toBeInTheDocument()
   })
 })
 
@@ -415,7 +424,7 @@ describe('ExamQuestionsTab — the frozen copies of an exam that was made availa
     expect(screen.getAllByTestId('exam-question-key')).toHaveLength(3)
 
     expect(screen.queryByText(words.editor.save)).not.toBeInTheDocument()
-    expect(screen.queryByText(words.editor.add)).not.toBeInTheDocument()
+    expect(screen.queryByText(words.editor.pickFromBank)).not.toBeInTheDocument()
     expect(screen.queryByTestId('exam-question-row')).not.toBeInTheDocument()
   })
 
@@ -609,5 +618,69 @@ describe('ExamQuestionsTab — «معاينة كطالب»', () => {
     const dialog = await previewDialog()
     expect(within(dialog).getAllByTestId('exam-preview-question')).toHaveLength(3)
     expect(within(dialog).queryByText(words.frozen.correct)).not.toBeInTheDocument()
+  })
+})
+
+describe('ExamQuestionsTab — «كتابة سؤال جديد» (CH-0376)', () => {
+  const editorOf = async () => (await screen.findByText(words.editor.write.saveAndAdd)).closest('.ant-drawer') as HTMLElement
+
+  async function writeQuestion(drawer: HTMLElement) {
+    fireEvent.change(within(drawer).getByLabelText(ar.questionBanks.editor.fields.promptAr), { target: { value: 'ما ناتج 2 + 3؟' } })
+    const options = within(drawer).getAllByLabelText(ar.questionBanks.editor.fields.optionAr)
+    fireEvent.change(options[0]!, { target: { value: '5' } })
+    fireEvent.change(options[1]!, { target: { value: '6' } })
+    fireEvent.click(within(drawer).getByLabelText('الخيار 1 هو الإجابة الصحيحة'))
+  }
+
+  it('opens the question form on the course bank with one «save and add» button; the saved question joins the list as ready, unsaved until «حفظ الأسئلة»', async () => {
+    const created = makeBankQuestion({ id: fourth, prompt: { ar: 'ما ناتج 2 + 3؟' }, points: 1 })
+    const calls = mockTabApi({
+      questions: () => makeExamQuestions({ items: [], totalPoints: 0, problems: ['no_questions'] }),
+      respond: (method, url) => (method === 'POST' && url === `/api/question-banks/${makeQuestionBank().id}/questions` ? jsonResponse(201, created) : undefined),
+    })
+    const { onUnsavedChange } = renderTab()
+    const choose = await screen.findByTestId('exam-questions-choose')
+    fireEvent.click(within(choose).getByText(words.editor.writeNew))
+
+    const drawer = await editorOf()
+    expect(within(drawer).getByText(fill(words.editor.write.bankNote, { name: makeQuestionBank().name.ar }))).toBeInTheDocument()
+    expect(within(drawer).queryByText(ar.questionBanks.editor.saveDraft)).not.toBeInTheDocument()
+    // The banks are read for the exam's course.
+    expect(calls.find((call) => call.url === '/api/question-banks')!.query.get('courseId')).toBe(makeOnlineExam().class.course.id)
+
+    await writeQuestion(drawer)
+    fireEvent.click(within(drawer).getByText(words.editor.write.saveAndAdd).closest('button')!)
+
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const post = writes(calls, 'POST')
+    expect(post).toHaveLength(1)
+    expect((post[0]!.body as { status: string }).status).toBe('ready')
+    expect(within(rows()[0]!).getByText('ما ناتج 2 + 3؟')).toBeInTheDocument()
+    expect(await screen.findByText(words.editor.write.added)).toBeInTheDocument()
+    expect(onUnsavedChange).toHaveBeenLastCalledWith(true)
+    expect(writes(calls, 'PUT')).toHaveLength(0)
+  })
+
+  it('makes the bank «أسئلة <الدورة>» under the course when the course has none', async () => {
+    const madeBank = makeQuestionBank({ id: '0193f000-0000-7000-8000-0000000b0009', name: { ar: 'أسئلة أساسيات بايثون' }, questionCount: 0, readyCount: 0 })
+    const calls = mockTabApi({
+      questions: () => makeExamQuestions(),
+      banks: () => [],
+      respond: (method, url) => (method === 'POST' && url === '/api/question-banks' ? jsonResponse(201, madeBank) : undefined),
+    })
+    renderTab()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    fireEvent.click(screen.getByText(words.editor.writeNew).closest('button')!)
+    await editorOf()
+    expect(writes(calls, 'POST')[0]!.body).toEqual({ name: { ar: 'أسئلة أساسيات بايثون' }, courseId: makeOnlineExam().class.course.id })
+  })
+
+  it('says so when the bank cannot be prepared, and opens no form', async () => {
+    mockTabApi({ questions: () => makeExamQuestions(), banks: () => [], respond: () => jsonResponse(403, { statusCode: 403, message: 'no', code: 'permission_denied' }) })
+    renderTab()
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    fireEvent.click(screen.getByText(words.editor.writeNew).closest('button')!)
+    expect(await screen.findByTestId('exam-questions-error')).toHaveTextContent(/تعذّر تجهيز بنك الأسئلة/)
+    expect(screen.queryByText(words.editor.write.saveAndAdd)).not.toBeInTheDocument()
   })
 })

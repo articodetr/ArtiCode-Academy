@@ -176,7 +176,7 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
             <Form.Item name="bodyAr" label={t('curriculum.content.bodyAr')} extra={t('curriculum.content.plainText')} rules={[required, textMax(CONTENT_TEXT_MAX)]}>
               <Input.TextArea rows={8} />
             </Form.Item>
-            <Form.Item name="bodyEn" label={t('curriculum.content.bodyEn')} dependencies={['bodyAr']} rules={[textMax(CONTENT_TEXT_MAX), arabicFirst(['bodyAr'])]}>
+            <Form.Item hidden name="bodyEn" label={t('curriculum.content.bodyEn')} dependencies={['bodyAr']} rules={[textMax(CONTENT_TEXT_MAX), arabicFirst(['bodyAr'])]}>
               <Input.TextArea rows={4} dir="ltr" />
             </Form.Item>
           </>
@@ -268,12 +268,12 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
 
         {kind === 'image' ? (
           <Row gutter={12}>
-            <Col xs={24} md={12}>
+            <Col xs={24}>
               <Form.Item name="altAr" label={t('curriculum.content.altAr')} extra={t('curriculum.content.altHint')} rules={[textMax(CONTENT_SHORT_TEXT_MAX)]}>
                 <Input />
               </Form.Item>
             </Col>
-            <Col xs={24} md={12}>
+            <Col span={0}>
               <Form.Item name="altEn" label={t('curriculum.content.altEn')} dependencies={['altAr']} rules={[textMax(CONTENT_SHORT_TEXT_MAX), arabicFirst(['altAr'])]}>
                 <Input dir="ltr" />
               </Form.Item>
@@ -292,7 +292,7 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
             <Form.Item name="noteAr" label={t('curriculum.content.noteAr')} extra={t('curriculum.content.plainText')} rules={[textMax(CONTENT_TEXT_MAX)]}>
               <Input.TextArea rows={4} />
             </Form.Item>
-            <Form.Item name="noteEn" label={t('curriculum.content.noteEn')} dependencies={['noteAr']} rules={[textMax(CONTENT_TEXT_MAX), arabicFirst(['noteAr'])]}>
+            <Form.Item hidden name="noteEn" label={t('curriculum.content.noteEn')} dependencies={['noteAr']} rules={[textMax(CONTENT_TEXT_MAX), arabicFirst(['noteAr'])]}>
               <Input.TextArea rows={3} dir="ltr" />
             </Form.Item>
           </>
@@ -307,12 +307,12 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
               </Space>
               {fields.map((field, index) => (
                 <Row key={field.key} gutter={8} align="top" data-testid="resource-row">
-                  <Col xs={24} md={7}>
+                  <Col xs={24} md={13}>
                     <Form.Item name={[field.name, 'titleAr']} label={t('curriculum.content.resourceTitleAr')} rules={[required, textMax(CONTENT_SHORT_TEXT_MAX)]}>
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={24} md={6}>
+                  <Col span={0}>
                     <Form.Item
                       name={[field.name, 'titleEn']}
                       label={t('curriculum.content.resourceTitleEn')}

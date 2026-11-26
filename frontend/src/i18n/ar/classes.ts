@@ -5,11 +5,11 @@ export const classes = {
   subtitle: 'مجموعات الطلاب داخل كل دورة',
   addClass: 'إضافة فصل',
   readOnlyHint: 'تعرض هذه الصفحة الفصول المُسندة إليك فقط.',
-  // J-F72: the page as a teacher-only viewer reads it.
-  teacherTitle: 'الدورات',
-  teacherSubtitle: 'الدورات التي تدرّسها وطلابها',
-  teacherReadOnlyHint: 'تعرض هذه الصفحة الدورات المُسندة إليك فقط.',
-  teacherEmptyAssigned: 'لا دورات مُسندة إليك',
+  // J-F72: the page as a teacher-only viewer reads it; «فصولي» since CH-0375 (was «الدورات»).
+  teacherTitle: 'فصولي',
+  teacherSubtitle: 'الفصول التي تدرّسها وطلابها',
+  teacherReadOnlyHint: 'تعرض هذه الصفحة الفصول المُسندة إليك فقط.',
+  teacherEmptyAssigned: 'لا فصول مُسندة إليك',
   searchPlaceholder: 'بحث بالرمز أو الاسم',
   allCourses: 'كل الدورات',
   allStatuses: 'كل الحالات',
@@ -39,7 +39,7 @@ export const classes = {
   fields: {
     course: 'الدورة',
     code: 'رمز الفصل',
-    nameAr: 'الاسم (عربي)',
+    nameAr: 'الاسم',
     nameEn: 'الاسم (إنجليزي)',
     capacity: 'السعة (مقعد)',
     seats: 'المقاعد المشغولة',
@@ -56,7 +56,7 @@ export const classes = {
   },
   hints: {
     course: 'دورة منشورة؛ لا تتغير دورة الفصل بعد إنشائه',
-    code: 'يُحفظ بأحرف كبيرة: أحرف لاتينية وأرقام و . _ - (حتى 32 حرفاً)، ولا يتكرر',
+    code: 'يُملأ رمز تلقائياً، ويمكنك كتابة رمزك أو الضغط على «توليد رمز». يُحفظ بأحرف كبيرة: أحرف لاتينية وأرقام و . _ - (حتى 32 حرفاً)، ولا يتكرر',
     capacityMin: 'لا تقل عن عدد المسجّلين حالياً ({{count}})',
     selfEnrollment: 'يراه الطلاب في «استكشف الدورات» ويسجّلون فيه بأنفسهم ما دام الفصل مفتوحاً أو جارياً ودورته منشورة؛ في الدورة المدفوعة يصبح التسجيل طلباً ينتظر الدفع والموافقة.',
   },

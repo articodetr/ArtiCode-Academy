@@ -27,6 +27,10 @@
 //
 // The page shows answer keys: nothing here is a learner's view, and there is no
 // preview or share link.
+//
+// CH-0376: `forExam` — opened from an online exam's «كتابة سؤال جديد»: a new question only, ONE save
+// («حفظ وإضافة إلى الاختبار» = ready, since a draft cannot be linked to an exam) and a line saying the
+// question is also kept in the bank; the exam's tab adds the saved question to its list.
 import { Alert, App, Button, Col, Drawer, Flex, Form, Input, InputNumber, Radio, Row, Select, Space, Tag, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -56,6 +60,8 @@ interface QuestionEditorProps {
   onSaved: (question: Question, created: boolean) => void
   /** The question or its bank is gone (404): the page re-reads what it shows. */
   onStale: (gone: 'question' | 'bank') => void
+  /** CH-0376: written from an exam — one «save and add» button (status `ready`). */
+  forExam?: boolean
 }
 
 /** What a refused save found: the problems, the status they were checked for, and who found them. */
@@ -68,7 +74,7 @@ interface Refusal {
 /** Tags are separated by Enter, a comma (Latin or Arabic) or a semicolon. */
 const TAG_SEPARATORS = [',', '،', ';', '؛']
 
-export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: QuestionEditorProps) {
+export function QuestionEditor({ bank, question, onClose, onSaved, onStale, forExam = false }: QuestionEditorProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
@@ -205,7 +211,11 @@ export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: Qu
           <Button onClick={requestClose} disabled={saving !== null}>
             {t('common.cancel')}
           </Button>
-          {archived ? (
+          {forExam && !question ? (
+            <Button type="primary" loading={saving === 'ready'} disabled={stopped} onClick={() => void save('ready')}>
+              {t('examOnline.editor.write.saveAndAdd')}
+            </Button>
+          ) : archived ? (
             <Button type="primary" loading={saving === 'keep'} disabled={stopped} onClick={() => void save('keep')}>
               {t('common.save')}
             </Button>
@@ -224,9 +234,13 @@ export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: Qu
     >
       <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
 
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-        {t('questionBanks.editor.bank', { name: localizedLabel(bank.name, language) })}
-      </Typography.Paragraph>
+      {forExam && !question ? (
+        <Alert type="info" showIcon title={t('examOnline.editor.write.hint')} description={t('examOnline.editor.write.bankNote', { name: localizedLabel(bank.name, language) })} style={{ marginBottom: 16 }} />
+      ) : (
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {t('questionBanks.editor.bank', { name: localizedLabel(bank.name, language) })}
+        </Typography.Paragraph>
+      )}
 
       {/* The outcome of a refused save: focused when it appears, so a screen reader reads it and the page shows it. */}
       <div ref={problemsBox} tabIndex={-1} data-testid="question-editor-outcome" style={{ outline: 'none' }}>
@@ -297,7 +311,7 @@ export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: Qu
         >
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} maxLength={QUESTION_TEXT_MAX_LENGTH} />
         </Form.Item>
-        <Form.Item name="promptEn" label={t('questionBanks.editor.fields.promptEn')} dependencies={['promptAr']} rules={[maxLength(QUESTION_TEXT_MAX_LENGTH), arabicFirst('promptAr')]}>
+        <Form.Item hidden name="promptEn" label={t('questionBanks.editor.fields.promptEn')} dependencies={['promptAr']} rules={[maxLength(QUESTION_TEXT_MAX_LENGTH), arabicFirst('promptAr')]}>
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} dir="ltr" maxLength={QUESTION_TEXT_MAX_LENGTH} />
         </Form.Item>
 
@@ -374,7 +388,7 @@ export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: Qu
         <Form.Item name="explanationAr" label={t('questionBanks.editor.fields.explanationAr')} extra={t('questionBanks.editor.hints.explanation')} rules={[maxLength(QUESTION_TEXT_MAX_LENGTH)]}>
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} maxLength={QUESTION_TEXT_MAX_LENGTH} />
         </Form.Item>
-        <Form.Item
+        <Form.Item hidden
           name="explanationEn"
           label={t('questionBanks.editor.fields.explanationEn')}
           dependencies={['explanationAr']}
@@ -383,7 +397,7 @@ export function QuestionEditor({ bank, question, onClose, onSaved, onStale }: Qu
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 8 }} dir="ltr" maxLength={QUESTION_TEXT_MAX_LENGTH} />
         </Form.Item>
 
-        {archived ? null : (
+        {archived || forExam ? null : (
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             {t('questionBanks.editor.hints.statuses')}
           </Typography.Paragraph>

@@ -9,6 +9,8 @@
 import { Alert, App, AutoComplete, Col, Form, Input, Modal, Row, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BRANCH_CODE_PREFIX, generateUniqueCode } from '../common/codeGenerator'
+import { GenerateCodeButton } from '../common/GenerateCodeButton'
 import { isIanaTimeZone, matchTimeZones, TIME_ZONE_MAX_LENGTH } from '../academy/academy.validation'
 import { createBranch, updateBranch } from '../api/branches'
 import type { Branch } from '../api/branches'
@@ -36,14 +38,18 @@ interface BranchModalProps {
   onClose: () => void
   /** The branch as the server returned it; `created` tells a new branch from an edit. */
   onSaved: (branch: Branch, created: boolean) => void
+  /** The codes already in the list (CH-0373): a generated code is never one of them. */
+  takenCodes?: readonly string[]
 }
 
-export function BranchModal({ open, branch, onClose, onSaved }: BranchModalProps) {
+export function BranchModal({ open, branch, onClose, onSaved, takenCodes = [] }: BranchModalProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
+  // CH-0373: a new branch starts with a generated code, drawn once per opening; the user may type their own.
+  const [startCode] = useState(() => generateUniqueCode(BRANCH_CODE_PREFIX, takenCodes))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [timeZoneQuery, setTimeZoneQuery] = useState('')
@@ -102,7 +108,7 @@ export function BranchModal({ open, branch, onClose, onSaved }: BranchModalProps
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={branch ? branchFormValuesOf(branch) : EMPTY_BRANCH_FORM}
+        initialValues={branch ? branchFormValuesOf(branch) : { ...EMPTY_BRANCH_FORM, code: startCode }}
         onFinish={(values) => void submit(values as BranchFormValues)}
         disabled={saving}
       >
@@ -123,8 +129,11 @@ export function BranchModal({ open, branch, onClose, onSaved }: BranchModalProps
         >
           <Input dir="ltr" maxLength={BRANCH_CODE_MAX_LENGTH} placeholder="MAIN" style={{ maxWidth: 200 }} />
         </Form.Item>
+        <div style={{ marginTop: -16, marginBottom: 16 }}>
+          <GenerateCodeButton form={form} prefix={BRANCH_CODE_PREFIX} takenCodes={takenCodes} />
+        </div>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item
               name="nameAr"
               label={t('branches.fields.nameAr')}
@@ -133,19 +142,19 @@ export function BranchModal({ open, branch, onClose, onSaved }: BranchModalProps
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item name="nameEn" label={t('branches.fields.nameEn')} rules={[{ max: BRANCH_TEXT_MAX_LENGTH }]}>
               <Input dir="ltr" />
             </Form.Item>
           </Col>
         </Row>
         <Row gutter={12}>
-          <Col xs={24} md={12}>
+          <Col xs={24}>
             <Form.Item name="addressAr" label={t('branches.fields.addressAr')} rules={[{ max: BRANCH_TEXT_MAX_LENGTH }]}>
               <Input.TextArea rows={2} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
+          <Col span={0}>
             <Form.Item
               name="addressEn"
               label={t('branches.fields.addressEn')}

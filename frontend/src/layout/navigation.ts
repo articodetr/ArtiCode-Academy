@@ -145,11 +145,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // MOD-07 (J-F05): the schedule API is real — «my schedule» needs `schedule.read` (every seeded role holds it) and the
   // academy view `schedule.manage` or `classes.manage` (D-R27); any of the three shows the entry (ADR-042 pattern).
   { key: 'schedule', path: '/schedule', labelKey: 'nav.schedule', icon: createElement(CalendarOutlined), permissions: ['schedule.read', 'schedule.manage', 'classes.manage'], module: 'MOD-07' },
+  // CH-0370: «طلابي» — the students of the classes the teacher teaches (API-301/302), read only; for the `teacher` role key.
+  { key: 'myStudents', path: '/my-students', labelKey: 'nav.myStudents', icon: createElement(TeamOutlined), roleKeys: ['teacher'], module: 'MOD-05' },
+  // CH-0374: a teacher-only viewer (`teacher`, also with `guardian`) has no «الدروس», «الواجبات» or «الاختبارات» entry —
+  // they manage them inside each class's page (/classes/:classId); an admin keeps the three academy-wide lists.
   // MOD-06 (J-F09): the lessons API is real — gated by the one key every read of `/api/lessons` requires (`lessons.read` at
   // controller level; `lessons.manage` only adds writes). Staff gain the entry (the seed grants them lessons.read); a student
   // holds it too but is assigned to no class, so the server would answer an empty list there — learner-only viewers are
   // excepted (`exceptRoleKeysOnly`); their own lessons are in «my lessons».
-  { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-06' },
+  { key: 'lessons', path: '/lessons', labelKey: 'nav.lessons', icon: createElement(PlayCircleOutlined), permissions: ['lessons.read'], exceptRoleKeysOnly: ['teacher', 'student', 'guardian'], module: 'MOD-06' },
   // MOD-06 (J-F11): «my lessons» (API-101) needs no permission key — ownership, the API-060 rule; shown to whoever holds the
   // `student` or `guardian` server role, like «my classes» (a teacher who is also a guardian keeps it; a teacher or an admin
   // alone gets no entry — the server would answer an empty list, and the lessons they teach are on /lessons).
@@ -198,7 +202,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     labelKey: 'nav.exams',
     icon: createElement(FormOutlined),
     permissions: ['exams.read'],
-    exceptRoleKeysOnly: ['student', 'guardian'],
+    exceptRoleKeysOnly: ['teacher', 'student', 'guardian'],
     module: 'MOD-09',
   },
   // MOD-09 phase 2 (roadmap §4r): the question banks (API-260..API-269) — every route needs `questions.manage`, which the
@@ -295,7 +299,7 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
   { key: 'home', labelKey: null, items: ['dashboard'] },
   { key: 'academy', labelKey: 'nav.groups.academy', items: ['users', 'enrollmentRequests'] },
   { key: 'mine', labelKey: 'nav.groups.mine', items: ['myClasses', 'catalog', 'myLessons', 'myAssignments', 'myExams', 'myGrades', 'myCertificates'] },
-  { key: 'academics', labelKey: 'nav.groups.academics', items: ['courses', 'classes', 'lessons', 'schedule'] },
+  { key: 'academics', labelKey: 'nav.groups.academics', items: ['courses', 'classes', 'myStudents', 'lessons', 'schedule'] },
   { key: 'assessment', labelKey: 'nav.groups.assessment', items: ['assignments', 'exams', 'questionBanks', 'certificates'] },
   { key: 'finance', labelKey: 'nav.groups.finance', items: ['payments'] },
   { key: 'followUp', labelKey: 'nav.groups.followUp', items: ['reports', 'notifications'] },

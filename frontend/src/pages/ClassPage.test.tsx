@@ -1,0 +1,111 @@
+// One class's own page (CH-0374): the drawer's tabs plus the class's lessons, homework and exams, each read with the
+// class's id, each «add» bound to this class, and «رجوع» back to the list.
+import { fireEvent, screen, within } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { ar } from '../i18n/ar'
+import { makeAssignment, makeAssignmentList } from '../test/assignments'
+import { CLASS_ID, makeClass } from '../test/classes'
+import { makeExam, makeExamList } from '../test/exams'
+import { jsonResponse, mockFetch } from '../test/http'
+import { makeLesson, makeLessonList } from '../test/lessons'
+import { LocationProbe } from '../test/LocationProbe'
+import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { ClassPage } from './ClassPage'
+
+const TEACHER_PERMISSIONS = ['classes.read', 'lessons.read', 'lessons.manage', 'assignments.read', 'assignments.manage', 'exams.read', 'exams.manage']
+
+function mockPageApi(status: 'running' | 'completed' = 'running') {
+  const urls: string[] = []
+  mockFetch((url) => {
+    urls.push(url)
+    if (url === `/api/classes/${CLASS_ID}`) return jsonResponse(200, makeClass({ status }))
+    if (url.startsWith('/api/lessons?')) return jsonResponse(200, makeLessonList([makeLesson({ id: 'l-1', title: { ar: 'الدرس الأول' } })]))
+    if (url.startsWith('/api/assignments?')) return jsonResponse(200, makeAssignmentList([makeAssignment({ id: 'a-1', title: { ar: 'واجب الدرس الأول' } })]))
+    if (url.startsWith('/api/exams?')) return jsonResponse(200, makeExamList([makeExam({ id: 'e-1', title: { ar: 'اختبار قصير' } })]))
+    return jsonResponse(404, { statusCode: 404, message: `unexpected ${url}` })
+  })
+  return { urls }
+}
+
+function renderPage(permissions: string[] = TEACHER_PERMISSIONS) {
+  return renderWithProviders(<ClassPage />, {
+    auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions }) }),
+    route: `/classes/${CLASS_ID}`,
+    path: '/classes/:classId',
+    routes: { '/classes': <LocationProbe /> },
+  })
+}
+
+const tabNames = () => [...document.querySelectorAll('.ant-tabs-tab')].map((tab) => tab.textContent ?? '')
+
+describe('ClassPage (CH-0374)', () => {
+  it('shows the class as a page with the lessons, homework and exams tabs after the weekly schedule', async () => {
+    mockPageApi()
+    renderPage()
+    await screen.findByText('PY-101-A')
+    const names = tabNames()
+    const schedule = names.indexOf(ar.classSchedule.tab)
+    expect(names.slice(schedule + 1, schedule + 4)).toEqual([ar.classPage.tabs.lessons, ar.classPage.tabs.assignments, ar.classPage.tabs.exams])
+    expect(document.querySelector('.ant-drawer')).toBeNull()
+  })
+
+  it('reads each list with the class id only when its tab opens, and offers «add» to a manager of an open class', async () => {
+    const { urls } = mockPageApi()
+    renderPage()
+    await screen.findByText('PY-101-A')
+    expect(urls).toEqual([`/api/classes/${CLASS_ID}`])
+
+    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.lessons }))
+    expect(await screen.findByText('الدرس الأول')).toBeInTheDocument()
+    expect(urls.some((url) => url.startsWith('/api/lessons?') && url.includes(`classId=${CLASS_ID}`))).toBe(true)
+    expect(screen.getByText(ar.lessons.addLesson)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.assignments }))
+    expect(await screen.findByText('واجب الدرس الأول')).toBeInTheDocument()
+    expect(urls.some((url) => url.startsWith('/api/assignments?') && url.includes(`classId=${CLASS_ID}`))).toBe(true)
+    expect(screen.getByText(ar.assignments.addAssignment)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.exams }))
+    expect(await screen.findByText('اختبار قصير')).toBeInTheDocument()
+    expect(urls.some((url) => url.startsWith('/api/exams?') && url.includes(`classId=${CLASS_ID}`))).toBe(true)
+    expect(screen.getByText(ar.exams.addExam)).toBeInTheDocument()
+  })
+
+  it('offers no «add» for a completed class, nor to a reader without the manage key', async () => {
+    mockPageApi('completed')
+    renderPage()
+    await screen.findByText('PY-101-A')
+    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.lessons }))
+    expect(await screen.findByText('الدرس الأول')).toBeInTheDocument()
+    expect(screen.queryByText(ar.lessons.addLesson)).toBeNull()
+  })
+
+  it('hides a tab whose read key is missing', async () => {
+    mockPageApi()
+    renderPage(['classes.read', 'lessons.read'])
+    await screen.findByText('PY-101-A')
+    const names = tabNames()
+    expect(names).toContain(ar.classPage.tabs.lessons)
+    expect(names).not.toContain(ar.classPage.tabs.assignments)
+    expect(names).not.toContain(ar.classPage.tabs.exams)
+  })
+
+  it('opens the homework form with this class fixed and named', async () => {
+    mockPageApi()
+    renderPage()
+    await screen.findByText('PY-101-A')
+    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.assignments }))
+    fireEvent.click((await screen.findByText(ar.assignments.addAssignment)).closest('button')!)
+    const dialog = (await screen.findByText(ar.assignments.create.title)).closest('[role="dialog"]') as HTMLElement
+    expect(within(dialog).getByText(/سيُضاف إلى الفصل/)).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(ar.assignments.fields.class)).toBeNull()
+  })
+
+  it('goes back to the classes list with «رجوع»', async () => {
+    mockPageApi()
+    renderPage()
+    await screen.findByText('PY-101-A')
+    fireEvent.click(screen.getByText(ar.classPage.back).closest('button')!)
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/classes')
+  })
+})

@@ -9,11 +9,12 @@ import { Alert, App, Button, Card, Flex, Input, Select, Space, Table, Typography
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router'
 import { CLASS_SEARCH_MAX_LENGTH, CLASS_STATUSES } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
 import { teachesOnly } from '../layout/navigation'
-import { ClassDrawer, SeatsBar } from '../classes/ClassDrawer'
+import { SeatsBar } from '../classes/SeatsBar'
 import { CoursePicker, TeacherPicker } from '../classes/ClassPickers'
 import { CreateClassModal } from '../classes/CreateClassModal'
 import { describeClassesFailure, failureMessage } from '../classes/classes.errors'
@@ -24,21 +25,23 @@ import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatDay, localizedLabel } from '../users/users.format'
 import { useOpenFromSearch } from '../common/useOpenFromSearch'
+import { classPagePath } from '../classes/classPage'
 
 export function ClassesPage() {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
   const { hasPermission, user } = useAuth()
-  // J-F72: a teacher-only viewer reads this page as «الدورات» (the menu says so too — navLabelKey()).
+  // J-F72: a teacher-only viewer reads this page as «فصولي» since CH-0375 (the menu says so too — navLabelKey()).
   const teacherView = user ? teachesOnly(user) : false
   const canManage = hasPermission('classes.manage')
   const canPickCourse = hasPermission('courses.read')
   const canPickTeacher = canManage && hasPermission('users.read')
   const list = useClassesList()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  // The global search opens a record here through `?open=<id>`.
-  useOpenFromSearch(setSelectedId)
+  const navigate = useNavigate()
+  // CH-0374: a class opens as its own page (/classes/:classId); the global search's `?open=<id>` goes there too.
+  const openClass = (id: string) => void navigate(classPagePath(id))
+  useOpenFromSearch(openClass)
   const [creating, setCreating] = useState(false)
 
   const leadOf = (row: AcademyClass) => {
@@ -76,7 +79,7 @@ export function ClassesPage() {
           size="small"
           onClick={(event) => {
             event.stopPropagation()
-            setSelectedId(row.id)
+            openClass(row.id)
           }}
           aria-label={`${t('common.view')}: ${row.code}`}
         >
@@ -181,7 +184,7 @@ export function ClassesPage() {
           pagination={false}
           scroll={{ x: 'max-content' }}
           locale={{ emptyText }}
-          onRow={(row) => ({ onClick: () => setSelectedId(row.id), style: { cursor: 'pointer' } })}
+          onRow={(row) => ({ onClick: () => openClass(row.id), style: { cursor: 'pointer' } })}
         />
 
         <Flex justify="space-between" align="center" wrap gap={12} style={{ marginTop: 16 }}>
@@ -206,15 +209,12 @@ export function ClassesPage() {
         </Flex>
       </Card>
 
-      <ClassDrawer classId={selectedId} onClose={() => setSelectedId(null)} onUpdated={list.replaceItem} onDeleted={list.removeItem} />
-
       <CreateClassModal
         open={creating}
         onClose={() => setCreating(false)}
         onCreated={(created) => {
           setCreating(false)
-          list.reload()
-          setSelectedId(created.id)
+          openClass(created.id)
           message.success(t('classes.create.created', { name: localizedLabel(created.name, language) }))
         }}
       />

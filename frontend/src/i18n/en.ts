@@ -14,9 +14,13 @@ import { courseClass } from './en/courseClass'
 import { studentRegistration } from './en/studentRegistration'
 import { publicHome } from './en/publicHome'
 import { homepageImages } from './en/homepageImages'
+import { myStudents } from './en/teaching'
+import { classPage } from './en/classPage'
 
 export const en: Translation = {
   common: {
+    // CH-0372: the shared «generate a code» button of the subject, level, class, branch and room forms.
+    generateCode: 'Generate a code',
     searchByTitle: 'Search titles',
     pageSize: 'Items per page',
     sortOrder: 'Sort order',
@@ -80,7 +84,7 @@ export const en: Translation = {
     users: 'Users',
     courses: 'Courses & levels',
     classes: 'Classes & groups',
-    classesForTeacher: 'Courses',
+    classesForTeacher: 'My classes',
     myClasses: 'My courses',
     catalog: 'Explore courses',
     myCourses: 'My courses',
@@ -92,6 +96,7 @@ export const en: Translation = {
     myAssignments: 'My assignments',
     myExams: 'My exams',
     myGrades: 'My grades',
+    myStudents: 'My students',
     exams: 'Exams & grades',
     questionBanks: 'Question bank',
     certificates: 'Certificates',
@@ -1022,6 +1027,7 @@ export const en: Translation = {
     sortNewest: 'Newest first',
     refresh: 'Refresh',
     empty: 'No courses',
+    generateCode: 'Generate a code',
     tabs: {
       courses: 'Courses',
       levels: 'Levels',
@@ -1147,7 +1153,7 @@ export const en: Translation = {
         isActive: 'Active',
       },
       hints: {
-        code: 'Saved in capitals: Latin letters, digits and . _ - (up to 16), unique',
+        code: 'A unique code is filled in for you; type your own or press “Generate a code”. Capital Latin letters, digits and . _ - (up to 16)',
         isActive: 'An inactive level disappears from non-manager lists and stays on its courses',
       },
       validation: {
@@ -1186,7 +1192,7 @@ export const en: Translation = {
         isActive: 'Active',
       },
       hints: {
-        code: 'Saved in capitals: Latin letters, digits and . _ - (up to 16), unique',
+        code: 'A unique code is filled in for you; type your own or press “Generate a code”. Capital Latin letters, digits and . _ - (up to 16)',
         isActive: 'An inactive subject disappears from non-manager lists and stays on its courses',
       },
       validation: {
@@ -1295,10 +1301,10 @@ export const en: Translation = {
     subtitle: 'Student groups within each course',
     addClass: 'Add class',
     readOnlyHint: 'This page shows only the classes assigned to you.',
-    teacherTitle: 'Courses',
-    teacherSubtitle: 'The courses you teach and their students',
-    teacherReadOnlyHint: 'This page shows only the courses assigned to you.',
-    teacherEmptyAssigned: 'No courses assigned to you',
+    teacherTitle: 'My classes',
+    teacherSubtitle: 'The classes you teach and their students',
+    teacherReadOnlyHint: 'This page shows only the classes assigned to you.',
+    teacherEmptyAssigned: 'No classes assigned to you',
     searchPlaceholder: 'Search by code or name',
     allCourses: 'All courses',
     allStatuses: 'All statuses',
@@ -4571,6 +4577,9 @@ export const en: Translation = {
       rate_limited: 'Too many requests in a short time. Wait 15 minutes and try again.',
     },
   },
+  // CH-0370: «My students» — a teacher's students.
+  myStudents,
+  classPage,
   // MOD-19 (roadmap §4p): the catalog, «my courses» and the office's enrollment requests.
   catalog,
   myCourses,

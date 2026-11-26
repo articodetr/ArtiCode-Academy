@@ -595,17 +595,13 @@ function LevelFields({ level, problemText, onChange }: { level: LevelDraft; prob
   }
   return (
     <Row gutter={12}>
-      <Col xs={24} md={12}>
+      {/* Arabic only on screen; a stored English text stays as it is (the draft keeps it). */}
+      <Col xs={24}>
         {field('titleAr', false)}
       </Col>
-      <Col xs={24} md={12}>
-        {field('titleEn', false)}
-      </Col>
-      <Col xs={24} md={12}>
+      {/* Arabic only on screen; a stored English text stays as it is (the draft keeps it). */}
+      <Col xs={24}>
         {field('descriptionAr', true)}
-      </Col>
-      <Col xs={24} md={12}>
-        {field('descriptionEn', true)}
       </Col>
       <Col xs={24}>
         <Form.Item
@@ -719,17 +715,13 @@ function LessonEditor({ lesson, item, number, first, last, groupKey, moveTargets
         </Typography.Paragraph>
       )}
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        {/* Arabic only on screen; a stored English text stays as it is (the draft keeps it). */}
+        <Col xs={24}>
           {text('titleAr', false)}
         </Col>
-        <Col xs={24} md={12}>
-          {text('titleEn', false)}
-        </Col>
-        <Col xs={24} md={12}>
+        {/* Arabic only on screen; a stored English text stays as it is (the draft keeps it). */}
+        <Col xs={24}>
           {text('descriptionAr', true)}
-        </Col>
-        <Col xs={24} md={12}>
-          {text('descriptionEn', true)}
         </Col>
       </Row>
       <Flex wrap gap={16} align="flex-end">

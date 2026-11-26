@@ -68,6 +68,8 @@ describe('LevelsManager (MOD-04-T06)', () => {
 
     fireEvent.click(screen.getByText(ar.courses.levels.add).closest('button')!)
     const dialog = (await screen.findByText(ar.courses.levels.createTitle)).closest('[role="dialog"]') as HTMLElement
+    // A new one starts with a generated code (CH-0372): the user replaces it with their own.
+    await userEvent.clear(within(dialog).getByLabelText(ar.courses.levels.fields.code))
     await userEvent.type(within(dialog).getByLabelText(ar.courses.levels.fields.code), 'pro')
     await userEvent.type(within(dialog).getByLabelText(ar.courses.levels.fields.nameAr), 'محترف')
     fireEvent.click(within(dialog).getByText(ar.courses.levels.create).closest('button')!)

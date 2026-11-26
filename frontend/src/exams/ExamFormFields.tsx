@@ -53,9 +53,11 @@ interface ExamFormFieldsProps {
   maxScoreLocked?: boolean
   /** Create only: the chosen class changed (the lesson is reset by the caller). */
   onClassChange?: (classId: string | undefined) => void
+  /** CH-0374: created from its class's page — the class is fixed (a hidden field) and this line names it. */
+  fixedPlace?: string
 }
 
-export function ExamFormFields({ form, mode, hasClass, context, current, maxScoreLocked = false, onClassChange }: ExamFormFieldsProps) {
+export function ExamFormFields({ form, mode, hasClass, context, current, maxScoreLocked = false, onClassChange, fixedPlace }: ExamFormFieldsProps) {
   const { t } = useTranslation()
   // GET /api/classes needs classes.read at the controller: without it the class list stays unknown.
   const canReadClasses = useAuth().hasPermission('classes.read')
@@ -130,7 +132,14 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
 
   return (
     <>
-      {mode === 'create' ? (
+      {fixedPlace ? (
+        <>
+          <Alert type="info" showIcon title={fixedPlace} style={{ marginBottom: 16 }} />
+          <Form.Item name="classId" hidden>
+            <Input />
+          </Form.Item>
+        </>
+      ) : mode === 'create' ? (
         <Form.Item
           name="classId"
           label={t('exams.fields.class')}
@@ -161,7 +170,7 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
         </Col>
       </Row>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item
             name="titleAr"
             label={t('exams.fields.titleAr')}
@@ -170,19 +179,19 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
             <Input maxLength={EXAM_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item name="titleEn" label={t('exams.fields.titleEn')} dependencies={['titleAr']} rules={[maxLength(EXAM_TITLE_MAX_LENGTH), arabicFirst('titleAr')]}>
             <Input dir="ltr" maxLength={EXAM_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
       </Row>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item name="descriptionAr" label={t('exams.fields.descriptionAr')} rules={[maxLength(EXAM_DESCRIPTION_MAX_LENGTH)]}>
             <Input.TextArea rows={3} maxLength={EXAM_DESCRIPTION_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item
             name="descriptionEn"
             label={t('exams.fields.descriptionEn')}

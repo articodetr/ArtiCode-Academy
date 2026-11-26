@@ -31,9 +31,11 @@ interface AssignmentFormFieldsProps {
   gradingLocked?: boolean
   /** Create only: the chosen class changed (the lesson is reset by the caller). */
   onClassChange?: (classId: string | undefined) => void
+  /** CH-0374: created from its class's page — the class is fixed (a hidden field) and this line names it. */
+  fixedPlace?: string
 }
 
-export function AssignmentFormFields({ form, mode, hasClass, context, current, gradingLocked = false, onClassChange }: AssignmentFormFieldsProps) {
+export function AssignmentFormFields({ form, mode, hasClass, context, current, gradingLocked = false, onClassChange, fixedPlace }: AssignmentFormFieldsProps) {
   const { t } = useTranslation()
   // GET /api/classes needs classes.read at the controller: without it the class list stays unknown.
   const canReadClasses = useAuth().hasPermission('classes.read')
@@ -63,7 +65,14 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
 
   return (
     <>
-      {mode === 'create' ? (
+      {fixedPlace ? (
+        <>
+          <Alert type="info" showIcon title={fixedPlace} style={{ marginBottom: 16 }} />
+          <Form.Item name="classId" hidden>
+            <Input />
+          </Form.Item>
+        </>
+      ) : mode === 'create' ? (
         <Form.Item
           name="classId"
           label={t('assignments.fields.class')}
@@ -85,7 +94,7 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
         <AssignmentLessonSelect lessons={lessons} hasClass={hasClass} canRead={canReadLessons} current={current?.lesson} currentZone={current?.timeZone} />
       </Form.Item>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item
             name="titleAr"
             label={t('assignments.fields.titleAr')}
@@ -94,19 +103,19 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
             <Input maxLength={ASSIGNMENT_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item name="titleEn" label={t('assignments.fields.titleEn')} dependencies={['titleAr']} rules={[maxLength(ASSIGNMENT_TITLE_MAX_LENGTH), arabicFirst('titleAr')]}>
             <Input dir="ltr" maxLength={ASSIGNMENT_TITLE_MAX_LENGTH} />
           </Form.Item>
         </Col>
       </Row>
       <Row gutter={12}>
-        <Col xs={24} md={12}>
+        <Col xs={24}>
           <Form.Item name="instructionsAr" label={t('assignments.fields.instructionsAr')} rules={[maxLength(ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH)]}>
             <Input.TextArea rows={3} maxLength={ASSIGNMENT_INSTRUCTIONS_MAX_LENGTH} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
+        <Col span={0}>
           <Form.Item
             name="instructionsEn"
             label={t('assignments.fields.instructionsEn')}
