@@ -125,7 +125,7 @@ export const nav = {
   courses: 'الدورات والمستويات',
   classes: 'الفصول والمجموعات',
   // J-F72: the same entry for a teacher-only viewer.
-  classesForTeacher: 'الدورات',
+  classesForTeacher: 'فصولي',
   myClasses: 'دوراتي',
   // MOD-19: the learner's catalog and courses, the office's requests.
   catalog: 'استكشف الدورات',

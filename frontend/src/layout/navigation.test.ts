@@ -454,7 +454,7 @@ describe('navFor', () => {
     expect(canAccess(viewer(null, ['users.read'], ['auditor']), 'users')).toBe(true)
   })
 
-  it('names «classes» «الدورات» for a teacher-only viewer and keeps «الفصول والمجموعات» for anyone else (J-F72)', () => {
+  it('names «classes» «فصولي» for a teacher-only viewer and keeps «الفصول والمجموعات» for anyone else (J-F72)', () => {
     const classes = NAV_ITEMS.find((item) => item.key === 'classes')!
     expect(teachesOnly(viewer('teacher'))).toBe(true)
     expect(teachesOnly(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']))).toBe(true)

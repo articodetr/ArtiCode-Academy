@@ -554,7 +554,7 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     const menu = siderMenu()
     expect(headings(menu)).toEqual([ar.nav.groups.mine, ar.nav.groups.academics, ar.nav.groups.followUp])
     expect(labelsIn(menu)).not.toContain(ar.nav.users)
-    // J-F72: «الفصول والمجموعات» reads «الدورات» for a teacher.
+    // J-F72: «الفصول والمجموعات» reads «فصولي» for a teacher (J-F72, CH-0375).
     const academics = sections(menu).find(([heading]) => heading === ar.nav.groups.academics)!
     // CH-0374: the lessons are inside each class's page, so no «الدروس» entry.
     expect(academics[1]).toEqual([ar.nav.classesForTeacher, ar.nav.myStudents, ar.nav.schedule])

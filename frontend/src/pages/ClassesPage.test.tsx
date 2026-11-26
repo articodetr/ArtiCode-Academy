@@ -102,7 +102,7 @@ describe('ClassesPage', () => {
     expect(Object.fromEntries(api.queries[0]!)).toEqual({ sort: 'code', limit: '20' })
   })
 
-  it('names the page «الدورات» for a teacher-only viewer, with its own hint and empty text (J-F72)', async () => {
+  it('names the page «فصولي» for a teacher-only viewer, with its own hint and empty text (J-F72)', async () => {
     mockClassesApi(makeClassList([]))
     renderWithProviders(<ClassesPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: CLASS_READER_PERMISSIONS }) }), route: '/classes' })
     expect(await screen.findByText(ar.classes.teacherEmptyAssigned)).toBeInTheDocument()

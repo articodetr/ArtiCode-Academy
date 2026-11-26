@@ -32,7 +32,7 @@ export function ClassesPage() {
   const { language } = useLocalized()
   const { message } = App.useApp()
   const { hasPermission, user } = useAuth()
-  // J-F72: a teacher-only viewer reads this page as «الدورات» (the menu says so too — navLabelKey()).
+  // J-F72: a teacher-only viewer reads this page as «فصولي» since CH-0375 (the menu says so too — navLabelKey()).
   const teacherView = user ? teachesOnly(user) : false
   const canManage = hasPermission('classes.manage')
   const canPickCourse = hasPermission('courses.read')
