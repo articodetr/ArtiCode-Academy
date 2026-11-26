@@ -1,30 +1,40 @@
 // Creation of a course (MOD-04-T05) through POST /api/courses (API-044): the
-// course starts as a draft. A server error that names a field (taken code,
-// unknown level or subject) is shown on that field; anything else above the form.
+// course starts as a draft. A server error that names a field (unknown or
+// inactive subject, a refused fee plan) is shown on that field; anything else above the form.
 // PORTAL-04: the subject picker; no age range.
+// The simplified course form: the Arabic texts, the cover, the subject and — for holders of
+// `fee_plans.manage`, which the server needs besides `courses.manage` — the course type with
+// a general fee plan as its price (CoursePricingFields without a course). No code: the server
+// generates one. Without the key the course is created free, as before.
 import { Alert, Form, Modal } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createCourse } from '../api/courses'
 import type { Course } from '../api/courses'
-import type { Level } from '../api/levels'
 import type { Subject } from '../api/subjects'
+import { useAuth } from '../auth/auth-context'
 import { CourseFormFields } from './CourseFormFields'
+import { CoursePricingFields } from './CoursePricingFields'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
-import { buildCreateCourseInput } from './courses.form'
+import { buildCreateCourseInput, courseFormField } from './courses.form'
 import type { CourseFormValues } from './courses.form'
 
 interface CreateCourseModalProps {
   open: boolean
-  levels: Level[]
   /** PORTAL-04 */
   subjects: Subject[]
   onClose: () => void
   onCreated: (course: Course) => void
 }
 
-export function CreateCourseModal({ open, levels, subjects, onClose, onCreated }: CreateCourseModalProps) {
+/** A new course is free until the manager says otherwise. */
+const INITIAL_VALUES: Partial<CourseFormValues> = { pricing: 'free' }
+
+export function CreateCourseModal({ open, subjects, onClose, onCreated }: CreateCourseModalProps) {
   const { t } = useTranslation()
+  const { hasPermission } = useAuth()
+  // MOD-19 (D-R122): the price needs fee_plans.manage besides courses.manage.
+  const canPrice = hasPermission('fee_plans.manage')
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
@@ -40,7 +50,8 @@ export function CreateCourseModal({ open, levels, subjects, onClose, onCreated }
     } catch (caught) {
       const failure = describeCoursesFailure(caught)
       const text = failureMessage(t, failure)
-      if (failure.field) form.setFields([{ name: failure.field, errors: [text] }])
+      const field = courseFormField(failure.field)
+      if (field) form.setFields([{ name: field, errors: [text] }])
       else setError(text)
     } finally {
       setSaving(false)
@@ -63,12 +74,20 @@ export function CreateCourseModal({ open, levels, subjects, onClose, onCreated }
       confirmLoading={saving}
       onOk={() => form.submit()}
       onCancel={close}
-      width={760}
+      width={640}
       destroyOnHidden
     >
-      {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
-      <Form form={form} layout="vertical" requiredMark={false} onFinish={(values) => void submit(values as CourseFormValues)} disabled={saving}>
-        <CourseFormFields form={form} levels={levels} subjects={subjects} />
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={canPrice ? INITIAL_VALUES : undefined}
+        onFinish={(values) => void submit(values as CourseFormValues)}
+        disabled={saving}
+      >
+        <CourseFormFields subjects={subjects} />
+        {canPrice ? <CoursePricingFields /> : null}
       </Form>
     </Modal>
   )

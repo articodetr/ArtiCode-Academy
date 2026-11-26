@@ -94,7 +94,8 @@ export interface ListCoursesParams {
 
 /** Body of API-044 (`CreateCourseDto`): the course starts as a draft. */
 export interface CreateCourseInput {
-  code: string
+  /** Absent = the server generates a unique code; the course form sends none since the simplified form. */
+  code?: string
   name: LocalizedLabel
   summary?: LocalizedLabel
   description?: LocalizedLabel
@@ -108,7 +109,7 @@ export interface CreateCourseInput {
   maxAge?: number
   /** MOD-19: an absolute http(s) URL (no upload). */
   coverImageUrl?: string
-  /** MOD-19: an active general fee plan; needs `fee_plans.manage` besides `courses.manage`. */
+  /** MOD-19: an active general fee plan (no course, no class — the course does not exist yet); needs `fee_plans.manage` besides `courses.manage`. */
   enrollmentFeePlanId?: string
 }
 

@@ -1,28 +1,44 @@
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { App as AntdApp, ConfigProvider } from 'antd'
+import { useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicAcademy } from '../api/academy'
 import { browserNavigation } from '../api/google'
+import { AuthContext } from '../auth/auth-context'
+import type { AuthUser } from '../auth/auth-context'
+import { getAccessToken, setAccessToken } from '../auth/token-store'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
 import { KEPT_COURSE_KEY, keepCourse } from '../studentRegistration/keptCourse'
-import { jsonResponse, mockFetch } from '../test/http'
+import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
 import { LocationProbe } from '../test/LocationProbe'
-import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { makeAuth, makeUser, renderWithProviders, userOfSession } from '../test/render'
 import { StudentRegisterPage } from './StudentRegisterPage'
 
 const text = ar.studentRegistration
 const COURSE = '0192f0a0-0000-7000-8000-00000000c001'
+const INTENT = `/catalog/${COURSE}?intent=enroll`
 const NAME = 'سارة علي'
 const EMAIL = 'sara@example.test'
 const PASSWORD = 'Secret123!x'
+const SESSION = sessionResponse('access-of-sara', {
+  id: 'user-sara',
+  email: EMAIL,
+  username: null,
+  fullName: NAME,
+  roles: ['student'],
+  permissions: ['catalog.read'],
+})
 
 const OPEN: PublicAcademy = { name: { ar: 'الأكاديمية' }, logoUrl: null, defaultLocale: 'ar', selfRegistration: true }
 
 type Answer = () => Response | Promise<Response>
 
-function mockApi({ academy = () => jsonResponse(200, OPEN), register = () => jsonResponse(202) }: { academy?: Answer; register?: Answer } = {}) {
+function mockApi({ academy = () => jsonResponse(200, OPEN), register = () => jsonResponse(201, SESSION) }: { academy?: Answer; register?: Answer } = {}) {
   return mockFetch((url) => (url.endsWith('/api/academy/public') ? academy() : register()))
 }
 
@@ -30,14 +46,28 @@ function posts(fetchMock: ReturnType<typeof mockFetch>) {
   return fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
 }
 
-function renderPage(state?: unknown, auth = makeAuth()) {
-  return renderWithProviders(<StudentRegisterPage />, {
-    auth,
-    route: { pathname: '/register', state },
-    path: '/register',
-    routes: { '/login': <LocationProbe />, '/my-classes': <LocationProbe />, '/': <LocationProbe /> },
-  })
+/** The path and the query string a navigation reached. */
+function PathProbe() {
+  const location = useLocation()
+  return <output data-testid="path">{`${location.pathname}${location.search}`}</output>
 }
+
+function renderPage(state?: unknown, auth = makeAuth(), search = '') {
+  const utils = renderWithProviders(<StudentRegisterPage />, {
+    auth,
+    route: { pathname: '/register', search, state },
+    path: '/register',
+    routes: {
+      '/login': <LocationProbe />,
+      '/my-classes': <LocationProbe />,
+      '/catalog/:courseId': <PathProbe />,
+      '/': <LocationProbe />,
+    },
+  })
+  return { ...utils, auth }
+}
+
+const returnToSearch = (path: string) => `?returnTo=${encodeURIComponent(path)}`
 
 function submitButton(label = text.register.submit): HTMLElement {
   const button = screen.getByText(label).closest<HTMLElement>('button')
@@ -63,7 +93,6 @@ async function fillIn(name = NAME, email = EMAIL, password = PASSWORD) {
   await user.type(await screen.findByLabelText(text.register.fullName), name)
   await user.type(screen.getByLabelText(text.register.email), email)
   typePasswords(password)
-  await user.click(screen.getByLabelText(text.register.terms))
   return user
 }
 
@@ -91,6 +120,24 @@ function storedText(): string {
   return parts.join('\n')
 }
 
+/** A stand-in for AuthProvider that, like it, becomes signed in when a session is adopted. */
+function StatefulAuth({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const value = useMemo(
+    () =>
+      makeAuth({
+        user,
+        adoptSession: (session) => {
+          const adopted = userOfSession(session)
+          setUser(adopted)
+          return adopted
+        },
+      }),
+    [user],
+  )
+  return <AuthContext value={value}>{children}</AuthContext>
+}
+
 describe('StudentRegisterPage', () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -100,6 +147,7 @@ describe('StudentRegisterPage', () => {
     vi.restoreAllMocks()
     window.localStorage.clear()
     window.sessionStorage.clear()
+    setAccessToken(null)
     await i18n.changeLanguage('ar')
   })
 
@@ -130,10 +178,10 @@ describe('StudentRegisterPage', () => {
 
     it('keeps the way back to the chosen course in the sign-in link of the closed notice, as ?returnTo=', async () => {
       mockApi({ academy: () => jsonResponse(200, { ...OPEN, selfRegistration: false }) })
-      renderPage({ from: `/catalog/${COURSE}?intent=enroll` })
+      renderPage({ from: INTENT })
 
       const link = await screen.findByRole('link', { name: text.closed.signIn })
-      expect(link).toHaveAttribute('href', `/login?returnTo=${encodeURIComponent(`/catalog/${COURSE}?intent=enroll`)}`)
+      expect(link).toHaveAttribute('href', `/login${returnToSearch(INTENT)}`)
       await userEvent.click(link)
       expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/login')
     })
@@ -157,6 +205,27 @@ describe('StudentRegisterPage', () => {
   })
 
   describe('the form', () => {
+    it('has exactly four fields — name, e-mail, password, confirmation — and «إنشاء حساب», with no checkbox', async () => {
+      mockApi()
+      renderPage()
+
+      await screen.findByLabelText(text.register.fullName)
+      const form = submitButton().closest('form')!
+      expect(form.querySelectorAll('input')).toHaveLength(4)
+      expect(form.querySelectorAll('input[type="checkbox"], select, textarea')).toHaveLength(0)
+      expect([...form.querySelectorAll('label')].map((label) => label.textContent)).toEqual([
+        'الاسم الكامل',
+        'البريد الإلكتروني',
+        'كلمة المرور',
+        'تأكيد كلمة المرور',
+      ])
+      expect(submitButton()).toHaveTextContent('إنشاء حساب')
+      // The intro no longer speaks of an e-mailed link to confirm.
+      expect(screen.getByText(text.register.intro)).toBeInTheDocument()
+      for (const word of ['رابط', 'رسالة', 'أكّد', 'تأكيد بريد']) expect(text.register.intro).not.toContain(word)
+      expect(en.studentRegistration.register.intro).not.toMatch(/confirm|link|message/i)
+    })
+
     it('labels the fields, with the e-mail left-to-right, and asks for the password twice with its rules in words', async () => {
       mockApi()
       renderPage()
@@ -170,7 +239,6 @@ describe('StudentRegisterPage', () => {
       // Both fields can show what was typed (Input.Password).
       expect(document.querySelectorAll('.ant-input-password-icon')).toHaveLength(2)
       expect(screen.getByText(i18n.t('studentRegistration.register.passwordHint', { min: 10 }))).toBeInTheDocument()
-      expect(screen.getByText(text.register.intro)).toBeInTheDocument()
     })
 
     it.each<[string, string, string, string]>([
@@ -188,12 +256,26 @@ describe('StudentRegisterPage', () => {
       await user.type(screen.getByLabelText(text.register.email), EMAIL)
       if (password) fireEvent.change(passwordField(), { target: { value: password } })
       if (confirmation) fireEvent.change(confirmField(), { target: { value: confirmation } })
-      await user.click(screen.getByLabelText(text.register.terms))
 
       await user.click(submitButton())
 
       expect(await screen.findByText(message)).toBeInTheDocument()
       expect(posts(fetchMock)).toHaveLength(0)
+    })
+
+    it('puts a mismatched confirmation under its own field and sends nothing', async () => {
+      const fetchMock = mockApi()
+      renderPage()
+      await fillIn()
+      fireEvent.change(confirmField(), { target: { value: 'Different123!x' } })
+
+      await userEvent.click(submitButton())
+
+      expect(await screen.findByText(text.register.mismatch)).toBeInTheDocument()
+      await waitFor(() => expect(confirmField()).toHaveAttribute('aria-invalid', 'true'))
+      expect(passwordField()).not.toHaveAttribute('aria-invalid', 'true')
+      expect(posts(fetchMock)).toHaveLength(0)
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
     })
 
     it.each([
@@ -228,13 +310,13 @@ describe('StudentRegisterPage', () => {
       expect(posts(fetchMock)).toHaveLength(0)
     })
 
-    it('sends the trimmed name and e-mail, the password as typed, with the UI language, without a bearer token', async () => {
+    it('sends exactly the four fields of the contract — the trimmed name and e-mail, the password as typed, the UI language — without a bearer token', async () => {
       const fetchMock = mockApi()
       renderPage()
 
       await fillAndSend(`  ${NAME} `, ` ${EMAIL}  `, ` ${PASSWORD} `)
 
-      await screen.findByText(text.register.sentTitle)
+      await screen.findByTestId('location')
       const [call] = posts(fetchMock)
       expect(String(call![0])).toBe('/api/account/register')
       expect(JSON.parse(String(call![1]?.body))).toEqual({ fullName: NAME, email: EMAIL, password: ` ${PASSWORD} `, locale: 'ar' })
@@ -251,10 +333,9 @@ describe('StudentRegisterPage', () => {
       await user.type(screen.getByLabelText(words.email), EMAIL)
       fireEvent.change(screen.getByLabelText(words.password), { target: { value: PASSWORD } })
       fireEvent.change(screen.getByLabelText(words.confirmPassword), { target: { value: PASSWORD } })
-      await user.click(screen.getByLabelText(en.studentRegistration.register.terms))
-      await user.click(screen.getByText(en.studentRegistration.register.submit).closest('button')!)
+      await user.click(screen.getByText(words.submit).closest('button')!)
 
-      await screen.findByText(en.studentRegistration.register.sentTitle)
+      await screen.findByTestId('location')
       expect(JSON.parse(String(posts(fetchMock)[0]![1]?.body)).locale).toBe('en')
     })
 
@@ -275,67 +356,107 @@ describe('StudentRegisterPage', () => {
       })
       expect(posts(fetchMock)).toHaveLength(1)
 
-      await act(async () => release(jsonResponse(202)))
-      expect(await screen.findByText(text.register.sentTitle)).toBeInTheDocument()
+      await act(async () => release(jsonResponse(201, SESSION)))
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
     })
   })
 
-  describe('after the 202', () => {
-    it('shows one neutral message that says nothing about the address', async () => {
+  describe('after the account is created', () => {
+    it('stores the token, adopts the session, says so and goes back (replace) to the course it came from', async () => {
+      mockApi()
+      const { auth } = renderPage(undefined, makeAuth(), returnToSearch(INTENT))
+
+      await fillAndSend()
+
+      expect((await screen.findByTestId('path')).textContent).toBe(INTENT)
+      expect(auth.adoptSession).toHaveBeenCalledTimes(1)
+      expect(auth.adoptSession).toHaveBeenCalledWith(SESSION)
+      expect(getAccessToken()).toBe(SESSION.accessToken)
+      expect(await screen.findByText(text.register.created)).toBeInTheDocument()
+      // Nothing about the person or the password is kept on this device.
+      const all = storedText()
+      for (const secret of [EMAIL, NAME, PASSWORD, SESSION.accessToken]) expect(all).not.toContain(secret)
+    })
+
+    it('reads the course from the router state too', async () => {
+      mockApi()
+      renderPage({ from: INTENT })
+
+      await fillAndSend()
+
+      expect((await screen.findByTestId('path')).textContent).toBe(INTENT)
+    })
+
+    it('goes to the default destination without a return path', async () => {
       mockApi()
       renderPage()
 
       await fillAndSend()
 
-      const alert = (await screen.findByText(text.register.sentTitle)).closest<HTMLElement>('[role="alert"]')!
-      expect(alert).toHaveTextContent(text.register.sentText)
-      // It says what to do next: open the link and type the password chosen here.
-      expect(text.register.sentText).toContain('افتح الرابط')
-      expect(text.register.sentText).toContain('كلمة مرورك')
-      expect(alert).not.toHaveTextContent(EMAIL)
-      expect(alert).not.toHaveTextContent(NAME)
-      expect(document.body).not.toHaveTextContent(PASSWORD)
-      expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
-      for (const revealing of ['لديك حساب', 'موجود', 'مسجّل', 'مستخدم', 'جديد']) {
-        expect(text.register.sentText).not.toContain(revealing)
-      }
-      for (const revealing of [/already/i, /exists/i, /registered/i, /new account/i]) {
-        expect(en.studentRegistration.register.sentText).not.toMatch(revealing)
-      }
-      expect(screen.queryByLabelText(text.register.email)).not.toBeInTheDocument()
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+      expect(getAccessToken()).toBe(SESSION.accessToken)
     })
 
-    it('offers the sign-in page', async () => {
+    it.each(['//evil.example', 'https://evil.example', '/\\evil', `https://evil.example${INTENT}`, '/login'])(
+      'never follows the return path %j after registering — the default destination instead',
+      async (hostile) => {
+        mockApi()
+        renderPage(undefined, makeAuth(), returnToSearch(hostile))
+
+        await fillAndSend()
+
+        expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+        expect(screen.queryByTestId('path')).not.toBeInTheDocument()
+      },
+    )
+
+    it('never follows a course kept on this device by an earlier visit, and clears it', async () => {
+      keepCourse('0192f0a0-0000-7000-8000-00000000c002')
       mockApi()
       renderPage()
 
       await fillAndSend()
 
-      expect(await screen.findByRole('link', { name: text.register.goToSignIn })).toHaveAttribute('href', '/login')
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
+      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
     })
 
-    it('goes back for another address, keeping the name but not the password, and sending again', async () => {
-      const fetchMock = mockApi()
-      renderPage()
-      const user = await fillAndSend()
+    it('keeps nothing on this device for the course it goes back to', async () => {
+      mockApi()
+      renderPage(undefined, makeAuth(), returnToSearch(INTENT))
 
-      await user.click(await screen.findByText(text.register.anotherAddress))
+      await fillAndSend()
 
-      const nameField = await screen.findByLabelText<HTMLInputElement>(text.register.fullName)
-      const emailField = screen.getByLabelText<HTMLInputElement>(text.register.email)
-      expect(nameField.value).toBe(NAME)
-      expect(emailField.value).toBe('')
-      expect(emailField).toHaveFocus()
-      // The password is never kept after it was sent.
-      expect(passwordField().value).toBe('')
-      expect(confirmField().value).toBe('')
+      expect((await screen.findByTestId('path')).textContent).toBe(INTENT)
+      expect(storedText()).toBe('')
+    })
 
-      await user.type(emailField, 'other@example.test')
-      typePasswords('Another123!x')
-      await user.click(submitButton())
-      await screen.findByText(text.register.sentTitle)
-      expect(posts(fetchMock)).toHaveLength(2)
-      expect(JSON.parse(String(posts(fetchMock)[1]![1]?.body))).toMatchObject({ email: 'other@example.test', password: 'Another123!x' })
+    it('lands on the course, not on «my classes», once the provider itself becomes signed in', async () => {
+      mockApi()
+      const router = createMemoryRouter(
+        [
+          { path: '/', element: <LocationProbe /> },
+          { path: '/my-classes', element: <LocationProbe /> },
+          { path: '/catalog/:courseId', element: <PathProbe /> },
+          { path: '/register', element: <StudentRegisterPage /> },
+        ],
+        { initialEntries: ['/explore', `/register${returnToSearch(INTENT)}`], initialIndex: 1 },
+      )
+      render(
+        <ConfigProvider>
+          <AntdApp>
+            <StatefulAuth>
+              <RouterProvider router={router} />
+            </StatefulAuth>
+          </AntdApp>
+        </ConfigProvider>,
+      )
+
+      await fillAndSend()
+
+      expect((await screen.findByTestId('path')).textContent).toBe(INTENT)
+      // The registration page left the history (replace): back leads to where the visitor was before it.
+      expect(router.state.historyAction).toBe('REPLACE')
     })
   })
 
@@ -363,7 +484,28 @@ describe('StudentRegisterPage', () => {
       expect(describedBy).toBeTruthy()
       expect(document.getElementById(describedBy!.split(' ')[0]!)).toHaveTextContent(text.validation.email.invalid_format)
       expect(screen.queryByText('invalid_format')).not.toBeInTheDocument()
-      expect(screen.queryByText(text.register.sentTitle)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+    })
+
+    it('puts 409 email_in_use under the e-mail field, keeps the form and goes nowhere', async () => {
+      const fetchMock = mockApi({ register: () => jsonResponse(409, { statusCode: 409, code: 'email_in_use', field: 'email' }) })
+      const { auth } = renderPage(undefined, makeAuth(), returnToSearch(INTENT))
+
+      await fillAndSend()
+
+      expect(await screen.findByText('هذا البريد الإلكتروني مسجّل بالفعل. سجّل الدخول أو استخدم بريدًا آخر.')).toBeInTheDocument()
+      const emailField = screen.getByLabelText<HTMLInputElement>(text.register.email)
+      expect(emailField).toHaveAttribute('aria-invalid', 'true')
+      expect(emailField).toHaveFocus()
+      expect(emailField.value).toBe(EMAIL)
+      expect(passwordField().value).toBe(PASSWORD)
+      expect(auth.adoptSession).not.toHaveBeenCalled()
+      expect(getAccessToken()).toBeNull()
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('path')).not.toBeInTheDocument()
+      expect(posts(fetchMock)).toHaveLength(1)
+      // The way to sign in instead stays under the form, with the course.
+      expect(within(screen.getByTestId('register-sign-in')).getByRole('link')).toHaveAttribute('href', `/login${returnToSearch(INTENT)}`)
     })
 
     it('puts password_weak under the password field, in this app’s words, and keeps the form', async () => {
@@ -377,7 +519,7 @@ describe('StudentRegisterPage', () => {
       expect(passwordField()).toHaveFocus()
       expect(screen.queryByText('at least 10 characters')).not.toBeInTheDocument()
       expect(screen.getByLabelText<HTMLInputElement>(text.register.email).value).toBe(EMAIL)
-      expect(screen.queryByText(text.register.sentTitle)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('location')).not.toBeInTheDocument()
     })
 
     it('puts a password problem of registration_invalid under the password field', async () => {
@@ -443,9 +585,9 @@ describe('StudentRegisterPage', () => {
       expect(passwordField().value).toBe(PASSWORD)
       expect(confirmField().value).toBe(PASSWORD)
 
-      fetchMock.mockImplementation(async () => jsonResponse(202))
+      fetchMock.mockImplementation(async () => jsonResponse(201, SESSION))
       await user.click(submitButton())
-      expect(await screen.findByText(text.register.sentTitle)).toBeInTheDocument()
+      expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/')
     })
 
     it('never shows the text of a server message', async () => {
@@ -459,99 +601,28 @@ describe('StudentRegisterPage', () => {
     })
   })
 
-  describe('the chosen course', () => {
-    const fromCourse = { from: `/catalog/${COURSE}?intent=enroll` }
+  describe('the way to sign in instead', () => {
+    const signInHref = `/login${returnToSearch(INTENT)}`
 
-    it('keeps only the course id and the time, after the 202', async () => {
+    it('says «لديك حساب بالفعل؟ تسجيل الدخول» under the form, carrying `from` as ?returnTo=', async () => {
       mockApi()
-      renderPage(fromCourse)
-      await fillIn()
-      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
-
-      await userEvent.click(submitButton())
-      await screen.findByText(text.register.sentTitle)
-
-      const stored = JSON.parse(window.localStorage.getItem(KEPT_COURSE_KEY)!)
-      expect(Object.keys(stored).sort()).toEqual(['courseId', 'savedAt'])
-      expect(stored.courseId).toBe(COURSE)
-      expect(typeof stored.savedAt).toBe('number')
-      const all = storedText()
-      expect(all).not.toContain(EMAIL)
-      expect(all).not.toContain(NAME)
-      expect(all).not.toContain(PASSWORD)
-    })
-
-    it('keeps nothing when the server refused', async () => {
-      mockApi({ register: () => jsonResponse(500, { statusCode: 500 }) })
-      renderPage(fromCourse)
-
-      await fillAndSend()
-
-      await screen.findByRole('alert')
-      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
-    })
-
-    it.each([
-      ['no return path', undefined],
-      ['a path that is no enroll intent', { from: '/my-classes' }],
-      ['another site', { from: `https://evil.example/catalog/${COURSE}?intent=enroll` }],
-      ['a value that is no course id', { from: '/catalog/sara@example.test?intent=enroll' }],
-    ])('keeps nothing for %s', async (_label, state) => {
-      mockApi()
-      renderPage(state)
-
-      await fillAndSend()
-
-      await screen.findByText(text.register.sentTitle)
-      expect(storedText()).toBe('')
-    })
-
-    it('clears an older choice when this visit named no course', async () => {
-      keepCourse('0192f0a0-0000-7000-8000-00000000c002')
-      mockApi()
-      renderPage()
-
-      await fillAndSend()
-
-      await screen.findByText(text.register.sentTitle)
-      expect(window.localStorage.getItem(KEPT_COURSE_KEY)).toBeNull()
-    })
-
-    const signInHref = `/login?returnTo=${encodeURIComponent(fromCourse.from)}`
-
-    it('keeps `from` in the sign-in link above the form, as ?returnTo=', async () => {
-      mockApi()
-      renderPage(fromCourse)
+      renderPage({ from: INTENT })
 
       const prompt = await screen.findByTestId('register-sign-in')
-      expect(prompt).toHaveTextContent(text.register.haveAccount)
+      expect(prompt).toHaveTextContent('لديك حساب بالفعل؟ تسجيل الدخول')
+      // Below the form: after its submit button in the document.
+      expect(submitButton().compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       const link = within(prompt).getByRole('link', { name: text.register.signIn })
       expect(link).toHaveAttribute('href', signInHref)
       await userEvent.click(link)
       expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/login')
     })
 
-    it('keeps `from` in the sign-in link after the 202', async () => {
+    it('reads the chosen course from ?returnTo= too', async () => {
       mockApi()
-      renderPage(fromCourse)
-      await fillAndSend()
-
-      expect(await screen.findByRole('link', { name: text.register.goToSignIn })).toHaveAttribute('href', signInHref)
-      // The form's own prompt is gone with the form.
-      expect(screen.queryByTestId('register-sign-in')).not.toBeInTheDocument()
-    })
-
-    it('reads the chosen course from ?returnTo= too, and keeps it after the 202', async () => {
-      mockApi()
-      renderWithProviders(<StudentRegisterPage />, {
-        route: { pathname: '/register', search: `?returnTo=${encodeURIComponent(fromCourse.from)}` },
-        path: '/register',
-      })
+      renderPage(undefined, makeAuth(), returnToSearch(INTENT))
 
       expect(within(await screen.findByTestId('register-sign-in')).getByRole('link')).toHaveAttribute('href', signInHref)
-      await fillAndSend()
-      await screen.findByText(text.register.sentTitle)
-      expect(JSON.parse(window.localStorage.getItem(KEPT_COURSE_KEY)!).courseId).toBe(COURSE)
     })
 
     it('never carries a return path to another site', async () => {
@@ -562,45 +633,22 @@ describe('StudentRegisterPage', () => {
       expect(within(prompt).getByRole('link', { name: text.register.signIn })).toHaveAttribute('href', '/login')
     })
   })
-  describe('the terms and Google (PORTAL-04)', () => {
+
+  describe('Google (PORTAL-04)', () => {
     const GOOGLE_URL = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
 
-    it('refuses to send before the terms are accepted, and sends nothing about them nor the confirmation', async () => {
-      const fetchMock = mockApi()
-      renderPage()
-      const user = userEvent.setup()
-      await user.type(await screen.findByLabelText(text.register.fullName), NAME)
-      await user.type(screen.getByLabelText(text.register.email), EMAIL)
-      typePasswords()
-
-      await user.click(submitButton())
-
-      expect(await screen.findByText(text.register.termsRequired)).toBeInTheDocument()
-      expect(posts(fetchMock)).toHaveLength(0)
-
-      await user.click(screen.getByLabelText(text.register.terms))
-      await user.click(submitButton())
-
-      await screen.findByText(text.register.sentTitle)
-      expect(Object.keys(JSON.parse(String(posts(fetchMock)[0]![1]?.body))).sort()).toEqual(['email', 'fullName', 'locale', 'password'])
-    })
-
-    it('words the terms as plain text: the academy has no pages to link to yet', async () => {
-      mockApi()
-      renderPage()
-      const box = await screen.findByLabelText(text.register.terms)
-      expect(box).toHaveAttribute('type', 'checkbox')
-      expect(box.closest('label')!.querySelector('a')).toBeNull()
-    })
-
-    it('heads the card with its title and the way to sign in, then Google, «أو» and the form', async () => {
+    it('heads the card with its title, then Google, «أو», the form, and the way to sign in under it', async () => {
       mockApi()
       renderPage()
       await screen.findByLabelText(text.register.fullName)
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(text.register.title)
-      expect(screen.getByTestId('register-sign-in')).toHaveTextContent(text.register.haveAccount)
-      expect(screen.getByText(ar.login.or)).toBeInTheDocument()
-      expect(submitButton()).toHaveTextContent(text.register.submit)
+      const google = screen.getByText(ar.login.google.button).closest('button')!
+      const or = screen.getByText(ar.login.or)
+      const form = submitButton().closest('form')!
+      const prompt = screen.getByTestId('register-sign-in')
+      expect(google.compareDocumentPosition(or) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(or.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(form.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it('shows Google disabled with its reason while googleSignUp is not on', async () => {
@@ -618,7 +666,7 @@ describe('StudentRegisterPage', () => {
           : jsonResponse(200, { url: GOOGLE_URL }),
       )
       const assign = vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
-      renderPage({ from: `/catalog/${COURSE}?intent=enroll` })
+      renderPage({ from: INTENT })
       const button = await waitFor(() => {
         const found = screen.getByText(ar.login.google.button).closest('button')!
         expect(found).toBeEnabled()
@@ -629,7 +677,7 @@ describe('StudentRegisterPage', () => {
 
       await waitFor(() => expect(assign).toHaveBeenCalledWith(GOOGLE_URL))
       const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/auth/google/start')!
-      expect(JSON.parse(String(init?.body))).toEqual({ returnTo: `/catalog/${COURSE}?intent=enroll` })
+      expect(JSON.parse(String(init?.body))).toEqual({ returnTo: INTENT })
       expect(screen.queryByTestId('google-sign-in-hint')).not.toBeInTheDocument()
     })
 

@@ -1,8 +1,10 @@
 // The global search (redesign, 2026-11-14): a box in the header (Ctrl+K or «/» from anywhere) that opens a
 // search panel. Before typing it suggests — unread notifications, the actions this viewer may take, the recent
 // searches; while typing it matches pages and actions locally (both languages, Arabic spelling variants ignored)
-// and asks the server for people, classes, courses, invoices, receipts and certificates — each only with the key
-// the server checks, and a number-looking query («INV-…», «RCPT-…», a serial) goes to its own kind first.
+// and asks the server for people, courses, lessons, assignments, exams, invoices, receipts and certificates — each only
+// with the key the server checks, and a number-looking query («INV-…», «RCPT-…», a serial) goes to its own kind first.
+// Classes are not searched since 2026-11-26 (they are an internal mechanism, not a section of the admin interface),
+// except by a teacher-only viewer, whose «الدورات» is the classes page (J-F72): their classes come under «الدورات».
 // A record opens on its page through `?open=<id>` (useOpenFromSearch). Arrow keys move, Enter opens, Esc closes.
 import {
   AppstoreOutlined,
@@ -26,8 +28,8 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { listCertificates } from '../api/certificates'
-import { listClasses } from '../api/classes'
 import { listAssignments } from '../api/assignments'
+import { listClasses } from '../api/classes'
 import { listCourses } from '../api/courses'
 import { listExams } from '../api/exams'
 import { listInvoices } from '../api/invoices'
@@ -39,14 +41,14 @@ import { listUsers } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { OPEN_PARAM } from '../common/useOpenFromSearch'
 import { useLocalized } from '../i18n/useLocalized'
-import { canAccess, navFor, navLabelKey } from '../layout/navigation'
+import { canAccess, navFor, navLabelKey, teachesOnly } from '../layout/navigation'
 import { useUnreadCount } from '../notifications/useUnreadCount'
 import { localizedLabel, roleLabel } from '../users/users.format'
 import { PAGE_KEYWORDS, SEARCH_MIN_LENGTH, actionsFor, forgetRecent, matchScore, numberPart, queryKind, readRecent, rememberRecent } from './search.data'
 import type { QueryKind, RecentEntry } from './search.data'
 import './search.css'
 
-type Group = 'recent' | 'suggested' | 'pages' | 'users' | 'classes' | 'courses' | 'lessons' | 'assignments' | 'exams' | 'invoices' | 'receipts' | 'certificates'
+type Group = 'recent' | 'suggested' | 'pages' | 'users' | 'courses' | 'lessons' | 'assignments' | 'exams' | 'invoices' | 'receipts' | 'certificates'
 
 interface Result {
   key: string
@@ -62,7 +64,6 @@ const GROUP_ICONS: Record<Group, ReactNode> = {
   suggested: <ThunderboltOutlined />,
   pages: <AppstoreOutlined />,
   users: <UserOutlined />,
-  classes: <AppstoreOutlined />,
   courses: <BookOutlined />,
   lessons: <PlayCircleOutlined />,
   assignments: <FileDoneOutlined />,
@@ -80,7 +81,7 @@ function remoteOrder(kind: QueryKind): Group[] {
   if (kind === 'receipt') return ['receipts']
   if (kind === 'serial') return ['certificates', 'invoices', 'receipts']
   if (kind === 'email') return ['users']
-  return ['users', 'classes', 'courses', 'lessons', 'assignments', 'exams', 'certificates', 'invoices', 'receipts']
+  return ['users', 'courses', 'lessons', 'assignments', 'exams', 'certificates', 'invoices', 'receipts']
 }
 
 export function GlobalSearch() {
@@ -170,16 +171,18 @@ export function GlobalSearch() {
             list.items.map((item) => ({ key: `u:${item.id}`, group: 'users', title: item.fullName, subtitle: [item.email, item.roles.map((role) => roleLabel(role, t)).join(language === 'ar' ? '، ' : ', ')].filter(Boolean).join(' · '), path: openPath('/users', item.id), icon: GROUP_ICONS.users })),
           )
       }
-      if (can('classes')) {
-        readers.classes = () =>
-          listClasses({ q: trimmed.slice(0, 100), limit: 5 }, signal).then((list) =>
-            list.items.map((item) => ({ key: `k:${item.id}`, group: 'classes', title: localizedLabel(item.name, language), subtitle: `${item.code} · ${localizedLabel(item.course.name, language)}`, path: openPath('/classes', item.id), icon: GROUP_ICONS.classes })),
-          )
-      }
       if (can('courses')) {
         readers.courses = () =>
           listCourses({ q: trimmed.slice(0, 100), limit: 5 }, signal).then((list) =>
             list.items.map((item) => ({ key: `c:${item.id}`, group: 'courses', title: localizedLabel(item.name, language), subtitle: item.code, path: openPath('/courses', item.id), icon: GROUP_ICONS.courses })),
+          )
+      }
+      // A teacher-only viewer has no courses page (J-F71) and reads the classes page as «الدورات» (J-F72): their own
+      // classes (D-R16) are found there, under that name.
+      if (!readers.courses && viewer && teachesOnly(viewer) && can('classes')) {
+        readers.courses = () =>
+          listClasses({ q: trimmed.slice(0, 100), limit: 5 }, signal).then((list) =>
+            list.items.map((item) => ({ key: `k:${item.id}`, group: 'courses', title: localizedLabel(item.name, language), subtitle: localizedLabel(item.course.name, language), path: openPath('/classes', item.id), icon: GROUP_ICONS.courses })),
           )
       }
       // Titles of lessons, assignments and exams (`q`, CH-0226), each through the class visibility of its list.

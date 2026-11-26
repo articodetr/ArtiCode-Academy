@@ -1,5 +1,5 @@
-// PORTAL-03/04 (#207, contract v3 — the password is chosen on /register): the pure rules of a visitor creating their
-// own student account — the body checks of the public routes in the problem codes of `400 registration_invalid`, with
+// PORTAL-03/04 (#207 — the direct registration, and the legacy contract-v3 completion): the pure rules of a visitor
+// creating their own student account — the body checks of the public routes in the problem codes of `400 registration_invalid`, with
 // every problem under its own field and every unexpected field named in `unknown` (the global ValidationPipe never
 // sees these bodies, so the refusal always has the contract's shape), and THE rule of a self-registered account still
 // waiting for its address. A name or an address is counted in characters as a person sees them (code points), as the
@@ -45,7 +45,7 @@ export interface RegisterInput {
   locale: RegistrationLocale | null;
 }
 
-/** A `POST /api/account/register/:token/complete` body whose shape is valid: the password chosen at registration. */
+/** A `POST /api/account/register/:token/complete` (legacy) body whose shape is valid: the password chosen at registration. */
 export interface CompleteInput {
   password: string;
 }
@@ -109,11 +109,12 @@ export function passwordShapeProblem(value: unknown): RegistrationProblem | null
 }
 
 /**
- * THE rule of a self-registered account whose holder has not confirmed the address yet (contract v3): `pending` and
+ * THE rule of a LEGACY self-registered account whose holder has not confirmed the address yet (contract v3, the
+ * e-mailed flow — the direct registration creates `active` accounts and never such a row): `pending` and
  * marked `self_registered_at` — the marker e-mail registration and Google sign-up set when they create an account
  * (POST /api/users creates `invited` accounts without it). Since v3 the visitor chooses the password at registration,
  * so the v2 rule (`pending` without a password) no longer holds. Every path that treats such an account specially
- * uses it: the registration routes (a fresh link, the completion), the sign-in (`403 email_not_verified` once the
+ * uses it: the legacy registration routes (the preview, the completion), the sign-in (`403 email_not_verified` once the
  * password matched), the admin `activate` (409 — only `delete` applies), the hard delete, the user detail
  * (`awaitingRegistration`) and the Google sign-in (links and activates it). A soft-deleted row is each caller's own
  * check.

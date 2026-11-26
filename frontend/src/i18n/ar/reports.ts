@@ -155,7 +155,6 @@ export const dashboard = {
   // API-050 (classes.read), the notifications from API-167 (ownership, no key).
   stats: {
     activeStudents: 'الطلاب النشطون',
-    runningClasses: 'الفصول الجارية',
     lessonsToday: 'عدد دروس اليوم',
     outstanding: 'المستحق الآن',
   },
@@ -164,7 +163,6 @@ export const dashboard = {
   lessonColumns: { time: 'الوقت', lesson: 'الدرس', class: 'الفصل', room: 'القاعة', status: 'الحالة' },
   classes: {
     title: 'الفصول المفتوحة والجارية',
-    all: 'كل الفصول',
     empty: 'لا فصول مفتوحة أو جارية الآن.',
     columns: { class: 'الفصل', course: 'الدورة', teacher: 'المعلم', seats: 'المقاعد', status: 'الحالة' },
     seats: '{{enrolled}} من {{capacity}}',
@@ -189,7 +187,6 @@ export const dashboard = {
       addStudent: 'إضافة طالب',
       addTeacher: 'إضافة مدرس',
       createCourse: 'إنشاء دورة',
-      classes: 'إدارة الفصول',
       assignTeacher: 'إسناد مدرس',
       lessons: 'إدارة الدروس',
       schedule: 'الجدول الدراسي',
@@ -202,8 +199,6 @@ export const dashboard = {
     statistics: 'إحصائيات الأكاديمية',
     stats: {
       activeStudents: 'الطلاب النشطون',
-      runningClasses: 'الفصول الجارية',
-      openClasses: 'الفصول المفتوحة',
       lessonsToday: 'حصص اليوم',
       attendanceRate: 'نسبة الحضور',
       attendancePeriod: 'آخر 30 يومًا',

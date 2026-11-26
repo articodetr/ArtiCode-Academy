@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { actionsFor, forgetRecent, matchScore, normalize, queryKind, readRecent, rememberRecent, RECENT_MAX } from './search.data'
+import { PAGE_KEYWORDS, SEARCH_ACTIONS, actionsFor, forgetRecent, matchScore, normalize, queryKind, readRecent, rememberRecent, RECENT_MAX } from './search.data'
 
 describe('global search rules (redesign)', () => {
   afterEach(() => localStorage.clear())
@@ -30,6 +30,12 @@ describe('global search rules (redesign)', () => {
   it('offers an action only to whoever may open its page and holds its key', () => {
     const keys = actionsFor((nav) => nav === 'payments', (key) => key === 'payments.record').map((action) => action.key)
     expect(keys).toEqual(['recordPayment'])
+  })
+
+  it('has no action that opens the classes page — classes are an internal mechanism (2026-11-26)', () => {
+    expect(SEARCH_ACTIONS.some((action) => action.navKey === 'classes' || action.path.startsWith('/classes'))).toBe(false)
+    expect(actionsFor(() => true, () => true).map((action) => action.key)).not.toContain('newClass')
+    expect(PAGE_KEYWORDS).not.toHaveProperty('classes')
   })
 
   it('keeps the recent searches newest first, once each, at most six', () => {

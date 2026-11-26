@@ -94,8 +94,8 @@ describe.skipIf(!available)('MOD-02-T04 public academy branding (e2e, TEST-223)'
       catalogPublic: readSettings(row.settings).catalog.publicBrowsing === true,
       // Homepage images: the public URL of each of the four pictures, null = the built-in default.
       homepageImages: publicHomepageImageUrls(row.settings, 'api'),
-      // TEST-320: vitest.config.e2e.ts forces MAIL_TRANSPORT=none, so it stays closed whatever the setting says.
-      selfRegistration: false,
+      // TEST-320: the setting alone (the direct registration needs no mail transport).
+      selfRegistration: readSettings(row.settings).selfRegistration.enabled === true,
       // PORTAL-04: the server's Google configuration, and sign-up only with the self-registration setting too.
       googleSignIn: GOOGLE_CONFIGURED,
       googleSignUp: GOOGLE_CONFIGURED && readSettings(row.settings).selfRegistration.enabled === true,

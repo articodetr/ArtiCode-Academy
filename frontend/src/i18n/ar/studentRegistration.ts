@@ -1,25 +1,22 @@
-// PORTAL-04 (#208), on the registration contract v3 (the password chosen on /register, typed again on the e-mailed
-// link): a student creating their own account.
+// PORTAL-04 (#208): a student creating their own account — /register creates it and signs it in at once (no e-mail to
+// confirm); the e-mailed link of the earlier contract v3 (`complete`) still activates the accounts it was sent for.
 export const studentRegistration = {
   // The ways in, shown only while the server says `selfRegistration: true`.
   entry: {
     createAccount: 'إنشاء حساب',
     noAccount: 'ليس لديك حساب؟',
     createAccountLink: 'أنشئ حسابًا',
-    // The sign-in card's way to /register (with «ليس لديك حساب؟» before it).
-    createAccountNow: 'أنشئ حسابك الآن',
+    // The sign-in card's way to /register, under the form (with «ليس لديك حساب؟» before it).
+    createAccountNow: 'إنشاء حساب جديد',
     // Replaces «الحسابات تُنشأ من إدارة الأكاديمية» while the academy lets a visitor register.
     accountsNote: 'يمكنك إنشاء حساب طالب بنفسك، أو الدخول بحسابك الحالي.',
     courseNote: 'سجّل الدخول أو أنشئ حسابًا لتختار الفصل وتؤكد التسجيل.',
-    // On the sign-in page, right after finishing a registration.
-    courseAfterRegister: 'بعد الدخول نعيدك إلى الدورة نفسها لتختار فصلها وتؤكد التحاقك.',
   },
-  // /register (contract v3: the password is chosen here). The same message after sending whatever the address, so
-  // nothing says whether an account exists.
+  // /register: four fields, and the new account is signed in at once.
   register: {
     title: 'أنشئ حسابك',
     subtitle: 'إنشاء حساب طالب',
-    intro: 'أدخل اسمك وبريدك الإلكتروني واختر كلمة مرور، ثم أكّد بريدك من الرسالة التي سنرسلها إليك.',
+    intro: 'أدخل اسمك وبريدك الإلكتروني واختر كلمة مرور، ويُفتح حسابك مباشرة لتبدأ التعلّم.',
     haveAccount: 'لديك حساب بالفعل؟',
     signIn: 'تسجيل الدخول',
     fullName: 'الاسم الكامل',
@@ -30,19 +27,13 @@ export const studentRegistration = {
     passwordRequired: 'اختر كلمة مرور لحسابك.',
     confirmRequired: 'أعد كتابة كلمة المرور للتأكيد.',
     mismatch: 'كلمتا المرور غير متطابقتين.',
-    // Checked on this page only: the academy has no terms pages yet, so the words link nowhere and nothing is sent.
-    terms: 'أوافق على شروط الاستخدام وسياسة الخصوصية',
-    termsRequired: 'وافق على شروط الاستخدام وسياسة الخصوصية لإنشاء حسابك.',
     submit: 'إنشاء حساب',
     submitting: 'جارٍ إنشاء الحساب…',
+    // The short message once the account is created and signed in.
+    created: 'تم إنشاء حسابك بنجاح.',
     // Registration by e-mail is closed while a new account may still come through Google (API-205 `googleSignUp`).
     emailClosedTitle: 'إنشاء الحساب بالبريد الإلكتروني غير متاح حاليًا',
     emailClosedText: 'يمكنك إنشاء حسابك عبر Google، أو تسجيل الدخول إن كان لديك حساب.',
-    sentTitle: 'تحقّق من بريدك الإلكتروني',
-    sentText:
-      'أرسلنا رسالة إلى بريدك؛ افتح الرابط فيها وأدخل كلمة مرورك لتفعيل حسابك. قد تتأخر الرسالة قليلًا، فتفقّد أيضًا مجلد الرسائل غير المرغوب فيها.',
-    goToSignIn: 'الذهاب إلى تسجيل الدخول',
-    anotherAddress: 'إدخال بريد آخر',
   },
   closed: {
     title: 'التسجيل غير متاح حاليًا',
@@ -96,6 +87,8 @@ export const studentRegistration = {
   },
   errors: {
     invalid: 'تعذّر قبول البيانات. راجعها ثم حاول مجددًا.',
+    // 409 email_in_use: the address already has an account (nothing about it changed).
+    emailInUse: 'هذا البريد الإلكتروني مسجّل بالفعل. سجّل الدخول أو استخدم بريدًا آخر.',
     rateLimited: 'محاولات كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مجددًا.',
     rateLimitedSoon: 'محاولات كثيرة خلال وقت قصير. حاول مجددًا بعد أقل من دقيقة.',
     rateLimitedMinutes: 'محاولات كثيرة خلال وقت قصير. حاول مجددًا بعد {{count}} دقيقة.',
@@ -104,8 +97,5 @@ export const studentRegistration = {
     rateLimitedMinutes_few: 'محاولات كثيرة خلال وقت قصير. حاول مجددًا بعد {{count}} دقائق.',
     rateLimitedMinutes_many: 'محاولات كثيرة خلال وقت قصير. حاول مجددًا بعد {{count}} دقيقة.',
     rateLimitedMinutes_other: 'محاولات كثيرة خلال وقت قصير. حاول مجددًا بعد {{count}} دقيقة.',
-  },
-  notices: {
-    accountCreated: 'تم إنشاء حسابك، سجّل الدخول',
   },
 }

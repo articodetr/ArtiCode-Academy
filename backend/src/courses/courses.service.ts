@@ -10,10 +10,12 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { CourseStatus } from '../generated/prisma/client.js';
 import { COURSE_PLAN_SELECT, coursePlanFits, toCourseFeePlan } from '../catalog/course-pricing.js';
 import { FEE_PLANS_MANAGE_PERMISSION } from '../finance/finance.policy.js';
+import { reserveNumbers } from '../finance/numbering.js';
 import { parseLessonResources, readLessonResources } from '../learning/learning.content.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { escapeLikePattern } from '../users/users.validation.js';
+import { COURSE_CODE_SEQUENCE_KEY, COURSE_CODE_SEQUENCE_PERIOD, generateCourseCode } from './course-code.js';
 import { hoursToDecimalString, invalidAgeRange, isEmptyCoursePatch, planCourseUpdate } from './courses.changes.js';
 import type { CoursePatch, CourseValues } from './courses.changes.js';
 import { COURSES_PAGE_DEFAULT } from './courses.dto.js';
@@ -132,6 +134,13 @@ function toUpdateInput(data: CoursePatch): Prisma.CourseUncheckedUpdateInput {
   return input;
 }
 
+/** A create without a code tries again once when a concurrent typed code took the generated one. */
+const GENERATED_CODE_ATTEMPTS = 2;
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
 /**
  * Concurrent requests can beat the friendly checks: a duplicate code (P2002),
  * a level deleted meanwhile (P2003 on courses.level_id) or a course deleted
@@ -237,48 +246,68 @@ export class CoursesService {
     const minAge = input.minAge ?? null;
     const maxAge = input.maxAge ?? null;
     if (minAge !== null && maxAge !== null && maxAge < minAge) throw coursesError.ageRangeInvalid(minAge, maxAge);
-    const clash = await this.prisma.db.course.findUnique({ where: { code: input.code }, select: { id: true } });
-    if (clash) throw coursesError.courseCodeTaken(input.code);
+    // A typed code is checked before the write; a generated one is free by construction (below).
+    if (input.code !== undefined) {
+      const clash = await this.prisma.db.course.findUnique({ where: { code: input.code }, select: { id: true } });
+      if (clash) throw coursesError.courseCodeTaken(input.code);
+    }
     if (input.levelId) await this.assertLevelExists(input.levelId);
     if (input.subjectId) await this.assertSubjectUsable(input.subjectId);
     if (input.enrollmentFeePlanId !== undefined) await this.assertPricingAllowed(input.enrollmentFeePlanId, null, caller);
 
     let courseId: string;
-    try {
-      courseId = await this.prisma.db.$transaction(async (tx) => {
-        const course = await tx.course.create({
-          data: {
-            code: input.code,
-            name: toLocalizedText(input.name) as Prisma.InputJsonValue,
-            summary: optionalJson(input.summary ? toLocalizedText(input.summary) : null),
-            description: optionalJson(input.description ? toLocalizedText(input.description) : null),
-            levelId: input.levelId ?? null,
-            durationHours: input.durationHours === undefined ? null : hoursToDecimalString(input.durationHours),
-            sessionsCount: input.sessionsCount ?? null,
-            minAge,
-            maxAge,
-            coverImageUrl: input.coverImageUrl ?? null,
-            enrollmentFeePlanId: input.enrollmentFeePlanId ?? null,
-            subjectId: input.subjectId ?? null,
-            createdById: caller.id,
-          },
-          select: { id: true },
+    // The stored code — typed, or generated inside the transaction — for the P2002 backstop.
+    let code: string | null = input.code ?? null;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        courseId = await this.prisma.db.$transaction(async (tx) => {
+          // No code in the body: the next free `CRS-NNNNN` from the shared counter, whose row
+          // the upsert locks until the commit (two creates never take the same number).
+          const stored =
+            input.code ??
+            (await generateCourseCode(
+              () => reserveNumbers(tx, COURSE_CODE_SEQUENCE_KEY, COURSE_CODE_SEQUENCE_PERIOD, 1),
+              async (candidate) => (await tx.course.findUnique({ where: { code: candidate }, select: { id: true } })) !== null,
+            ));
+          code = stored;
+          const course = await tx.course.create({
+            data: {
+              code: stored,
+              name: toLocalizedText(input.name) as Prisma.InputJsonValue,
+              summary: optionalJson(input.summary ? toLocalizedText(input.summary) : null),
+              description: optionalJson(input.description ? toLocalizedText(input.description) : null),
+              levelId: input.levelId ?? null,
+              durationHours: input.durationHours === undefined ? null : hoursToDecimalString(input.durationHours),
+              sessionsCount: input.sessionsCount ?? null,
+              minAge,
+              maxAge,
+              coverImageUrl: input.coverImageUrl ?? null,
+              enrollmentFeePlanId: input.enrollmentFeePlanId ?? null,
+              subjectId: input.subjectId ?? null,
+              createdById: caller.id,
+            },
+            select: { id: true },
+          });
+          await this.audit.record(
+            {
+              action: COURSES_AUDIT_ACTIONS.created,
+              actorUserId: caller.id,
+              entityType: COURSES_ENTITY_TYPE,
+              entityId: course.id,
+              metadata: { code: stored, status: 'draft', pricing: input.enrollmentFeePlanId ? 'paid' : 'free' },
+              ...ctx,
+            },
+            tx,
+          );
+          return course.id;
         });
-        await this.audit.record(
-          {
-            action: COURSES_AUDIT_ACTIONS.created,
-            actorUserId: caller.id,
-            entityType: COURSES_ENTITY_TYPE,
-            entityId: course.id,
-            metadata: { code: input.code, status: 'draft', pricing: input.enrollmentFeePlanId ? 'paid' : 'free' },
-            ...ctx,
-          },
-          tx,
-        );
-        return course.id;
-      });
-    } catch (error) {
-      throw translateKnownError(error, null, input.code, input.levelId ?? null, input.enrollmentFeePlanId ?? null, input.subjectId ?? null);
+        break;
+      } catch (error) {
+        // A code typed by hand at the very instant it was generated wins the unique index; the
+        // counter rolled back with the transaction, and the next attempt sees that course and skips it.
+        if (input.code === undefined && attempt < GENERATED_CODE_ATTEMPTS && isUniqueViolation(error)) continue;
+        throw translateKnownError(error, null, code, input.levelId ?? null, input.enrollmentFeePlanId ?? null, input.subjectId ?? null);
+      }
     }
     return this.getForManager(courseId);
   }

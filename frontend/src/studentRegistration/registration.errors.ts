@@ -1,6 +1,6 @@
-// What a refused registration request means for its screen (PORTAL-04, contract v3: the password is chosen on /register
-// and typed again on the e-mailed link). Every message is a translation key of this app: neither a server message nor a
-// server-sent field value is ever shown. No React.
+// What a refused registration request means for its screen (PORTAL-04: /register creates the account and signs it in at
+// once; the e-mailed link of the earlier contract v3 still completes the accounts it was sent for). Every message is a
+// translation key of this app: neither a server message nor a server-sent field value is ever shown. No React.
 import { REGISTRATION_PROBLEMS } from '../api/registration'
 import type { RegistrationProblem } from '../api/registration'
 import { ApiError } from '../api/client'
@@ -120,6 +120,10 @@ export function describeRegisterFailure(error: unknown): RegistrationFailure {
     // The server's policy (the problems are its own words, never shown): the rules in this app's words instead.
     if (error.code === 'password_weak') {
       return passwordFailure({ key: 'account.errors.password_weak', params: { min: PASSWORD_MIN_LENGTH } })
+    }
+    // The address already has an account (nothing about it changed): said under the e-mail field, with the way on.
+    if (error.code === 'email_in_use') {
+      return { kind: 'fields', fields: [{ name: 'email', messages: [{ key: 'studentRegistration.errors.emailInUse' }] }] }
     }
   }
   return { kind: 'message', ...generalMessage(error) }

@@ -22,6 +22,17 @@ export function codeParam({ value }: { value: unknown }): unknown {
 }
 
 /**
+ * The optional code of POST /api/courses: only an ABSENT code is left out (the
+ * server then generates one). `null` and a blank string reach the validator
+ * as they are and are refused (400), so a client bug never turns into a
+ * generated code; a string is trimmed and upper-cased like every code.
+ */
+export function optionalCodeParam({ obj, key }: { obj: Record<string, unknown>; key: string }): unknown {
+  const raw = obj[key];
+  return typeof raw === 'string' ? raw.trim().toUpperCase() : raw;
+}
+
+/**
  * Body booleans must be JSON booleans: reads the raw value so the implicit
  * conversion of the ValidationPipe cannot turn `"yes"` or `1` into `true`
  * (same rule as guardians.dto.ts); @IsBoolean then rejects anything else.

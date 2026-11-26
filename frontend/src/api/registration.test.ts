@@ -3,7 +3,7 @@ import { getAccessToken, getSessionUserId, setAccessToken } from '../auth/token-
 import { jsonResponse, mockFetch, sessionResponse } from '../test/http'
 import { getPublicAcademy, isSelfRegistrationOpen } from './academy'
 import { ApiError } from './client'
-import { REGISTRATION_PATHS, completeRegistration, getRegistrationLink, requestRegistration } from './registration'
+import { REGISTRATION_PATHS, completeRegistration, getRegistrationLink, register } from './registration'
 
 const TOKEN = 'reg_'.padEnd(43, 'x')
 
@@ -27,16 +27,35 @@ describe('the registration requests', () => {
   beforeEach(() => setAccessToken('access-of-somebody', 'user-1'))
   afterEach(() => setAccessToken(null))
 
-  it('requestRegistration posts exactly the input, the password as typed, without a bearer token, and resolves on a 202 with no body', async () => {
-    const fetchMock = mockFetch(() => jsonResponse(202))
+  it('register posts exactly the input, the password as typed, without a bearer token, and stores the access token of the session it hands back', async () => {
+    const session = sessionResponse('access-of-sara', { id: 'user-sara', roles: ['student'], permissions: [] })
+    const fetchMock = mockFetch(() => jsonResponse(201, session))
     const input = { fullName: 'سارة علي', email: 's@example.test', password: ' Secret123!x ', locale: 'ar' as const }
-    await expect(requestRegistration(input)).resolves.toBeUndefined()
+    await expect(register(input)).resolves.toEqual(session)
 
     const { url, init, headers } = onlyCall(fetchMock)
     expect(url).toBe('/api/account/register')
     expect(init?.method).toBe('POST')
     expect(JSON.parse(String(init?.body))).toEqual({ fullName: 'سارة علي', email: 's@example.test', password: ' Secret123!x ', locale: 'ar' })
     expect(headers.has('Authorization')).toBe(false)
+    expect(getAccessToken()).toBe('access-of-sara')
+    expect(getSessionUserId()).toBe('user-sara')
+  })
+
+  it('register sends no other field, even when one is handed in, and no locale when none is given', async () => {
+    const fetchMock = mockFetch(() => jsonResponse(201, sessionResponse()))
+    const sneaky = { fullName: 'سارة', email: 's@example.test', password: 'Secret123!x', roleKeys: ['academy_admin'], confirmPassword: 'x' }
+    await register(sneaky as unknown as Parameters<typeof register>[0])
+    expect(JSON.parse(String(onlyCall(fetchMock).init?.body))).toEqual({ fullName: 'سارة', email: 's@example.test', password: 'Secret123!x' })
+  })
+
+  it('register keeps the stored token on a refusal, and carries the code of an address that already has an account', async () => {
+    mockFetch(() => jsonResponse(409, { statusCode: 409, code: 'email_in_use', field: 'email' }))
+    await expect(register({ fullName: 'سارة', email: 's@example.test', password: 'Secret123!x' })).rejects.toMatchObject({
+      status: 409,
+      code: 'email_in_use',
+    })
+    expect(getAccessToken()).toBe('access-of-somebody')
   })
 
   it('getRegistrationLink reads the preview on its own route, without a bearer token', async () => {
@@ -83,7 +102,7 @@ describe('the registration requests', () => {
 
   it('never tries a session refresh on a 401, and carries the code of a refusal', async () => {
     const fetchMock = mockFetch(() => jsonResponse(401, { statusCode: 401, code: 'token_expired' }))
-    await expect(requestRegistration({ fullName: 'سارة', email: 's@example.test', password: 'Secret123!x' })).rejects.toBeInstanceOf(ApiError)
+    await expect(register({ fullName: 'سارة', email: 's@example.test', password: 'Secret123!x' })).rejects.toBeInstanceOf(ApiError)
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     fetchMock.mockImplementation(async () => jsonResponse(410, { statusCode: 410, code: 'registration_link_expired' }))
@@ -98,7 +117,7 @@ describe('the registration requests', () => {
           headers: { 'Content-Type': 'application/json', 'Retry-After-register_ip': '180' },
         }),
     )
-    await expect(requestRegistration({ fullName: 'سارة', email: 's@example.test', password: 'Secret123!x' })).rejects.toMatchObject({
+    await expect(register({ fullName: 'سارة', email: 's@example.test', password: 'Secret123!x' })).rejects.toMatchObject({
       status: 429,
       retryAfterSeconds: 180,
     })

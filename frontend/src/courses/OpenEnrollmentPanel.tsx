@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAcademy } from '../academy/useAcademy'
 import { ApiError } from '../api/client'
-import { changeClassStatus, createClass, listClasses, updateClass } from '../api/classes'
+import { changeClassStatus, createClass, updateClass } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import type { Course } from '../api/courses'
 import { useAuth } from '../auth/auth-context'
@@ -31,8 +31,8 @@ import {
   planStop,
 } from './courses.openEnrollment'
 import type { OpenStep } from './courses.openEnrollment'
-
-const PAGE_SIZE = 100
+// Shared with the course drawer's class tabs (one reading of every page).
+import { readCourseClasses } from './courseClasses'
 
 type WriteOutcome = 'opened' | 'stopped' | 'stopped_others_open' | 'needs_capacity' | 'codes_exhausted' | 'nothing'
 
@@ -40,18 +40,6 @@ type WriteOutcome = 'opened' | 'stopped' | 'stopped_others_open' | 'needs_capaci
 interface NewClassInput {
   capacity: number
   startsOn: string
-}
-
-/** Every class of the course: the plan must not miss one on a later page. */
-async function readCourseClasses(courseId: string, signal?: AbortSignal): Promise<AcademyClass[]> {
-  const items: AcademyClass[] = []
-  let cursor: string | undefined
-  do {
-    const page = await listClasses({ courseId, sort: 'code', limit: PAGE_SIZE, cursor }, signal)
-    items.push(...page.items)
-    cursor = page.nextCursor ?? undefined
-  } while (cursor)
-  return items
 }
 
 async function applyReuseStep(step: Exclude<OpenStep, { kind: 'create' }>): Promise<void> {

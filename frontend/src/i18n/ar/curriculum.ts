@@ -361,11 +361,16 @@ export const publicCatalog = {
     minutes_few: '{{count}} دقائق',
     minutes_many: '{{count}} دقيقة',
     minutes_other: '{{count}} دقيقة',
+    // The title of the dialog «اشترك الآن» opens for a visitor while an account can be created.
     enrollTitle: 'التسجيل في الدورة',
-    enroll: 'سجّل في هذه الدورة',
-    // PORTAL-04: the quiet link beside «سجّل في هذه الدورة», only while API-205 lets a visitor create an account.
-    createAccount: 'إنشاء حساب',
-    // …and the note under the two: with the way to a new account, or (nobody can create one) the sign-in alone.
+    enroll: 'اشترك الآن',
+    // PORTAL-04: the visitor's two ways on, in that dialog (each with the course as `returnTo`).
+    enrollChoice: {
+      text: 'سجّل الدخول إن كان لديك حساب، أو أنشئ حسابًا جديدًا لتشترك في الدورة.',
+      signIn: 'تسجيل الدخول',
+      register: 'إنشاء حساب جديد',
+    },
+    // …and the note under the button: with the way to a new account, or (nobody can create one) the sign-in alone.
     signInOrRegisterNote: 'سجّل الدخول أو أنشئ حسابًا جديدًا للاشتراك في الدورة والبدء بالتعلم.',
     signInNote: 'سجّل الدخول للاشتراك في الدورة والبدء بالتعلم.',
     // PORTAL-04 PR-2 (MOD-19): a paid course becomes a request with an invoice, activated after payment and approval.

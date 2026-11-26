@@ -1,27 +1,33 @@
-// /register (PORTAL-04, contract v3): a visitor asks for a student account with a name, an e-mail and a password (typed
-// twice), in the frame of the account pages (auth/AuthLayout.tsx). The e-mail way is closed unless API-205 says
-// `selfRegistration: true`; «المتابعة باستخدام Google» is enabled only while it says `googleSignUp: true` (Google proves
-// the address, so it needs no mail and may stay open while the e-mail way is closed); a failed read closes both. The
-// server answers 202 whatever the address, so the page shows one fixed message and never says whether an account
-// exists. The account is activated from the e-mailed link, where the same password is typed again. The password lives in
-// the form only: it is sent once, never trimmed, never kept after the 202 or stored. The terms box is checked on this
-// page only — the academy has no terms pages yet, so its words link nowhere — and nothing about it is sent. A course
-// chosen before coming here waits on this device (keptCourse.ts); nothing enrolls.
+// /register (PORTAL-04 — the owner's request of 2026-11-26): a visitor creates a student account with exactly four fields
+// — الاسم الكامل، البريد الإلكتروني، كلمة المرور، تأكيد كلمة المرور — and «إنشاء حساب», in the frame of the account
+// pages (auth/AuthLayout.tsx). The server creates the account active and signs it in at once (201 with the session —
+// api/registration.ts): no e-mail to confirm, no extra field, no terms box. The session is adopted (as on the invitation
+// page), a short message says the account was created, and the page goes on — replacing this history entry — where a
+// sign-in goes (signInTarget() of auth/returnPath.ts): the return path the page was opened with (`?returnTo=` or the
+// router state's `from`, a path of this site only — a visitor who came from a course goes back to
+// `/catalog/<id>?intent=enroll`, where a free course enrolls and a paid one sends a request, MOD-19), else the home page.
+// A course kept on this device by an earlier visit (keptCourse.ts) is cleared, never followed.
+// The e-mail way is closed unless API-205 says `selfRegistration: true`; «المتابعة باستخدام Google» is enabled only while
+// it says `googleSignUp: true` (it may stay open while the e-mail way is closed); a failed read closes both. Under the form,
+// «لديك حساب بالفعل؟ تسجيل الدخول» leads to /login with the same `returnTo`. The password lives in the form only: it is
+// sent once, never trimmed, never stored.
 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons'
-import { Alert, Button, Checkbox, Divider, Flex, Form, Input, Spin, Typography } from 'antd'
+import { Alert, App, Button, Divider, Flex, Form, Input, Spin, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../account/account.links'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
 import { isGoogleSignUpOpen, isSelfRegistrationOpen } from '../api/academy'
-import { requestRegistration } from '../api/registration'
+import { register } from '../api/registration'
+import { useAuth } from '../auth/auth-context'
 import { AuthLayout, AuthPrompt } from '../auth/AuthLayout'
 import { GoogleSignInButton } from '../auth/GoogleSignInButton'
-import { requestedReturnPath, withReturnTo } from '../auth/returnPath'
+import { requestedReturnPath, signInTarget, withReturnTo } from '../auth/returnPath'
+import type { SignInDestination } from '../auth/returnPath'
 import { useLocalized } from '../i18n/useLocalized'
 import { PublicOnly } from '../publicCatalog/PublicShell'
-import { rememberChosenCourse } from '../studentRegistration/keptCourse'
+import { clearKeptCourse } from '../studentRegistration/keptCourse'
 import { RegistrationClosedNotice } from '../studentRegistration/RegistrationClosedNotice'
 import { describeRegisterFailure } from '../studentRegistration/registration.errors'
 import type { RegistrationMessage } from '../studentRegistration/registration.errors'
@@ -37,33 +43,31 @@ interface RegisterValues {
   email: string
   password: string
   confirmPassword: string
-  acceptTerms?: boolean
 }
 
 export function StudentRegisterPage() {
+  // Where the new session goes. It is set in the same update that adopts the session and rendered here, above
+  // PublicOnly, so that wrapper's own redirect of a signed-in learner (to /my-classes) never races this one.
+  const [arrival, setArrival] = useState<SignInDestination | null>(null)
+  if (arrival) return <Navigate to={arrival.path} state={arrival.state} replace />
   return (
     <PublicOnly signedInTo="/my-classes">
-      <RegisterBody />
+      <RegisterBody onRegistered={setArrival} />
     </PublicOnly>
   )
 }
 
-function RegisterBody() {
+function RegisterBody({ onRegistered }: { onRegistered: (destination: SignInDestination) => void }) {
   const { t } = useTranslation()
   const location = useLocation()
-  // A path of this site only (returnPath.ts): `?returnTo=` (or the router state's `from`) goes on to the sign-in
-  // page and to Google unchanged.
+  // A path of this site only (returnPath.ts): `?returnTo=` (or the router state's `from`) is where the new account goes,
+  // and goes on to the sign-in page and to Google unchanged.
   const from = requestedReturnPath(location.search, location.state)
   const reading = usePublicAcademy()
   const [closedByServer, setClosedByServer] = useState(false)
-  const [sent, setSent] = useState(false)
-  // Each new form is its own instance (KI-049); «another address» keeps the name and asks for the address again.
-  const [formSession, setFormSession] = useState(0)
-  const [lastName, setLastName] = useState('')
 
   const emailOpen = !closedByServer && isSelfRegistrationOpen(reading.academy)
   const googleOpen = isGoogleSignUpOpen(reading.academy)
-  const signInLink = withReturnTo('/login', from)
 
   let body
   if (reading.loading) {
@@ -74,24 +78,6 @@ function RegisterBody() {
     )
   } else if (!emailOpen && !googleOpen) {
     body = <RegistrationClosedNotice from={from} />
-  } else if (sent) {
-    body = (
-      <>
-        <Alert type="info" showIcon title={t('studentRegistration.register.sentTitle')} description={t('studentRegistration.register.sentText')} />
-        <div className="auth-layout__links">
-          <Link to={signInLink}>{t('studentRegistration.register.goToSignIn')}</Link>
-          <Button
-            type="link"
-            onClick={() => {
-              setSent(false)
-              setFormSession((session) => session + 1)
-            }}
-          >
-            {t('studentRegistration.register.anotherAddress')}
-          </Button>
-        </div>
-      </>
-    )
   } else {
     body = (
       <>
@@ -102,18 +88,7 @@ function RegisterBody() {
         {emailOpen ? (
           <>
             <Typography.Paragraph type="secondary">{t('studentRegistration.register.intro')}</Typography.Paragraph>
-            <RegisterForm
-              key={formSession}
-              initialName={lastName}
-              // «Another address» is the same visitor, who has accepted the terms already.
-              initialAccepted={lastName !== ''}
-              onSent={(fullName) => {
-                rememberChosenCourse({ from })
-                setLastName(fullName)
-                setSent(true)
-              }}
-              onClosed={() => setClosedByServer(true)}
-            />
+            <RegisterForm from={from} onRegistered={onRegistered} onClosed={() => setClosedByServer(true)} />
           </>
         ) : (
           <Alert
@@ -124,38 +99,35 @@ function RegisterBody() {
             description={t('studentRegistration.register.emailClosedText')}
           />
         )}
+        {/* «لديك حساب بالفعل؟ تسجيل الدخول» under the form (or Google's way in), with the same return path. The closed
+            notice carries its own way to the sign-in page. */}
+        <AuthPrompt question={t('studentRegistration.register.haveAccount')} testId="register-sign-in">
+          <Link to={withReturnTo('/login', from)}>{t('studentRegistration.register.signIn')}</Link>
+        </AuthPrompt>
       </>
     )
   }
 
-  // «لديك حساب بالفعل؟ تسجيل الدخول» heads every state that has a form or Google's button; the closed notice and the
-  // message after the 202 carry their own way to the sign-in page.
-  const showsPrompt = !reading.loading && (emailOpen || googleOpen) && !sent
   return (
     <AuthLayout title={t('studentRegistration.register.title')} academy={reading}>
-      {showsPrompt ? (
-        <AuthPrompt question={t('studentRegistration.register.haveAccount')} testId="register-sign-in" placement="top">
-          <Link to={signInLink}>{t('studentRegistration.register.signIn')}</Link>
-        </AuthPrompt>
-      ) : null}
       {body}
     </AuthLayout>
   )
 }
 
 function RegisterForm({
-  initialName,
-  initialAccepted,
-  onSent,
+  from,
+  onRegistered,
   onClosed,
 }: {
-  initialName: string
-  initialAccepted: boolean
-  onSent: (fullName: string) => void
+  from: string | null
+  onRegistered: (destination: SignInDestination) => void
   onClosed: () => void
 }) {
   const { t } = useTranslation()
   const { language } = useLocalized()
+  const { adoptSession } = useAuth()
+  const { message: toast } = App.useApp()
   const [form] = Form.useForm<RegisterValues>()
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<RegistrationMessage | null>(null)
@@ -167,13 +139,18 @@ function RegisterForm({
     busy.current = true
     setSubmitting(true)
     setMessage(null)
-    const fullName = values.fullName.trim()
+    let session
     try {
-      // The terms box and the confirmation are not part of the contract: the server refuses any other field. The
-      // password goes exactly as typed.
-      await requestRegistration({ fullName, email: values.email.trim(), password: values.password, locale: language })
-      onSent(fullName)
+      // Exactly the contract's fields: the confirmation stays here. The password goes exactly as typed.
+      session = await register({
+        fullName: values.fullName.trim(),
+        email: values.email.trim(),
+        password: values.password,
+        locale: language,
+      })
     } catch (error) {
+      busy.current = false
+      setSubmitting(false)
       const failure = describeRegisterFailure(error)
       if (failure.kind === 'closed') {
         onClosed()
@@ -189,20 +166,20 @@ function RegisterForm({
       } else if (failure.kind === 'message') {
         setMessage({ key: failure.key, params: failure.params })
       }
-    } finally {
-      busy.current = false
-      setSubmitting(false)
+      return
     }
+    // The account exists and is signed in (the access token is stored by register(), the refresh cookie by the server).
+    // Only this visit's return path leads on: a course kept on this device by an earlier visit — perhaps another
+    // person's, on a shared device — is never followed, and is cleared so no later sign-in offers it either.
+    const user = adoptSession(session)
+    clearKeptCourse()
+    const target = signInTarget(user, from, null)
+    toast.success(t('studentRegistration.register.created'))
+    onRegistered({ path: target.path, state: target.state })
   }
 
   return (
-    <Form<RegisterValues>
-      form={form}
-      layout="vertical"
-      requiredMark={false}
-      initialValues={{ fullName: initialName, acceptTerms: initialAccepted }}
-      onFinish={onFinish}
-    >
+    <Form<RegisterValues> form={form} layout="vertical" requiredMark={false} onFinish={onFinish}>
       {message ? <Alert type="error" showIcon title={t(message.key, { ...message.params })} style={{ marginBottom: 16 }} /> : null}
 
       <Form.Item
@@ -219,7 +196,7 @@ function RegisterForm({
           },
         ]}
       >
-        <Input prefix={<UserOutlined />} autoComplete="name" dir="auto" autoFocus={!initialName} readOnly={submitting} />
+        <Input prefix={<UserOutlined />} autoComplete="name" dir="auto" autoFocus readOnly={submitting} />
       </Form.Item>
 
       <Form.Item
@@ -243,7 +220,6 @@ function RegisterForm({
           prefix={<MailOutlined />}
           autoComplete="email"
           dir="ltr"
-          autoFocus={Boolean(initialName)}
           readOnly={submitting}
         />
       </Form.Item>
@@ -292,19 +268,6 @@ function RegisterForm({
         ]}
       >
         <Input.Password prefix={<LockOutlined />} autoComplete="new-password" readOnly={submitting} />
-      </Form.Item>
-
-      <Form.Item
-        name="acceptTerms"
-        valuePropName="checked"
-        rules={[
-          {
-            validator: (_, value: unknown) =>
-              value === true ? Promise.resolve() : Promise.reject(new Error(t('studentRegistration.register.termsRequired'))),
-          },
-        ]}
-      >
-        <Checkbox disabled={submitting}>{t('studentRegistration.register.terms')}</Checkbox>
       </Form.Item>
 
       <Button type="primary" htmlType="submit" block loading={submitting}>

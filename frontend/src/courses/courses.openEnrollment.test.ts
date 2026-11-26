@@ -93,6 +93,14 @@ describe('planEnrollmentPanel', () => {
     expect(planEnrollmentPanel('published', [general({ status: 'open' })])).toEqual({ kind: 'closed', step: { kind: 'reenable', classId: 'general' } })
   })
 
+  it('finds the general class the course drawer prepared (open, self-service off) and only switches self-enrollment on', () => {
+    // What «تجهيز الدورة للمدرسين والطلاب» leaves: the marker, opened at once, selfEnrollment false.
+    const prepared = general({ id: 'prepared', status: 'open', selfEnrollment: false, enrolledCount: 4 })
+    expect(planEnrollmentPanel('published', [prepared])).toEqual({ kind: 'closed', step: { kind: 'reenable', classId: 'prepared' } })
+    // Once the panel switched it on, the course is open through that very class — no second one.
+    expect(planEnrollmentPanel('published', [{ ...prepared, selfEnrollment: true }])).toEqual({ kind: 'open', classes: [{ ...prepared, selfEnrollment: true }] })
+  })
+
   it('still recognises a general class whose code and name were edited: no second class', () => {
     expect(planEnrollmentPanel('published', [general({ code: 'RENAMED-1', name: { ar: 'اسم جديد' }, status: 'open' })])).toEqual({
       kind: 'closed',

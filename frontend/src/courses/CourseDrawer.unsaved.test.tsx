@@ -6,7 +6,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
-import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse, makeLevel } from '../test/courses'
+import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse } from '../test/courses'
 import { makeCurriculum } from '../test/curriculum'
 import { clickWhenSettled } from '../test/drawer'
 import { jsonResponse, mockFetch } from '../test/http'
@@ -30,7 +30,7 @@ function mockCourseApi() {
 
 function renderDrawer() {
   const onClose = vi.fn()
-  renderWithProviders(<CourseDrawer courseId={COURSE_ID} levels={[makeLevel()]} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
+  renderWithProviders(<CourseDrawer courseId={COURSE_ID} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
     auth: makeAuth({ user: makeUser({ permissions: COURSE_MANAGER_PERMISSIONS }) }),
     route: '/courses',
   })
@@ -47,7 +47,7 @@ const expectNoDiscardQuestion = () => expect(screen.queryByText(ar.common.unsave
 async function startEditing() {
   await screen.findByText('PY-101')
   fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
-  return screen.findByLabelText(ar.courses.fields.nameEn)
+  return screen.findByLabelText(ar.courses.fields.name)
 }
 
 /** Opens the curriculum tab: its editor is there at once for a manager. */
@@ -84,21 +84,21 @@ describe('CourseDrawer — unsaved editors (KI-054)', () => {
   it('keeps the edit form and its draft on Escape and on a mask click; the close button asks — cancel stays, confirm closes', async () => {
     const { writes } = mockCourseApi()
     const { onClose } = renderDrawer()
-    const english = await startEditing()
-    await userEvent.clear(english)
-    await userEvent.type(english, 'Python 3')
+    const name = await startEditing()
+    await userEvent.clear(name)
+    await userEvent.type(name, 'بايثون 3')
 
     pressEscape()
     pressEscape()
     await clickWhenSettled(mask)
     expect(onClose).not.toHaveBeenCalled()
     expectNoDiscardQuestion()
-    expect(screen.getByLabelText(ar.courses.fields.nameEn)).toHaveValue('Python 3')
+    expect(screen.getByLabelText(ar.courses.fields.name)).toHaveValue('بايثون 3')
 
     const first = await openDiscardDialog()
     expect(within(first).getByText(ar.common.unsaved.content)).toBeInTheDocument()
     fireEvent.click(within(first).getByText(ar.common.unsaved.cancel).closest('button')!)
-    await waitFor(() => expect(screen.getByLabelText(ar.courses.fields.nameEn)).toHaveValue('Python 3'))
+    await waitFor(() => expect(screen.getByLabelText(ar.courses.fields.name)).toHaveValue('بايثون 3'))
     expect(onClose).not.toHaveBeenCalled()
 
     const second = await openDiscardDialog()
@@ -120,15 +120,15 @@ describe('CourseDrawer — unsaved editors (KI-054)', () => {
   it('lets go of a change typed back: Escape keeps the form while it differs and closes once it matches the course again', async () => {
     const { writes } = mockCourseApi()
     const { onClose } = renderDrawer()
-    const english = await startEditing()
+    const name = await startEditing()
 
-    // The course is «Python Basics» in English: typed away and back, nothing is left to lose.
-    await userEvent.type(english, '!')
-    expect(english).toHaveValue('Python Basics!')
+    // The course is «أساسيات بايثون»: typed away and back, nothing is left to lose.
+    await userEvent.type(name, '!')
+    expect(name).toHaveValue('أساسيات بايثون!')
     pressEscape()
     expect(onClose).not.toHaveBeenCalled()
-    await userEvent.type(english, '{Backspace}')
-    expect(english).toHaveValue('Python Basics')
+    await userEvent.type(name, '{Backspace}')
+    expect(name).toHaveValue('أساسيات بايثون')
     pressEscape()
     expect(onClose).toHaveBeenCalledTimes(1)
     expectNoDiscardQuestion()

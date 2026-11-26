@@ -131,6 +131,19 @@ describe('CreateUserWizard', () => {
     expect(onCreated).not.toHaveBeenCalled()
   })
 
+  it('offers only the given kinds and starts on the first when the initial kind is not among them («حساب آخر»)', async () => {
+    mockCreateApi()
+    renderWithProviders(<CreateUserWizard open onClose={vi.fn()} onCreated={vi.fn()} kinds={['staff', 'guardian']} initialKind="teacher" />, {
+      auth: makeAuth({ user: makeUser({ permissions: ADMIN_PERMISSIONS }) }),
+    })
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getAllByRole('radio')).toHaveLength(2)
+    expect(within(dialog).getByRole('radio', { name: new RegExp(`^${ar.users.kinds.staff}`) })).toBeChecked()
+    expect(within(dialog).queryByRole('radio', { name: new RegExp(`^${ar.users.kinds.student}`) })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio', { name: new RegExp(`^${ar.users.kinds.teacher}`) })).not.toBeInTheDocument()
+  })
+
   it('shows a permission refusal as an alert and keeps the entered values', async () => {
     mockCreateApi(() => jsonResponse(403, { statusCode: 403, code: 'permission_denied', message: 'Missing permission', missing: ['users.roles.assign'] }))
     renderWizard()

@@ -3,7 +3,8 @@
 // WF-15 "a notification from a real event" through the API against the live
 // development database. Skipped when no database is reachable.
 //
-// Four people with the seeded system roles: a teacher (`teacher`) who leads
+// Four people with the seeded system roles: a teacher (`teacher`, plus a custom
+// role with the assignment keys the seeded role no longer holds) who leads
 // the class, an office clerk (`staff` — invoices and payments), a student
 // (`student`, reads English) with an active enrollment and that student's
 // guardian (`guardian`, reads Arabic) — both with a confirmed address. The
@@ -56,6 +57,7 @@ import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { addDays } from '../src/finance/fee-plans.rules.js';
 import { dayIn } from '../src/finance/invoices.calc.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { createAssignmentWriterRole } from './assignment-writer.helpers.js';
 import { MailService } from '../src/mail/mail.service.js';
 import type { NotificationEventKey, NotificationEventParams } from '../src/notifications/notifications.events.js';
 import { childrenSuffix, renderNotification } from '../src/notifications/notifications.templates.js';
@@ -140,6 +142,7 @@ describe.skipIf(!available)('WF-15 notification journey — the MOD-12 and Stage
   let classId: string;
   let enrollmentId: string;
   const createdUserIds: string[] = [];
+  const createdRoleIds: string[] = [];
   const fx = {} as Record<Person, string>;
   const tokens = {} as Record<Person, string>;
   /** The newest notification each reader has seen so far: whatever their inbox lists above it is new. */
@@ -207,7 +210,7 @@ describe.skipIf(!available)('WF-15 notification journey — the MOD-12 and Stage
     return received;
   }
 
-  async function createUser(name: Person, roleKey: string, profile: { locale?: 'ar' | 'en'; displayName?: string } = {}): Promise<void> {
+  async function createUser(name: Person, roleKey: string, profile: { locale?: 'ar' | 'en'; displayName?: string } = {}, extraRoleIds: readonly string[] = []): Promise<void> {
     const role = await prisma.role.findUniqueOrThrow({ where: { key: roleKey }, select: { id: true } });
     const user = await prisma.user.create({
       data: {
@@ -219,7 +222,7 @@ describe.skipIf(!available)('WF-15 notification journey — the MOD-12 and Stage
         passwordHash: await passwords.hash(PASSWORD),
         // A confirmed address: an e-mail copy of every notification is due.
         emailVerifiedAt: new Date(),
-        roles: { create: [{ roleId: role.id }] },
+        roles: { create: [role.id, ...extraRoleIds].map((roleId) => ({ roleId })) },
       },
       select: { id: true },
     });
@@ -265,8 +268,11 @@ describe.skipIf(!available)('WF-15 notification journey — the MOD-12 and Stage
     currency = academy.currency;
     today = dayIn(academy.timezone, new Date());
 
-    // Everyone holds a seeded system role and nothing else.
-    await createUser('teacher', 'teacher');
+    // Everyone holds a seeded system role and nothing else — except the teacher: the seeded `teacher` role holds no
+    // assignment key since 20261126141500_teacher_without_assignments, so a custom role with the three keys comes with it.
+    const assignmentWriter = await createAssignmentWriterRole(prisma, `test_wf15w_${RUN.toLowerCase()}`);
+    createdRoleIds.push(assignmentWriter);
+    await createUser('teacher', 'teacher', {}, [assignmentWriter]);
     await createUser('office', 'staff');
     await createUser('student', 'student', { locale: 'en', displayName: STUDENT_NAME });
     await createUser('guardian', 'guardian', { locale: 'ar' });
@@ -300,6 +306,7 @@ describe.skipIf(!available)('WF-15 notification journey — the MOD-12 and Stage
         } finally {
           // The users take their notifications, e-mail preferences, sessions and the guardian link with them.
           if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+          if (createdRoleIds.length > 0) await prisma.role.deleteMany({ where: { id: { in: createdRoleIds } } });
         }
         // Nothing of the run is left in the shared database.
         const left = await footprint();

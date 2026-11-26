@@ -266,14 +266,8 @@ describe('the sign-in notices', () => {
     }
   })
 
-  it('words a finished student registration as a success, keeping the return path beside it', () => {
-    const state = { ...signInNoticeState('registration_completed'), from: '/catalog/c-1?intent=enroll' }
-    expect(signInNoticeOf(state)).toEqual({
-      id: 'registration_completed',
-      key: 'studentRegistration.notices.accountCreated',
-      type: 'success',
-    })
-    expect(i18n.t('studentRegistration.notices.accountCreated', { lng: 'ar' })).toBe('تم إنشاء حسابك، سجّل الدخول')
+  it('knows no notice of a finished registration: /register signs the new student in itself (PORTAL-04)', () => {
+    expect(signInNoticeOf({ notice: 'registration_completed', from: '/catalog/c-1?intent=enroll' })).toBeNull()
   })
 
   it('names the minutes of a lock only for the notice that has such a wording, and only whole minutes up to a day', () => {

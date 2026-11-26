@@ -8,7 +8,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ar } from '../i18n/ar'
-import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse, makeLevel } from '../test/courses'
+import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse } from '../test/courses'
 import { makeCurriculum } from '../test/curriculum'
 import { jsonResponse, mockFetch } from '../test/http'
 import { answerDiscardQuestion, blockerStates, discardQuestionCount, goBack, latestDiscardQuestion, renderInDataRouter, unloadWouldPrompt } from '../test/navigation'
@@ -23,7 +23,7 @@ function mockCourseApi() {
     const method = init?.method ?? 'GET'
     if (method === 'GET') return jsonResponse(200, url.endsWith('/curriculum') ? makeCurriculum() : makeCourse())
     writes.push(`${method} ${new URL(url, 'http://localhost').pathname}`)
-    if (method === 'PATCH') return jsonResponse(200, makeCourse({ name: { ar: 'أساسيات بايثون', en: 'Python 3' }, updatedAt: '2026-11-09T12:00:00.000Z' }))
+    if (method === 'PATCH') return jsonResponse(200, makeCourse({ name: { ar: 'بايثون 3', en: 'Python Basics' }, updatedAt: '2026-11-09T12:00:00.000Z' }))
     return jsonResponse(500, { statusCode: 500, message: 'unexpected' })
   })
   return { writes }
@@ -31,7 +31,7 @@ function mockCourseApi() {
 
 async function renderDrawer() {
   const onClose = vi.fn()
-  const { router } = renderInDataRouter(<CourseDrawer courseId={COURSE_ID} levels={[makeLevel()]} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
+  const { router } = renderInDataRouter(<CourseDrawer courseId={COURSE_ID} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
     auth: makeAuth({ user: makeUser({ permissions: COURSE_MANAGER_PERMISSIONS }) }),
     path: '/courses',
   })
@@ -85,9 +85,9 @@ describe('CourseDrawer — browser back, reload and tab close with unsaved work 
     const { writes } = mockCourseApi()
     const { router } = await renderDrawer()
     fireEvent.click(screen.getByText(ar.common.edit).closest('button')!)
-    const english = await screen.findByLabelText(ar.courses.fields.nameEn)
-    await userEvent.clear(english)
-    await userEvent.type(english, 'Python 3')
+    const name = await screen.findByLabelText(ar.courses.fields.name)
+    await userEvent.clear(name)
+    await userEvent.type(name, 'بايثون 3')
     expect(unloadWouldPrompt()).toBe(true)
 
     fireEvent.click(screen.getByText(ar.common.save).closest('button')!)

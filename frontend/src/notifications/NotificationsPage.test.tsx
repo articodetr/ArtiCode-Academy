@@ -229,6 +229,43 @@ describe('NotificationsPage — e-mail preferences', () => {
     })
     expect(screen.getByLabelText(`بريد ${n.categories.enrollments}`)).toBeInTheDocument()
   })
+
+  it('offers a teacher-only viewer no «assignments» switch or filter and keeps its stored value in the PUT; a teacher who is also a guardian keeps both (2026-11-26)', async () => {
+    const stored = makePreferences().categories.map((entry) => (entry.category === 'assignments' ? { ...entry, emailEnabled: false } : entry))
+    const calls = mockApi({
+      'GET /api/me/notification-preferences': () => jsonResponse(200, makePreferences({ categories: stored })),
+      'PUT /api/me/notification-preferences': (call) => jsonResponse(200, makePreferences({ categories: (call.body as { categories: never[] }).categories })),
+    })
+    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['lessons.read', 'exams.read'] })
+    const { unmount } = renderWithProviders(<NotificationsPage />, { auth: makeAuth({ user: teacher }), route: '/notifications' })
+    await screen.findByText(makeNotification().title)
+    // The inbox filter: every category but the assignments.
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: n.inbox.category }))
+    const optionTexts = async () => {
+      await screen.findByText((_, element) => element?.classList.contains('ant-select-item-option-content') === true && element.textContent === n.categories.exams)
+      return Array.from(document.querySelectorAll('.ant-select-item-option-content')).map((option) => option.textContent)
+    }
+    const options = await optionTexts()
+    expect(options).toContain(n.categories.lessons)
+    expect(options).not.toContain(n.categories.assignments)
+
+    fireEvent.click(screen.getByRole('tab', { name: n.tabs.preferences }))
+    const save = (await screen.findByText(n.preferences.save)).closest('button')!
+    expect(screen.queryByLabelText(`بريد ${n.categories.assignments}`)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(`بريد ${n.categories.finance}`))
+    fireEvent.click(save)
+    await waitFor(() => expect(calls.some((call) => call.method === 'PUT')).toBe(true))
+    const body = calls.find((call) => call.method === 'PUT')!.body as { categories: Array<{ category: string; emailEnabled: boolean }> }
+    expect(body.categories).toHaveLength(7)
+    expect(body.categories.find((entry) => entry.category === 'assignments')).toEqual({ category: 'assignments', emailEnabled: false })
+    unmount()
+
+    const teacherGuardian = makeUser({ role: 'teacher', roles: ['teacher', 'guardian'], permissions: ['lessons.read', 'exams.read'] })
+    renderWithProviders(<NotificationsPage />, { auth: makeAuth({ user: teacherGuardian }), route: '/notifications' })
+    await screen.findByText(makeNotification().title)
+    fireEvent.click(screen.getByRole('tab', { name: n.tabs.preferences }))
+    expect(await screen.findByLabelText(`بريد ${n.categories.assignments}`)).toBeInTheDocument()
+  })
 })
 
 describe('NotificationsPage — announcements', () => {

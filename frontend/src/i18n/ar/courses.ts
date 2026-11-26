@@ -34,25 +34,25 @@ export const courses = {
     next: 'التالي',
   },
   fields: {
+    // The simplified course form asks the code, the English texts, the level, the hours and the sessions no more;
+    // their labels stay for the drawer's details, which show a stored value.
     code: 'رمز الدورة',
-    nameAr: 'الاسم (عربي)',
-    nameEn: 'الاسم (إنجليزي)',
-    summaryAr: 'الملخص (عربي)',
-    summaryEn: 'الملخص (إنجليزي)',
-    descriptionAr: 'الوصف (عربي)',
-    descriptionEn: 'الوصف (إنجليزي)',
+    name: 'اسم الدورة',
+    nameEn: 'الاسم بالإنجليزية',
     summary: 'الملخص',
-    description: 'الوصف',
+    description: 'وصف الدورة',
     level: 'المستوى',
     subject: 'المادة',
     durationHours: 'المدة (ساعات)',
     sessionsCount: 'عدد الجلسات',
-    coverImageUrl: 'رابط صورة الغلاف',
+    coverImageUrl: 'صورة الغلاف',
     // J-F67: the course's own materials (its textbook).
     resources: 'مقرّر الدورة',
     resourceTitle: 'عنوان الملف',
     resourceUrl: 'رابط الملف',
     pricing: 'نوع الدورة',
+    // The price of a paid course is a fee plan (its total).
+    price: 'السعر',
     feePlan: 'خطة الرسوم',
     createdAt: 'أُنشئت في',
     updatedAt: 'آخر تعديل',
@@ -64,12 +64,14 @@ export const courses = {
     full: 'وصلت إلى الحد الأقصى ({{max}} ملفاً)',
   },
   hints: {
-    code: 'يُحفظ بأحرف كبيرة: أحرف لاتينية وأرقام و . _ - (حتى 32 حرفاً)، ولا يتكرر',
     coverImageUrl: 'رابط كامل يبدأ بـ https:// (أو http://) لصورة منشورة على الإنترنت؛ لا رفع ملفات. اتركه فارغاً لإزالة الغلاف.',
     resources: 'كتاب الدورة أو ملفاتها العامة، تظهر للطالب بزر «المقرّر» على بطاقة الدورة في «دوراتي». رابط كامل يبدأ بـ https://؛ لا رفع ملفات. مرفقات الدرس الواحد تُضاف في الدرس نفسه.',
     feePlan: 'خطة رسوم نشطة لهذه الدورة أو خطة عامة؛ يدفع الطالب مجموعها، ولا يُفعَّل اشتراكه إلا بعد سداد فاتورته والموافقة على طلبه.',
+    // The create modal: the course does not exist yet, so only a general plan can be its price.
+    feePlanCreate: 'خطة رسوم عامة نشطة؛ يدفع الطالب مجموعها، ولا يُفعَّل اشتراكه إلا بعد سداد فاتورته والموافقة على طلبه. خطة تسعّر هذه الدورة نفسها تُختار من تعديل الدورة بعد إنشائها.',
     pricingReadOnly: 'تغيير نوع الدورة ورسومها لحامل صلاحية «إدارة خطط الرسوم».',
     noFeePlans: 'لا توجد خطة رسوم نشطة تناسب هذه الدورة. رسوم الدورة تحتاج خطة تسعّر «فصول دورة» هذه الدورة نفسها، أو «أي فصل»؛ خطة «فصلاً واحداً» لا تُستعمل هنا. أنشئ خطة أو غيّر ما تسعّره خطتك من المدفوعات ← خطط الرسوم.',
+    noFeePlansCreate: 'لا توجد خطة رسوم عامة نشطة. سعر الدورة خطة رسوم تُنشأ من المدفوعات ← خطط الرسوم: خطة تسعّر «أي فصل» تُختار هنا، وخطة تسعّر «فصول دورة» هذه الدورة نفسها تُختار من تعديل الدورة بعد إنشائها.',
     // PORTAL-04: the active plans of one class, named so a plan made for the class instead of the course is recognised.
     classPlans: 'خطط مرتبطة بفصل واحد ولا تصلح رسوماً للدورة: {{plans}}.',
     feePlansFailed: 'تعذّر تحميل خطط الرسوم.',
@@ -83,9 +85,7 @@ export const courses = {
     general: 'خطة عامة',
   },
   validation: {
-    codeRequired: 'أدخل رمز الدورة',
-    codeFormat: 'الرمز من أحرف لاتينية وأرقام و . _ - ويبدأ بحرف أو رقم (حتى 32)',
-    nameArRequired: 'الاسم بالعربية مطلوب',
+    nameRequired: 'اسم الدورة مطلوب',
     arabicFirst: 'أدخل النص العربي أولاً',
     maxLength: 'الحد الأقصى {{max}} حرفاً',
     coverUrl: 'أدخل رابطاً كاملاً يبدأ بـ http:// أو https:// بلا مسافات (حتى 2048 حرفاً)',

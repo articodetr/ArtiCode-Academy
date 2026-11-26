@@ -599,6 +599,31 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     expect((await prisma.user.findUniqueOrThrow({ where: { id: invited.id }, select: { status: true } })).status).toBe('invited');
   });
 
+  it('an account registered directly through POST /api/account/register (active, address never proven) → link_required, nothing linked or changed', async () => {
+    await setSignUp(true);
+    const address = email('direct');
+    newAccountEmails.push(address);
+    const registered = await api()
+      .post('/api/account/register')
+      .set('X-Forwarded-For', nextIp())
+      .send({ fullName: 'Direct Student', email: address, password: PASSWORD })
+      .expect(201);
+    const userId = registered.body.user.id as string;
+    expect(registered.body.user).toMatchObject({ status: 'active', emailVerifiedAt: null, roles: ['student'] });
+    const select = { status: true, emailVerifiedAt: true, passwordHash: true, selfRegisteredAt: true, updatedAt: true } as const;
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select });
+    expect(before.selfRegisteredAt).toBeInstanceOf(Date);
+    const m = await mark();
+    // Google IS authoritative for the address (`hd` = its domain), yet the account's own address was never proven:
+    // whoever registered it may not hold the mailbox, so a Google account with that address is never linked by it.
+    const res = await signIn({ sub: nextSub(), email: address }, { returnTo: '/catalog' });
+    expect(locationOf(res)).toMatchObject({ path: '/login', query: { google: 'link_required', returnTo: '/catalog' } });
+    expect(cookieLine(res, REFRESH_COOKIE)).toBe('');
+    expect(await prisma.userIdentity.count({ where: { userId } })).toBe(0);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: userId }, select })).toEqual(before);
+    expect((await eventsOf(m, userId)).map((event) => event.action)).toEqual([]);
+  });
+
   it('a pending self-registered account while sign-up is closed → registration_closed, the account stays pending and unlinked', async () => {
     await setSignUp(false);
     // Contract v3: a self-registered pending account holds the password chosen at registration and the marker.
@@ -739,8 +764,8 @@ describe.skipIf(!available)('PORTAL-04 Google sign-in (e2e)', () => {
     await setSignUp(false);
     expect((await api().get('/api/academy/public').expect(200)).body).toMatchObject({ googleSignIn: true, googleSignUp: false, selfRegistration: false });
     await setSignUp(true);
-    // MAIL_TRANSPORT=none (vitest.config.e2e.ts): e-mail sign-up stays closed, Google sign-up opens.
-    expect((await api().get('/api/academy/public').expect(200)).body).toMatchObject({ googleSignIn: true, googleSignUp: true, selfRegistration: false });
+    // MAIL_TRANSPORT=none (vitest.config.e2e.ts): both sign-ups open — neither needs a mail transport.
+    expect((await api().get('/api/academy/public').expect(200)).body).toMatchObject({ googleSignIn: true, googleSignUp: true, selfRegistration: true });
     expect((await api(unconfigured).get('/api/academy/public').expect(200)).body).toMatchObject({ googleSignIn: false, googleSignUp: false });
 
     const res = await api(unconfigured).get(CALLBACK).query({ code: 'c', state: 's' }).set('X-Forwarded-For', nextIp());

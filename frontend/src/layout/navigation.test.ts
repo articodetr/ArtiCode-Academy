@@ -42,8 +42,9 @@ const SEEDED: Readonly<Record<Role, string[]>> = {
   ],
   // Staff hold no assignments.* and no exams.* key (matrix 7.2); they issue certificates (MOD-10).
   staff: ['users.read', 'users.read_contact', 'users.create', 'users.update', 'guardians.link', 'courses.read', 'classes.read', 'classes.manage', 'schedule.read', 'lessons.read', 'certificates.issue', 'invoices.manage', 'payments.record', 'fee_plans.manage', 'reports.attendance.view', 'reports.financial.view'],
-  // Teachers hold no certificates.* key (roadmap §4h.10.3).
-  teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.read', 'lessons.manage', 'schedule.read', 'assignments.read', 'assignments.manage', 'assignments.grade', 'exams.read', 'exams.manage', 'exams.grade'],
+  // Teachers hold no certificates.* key (roadmap §4h.10.3), and no assignments.* key since 2026-11-26 (they no longer
+  // manage assignments — MOD-08); they keep the exams and the question banks (MOD-09 phase 2).
+  teacher: ['users.read', 'courses.read', 'classes.read', 'lessons.read', 'lessons.manage', 'schedule.read', 'exams.read', 'exams.manage', 'exams.grade', 'questions.manage'],
   student: ['courses.read', 'assignments.read', 'assignments.submit', 'schedule.read', 'lessons.read', 'exams.read', 'exams.take', 'certificates.read_own', 'invoices.read_own'],
   guardian: ['courses.read', 'assignments.read', 'grades.read_linked', 'schedule.read', 'attendance.read', 'exams.read', 'certificates.read_linked', 'invoices.read_linked'],
 }
@@ -125,8 +126,9 @@ describe('NAV_ITEMS', () => {
   it('gates the classes screen by classes.read alone since every read of /api/classes requires it (J-F01, PR #26 review) — students and guardians do not hold it', () => {
     const classes = NAV_ITEMS.find((item) => item.key === 'classes')!
     expect(classes.permissions).toEqual(['classes.read'])
-    expect(keysFor(viewer(null, ['classes.read']))).toEqual(['dashboard', 'classes'])
-    // A custom role holding classes.manage without classes.read would get 403 on the list — the entry stays hidden
+    expect(classes.path).toBe('/classes')
+    expect(canAccess(viewer(null, ['classes.read']), 'classes')).toBe(true)
+    // A custom role holding classes.manage without classes.read would get 403 on the list — the route stays closed
     // (classes.manage does open the academy schedule — J-F05).
     expect(keysFor(viewer(null, ['classes.manage']))).toEqual(['dashboard', 'schedule'])
     expect(keysFor(viewer(null, ['classes.manage', 'classes.teachers.assign']))).toEqual(['dashboard', 'schedule'])
@@ -134,6 +136,32 @@ describe('NAV_ITEMS', () => {
     expect(keysFor(viewer(null, ['classes.teachers.assign']))).toEqual(['dashboard'])
     expect(canAccess(viewer('student'), 'classes')).toBe(false)
     expect(canAccess(viewer('guardian'), 'classes')).toBe(false)
+  })
+
+  it('keeps classes out of every menu but a teacher-only one (their «الدورات») while the /classes route still opens for a classes.read holder (PORTAL-04-ADMIN-SIMPLIFY)', () => {
+    const classes = NAV_ITEMS.find((item) => item.key === 'classes')!
+    expect(classes.inMenu).toBe('teacherOnly')
+    const office = [
+      viewer('admin'),
+      viewer('staff'),
+      viewer(null, ['classes.read']),
+      viewer(null, ['classes.read', 'classes.manage', 'classes.teachers.assign'], ['registrar']),
+      viewer('teacher', SEEDED.teacher, ['teacher', 'staff']),
+    ]
+    for (const user of office) {
+      // The flat list (a learner's menu and the search's pages) and the grouped menu both leave it out…
+      expect(keysFor(user)).not.toContain('classes')
+      expect(navGroupsFor(user).flatMap((group) => group.items.map((item) => item.key))).not.toContain('classes')
+      // …while the route's guard still answers by the entry's own key, for an address typed by hand.
+      expect(canAccess(user, 'classes')).toBe(true)
+    }
+    expect(keysFor(viewer(null, ['classes.read']))).toEqual(['dashboard'])
+    // A teacher-only viewer (also a guardian) keeps the entry: it is their «الدورات» since J-F71/J-F72.
+    for (const user of [viewer('teacher'), viewer('teacher', SEEDED.teacher, ['teacher', 'guardian'])]) {
+      expect(keysFor(user)).toContain('classes')
+      expect(navGroupsFor(user).flatMap((group) => group.items.map((item) => item.key))).toContain('classes')
+      expect(navLabelKey(classes, user)).toBe('nav.classesForTeacher')
+    }
   })
 
   it('gates the branches screen (/settings/branches) by branches.manage alone — the one key the server enforces for writes (MOD-02-T06 screen)', () => {
@@ -230,22 +258,29 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer(null, ['lessons.read', 'lessons.manage', 'attendance.read', 'attendance.record']), 'myLessons')).toBe(false)
   })
 
-  it('gates the assignments screen by assignments.read with the learners excepted (J-F38, roadmap §4g T06) — the route follows the same rule', () => {
+  it('gates the assignments screen by assignments.read with the teachers and the learners excepted (J-F38; teachers since 2026-11-26) — the route follows the same rule', () => {
     const assignments = NAV_ITEMS.find((item) => item.key === 'assignments')!
     expect(assignments.permissions).toEqual(['assignments.read'])
-    expect(assignments.exceptRoleKeysOnly).toEqual(['student', 'guardian'])
+    expect(assignments.exceptRoleKeysOnly).toEqual(['teacher', 'student', 'guardian'])
     expect(assignments.module).toBe('MOD-08')
     expect(keysFor(viewer(null, ['assignments.read']))).toEqual(['dashboard', 'assignments'])
     // A custom role holding assignments.manage without assignments.read would get 403 on the list — the entry stays hidden.
     expect(keysFor(viewer(null, ['assignments.manage']))).toEqual(['dashboard'])
     expect(canAccess(viewer('admin'), 'assignments')).toBe(true)
-    expect(canAccess(viewer('teacher'), 'assignments')).toBe(true)
+    // A teacher no longer manages assignments: the seed took the keys away, and even a teacher role that still held them
+    // (a session from before the change, an edited role) gets no entry and the 403 page…
+    expect(canAccess(viewer('teacher'), 'assignments')).toBe(false)
+    expect(canAccess(viewer('teacher', [...SEEDED.teacher, 'assignments.read', 'assignments.manage', 'assignments.grade']), 'assignments')).toBe(false)
+    // …nor does a teacher who is also a guardian or a student, who holds assignments.read through the learner role.
+    expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.guardian], ['teacher', 'guardian']), 'assignments')).toBe(false)
+    expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.student], ['teacher', 'student']), 'assignments')).toBe(false)
     // Students and guardians hold assignments.read by seed but teach no class (an empty list — D-R16, D-R40), so no entry and the 403 page…
     expect(canAccess(viewer('student'), 'assignments')).toBe(false)
     expect(canAccess(viewer('guardian'), 'assignments')).toBe(false)
     expect(canAccess(viewer('student', [...SEEDED.student, ...SEEDED.guardian], ['student', 'guardian']), 'assignments')).toBe(false)
-    // …while any other role key keeps it: a teacher who is also a guardian, or a custom role holding the key.
-    expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.guardian], ['teacher', 'guardian']), 'assignments')).toBe(true)
+    // …while any other role key keeps it: a teacher who is also an admin, or also staff holding the key, or a custom role.
+    expect(canAccess(viewer('admin', [...SEEDED.admin, ...SEEDED.teacher], ['academy_admin', 'teacher']), 'assignments')).toBe(true)
+    expect(canAccess(viewer('staff', [...SEEDED.teacher, ...SEEDED.staff, 'assignments.read'], ['teacher', 'staff']), 'assignments')).toBe(true)
     expect(canAccess(viewer(null, ['assignments.read'], ['auditor']), 'assignments')).toBe(true)
     // Staff hold no assignments.* key, and a role that lost the key loses the entry.
     expect(canAccess(viewer('staff'), 'assignments')).toBe(false)
@@ -260,12 +295,15 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer('student'), 'myAssignments')).toBe(true)
     // A guardian sees it too — to read the children's assignments (they hold no assignments.submit).
     expect(canAccess(viewer('guardian'), 'myAssignments')).toBe(true)
-    // A teacher keeps «assignments» (the classes they teach) and gets no «my assignments»…
-    expect(keysFor(viewer('teacher'))).toContain('assignments')
+    // A teacher gets neither «assignments» (since 2026-11-26) nor «my assignments»…
+    expect(keysFor(viewer('teacher'))).not.toContain('assignments')
     expect(keysFor(viewer('teacher'))).not.toContain('myAssignments')
-    // …unless they also hold a learner role key: a teacher who is also a guardian sees both, «my assignments» right after «assignments».
+    // …unless they also hold a learner role key: a teacher who is also a guardian keeps «my assignments» — the learner's page,
+    // right after «my lessons» — and still no «assignments».
     const teacherGuardian = keysFor(viewer('teacher', [...SEEDED.teacher, ...SEEDED.guardian], ['teacher', 'guardian']))
-    expect(teacherGuardian.indexOf('myAssignments')).toBe(teacherGuardian.indexOf('assignments') + 1)
+    expect(teacherGuardian).not.toContain('assignments')
+    expect(teacherGuardian.indexOf('myAssignments')).toBe(teacherGuardian.indexOf('myLessons') + 1)
+    expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.student], ['teacher', 'student']), 'myAssignments')).toBe(true)
     // Staff, an admin and a custom role without those keys get no entry (the server would answer an empty list).
     expect(canAccess(viewer('staff'), 'myAssignments')).toBe(false)
     expect(canAccess(viewer('admin'), 'myAssignments')).toBe(false)
@@ -274,7 +312,7 @@ describe('NAV_ITEMS', () => {
     expect(canAccess(viewer(null, ['assignments.read', 'assignments.submit', 'assignments.grade']), 'myAssignments')).toBe(false)
   })
 
-  it('gates the exams screen by exams.read with the learners excepted, like «assignments» (J-F45) — the route follows the same rule', () => {
+  it('gates the exams screen by exams.read with the learners excepted — the teachers keep it (J-F45) — the route follows the same rule', () => {
     const exams = NAV_ITEMS.find((item) => item.key === 'exams')!
     expect(exams.permissions).toEqual(['exams.read'])
     expect(exams.exceptRoleKeysOnly).toEqual(['student', 'guardian'])
@@ -371,10 +409,10 @@ describe('navFor', () => {
 
   it('keeps the role matrix of the system roles for the screens without a server contract — AC3', () => {
     // academy.settings.manage also opens the homepage images tab, right after the settings, and the grade schemes tab (J-F44), right after the rooms tab.
-    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'homepageImages', 'rooms', 'gradeSchemes'])
+    expect(keysFor(viewer('admin'))).toEqual(['dashboard', 'users', 'roles', 'courses', 'schedule', 'lessons', 'assignments', 'exams', 'certificates', 'payments', 'notifications', 'reports', 'audit', 'settings', 'homepageImages', 'rooms', 'gradeSchemes'])
     // Staff gain the courses entry (MOD-04-T05) and the lessons entry (J-F09): the seed grants them courses.read and lessons.read;
     // and the certificates entry (J-F51): the seed grants them certificates.issue, which opens the list too (D-R57).
-    expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'classes', 'schedule', 'lessons', 'certificates', 'payments', 'notifications', 'reports'])
+    expect(keysFor(viewer('staff'))).toEqual(['dashboard', 'users', 'courses', 'schedule', 'lessons', 'certificates', 'payments', 'notifications', 'reports'])
     // Students and guardians gain «my classes» (J-F04) and «my lessons» (J-F11): ownership, by their server role keys.
     // Learner-only viewers lose the staff lessons entry (`exceptRoleKeysOnly`) although students hold lessons.read: the
     // lessons list showed them nothing — their own lessons are in «my lessons» (API-101), their classes in «my classes».
@@ -401,7 +439,7 @@ describe('navFor', () => {
   })
 
   it('hides the users page from a teacher although the seed grants teachers users.read (J-F70)', () => {
-    expect(keysFor(viewer('teacher'))).toEqual(['dashboard', 'classes', 'schedule', 'lessons', 'assignments', 'exams', 'notifications'])
+    expect(keysFor(viewer('teacher'))).toEqual(['dashboard', 'classes', 'schedule', 'lessons', 'exams', 'questionBanks', 'notifications'])
     expect(canAccess(viewer('teacher'), 'users')).toBe(false)
     // Only teacher and learner keys: a teacher who is also a guardian (or a student) gets no entry either…
     expect(canAccess(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']), 'users')).toBe(false)
@@ -452,7 +490,7 @@ describe('canAccess', () => {
 })
 
 describe('NAV_GROUPS and navGroupsFor (the grouped side menu, 2026-11-22)', () => {
-  it('puts every NAV_ITEMS key in exactly one section and names no other key', () => {
+  it('puts every NAV_ITEMS key in exactly one section and names no other key (an entry kept out of some menus is left out by navFor(), not by the sections)', () => {
     const grouped = NAV_GROUPS.flatMap((group) => group.items)
     expect(new Set(grouped).size).toBe(grouped.length)
     expect([...grouped].sort()).toEqual(NAV_ITEMS.map((item) => item.key).sort())
@@ -490,12 +528,19 @@ describe('NAV_GROUPS and navGroupsFor (the grouped side menu, 2026-11-22)', () =
     expect(navGroupsFor(admin).map((group) => [group.key, group.items.map((item) => item.key)])).toEqual([
       ['home', ['dashboard']],
       ['academy', ['users', 'enrollmentRequests']],
-      ['academics', ['courses', 'classes', 'lessons', 'schedule']],
+      ['academics', ['courses', 'lessons', 'schedule']],
       ['assessment', ['assignments', 'exams', 'certificates']],
       ['finance', ['payments']],
       ['followUp', ['reports', 'notifications']],
       ['system', ['settings', 'homepageImages', 'branches', 'rooms', 'gradeSchemes', 'roles', 'audit']],
     ])
+  })
+
+  it('leaves the assignments out of a teacher’s «evaluation» section — exams and question banks remain, without a gap — while a teacher who is also an admin keeps it (2026-11-26)', () => {
+    const assessmentOf = (user: NavViewer) => navGroupsFor(user).find((group) => group.key === 'assessment')?.items.map((item) => item.key)
+    expect(assessmentOf(viewer('teacher'))).toEqual(['exams', 'questionBanks'])
+    expect(assessmentOf(viewer('teacher', [...SEEDED.teacher, ...SEEDED.guardian], ['teacher', 'guardian']))).toEqual(['exams', 'questionBanks'])
+    expect(assessmentOf(viewer('admin', [...SEEDED.admin, ...SEEDED.teacher], ['academy_admin', 'teacher']))).toEqual(['assignments', 'exams', 'questionBanks', 'certificates'])
   })
 
   it('shows a teacher who is also a guardian the ownership pages under «my pages», and a custom role only its own sections', () => {

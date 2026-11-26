@@ -137,10 +137,11 @@ export class AcademyService {
    * API-205: the branding of the sign-in page for an anonymous caller — the
    * name (only its string locales), the logo, the default locale and whether
    * the public catalog is open (`settings.catalog.publicBrowsing === true`,
-   * MOD-20) and visitors may register (PORTAL-03: the setting AND a mail
-   * transport), and whether Google sign-in is configured and may create an
-   * account (PORTAL-04: `googleSignUp` = Google configured AND the setting —
-   * Google proves the address, no mail transport needed). Read-only, no audit
+   * MOD-20) and visitors may register (PORTAL-03/04: the setting alone —
+   * the registration creates an active account at once, no mail transport
+   * needed), and whether Google sign-in is configured and may create an
+   * account (PORTAL-04: `googleSignUp` = Google configured AND the setting).
+   * Read-only, no audit
    * event; 503 `academy_not_configured` without the row. `homepageImages`
    * names the URL of each of the four pictures of the public home page
    * (`/<prefix>/academy/media/<file>`), null = the built-in default.
@@ -159,9 +160,9 @@ export class AcademyService {
       defaultLocale: row.defaultLocale as LocaleCode,
       catalogPublic: settings.catalog.publicBrowsing === true,
       homepageImages: publicHomepageImageUrls(row.settings, this.config.get('API_PREFIX', { infer: true })),
-      selfRegistration: isSelfRegistrationOpen(settings, this.config.get('MAIL_TRANSPORT', { infer: true })),
+      selfRegistration: isSelfRegistrationOpen(settings),
       googleSignIn,
-      googleSignUp: googleSignIn && settings.selfRegistration.enabled === true,
+      googleSignUp: googleSignIn && isSelfRegistrationOpen(settings),
     };
   }
 

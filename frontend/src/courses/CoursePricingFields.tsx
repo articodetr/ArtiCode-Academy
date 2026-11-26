@@ -1,4 +1,4 @@
-// The price of a course in its edit form (MOD-19, D-R122): free, or paid with
+// The price of a course in its create and edit forms (MOD-19, D-R122): free, or paid with
 // the fee plan that prices a request. Rendered inside the caller's <Form> for
 // holders of `fee_plans.manage` only (the server needs it besides
 // `courses.manage`); it reads the plans through API-140 and offers the active
@@ -7,6 +7,9 @@
 // holds now stays selectable even when it no longer fits or was deactivated,
 // so the form never shows a raw id. The server decides (422 fee_plan_mismatch,
 // fee_plan_inactive, 404 fee_plan_not_found).
+// In the create modal there is no course yet: only the general plans fit (API-044
+// takes an active general plan), and the warning says a plan made for this course
+// can be chosen after creation.
 import { Alert, Form, Radio, Select, Tag } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -18,7 +21,8 @@ import { localizedLabel } from '../users/users.format'
 import { plansFittingCourse } from './courses.form'
 
 interface CoursePricingFieldsProps {
-  course: Course
+  /** The course being edited; absent in the create modal (the course does not exist yet). */
+  course?: Course
 }
 
 // `classPlans`: the active plans of ONE class — never a course fee (the server answers 422 fee_plan_mismatch); named
@@ -30,22 +34,25 @@ export function CoursePricingFields({ course }: CoursePricingFieldsProps) {
   const { language } = useLocalized()
   const [state, setState] = useState<PlansState>({ status: 'loading' })
 
+  const courseId = course?.id ?? null
+  const creating = course === undefined
+
   useEffect(() => {
     const controller = new AbortController()
     listFeePlans({}, controller.signal)
       .then((result) => {
         if (!controller.signal.aborted) {
-          setState({ status: 'ready', plans: plansFittingCourse(result.items, course.id), classPlans: result.items.filter((plan) => plan.isActive && plan.class !== null) })
+          setState({ status: 'ready', plans: plansFittingCourse(result.items, courseId), classPlans: result.items.filter((plan) => plan.isActive && plan.class !== null) })
         }
       })
       .catch(() => {
         if (!controller.signal.aborted) setState({ status: 'failed' })
       })
     return () => controller.abort()
-  }, [course.id])
+  }, [courseId])
 
   const plans = state.status === 'ready' ? state.plans : []
-  const current = course.enrollmentFeePlan
+  const current = course?.enrollmentFeePlan ?? null
   const options = plans.map((plan) => ({
     value: plan.id,
     label: (
@@ -90,7 +97,7 @@ export function CoursePricingFields({ course }: CoursePricingFieldsProps) {
                   type="warning"
                   showIcon
                   data-testid="course-no-fee-plans"
-                  title={t('courses.hints.noFeePlans')}
+                  title={t(creating ? 'courses.hints.noFeePlansCreate' : 'courses.hints.noFeePlans')}
                   description={
                     state.classPlans.length > 0
                       ? t('courses.hints.classPlans', {
@@ -103,17 +110,11 @@ export function CoursePricingFields({ course }: CoursePricingFieldsProps) {
               ) : null}
               <Form.Item
                 name="enrollmentFeePlanId"
-                label={t('courses.fields.feePlan')}
-                extra={t('courses.hints.feePlan')}
+                label={t('courses.fields.price')}
+                extra={t(creating ? 'courses.hints.feePlanCreate' : 'courses.hints.feePlan')}
                 rules={[{ required: true, message: t('courses.validation.feePlanRequired') }]}
               >
-                <Select
-                  aria-label={t('courses.fields.feePlan')}
-                  loading={state.status === 'loading'}
-                  options={options}
-                  placeholder={t('courses.fields.feePlan')}
-                  style={{ maxWidth: 420 }}
-                />
+                <Select aria-label={t('courses.fields.price')} loading={state.status === 'loading'} options={options} placeholder={t('courses.fields.feePlan')} />
               </Form.Item>
             </>
           ) : null

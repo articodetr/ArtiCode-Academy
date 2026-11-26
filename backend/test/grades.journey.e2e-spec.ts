@@ -3,7 +3,8 @@
 // against the live development database. A manager prepares the class
 // (WF-03/WF-04: a class of a published course, its lead teacher, open, three
 // active enrollments). WF-07 (D-R42/D-R47): the teacher (the seeded `teacher`
-// system role) creates a draft exam with a weight, schedules it, records the
+// system role, plus a custom role with the assignment keys the seeded role no
+// longer holds) creates a draft exam with a weight, schedules it, records the
 // results sheet — two scores and an excused student — corrects one score and
 // publishes it; the learners see the exam once scheduled and their own result
 // only once published. WF-08 (D-R43..D-R46): the teacher sets a weighted
@@ -30,6 +31,7 @@ import { PasswordService } from '../src/auth/password.service.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { createAssignmentWriterRole } from './assignment-writer.helpers.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 
@@ -179,7 +181,11 @@ describe.skipIf(!available)('WF-07/WF-08 exam and grades journey — the MOD-09 
     });
     createdRoleIds.push(manager.id);
     await createUser('manager', [manager.id]);
-    await createUser('teacher', [await systemRole('teacher')]);
+    // The seeded `teacher` role holds no assignment key since 20261126141500_teacher_without_assignments:
+    // the journey's teacher also holds a custom role with the three keys.
+    const assignmentWriter = await createAssignmentWriterRole(prisma, `test_wf08w_${RUN.toLowerCase()}`);
+    createdRoleIds.push(assignmentWriter);
+    await createUser('teacher', [await systemRole('teacher'), assignmentWriter]);
     const student = await systemRole('student');
     for (const name of ['student1', 'student2', 'student3']) await createUser(name, [student]);
     await createUser('guardian', [await systemRole('guardian')]);

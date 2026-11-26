@@ -8,7 +8,7 @@ import { CourseStatus } from '../generated/prisma/client.js';
 import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { COURSE_STATUS_ACTIONS } from './courses.status.js';
 import type { CourseStatusAction } from './courses.status.js';
-import { codeParam, COURSE_CODE_PATTERN } from './courses.validation.js';
+import { codeParam, COURSE_CODE_PATTERN, optionalCodeParam } from './courses.validation.js';
 
 export const COURSES_PAGE_DEFAULT = 20;
 export const COURSES_PAGE_MAX = 100;
@@ -87,11 +87,19 @@ export class ListCoursesQueryDto {
 }
 
 export class CreateCourseDto {
-  @ApiProperty({ maxLength: 32, example: 'PY-101', description: 'Trimmed and upper-cased; unique among courses' })
-  @Transform(codeParam)
+  @ApiPropertyOptional({
+    maxLength: 32,
+    example: 'PY-101',
+    description:
+      'Trimmed and upper-cased; unique among courses (409 course_code_taken). Absent = the server generates `CRS-NNNNN` ' +
+      '(a running number, five digits or more) that no course uses yet; `null` or a blank string is 400.',
+  })
+  // Absent, never null: `IsOptional` would let a null through to the service.
+  @ValidateIf((dto: CreateCourseDto) => dto.code !== undefined)
+  @Transform(optionalCodeParam)
   @IsString()
   @Matches(COURSE_CODE_PATTERN, { message: CODE_MESSAGE })
-  code: string;
+  code?: string;
 
   @ApiProperty({ type: LocalizedTextDto, description: 'Localized name `{ ar, en?, tr? }`; `ar` is required' })
   @IsDefined()

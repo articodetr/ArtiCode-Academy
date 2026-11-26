@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
+import { NOTIFICATION_CATEGORIES } from '../api/notifications'
 import { ar } from '../i18n/ar'
 import { buildAnnouncementInput, initialAnnouncementValues, textProblem } from './announcements.form'
 import { describeNotificationsFailure } from './notifications.errors'
-import { notificationLink, planPreferencesSave, switchesOf } from './notifications.view'
+import { categoriesFor, notificationLink, planPreferencesSave, switchesOf } from './notifications.view'
 import { makePreferences } from '../test/notifications'
 
 describe('notifications rules', () => {
@@ -12,6 +13,13 @@ describe('notifications rules', () => {
     expect(notificationLink({ link: '//evil.example' })).toBeNull()
     expect(notificationLink({ link: 'https://evil.example' })).toBeNull()
     expect(notificationLink({})).toBeNull()
+  })
+
+  it('offers every category but «assignments» to a viewer whose only role key is teacher (2026-11-26)', () => {
+    expect(categoriesFor(['teacher'])).toEqual(['lessons', 'exams', 'grades', 'finance', 'announcements', 'enrollments'])
+    for (const roles of [['teacher', 'guardian'], ['teacher', 'student'], ['academy_admin', 'teacher'], ['student'], ['staff'], []]) {
+      expect(categoriesFor(roles)).toEqual([...NOTIFICATION_CATEGORIES])
+    }
   })
 
   it('plans one PUT of the seven switches (MOD-19 added enrollments) only when one changed', () => {

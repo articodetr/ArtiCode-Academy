@@ -51,6 +51,12 @@ interface NavItemBase {
   icon: ReactNode
   /** Documentation module this screen belongs to. */
   module: string
+  /**
+   * `'teacherOnly'` keeps the screen out of every menu (the grouped one and the learners' flat one) and out of the
+   * search's pages for every viewer but a teacher-only one (`teachesOnly()`), while `canAccess()` — the route's guard —
+   * still answers for it: for the others the page opens by its address only.
+   */
+  inMenu?: 'teacherOnly'
 }
 
 /**
@@ -78,7 +84,8 @@ interface PermissionGatedItem extends NavItemBase {
    * API-113) answer them an empty list (D-R16, D-R40, D-R48) — their own work
    * comes through ownership instead. A viewer holding any other role key (a
    * teacher who is also a guardian) keeps the entry. The users page excepts
-   * teachers too (J-F70).
+   * teachers too (J-F70), so do the courses page (J-F71) and, since teachers
+   * no longer manage assignments (2026-11-26), the assignments page.
    */
   exceptRoleKeysOnly?: readonly string[]
   roles?: undefined
@@ -121,7 +128,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
   // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16). J-F72 (Jallal's request,
   // 2026-11-26): a teacher-only viewer, who has no «الدورات والمستويات» since J-F71, reads this entry as «الدورات».
-  { key: 'classes', path: '/classes', labelKey: 'nav.classes', teacherLabelKey: 'nav.classesForTeacher', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
+  // PORTAL-04-ADMIN-SIMPLIFY (2026-11-26): classes are an internal mechanism, not a section of the admin interface (a
+  // course opens for subscription through its automatic general class — courses/courses.openEnrollment.ts; teachers are
+  // assigned and students enrolled from the course drawer): the entry stays in the menu of a teacher-only viewer alone
+  // (their «الدورات»), and for everyone else the route opens by its address only, behind this same gate.
+  { key: 'classes', path: '/classes', labelKey: 'nav.classes', teacherLabelKey: 'nav.classesForTeacher', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], inMenu: 'teacherOnly', module: 'MOD-05' },
   // MOD-05 (J-F04): «my classes» (API-060) needs no permission key — ownership; shown to whoever holds the
   // `student` or `guardian` server role, as the server reads them (an admin or a teacher alone gets an empty list).
   { key: 'myClasses', path: '/my-classes', labelKey: 'nav.myClasses', icon: createElement(ReadOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-05' },
@@ -147,18 +158,22 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // (`assignments.read` at controller level; `assignments.manage` only adds writes), with the learners excepted (roadmap
   // §4g T06): students and guardians hold the key by seed but are assigned to no class, so the list would stay empty —
   // their own assignments come with «my assignments» (API-112, MOD-08-T04). Staff hold no assignments.* key (matrix 7.2).
+  // Teachers no longer manage assignments (2026-11-26 — the seeded `teacher` role lost assignments.read|manage|grade): a
+  // viewer whose role keys are only teacher and/or learner keys gets no entry, no route (403), no search group and no
+  // «review submissions» action — a teacher who is also a guardian holds assignments.read through the guardian role and
+  // is excepted all the same, like the users page (J-F70); any other role key (staff, an admin, a custom role) keeps it.
   {
     key: 'assignments',
     path: '/assignments',
     labelKey: 'nav.assignments',
     icon: createElement(FileTextOutlined),
     permissions: ['assignments.read'],
-    exceptRoleKeysOnly: ['student', 'guardian'],
+    exceptRoleKeysOnly: ['teacher', 'student', 'guardian'],
     module: 'MOD-08',
   },
   // MOD-08 (J-F42): «my assignments» (API-112) needs no permission key — ownership, the API-060 rule (D-R40); shown to whoever
-  // holds the `student` or `guardian` server role, like «my lessons» (a teacher who is also a guardian keeps it next to
-  // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
+  // holds the `student` or `guardian` server role, like «my lessons» (a teacher who is also a guardian keeps it — as a
+  // learner's page; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
   // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
   { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
   // MOD-09 (J-F50): «my exams» (API-121) needs no permission key — ownership, the API-060 rule (D-R48, as «my assignments»);
@@ -174,7 +189,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // keys reaches the page and gets the server's 403 message.
   { key: 'myCertificates', path: '/my-certificates', labelKey: 'nav.myCertificates', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-10' },
   // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
-  // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
+  // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted (the teachers keep it):
   // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams
   // come with «my exams» (API-121, a later part of MOD-09-T08). Staff hold no exams.* key (matrix 7.2).
   {
@@ -241,8 +256,9 @@ export function sees(item: NavItem, viewer: NavViewer): boolean {
   return viewer.role !== null && item.roles.includes(viewer.role)
 }
 
+/** The menu's entries for this viewer: those they may open, less the ones kept out of their menu (`inMenu`). */
 export function navFor(viewer: NavViewer): NavItem[] {
-  return NAV_ITEMS.filter((item) => sees(item, viewer))
+  return NAV_ITEMS.filter((item) => (item.inMenu !== 'teacherOnly' || teachesOnly(viewer)) && sees(item, viewer))
 }
 
 /** The role keys of a teacher-only viewer: a teacher, possibly also a student or a guardian, and nothing else (J-F70..J-F72). */
@@ -270,8 +286,8 @@ interface NavGroupDefinition {
 }
 
 /**
- * Where each entry sits in the grouped menu: every `NAV_ITEMS` key in exactly one section (navigation.test.ts). The
- * sections only arrange what `navFor()` lets through — they never show or hide an entry. «My pages» holds the
+ * Where each entry sits in the grouped menu: every `NAV_ITEMS` key in exactly one
+ * section (navigation.test.ts). The sections only arrange what `navFor()` lets through — they never show or hide an entry. «My pages» holds the
  * ownership pages, which only a teacher or an admin who is also a student or a guardian sees beside the staff ones; a
  * learner-only viewer keeps the flat menu (AppLayout).
  */
@@ -306,7 +322,10 @@ export function navGroupsFor(viewer: NavViewer): NavGroup[] {
   })).filter((group) => group.items.length > 0)
 }
 
-/** UI-level gate behind `RequireAccess` (not a security boundary — the server enforces permissions). */
+/**
+ * UI-level gate behind `RequireAccess` (not a security boundary — the server enforces permissions). It answers for an
+ * entry kept out of the viewer's menu too (`inMenu`), so that page still opens by its address.
+ */
 export function canAccess(viewer: NavViewer, navKey: string): boolean {
   const item = NAV_ITEMS.find((entry) => entry.key === navKey)
   return item ? sees(item, viewer) : false

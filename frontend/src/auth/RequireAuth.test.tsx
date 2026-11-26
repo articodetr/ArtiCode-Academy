@@ -107,6 +107,33 @@ describe('RequireAccess', () => {
     expectForbidden()
   })
 
+  it('shows the 403 page at /assignments to a teacher-only viewer, even holding the key, and opens it to a teacher who is also an admin; a student keeps «my assignments» (2026-11-26)', () => {
+    const guardedAssignments = (
+      <RequireAccess navKey="assignments">
+        <p>{SECRET}</p>
+      </RequireAccess>
+    )
+    const teacherKeys = ['classes.read', 'lessons.read', 'exams.read', 'assignments.read', 'assignments.manage', 'assignments.grade']
+    for (const roles of [['teacher'], ['teacher', 'guardian'], ['teacher', 'student']]) {
+      const { unmount } = renderWithProviders(guardedAssignments, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles, permissions: teacherKeys }) }), route: '/assignments' })
+      expectForbidden()
+      unmount()
+    }
+
+    const { unmount } = renderWithProviders(guardedAssignments, { auth: makeAuth({ user: makeUser({ role: 'admin', roles: ['academy_admin', 'teacher'], permissions: teacherKeys }) }), route: '/assignments' })
+    expect(screen.getByText(SECRET)).toBeInTheDocument()
+    unmount()
+
+    const student = makeUser({ role: 'student', roles: ['student'], permissions: ['assignments.read', 'assignments.submit'] })
+    renderWithProviders(
+      <RequireAccess navKey="myAssignments">
+        <p>{SECRET}</p>
+      </RequireAccess>,
+      { auth: makeAuth({ user: student }), route: '/my-assignments' },
+    )
+    expect(screen.getByText(SECRET)).toBeInTheDocument()
+  })
+
   it('accepts a permission key directly', () => {
     const { unmount } = renderWithProviders(
       <RequireAccess permission="roles.manage">

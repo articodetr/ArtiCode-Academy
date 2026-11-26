@@ -1,8 +1,9 @@
 // MOD-20 (D-R138) — one course of the public catalog (/explore/:courseId, API-237): the course and its outline by level
-// (titles only), the price, «سجّل في هذه الدورة» → the sign-in page with the enroll intent, the closed catalog, a missing
+// (titles only), the price, «اشترك الآن» → the sign-in page with the enroll intent, the closed catalog, a missing
 // course, a failure, and that a signed-in user goes to the signed-in course page instead. PORTAL-04: the subject instead
-// of the difficulty, no age range and no sessions, the facts order, /login?returnTo=… with the course kept, and the note
-// and «إنشاء حساب» while API-205 lets a visitor create an account (by e-mail or through Google).
+// of the difficulty, no age range and no sessions, the facts order, /login?returnTo=… with the course kept, and — while
+// API-205 lets a visitor create an account (by e-mail or through Google) — the note and the dialog of the two ways on,
+// «تسجيل الدخول» and «إنشاء حساب جديد», each with the course as returnTo.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -483,50 +484,116 @@ describe('PublicCoursePage', () => {
       await new Promise((resolve) => setTimeout(resolve, 20))
       expect(enroll.getByTestId('public-enroll-note')).toHaveTextContent(pc.course.signInNote)
       expect(enroll.queryByText(pc.course.signInOrRegisterNote)).not.toBeInTheDocument()
-      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('public-enroll-choice')).not.toBeInTheDocument()
       expect(document.querySelector('a[href^="/register"]')).toBeNull()
       expect(document.body.textContent).not.toContain(entry.courseNote)
       expect(academyReads(fetchMock)).toBe(1)
     })
 
+    /** The note that says an account can be created: API-205 was read and the card knows it. */
+    const registrationKnown = () => screen.findByText(pc.course.signInOrRegisterNote)
+    const enrollButton = () => within(screen.getByTestId('public-enroll')).getByText(pc.course.enroll).closest('button')!
+    /** The dialog of the two ways on, once «اشترك الآن» opened it. */
+    const choice = async () => within((await screen.findByTestId('public-enroll-choice')).closest<HTMLElement>('[role="dialog"]')!)
+
+    it('labels the button «اشترك الآن»', () => {
+      expect(pc.course.enroll).toBe('اشترك الآن')
+    })
+
     it.each([
       ['by e-mail (selfRegistration)', { selfRegistration: true }],
       ['through Google alone (googleSignUp)', { selfRegistration: false, googleSignUp: true }],
-    ])('offers «إنشاء حساب» to /register?returnTo=… and the note that says so when an account can be created %s', async (_case, flags) => {
+    ])('opens a dialog with «تسجيل الدخول» and «إنشاء حساب جديد», each with the course as returnTo, when an account can be created %s', async (_case, flags) => {
       const fetchMock = mockRegistrationApi({ ...makePublicAcademy({ catalogPublic: true }), ...flags }, serve(makePublicDetail()))
       renderForRegister()
-      const link = await screen.findByTestId('public-course-register')
+      await registrationKnown()
       const enroll = within(screen.getByTestId('public-enroll'))
       expect(enroll.getByTestId('public-enroll-note')).toHaveTextContent(pc.course.signInOrRegisterNote)
       expect(enroll.queryByText(pc.course.signInNote)).not.toBeInTheDocument()
-      // The way in stays, and the new account is the quiet link beside it.
-      expect(enroll.getByText(pc.course.enroll)).toBeInTheDocument()
+      // One button, and no second «إنشاء حساب» beside it: the new account is one of the dialog's two choices.
+      const buttons = screen.getByTestId('public-enroll').querySelector<HTMLElement>('.course-enroll__buttons')!
+      expect(within(buttons).getAllByRole('button')).toHaveLength(1)
+      expect(within(buttons).queryAllByRole('link')).toHaveLength(0)
       expect(screen.queryByTestId(`public-subscribe-${COURSE_ID}`)).not.toBeInTheDocument()
       expect(academyReads(fetchMock)).toBe(1)
+      expect(screen.queryByTestId('public-enroll-choice')).not.toBeInTheDocument()
 
-      expect(link).toHaveTextContent(pc.course.createAccount)
-      expect(link).toHaveAttribute('href', REGISTER)
+      fireEvent.click(enrollButton())
+
+      const dialog = await choice()
+      expect(dialog.getByText(pc.course.enrollTitle)).toBeInTheDocument()
+      expect(dialog.getByText(pc.course.enrollChoice.text)).toBeInTheDocument()
+      const signIn = dialog.getByText(pc.course.enrollChoice.signIn).closest('a')!
+      const register = dialog.getByText(pc.course.enrollChoice.register).closest('a')!
+      expect(signIn).toHaveAttribute('href', SIGN_IN)
+      expect(register).toHaveAttribute('href', REGISTER)
+      expect(pc.course.enrollChoice).toMatchObject({ signIn: 'تسجيل الدخول', register: 'إنشاء حساب جديد' })
+      // Opening the dialog keeps nothing and goes nowhere.
       expect(keptCourseId()).toBeNull()
-      fireEvent.click(link)
+      expect(screen.queryByTestId('path')).not.toBeInTheDocument()
+
+      fireEvent.click(register)
       const probe = await screen.findByTestId('path')
       expect(probe.textContent).toBe(REGISTER)
       expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: INTENT })
       expect(keptCourseId()).toBe(COURSE_ID)
     })
 
+    it('leads «تسجيل الدخول» of the dialog to /login?returnTo=<the course with the enroll intent>', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail()))
+      renderForRegister()
+      await registrationKnown()
+      fireEvent.click(enrollButton())
+
+      fireEvent.click((await choice()).getByText(pc.course.enrollChoice.signIn).closest('a')!)
+
+      const probe = await screen.findByTestId('path')
+      expect(probe.textContent).toBe(SIGN_IN)
+      expect(JSON.parse(probe.getAttribute('data-state')!)).toEqual({ from: INTENT })
+      expect(keptCourseId()).toBe(COURSE_ID)
+    })
+
+    it('closes the dialog without going anywhere or keeping anything', async () => {
+      mockRegistrationApi(open(), serve(makePublicDetail()))
+      renderForRegister()
+      await registrationKnown()
+      fireEvent.click(enrollButton())
+      await choice()
+
+      fireEvent.click(screen.getByTestId('public-enroll-choice').closest('[role="dialog"]')!.querySelector('.ant-modal-close')!)
+
+      // (jsdom never ends antd's closing motion, so the dialog's node may linger; what matters is that nothing happened.)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(screen.queryByTestId('path')).not.toBeInTheDocument()
+      expect(keptCourseId()).toBeNull()
+    })
+
+    it('goes straight to the sign-in, with no dialog, while no account can be created', async () => {
+      mockRegistrationApi(makePublicAcademy({ catalogPublic: true, selfRegistration: false }), serve(makePublicDetail()))
+      renderForRegister()
+      const enroll = within(await screen.findByTestId('public-enroll'))
+      await waitFor(() => expect(enroll.getByTestId('public-enroll-note')).toHaveTextContent(pc.course.signInNote))
+
+      fireEvent.click(enrollButton())
+
+      expect((await screen.findByTestId('path')).textContent).toBe(SIGN_IN)
+      expect(screen.queryByTestId('public-enroll-choice')).not.toBeInTheDocument()
+    })
+
     it('keeps the paid note beside the new one', async () => {
       mockRegistrationApi(open(), serve(makePublicDetail({ pricing: 'paid', price: { amount: 1200, currency: 'SAR' } })))
       renderForRegister()
-      await screen.findByTestId('public-course-register')
+      await registrationKnown()
       expect(within(screen.getByTestId('public-enroll')).getByText(pc.course.paidNote)).toBeInTheDocument()
     })
 
-    it('offers no course link for a course that takes nobody now', async () => {
+    it('offers no button and no dialog for a course that takes nobody now', async () => {
       mockRegistrationApi(open(), serve(makePublicDetail({ openClasses: 0, hasFreeSeat: false })))
       renderForRegister()
       await screen.findByTestId('public-not-enrollable')
       await waitFor(() => expect(document.querySelector('.public-catalog__register')).not.toBeNull())
-      expect(screen.queryByTestId('public-course-register')).not.toBeInTheDocument()
+      expect(screen.queryByText(pc.course.enroll)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('public-enroll-choice')).not.toBeInTheDocument()
     })
 
     it('words the closed catalog truthfully, with the way to register, only while registration is open', async () => {

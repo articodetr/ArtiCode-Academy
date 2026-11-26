@@ -290,7 +290,8 @@ export class AcademyPublicDto {
   @ApiProperty({
     type: Boolean,
     example: false,
-    description: 'true when visitors may create their own student account: `settings.selfRegistration.enabled` is true AND the server has a mail transport (PORTAL-03)',
+    description:
+      'true when visitors may create their own student account: `settings.selfRegistration.enabled` is true (PORTAL-03/04 — the registration creates an active account and signs the visitor in at once; no mail transport needed)',
   })
   selfRegistration: boolean;
 
@@ -306,7 +307,7 @@ export class AcademyPublicDto {
     type: Boolean,
     example: false,
     description:
-      'true when Google sign-in may also create a new student account: `googleSignIn` AND `settings.selfRegistration.enabled` is true (Google proves the address, so no mail transport is needed — PORTAL-04)',
+      'true when Google sign-in may also create a new student account: `googleSignIn` AND `settings.selfRegistration.enabled` is true (PORTAL-04)',
   })
   googleSignUp: boolean;
 }
@@ -335,7 +336,7 @@ export class CatalogSettingsDto {
 }
 
 export class SelfRegistrationSettingsDto {
-  @ApiProperty({ type: Boolean, nullable: true, example: false, description: 'The academy allows visitors to create their own student account; null = off. Effective only with a mail transport (see `selfRegistration` of API-205)' })
+  @ApiProperty({ type: Boolean, nullable: true, example: false, description: 'The academy allows visitors to create their own student account; null = off (the `selfRegistration` flag of API-205)' })
   enabled: boolean | null;
 }
 

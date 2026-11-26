@@ -2,7 +2,8 @@
 // and review an assignment" through the API against the live development
 // database. A manager prepares the class (WF-03/WF-04: a class of a published
 // course, its lead teacher, open, two active enrollments); the teacher (the
-// seeded `teacher` system role) creates a draft with a due date, a late
+// seeded `teacher` system role plus a custom role with the assignment keys,
+// which the seeded role no longer holds) creates a draft with a due date, a late
 // policy and one attempt, publishes it, and — once the first student has
 // submitted on time — finds the grading rules locked while the due date still
 // moves; the second student submits late (allowed and marked); the teacher
@@ -28,6 +29,7 @@ import { PasswordService } from '../src/auth/password.service.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { createAssignmentWriterRole } from './assignment-writer.helpers.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 
@@ -142,7 +144,11 @@ describe.skipIf(!available)('WF-13 assignment journey — the MOD-08 gate (e2e, 
     });
     createdRoleIds.push(manager.id);
     await createUser('manager', [manager.id]);
-    await createUser('teacher', [await systemRole('teacher')]);
+    // The seeded `teacher` role holds no assignment key since 20261126141500_teacher_without_assignments:
+    // the journey's teacher also holds a custom role with the three keys.
+    const assignmentWriter = await createAssignmentWriterRole(prisma, `test_wf13w_${RUN.toLowerCase()}`);
+    createdRoleIds.push(assignmentWriter);
+    await createUser('teacher', [await systemRole('teacher'), assignmentWriter]);
     const student = await systemRole('student');
     await createUser('student1', [student]);
     await createUser('student2', [student]);

@@ -6,15 +6,14 @@ export const studentRegistration: typeof arStudentRegistration = {
     createAccount: 'Create account',
     noAccount: 'No account yet?',
     createAccountLink: 'Create one',
-    createAccountNow: 'Create your account now',
+    createAccountNow: 'Create a new account',
     accountsNote: 'You can create a student account yourself, or sign in with the one you have.',
     courseNote: 'Sign in or create an account to choose a class and confirm your enrollment.',
-    courseAfterRegister: 'After you sign in, we take you back to the same course to choose a class and confirm your enrollment.',
   },
   register: {
     title: 'Create your account',
     subtitle: 'Create a student account',
-    intro: 'Enter your name and e-mail and choose a password, then confirm your e-mail from the message we will send you.',
+    intro: 'Enter your name and e-mail and choose a password, and your account opens right away so you can start learning.',
     haveAccount: 'Already have an account?',
     signIn: 'Sign in',
     fullName: 'Full name',
@@ -25,17 +24,11 @@ export const studentRegistration: typeof arStudentRegistration = {
     passwordRequired: 'Choose a password for your account.',
     confirmRequired: 'Type the password again to confirm it.',
     mismatch: 'The passwords do not match.',
-    terms: 'I agree to the terms of use and the privacy policy',
-    termsRequired: 'Agree to the terms of use and the privacy policy to create your account.',
     submit: 'Create account',
     submitting: 'Creating your account…',
+    created: 'Your account has been created.',
     emailClosedTitle: 'Creating an account by e-mail is not available right now',
     emailClosedText: 'You can create your account with Google, or sign in if you already have one.',
-    sentTitle: 'Check your e-mail',
-    sentText:
-      'We sent a message to your e-mail. Open the link in it and enter your password to activate your account. It may take a little while, so check your spam folder too.',
-    goToSignIn: 'Go to sign in',
-    anotherAddress: 'Enter another address',
   },
   closed: {
     title: 'Registration is not available right now',
@@ -87,6 +80,7 @@ export const studentRegistration: typeof arStudentRegistration = {
   },
   errors: {
     invalid: 'The details could not be accepted. Check them and try again.',
+    emailInUse: 'This e-mail address already has an account. Sign in or use another address.',
     rateLimited: 'Too many attempts in a short time. Wait a moment and try again.',
     rateLimitedSoon: 'Too many attempts in a short time. Try again in less than a minute.',
     rateLimitedMinutes: 'Too many attempts in a short time. Try again in {{count}} minutes.',
@@ -95,8 +89,5 @@ export const studentRegistration: typeof arStudentRegistration = {
     rateLimitedMinutes_few: 'Too many attempts in a short time. Try again in {{count}} minutes.',
     rateLimitedMinutes_many: 'Too many attempts in a short time. Try again in {{count}} minutes.',
     rateLimitedMinutes_other: 'Too many attempts in a short time. Try again in {{count}} minutes.',
-  },
-  notices: {
-    accountCreated: 'Your account has been created. Sign in',
   },
 }

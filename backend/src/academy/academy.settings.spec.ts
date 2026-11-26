@@ -122,7 +122,7 @@ describe('academy settings (TEST-068)', () => {
     expect(applySettingsChanges({}, [['settings.catalog.publicBrowsing', false]])).toEqual({ catalog: { publicBrowsing: false } });
   });
 
-  it('PORTAL-03 (TEST-320) — the switch is a JSON boolean, off unless stored, cleared by null, and opens nothing without a mail transport', () => {
+  it('PORTAL-03 (TEST-320) — the switch is a JSON boolean, off unless stored, cleared by null, and alone decides — no mail transport needed (direct registration)', () => {
     for (const value of [true, false]) expect(selfRegistrationEnabledSchema.safeParse(value).success, String(value)).toBe(true);
     for (const value of ['true', 1, 0, null, [], {}]) expect(selfRegistrationEnabledSchema.safeParse(value).success, JSON.stringify(value)).toBe(false);
     expect(readSettings({}).selfRegistration.enabled).toBeNull();
@@ -130,10 +130,10 @@ describe('academy settings (TEST-068)', () => {
     expect(settingsPatchEntries({ selfRegistration: { enabled: true } })).toEqual([['settings.selfRegistration.enabled', true]]);
     expect(applySettingsChanges({ selfRegistration: { enabled: true } }, [['settings.selfRegistration.enabled', null]])).toEqual({});
     const on = readSettings({ selfRegistration: { enabled: true } });
-    expect(isSelfRegistrationOpen(on, 'resend')).toBe(true);
-    expect(isSelfRegistrationOpen(on, 'none')).toBe(false);
-    expect(isSelfRegistrationOpen(readSettings({}), 'resend')).toBe(false);
-    expect(isSelfRegistrationOpen(readSettings({ selfRegistration: { enabled: false } }), 'resend')).toBe(false);
+    expect(isSelfRegistrationOpen(on)).toBe(true);
+    expect(isSelfRegistrationOpen(readSettings({}))).toBe(false);
+    expect(isSelfRegistrationOpen(readSettings({ selfRegistration: { enabled: false } }))).toBe(false);
+    expect(isSelfRegistrationOpen(readSettings({ selfRegistration: { enabled: 'true' } }))).toBe(false);
   });
 
   it('compares values by content', () => {
