@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { CLASS_SEARCH_MAX_LENGTH, CLASS_STATUSES } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { useAuth } from '../auth/auth-context'
+import { teachesOnly } from '../layout/navigation'
 import { ClassDrawer, SeatsBar } from '../classes/ClassDrawer'
 import { CoursePicker, TeacherPicker } from '../classes/ClassPickers'
 import { CreateClassModal } from '../classes/CreateClassModal'
@@ -28,7 +29,9 @@ export function ClassesPage() {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { message } = App.useApp()
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
+  // J-F72: a teacher-only viewer reads this page as «الدورات» (the menu says so too — navLabelKey()).
+  const teacherView = user ? teachesOnly(user) : false
   const canManage = hasPermission('classes.manage')
   const canPickCourse = hasPermission('courses.read')
   const canPickTeacher = canManage && hasPermission('users.read')
@@ -85,13 +88,13 @@ export function ClassesPage() {
 
   const failure = list.error ? describeClassesFailure(list.error) : null
   const filtered = Boolean(list.filters.q || list.filters.status || list.filters.courseId || list.filters.teacherId)
-  const emptyText = filtered ? t('classes.emptyFiltered') : canManage ? t('classes.empty') : t('classes.emptyAssigned')
+  const emptyText = filtered ? t('classes.emptyFiltered') : canManage ? t('classes.empty') : t(teacherView ? 'classes.teacherEmptyAssigned' : 'classes.emptyAssigned')
 
   return (
     <>
       <PageHeader
-        title={t('classes.title')}
-        subtitle={t('classes.subtitle')}
+        title={t(teacherView ? 'classes.teacherTitle' : 'classes.title')}
+        subtitle={t(teacherView ? 'classes.teacherSubtitle' : 'classes.subtitle')}
         extra={
           canManage ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
@@ -101,7 +104,7 @@ export function ClassesPage() {
         }
       />
 
-      {!canManage ? <Alert type="info" showIcon message={t('classes.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
+      {!canManage ? <Alert type="info" showIcon message={t(teacherView ? 'classes.teacherReadOnlyHint' : 'classes.readOnlyHint')} style={{ marginBottom: 16 }} /> : null}
 
       <Card>
         <Flex gap={12} wrap style={{ marginBottom: 16 }}>

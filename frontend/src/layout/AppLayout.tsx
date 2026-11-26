@@ -12,7 +12,7 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { isLearnerOnly } from '../dashboard/learner.data'
 import { TABSEET_FONT_FAMILY } from '../learn/hub/hub.theme'
 import { HeaderBrand, SiderBrand } from './AcademyBrand'
-import { navFor, navGroupsFor } from './navigation'
+import { navFor, navGroupsFor, navLabelKey } from './navigation'
 import type { NavItem, NavViewer } from './navigation'
 import { useIsPhone } from './useIsPhone'
 import { useUnreadCount } from '../notifications/useUnreadCount'
@@ -106,7 +106,7 @@ const LEARNER_MENU_HIDDEN: ReadonlySet<string> = new Set(['catalog', 'myAssignme
  * a divider between sections.
  */
 function sideMenuItems(viewer: NavViewer, rail: boolean, label: (key: string) => string): MenuItems {
-  const entry = (item: NavItem) => ({ key: item.path, icon: item.icon, label: label(item.labelKey) })
+  const entry = (item: NavItem) => ({ key: item.path, icon: item.icon, label: label(navLabelKey(item, viewer)) })
   if (isLearnerOnly(viewer.roles)) return navFor(viewer).filter((item) => !LEARNER_MENU_HIDDEN.has(item.key)).map(entry)
   const items: MenuItems = []
   navGroupsFor(viewer).forEach((group, index) => {

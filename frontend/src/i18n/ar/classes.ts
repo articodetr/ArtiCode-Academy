@@ -5,6 +5,11 @@ export const classes = {
   subtitle: 'مجموعات الطلاب داخل كل دورة',
   addClass: 'إضافة فصل',
   readOnlyHint: 'تعرض هذه الصفحة الفصول المُسندة إليك فقط.',
+  // J-F72: the page as a teacher-only viewer reads it.
+  teacherTitle: 'الدورات',
+  teacherSubtitle: 'الدورات التي تدرّسها وطلابها',
+  teacherReadOnlyHint: 'تعرض هذه الصفحة الدورات المُسندة إليك فقط.',
+  teacherEmptyAssigned: 'لا دورات مُسندة إليك',
   searchPlaceholder: 'بحث بالرمز أو الاسم',
   allCourses: 'كل الدورات',
   allStatuses: 'كل الحالات',

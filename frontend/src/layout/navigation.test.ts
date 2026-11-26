@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Role } from '../auth/roles'
-import { NAV_GROUPS, NAV_ITEMS, canAccess, navFor, navGroupsFor } from './navigation'
+import { NAV_GROUPS, NAV_ITEMS, canAccess, navFor, navGroupsFor, navLabelKey, teachesOnly } from './navigation'
 import type { NavViewer } from './navigation'
 
 /** The MOD-03/MOD-04/MOD-05/MOD-06/MOD-07/MOD-08/MOD-09/MOD-10/MOD-14 keys the seeded system roles hold (backend/src/authorization/system-roles.ts). */
@@ -411,6 +411,21 @@ describe('navFor', () => {
     expect(canAccess(viewer('admin'), 'users')).toBe(true)
     expect(canAccess(viewer('teacher', [...SEEDED.teacher, ...SEEDED.staff], ['teacher', 'staff']), 'users')).toBe(true)
     expect(canAccess(viewer(null, ['users.read'], ['auditor']), 'users')).toBe(true)
+  })
+
+  it('names «classes» «الدورات» for a teacher-only viewer and keeps «الفصول والمجموعات» for anyone else (J-F72)', () => {
+    const classes = NAV_ITEMS.find((item) => item.key === 'classes')!
+    expect(teachesOnly(viewer('teacher'))).toBe(true)
+    expect(teachesOnly(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']))).toBe(true)
+    expect(teachesOnly(viewer('teacher', [...SEEDED.teacher, ...SEEDED.staff], ['teacher', 'staff']))).toBe(false)
+    expect(teachesOnly(viewer('student'))).toBe(false)
+    expect(teachesOnly(viewer('admin'))).toBe(false)
+    expect(navLabelKey(classes, viewer('teacher'))).toBe('nav.classesForTeacher')
+    expect(navLabelKey(classes, viewer('staff'))).toBe('nav.classes')
+    expect(navLabelKey(classes, viewer('admin'))).toBe('nav.classes')
+    // An entry without a teacher name keeps its own for everyone.
+    const lessons = NAV_ITEMS.find((item) => item.key === 'lessons')!
+    expect(navLabelKey(lessons, viewer('teacher'))).toBe('nav.lessons')
   })
 
   it('hides «courses and levels» from a teacher although the seed grants teachers courses.read (J-F71)', () => {
