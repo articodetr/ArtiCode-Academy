@@ -691,3 +691,29 @@ describe('CatalogCoursePage — the facts (PORTAL-04)', () => {
     expect(screen.getByTestId('catalog-enroll-card').textContent).toContain(formatMoney(1200, 'SAR', 'ar'))
   })
 })
+
+describe('CatalogCoursePage — the polished page (PORTAL-04)', () => {
+  it('shows the description as paragraphs, a subheading and a list, never the typed ** or - marks', async () => {
+    mockCourseApi(makeCatalogDetail({ description: { ar: 'مقدمة الدورة.\n**ماذا ستتعلم؟**\n- المتغيرات\n- الدوال' } }))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+
+    const section = document.getElementById('course-description')!
+    expect(within(section).getByRole('heading', { level: 3, name: 'ماذا ستتعلم؟' })).toBeInTheDocument()
+    expect(within(section).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['المتغيرات', 'الدوال'])
+    expect(within(section).getByText('مقدمة الدورة.')).toBeInTheDocument()
+    expect(section.textContent).not.toContain('**')
+  })
+
+  it('names the course code at the foot of the card and says the reader’s standing as a pill on the band', async () => {
+    mockCourseApi(makeCatalogDetail({ mine: { enrolled: true, pending: false } }))
+    renderPage()
+    await screen.findByText('أساسيات بايثون')
+
+    const code = screen.getByTestId('catalog-enroll-card').querySelector('.course-enroll__code')!
+    expect(code).toHaveTextContent(ar.catalog.detail.code)
+    expect(code).toHaveTextContent('PY-101')
+    const hero = document.querySelector<HTMLElement>('.course-page__hero')!
+    expect(within(hero).getByText(ar.catalog.card.enrolled)).toHaveClass('course-availability--available')
+  })
+})

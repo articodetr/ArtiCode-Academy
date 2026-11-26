@@ -17,7 +17,7 @@
 // confirmation opens by itself, once per arrival, and nothing is sent until the
 // learner presses confirm. Cancelling leaves the class and its button.
 import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, ConfigProvider, Descriptions, Flex, Skeleton, Space, Tag, Typography } from 'antd'
+import { Alert, App, Button, Card, ConfigProvider, Descriptions, Flex, Skeleton, Tag, Typography } from 'antd'
 import type { DescriptionsProps, ThemeConfig } from 'antd'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -28,6 +28,7 @@ import { catalogFailureKey, isCourseGone } from '../catalog/catalog.errors'
 import { REQUEST_STATE_COLORS, autoConfirmClass, courseStandingOf, enrollableClasses, enrollmentUnavailable } from '../catalog/catalog.view'
 import type { CourseStanding } from '../catalog/catalog.view'
 import { ClassOffer } from '../catalog/ClassOffer'
+import { CourseDescription } from '../catalog/CourseDescription'
 import { useCatalogCourse } from '../catalog/useCatalogCourse'
 import '../catalog/catalogCourse.css'
 import { PageHeader } from '../components/PageHeader'
@@ -40,7 +41,15 @@ import { courseBadgesOf, subjectNameOf } from '../publicCatalog/publicCatalog.vi
 import { localizedLabel } from '../users/users.format'
 
 // The page's buttons in the academy's turquoise: the stronger shade (--pub-primary-strong), where white text keeps 4.5:1.
-const COURSE_PAGE_THEME: ThemeConfig = { token: { colorPrimary: '#047c83' } }
+// A light shadow under a primary button (antd's default reads as a dark rim on the turquoise), none under the others,
+// and the seats bar in the academy's turquoise instead of antd's blue.
+const COURSE_PAGE_THEME: ThemeConfig = {
+  token: { colorPrimary: '#047c83' },
+  components: {
+    Button: { primaryShadow: '0 1px 2px rgba(4, 124, 131, 0.2)', defaultShadow: 'none' },
+    Progress: { defaultColor: '#039092' },
+  },
+}
 
 interface EnrollOutcome {
   result: CatalogEnrollResult
@@ -165,10 +174,20 @@ export function CatalogCoursePage() {
     [courseId],
   )
 
+  const backIcon = language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />
   const back = (
-    <Button icon={language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />} onClick={() => navigate('/catalog')}>
+    <Button icon={backIcon} onClick={() => navigate('/catalog')}>
       {t('catalog.detail.back')}
     </Button>
+  )
+  // On the band: the course page's own way back (publicCourse.css `.course-back`), a quiet pill on the turquoise.
+  const heroBack = (
+    <button type="button" className="course-back" onClick={() => navigate('/catalog')}>
+      <span className="course-back__icon" aria-hidden="true">
+        {backIcon}
+      </span>
+      {t('catalog.detail.back')}
+    </button>
   )
 
   if (!course) {
@@ -265,7 +284,7 @@ export function CatalogCoursePage() {
     sections.push({
       id: 'course-description',
       label: t('publicCatalog.course.descriptionSection'),
-      content: <p className="course-page__text">{description}</p>,
+      content: <CourseDescription text={description} />,
     })
   }
   if (course.syllabus.length > 0) {
@@ -297,7 +316,7 @@ export function CatalogCoursePage() {
         <CoursePageLayout
           variant="app"
           title={name}
-          back={back}
+          back={heroBack}
           badges={courseBadgesOf(course, t, language)}
           meta={
             <span className="catalog-course__meta">
@@ -308,11 +327,23 @@ export function CatalogCoursePage() {
           }
           summary={summary || undefined}
           status={
+            // The reader's own standing as the band's pills (publicCourse.css `.course-availability`): dark text on white,
+            // readable on the turquoise whatever the state.
             course.mine.enrolled || course.mine.pending ? (
-              <Space size={[4, 4]} wrap>
-                {course.mine.enrolled ? <Tag color="green">{t('catalog.card.enrolled')}</Tag> : null}
-                {course.mine.pending ? <Tag color="gold">{t('catalog.card.pending')}</Tag> : null}
-              </Space>
+              <span className="catalog-course__standing">
+                {course.mine.enrolled ? (
+                  <span className="course-availability course-availability--available">
+                    <span className="course-availability__dot" aria-hidden="true" />
+                    {t('catalog.card.enrolled')}
+                  </span>
+                ) : null}
+                {course.mine.pending ? (
+                  <span className="course-availability course-availability--full">
+                    <span className="course-availability__dot" aria-hidden="true" />
+                    {t('catalog.card.pending')}
+                  </span>
+                ) : null}
+              </span>
             ) : undefined
           }
           navLabel={t('publicCatalog.course.sectionsNav')}
@@ -320,21 +351,19 @@ export function CatalogCoursePage() {
           aside={
             <>
               <CourseEnrollCard courseId={course.id} coverUrl={course.coverImageUrl} testId="catalog-enroll-card">
-                <Descriptions size="small" column={1} items={facts} />
+                <Descriptions className="catalog-course__facts" size="small" column={1} colon={false} items={facts} />
                 {/* «تُفتح لك بعد تفعيل تسجيلك» is no news to a reader already enrolled (the server's `mine.enrolled`). */}
-                {course.mine.enrolled ? null : <Alert type="info" showIcon title={t('catalog.detail.lockedNote')} />}
+                {course.mine.enrolled ? null : <Alert className="catalog-course__locked" type="info" showIcon title={t('catalog.detail.lockedNote')} />}
                 <div className="course-enroll__code">
-                  <bdi dir="ltr">{course.code}</bdi>
+                  <span>{t('catalog.detail.code')}</span>
+                  <bdi dir="ltr" className="course-enroll__code-value">
+                    {course.code}
+                  </bdi>
                 </div>
               </CourseEnrollCard>
               <div ref={classesRef} className="catalog-course__classes">
-                <Card
-                  title={t('catalog.detail.classes')}
-                  aria-busy={loading}
-                  data-testid="catalog-classes"
-                  data-intent={highlightClasses ? 'enroll' : undefined}
-                  style={highlightClasses ? { boxShadow: '0 0 0 2px #039092' } : undefined}
-                >
+                {/* The «choose your class» highlight is drawn by catalogCourse.css on `data-intent`. */}
+                <Card title={t('catalog.detail.classes')} aria-busy={loading} data-testid="catalog-classes" data-intent={highlightClasses ? 'enroll' : undefined}>
                   <Flex vertical gap={12}>
                     {standing ? <StandingNotice standing={standing} courseId={course.id} /> : null}
                     {chooseNotice ? (
@@ -360,14 +389,14 @@ export function CatalogCoursePage() {
                           description={
                             <Flex vertical gap={8}>
                               <span>{t('catalog.result.enrolledContent', { className: shownOutcome.className })}</span>
-                              <Space wrap>
-                                <Button type="primary" size="small" onClick={() => navigate(`/learn/${encodeURIComponent(course.id)}`)}>
+                              <div className="catalog-course__actions">
+                                <Button type="primary" onClick={() => navigate(`/learn/${encodeURIComponent(course.id)}`)}>
                                   {t('catalog.result.startLearning')}
                                 </Button>
-                                <Button size="small" onClick={() => navigate('/my-classes')}>
+                                <Button onClick={() => navigate('/my-classes')}>
                                   {t('catalog.result.goToMySchool')}
                                 </Button>
-                              </Space>
+                              </div>
                             </Flex>
                           }
                         />
@@ -381,10 +410,10 @@ export function CatalogCoursePage() {
                           title={t('catalog.result.requestedTitle')}
                           description={
                             <Flex vertical gap={8}>
-                              <Space size={6} wrap>
+                              <span className="catalog-course__state">
                                 <span>{t('catalog.result.requestState')}</span>
                                 <Tag color={REQUEST_STATE_COLORS[shownOutcome.result.enrollment.state]}>{t(`catalog.states.${shownOutcome.result.enrollment.state}`)}</Tag>
-                              </Space>
+                              </span>
                               <span>
                                 {t('catalog.result.requestedContent', {
                                   number: invoiceOf(shownOutcome.result)?.number ?? '—',
@@ -393,14 +422,14 @@ export function CatalogCoursePage() {
                                     : shownOutcome.result.enrollment.payment.total.toFixed(2),
                                 })}
                               </span>
-                              <Space wrap>
-                                <Button type="primary" size="small" onClick={() => navigate('/my-classes?section=requests')}>
+                              <div className="catalog-course__actions">
+                                <Button type="primary" onClick={() => navigate('/my-classes?section=requests')}>
                                   {t('catalog.result.myRequests')}
                                 </Button>
-                                <Button size="small" onClick={() => navigate('/payments')}>
+                                <Button onClick={() => navigate('/payments')}>
                                   {t('catalog.result.invoices')}
                                 </Button>
-                              </Space>
+                              </div>
                             </Flex>
                           }
                         />
@@ -480,21 +509,21 @@ function StandingNotice({ standing, courseId }: { standing: CourseStanding; cour
         title={t('catalog.detail.mine.pendingTitle')}
         description={
           <Flex vertical gap={8} align="flex-start">
-            <Space size={6} wrap>
+            <span className="catalog-course__state">
               <span>{t('catalog.detail.mine.pendingText', { className })}</span>
               <Tag color={REQUEST_STATE_COLORS[standing.state]}>{t(`catalog.states.${standing.state}`)}</Tag>
-            </Space>
-            <Space wrap>
-              <Button size="small" onClick={() => navigate('/my-classes?section=requests')}>
+            </span>
+            <div className="catalog-course__actions">
+              <Button onClick={() => navigate('/my-classes?section=requests')}>
                 {t('catalog.detail.mine.requests')}
               </Button>
               {/* The invoice is paid at the academy and recorded by its staff: «my invoices» shows it — no checkout here. */}
               {standing.state === 'pending_payment' ? (
-                <Button size="small" onClick={() => navigate('/payments')}>
+                <Button onClick={() => navigate('/payments')}>
                   {t('catalog.result.invoices')}
                 </Button>
               ) : null}
-            </Space>
+            </div>
           </Flex>
         }
       />
@@ -512,14 +541,14 @@ function StandingNotice({ standing, courseId }: { standing: CourseStanding; cour
       description={
         <Flex vertical gap={8} align="flex-start">
           <span>{t(studying ? 'catalog.detail.mine.studyingText' : 'catalog.detail.mine.completedText', { className })}</span>
-          <Space wrap>
-            <Button type="primary" size="small" onClick={() => navigate(learnPath)}>
+          <div className="catalog-course__actions">
+            <Button type="primary" onClick={() => navigate(learnPath)}>
               {t('catalog.detail.mine.goToCourse')}
             </Button>
-            <Button size="small" onClick={() => navigate('/my-classes')}>
+            <Button onClick={() => navigate('/my-classes')}>
               {t('catalog.detail.mine.mySchool')}
             </Button>
-          </Space>
+          </div>
         </Flex>
       }
     />

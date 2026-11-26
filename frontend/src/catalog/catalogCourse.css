@@ -1,21 +1,91 @@
 /* The signed-in course page (/catalog/:courseId) on the frame of a course page (publicCourse.css), inside the app's
-   content area. Everything here is scoped to `.catalog-course`.
+   content area. Everything here is scoped to `.catalog-course`, so the public page (/explore/:courseId) keeps its look.
 
-   The document is what scrolls and the app's header scrolls away with it (AppLayout.css: no sticky header), so the
-   section bar stops at the very top of the window and a scroll target needs no room for a header. */
+   PORTAL-04 polish: one scale for the whole page — radii 18 (the page) / 14 (its cards) / 10 (inner blocks), one soft
+   shadow per depth, a 4-px spacing grid, the academy's turquoise and fonts unchanged (--pub-*, publicCatalog.css). The
+   app's header is sticky (AppLayout.css `.app-top`, --ac-sticky-offset), so every sticky bar and scroll target here
+   keeps clear of it. Width rules are container queries on `.course-page`: the page sits beside the side menu. */
+
+.catalog-course {
+  --cc-radius: 14px;
+  --cc-radius-sm: 10px;
+  --cc-shadow: 0 1px 2px rgba(16, 42, 48, 0.05), 0 4px 16px rgba(16, 42, 48, 0.06);
+  --cc-shadow-raised: 0 1px 3px rgba(16, 42, 48, 0.06), 0 12px 32px rgba(16, 42, 48, 0.12);
+  --cc-soft: #f7fafb;
+}
 
 .catalog-course .course-page.course-page--app {
-  --course-sticky-top: 0px;
+  --course-side: 360px;
+  --course-gap: 32px;
+  /* The section bar stops right under the app's sticky header (its offset keeps 16 px of breathing room). */
+  --course-sticky-top: calc(var(--ac-sticky-offset, 88px) - 16px);
   box-sizing: border-box;
   background: var(--pub-surface);
   border: 1px solid var(--pub-line);
-  border-radius: 16px;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(16, 42, 48, 0.04);
 }
+
+/* ---------- The band and its text ---------- */
 
 /* Rounded on the band itself: `overflow` on the page would make it the section bar's scroll container. */
 .catalog-course .course-page__band {
-  border-start-start-radius: 15px;
-  border-start-end-radius: 15px;
+  border-start-start-radius: 17px;
+  border-start-end-radius: 17px;
+}
+
+.catalog-course .course-page__hero {
+  gap: 10px;
+  padding-block: 22px 68px;
+}
+
+/* The way back: a quiet pill on the turquoise, one step above the title. */
+.catalog-course .course-page__back {
+  margin-bottom: 6px;
+}
+
+.catalog-course .course-page__back .course-back {
+  min-height: 34px;
+  padding: 4px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.catalog-course .course-page__back .course-back:hover {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.18);
+  text-decoration: none;
+}
+
+.catalog-course .course-page__back .course-back:active {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.catalog-course .course-page__back .course-back:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.catalog-course .course-page__back .course-back__icon {
+  font-size: 12px;
+}
+
+.catalog-course .course-page__title {
+  font-size: 24px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.catalog-course .course-page__meta {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13.5px;
+  font-weight: 500;
 }
 
 .catalog-course__meta {
@@ -29,31 +99,426 @@
   margin-inline-end: 8px;
 }
 
-/* A comfortable target for a finger, on this page's buttons only. */
-@media (max-width: 767px) {
-  .catalog-course .ant-btn {
-    min-height: 40px;
-  }
+.catalog-course .course-page__summary {
+  max-width: 62ch;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 15px;
+  line-height: 1.9;
+}
+
+.catalog-course .course-page__status {
+  margin-top: 4px;
+}
+
+.catalog-course__standing {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.catalog-course__standing .course-availability {
+  box-shadow: 0 1px 2px rgba(16, 42, 48, 0.12);
+}
+
+/* ---------- The enrollment card: the picture, the facts, the course code ---------- */
+
+.catalog-course .course-enroll {
+  border-color: var(--pub-line);
+  border-radius: var(--cc-radius);
+  box-shadow: var(--cc-shadow-raised);
+}
+
+.catalog-course .course-enroll__body {
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+/* The facts as quiet rows: the name at the start, the value at the end, a hairline between them, no colons. */
+.catalog-course .catalog-course__facts .ant-descriptions-row > td,
+.catalog-course .class-offer__facts .ant-descriptions-row > td {
+  padding: 9px 0;
+}
+
+.catalog-course .catalog-course__facts .ant-descriptions-row:first-child > td {
+  padding-top: 0;
+}
+
+.catalog-course .catalog-course__facts .ant-descriptions-row:last-child > td,
+.catalog-course .class-offer__facts .ant-descriptions-row:last-child > td {
+  padding-bottom: 0;
+}
+
+.catalog-course .catalog-course__facts .ant-descriptions-row + .ant-descriptions-row > td,
+.catalog-course .class-offer__facts .ant-descriptions-row + .ant-descriptions-row > td {
+  border-top: 1px solid var(--pub-line);
+}
+
+.catalog-course .catalog-course__facts .ant-descriptions-item-container,
+.catalog-course .class-offer__facts .ant-descriptions-item-container {
+  align-items: center;
+  gap: 12px;
+}
+
+.catalog-course .catalog-course__facts .ant-descriptions-item-label,
+.catalog-course .class-offer__facts .ant-descriptions-item-label {
+  flex: none;
+  color: var(--pub-detail);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.catalog-course .catalog-course__facts .ant-descriptions-item-content,
+.catalog-course .class-offer__facts .ant-descriptions-item-content {
+  justify-content: flex-end;
+  align-items: center;
+  color: var(--pub-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+  text-align: end;
+}
+
+/* Tags in a row (free, a class's status, a state): soft pills that sit on the row's line. */
+.catalog-course .catalog-course__facts .ant-tag,
+.catalog-course .class-offer .ant-tag,
+.catalog-course__state .ant-tag {
+  margin: 0;
+  padding-inline: 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.catalog-course .catalog-course__locked.ant-alert {
+  padding: 10px 12px;
+  border-radius: var(--cc-radius-sm);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.catalog-course .course-enroll__code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--pub-line);
+  color: var(--pub-muted);
+  font-size: 12.5px;
+}
+
+.catalog-course .course-enroll__code-value {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--cc-soft);
+  color: var(--pub-detail);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 /* ---------- The classes, under the enrollment card ---------- */
 
 .catalog-course__classes {
   margin-top: 16px;
-  scroll-margin-top: calc(var(--course-sticky-top) + 16px);
+  /* scrollIntoView() lands the card under the app's sticky header, not behind it. */
+  scroll-margin-top: var(--ac-sticky-offset, 88px);
 }
 
 .catalog-course__classes > .ant-card {
   border-color: var(--pub-line);
-  border-radius: 16px;
+  border-radius: var(--cc-radius);
+  box-shadow: var(--cc-shadow);
+  transition: box-shadow 0.2s ease;
 }
 
-/* ---------- The study plan ---------- */
+/* «اختر الفصل…»: the card is outlined in the academy's colour while the learner chooses. */
+.catalog-course__classes > .ant-card[data-intent='enroll'] {
+  box-shadow:
+    0 0 0 2px var(--pub-primary),
+    var(--cc-shadow);
+}
 
+.catalog-course__classes > .ant-card > .ant-card-head {
+  min-height: 52px;
+  padding-inline: 20px;
+  border-bottom-color: var(--pub-line);
+}
+
+.catalog-course__classes > .ant-card > .ant-card-head .ant-card-head-title {
+  color: var(--pub-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.catalog-course__classes > .ant-card > .ant-card-body {
+  padding: 16px 20px 20px;
+}
+
+/* The notices of the card (your place, the answer to an enrollment, why nobody can enroll now). */
+.catalog-course__classes .ant-alert {
+  padding: 14px;
+  border-radius: 12px;
+  align-items: flex-start;
+}
+
+.catalog-course__classes .ant-alert .ant-alert-title {
+  color: var(--pub-ink);
+  font-weight: 600;
+}
+
+.catalog-course__classes .ant-alert .ant-alert-description {
+  color: var(--pub-detail);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+
+/* The way on from a notice: buttons of one width and one height — side by side where two fit without breaking a
+   label, one per row in the narrow side column (the primary one first); a very long label wraps inside its button. */
+.catalog-course__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
+  align-self: stretch;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.catalog-course__actions .ant-btn {
+  height: auto;
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.catalog-course__state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+/* One class: a soft panel inside the card, its facts in the enrollment card's rows. */
+.catalog-course .class-offer.ant-card {
+  border-color: var(--pub-line);
+  border-radius: 12px;
+  background: var(--cc-soft);
+  box-shadow: none;
+}
+
+/* The class's name and code, and «الفصل المتاح للتسجيل» beside them — under them when the card is too narrow for both. */
+.catalog-course .class-offer > .ant-card-head {
+  min-height: 46px;
+  padding: 8px 14px;
+  border-bottom-color: var(--pub-line);
+}
+
+.catalog-course .class-offer > .ant-card-head > .ant-card-head-wrapper {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.catalog-course .class-offer > .ant-card-head .ant-card-head-title {
+  flex: 1 1 auto;
+  padding-block: 0;
+}
+
+.catalog-course .class-offer > .ant-card-head .ant-card-extra {
+  margin-inline-start: 0;
+  padding-block: 0;
+}
+
+.catalog-course .class-offer > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px 14px;
+}
+
+.class-offer__title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+  white-space: normal;
+}
+
+.class-offer__name {
+  color: var(--pub-ink);
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.class-offer__code {
+  color: var(--pub-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.catalog-course .class-offer__facts .ant-progress {
+  flex: 1 1 auto;
+  max-width: 220px;
+  margin: 0;
+}
+
+.class-offer__schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pub-line);
+}
+
+.class-offer__heading {
+  color: var(--pub-ink);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.class-offer__muted,
+.class-offer__blocker {
+  color: var(--pub-detail);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.class-offer__slots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.class-offer__slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  color: var(--pub-text);
+  font-size: 13.5px;
+}
+
+.class-offer__day {
+  min-width: 64px;
+  color: var(--pub-ink);
+  font-weight: 600;
+}
+
+.class-offer__note {
+  color: var(--pub-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.class-offer__mine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border-radius: var(--cc-radius-sm);
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  color: var(--pub-detail);
+  font-size: 13.5px;
+}
+
+.catalog-course .class-offer__enroll.ant-btn {
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* ---------- The sections: the description and the study plan ---------- */
+
+.catalog-course .course-page__nav {
+  margin-bottom: 4px;
+}
+
+.catalog-course .course-page__section {
+  padding-top: 28px;
+}
+
+/* A section's title with a short turquoise mark at its start. */
+.catalog-course .course-page__section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.catalog-course .course-page__section-title::before {
+  content: '';
+  flex: none;
+  width: 4px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--pub-primary);
+}
+
+.catalog-course__description {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 70ch;
+  color: var(--pub-text);
+  font-size: 15px;
+  line-height: 1.95;
+  overflow-wrap: anywhere;
+}
+
+.catalog-course__description-text {
+  margin: 0;
+}
+
+.catalog-course__description strong {
+  color: var(--pub-ink);
+  font-weight: 700;
+}
+
+.catalog-course__description-heading {
+  margin: 8px 0 0;
+  color: var(--pub-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.catalog-course__description-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-inline-start: 22px;
+}
+
+.catalog-course__description-list > li {
+  padding-inline-start: 4px;
+}
+
+ul.catalog-course__description-list > li::marker {
+  color: var(--pub-primary);
+}
+
+ol.catalog-course__description-list > li::marker {
+  color: var(--pub-primary-strong);
+  font-weight: 700;
+}
+
+/* The study plan: numbered rows in one rounded panel. */
 .catalog-course__syllabus {
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow: hidden;
   border: 1px solid var(--pub-line);
   border-radius: 12px;
 }
@@ -62,7 +527,12 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 14px 16px;
+  transition: background-color 0.15s ease;
+}
+
+.catalog-course__lesson:hover {
+  background: var(--cc-soft);
 }
 
 .catalog-course__lesson + .catalog-course__lesson {
@@ -88,6 +558,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  padding-top: 1px;
   overflow-wrap: anywhere;
 }
 
@@ -95,7 +566,7 @@
   color: var(--pub-ink);
   font-size: 15px;
   font-weight: 600;
-  line-height: 1.75;
+  line-height: 1.7;
 }
 
 .catalog-course__lesson-text {
@@ -106,8 +577,67 @@
 }
 
 .catalog-course__lesson-minutes {
-  color: var(--pub-detail);
+  color: var(--pub-muted);
   font-size: 12px;
+}
+
+/* ---------- A medium width: the card lies on its side, so the picture never fills the screen ---------- */
+
+@container (min-width: 600px) and (max-width: 959.98px) {
+  .catalog-course .course-enroll {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  }
+
+  .catalog-course .course-enroll .public-card__media {
+    height: 100%;
+    min-height: 220px;
+    aspect-ratio: auto;
+  }
+
+  .catalog-course .course-enroll__body {
+    justify-content: center;
+  }
+}
+
+/* ---------- Side by side, when the page has the room ---------- */
+
+@container (min-width: 960px) {
+  /* A faint light at the band's far end, behind the card — never behind the text, which keeps its contrast on the
+     strong shade. The turquoise gradient is publicCourse.css's own, repeated under the light. */
+  .catalog-course .course-page__band {
+    background-image:
+      radial-gradient(60% 150% at 0% 100%, rgba(255, 255, 255, 0.09), transparent 62%),
+      linear-gradient(to left, var(--pub-primary-strong) 0%, var(--pub-primary-strong) 64%, var(--pub-primary) 100%);
+  }
+
+  [dir='ltr'] .catalog-course .course-page__band {
+    background-image:
+      radial-gradient(60% 150% at 100% 100%, rgba(255, 255, 255, 0.09), transparent 62%),
+      linear-gradient(to right, var(--pub-primary-strong) 0%, var(--pub-primary-strong) 64%, var(--pub-primary) 100%);
+  }
+
+  .catalog-course .course-page__hero {
+    padding-block: 32px 40px;
+  }
+
+  .catalog-course .course-page__title {
+    font-size: 30px;
+    line-height: 1.3;
+  }
+
+  .catalog-course .course-page__aside {
+    margin-top: 32px;
+    margin-bottom: 28px;
+  }
+
+  .catalog-course .course-page__body {
+    padding-block: 4px 40px;
+  }
+
+  .catalog-course .course-page__section:first-of-type {
+    padding-top: 24px;
+  }
 }
 
 /* ---------- A phone: the gutters and the nested cards give the text its width back ---------- */
@@ -116,11 +646,33 @@
   .catalog-course .course-page.course-page--app {
     --pub-gutter: 14px;
   }
+
+  /* The phone header's height follows what it holds: the section bar scrolls with the page instead of hiding under it. */
+  .catalog-course .course-page__nav {
+    position: static;
+  }
+
+  .catalog-course .course-page__section {
+    scroll-margin-top: var(--ac-sticky-offset, 88px);
+  }
+
+  /* A comfortable target for a finger, on this page's buttons only. */
+  .catalog-course .ant-btn {
+    min-height: 40px;
+  }
 }
 
 @container (max-width: 480px) {
+  .catalog-course .course-page__title {
+    font-size: 22px;
+  }
+
+  .catalog-course .course-page__summary {
+    font-size: 14.5px;
+  }
+
   .catalog-course .course-enroll__body {
-    padding: 14px;
+    padding: 14px 16px;
   }
 
   .catalog-course__classes > .ant-card > .ant-card-head {
@@ -129,5 +681,21 @@
 
   .catalog-course__classes > .ant-card > .ant-card-body {
     padding: 12px;
+  }
+
+  .catalog-course__classes .ant-alert {
+    padding: 12px;
+  }
+
+  .catalog-course__actions .ant-btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-course .course-page__back .course-back,
+  .catalog-course__classes > .ant-card,
+  .catalog-course__lesson {
+    transition: none;
   }
 }
