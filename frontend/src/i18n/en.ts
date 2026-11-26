@@ -82,7 +82,7 @@ export const en: Translation = {
     unreadNotifications: 'Notifications, {{count}} unread',
     dashboard: 'Dashboard',
     users: 'Users',
-    courses: 'Courses & levels',
+    courses: 'Courses',
     classes: 'Classes & groups',
     classesForTeacher: 'My classes',
     myClasses: 'My courses',
@@ -1010,8 +1010,8 @@ export const en: Translation = {
     },
   },
   courses: {
-    title: 'Courses & levels',
-    subtitle: 'Training courses and their levels',
+    title: 'Courses',
+    subtitle: 'Training courses and the order learners and visitors see them in',
     addCourse: 'Add course',
     code: 'Code',
     level: 'Level',
@@ -1025,6 +1025,14 @@ export const en: Translation = {
     sort: 'Sort',
     sortByCode: 'By code',
     sortNewest: 'Newest first',
+    sortByPosition: 'Display order',
+    order: {
+      up: 'Move «{{name}}» up',
+      down: 'Move «{{name}}» down',
+      note: 'Learners and visitors see the published courses in this order. Change it with the arrows.',
+      hint: 'The arrows work in «Display order» with no search and no status filter.',
+      failed: 'The course could not be moved. Try again.',
+    },
     refresh: 'Refresh',
     empty: 'No courses',
     generateCode: 'Generate a code',
@@ -1035,6 +1043,7 @@ export const en: Translation = {
     },
     columns: {
       updatedAt: 'Last updated',
+      order: 'Order',
     },
     pagination: {
       page: 'Page {{page}}',

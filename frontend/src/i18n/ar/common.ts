@@ -122,7 +122,7 @@ export const nav = {
   unreadNotifications: 'الإشعارات، {{count}} غير مقروءة',
   dashboard: 'لوحة التحكم',
   users: 'المستخدمون',
-  courses: 'الدورات والمستويات',
+  courses: 'الدورات',
   classes: 'الفصول والمجموعات',
   // J-F72: the same entry for a teacher-only viewer.
   classesForTeacher: 'فصولي',

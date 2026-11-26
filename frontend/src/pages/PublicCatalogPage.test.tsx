@@ -180,13 +180,14 @@ describe('PublicCatalogPage', () => {
     await waitFor(() => expect(screen.queryByText(pc.list.more)).not.toBeInTheDocument())
   })
 
+  // PORTAL-04-COURSE-ORDER: the cards keep the server's order (the office's arrows); «قريبًا» is no longer moved last.
   describe('the order of the cards', () => {
     const open = (id: string) => makePublicCard({ id, code: id, name: { ar: `برنامج ${id}` } })
     const full = (id: string) => makePublicCard({ id, code: id, name: { ar: `برنامج ${id}` }, hasFreeSeat: false })
     const soon = (id: string) => makePublicCard({ id, code: id, name: { ar: `برنامج ${id}` }, openClasses: 0, hasFreeSeat: false })
     const shownIds = () => Array.from(document.querySelectorAll('[data-testid^="public-card-"]')).map((node) => node.getAttribute('data-testid')!.slice('public-card-'.length))
 
-    it('orders each page as it arrives and only appends the next one: no card jumps, is lost or repeats, and the cursor still works', async () => {
+    it('keeps the server’s order on each page and only appends the next one: no card jumps, is lost or repeats, and the cursor still works', async () => {
       const api = mockPublicApi((query) =>
         query.get('cursor') === 'next-1'
           ? // `s1` again: a course the server moved between the two reads is not shown twice.
@@ -196,11 +197,11 @@ describe('PublicCatalogPage', () => {
       renderPage()
 
       await screen.findByText('برنامج o1')
-      expect(shownIds()).toEqual(['o1', 'f1', 's1'])
+      expect(shownIds()).toEqual(['s1', 'f1', 'o1'])
 
       fireEvent.click(screen.getByText(pc.list.more).closest('button')!)
       await screen.findByText('برنامج o2')
-      expect(shownIds()).toEqual(['o1', 'f1', 's1', 'o2', 's2'])
+      expect(shownIds()).toEqual(['s1', 'f1', 'o1', 's2', 'o2'])
       expect(api.requests.map((request) => request.query.get('cursor'))).toEqual([null, 'next-1'])
 
       // The whole list is on screen: the count is every distinct course.
@@ -208,12 +209,12 @@ describe('PublicCatalogPage', () => {
       expect(screen.getByText(i18n.getFixedT('ar')('publicCatalog.list.count', { count: 5 }))).toBeInTheDocument()
     })
 
-    it('orders the results of a search the same way', async () => {
+    it('keeps the server’s order for the results of a search too', async () => {
       mockPublicApi(() => jsonResponse(200, makePublicList([soon('s1'), open('o1')])))
       renderPage(makeAuth(), '?q=برنامج')
 
       await screen.findByText('برنامج o1')
-      expect(shownIds()).toEqual(['o1', 's1'])
+      expect(shownIds()).toEqual(['s1', 'o1'])
     })
   })
 

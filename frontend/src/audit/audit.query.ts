@@ -108,6 +108,8 @@ export const AUDIT_ACTION_SUGGESTIONS: readonly string[] = [
   'courses.updated',
   'courses.status.changed',
   'courses.deleted',
+  // PORTAL-04-COURSE-ORDER: one step of a course's place (POST /api/courses/:id/move).
+  'courses.reordered',
   // MOD-04-T04 (CH-0050) — first offered in the frontend with O7-F (CH-0067)
   'courses.syllabus.changed',
   // MOD-20 (CH-0304): the curriculum by levels and a lesson's content.

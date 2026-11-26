@@ -7,12 +7,13 @@
 // the one place it lives): the hook holds no copy of it, so two sources can never
 // disagree about which search is on screen. No manual memoization: the page reads
 // the result and calls more()/retry() from clicks only, nothing depends on identity.
-// Each page is ordered once, when it arrives (`orderPublicPage()`: what can be joined
-// first, «قريبًا» last), and the cards already on screen are never re-sorted.
+// PORTAL-04-COURSE-ORDER: the cards keep the server's order — the order the office sets
+// with the arrows — page after page; a course with no open class keeps its «قريبًا» pill
+// in its place (it was moved to the end of its page before).
 import { useEffect, useState } from 'react'
 import { listPublicCatalog } from '../api/publicCatalog'
 import type { PublicCourseCard } from '../api/publicCatalog'
-import { appendCards, orderPublicPage, publicCatalogParams } from './publicCatalog.view'
+import { appendCards, publicCatalogParams } from './publicCatalog.view'
 
 interface ListState {
   key: string
@@ -40,12 +41,11 @@ export function usePublicCatalogList(search: string) {
         if (controller.signal.aborted) return
         // A first page starts a new list: a «المزيد» page of an earlier one no longer applies.
         if (!cursor) setLater(null)
-        const ordered = orderPublicPage(page.items)
         setState((current) => ({
           key: requestKey,
           query,
           // The first page replaces the cards; a later one comes after them.
-          items: cursor ? appendCards(current.items, ordered) : ordered,
+          items: cursor ? appendCards(current.items, page.items) : page.items,
           nextCursor: page.nextCursor,
           error: null,
         }))
