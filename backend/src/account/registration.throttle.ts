@@ -17,8 +17,12 @@ export const REGISTER_CLIENT_LIMIT = 5;
 export const REGISTER_CLIENT_TTL_MS = 15 * 60 * 1000;
 /** Name of the per-IP ceiling (app.module.ts). */
 export const REGISTER_IP_THROTTLER = 'register_ip';
-/** Every registration request per hour per IP, whatever the address (a school behind one NAT registers a class at once). */
-export const REGISTER_IP_LIMIT = 200;
+/**
+ * Every registration request per hour per IP, whatever the address. Since the direct registration (PORTAL-04) each
+ * request may create an active account at once — no e-mail, so no daily mail budget bounds it any more — hence 60, not
+ * the 200 of the e-mailed flow (a school behind one NAT still registers a class within the hour).
+ */
+export const REGISTER_IP_LIMIT = 60;
 export const REGISTER_IP_TTL_MS = 60 * 60 * 1000;
 /** Completions per 15 minutes per (IP, token digest), on the `login` throttler. */
 export const COMPLETE_CLIENT_LIMIT = 20;
@@ -68,7 +72,7 @@ export function completionClientTracker(req: Record<string, any>): string {
   return `${ip}|register-complete:${createHash('sha256').update(token).digest('hex').slice(0, 32)}`;
 }
 
-/** Marks the registration route: 5 per 15 minutes per (IP, e-mail) on `login`, and the `register_ip` ceiling applies (200 per hour). */
+/** Marks the registration route: 5 per 15 minutes per (IP, e-mail) on `login`, and the `register_ip` ceiling applies (60 per hour). */
 export const RegisterThrottle = () =>
   applyDecorators(
     SetMetadata(REGISTER_ROUTE_KEY, true),
@@ -86,7 +90,7 @@ export const CompleteRegistrationThrottle = () =>
   );
 
 /**
- * The per-IP ceiling of the two registration writes: 200 registrations per
+ * The per-IP ceiling of the two registration writes: 60 registrations per
  * hour and 200 completions per 15 minutes per IP (`normalizeIp()`: an IPv6
  * address by its /64); the completion route overrides the limit and window
  * with @CompleteRegistrationThrottle(). Its `skipIf` keeps it off every route

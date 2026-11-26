@@ -1,8 +1,8 @@
-// PORTAL-03/04 (#207, contract v3) — the shapes of the self-registration routes in the OpenAPI document. The two
+// PORTAL-03/04 (#207) — the shapes of the self-registration routes in the OpenAPI document. The two
 // request bodies are DOCUMENTATION ONLY: the routes take the raw JSON body and check it with registration.rules.ts,
 // so that every refusal — an unknown field included — is `400 registration_invalid { fields, unknown }` and never
 // the global ValidationPipe's own 400. Do not add class-validator decorators here: they would never run. The
-// completion answers the session body of every sign-in (`SessionResponseDto` of auth.dto.ts).
+// registration and the legacy completion answer the session body of every sign-in (`SessionResponseDto` of auth.dto.ts).
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../auth/password.service.js';
 import { EMAIL_MAX_LENGTH, FULL_NAME_MAX_LENGTH, FULL_NAME_MIN_LENGTH, REGISTRATION_LOCALES, REGISTRATION_PROBLEMS } from './registration.rules.js';
@@ -13,11 +13,15 @@ export class RegisterDto {
     minLength: FULL_NAME_MIN_LENGTH,
     maxLength: FULL_NAME_MAX_LENGTH,
     example: 'سارة أحمد',
-    description: 'The visitor’s full name, trimmed; counted in characters (code points). Never put in an e-mail.',
+    description: 'The visitor’s full name, trimmed; counted in characters (code points).',
   })
   fullName: string;
 
-  @ApiProperty({ maxLength: EMAIL_MAX_LENGTH, example: 'sara@example.test', description: 'Trimmed and lower-cased before use' })
+  @ApiProperty({
+    maxLength: EMAIL_MAX_LENGTH,
+    example: 'sara@example.test',
+    description: 'Trimmed and lower-cased before use; an address any account already has → 409 `email_in_use`. Stored unconfirmed (`emailVerifiedAt` null).',
+  })
   email: string;
 
   @ApiProperty({
@@ -26,11 +30,11 @@ export class RegisterDto {
     description:
       'The password the visitor chooses (MOD-01 policy, as for an invitation: 10–128 characters, not only whitespace). ' +
       'Longer than 128 → `registration_invalid` (`too_long`); otherwise outside the policy → `password_weak`. ' +
-      'The account stays `pending` until the e-mailed link is opened and this same password typed there.',
+      'The new account is active at once with this password; later sign-ins use it with POST /api/auth/login.',
   })
   password: string;
 
-  @ApiPropertyOptional({ enum: REGISTRATION_LOCALES, description: 'The language of the e-mail and of the new account; absent = the academy default' })
+  @ApiPropertyOptional({ enum: REGISTRATION_LOCALES, description: 'The language of the new account; absent = the academy default' })
   locale?: string;
 }
 

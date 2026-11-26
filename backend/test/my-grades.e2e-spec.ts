@@ -1,6 +1,7 @@
 // TEST-132 — MOD-09-T06 «my grades» (API-129) against the live development
 // database. Skipped when no database is reachable. Fixture users (a manager, a
-// teacher, students with the system role, a guardian with the system role
+// teacher — with a custom role for the assignment keys the seeded `teacher` role
+// no longer holds —, students with the system role, a guardian with the system role
 // linked to two of them, a linked user without the role, an enrolled learner
 // whose custom role holds no grades key), roles, a published course, classes,
 // enrollments, assignments with a review, exams with results (through the API)
@@ -18,6 +19,7 @@ import { PasswordService } from '../src/auth/password.service.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { TEACHER_REVOKED_ASSIGNMENT_KEYS } from './assignment-writer.helpers.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 
@@ -127,7 +129,7 @@ describe.skipIf(!available)('MOD-09 «my grades» (e2e, TEST-132)', () => {
     ).id;
     const systemRole = async (key: string) => (await prisma.role.findUniqueOrThrow({ where: { key }, select: { id: true } })).id;
     await createUser('manager', [await createRole('qmanager', ['classes.read', 'classes.manage', 'classes.teachers.assign', 'grades.read_all', 'grades.manage'])]);
-    await createUser('teacher', [await systemRole('teacher')]);
+    await createUser('teacher', [await systemRole('teacher'), await createRole('qassign', TEACHER_REVOKED_ASSIGNMENT_KEYS)]);
     for (const student of ['s1', 's2']) await createUser(student, [await systemRole('student')]);
     await createUser('guardian', [await systemRole('guardian')]);
     const noGrades = await createRole('qnogrades', ['courses.read', 'assignments.read', 'assignments.submit']);

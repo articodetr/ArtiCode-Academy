@@ -1,9 +1,10 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  ApiAcceptedResponse,
   ApiBadRequestResponse,
   ApiBody,
+  ApiConflictResponse,
+  ApiCreatedResponse,
   ApiExtraModels,
   ApiForbiddenResponse,
   ApiGoneResponse,
@@ -38,15 +39,16 @@ import { CompleteRegistrationThrottle, RegisterThrottle } from './registration.t
 /** 60 previews per minute per IP (a page load each), like an invitation preview. */
 const PREVIEW_LIMIT = { login: { limit: 60, ttl: 60 * 1000 } };
 
-const CLOSED = 'registration_disabled — `settings.selfRegistration.enabled` is not true, or the server has no mail transport (the `selfRegistration` flag of API-205)';
+const CLOSED = 'registration_disabled — `settings.selfRegistration.enabled` is not true (the `selfRegistration` flag of API-205)';
 
 /**
- * PORTAL-03/04 (#207, contract v3) — a visitor creates their own student
- * account: name, e-mail and password on /register; the e-mailed link then
- * activates it — only with that same password — and signs the visitor in.
- * Public routes, rate limited like the other account routes; the bodies are
- * checked by registration.rules.ts (raw JSON, so every refusal has the
- * contract's `registration_invalid { fields, unknown }` shape).
+ * PORTAL-03/04 (#207) — a visitor creates their own student account: name,
+ * e-mail and password on /register create an ACTIVE student account and sign
+ * the visitor in at once (no e-mail, no link, no approval). The two
+ * `:token` routes are LEGACY: they complete the pending accounts the earlier
+ * e-mailed flow left behind. Public routes, rate limited like the other account
+ * routes; the bodies are checked by registration.rules.ts (raw JSON, so every
+ * refusal has the contract's `registration_invalid { fields, unknown }` shape).
  */
 @ApiTags('account')
 @Controller('account/register')
@@ -66,36 +68,41 @@ export class RegistrationController {
   }
 
   @Post()
-  @HttpCode(HttpStatus.ACCEPTED)
+  @HttpCode(HttpStatus.CREATED)
   @RegisterThrottle()
   @ApiOperation({
-    summary: 'Ask for a student account (public, self-registration)',
+    summary: 'Create a student account and sign in (public, self-registration)',
     description:
-      'Checks, in order: open (403 `registration_disabled`), the body (400 `registration_invalid`), the password policy (400 `password_weak` — about the typed password alone). ' +
-      'Then always 202 with NO body, whatever the address: the password is hashed and the account looked up only after the response. ' +
-      'A new address gets a `pending` account with that password (the `student` role and a student profile) and the e-mail «أكّد بريدك الإلكتروني لإكمال إنشاء حسابك» with the link ' +
-      '`<APP_PUBLIC_URL>/register/complete/<token>`; a pending self-registered account gets the NEW password (the latest registration wins) and a fresh link (older ones retired, at most 3 per 15 minutes); ' +
-      'any other account the notice «لديك حساب بالفعل» (a link to /login, nothing changes); a soft-deleted one nothing. The e-mails carry nothing the visitor typed. ' +
-      'At most one «لديك حساب بالفعل» per account per 24 hours and 300 registration e-mails (links and notices) per 24 hours for the academy — past either, still 202 and nothing is sent or changed. ' +
-      'Signing in before the link is opened answers `403 email_not_verified` once the password matched. ' +
-      'Limits: 5 per 15 minutes per (IP, e-mail) and 200 per hour per IP.',
+      'Open only while `settings.selfRegistration.enabled` is true (the `selfRegistration` flag of API-205; no mail transport needed). ' +
+      'Checks, in order: open (403 `registration_disabled`), the body (400 `registration_invalid { fields, unknown }` — any field but fullName/email/password/locale is refused, ' +
+      'so nothing in the body can choose a role, a permission or an academy), the password policy (400 `password_weak { problems }`), ' +
+      'the address (409 `email_in_use` when ANY account already has it — active, pending, invited, suspended, archived or soft-deleted; that account is not changed and nothing is sent). ' +
+      'Then, in one transaction, an ACTIVE account with the chosen password, the `student` role only and an empty student profile, marked `selfRegisteredAt`, ' +
+      'with the address NOT confirmed (`emailVerifiedAt` null — it was never proven, so Google sign-in never links it by its e-mail), and the event ' +
+      '`users.self_registered { via: email }`; then a session opens exactly like login (access token + httpOnly refresh cookie, `auth.login.succeeded { via: self_registration }`). ' +
+      'No confirmation e-mail, no link, no approval: later sign-ins use POST /api/auth/login with the same password. ' +
+      'Limits: 5 per 15 minutes per (IP, e-mail) and 60 per hour per IP.',
   })
   @ApiBody({ type: RegisterDto })
-  @ApiAcceptedResponse({ description: 'Accepted — an e-mail is on its way to the address (which one, and whether, is never revealed)' })
+  @ApiCreatedResponse({ type: SessionResponseDto, description: 'Created — the new student is signed in (the refresh token is in the httpOnly cookie, never the body)' })
   @ApiBadRequestResponse({
     description: 'registration_invalid { fields, unknown } (RegistrationInvalidErrorDto), or password_weak { problems } (the invitation password policy)',
     schema: { oneOf: [{ $ref: getSchemaPath(RegistrationInvalidErrorDto) }, { $ref: getSchemaPath(AuthErrorDto) }] },
   })
   @ApiForbiddenResponse({ type: AuthErrorDto, description: `${CLOSED} | origin_forbidden` })
-  async register(@Body() body: unknown, @Req() req: Request): Promise<void> {
-    await this.registration.register(body, requestContext(req));
+  @ApiConflictResponse({ type: AuthErrorDto, description: 'email_in_use { field: email } — the address already has an account; sign in or reset the password instead' })
+  async register(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<SessionResponseDto> {
+    const session = await this.registration.register(body, requestContext(req));
+    return presentSession(res, session, this.cookie);
   }
 
   @Get(':token')
   @Throttle(PREVIEW_LIMIT)
   @ApiOperation({
-    summary: 'Preview a registration link (public)',
-    description: 'What the page shows before the password is typed: the name typed at registration, the masked address and the expiry.',
+    summary: 'Preview a registration link (public, legacy)',
+    description:
+      'LEGACY — for the pending accounts the earlier e-mailed registration left behind (no new link is sent any more). ' +
+      'What the page shows before the password is typed: the name typed at registration, the masked address and the expiry.',
   })
   @ApiParam({ name: 'token', description: 'The raw token from the e-mailed link' })
   @ApiOkResponse({ type: RegistrationPreviewDto })
@@ -104,7 +111,7 @@ export class RegistrationController {
     type: AuthErrorDto,
     description: 'registration_link_invalid (malformed, unknown, used, replaced, retired, not a self-registration link, or the account can no longer be completed)',
   })
-  @ApiGoneResponse({ type: AuthErrorDto, description: 'registration_link_expired (`expiresAt` in the body) — register again with the same address' })
+  @ApiGoneResponse({ type: AuthErrorDto, description: 'registration_link_expired (`expiresAt` in the body) — the pending account stays; an administrator deletes it to free the address' })
   preview(@Param('token') token: string): Promise<RegistrationPreviewDto> {
     return this.registration.preview(token);
   }
@@ -113,9 +120,9 @@ export class RegistrationController {
   @HttpCode(HttpStatus.OK)
   @CompleteRegistrationThrottle()
   @ApiOperation({
-    summary: 'Complete a registration: type the password chosen at registration, and sign in (public)',
+    summary: 'Complete a registration: type the password chosen at registration, and sign in (public, legacy)',
     description:
-      'Checks, in order: open (403), the link (404/410), the body (400 `registration_invalid`), then the typed password against the one chosen at registration: ' +
+      'LEGACY — completes a pending account of the earlier e-mailed registration (no new such account is created). Checks, in order: open (403), the link (404/410), the body (400 `registration_invalid`), then the typed password against the one chosen at registration: ' +
       'a wrong one → 400 `registration_password_incorrect { attemptsLeft }` (the 5th retires the link; the next try is 404). ' +
       'The right one consumes the one-time link, sets the account `active` with `emailVerifiedAt` — opening the e-mailed link proved the address — and opens a session exactly like login ' +
       '(access token + httpOnly refresh cookie). Records `users.self_registration.completed` and `auth.login.succeeded { via: self_registration }`. ' +

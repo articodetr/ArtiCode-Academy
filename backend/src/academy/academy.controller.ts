@@ -53,7 +53,7 @@ export class AcademyController {
       'No sign-in: the localized `name`, the `logoUrl` and the `defaultLocale` the sign-in page shows before anybody is authenticated, and `catalogPublic` ' +
       '(true when `settings.catalog.publicBrowsing` is true — visitors may browse the published courses, API-236/237), `homepageImages` ' +
       '(the root-relative URL of the academy’s own picture for each of the four places of the public home page, null = the built-in default), `selfRegistration` ' +
-      '(true when `settings.selfRegistration.enabled` is true and the server has a mail transport — PORTAL-03), `googleSignIn` (Google sign-in is configured on this server) and `googleSignUp` (`googleSignIn` and `settings.selfRegistration.enabled` is true — a new student account may be created through Google) — nothing else ' +
+      '(true when `settings.selfRegistration.enabled` is true — PORTAL-03/04: a visitor may create an active student account and is signed in at once), `googleSignIn` (Google sign-in is configured on this server) and `googleSignUp` (`googleSignIn` and `settings.selfRegistration.enabled` is true — a new student account may be created through Google) — nothing else ' +
       '(no id, slug, contact details, time zone, currency or settings). 60 requests per minute per IP; no audit event.',
   })
   @ApiOkResponse({ type: AcademyPublicDto })

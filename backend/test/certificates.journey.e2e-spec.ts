@@ -1,7 +1,8 @@
 // TEST-138 — the MOD-10 module gate and the Stage 4 gate (MOD-10-T05,
 // CH-0179): WF-09 "issue a certificate" from real grades through the API
 // against the live development database. A manager prepares the class
-// (WF-03/WF-04); the teacher (the seeded `teacher` role) sets a weighted
+// (WF-03/WF-04); the teacher (the seeded `teacher` role, plus a custom role
+// with the assignment keys the seeded role no longer holds) sets a weighted
 // assignment and a weighted exam and grades both students (WF-13, WF-07);
 // the class runs and the teacher fixes the final grades (WF-08); the class is
 // completed; a member of staff (the seeded `staff` role — it holds
@@ -26,6 +27,7 @@ import { PasswordService } from '../src/auth/password.service.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { TEACHER_REVOKED_ASSIGNMENT_KEYS } from './assignment-writer.helpers.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 
@@ -118,7 +120,7 @@ describe.skipIf(!available)('WF-09 certificate journey — the MOD-10 and Stage 
     // The manager prepares and reads the log without academy_admin; the revoker holds the two administrator keys MOD-10 needs.
     await createUser('manager', [await createRole('wf09mgr', ['classes.read', 'classes.manage', 'classes.teachers.assign', 'enrollments.read', 'enrollments.manage', 'audit.read'])]);
     await createUser('revoker', [await createRole('wf09rev', ['certificates.read_all', 'certificates.revoke'])]);
-    await createUser('teacher', [await systemRole('teacher')]);
+    await createUser('teacher', [await systemRole('teacher'), await createRole('wf09asg', TEACHER_REVOKED_ASSIGNMENT_KEYS)]);
     await createUser('staff', [await systemRole('staff')]);
     const student = await systemRole('student');
     await createUser('student1', [student]);

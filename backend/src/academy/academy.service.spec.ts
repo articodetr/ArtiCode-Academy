@@ -108,12 +108,13 @@ describe('AcademyService', () => {
     }
   });
 
-  it('API-205 answers selfRegistration true only with the setting exactly true AND a mail transport (PORTAL-03, TEST-320)', async () => {
+  it('API-205 answers selfRegistration true exactly when the setting is true — whatever the mail transport (PORTAL-03/04 direct registration, TEST-320)', async () => {
     const cases: Array<[unknown, string, boolean]> = [
       [{}, 'resend', false],
       [{ selfRegistration: { enabled: false } }, 'resend', false],
       [{ selfRegistration: { enabled: 'true' } }, 'resend', false],
-      [{ selfRegistration: { enabled: true } }, 'none', false],
+      [{ selfRegistration: { enabled: false } }, 'none', false],
+      [{ selfRegistration: { enabled: true } }, 'none', true],
       [{ selfRegistration: { enabled: true } }, 'log', true],
       [{ selfRegistration: { enabled: true } }, 'resend', true],
     ];
@@ -123,7 +124,7 @@ describe('AcademyService', () => {
     }
   });
 
-  it('API-205 answers googleSignIn when both Google client values are set, and googleSignUp only with the self-registration setting too — no mail transport needed (PORTAL-04)', async () => {
+  it('API-205 answers googleSignIn when both Google client values are set, and googleSignUp only with the self-registration setting too — no mail transport needed (PORTAL-04); selfRegistration follows the setting alone', async () => {
     const both = { GOOGLE_OAUTH_CLIENT_ID: 'client.apps.googleusercontent.com', GOOGLE_OAUTH_CLIENT_SECRET: 'test-only-secret' };
     const cases: Array<[unknown, Record<string, string>, boolean, boolean]> = [
       [{ selfRegistration: { enabled: true } }, {}, false, false],
@@ -134,13 +135,13 @@ describe('AcademyService', () => {
       [{ selfRegistration: { enabled: true } }, both, true, true],
     ];
     for (const [settings, env, signIn, signUp] of cases) {
-      // MAIL_TRANSPORT=none: Google sign-up does not depend on a transport, the e-mail sign-up does.
+      // MAIL_TRANSPORT=none: neither sign-up depends on a transport any more.
       const { service } = makeService({ ...ROW, settings: settings as typeof ROW.settings }, 'none', env);
       const dto = await service.getPublic();
       const label = `${JSON.stringify(settings)} ${Object.keys(env).join(',')}`;
       expect(dto.googleSignIn, label).toBe(signIn);
       expect(dto.googleSignUp, label).toBe(signUp);
-      expect(dto.selfRegistration, label).toBe(false);
+      expect(dto.selfRegistration, label).toBe((settings as { selfRegistration?: { enabled?: unknown } }).selfRegistration?.enabled === true);
     }
   });
 

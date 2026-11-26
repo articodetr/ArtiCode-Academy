@@ -471,7 +471,7 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     ]);
   });
 
-  it('PORTAL-03 (TEST-320) — settings.selfRegistration.enabled: a JSON boolean for the manager only, one event per change, null clears, and API-205 stays closed without a mail transport', async () => {
+  it('PORTAL-03 (TEST-320) — settings.selfRegistration.enabled: a JSON boolean for the manager only, one event per change, null clears, and API-205 opens with it alone — no mail transport needed', async () => {
     await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { selfRegistration: { enabled: null } } }).expect(200);
     const m = await mark();
     for (const enabled of ['true', 1, [], {}]) {
@@ -481,9 +481,9 @@ describe.skipIf(!available)('MOD-02/MOD-14 academy settings (e2e, TEST-036)', ()
     const on = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { selfRegistration: { enabled: true } } }).expect(200);
     expect(on.body.settings.selfRegistration).toEqual({ enabled: true });
     await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { selfRegistration: { enabled: true } } }).expect(200); // same value: nothing
-    // vitest.config.e2e.ts forces MAIL_TRANSPORT=none: switched on, yet not open to visitors.
+    // vitest.config.e2e.ts forces MAIL_TRANSPORT=none: the direct registration needs no transport, so it is open.
     const open = await api().get(`${ACADEMY}/public`).expect(200);
-    expect(open.body.selfRegistration).toBe(false);
+    expect(open.body.selfRegistration).toBe(true);
     const cleared = await api().patch(ACADEMY).set(bearer('manager')).send({ settings: { selfRegistration: { enabled: null } } }).expect(200);
     expect(cleared.body.settings.selfRegistration).toEqual({ enabled: null });
     expect((await eventsSince(m)).map((event) => event.metadata)).toEqual([

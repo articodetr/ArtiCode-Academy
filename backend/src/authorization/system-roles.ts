@@ -36,8 +36,8 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     key: 'teacher',
     label: { ar: 'معلم', en: 'Teacher' },
     description: {
-      ar: 'يدير فصوله ودروسه وواجباته واختباراته ودرجاته',
-      en: 'Manages own classes, lessons, assignments, exams and grades',
+      ar: 'يدير فصوله ودروسه واختباراته ودرجاته',
+      en: 'Manages own classes, lessons, exams and grades',
     },
     isDefaultForSignup: false,
     permissions: [
@@ -51,9 +51,8 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       'attendance.read',
       'attendance.record',
       'recordings.manage',
-      'assignments.read',
-      'assignments.manage',
-      'assignments.grade',
+      // No `assignments.read|manage|grade` since 20261126141500_teacher_without_assignments: a teacher no longer
+      // manages assignments (MOD-08). The academy admin keeps them; a custom role can still grant them.
       'exams.read',
       'exams.manage',
       'exams.grade',

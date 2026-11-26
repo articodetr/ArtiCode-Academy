@@ -50,7 +50,7 @@ export const publicBrowsingSchema = z.boolean();
 
 /**
  * PORTAL-03 (#207): whether the academy lets visitors create their own student
- * account — a JSON boolean; `null` = off. It alone opens nothing: see
+ * account — a JSON boolean; `null` = off. Read it through
  * `isSelfRegistrationOpen()`.
  */
 export const selfRegistrationEnabledSchema = z.boolean();
@@ -142,12 +142,14 @@ export function readSettings(stored: unknown): AcademySettings {
 }
 
 /**
- * PORTAL-03 (#207): visitors may register only when the academy switched it on
- * AND a confirmation e-mail can leave the server — an account is never activated
- * without proof of the address, so the `none` transport keeps it closed.
+ * PORTAL-03/04 (#207): visitors may create their own student account exactly
+ * when the academy switched it on (`settings.selfRegistration.enabled === true`).
+ * Since the direct registration (PORTAL-04) the account is created ACTIVE and
+ * the visitor signed in at once — no confirmation e-mail — so no mail transport
+ * is needed: the address simply stays unconfirmed (`email_verified_at` NULL).
  */
-export function isSelfRegistrationOpen(settings: AcademySettings, mailTransport: string): boolean {
-  return settings.selfRegistration.enabled === true && mailTransport !== 'none';
+export function isSelfRegistrationOpen(settings: AcademySettings): boolean {
+  return settings.selfRegistration.enabled === true;
 }
 
 /** True when the stored object carries the key at all, valid or not (so `null` can clear a corrupt value). */

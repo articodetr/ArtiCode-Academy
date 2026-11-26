@@ -1,7 +1,8 @@
 // TEST-171 — MOD-13-T05 the WF-14 journey «a report from real data» (roadmap §4k.5 T05) through
 // the API against the live development database. Skipped when no database is reachable.
 // Writers: a director (custom role for the class, enrollment and finance keys), a teacher with
-// the seeded `teacher` role and a student with the seeded `student` role. Readers: a clerk with
+// the seeded `teacher` role (plus a custom role with the assignment keys the seeded role no longer
+// holds) and a student with the seeded `student` role. Readers: a clerk with
 // the seeded `staff` role (attendance + financial reports) and an academic reader (custom role
 // with reports.academic.view). Every report reads the suite's own course or class, so the shared
 // dev DB never pollutes a number; the readers record no audit event. Everything is deleted at the end.
@@ -17,6 +18,7 @@ import { PasswordService } from '../src/auth/password.service.js';
 import { postgresUrlFromEnv } from '../src/config/database-url.js';
 import { ENV_FILE_PATHS } from '../src/config/env-files.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { TEACHER_REVOKED_ASSIGNMENT_KEYS } from './assignment-writer.helpers.js';
 
 loadDotenv({ path: [...ENV_FILE_PATHS], quiet: true });
 
@@ -68,9 +70,9 @@ describe.skipIf(!available)('MOD-13 the WF-14 journey «a report from real data�
     return role.id;
   }
 
-  async function createUser(name: string, role: string): Promise<void> {
+  async function createUser(name: string, role: string | readonly string[]): Promise<void> {
     const user = await prisma.user.create({
-      data: { email: email(name), fullName: `Journey ${name} ${RUN}`, passwordHash: await passwords.hash(PASSWORD), status: 'active', roles: { create: [{ roleId: role }] } },
+      data: { email: email(name), fullName: `Journey ${name} ${RUN}`, passwordHash: await passwords.hash(PASSWORD), status: 'active', roles: { create: [role].flat().map((roleId) => ({ roleId })) } },
       select: { id: true },
     });
     createdUserIds.push(user.id);
@@ -87,7 +89,7 @@ describe.skipIf(!available)('MOD-13 the WF-14 journey «a report from real data�
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL! }) });
     passwords = new PasswordService();
     await createUser('director', await roleId('director', DIRECTOR_KEYS));
-    await createUser('teacher', await roleId('teacher'));
+    await createUser('teacher', [await roleId('teacher'), await roleId('assign', TEACHER_REVOKED_ASSIGNMENT_KEYS)]);
     await createUser('student', await roleId('student'));
     await createUser('clerk', await roleId('staff'));
     await createUser('reader', await roleId('reader', ['reports.academic.view']));
