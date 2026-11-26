@@ -110,8 +110,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // learner keys gets no entry, no route (403), no search group and no «add» card; any other role key keeps it.
   { key: 'users', path: '/users', labelKey: 'nav.users', icon: createElement(TeamOutlined), permissions: ['users.read'], exceptRoleKeysOnly: ['teacher', 'student', 'guardian'], module: 'MOD-03' },
   { key: 'roles', path: '/settings/roles', labelKey: 'nav.roles', icon: createElement(SafetyOutlined), permissions: ['roles.manage'], module: 'MOD-03' },
-  // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too.
-  { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], exceptRoleKeysOnly: ['student', 'guardian'], module: 'MOD-04' },
+  // MOD-04-T05 (CH-0047): gated by the key the server enforces (ADR-042 pattern) — staff see it too. J-F71 (Jallal's request,
+  // 2026-11-26): «الدورات والمستويات» is the office's catalog screen — a teacher reads the published courses there with
+  // `courses.read` but has no use for the page (their classes, lessons and exams have their own), so the teachers are
+  // excepted like the learners; the key stays theirs on the server (API-226 and the lesson forms read with it).
+  { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], exceptRoleKeysOnly: ['teacher', 'student', 'guardian'], module: 'MOD-04' },
   // MOD-05 (J-F01): the classes API is real — gated by the one key every read of `/api/classes` requires
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
   // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16).
