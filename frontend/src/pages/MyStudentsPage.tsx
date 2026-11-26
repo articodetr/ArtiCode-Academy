@@ -139,14 +139,14 @@ export function MyStudentsPage() {
             {t('myStudents.count', { count: state.items.length })}
           </Typography.Paragraph>
           {state.truncated ? <Alert type="info" showIcon title={t('myStudents.truncated')} style={{ marginBottom: 16 }} /> : null}
-          <Row gutter={[16, 16]} style={{ opacity: loading ? 0.6 : 1 }}>
+          <Row gutter={[12, 12]} style={{ opacity: loading ? 0.6 : 1 }}>
             {state.items.map((item) => (
-              <Col key={item.student.id} xs={24} md={12} xl={8}>
-                <Card hoverable onClick={() => navigate(`/my-students/${item.student.id}`)} data-testid={`student-card-${item.student.id}`} style={{ height: '100%' }}>
-                  <Flex vertical gap={10}>
+              <Col key={item.student.id} xs={24} sm={12} md={8} lg={6}>
+                <Card hoverable size="small" onClick={() => navigate(`/my-students/${item.student.id}`)} data-testid={`student-card-${item.student.id}`} style={{ height: '100%' }}>
+                  <Flex vertical gap={6}>
                     <Flex gap={12} align="center">
-                      <Avatar size={48} src={item.student.avatarUrl ?? undefined} icon={<UserOutlined />} />
-                      <Typography.Title level={4} style={{ margin: 0 }}>
+                      <Avatar size={36} src={item.student.avatarUrl ?? undefined} icon={<UserOutlined />} />
+                      <Typography.Title level={5} style={{ margin: 0 }}>
                         <bdi>{displayNameOf(item.student)}</bdi>
                       </Typography.Title>
                     </Flex>
@@ -163,7 +163,7 @@ export function MyStudentsPage() {
                     <div>
                       <RateTag attendance={item.attendance} />
                     </div>
-                    <Button type="primary" size="large" block>
+                    <Button type="primary" block>
                       {t('myStudents.open')}
                     </Button>
                   </Flex>
