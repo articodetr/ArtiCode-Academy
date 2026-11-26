@@ -68,6 +68,7 @@ async function openCreateDialog() {
 async function fillRequired(dialog: HTMLElement, code: string) {
   fireEvent.mouseDown(within(dialog).getByLabelText(ar.classes.fields.course))
   fireEvent.click(await screen.findByText('PY-101 — أساسيات بايثون', { selector: '.ant-select-item-option-content' }))
+  await userEvent.clear(within(dialog).getByLabelText(ar.classes.fields.code)) // a new one starts with a generated code (CH-0373)
   await userEvent.type(within(dialog).getByLabelText(ar.classes.fields.code), code)
   await userEvent.type(within(dialog).getByLabelText(ar.classes.fields.nameAr), 'فصل جديد')
   await userEvent.type(within(dialog).getByLabelText(ar.classes.fields.capacity), '15')
@@ -174,6 +175,7 @@ describe('ClassesPage', () => {
     await waitFor(() => expect(api.queries).toHaveLength(1))
 
     const dialog = await openCreateDialog()
+    await userEvent.clear(within(dialog).getByLabelText(ar.classes.fields.code)) // a new one starts with a generated code (CH-0373)
     await userEvent.type(within(dialog).getByLabelText(ar.classes.fields.code), 'PY A')
     await userEvent.type(within(dialog).getByLabelText(ar.classes.fields.nameAr), 'فصل')
     await userEvent.type(within(dialog).getByLabelText(ar.classes.fields.capacity), '10')

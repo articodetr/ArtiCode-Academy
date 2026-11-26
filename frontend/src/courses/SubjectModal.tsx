@@ -2,15 +2,15 @@
 // new subject (appended at the end of the order), PATCH /api/subjects/:id with the smallest body for an existing one (no
 // request when nothing changed). A taken code lands on the code field; any other refusal shows inside the modal. The
 // parent mounts it per session (a form instance kept across sessions would bring back an earlier subject's values).
-import { ThunderboltOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Col, Form, Input, Modal, Row, Space, Switch } from 'antd'
+import { Alert, App, Col, Form, Input, Modal, Row, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createSubject, updateSubject } from '../api/subjects'
 import type { Subject } from '../api/subjects'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
-import { SUBJECT_CODE_PREFIX, generateUniqueCode } from './codeGenerator'
+import { SUBJECT_CODE_PREFIX, generateUniqueCode } from '../common/codeGenerator'
+import { GenerateCodeButton } from '../common/GenerateCodeButton'
 import { COURSE_TEXT_MAX_LENGTH, normaliseCourseCode } from './courses.form'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { EMPTY_SUBJECT_FORM, SUBJECT_CODE_MAX_LENGTH, SUBJECT_CODE_PATTERN, buildCreateSubjectInput, planSubjectPatch, subjectFormValuesOf } from './subjects.form'
@@ -106,17 +106,9 @@ export function SubjectModal({ open, subject, onClose, onSaved, takenCodes = [] 
         >
           <Input dir="ltr" maxLength={SUBJECT_CODE_MAX_LENGTH} placeholder="MATH" style={{ maxWidth: 200 }} />
         </Form.Item>
-        <Space style={{ marginTop: -16, marginBottom: 16 }}>
-          <Button
-            size="small"
-            icon={<ThunderboltOutlined />}
-            onClick={() => {
-              form.setFields([{ name: 'code', value: generateUniqueCode(SUBJECT_CODE_PREFIX, takenCodes), errors: [] }])
-            }}
-          >
-            {t('courses.generateCode')}
-          </Button>
-        </Space>
+        <div style={{ marginTop: -16, marginBottom: 16 }}>
+          <GenerateCodeButton form={form} prefix={SUBJECT_CODE_PREFIX} takenCodes={takenCodes} />
+        </div>
         <Row gutter={12}>
           <Col xs={24}>
             <Form.Item

@@ -6,6 +6,8 @@ import { Col, Form, Input, InputNumber, Row, Switch } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { CoursePicker } from './ClassPickers'
+import { CLASS_CODE_PREFIX, LONG_CODE_BODY } from '../common/codeGenerator'
+import { GenerateCodeButton } from '../common/GenerateCodeButton'
 import { CLASS_CAPACITY_MAX, CLASS_CODE_PATTERN, CLASS_NAME_MAX_LENGTH, CLASS_NOTES_MAX_LENGTH, invalidDateRange, normaliseClassCode } from './classes.form'
 
 interface ClassFormFieldsProps {
@@ -48,6 +50,9 @@ export function ClassFormFields({ form, mode, enrolledCount = 0 }: ClassFormFiel
       >
         <Input dir="ltr" maxLength={32} placeholder="PY-101-A" style={{ maxWidth: 220 }} />
       </Form.Item>
+      <div style={{ marginTop: -16, marginBottom: 16 }}>
+        <GenerateCodeButton form={form} prefix={CLASS_CODE_PREFIX} bodyLength={LONG_CODE_BODY} />
+      </div>
       <Row gutter={12}>
         <Col xs={24}>
           <Form.Item

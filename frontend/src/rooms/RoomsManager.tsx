@@ -227,6 +227,7 @@ export function RoomsManager() {
       {/* Mounted per session: its form starts from the chosen room, never from the values of an earlier session (KI-049). */}
       {editing !== null ? (
         <RoomModal
+          takenCodes={list.rooms.map((item) => item.code)}
           key={editing === 'new' ? 'new' : editing.id}
           open
           room={editing === 'new' ? null : editing}

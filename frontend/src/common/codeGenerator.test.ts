@@ -1,7 +1,7 @@
 // TEST-332 — the random subject/level code (CH-0372).
 import { describe, expect, it } from 'vitest'
-import { LEVEL_CODE_PATTERN } from './levels.form'
-import { SUBJECT_CODE_PATTERN } from './subjects.form'
+import { LEVEL_CODE_PATTERN } from '../courses/levels.form'
+import { SUBJECT_CODE_PATTERN } from '../courses/subjects.form'
 import { LEVEL_CODE_PREFIX, SUBJECT_CODE_PREFIX, generateUniqueCode } from './codeGenerator'
 
 describe('generateUniqueCode', () => {

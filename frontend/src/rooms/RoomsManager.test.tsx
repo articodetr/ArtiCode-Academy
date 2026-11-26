@@ -109,6 +109,7 @@ describe('RoomsManager (J-F06)', () => {
 
     fireEvent.click(screen.getByText(ar.rooms.add).closest('button')!)
     const dialog = (await screen.findByText(ar.rooms.createTitle)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.clear(within(dialog).getByLabelText(ar.rooms.fields.code)) // a new one starts with a generated code (CH-0373)
     await userEvent.type(within(dialog).getByLabelText(ar.rooms.fields.code), 'lab-2')
     await userEvent.type(within(dialog).getByLabelText(ar.rooms.fields.nameAr), 'مختبر 2')
     await userEvent.type(within(dialog).getByLabelText(ar.rooms.fields.capacity), '20')
@@ -127,6 +128,7 @@ describe('RoomsManager (J-F06)', () => {
 
     fireEvent.click(screen.getByText(ar.rooms.add).closest('button')!)
     const dialog = (await screen.findByText(ar.rooms.createTitle)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.clear(within(dialog).getByLabelText(ar.rooms.fields.code)) // a new one starts with a generated code (CH-0373)
     await userEvent.type(within(dialog).getByLabelText(ar.rooms.fields.code), 'V1')
     await pick(ar.rooms.fields.kind, ar.rooms.kinds.virtual, within(dialog))
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.rooms.fields.branch))
@@ -222,6 +224,7 @@ describe('RoomsManager (J-F06)', () => {
 
     fireEvent.click(screen.getByText(ar.rooms.add).closest('button')!)
     const dialog = (await screen.findByText(ar.rooms.createTitle)).closest('[role="dialog"]') as HTMLElement
+    await userEvent.clear(within(dialog).getByLabelText(ar.rooms.fields.code)) // a new one starts with a generated code (CH-0373)
     await userEvent.type(within(dialog).getByLabelText(ar.rooms.fields.code), 'hall')
     fireEvent.click(within(dialog).getByText(ar.rooms.create).closest('button')!)
 

@@ -220,7 +220,7 @@ export function BranchesManager() {
 
       {/* Mounted per session: its form starts from the chosen branch, never from the values of an earlier session (KI-049). */}
       {editing !== null ? (
-        <BranchModal key={editing === 'new' ? 'new' : editing.id} open branch={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />
+        <BranchModal takenCodes={branches.map((item) => item.code)} key={editing === 'new' ? 'new' : editing.id} open branch={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />
       ) : null}
     </Card>
   )

@@ -3,8 +3,9 @@
 // (taken code, course not published, date range) is shown on that field;
 // anything else above the form.
 import { Alert, Form, Modal } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { CLASS_CODE_PREFIX, LONG_CODE_BODY, generateUniqueCode } from '../common/codeGenerator'
 import { createClass } from '../api/classes'
 import type { AcademyClass } from '../api/classes'
 import { ClassFormFields } from './ClassFormFields'
@@ -22,6 +23,11 @@ export function CreateClassModal({ open, onClose, onCreated }: CreateClassModalP
   const { t } = useTranslation()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
+  // CH-0373: every opening starts with a new generated code; the user may type their own or press «توليد رمز».
+  // The class list loads page by page, so the code is long enough that a clash with an unseen one is negligible.
+  useEffect(() => {
+    if (open) form.setFieldsValue({ code: generateUniqueCode(CLASS_CODE_PREFIX, [], undefined, LONG_CODE_BODY) })
+  }, [open, form])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

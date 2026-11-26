@@ -4,15 +4,15 @@
 // any other refusal shows inside the modal. The parent mounts it per session
 // (a form instance kept across sessions would bring back an earlier level's values).
 // Every length rule words its own message (courses.validation.maxLength — J-F23).
-import { ThunderboltOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Col, Form, Input, Modal, Row, Space, Switch } from 'antd'
+import { Alert, App, Col, Form, Input, Modal, Row, Switch } from 'antd'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createLevel, updateLevel } from '../api/levels'
 import type { Level } from '../api/levels'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
-import { LEVEL_CODE_PREFIX, generateUniqueCode } from './codeGenerator'
+import { LEVEL_CODE_PREFIX, generateUniqueCode } from '../common/codeGenerator'
+import { GenerateCodeButton } from '../common/GenerateCodeButton'
 import { COURSE_TEXT_MAX_LENGTH, normaliseCourseCode } from './courses.form'
 import { describeCoursesFailure, failureMessage } from './courses.errors'
 import { EMPTY_LEVEL_FORM, LEVEL_CODE_MAX_LENGTH, LEVEL_CODE_PATTERN, buildCreateLevelInput, levelFormValuesOf, planLevelPatch } from './levels.form'
@@ -116,17 +116,9 @@ export function LevelModal({ open, level, onClose, onSaved, takenCodes = [] }: L
         >
           <Input dir="ltr" maxLength={LEVEL_CODE_MAX_LENGTH} placeholder="BEG" style={{ maxWidth: 200 }} />
         </Form.Item>
-        <Space style={{ marginTop: -16, marginBottom: 16 }}>
-          <Button
-            size="small"
-            icon={<ThunderboltOutlined />}
-            onClick={() => {
-              form.setFields([{ name: 'code', value: generateUniqueCode(LEVEL_CODE_PREFIX, takenCodes), errors: [] }])
-            }}
-          >
-            {t('courses.generateCode')}
-          </Button>
-        </Space>
+        <div style={{ marginTop: -16, marginBottom: 16 }}>
+          <GenerateCodeButton form={form} prefix={LEVEL_CODE_PREFIX} takenCodes={takenCodes} />
+        </div>
         <Row gutter={12}>
           <Col xs={24}>
             <Form.Item
