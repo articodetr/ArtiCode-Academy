@@ -84,7 +84,8 @@ interface PermissionGatedItem extends NavItemBase {
    * API-113) answer them an empty list (D-R16, D-R40, D-R48) — their own work
    * comes through ownership instead. A viewer holding any other role key (a
    * teacher who is also a guardian) keeps the entry. The users page excepts
-   * teachers too (J-F70).
+   * teachers too (J-F70), so do the courses page (J-F71) and, since teachers
+   * no longer manage assignments (2026-11-26), the assignments page.
    */
   exceptRoleKeysOnly?: readonly string[]
   roles?: undefined
@@ -157,18 +158,22 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // (`assignments.read` at controller level; `assignments.manage` only adds writes), with the learners excepted (roadmap
   // §4g T06): students and guardians hold the key by seed but are assigned to no class, so the list would stay empty —
   // their own assignments come with «my assignments» (API-112, MOD-08-T04). Staff hold no assignments.* key (matrix 7.2).
+  // Teachers no longer manage assignments (2026-11-26 — the seeded `teacher` role lost assignments.read|manage|grade): a
+  // viewer whose role keys are only teacher and/or learner keys gets no entry, no route (403), no search group and no
+  // «review submissions» action — a teacher who is also a guardian holds assignments.read through the guardian role and
+  // is excepted all the same, like the users page (J-F70); any other role key (staff, an admin, a custom role) keeps it.
   {
     key: 'assignments',
     path: '/assignments',
     labelKey: 'nav.assignments',
     icon: createElement(FileTextOutlined),
     permissions: ['assignments.read'],
-    exceptRoleKeysOnly: ['student', 'guardian'],
+    exceptRoleKeysOnly: ['teacher', 'student', 'guardian'],
     module: 'MOD-08',
   },
   // MOD-08 (J-F42): «my assignments» (API-112) needs no permission key — ownership, the API-060 rule (D-R40); shown to whoever
-  // holds the `student` or `guardian` server role, like «my lessons» (a teacher who is also a guardian keeps it next to
-  // «assignments»; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
+  // holds the `student` or `guardian` server role, like «my lessons» (a teacher who is also a guardian keeps it — as a
+  // learner's page; a teacher or an admin alone gets no entry — the server would answer an empty list). Submitting from the
   // page needs `assignments.submit` on top (the student's seed key); a guardian reads and never submits.
   { key: 'myAssignments', path: '/my-assignments', labelKey: 'nav.myAssignments', icon: createElement(FileDoneOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-08' },
   // MOD-09 (J-F50): «my exams» (API-121) needs no permission key — ownership, the API-060 rule (D-R48, as «my assignments»);
@@ -184,7 +189,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // keys reaches the page and gets the server's 403 message.
   { key: 'myCertificates', path: '/my-certificates', labelKey: 'nav.myCertificates', icon: createElement(TrophyOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-10' },
   // MOD-09 (J-F45): the exams API is real — gated by the one key every read of `/api/exams` requires (`exams.read` at
-  // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted like «assignments»:
+  // controller level; `exams.manage` and `exams.grade` only add writes), with the learners excepted (the teachers keep it):
   // students and guardians hold the key by seed but are assigned to no class, so the list would stay empty — their own exams
   // come with «my exams» (API-121, a later part of MOD-09-T08). Staff hold no exams.* key (matrix 7.2).
   {

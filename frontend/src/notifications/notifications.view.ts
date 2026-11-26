@@ -23,6 +23,18 @@ export function notificationZone(academy: { timezone?: unknown } | null | undefi
   return academyTimeZoneOf(academy) ?? deviceTimeZone()
 }
 
+/**
+ * The categories the inbox filter and the e-mail switches offer this viewer: every one, but «assignments» for a viewer
+ * whose only server role key is `teacher` — teachers no longer manage assignments (2026-11-26) and the assignment events
+ * reach students and guardians only (MOD-12), so nothing of that category ever comes to them. A teacher who is also a
+ * student or a guardian keeps it (their own or their children's work). A switch left out keeps its value: the save
+ * sends the whole set (`planPreferencesSave()`).
+ */
+export function categoriesFor(roles: readonly string[]): NotificationCategory[] {
+  const teacherOnly = roles.length > 0 && roles.every((key) => key === 'teacher')
+  return teacherOnly ? NOTIFICATION_CATEGORIES.filter((category) => category !== 'assignments') : [...NOTIFICATION_CATEGORIES]
+}
+
 export type PreferenceSwitches = Record<NotificationCategory, boolean>
 
 /** The six switches of an API-171 answer; a category the answer lacks reads as on (a missing row = on). */

@@ -1,7 +1,8 @@
 // /login (MOD-01; PORTAL-04 redesign): the sign-in card of the academy's site, in the frame of the account pages
 // (auth/AuthLayout.tsx). The identifier and the password; «نسيت كلمة المرور؟»; «أو» and «المتابعة باستخدام Google» —
-// enabled only while API-205 says `googleSignIn`; «ليس لديك حساب؟ أنشئ حسابك الآن» only while a visitor may create an
-// account (`selfRegistration` or `googleSignUp`); «تصفّح الدورات» while the catalog is public.
+// enabled only while API-205 says `googleSignIn`; under them «ليس لديك حساب؟ إنشاء حساب جديد» (to /register with the same
+// `returnTo`) only while a visitor may create an account (`selfRegistration` or `googleSignUp`); «تصفّح الدورات» while the
+// catalog is public.
 //
 // Where a sign-in leads (returnPath.ts): the return path the page was opened with (`?returnTo=` — the public course
 // page's visitor button —, else the router state's `from` — RequireAuth), else for a student the course kept on this
@@ -94,8 +95,6 @@ export function LoginPage() {
   // Why the visitor is (back) at the password form: the second step ended, or a password reset sent them here.
   // From the router state only a known notice id (and the whole minutes of a lock) is ever read — never text.
   const [notice, setNotice] = useState<ShownSignInNotice | null>(() => signInNoticeOf(location.state))
-  // Arrived from a finished registration: fixed on arrival, because the notice itself clears at the first sign-in attempt.
-  const [justRegistered] = useState(() => signInNoticeOf(location.state)?.id === 'registration_completed')
   // API-205, once the visitor is known to be signed out: the catalog (D-R138), registration (#221) and Google flags.
   const publicAcademy = usePublicAcademy(status === 'anonymous')
   const academy = publicAcademy.academy
@@ -170,10 +169,10 @@ export function LoginPage() {
           description={
             <>
               {/* «الحسابات تُنشئها إدارة الأكاديمية» is untrue while a visitor may create one; the second step speaks of neither. */}
-              {!accountsOpen && !justRegistered ? (
+              {!accountsOpen ? (
                 <div>{t('login.enrollIntent.text')}</div>
               ) : !challenge ? (
-                <div>{t(justRegistered ? 'studentRegistration.entry.courseAfterRegister' : 'studentRegistration.entry.courseNote')}</div>
+                <div>{t('studentRegistration.entry.courseNote')}</div>
               ) : null}
               {isCatalogPublic(academy) ? (
                 <Link to={`/explore/${encodeURIComponent(intentCourse)}`}>{t('login.enrollIntent.back')}</Link>
@@ -226,9 +225,9 @@ export function LoginPage() {
             returnTo={from}
           />
 
-          {/* Creating an account, carrying the chosen course (a path `requestedReturnPath()` already checked). Not to
-              someone who has just finished creating one. */}
-          {accountsOpen && !justRegistered ? (
+          {/* «ليس لديك حساب؟ إنشاء حساب جديد» under the form, carrying the chosen course (a path `requestedReturnPath()`
+              already checked) as `?returnTo=`. */}
+          {accountsOpen ? (
             <AuthPrompt question={t('studentRegistration.entry.noAccount')} testId="login-register">
               <Link to={withReturnTo('/register', from)}>{t('studentRegistration.entry.createAccountNow')}</Link>
             </AuthPrompt>

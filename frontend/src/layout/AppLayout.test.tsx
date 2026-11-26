@@ -100,11 +100,14 @@ describe('AppLayout navigation', () => {
     expect(labels).toContain(ar.nav.myLessons)
   })
 
-  it('shows a teacher «exams» right after «assignments» and selects it on /exams; a student holding exams.read does not see it (J-F45)', () => {
-    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['classes.read', 'assignments.read', 'exams.read', 'exams.manage', 'exams.grade'] })
+  it('shows a teacher «exams» — no «assignments» since 2026-11-26, even with the key — and selects it on /exams; a student holding exams.read does not see it (J-F45)', () => {
+    // A session from before the seed change still carries assignments.read: the teacher gets no assignments entry all the same.
+    const teacher = makeUser({ role: 'teacher', roles: ['teacher'], permissions: ['classes.read', 'assignments.read', 'exams.read', 'exams.manage', 'exams.grade', 'questions.manage'] })
     const { unmount } = renderWithProviders(<AppLayout />, { auth: makeAuth({ user: teacher }), route: '/exams' })
     const labels = menuLabels()
-    expect(labels.indexOf(ar.nav.exams)).toBe(labels.indexOf(ar.nav.assignments) + 1)
+    expect(labels).not.toContain(ar.nav.assignments)
+    expect(labels).toContain(ar.nav.exams)
+    expect(labels.indexOf(ar.nav.questionBanks)).toBe(labels.indexOf(ar.nav.exams) + 1)
     const selected = document.querySelectorAll('.ant-menu-item-selected')
     expect(selected).toHaveLength(1)
     expect(selected[0]).toHaveTextContent(ar.nav.exams)
@@ -550,6 +553,23 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     expect(academics[1]).toEqual([ar.nav.classesForTeacher, ar.nav.lessons, ar.nav.schedule])
     const mine = sections(menu).find(([heading]) => heading === ar.nav.groups.mine)!
     expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
+  })
+
+  it('leaves «assignments» out of a teacher’s «evaluation» section — exams and question banks follow each other — and keeps it for a teacher who is also an admin (2026-11-26)', () => {
+    const teacherKeys = ['users.read', 'courses.read', 'classes.read', 'lessons.read', 'schedule.read', 'exams.read', 'exams.manage', 'questions.manage', 'grades.read_all']
+    const { unmount } = renderShell(makeUser({ role: 'teacher', roles: ['teacher'], permissions: teacherKeys }))
+    const menu = siderMenu()
+    expect(labelsIn(menu)).not.toContain(ar.nav.assignments)
+    expect(sections(menu)).toEqual([
+      [ar.nav.groups.academics, [ar.nav.classesForTeacher, ar.nav.lessons, ar.nav.schedule]],
+      [ar.nav.groups.assessment, [ar.nav.exams, ar.nav.questionBanks]],
+      [ar.nav.groups.followUp, [ar.nav.notifications]],
+    ])
+    unmount()
+
+    renderShell(makeUser({ role: 'admin', roles: ['academy_admin', 'teacher'], permissions: [...teacherKeys, 'assignments.read'] }))
+    const assessment = sections(siderMenu()).find(([heading]) => heading === ar.nav.groups.assessment)!
+    expect(assessment[1]).toEqual([ar.nav.assignments, ar.nav.exams, ar.nav.questionBanks])
   })
 
   it('gives a learner-only viewer a horizontal TabseetCourse pill bar instead of the vertical Sider on desktop, without Explore Courses and with no headings, and navigates from it (J-F66)', async () => {

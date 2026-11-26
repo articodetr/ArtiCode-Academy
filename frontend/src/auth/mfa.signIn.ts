@@ -213,7 +213,6 @@ export type SignInNotice =
   | 'password_changed'
   | 'password_changed_step_ended'
   | 'password_changed_account_locked'
-  | 'registration_completed'
 
 type SignInNoticeType = 'success' | 'warning'
 
@@ -240,8 +239,6 @@ export const SIGN_IN_NOTICES: Readonly<Record<SignInNotice, SignInNoticeSpec>> =
     timedKey: 'login.mfa.notices.passwordChangedLockedFor',
     type: 'warning',
   },
-  /** A student finished their own registration (PORTAL-04): the link opens no session, so they sign in now. */
-  registration_completed: { key: 'studentRegistration.notices.accountCreated', type: 'success' },
 }
 
 /** The longest lock the server can name: AUTH_LOCKOUT_MINUTES goes up to 1440 (backend env.schema.ts). */

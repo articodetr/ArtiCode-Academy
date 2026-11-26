@@ -120,6 +120,26 @@ describe('DashboardPage — the teacher’s dashboard (the classic staff dashboa
     expect(urls.some((url) => url.startsWith('/api/lessons') || url.startsWith('/api/classes'))).toBe(false)
   })
 
+  it('shows a teacher no assignment card, number or link — not the overview’s «awaiting review» either, even with the assignments keys — and keeps the other cards (2026-11-26)', async () => {
+    const urls = mockDashboardApi()
+    const permissions = [...MANAGER, 'exams.read', 'assignments.read', 'assignments.manage', 'assignments.grade']
+    renderWithProviders(<DashboardPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions }) }) })
+
+    await waitFor(() => expect(within(cardOf(ar.dashboard.stats.activeStudents)).getByText('42')).toBeInTheDocument())
+    expect(await within(cardOf(ar.dashboard.todayLessons)).findByText('المتغيرات')).toBeInTheDocument()
+    expect(await within(cardOf(ar.dashboard.classes.title)).findByText('بايثون — الفصل أ')).toBeInTheDocument()
+    expect(screen.getByText(ar.dashboard.recentNotifications)).toBeInTheDocument()
+    // The number row holds the students, today's lessons and the money — three equal cards, no fourth slot.
+    const numberCols = Array.from(document.querySelectorAll('.ant-statistic')).map((card) => card.closest('.ant-col') as HTMLElement)
+    expect(numberCols).toHaveLength(3)
+    for (const col of numberCols) expect(col).toHaveClass('ant-col-sm-8')
+    // The overview's 5 submissions waiting for review are not shown, and nothing names or links to the assignments.
+    expect(screen.queryByText('5')).toBeNull()
+    expect(screen.queryByText(ar.nav.assignments)).toBeNull()
+    expect(document.querySelector('a[href^="/assignments"]')).toBeNull()
+    expect(urls.some((url) => url.startsWith('/api/assignments') || url.startsWith('/api/me/assignments') || url.startsWith('/api/submissions'))).toBe(false)
+  })
+
   it('shows a failed overview as a short error with a retry, and the other cards still load', async () => {
     let calls = 0
     mockDashboardApi({

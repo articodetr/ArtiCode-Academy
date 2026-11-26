@@ -7,15 +7,18 @@
 // ever shown, and since PORTAL-04 neither the age range nor the sessions; the
 // school subject (`course.subject`) replaced the difficulty. The facts read
 // المادة · المدة · المحتوى (the published lessons), then الرسوم and the buttons.
-// «سجّل في هذه الدورة» keeps the course on this device (keepCourse()) and sends
-// the visitor to /login?returnTo=<the course in the signed-in catalog plus the
-// enroll intent, `/catalog/<id>?intent=enroll`>, which scrolls to its classes
-// once signed in — nothing enrolls by itself. While API-205 says an account may
-// be created (`selfRegistration` or `googleSignUp` — accountCreationOpen()), a
-// quiet «إنشاء حساب» beside it leads to /register?returnTo=… the same way and
-// the note under them says so; otherwise the note only invites the sign-in (the
-// page reads API-205 once and hands it to the shell). Both links still carry the
-// return path in the router state too (`from`), as before. Since PORTAL-04 PR-2 the button shows only while a visitor can go
+// «اشترك الآن» leads a visitor on with the course in the signed-in catalog plus
+// the enroll intent (`/catalog/<id>?intent=enroll`) as `returnTo` — where, once
+// signed in, a free course enrolls and a paid one sends a request (MOD-19);
+// nothing enrolls by itself. While API-205 says an account may be created
+// (`selfRegistration` or `googleSignUp` — accountCreationOpen()), the button opens
+// a dialog with the two ways on: «تسجيل الدخول» → /login?returnTo=… and «إنشاء
+// حساب جديد» → /register?returnTo=…, and the note under the button says so;
+// otherwise the button goes straight to /login?returnTo=… and the note only
+// invites the sign-in (the page reads API-205 once and hands it to the shell).
+// Either way the course is kept on this device (keepCourse()) and the return path
+// travels in the router state too (`from`), as before. A signed-in user never
+// sees the dialog: PublicOnly sends them to /catalog/<id>. Since PORTAL-04 PR-2 the button shows only while a visitor can go
 // on to enroll (`publicEnrollStateOf()`: a class open, a free seat, a usable price);
 // otherwise «التسجيل غير متاح حالياً» says why and the details stay readable. A
 // paid course says that it becomes a request with an invoice, activated after
@@ -31,11 +34,21 @@
 // title, badges, counts, short text and availability; the enrollment card beside
 // it; «الوصف» and «الخطة الدراسية» below, each only with real data. API-237 has no
 // learning outcomes and no teacher, so neither section exists.
-import { ArrowLeftOutlined, ArrowRightOutlined, BookOutlined, ClockCircleOutlined, InfoCircleOutlined, LoginOutlined, ReadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Collapse, Skeleton } from 'antd'
-import type { KeyboardEvent, ReactNode } from 'react'
+import {
+  ArrowLeftOutlined,
+  ArrowRightOutlined,
+  BookOutlined,
+  ClockCircleOutlined,
+  InfoCircleOutlined,
+  LoginOutlined,
+  ReadOutlined,
+  UserAddOutlined,
+} from '@ant-design/icons'
+import { Alert, Button, Card, Collapse, Flex, Modal, Skeleton, Typography } from 'antd'
+import { useState } from 'react'
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
 import { isCatalogNotPublic } from '../api/publicCatalog'
 import type { PublicCourseDetail, PublicOutlineLevel } from '../api/publicCatalog'
@@ -92,6 +105,8 @@ function PublicCourse({ courseId, accountsOpen }: { courseId: string; accountsOp
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const { course, error, reload } = usePublicCourse(courseId)
+  // The dialog of the two ways on (sign in / a new account), opened by «اشترك الآن» while an account can be created.
+  const [choosing, setChoosing] = useState(false)
   // Back to the results the course was opened from (`?q=` of this page), else to all programs.
   const backPath = explorePathFor(exploreSearchOf(params))
   const back = <BackButton onClick={() => navigate(backPath)} />
@@ -141,6 +156,12 @@ function PublicCourse({ courseId, accountsOpen }: { courseId: string; accountsOp
       ? `${t('publicCatalog.card.lessons', { count: course.lessonCount })} · ${t('publicCatalog.card.levels', { count: course.levelCount })}`
       : t('publicCatalog.card.lessons', { count: course.lessonCount })
   const levels = course.outline.filter((level) => level.lessons.length > 0)
+  // Where a visitor goes on (a path `visitorSignInPath()`/`visitorRegisterPath()` built): the chosen course waits on this
+  // device for the way back, and the router state carries it too.
+  const goOn = (path: string) => {
+    keepCourse(course.id)
+    navigate(path, { state: { from: enrollIntentPath(course.id) } })
+  }
 
   const sections: CoursePageSection[] = []
   if (description) {
@@ -179,16 +200,66 @@ function PublicCourse({ courseId, accountsOpen }: { courseId: string; accountsOp
             course={course}
             accountsOpen={accountsOpen}
             onEnroll={() => {
-              // The chosen course waits on this device for the way back (the agreed contract of #207 has no server `next`).
-              keepCourse(course.id)
-              navigate(visitorSignInPath(course.id), { state: { from: enrollIntentPath(course.id) } })
+              // Nobody can create an account here: straight to the sign-in, as before.
+              if (accountsOpen) setChoosing(true)
+              else goOn(visitorSignInPath(course.id))
             }}
           />
         }
         sections={sections}
         navLabel={t('publicCatalog.course.sectionsNav')}
       />
+      <EnrollChoiceModal
+        open={choosing && accountsOpen}
+        courseId={course.id}
+        onClose={() => setChoosing(false)}
+        onChoose={(path) => {
+          setChoosing(false)
+          goOn(path)
+        }}
+      />
     </>
+  )
+}
+
+/**
+ * «اشترك الآن» for a visitor while an account can be created: «تسجيل الدخول» or «إنشاء حساب جديد», each with the course as
+ * `returnTo`. Real links (a new tab works too); a plain click goes through the router.
+ */
+function EnrollChoiceModal({
+  open,
+  courseId,
+  onClose,
+  onChoose,
+}: {
+  open: boolean
+  courseId: string
+  onClose: () => void
+  onChoose: (path: string) => void
+}) {
+  const { t } = useTranslation()
+  const signIn = visitorSignInPath(courseId)
+  const register = visitorRegisterPath(courseId)
+  const follow = (path: string) => (event: MouseEvent<HTMLElement>) => {
+    // A modified click (a new tab or window) is the browser's own.
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return
+    event.preventDefault()
+    onChoose(path)
+  }
+  return (
+    <Modal open={open} title={t('publicCatalog.course.enrollTitle')} onCancel={onClose} footer={null} destroyOnHidden centered>
+      <div data-testid="public-enroll-choice">
+        <Typography.Paragraph type="secondary">{t('publicCatalog.course.enrollChoice.text')}</Typography.Paragraph>
+        <Flex vertical gap={12}>
+          <Button type="primary" size="large" block icon={<LoginOutlined />} href={signIn} onClick={follow(signIn)}>
+            {t('publicCatalog.course.enrollChoice.signIn')}
+          </Button>
+          <Button size="large" block icon={<UserAddOutlined />} href={register} onClick={follow(register)}>
+            {t('publicCatalog.course.enrollChoice.register')}
+          </Button>
+        </Flex>
+      </div>
+    </Modal>
   )
 }
 
@@ -251,20 +322,15 @@ function CourseEnrollment({ course, accountsOpen, onEnroll }: { course: PublicCo
       {enrollState === 'enrollable' ? (
         <div className="course-enroll__action" data-testid="public-enroll">
           <div className="course-enroll__buttons">
-            <Button type="primary" size="large" icon={<LoginOutlined />} onClick={onEnroll}>
+            <Button
+              type="primary"
+              size="large"
+              icon={<LoginOutlined />}
+              onClick={onEnroll}
+              aria-haspopup={accountsOpen ? 'dialog' : undefined}
+            >
               {t('publicCatalog.course.enroll')}
             </Button>
-            {accountsOpen ? (
-              <Link
-                to={visitorRegisterPath(course.id)}
-                state={{ from: enrollIntentPath(course.id) }}
-                onClick={() => keepCourse(course.id)}
-                className="course-enroll__subscribe"
-                data-testid="public-course-register"
-              >
-                {t('publicCatalog.course.createAccount')}
-              </Link>
-            ) : null}
           </div>
           <p className="course-enroll__note" data-testid="public-enroll-note">
             {t(accountsOpen ? 'publicCatalog.course.signInOrRegisterNote' : 'publicCatalog.course.signInNote')}

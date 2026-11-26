@@ -3,7 +3,8 @@
 // an unread one carries a chalk dot and a bold title. Opening one marks it read
 // (API-169 — the row shows the server's answer) and follows its `data.link`
 // inside the app; «mark all as read» (API-170 — of the chosen category only,
-// when one is chosen) re-reads the list. Times are in the academy's zone.
+// when one is chosen) re-reads the list. Times are in the academy's zone. The
+// category filter offers a teacher-only viewer no «assignments» (`categoriesFor()`).
 // The inbox follows the header bell: the bell's count (useLatestUnread — no
 // second poll) is compared with its count when the list was last read from its
 // first page; a higher one offers the new notifications in a bar (the list
@@ -13,13 +14,14 @@ import { Alert, App, Button, Empty, Flex, Segmented, Select, Skeleton, Tag, Typo
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router'
-import { NOTIFICATION_CATEGORIES, markAllNotificationsRead, markNotificationRead } from '../api/notifications'
+import { markAllNotificationsRead, markNotificationRead } from '../api/notifications'
 import type { MyNotification, NotificationCategory } from '../api/notifications'
 import { useAcademy } from '../academy/useAcademy'
+import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
 import { formatLessonDateTime } from '../lessons/lessons.format'
 import { describeNotificationsFailure, failureMessage } from './notifications.errors'
-import { notificationLink, notificationZone } from './notifications.view'
+import { categoriesFor, notificationLink, notificationZone } from './notifications.view'
 import { refreshUnreadCount, useLatestUnread } from './useUnreadCount'
 import { useInbox } from './useInbox'
 import type { InboxFilters } from './useInbox'
@@ -37,6 +39,7 @@ export function InboxTab() {
   const navigate = useNavigate()
   const location = useLocation()
   const { academy } = useAcademy()
+  const { user } = useAuth()
   const zone = notificationZone(academy)
   const inbox = useInbox()
   const [markingAll, setMarkingAll] = useState(false)
@@ -121,7 +124,7 @@ export function InboxTab() {
           aria-label={t('notifications.inbox.category')}
           value={inbox.filters.category}
           onChange={(value) => setFilters({ category: value })}
-          options={NOTIFICATION_CATEGORIES.map((category) => ({ value: category, label: t(`notifications.categories.${category}`) }))}
+          options={categoriesFor(user?.roles ?? []).map((category) => ({ value: category, label: t(`notifications.categories.${category}`) }))}
           style={{ minWidth: 180 }}
         />
         <Button icon={<ReloadOutlined />} onClick={reload} aria-label={t('notifications.inbox.refresh')} />

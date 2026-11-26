@@ -1,11 +1,12 @@
-// A student creating their own account (PORTAL-04, contract v3 — the owner's request of 2026-11-25). Public routes: no
-// access token, no session refresh. The password is chosen on /register, and the e-mailed link activates the account only
-// when the person types that same password again: someone who registers another person's address cannot take the account
-// over when its owner clicks the link (the owner does not know the password), and the person who registered proves both
-// the mailbox and the password. The completion then opens the session directly, like an accepted invitation.
-// `POST /api/account/register` answers 202 with no body whatever the address, so nothing about an account is revealed.
-// The raw token goes only to its own route and is never stored. Every screen stays closed behind `selfRegistration` of
-// API-205 (isSelfRegistrationOpen()).
+// A student creating their own account (PORTAL-04 — the owner's request of 2026-11-26: no e-mail to confirm). Public
+// routes: no access token, no session refresh. `POST /api/account/register` creates the account ACTIVE as a student (its
+// e-mail not verified) and signs it in at once: it answers 201 with the session body of a sign-in (API-005 — the access
+// token in the JSON, the refresh cookie set by the server), so register() stores the token like completeRegistration()
+// does and the caller adopts the session. An address that already has an account is `409 email_in_use` (nothing about
+// that account changes). The password goes once, exactly as typed, and is never stored. Every screen stays closed behind
+// `selfRegistration` of API-205 (isSelfRegistrationOpen()).
+// The e-mailed link of the earlier contract (v3: GET …/register/:token and POST …/register/:token/complete) is kept for
+// the links already sent (StudentRegisterCompletePage.tsx); its raw token goes only to its own route and is never stored.
 import { setAccessToken } from '../auth/token-store'
 import { apiRequest } from './client'
 import type { SessionResponse } from './client'
@@ -48,11 +49,22 @@ export const REGISTRATION_PATHS = {
 } as const
 
 /**
- * 202 with no body. 403 registration_disabled | origin_forbidden, 400 registration_invalid { fields, unknown },
- * 400 password_weak { problems } (checked before the 202: it says nothing about any account), 429 rate_limited.
+ * Creates the student account and opens its session: 201 with the session body, whose access token is stored here (in
+ * memory) — the refresh cookie by the server; the caller adopts the session. 403 registration_disabled |
+ * origin_forbidden, 400 registration_invalid { fields, unknown }, 400 password_weak { problems },
+ * 409 email_in_use { field: 'email' }, 429 rate_limited. Only the four fields of the contract are sent.
  */
-export async function requestRegistration(input: RegisterInput): Promise<void> {
-  await apiRequest<void>(REGISTRATION_PATHS.register, { method: 'POST', body: input, auth: false, retry: false })
+export async function register(input: RegisterInput): Promise<SessionResponse> {
+  const body: RegisterInput = { fullName: input.fullName, email: input.email, password: input.password }
+  if (input.locale !== undefined) body.locale = input.locale
+  const session = await apiRequest<SessionResponse>(REGISTRATION_PATHS.register, {
+    method: 'POST',
+    body,
+    auth: false,
+    retry: false,
+  })
+  setAccessToken(session.accessToken, session.user.id)
+  return session
 }
 
 /** 404 registration_link_invalid, 410 registration_link_expired, 403 registration_disabled. */

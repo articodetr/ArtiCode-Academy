@@ -3,19 +3,23 @@
 // Saved as ONE PUT of the six switches, only when something changed; the
 // screen then shows the server's answer. `emailAvailable` false: the academy
 // sends no e-mail at all; `emailVerified` false: nothing is e-mailed until the
-// caller confirms an address — the switches are still kept.
+// caller confirms an address — the switches are still kept. A teacher-only viewer
+// gets no «assignments» switch (`categoriesFor()` — 2026-11-26); its value is kept
+// and saved with the others.
 import { Alert, App, Button, Flex, Skeleton, Switch, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { NOTIFICATION_CATEGORIES, getNotificationPreferences, updateNotificationPreferences } from '../api/notifications'
+import { getNotificationPreferences, updateNotificationPreferences } from '../api/notifications'
+import { useAuth } from '../auth/auth-context'
 import type { NotificationPreferences } from '../api/notifications'
 import { describeNotificationsFailure, failureMessage } from './notifications.errors'
-import { planPreferencesSave, switchesOf } from './notifications.view'
+import { categoriesFor, planPreferencesSave, switchesOf } from './notifications.view'
 import type { PreferenceSwitches } from './notifications.view'
 
 export function PreferencesTab() {
   const { t } = useTranslation()
   const { message } = App.useApp()
+  const { user } = useAuth()
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null)
   const [draft, setDraft] = useState<PreferenceSwitches | null>(null)
   const [loadError, setLoadError] = useState<unknown>(null)
@@ -81,7 +85,7 @@ export function PreferencesTab() {
         <Alert type="warning" showIcon title={t('notifications.preferences.emailUnverified')} style={{ marginBottom: 16 }} />
       ) : null}
       <ul className="notif-prefs__list">
-        {NOTIFICATION_CATEGORIES.map((category) => {
+        {categoriesFor(user?.roles ?? []).map((category) => {
           const label = t(`notifications.categories.${category}`)
           return (
             <li key={category} className="notif-prefs__row">

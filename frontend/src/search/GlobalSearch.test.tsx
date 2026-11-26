@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
+import { makeAssignment, makeAssignmentList } from '../test/assignments'
 import { makeLesson } from '../test/lessons'
 import { makeListItem } from '../test/users'
 import { GlobalSearch } from './GlobalSearch'
@@ -67,6 +68,47 @@ describe('GlobalSearch (redesign)', () => {
     expect(screen.queryByText(ar.nav.classes)).not.toBeInTheDocument()
     expect(screen.queryByText('إنشاء فصل')).not.toBeInTheDocument()
     expect(document.querySelector('.gsearch-group')?.textContent ?? '').not.toContain('الفصول')
+  })
+
+  it('offers a teacher-only viewer no assignment page, action or record, even with the keys — exams and lessons are still searched; an admin keeps them (2026-11-26)', async () => {
+    const urls: string[] = []
+    mockFetch((url) => {
+      urls.push(url)
+      const path = new URL(url, 'http://localhost').pathname
+      if (path === '/api/assignments') return jsonResponse(200, makeAssignmentList([makeAssignment({ id: 'a-7', title: { ar: 'واجب الحلقات' } })]))
+      if (path === '/api/me/notifications/unread-count') return jsonResponse(200, { unread: 0 })
+      return jsonResponse(200, { items: [], nextCursor: null })
+    })
+    // A session from before the seed change still carries the assignments keys: the teacher gets nothing of them all the same.
+    const teacherKeys = ['classes.read', 'lessons.read', 'attendance.record', 'exams.read', 'exams.grade', 'assignments.read', 'assignments.manage', 'assignments.grade']
+    for (const roles of [['teacher'], ['teacher', 'guardian']]) {
+      urls.length = 0
+      const { unmount } = renderWithProviders(<GlobalSearch />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles, permissions: teacherKeys }) }), route: '/' })
+      fireEvent.click(screen.getByLabelText(ar.search.open))
+      const input = await screen.findByLabelText(ar.search.placeholder)
+      // Before typing: the exam action is offered, the review of submissions is not.
+      expect(await screen.findByText(ar.search.actions.enterResults)).toBeInTheDocument()
+      expect(screen.queryByText(ar.search.actions.reviewSubmissions)).not.toBeInTheDocument()
+
+      fireEvent.change(input, { target: { value: 'الواجبات' } })
+      await waitFor(() => expect(urls.some((url) => url.startsWith('/api/exams?'))).toBe(true))
+      expect(urls.some((url) => url.startsWith('/api/lessons?'))).toBe(true)
+      expect(urls.some((url) => url.startsWith('/api/assignments'))).toBe(false)
+      expect(screen.queryByText(ar.nav.assignments)).not.toBeInTheDocument()
+      expect(screen.queryByText('واجب الحلقات')).not.toBeInTheDocument()
+      unmount()
+    }
+
+    urls.length = 0
+    renderWithProviders(<GlobalSearch />, { auth: makeAuth({ user: makeUser({ permissions: ['assignments.read', 'assignments.grade'] }) }), route: '/' })
+    fireEvent.click(screen.getByLabelText(ar.search.open))
+    const input = await screen.findByLabelText(ar.search.placeholder)
+    expect(await screen.findByText(ar.search.actions.reviewSubmissions)).toBeInTheDocument()
+    fireEvent.change(input, { target: { value: 'الواجبات' } })
+    expect(await screen.findByText('واجب الحلقات')).toBeInTheDocument()
+    // «الواجبات» twice: the page found by its name and the heading of the records.
+    expect(screen.getAllByText(ar.nav.assignments)).toHaveLength(2)
+    expect(urls.some((url) => url.startsWith('/api/assignments?'))).toBe(true)
   })
 
   it('finds lessons by title (q, CH-0226) through the lessons list and opens them on their page', async () => {

@@ -572,19 +572,29 @@ describe('LoginPage — the public catalog and the intended action (MOD-20, D-R1
       expect((await screen.findByTestId('path')).textContent).toBe('/register')
     })
 
-    it('does not invite someone who has just finished registering to create another account', async () => {
+    it('words the way to a new account «ليس لديك حساب؟ إنشاء حساب جديد», under the sign-in form', async () => {
+      mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
+      renderLogin(makeAuth(), INTENT)
+      const prompt = await screen.findByTestId('login-register')
+      expect(prompt).toHaveTextContent('ليس لديك حساب؟ إنشاء حساب جديد')
+      expect(within(prompt).getByRole('link', { name: 'إنشاء حساب جديد' })).toHaveAttribute(
+        'href',
+        `/register?returnTo=${encodeURIComponent(INTENT)}`,
+      )
+      // Below the form: after its submit button in the document.
+      const submit = prompt.closest('section')!.querySelector('button[type="submit"]')!
+      expect(submit.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('still offers the way to a new account to a visitor who arrives with an old «registration completed» notice', async () => {
       const fetchMock = mockPublicAcademy(makePublicAcademy({ selfRegistration: true }))
       renderWithProviders(<LoginPage />, {
         auth: makeAuth(),
         route: { pathname: '/login', state: { notice: 'registration_completed', from: INTENT } },
       })
       await settle(fetchMock)
-      expect(screen.getByText(ar.studentRegistration.notices.accountCreated)).toBeInTheDocument()
-      expect(registerLink()).not.toBeInTheDocument()
-      const notice = screen.getByTestId('login-enroll-intent')
-      expect(notice).toHaveTextContent(entry.courseAfterRegister)
-      expect(notice).not.toHaveTextContent(entry.courseNote)
-      expect(notice).not.toHaveTextContent(ar.login.enrollIntent.text)
+      expect(registerLink()).toBeInTheDocument()
+      expect(screen.getByTestId('login-enroll-intent')).toHaveTextContent(entry.courseNote)
     })
 
     it('shows no way to register, and no talk of accounts, during the second step of a sign-in', async () => {

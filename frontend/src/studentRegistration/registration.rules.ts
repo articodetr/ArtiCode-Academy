@@ -1,4 +1,4 @@
-// Pure rules of a student creating their own account (PORTAL-04, contract v3): the limits of the name and the e-mail,
+// Pure rules of a student creating their own account (PORTAL-04): the limits of the name and the e-mail,
 // and the password with its confirmation, mirrored for immediate feedback (the server stays the judge). A length of the
 // name or the e-mail is counted in characters as a person sees them (code points), so an emoji is one; the password
 // follows the invitation's policy mirror (account.links.ts — backend passwordProblems()). No React, no I/O.

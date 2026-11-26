@@ -105,6 +105,19 @@ describe('describeRegisterFailure', () => {
     })
   })
 
+  it('puts 409 email_in_use under the e-mail field, in words that lead on', () => {
+    expect(describeRegisterFailure(refused(409, 'email_in_use', { field: 'email' }))).toEqual({
+      kind: 'fields',
+      fields: [{ name: 'email', messages: [{ key: 'studentRegistration.errors.emailInUse' }] }],
+    })
+    // Whatever field the server names, the address is the one in use.
+    expect(describeRegisterFailure(refused(409, 'email_in_use'))).toEqual(describeRegisterFailure(refused(409, 'email_in_use', { field: 'email' })))
+    expect(i18n.t('studentRegistration.errors.emailInUse', { lng: 'ar' })).toBe('هذا البريد الإلكتروني مسجّل بالفعل. سجّل الدخول أو استخدم بريدًا آخر.')
+    expect(i18n.t('studentRegistration.errors.emailInUse', { lng: 'en' })).toBe(
+      'This e-mail address already has an account. Sign in or use another address.',
+    )
+  })
+
   it('answers a refusal that names no shown field with a general message', () => {
     expect(describeRegisterFailure(refused(400, 'registration_invalid', { fields: {}, unknown: ['role'] }))).toEqual({
       kind: 'message',
