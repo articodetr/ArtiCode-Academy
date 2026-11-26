@@ -27,6 +27,27 @@
 }
 
 /*
+ * The page's scrollbar never moves the shell (J-F73): its place is kept on every page of the layout, scrolling or not,
+ * so the side menu and the header no longer jump sideways by the scrollbar's width between a short page and a long one
+ * (they did at the inline end of an Arabic page, beside the side menu). Only on the shell's pages — the sign-in page,
+ * the learning workspace and the print pages keep the browser's default.
+ *
+ * antd's scroll lock (an open modal or drawer) hides the page's overflow and narrows <body> by the scrollbar's width
+ * (@rc-component/portal useScrollLocker); the kept gutter already holds that width, so the narrowing would move the
+ * shell the other way — `width: auto` cancels it. Not `overflow-y: scroll`: the lock then clips <body> and the page
+ * jumps back to its top whenever a modal opens.
+ */
+@supports (scrollbar-gutter: stable) and selector(:has(*)) {
+  :root:has(.app-shell) {
+    scrollbar-gutter: stable;
+  }
+
+  :root:has(.app-shell) body {
+    width: auto !important;
+  }
+}
+
+/*
  * The desktop side menu stays in view while the page scrolls: the menu scrolls inside it, between the brand and the
  * trigger bar (antd keeps the trigger's height free at the bottom — `ant-layout-sider-has-trigger`).
  */
