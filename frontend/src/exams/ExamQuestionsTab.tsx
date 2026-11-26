@@ -26,23 +26,31 @@
 //     and, for a holder of `exams.grade`, «تصحيح المفتاح» (CorrectKeyModal —
 //     API-272), whose counts the tab shows before it re-reads.
 //
+// CH-0376: the draft editor adds a question in one of two ways — «اختيار من بنك الأسئلة» (the picker above) or
+// «كتابة سؤال جديد»: the bank page's QuestionEditor in its `forExam` mode, whose question is kept in the bank of the
+// exam's course (courseQuestionBank(): «أسئلة <الدورة>», created when the course has none) and appended to the list
+// like a picked one. With no question yet, the two ways are shown as two cards.
+//
 // «معاينة كطالب» (ExamPreviewModal) is there in every view: the SAVED questions
 // as a learner will see them, without the key — so it waits for a save while
 // the editor differs. While the editor holds a set that differs from the saved
 // one, or the key dialog holds a typed reason, the tab reports it
 // (`onUnsavedChange`), so the drawer keeps it on Escape, a mask click, its
 // close button, a browser back and a reload; false after a save and on unmount.
-import { ArrowDownOutlined, ArrowUpOutlined, CheckCircleFilled, DeleteOutlined, EyeOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Empty, Flex, InputNumber, Popconfirm, Skeleton, Space, Tag, Tooltip, Typography, theme } from 'antd'
+import { ArrowDownOutlined, ArrowUpOutlined, CheckCircleFilled, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, KeyOutlined, ReloadOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Col, Empty, Flex, InputNumber, Popconfirm, Row, Skeleton, Space, Tag, Tooltip, Typography, theme } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EXAM_QUESTIONS_MAX, getExamQuestions, replaceExamQuestions } from '../api/examQuestions'
 import type { ExamQuestionItem, ExamQuestions, KeyCorrectionResult } from '../api/examQuestions'
 import type { Exam } from '../api/exams'
+import type { QuestionBank } from '../api/questionBanks'
+import type { ScheduleCourse } from '../api/timetable'
 import { QUESTION_POINTS_LIMIT, QUESTION_POINTS_MIN } from '../api/questionBanks'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
+import { QuestionEditor } from '../questions/QuestionEditor'
 import { formatDateTime, localizedLabel } from '../users/users.format'
 import { CorrectKeyModal } from './CorrectKeyModal'
 import { ExamPreviewModal } from './ExamPreviewModal'
@@ -51,8 +59,9 @@ import { describeQuestionSetFailure } from './examQuestions.errors'
 import type { ExamQuestionsFailure, RefusedRowReason } from './examQuestions.errors'
 import { addQuestions, formatHundredths, moveRow, planQuestionsSave, removeRow, roomLeft, rowsOf, setRowPoints, totalHundredths, totalMatchesMaxScore } from './examQuestions.set'
 import type { QuestionRow, RowProblem } from './examQuestions.set'
+import { courseQuestionBank } from './courseQuestionBank'
 import { answerChoicesOf } from './examQuestions.view'
-import { failureMessage } from './exams.errors'
+import { describeExamsFailure, failureMessage } from './exams.errors'
 import { examTitle } from './exams.format'
 import { isClassFrozenForExams } from './exams.status'
 
@@ -213,6 +222,7 @@ export function ExamQuestionsTab({ exam, onChanged, onUnsavedChange }: ExamQuest
           key={`${data.examId}:${version}`}
           data={data}
           maxScore={exam.maxScore}
+          course={exam.class.course}
           reloading={loading}
           previewButton={previewButton}
           onSaved={(saved) => {
@@ -378,6 +388,8 @@ interface QuestionSetEditorProps {
   data: ExamQuestions
   /** The exam's maximum score as the drawer holds it (the «Y» of the total). */
   maxScore: number
+  /** The exam's course: a question written here is kept in its bank (CH-0376). */
+  course: ScheduleCourse
   /** A re-read is on its way. */
   reloading: boolean
   /** «معاينة كطالب»: it shows the SAVED set, so it waits for a save while the rows differ. */
@@ -390,7 +402,7 @@ interface QuestionSetEditorProps {
   onUnsavedChange: (unsaved: boolean) => void
 }
 
-function QuestionSetEditor({ data, maxScore, reloading, previewButton, onSaved, onStale, onReload, onUnsavedChange }: QuestionSetEditorProps) {
+function QuestionSetEditor({ data, maxScore, course, reloading, previewButton, onSaved, onStale, onReload, onUnsavedChange }: QuestionSetEditorProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [rows, setRows] = useState<QuestionRow[]>(() => rowsOf(data.items))
@@ -399,6 +411,23 @@ function QuestionSetEditor({ data, maxScore, reloading, previewButton, onSaved, 
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [picking, setPicking] = useState(false)
+  const { language } = useLocalized()
+  // «كتابة سؤال جديد»: the bank is being found (or made), then the editor is open on it.
+  const [findingBank, setFindingBank] = useState(false)
+  const [writingIn, setWritingIn] = useState<QuestionBank | null>(null)
+
+  const startWriting = async () => {
+    if (findingBank) return
+    setFindingBank(true)
+    setError(null)
+    try {
+      setWritingIn(await courseQuestionBank(course, t('examOnline.editor.write.bankName', { course: localizedLabel(course.name, language) })))
+    } catch (caught) {
+      setError(t('examOnline.editor.write.bankError', { reason: failureMessage(t, describeExamsFailure(caught)) }))
+    } finally {
+      setFindingBank(false)
+    }
+  }
 
   const plan = planQuestionsSave(data.items, rows)
   // Rows the save would send — or refuse instead of sending — are unsaved work; rows changed back hold nothing.
@@ -493,8 +522,11 @@ function QuestionSetEditor({ data, maxScore, reloading, previewButton, onSaved, 
         </Space>
         <Space wrap>
           {previewButton(unsaved)}
-          <Button ref={addRef} icon={<PlusOutlined />} onClick={() => setPicking(true)} disabled={saving || room === 0} title={room === 0 ? t('examOnline.editor.maxReached', { max: EXAM_QUESTIONS_MAX }) : undefined}>
-            {t('examOnline.editor.add')}
+          <Button ref={addRef} icon={<DatabaseOutlined />} onClick={() => setPicking(true)} disabled={saving || room === 0} title={room === 0 ? t('examOnline.editor.maxReached', { max: EXAM_QUESTIONS_MAX }) : undefined}>
+            {t('examOnline.editor.pickFromBank')}
+          </Button>
+          <Button icon={<EditOutlined />} onClick={() => void startWriting()} loading={findingBank} disabled={saving || room === 0} title={room === 0 ? t('examOnline.editor.maxReached', { max: EXAM_QUESTIONS_MAX }) : undefined}>
+            {t('examOnline.editor.writeNew')}
           </Button>
           {unsaved ? (
             <Popconfirm title={t('examOnline.editor.discardConfirm')} okText={t('examOnline.editor.discard')} cancelText={t('common.cancel')} onConfirm={discard} disabled={saving}>
@@ -522,7 +554,33 @@ function QuestionSetEditor({ data, maxScore, reloading, previewButton, onSaved, 
       {data.problems.includes('questions_not_ready') ? <Alert type="warning" showIcon title={t('examOnline.editor.serverNotReady')} /> : null}
       {error ? <Alert type="error" showIcon title={error} data-testid="exam-questions-error" /> : null}
 
-      {rows.length === 0 ? <Empty description={t('examOnline.editor.empty')} /> : null}
+      {rows.length === 0 ? (
+        <Flex vertical gap={12} data-testid="exam-questions-choose">
+          <Typography.Text strong>
+            {t('examOnline.editor.empty')} {t('examOnline.editor.chooseHow')}
+          </Typography.Text>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} sm={12}>
+              <Card hoverable={!saving} onClick={() => (saving ? undefined : setPicking(true))} style={{ height: '100%', textAlign: 'center' }}>
+                <DatabaseOutlined style={{ fontSize: 28 }} />
+                <Typography.Title level={5} style={{ marginTop: 8 }}>
+                  {t('examOnline.editor.pickFromBank')}
+                </Typography.Title>
+                <Typography.Text type="secondary">{t('examOnline.editor.pickFromBankHint')}</Typography.Text>
+              </Card>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Card hoverable={!saving} onClick={() => (saving ? undefined : void startWriting())} style={{ height: '100%', textAlign: 'center' }}>
+                <EditOutlined style={{ fontSize: 28 }} />
+                <Typography.Title level={5} style={{ marginTop: 8 }}>
+                  {t('examOnline.editor.writeNew')}
+                </Typography.Title>
+                <Typography.Text type="secondary">{t('examOnline.editor.writeNewHint')}</Typography.Text>
+              </Card>
+            </Col>
+          </Row>
+        </Flex>
+      ) : null}
       <div ref={listRef} role="list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {rows.map((row, index) => {
           const number = index + 1
@@ -587,6 +645,26 @@ function QuestionSetEditor({ data, maxScore, reloading, previewButton, onSaved, 
             setPicking(false)
           }}
           onClose={() => setPicking(false)}
+        />
+      ) : null}
+
+      {writingIn ? (
+        <QuestionEditor
+          // A new question per session (KI-049).
+          key={writingIn.id}
+          bank={writingIn}
+          question={null}
+          forExam
+          onClose={() => setWritingIn(null)}
+          onSaved={(question) => {
+            edit((current) => addQuestions(current, [question], writingIn))
+            setWritingIn(null)
+            message.success(t('examOnline.editor.write.added'))
+          }}
+          onStale={() => {
+            setWritingIn(null)
+            setError(t('examOnline.editor.write.bankError', { reason: t('questionBanks.errors.question_bank_not_found') }))
+          }}
         />
       ) : null}
     </Flex>
