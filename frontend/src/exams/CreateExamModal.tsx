@@ -26,9 +26,11 @@ interface CreateExamModalProps {
   open: boolean
   onClose: () => void
   onCreated: (exam: Exam) => void
+  /** CH-0374: opened from a class's page — the class is fixed and `place` names it. */
+  fixed?: { classId: string; place: string }
 }
 
-export function CreateExamModal({ open, onClose, onCreated }: CreateExamModalProps) {
+export function CreateExamModal({ open, onClose, onCreated, fixed }: CreateExamModalProps) {
   const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
   // The form lives in the body, mounted per open session; the modal only submits it (as CreateLessonModal).
@@ -50,7 +52,7 @@ export function CreateExamModal({ open, onClose, onCreated }: CreateExamModalPro
       width={820}
       destroyOnHidden
     >
-      {open ? <CreateExamBody onSaving={setSaving} onReady={onReady} onCreated={onCreated} /> : null}
+      {open ? <CreateExamBody fixed={fixed} onSaving={setSaving} onReady={onReady} onCreated={onCreated} /> : null}
     </Modal>
   )
 }
@@ -60,13 +62,14 @@ interface CreateExamBodyProps {
   /** This session's submit on mount, null on unmount. */
   onReady: (submit: (() => void) | null) => void
   onCreated: (exam: Exam) => void
+  fixed?: { classId: string; place: string }
 }
 
-function CreateExamBody({ onSaving, onReady, onCreated }: CreateExamBodyProps) {
+function CreateExamBody({ onSaving, onReady, onCreated, fixed }: CreateExamBodyProps) {
   const { t } = useTranslation()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
-  const [classId, setClassId] = useState<string | undefined>(undefined)
+  const [classId, setClassId] = useState<string | undefined>(fixed?.classId)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const context = useExamFormContext(form, classId)
@@ -97,8 +100,9 @@ function CreateExamBody({ onSaving, onReady, onCreated }: CreateExamBodyProps) {
   return (
     <>
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={NEW_EXAM_FORM_VALUES} onFinish={(values) => void submit(values as ExamFormValues)} disabled={saving}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={fixed ? { ...NEW_EXAM_FORM_VALUES, classId: fixed.classId } : NEW_EXAM_FORM_VALUES} onFinish={(values) => void submit(values as ExamFormValues)} disabled={saving}>
         <ExamFormFields
+          fixedPlace={fixed?.place}
           form={form}
           mode="create"
           hasClass={Boolean(classId)}

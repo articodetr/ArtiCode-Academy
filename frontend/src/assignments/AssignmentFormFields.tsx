@@ -31,9 +31,11 @@ interface AssignmentFormFieldsProps {
   gradingLocked?: boolean
   /** Create only: the chosen class changed (the lesson is reset by the caller). */
   onClassChange?: (classId: string | undefined) => void
+  /** CH-0374: created from its class's page — the class is fixed (a hidden field) and this line names it. */
+  fixedPlace?: string
 }
 
-export function AssignmentFormFields({ form, mode, hasClass, context, current, gradingLocked = false, onClassChange }: AssignmentFormFieldsProps) {
+export function AssignmentFormFields({ form, mode, hasClass, context, current, gradingLocked = false, onClassChange, fixedPlace }: AssignmentFormFieldsProps) {
   const { t } = useTranslation()
   // GET /api/classes needs classes.read at the controller: without it the class list stays unknown.
   const canReadClasses = useAuth().hasPermission('classes.read')
@@ -63,7 +65,14 @@ export function AssignmentFormFields({ form, mode, hasClass, context, current, g
 
   return (
     <>
-      {mode === 'create' ? (
+      {fixedPlace ? (
+        <>
+          <Alert type="info" showIcon title={fixedPlace} style={{ marginBottom: 16 }} />
+          <Form.Item name="classId" hidden>
+            <Input />
+          </Form.Item>
+        </>
+      ) : mode === 'create' ? (
         <Form.Item
           name="classId"
           label={t('assignments.fields.class')}

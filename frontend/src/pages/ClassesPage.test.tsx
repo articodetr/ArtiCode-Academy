@@ -5,6 +5,7 @@ import type { ClassList } from '../api/classes'
 import { ar } from '../i18n/ar'
 import { CLASS_ADMIN_PERMISSIONS, CLASS_COURSE_ID, CLASS_READER_PERMISSIONS, makeClass, makeClassList, makeClassTeacher, makeTeacherCandidate } from '../test/classes'
 import { makeCourse, makeCourseList } from '../test/courses'
+import { LocationProbe } from '../test/LocationProbe'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { makeUserList } from '../test/users'
@@ -52,7 +53,12 @@ function mockClassesApi(list: ClassList | Response, created: Response = jsonResp
 }
 
 function renderPage(permissions: string[]) {
-  return renderWithProviders(<ClassesPage />, { auth: makeAuth({ user: makeUser({ permissions }) }), route: '/classes' })
+  return renderWithProviders(<ClassesPage />, {
+    auth: makeAuth({ user: makeUser({ permissions }) }),
+    route: '/classes',
+    path: '/classes',
+    routes: { '/classes/:classId': <LocationProbe /> },
+  })
 }
 
 function bodyRows() {
@@ -141,19 +147,18 @@ describe('ClassesPage', () => {
     expect(api.queries.at(-1)?.get('courseId')).toBe(CLASS_COURSE_ID)
   })
 
-  it('creates a planned class: the course picker offers published courses, POST carries the normalised body, the list reloads', async () => {
+  it('creates a planned class: the course picker offers published courses, POST carries the normalised body, the new class opens on its own page (CH-0374)', async () => {
     const api = mockClassesApi(makeClassList([pyA]))
     renderPage(CLASS_ADMIN_PERMISSIONS)
     await screen.findByText('PY-101-A')
 
     const dialog = await openCreateDialog()
     await fillRequired(dialog, 'new-a')
-    const before = api.queries.length
     fireEvent.click(within(dialog).getByText(ar.classes.create.submit).closest('button')!)
 
     await waitFor(() => expect(api.posts).toEqual([{ courseId: CLASS_COURSE_ID, code: 'NEW-A', name: { ar: 'فصل جديد' }, capacity: 15 }]))
     expect(await screen.findByText('تم إنشاء الفصل «فصل جديد» بحالة «مخطَّط»')).toBeInTheDocument()
-    await waitFor(() => expect(api.queries.length).toBeGreaterThan(before))
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/classes/new-1')
     expect(api.courseQueries.some((query) => query.get('status') === 'published')).toBe(true)
   })
 
@@ -221,6 +226,13 @@ describe('ClassesPage', () => {
     expect(screen.getByText(ar.classes.pagination.next).closest('button')).toBeDisabled()
     expect(screen.getByText(ar.classes.pagination.previous).closest('button')).toBeEnabled()
     expect(cursors).toEqual([null, 'c2'])
+  })
+
+  it('opens a class on its own page when its row is clicked (CH-0374)', async () => {
+    mockClassesApi(makeClassList([pyA]))
+    renderPage(CLASS_READER_PERMISSIONS)
+    fireEvent.click(await screen.findByText('PY-101-A'))
+    expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', `/classes/${pyA.id}`)
   })
 
   it('caps the search at the 100 characters API-050 accepts for q (PR #26 note 5)', async () => {

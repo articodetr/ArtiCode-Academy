@@ -15,9 +15,12 @@ import { studentRegistration } from './en/studentRegistration'
 import { publicHome } from './en/publicHome'
 import { homepageImages } from './en/homepageImages'
 import { myStudents } from './en/teaching'
+import { classPage } from './en/classPage'
 
 export const en: Translation = {
   common: {
+    // CH-0372: the shared «generate a code» button of the subject, level, class, branch and room forms.
+    generateCode: 'Generate a code',
     searchByTitle: 'Search titles',
     pageSize: 'Items per page',
     sortOrder: 'Sort order',
@@ -4576,6 +4579,7 @@ export const en: Translation = {
   },
   // CH-0370: «My students» — a teacher's students.
   myStudents,
+  classPage,
   // MOD-19 (roadmap §4p): the catalog, «my courses» and the office's enrollment requests.
   catalog,
   myCourses,

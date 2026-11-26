@@ -23,9 +23,11 @@ interface CreateAssignmentModalProps {
   open: boolean
   onClose: () => void
   onCreated: (assignment: Assignment) => void
+  /** CH-0374: opened from a class's page — the class is fixed and `place` names it. */
+  fixed?: { classId: string; place: string }
 }
 
-export function CreateAssignmentModal({ open, onClose, onCreated }: CreateAssignmentModalProps) {
+export function CreateAssignmentModal({ open, onClose, onCreated, fixed }: CreateAssignmentModalProps) {
   const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
   // The form lives in the body, mounted per open session; the modal only submits it (as CreateLessonModal).
@@ -47,7 +49,7 @@ export function CreateAssignmentModal({ open, onClose, onCreated }: CreateAssign
       width={820}
       destroyOnHidden
     >
-      {open ? <CreateAssignmentBody onSaving={setSaving} onReady={onReady} onCreated={onCreated} /> : null}
+      {open ? <CreateAssignmentBody fixed={fixed} onSaving={setSaving} onReady={onReady} onCreated={onCreated} /> : null}
     </Modal>
   )
 }
@@ -57,13 +59,14 @@ interface CreateAssignmentBodyProps {
   /** This session's submit on mount, null on unmount. */
   onReady: (submit: (() => void) | null) => void
   onCreated: (assignment: Assignment) => void
+  fixed?: { classId: string; place: string }
 }
 
-function CreateAssignmentBody({ onSaving, onReady, onCreated }: CreateAssignmentBodyProps) {
+function CreateAssignmentBody({ onSaving, onReady, onCreated, fixed }: CreateAssignmentBodyProps) {
   const { t } = useTranslation()
   // Untyped so setFields accepts the string[] name paths of the error mapper.
   const [form] = Form.useForm()
-  const [classId, setClassId] = useState<string | undefined>(undefined)
+  const [classId, setClassId] = useState<string | undefined>(fixed?.classId)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const context = useAssignmentFormContext(form, classId)
@@ -94,8 +97,9 @@ function CreateAssignmentBody({ onSaving, onReady, onCreated }: CreateAssignment
   return (
     <>
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={NEW_ASSIGNMENT_VALUES} onFinish={(values) => void submit(values as AssignmentFormValues)} disabled={saving}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={fixed ? { ...NEW_ASSIGNMENT_VALUES, classId: fixed.classId } : NEW_ASSIGNMENT_VALUES} onFinish={(values) => void submit(values as AssignmentFormValues)} disabled={saving}>
         <AssignmentFormFields
+          fixedPlace={fixed?.place}
           form={form}
           mode="create"
           hasClass={Boolean(classId)}

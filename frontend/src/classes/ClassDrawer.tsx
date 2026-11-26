@@ -33,8 +33,12 @@
 // MOD-20 (D-R137): a «تقدّم التعلّم» tab after the students tab, for the same
 // readers as the roster (`canReadRoster()`) — each student's progress in the
 // course's lessons (ClassLearningProgressTab on API-235); it holds no editor.
-import { CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
+// CH-0374: `variant="page"` renders the same class as a full page (/classes/:classId — ClassPage) instead of a
+// drawer, with three more tabs: the class's lessons, homework and exams (ClassLessonsTab, ClassAssignmentsTab,
+// ClassExamsTab — each for its read key), so a teacher manages a class from one place. On the page, «رجوع»
+// navigates and the NavigationBlocker asks about unsaved work, as a browser back does.
+import { ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -54,7 +58,10 @@ import { useLocalized } from '../i18n/useLocalized'
 import { ClassLearningProgressTab } from '../learningProgress/ClassLearningProgressTab'
 import { ClassScheduleTab } from '../schedule/ClassScheduleTab'
 import { formatDateTime, formatDay, localizedLabel } from '../users/users.format'
+import { ClassAssignmentsTab } from './ClassAssignmentsTab'
+import { ClassExamsTab } from './ClassExamsTab'
 import { ClassFormFields } from './ClassFormFields'
+import { ClassLessonsTab } from './ClassLessonsTab'
 import { ClassTeachersTab } from './ClassTeachersTab'
 import { SeatsBar } from './SeatsBar'
 import { describeClassesFailure, failureMessage, isStaleClassAction } from './classes.errors'
@@ -74,10 +81,10 @@ const ICONS: Readonly<Record<ClassMenuAction, ReactNode>> = {
 
 const DASH = '—'
 
-type DrawerTab = 'details' | 'teachers' | 'students' | 'learning' | 'schedule' | 'gradebook' | 'certificates'
+type DrawerTab = 'details' | 'teachers' | 'students' | 'learning' | 'schedule' | 'lessons' | 'assignments' | 'exams' | 'gradebook' | 'certificates'
 
 /** The tabs whose editors report unsaved work (KI-052); the details edit form reports to the drawer itself, the learning progress, the gradebook and the certificates tab hold none. */
-type EditorTab = Exclude<DrawerTab, 'details' | 'learning' | 'gradebook' | 'certificates'>
+type EditorTab = Exclude<DrawerTab, 'details' | 'learning' | 'lessons' | 'assignments' | 'exams' | 'gradebook' | 'certificates'>
 
 const NOTHING_UNSAVED: Readonly<Record<EditorTab, boolean>> = { teachers: false, students: false, schedule: false }
 
@@ -91,9 +98,12 @@ interface ClassDrawerProps {
   onUpdated: (cls: AcademyClass) => void
   /** A planned class was deleted. */
   onDeleted: (classId: string) => void
+  /** CH-0374: `page` = the class's own page (no drawer; `onClose` leaves it), with the lessons/homework/exams tabs. */
+  variant?: 'drawer' | 'page'
 }
 
-export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDrawerProps) {
+export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 'drawer' }: ClassDrawerProps) {
+  const page = variant === 'page'
   const { t } = useTranslation()
   const { language } = useLocalized()
   const { user, hasPermission } = useAuth()
@@ -148,21 +158,25 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
     setRosterRefresh((count) => count + 1)
   }
 
-  const close = () => {
-    setCls(null)
-    setLoadError(null)
-    setTab('details')
+  const forget = () => {
     setEditing(false)
     setPending(null)
     setUnsavedTabs(NOTHING_UNSAVED)
     setDetailsUnsaved(false)
+  }
+  const close = () => {
+    setCls(null)
+    setLoadError(null)
+    setTab('details')
+    forget()
     onClose()
   }
 
   // The close button (Escape and the mask too when nothing is unsaved) asks first while an editor
   // holds unsaved work, and so does a browser back/forward (NavigationBlocker below) — one question
   // (common.unsaved.*); a reload or a tab close gets the browser's own prompt (KI-055).
-  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, close)
+  // On the page a discarded navigation only forgets the unsaved work: the navigation itself leaves the page.
+  const { requestClose, holdNavigation } = useUnsavedChangesGuard(unsaved, page ? forget : close)
 
   const applyUpdate = (updated: AcademyClass) => {
     setCls(updated)
@@ -228,36 +242,26 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
     )
   ) : null
 
-  return (
-    <Drawer
-      open={classId !== null}
-      onClose={requestClose}
-      // KI-052: unsaved work turns off the Escape key and the mask click; an open
-      // Select or Dropdown still closes on Escape (it sits on top of the drawer).
-      keyboard={!unsaved}
-      mask={{ closable: !unsaved }}
-      title={name}
-      size="large"
-      destroyOnHidden
-      extra={
-        canManage && cls && !editing ? (
-          <Space>
-            {tab === 'details' ? (
-              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-                {t('common.edit')}
-              </Button>
-            ) : null}
-            {menu.length > 0 ? (
-              <Dropdown trigger={['click']} destroyOnHidden menu={{ items: menu, onClick: ({ key }) => setPending(key as ClassMenuAction) }}>
-                <Button icon={<DownOutlined />} iconPlacement="end">
-                  {t('classes.actions.menu')}
-                </Button>
-              </Dropdown>
-            ) : null}
-          </Space>
-        ) : null
-      }
-    >
+  const headerActions =
+    canManage && cls && !editing ? (
+      <Space>
+        {tab === 'details' ? (
+          <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+            {t('common.edit')}
+          </Button>
+        ) : null}
+        {menu.length > 0 ? (
+          <Dropdown trigger={['click']} destroyOnHidden menu={{ items: menu, onClick: ({ key }) => setPending(key as ClassMenuAction) }}>
+            <Button icon={<DownOutlined />} iconPlacement="end">
+              {t('classes.actions.menu')}
+            </Button>
+          </Dropdown>
+        ) : null}
+      </Space>
+    ) : null
+
+  const content = (
+    <>
       <NavigationBlocker when={unsaved} onBlocked={holdNavigation} />
       {loadError ? (
         <Alert
@@ -314,6 +318,16 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
               children: <ClassScheduleTab cls={cls} onUnsavedChange={reportUnsaved.schedule} />,
               disabled: editing,
             },
+            // CH-0374: the class's own lessons, homework and exams — on the page only, each for its read key.
+            ...(page && hasPermission('lessons.read')
+              ? [{ key: 'lessons', label: t('classPage.tabs.lessons'), children: <ClassLessonsTab cls={cls} />, disabled: editing }]
+              : []),
+            ...(page && hasPermission('assignments.read')
+              ? [{ key: 'assignments', label: t('classPage.tabs.assignments'), children: <ClassAssignmentsTab cls={cls} />, disabled: editing }]
+              : []),
+            ...(page && hasPermission('exams.read')
+              ? [{ key: 'exams', label: t('classPage.tabs.exams'), children: <ClassExamsTab cls={cls} />, disabled: editing }]
+              : []),
             // J-F49: the gradebook the server computes (API-126) for `grades.read_all` — the server adds the class's
             // visibility (404 reads as «not available»); finalize/withdraw for `grades.manage` (API-127/API-128).
             ...(hasPermission('grades.read_all')
@@ -346,6 +360,43 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted }: ClassDra
           onCancel={() => setPending(null)}
         />
       ) : null}
+    </>
+  )
+
+  if (page) {
+    return (
+      <Flex vertical gap={16}>
+        <Flex justify="space-between" align="center" wrap gap={12}>
+          <Flex align="center" gap={12} wrap>
+            <Button icon={language === 'ar' ? <ArrowRightOutlined /> : <ArrowLeftOutlined />} onClick={onClose}>
+              {t('classPage.back')}
+            </Button>
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              <bdi>{name}</bdi>
+            </Typography.Title>
+            {cls ? <StatusTag value={cls.status} /> : null}
+          </Flex>
+          {headerActions}
+        </Flex>
+        <Card>{content}</Card>
+      </Flex>
+    )
+  }
+
+  return (
+    <Drawer
+      open={classId !== null}
+      onClose={requestClose}
+      // KI-052: unsaved work turns off the Escape key and the mask click; an open
+      // Select or Dropdown still closes on Escape (it sits on top of the drawer).
+      keyboard={!unsaved}
+      mask={{ closable: !unsaved }}
+      title={name}
+      size="large"
+      destroyOnHidden
+      extra={headerActions}
+    >
+      {content}
     </Drawer>
   )
 }

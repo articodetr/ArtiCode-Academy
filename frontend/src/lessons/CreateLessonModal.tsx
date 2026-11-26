@@ -160,6 +160,7 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
           form={form}
           mode="create"
           zone={zone}
+          classLocked={initialClass !== undefined}
           onRoomChange={(_roomId, next) => setRoom(next ?? null)}
           klass={klass}
           onClassChange={(next) => {

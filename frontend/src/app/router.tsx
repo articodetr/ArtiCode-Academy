@@ -18,6 +18,7 @@ import { PublicHomePage } from '../pages/PublicHomePage'
 import { PublicCoursePage } from '../pages/PublicCoursePage'
 import { CertificatePrintPage } from '../pages/CertificatePrintPage'
 import { CertificatesPage } from '../pages/CertificatesPage'
+import { ClassPage } from '../pages/ClassPage'
 import { ClassesPage } from '../pages/ClassesPage'
 import { CoursesPage } from '../pages/CoursesPage'
 import { DashboardPage } from '../pages/DashboardPage'
@@ -109,6 +110,7 @@ const router = createBrowserRouter([
       { path: 'users', element: guarded('users', <UsersPage />) },
       { path: 'courses', element: guarded('courses', <CoursesPage />) },
       { path: 'classes', element: guarded('classes', <ClassesPage />) },
+      { path: 'classes/:classId', element: guarded('classes', <ClassPage />) }, // CH-0374: one class's page with its lessons, homework and exams
       { path: 'my-classes', element: guarded('myClasses', <MyClassesPage />) }, // `student`/`guardian` role keys (J-F04, API-060 — ownership)
       { path: 'my-classes/:classId', element: guarded('myClasses', <MyClassLessonsPage />) }, // J-F62: one class's lessons (API-101 with classId)
       { path: 'catalog', element: guarded('catalog', <CatalogPage />) }, // MOD-19: `student`/`guardian` role keys (API-219 reads with courses.read)

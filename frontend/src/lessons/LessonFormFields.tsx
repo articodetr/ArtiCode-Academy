@@ -48,6 +48,8 @@ interface LessonFormFieldsProps {
   lesson?: Lesson
   /** Edit of a completed lesson: time, room and teacher are read-only (`lesson_locked`). */
   timingLocked?: boolean
+  /** CH-0374: a lesson added from its class's page — the class is fixed and its picker read-only. */
+  classLocked?: boolean
   /** Create only: the chosen class changed (the teacher and syllabus fields are reset by the caller). */
   onClassChange?: (klass: AcademyClass | undefined) => void
   /** Create only: the course's syllabus the caller read itself (for its suggestion), so the select asks nothing more. */
@@ -56,7 +58,7 @@ interface LessonFormFieldsProps {
   syllabusHint?: string
 }
 
-export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson, timingLocked = false, onClassChange, syllabus, syllabusHint }: LessonFormFieldsProps) {
+export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson, timingLocked = false, classLocked = false, onClassChange, syllabus, syllabusHint }: LessonFormFieldsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   // GET /api/classes(/:id) needs classes.read at the controller: without it the class list and the class's teachers stay unknown.
@@ -100,7 +102,7 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
           rules={[{ required: true, message: t('lessons.validation.classRequired') }]}
         >
           {canReadClasses ? (
-            <LessonClassPicker placeholder={t('lessons.pickers.classPlaceholder')} onChange={(_value, item) => onClassChange?.(item)} style={{ maxWidth: 480 }} />
+            <LessonClassPicker disabled={classLocked} placeholder={t('lessons.pickers.classPlaceholder')} onChange={(_value, item) => onClassChange?.(item)} style={{ maxWidth: 480 }} />
           ) : (
             <Select
               disabled
