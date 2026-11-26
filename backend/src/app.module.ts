@@ -19,6 +19,7 @@ import { ExamsModule } from './exams/exams.module.js';
 import { CertificatesModule } from './certificates/certificates.module.js';
 import { FinanceModule } from './finance/finance.module.js';
 import { GradesModule } from './grades/grades.module.js';
+import { TeachingModule } from './teaching/teaching.module.js';
 import { GuardiansModule } from './guardians/guardians.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
@@ -84,6 +85,8 @@ import { UsersModule } from './users/users.module.js';
     AssignmentsModule,
     // MOD-09 (§4h): grade schemes (T02); exams, the gradebook and final grades follow in T03..T06.
     GradesModule,
+    // CH-0370: «طلابي» — a teacher's students, read only.
+    TeachingModule,
     // MOD-09-T03/T04: exams whose results a teacher records, their results sheet and «my exams».
     ExamsModule,
     // MOD-09 phase 2 (§4r): question banks and their questions; the online side of an exam (its questions, attempts and grading) lives in ExamsModule.

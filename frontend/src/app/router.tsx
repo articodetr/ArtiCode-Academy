@@ -43,6 +43,7 @@ import { SettingsPage } from '../pages/SettingsPage'
 import { StudentRegisterCompletePage } from '../pages/StudentRegisterCompletePage'
 import { StudentRegisterPage } from '../pages/StudentRegisterPage'
 import { TakeExamPage } from '../pages/TakeExamPage'
+import { MyStudentPage, MyStudentsPage } from '../pages/MyStudentsPage'
 import { UsersPage } from '../pages/UsersPage'
 import { VerifyCertificatePage } from '../pages/VerifyCertificatePage'
 
@@ -118,6 +119,8 @@ const router = createBrowserRouter([
       { path: 'enrollment-requests', element: guarded('enrollmentRequests', <EnrollmentRequestsPage />) }, // MOD-19: `enrollments.manage` (API-224/225)
       { path: 'schedule', element: guarded('schedule', <SchedulePage />) },
       { path: 'lessons', element: guarded('lessons', <LessonsPage />) },
+      { path: 'my-students', element: guarded('myStudents', <MyStudentsPage />) }, // CH-0370: the `teacher` role key (API-301 — the classes the caller teaches)
+      { path: 'my-students/:studentId', element: guarded('myStudents', <MyStudentPage />) }, // CH-0370: one student (API-302)
       { path: 'my-lessons', element: guarded('myLessons', <MyLessonsPage />) }, // `student`/`guardian` role keys (J-F11, API-101 — ownership)
       { path: 'assignments', element: guarded('assignments', <AssignmentsPage />) },
       { path: 'my-assignments', element: guarded('myAssignments', <MyAssignmentsPage />) }, // `student`/`guardian` role keys (J-F42, API-112 — ownership)

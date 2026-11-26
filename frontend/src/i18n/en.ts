@@ -14,6 +14,7 @@ import { courseClass } from './en/courseClass'
 import { studentRegistration } from './en/studentRegistration'
 import { publicHome } from './en/publicHome'
 import { homepageImages } from './en/homepageImages'
+import { myStudents } from './en/teaching'
 
 export const en: Translation = {
   common: {
@@ -92,6 +93,7 @@ export const en: Translation = {
     myAssignments: 'My assignments',
     myExams: 'My exams',
     myGrades: 'My grades',
+    myStudents: 'My students',
     exams: 'Exams & grades',
     questionBanks: 'Question bank',
     certificates: 'Certificates',
@@ -4571,6 +4573,8 @@ export const en: Translation = {
       rate_limited: 'Too many requests in a short time. Wait 15 minutes and try again.',
     },
   },
+  // CH-0370: «My students» — a teacher's students.
+  myStudents,
   // MOD-19 (roadmap §4p): the catalog, «my courses» and the office's enrollment requests.
   catalog,
   myCourses,

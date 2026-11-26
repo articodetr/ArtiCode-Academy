@@ -439,7 +439,7 @@ describe('navFor', () => {
   })
 
   it('hides the users page from a teacher although the seed grants teachers users.read (J-F70)', () => {
-    expect(keysFor(viewer('teacher'))).toEqual(['dashboard', 'classes', 'schedule', 'lessons', 'exams', 'questionBanks', 'notifications'])
+    expect(keysFor(viewer('teacher'))).toEqual(['dashboard', 'classes', 'schedule', 'myStudents', 'lessons', 'exams', 'questionBanks', 'notifications'])
     expect(canAccess(viewer('teacher'), 'users')).toBe(false)
     // Only teacher and learner keys: a teacher who is also a guardian (or a student) gets no entry either…
     expect(canAccess(viewer('teacher', SEEDED.teacher, ['teacher', 'guardian']), 'users')).toBe(false)
@@ -558,5 +558,14 @@ describe('NAV_GROUPS and navGroupsFor (the grouped side menu, 2026-11-22)', () =
     expect(keysOf(viewer('teacher'))).not.toContain('mine')
     expect(keysOf(viewer(null, ['audit.read']))).toEqual(['home', 'system'])
     expect(keysOf(viewer(null, []))).toEqual(['home'])
+  })
+})
+
+describe('«طلابي» (CH-0370)', () => {
+  it('shows «my students» to the teacher role key only', () => {
+    expect(canAccess({ role: 'teacher', roles: ['teacher'], permissions: [] }, 'myStudents')).toBe(true)
+    expect(canAccess({ role: 'admin', roles: ['academy_admin'], permissions: ['classes.manage', 'enrollments.read'] }, 'myStudents')).toBe(false)
+    expect(canAccess({ role: 'student', roles: ['student'], permissions: [] }, 'myStudents')).toBe(false)
+    expect(canAccess({ role: 'guardian', roles: ['guardian'], permissions: [] }, 'myStudents')).toBe(false)
   })
 })

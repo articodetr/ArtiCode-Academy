@@ -28,6 +28,7 @@ import { courseClass } from './ar/courseClass'
 import { studentRegistration } from './ar/studentRegistration'
 import { publicHome } from './ar/publicHome'
 import { homepageImages } from './ar/homepageImages'
+import { myStudents } from './ar/teaching'
 
 export const ar = {
   common,
@@ -69,6 +70,8 @@ export const ar = {
   server,
   emailVerification,
   forgotPassword,
+  // CH-0370: «طلابي» — a teacher's students.
+  myStudents,
   // MOD-19 (roadmap §4p): the catalog, «my courses» and the office's enrollment requests.
   catalog,
   myCourses,
