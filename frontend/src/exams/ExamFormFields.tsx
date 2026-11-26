@@ -27,6 +27,7 @@ import type { FormInstance } from 'antd'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EXAM_ATTEMPTS_MAX, EXAM_DELIVERIES, EXAM_DESCRIPTION_MAX_LENGTH, EXAM_DURATION_MAX, EXAM_RESULTS_RELEASES, EXAM_TITLE_MAX_LENGTH, EXAM_TYPES } from '../api/exams'
+import type { AssignmentLesson } from '../api/assignments'
 import type { Exam, ExamDelivery } from '../api/exams'
 import { LESSONS_PAGE_MAX } from '../api/lessons'
 import { AssignmentLessonSelect } from '../assignments/AssignmentPickers'
@@ -55,9 +56,11 @@ interface ExamFormFieldsProps {
   onClassChange?: (classId: string | undefined) => void
   /** CH-0374: created from its class's page — the class is fixed (a hidden field) and this line names it. */
   fixedPlace?: string
+  /** J-F75: created from a lesson card — that lesson starts chosen and stays an option while the lessons load. */
+  presetLesson?: AssignmentLesson & { timeZone?: string }
 }
 
-export function ExamFormFields({ form, mode, hasClass, context, current, maxScoreLocked = false, onClassChange, fixedPlace }: ExamFormFieldsProps) {
+export function ExamFormFields({ form, mode, hasClass, context, current, maxScoreLocked = false, onClassChange, fixedPlace, presetLesson }: ExamFormFieldsProps) {
   const { t } = useTranslation()
   // GET /api/classes needs classes.read at the controller: without it the class list stays unknown.
   const canReadClasses = useAuth().hasPermission('classes.read')
@@ -165,7 +168,13 @@ export function ExamFormFields({ form, mode, hasClass, context, current, maxScor
             label={t('exams.fields.lesson')}
             extra={lessons.truncated ? t('exams.hints.lessonsTruncated', { count: LESSONS_PAGE_MAX }) : t('exams.hints.lesson')}
           >
-            <AssignmentLessonSelect lessons={lessons} hasClass={hasClass} canRead={canReadLessons} current={current?.lesson} currentZone={current?.timeZone} />
+            <AssignmentLessonSelect
+              lessons={lessons}
+              hasClass={hasClass}
+              canRead={canReadLessons}
+              current={current?.lesson ?? presetLesson}
+              currentZone={current ? current.timeZone : presetLesson?.timeZone}
+            />
           </Form.Item>
         </Col>
       </Row>

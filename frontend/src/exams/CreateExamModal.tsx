@@ -11,9 +11,13 @@
 // MOD-09 phase 2: the form starts as a manual exam (NEW_EXAM_FORM_VALUES) and
 // may be switched to an online one, whose body then carries `delivery` and its
 // settings; a manual exam's body is what it always was (exams.form.ts).
+// J-F75 (CH-0382): opened from a lesson card of the class's page, the form
+// starts with that lesson chosen (`fixed.lesson`, kept as an option while the
+// class's lessons load); it may still be changed or cleared.
 import { Alert, Form, Modal } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { AssignmentLesson } from '../api/assignments'
 import { createExam } from '../api/exams'
 import type { Exam } from '../api/exams'
 import { ExamFormFields } from './ExamFormFields'
@@ -22,12 +26,23 @@ import { NEW_EXAM_FORM_VALUES, buildCreateExamInput } from './exams.form'
 import type { ExamFormValues } from './exams.form'
 import { useExamFormContext } from './useExamFormContext'
 
+/** CH-0374: opened from a class's page — the class is fixed and `place` names it; J-F75: from one of its lesson cards, that lesson is chosen. */
+export interface FixedExamPlace {
+  classId: string
+  place: string
+  lesson?: FixedExamLesson
+}
+
+/** The lesson an exam is added to from its card (a `Lesson` of the class's list fits). */
+export interface FixedExamLesson extends AssignmentLesson {
+  timeZone?: string
+}
+
 interface CreateExamModalProps {
   open: boolean
   onClose: () => void
   onCreated: (exam: Exam) => void
-  /** CH-0374: opened from a class's page — the class is fixed and `place` names it. */
-  fixed?: { classId: string; place: string }
+  fixed?: FixedExamPlace
 }
 
 export function CreateExamModal({ open, onClose, onCreated, fixed }: CreateExamModalProps) {
@@ -62,7 +77,7 @@ interface CreateExamBodyProps {
   /** This session's submit on mount, null on unmount. */
   onReady: (submit: (() => void) | null) => void
   onCreated: (exam: Exam) => void
-  fixed?: { classId: string; place: string }
+  fixed?: FixedExamPlace
 }
 
 function CreateExamBody({ onSaving, onReady, onCreated, fixed }: CreateExamBodyProps) {
@@ -72,7 +87,8 @@ function CreateExamBody({ onSaving, onReady, onCreated, fixed }: CreateExamBodyP
   const [classId, setClassId] = useState<string | undefined>(fixed?.classId)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const context = useExamFormContext(form, classId)
+  const context = useExamFormContext(form, classId, undefined, fixed?.lesson)
+  const initialValues = fixed ? { ...NEW_EXAM_FORM_VALUES, classId: fixed.classId, lessonId: fixed.lesson?.id } : NEW_EXAM_FORM_VALUES
 
   useEffect(() => {
     onReady(() => form.submit())
@@ -100,9 +116,10 @@ function CreateExamBody({ onSaving, onReady, onCreated, fixed }: CreateExamBodyP
   return (
     <>
       {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={fixed ? { ...NEW_EXAM_FORM_VALUES, classId: fixed.classId } : NEW_EXAM_FORM_VALUES} onFinish={(values) => void submit(values as ExamFormValues)} disabled={saving}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={initialValues} onFinish={(values) => void submit(values as ExamFormValues)} disabled={saving}>
         <ExamFormFields
           fixedPlace={fixed?.place}
+          presetLesson={fixed?.lesson}
           form={form}
           mode="create"
           hasClass={Boolean(classId)}

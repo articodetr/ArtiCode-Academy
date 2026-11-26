@@ -39,6 +39,7 @@
 // navigates and the NavigationBlocker asks about unsaved work, as a browser back does.
 // J-F74 (CH-0381, Jallal's request): on the page the lessons tab comes first and the page opens on it — the details
 // follow it; a reader without `lessons.read` has no lessons tab, so the page opens on the details as before.
+// J-F75 (CH-0382): an exam added from a lesson card (ClassLessonsTab) remounts the exams tab, so its list includes it.
 import { ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -123,6 +124,8 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 
   const [pending, setPending] = useState<ClassMenuAction | null>(null)
   const [unsavedTabs, setUnsavedTabs] = useState<Readonly<Record<EditorTab, boolean>>>(NOTHING_UNSAVED)
   const [detailsUnsaved, setDetailsUnsaved] = useState(false)
+  // J-F75: moved when a lesson card adds (or its exam drawer changes) an exam — the exams tab mounts anew and reads its list.
+  const [examsVersion, setExamsVersion] = useState(0)
 
   // One stable reporter per tab (the tabs report from an effect that depends on it).
   const reportUnsaved = useMemo(() => {
@@ -291,7 +294,15 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 
           items={[
             // CH-0374: the class's own lessons — on the page only, for `lessons.read`; first since J-F74.
             ...(lessonsFirst
-              ? [{ key: 'lessons', label: t('classPage.tabs.lessons'), children: <ClassLessonsTab cls={cls} />, disabled: editing }]
+              ? [
+                  {
+                    key: 'lessons',
+                    label: t('classPage.tabs.lessons'),
+                    // J-F75: an exam added from a lesson card renews the exams tab's list.
+                    children: <ClassLessonsTab cls={cls} onExamsChanged={() => setExamsVersion((version) => version + 1)} />,
+                    disabled: editing,
+                  },
+                ]
               : []),
             { key: 'details', label: t('classes.drawer.tabs.details'), children: details },
             {
@@ -332,7 +343,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 
               ? [{ key: 'assignments', label: t('classPage.tabs.assignments'), children: <ClassAssignmentsTab cls={cls} />, disabled: editing }]
               : []),
             ...(page && hasPermission('exams.read')
-              ? [{ key: 'exams', label: t('classPage.tabs.exams'), children: <ClassExamsTab cls={cls} />, disabled: editing }]
+              ? [{ key: 'exams', label: t('classPage.tabs.exams'), children: <ClassExamsTab key={examsVersion} cls={cls} />, disabled: editing }]
               : []),
             // J-F49: the gradebook the server computes (API-126) for `grades.read_all` — the server adds the class's
             // visibility (404 reads as «not available»); finalize/withdraw for `grades.manage` (API-127/API-128).
