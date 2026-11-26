@@ -1,5 +1,6 @@
 // One class's own page (CH-0374): the drawer's tabs plus the class's lessons, homework and exams, each read with the
-// class's id, each «add» bound to this class, and «رجوع» back to the list.
+// class's id, each «add» bound to this class, and «رجوع» back to the list. Since J-F74 (CH-0381) the lessons tab
+// comes first and the page opens on it.
 import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ar } from '../i18n/ar'
@@ -37,27 +38,42 @@ function renderPage(permissions: string[] = TEACHER_PERMISSIONS) {
 }
 
 const tabNames = () => [...document.querySelectorAll('.ant-tabs-tab')].map((tab) => tab.textContent ?? '')
+const activeTab = () => document.querySelector('.ant-tabs-tab-active')?.textContent ?? null
+
+/** The page has read its class: the class's name heads it (the class code shows in the details tab only). */
+const pageLoaded = () => screen.findByText('بايثون — الفصل أ', { selector: 'h3 bdi' })
 
 describe('ClassPage (CH-0374)', () => {
-  it('shows the class as a page with the lessons, homework and exams tabs after the weekly schedule', async () => {
+  it('shows the class as a page opening on its lessons — the first tab, before the details (J-F74) — with the homework and exams tabs after the weekly schedule', async () => {
     mockPageApi()
     renderPage()
-    await screen.findByText('PY-101-A')
+    await pageLoaded()
     const names = tabNames()
+    expect(names.slice(0, 2)).toEqual([ar.classPage.tabs.lessons, ar.classes.drawer.tabs.details])
+    expect(activeTab()).toBe(ar.classPage.tabs.lessons)
+    expect(await screen.findByText('الدرس الأول')).toBeInTheDocument()
     const schedule = names.indexOf(ar.classSchedule.tab)
-    expect(names.slice(schedule + 1, schedule + 4)).toEqual([ar.classPage.tabs.lessons, ar.classPage.tabs.assignments, ar.classPage.tabs.exams])
+    expect(names.slice(schedule + 1, schedule + 3)).toEqual([ar.classPage.tabs.assignments, ar.classPage.tabs.exams])
     expect(document.querySelector('.ant-drawer')).toBeNull()
   })
 
-  it('reads each list with the class id only when its tab opens, and offers «add» to a manager of an open class', async () => {
+  it('opens on the details, first as before, for a reader without the lessons key (J-F74)', async () => {
+    mockPageApi()
+    renderPage(['classes.read', 'assignments.read', 'exams.read'])
+    expect(await screen.findByText('PY-101-A')).toBeInTheDocument()
+    expect(tabNames()).not.toContain(ar.classPage.tabs.lessons)
+    expect(tabNames()[0]).toBe(ar.classes.drawer.tabs.details)
+    expect(activeTab()).toBe(ar.classes.drawer.tabs.details)
+  })
+
+  it('reads the lessons with the class id at once and each other list only when its tab opens, and offers «add» to a manager of an open class', async () => {
     const { urls } = mockPageApi()
     renderPage()
-    await screen.findByText('PY-101-A')
-    expect(urls).toEqual([`/api/classes/${CLASS_ID}`])
-
-    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.lessons }))
+    await pageLoaded()
     expect(await screen.findByText('الدرس الأول')).toBeInTheDocument()
+    expect(urls[0]).toBe(`/api/classes/${CLASS_ID}`)
     expect(urls.some((url) => url.startsWith('/api/lessons?') && url.includes(`classId=${CLASS_ID}`))).toBe(true)
+    expect(urls.some((url) => url.startsWith('/api/assignments?') || url.startsWith('/api/exams?'))).toBe(false)
     expect(screen.getByText(ar.lessons.addLesson)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.assignments }))
@@ -74,8 +90,7 @@ describe('ClassPage (CH-0374)', () => {
   it('offers no «add» for a completed class, nor to a reader without the manage key', async () => {
     mockPageApi('completed')
     renderPage()
-    await screen.findByText('PY-101-A')
-    fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.lessons }))
+    await pageLoaded()
     expect(await screen.findByText('الدرس الأول')).toBeInTheDocument()
     expect(screen.queryByText(ar.lessons.addLesson)).toBeNull()
   })
@@ -83,7 +98,7 @@ describe('ClassPage (CH-0374)', () => {
   it('hides a tab whose read key is missing', async () => {
     mockPageApi()
     renderPage(['classes.read', 'lessons.read'])
-    await screen.findByText('PY-101-A')
+    await pageLoaded()
     const names = tabNames()
     expect(names).toContain(ar.classPage.tabs.lessons)
     expect(names).not.toContain(ar.classPage.tabs.assignments)
@@ -93,7 +108,7 @@ describe('ClassPage (CH-0374)', () => {
   it('opens the homework form with this class fixed and named', async () => {
     mockPageApi()
     renderPage()
-    await screen.findByText('PY-101-A')
+    await pageLoaded()
     fireEvent.click(screen.getByRole('tab', { name: ar.classPage.tabs.assignments }))
     fireEvent.click((await screen.findByText(ar.assignments.addAssignment)).closest('button')!)
     const dialog = (await screen.findByText(ar.assignments.create.title)).closest('[role="dialog"]') as HTMLElement
@@ -104,7 +119,7 @@ describe('ClassPage (CH-0374)', () => {
   it('goes back to the classes list with «رجوع»', async () => {
     mockPageApi()
     renderPage()
-    await screen.findByText('PY-101-A')
+    await pageLoaded()
     fireEvent.click(screen.getByText(ar.classPage.back).closest('button')!)
     expect(await screen.findByTestId('location')).toHaveAttribute('data-pathname', '/classes')
   })

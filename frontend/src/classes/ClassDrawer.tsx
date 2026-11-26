@@ -37,6 +37,8 @@
 // drawer, with three more tabs: the class's lessons, homework and exams (ClassLessonsTab, ClassAssignmentsTab,
 // ClassExamsTab — each for its read key), so a teacher manages a class from one place. On the page, «رجوع»
 // navigates and the NavigationBlocker asks about unsaved work, as a browser back does.
+// J-F74 (CH-0381, Jallal's request): on the page the lessons tab comes first and the page opens on it — the details
+// follow it; a reader without `lessons.read` has no lessons tab, so the page opens on the details as before.
 import { ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, UndoOutlined, UnlockOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Drawer, Dropdown, Flex, Form, Input, Modal, Skeleton, Space, Tabs, Tag, Typography } from 'antd'
 import type { MenuProps } from 'antd'
@@ -108,12 +110,15 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 
   const { language } = useLocalized()
   const { user, hasPermission } = useAuth()
   const canManage = hasPermission('classes.manage')
+  // J-F74: the page's first tab, and the one it opens on.
+  const lessonsFirst = page && hasPermission('lessons.read')
+  const firstTab: DrawerTab = lessonsFirst ? 'lessons' : 'details'
   const [cls, setCls] = useState<AcademyClass | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
   // Moved by the drawer's own retry only: an opened students tab reads its roster again (KI-120).
   const [rosterRefresh, setRosterRefresh] = useState(0)
-  const [tab, setTab] = useState<DrawerTab>('details')
+  const [tab, setTab] = useState<DrawerTab>(firstTab)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState<ClassMenuAction | null>(null)
   const [unsavedTabs, setUnsavedTabs] = useState<Readonly<Record<EditorTab, boolean>>>(NOTHING_UNSAVED)
@@ -167,7 +172,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 
   const close = () => {
     setCls(null)
     setLoadError(null)
-    setTab('details')
+    setTab(firstTab)
     forget()
     onClose()
   }
@@ -284,6 +289,10 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 
           activeKey={tab}
           onChange={(key) => setTab(key as DrawerTab)}
           items={[
+            // CH-0374: the class's own lessons — on the page only, for `lessons.read`; first since J-F74.
+            ...(lessonsFirst
+              ? [{ key: 'lessons', label: t('classPage.tabs.lessons'), children: <ClassLessonsTab cls={cls} />, disabled: editing }]
+              : []),
             { key: 'details', label: t('classes.drawer.tabs.details'), children: details },
             {
               key: 'teachers',
@@ -318,10 +327,7 @@ export function ClassDrawer({ classId, onClose, onUpdated, onDeleted, variant = 
               children: <ClassScheduleTab cls={cls} onUnsavedChange={reportUnsaved.schedule} />,
               disabled: editing,
             },
-            // CH-0374: the class's own lessons, homework and exams — on the page only, each for its read key.
-            ...(page && hasPermission('lessons.read')
-              ? [{ key: 'lessons', label: t('classPage.tabs.lessons'), children: <ClassLessonsTab cls={cls} />, disabled: editing }]
-              : []),
+            // CH-0374: the class's own homework and exams — on the page only, each for its read key (the lessons lead the tabs).
             ...(page && hasPermission('assignments.read')
               ? [{ key: 'assignments', label: t('classPage.tabs.assignments'), children: <ClassAssignmentsTab cls={cls} />, disabled: editing }]
               : []),
