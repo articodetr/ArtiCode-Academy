@@ -95,6 +95,16 @@ describe('ClassesPage', () => {
     expect(Object.fromEntries(api.queries[0]!)).toEqual({ sort: 'code', limit: '20' })
   })
 
+  it('names the page «الدورات» for a teacher-only viewer, with its own hint and empty text (J-F72)', async () => {
+    mockClassesApi(makeClassList([]))
+    renderWithProviders(<ClassesPage />, { auth: makeAuth({ user: makeUser({ role: 'teacher', roles: ['teacher'], permissions: CLASS_READER_PERMISSIONS }) }), route: '/classes' })
+    expect(await screen.findByText(ar.classes.teacherEmptyAssigned)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: ar.classes.teacherTitle })).toBeInTheDocument()
+    expect(screen.getByText(ar.classes.teacherSubtitle)).toBeInTheDocument()
+    expect(screen.getByText(ar.classes.teacherReadOnlyHint)).toBeInTheDocument()
+    expect(screen.queryByText(ar.classes.title)).not.toBeInTheDocument()
+  })
+
   it('says "no classes assigned to you" to a teacher without classes, and "no match" once a filter is set', async () => {
     const api = mockClassesApi(makeClassList([]))
     renderPage(CLASS_READER_PERMISSIONS)

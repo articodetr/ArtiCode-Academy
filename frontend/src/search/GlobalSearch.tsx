@@ -39,7 +39,7 @@ import { listUsers } from '../api/users'
 import { useAuth } from '../auth/auth-context'
 import { OPEN_PARAM } from '../common/useOpenFromSearch'
 import { useLocalized } from '../i18n/useLocalized'
-import { canAccess, navFor } from '../layout/navigation'
+import { canAccess, navFor, navLabelKey } from '../layout/navigation'
 import { useUnreadCount } from '../notifications/useUnreadCount'
 import { localizedLabel, roleLabel } from '../users/users.format'
 import { PAGE_KEYWORDS, SEARCH_MIN_LENGTH, actionsFor, forgetRecent, matchScore, numberPart, queryKind, readRecent, rememberRecent } from './search.data'
@@ -265,7 +265,7 @@ export function GlobalSearch() {
       if (score > 0) local.push({ key: `a:${action.key}`, group: 'suggested', title: label, path: action.path, icon: GROUP_ICONS.suggested, score: score + 1 })
     }
     for (const page of pages) {
-      const label = t(page.labelKey)
+      const label = t(viewer ? navLabelKey(page, viewer) : page.labelKey)
       const score = Math.max(matchScore(trimmed, label), matchScore(trimmed, PAGE_KEYWORDS[page.key] ?? '') - 10)
       if (score > 0) local.push({ key: `n:${page.key}`, group: 'pages', title: label, path: page.path, icon: page.icon, score })
     }

@@ -543,6 +543,9 @@ describe('AppLayout — the grouped side menu (Admin Dashboard Modern Redesign, 
     const menu = siderMenu()
     expect(headings(menu)).toEqual([ar.nav.groups.mine, ar.nav.groups.academics, ar.nav.groups.followUp])
     expect(labelsIn(menu)).not.toContain(ar.nav.users)
+    // J-F72: «الفصول والمجموعات» reads «الدورات» for a teacher.
+    const academics = sections(menu).find(([heading]) => heading === ar.nav.groups.academics)!
+    expect(academics[1]).toEqual([ar.nav.classesForTeacher, ar.nav.lessons, ar.nav.schedule])
     const mine = sections(menu).find(([heading]) => heading === ar.nav.groups.mine)!
     expect(mine[1]).toEqual([ar.nav.myClasses, ar.nav.catalog, ar.nav.myLessons, ar.nav.myAssignments, ar.nav.myExams, ar.nav.myGrades, ar.nav.myCertificates])
   })

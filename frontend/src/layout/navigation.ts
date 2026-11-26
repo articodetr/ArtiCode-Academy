@@ -46,6 +46,8 @@ interface NavItemBase {
   key: string
   path: string
   labelKey: string
+  /** The name a teacher-only viewer reads instead of `labelKey` (`teachesOnly()` — J-F72); the menu and the search use `navLabelKey()`. */
+  teacherLabelKey?: string
   icon: ReactNode
   /** Documentation module this screen belongs to. */
   module: string
@@ -117,8 +119,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'courses', path: '/courses', labelKey: 'nav.courses', icon: createElement(BookOutlined), permissions: ['courses.read'], exceptRoleKeysOnly: ['teacher', 'student', 'guardian'], module: 'MOD-04' },
   // MOD-05 (J-F01): the classes API is real — gated by the one key every read of `/api/classes` requires
   // (`classes.read` at controller level; `classes.manage` only adds writes, so alone it would get a 403 on the list —
-  // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16).
-  { key: 'classes', path: '/classes', labelKey: 'nav.classes', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
+  // owner review of PR #26). A teacher (classes.read) sees only assigned classes (D-R16). J-F72 (Jallal's request,
+  // 2026-11-26): a teacher-only viewer, who has no «الدورات والمستويات» since J-F71, reads this entry as «الدورات».
+  { key: 'classes', path: '/classes', labelKey: 'nav.classes', teacherLabelKey: 'nav.classesForTeacher', icon: createElement(AppstoreOutlined), permissions: ['classes.read'], module: 'MOD-05' },
   // MOD-05 (J-F04): «my classes» (API-060) needs no permission key — ownership; shown to whoever holds the
   // `student` or `guardian` server role, as the server reads them (an admin or a teacher alone gets an empty list).
   { key: 'myClasses', path: '/my-classes', labelKey: 'nav.myClasses', icon: createElement(ReadOutlined), roleKeys: ['student', 'guardian'], module: 'MOD-05' },
@@ -240,6 +243,19 @@ export function sees(item: NavItem, viewer: NavViewer): boolean {
 
 export function navFor(viewer: NavViewer): NavItem[] {
   return NAV_ITEMS.filter((item) => sees(item, viewer))
+}
+
+/** The role keys of a teacher-only viewer: a teacher, possibly also a student or a guardian, and nothing else (J-F70..J-F72). */
+const TEACHER_ONLY_ROLE_KEYS: readonly string[] = ['teacher', 'student', 'guardian']
+
+/** True for a viewer who teaches and holds no office role (staff, admin, a custom role) — the viewer J-F70..J-F72 serve. */
+export function teachesOnly(viewer: Pick<NavViewer, 'roles'>): boolean {
+  return viewer.roles.includes('teacher') && viewer.roles.every((key) => TEACHER_ONLY_ROLE_KEYS.includes(key))
+}
+
+/** The i18n key of an entry's name for this viewer: its `teacherLabelKey` for a teacher-only viewer, else `labelKey` (J-F72). */
+export function navLabelKey(item: NavItem, viewer: Pick<NavViewer, 'roles'>): string {
+  return item.teacherLabelKey && teachesOnly(viewer) ? item.teacherLabelKey : item.labelKey
 }
 
 /** The titled sections of the side menu («Admin Dashboard Modern Redesign», 2026-11-22). */
