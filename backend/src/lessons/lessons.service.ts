@@ -14,6 +14,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { toLocalizedText } from '../roles/roles.dto.js';
 import { isWriteConflict } from '../schedule/class-schedule.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
+import { parseLessonAttachments, readLessonAttachments } from './lessons.attachments.js';
+import type { LessonAttachment } from './lessons.attachments.js';
 import { isEmptyLessonPatch, mergedRange, planLessonUpdate } from './lessons.changes.js';
 import type { LessonPatch, LessonPatchField, LessonValues } from './lessons.changes.js';
 import { LESSONS_PAGE_DEFAULT, LESSON_SORT_FIELD } from './lessons.dto.js';
@@ -64,6 +66,8 @@ const LESSON_SELECT = {
   endsAt: true,
   status: true,
   meetingUrl: true,
+  recordingUrl: true,
+  attachments: true,
   cancellationReason: true,
   attendanceTakenAt: true,
   createdAt: true,
@@ -92,6 +96,8 @@ interface LessonInput {
   teacherUserId: string | null;
   syllabusItemId: string | null;
   meetingUrl: string | null;
+  recordingUrl: string | null;
+  attachments: LessonAttachment[];
   scheduleId: string | null;
 }
 
@@ -106,6 +112,10 @@ export interface LessonRequest {
   teacherUserId?: string | null;
   syllabusItemId?: string | null;
   meetingUrl?: string | null;
+  /** J-F77: the video link. */
+  recordingUrl?: string | null;
+  /** J-F77: already normalised by parseLessonAttachments(); absent = none. */
+  attachments?: LessonAttachment[];
   /** The weekly slot a generated lesson comes from (MOD-07-T05); never set by the API. */
   scheduleId?: string | null;
 }
@@ -160,6 +170,8 @@ function toLessonDto(row: LessonRow, counts: AttendanceCounts, academyTimeZone: 
       : null,
     scheduleId: row.scheduleId,
     meetingUrl: row.meetingUrl,
+    recordingUrl: row.recordingUrl,
+    attachments: readLessonAttachments(row.attachments),
     cancellationReason: row.cancellationReason,
     attendanceTakenAt: row.attendanceTakenAt ? toIso(row.attendanceTakenAt) : null,
     attendance: counts[row.id] ?? EMPTY_COUNTS,
@@ -202,7 +214,17 @@ function valuesOf(row: LessonRow): LessonValues {
     teacherUserId: row.teacherUserId,
     syllabusItemId: row.syllabusItemId,
     meetingUrl: row.meetingUrl,
+    recordingUrl: row.recordingUrl,
+    attachments: readLessonAttachments(row.attachments),
   };
+}
+
+/** J-F77: the body's attachments normalised, or 400 attachments_invalid before anything is read or written. */
+function attachmentsOf(input: unknown[] | undefined): LessonAttachment[] | undefined {
+  if (input === undefined) return undefined;
+  const check = parseLessonAttachments(input);
+  if (!check.ok) throw lessonsError.attachmentsInvalid(check.problems);
+  return check.attachments;
 }
 
 function toUpdateInput(data: LessonPatch): Prisma.LessonUncheckedUpdateInput {
@@ -216,6 +238,8 @@ function toUpdateInput(data: LessonPatch): Prisma.LessonUncheckedUpdateInput {
   if (data.teacherUserId !== undefined) input.teacherUserId = data.teacherUserId;
   if (data.syllabusItemId !== undefined) input.syllabusItemId = data.syllabusItemId;
   if (data.meetingUrl !== undefined) input.meetingUrl = data.meetingUrl;
+  if (data.recordingUrl !== undefined) input.recordingUrl = data.recordingUrl;
+  if (data.attachments !== undefined) input.attachments = data.attachments as unknown as Prisma.InputJsonValue;
   return input;
 }
 
@@ -332,6 +356,8 @@ export class LessonsService {
       teacherUserId: input.teacherUserId,
       syllabusItemId: input.syllabusItemId,
       meetingUrl: input.meetingUrl,
+      recordingUrl: input.recordingUrl,
+      attachments: attachmentsOf(input.attachments),
     };
     const [lesson] = await this.createLessons(classId, [request], caller, ctx);
     return lesson!;
@@ -393,6 +419,8 @@ export class LessonsService {
               teacherUserId,
               syllabusItemId,
               meetingUrl: request.meetingUrl ?? null,
+              recordingUrl: request.recordingUrl ?? null,
+              attachments: request.attachments ?? [],
               scheduleId: request.scheduleId ?? null,
             });
           }
@@ -412,6 +440,8 @@ export class LessonsService {
                 teacherUserId: values.teacherUserId,
                 syllabusItemId: values.syllabusItemId,
                 meetingUrl: values.meetingUrl,
+                recordingUrl: values.recordingUrl,
+                attachments: values.attachments as unknown as Prisma.InputJsonValue,
                 scheduleId: values.scheduleId,
               },
               select: { id: true },
@@ -454,6 +484,8 @@ export class LessonsService {
     if (input.teacherUserId !== undefined) patch.teacherUserId = input.teacherUserId;
     if (input.syllabusItemId !== undefined) patch.syllabusItemId = input.syllabusItemId;
     if (input.meetingUrl !== undefined) patch.meetingUrl = input.meetingUrl;
+    if (input.recordingUrl !== undefined) patch.recordingUrl = input.recordingUrl;
+    if (input.attachments !== undefined) patch.attachments = attachmentsOf(input.attachments);
 
     let booking: Booking | null = null;
     for (let attempt = 1; ; attempt++) {

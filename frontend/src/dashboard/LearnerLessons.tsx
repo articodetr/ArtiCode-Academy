@@ -1,7 +1,7 @@
 // The lessons of the learner home (J-F63): what runs now — or comes next — on top with its «join» button, then a short
 // list of the rest of the coming days. The link is the server's (`meetingUrl`, https only); lessonLinkOf() decides
 // whether it reads «join» or «open the link» (KI-062).
-import { VideoCameraOutlined } from '@ant-design/icons'
+import { PlayCircleOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { Button, Tag } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -47,9 +47,17 @@ function LessonLink({ lesson, now, size }: { lesson: MyLessonItem; now: number; 
   const link = lessonLinkOf(lesson, now)
   if (!link) return null
   const join = link.action === 'join'
+  const watch = link.action === 'watch'
   return (
-    <Button type={join && size === 'large' ? 'primary' : 'default'} size={size} icon={join ? <VideoCameraOutlined aria-hidden /> : undefined} href={link.url} target="_blank" rel="noreferrer">
-      {t(join ? 'dashboard.learner.join' : 'dashboard.learner.openLink')}
+    <Button
+      type={(join || watch) && size === 'large' ? 'primary' : 'default'}
+      size={size}
+      icon={join ? <VideoCameraOutlined aria-hidden /> : watch ? <PlayCircleOutlined aria-hidden /> : undefined}
+      href={link.url}
+      target="_blank"
+      rel="noreferrer"
+    >
+      {t(join ? 'dashboard.learner.join' : watch ? 'lessons.attachments.watchVideo' : 'dashboard.learner.openLink')}
       <span className="lh-sr-only"> {t('learn.lesson.newTab')}</span>
     </Button>
   )

@@ -7,6 +7,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { displayTimeZone } from '../schedule/timetable.policy.js';
 import { LESSON_SORT_FIELD, LESSONS_PAGE_DEFAULT } from './lessons.dto.js';
+import { readLessonAttachments } from './lessons.attachments.js';
 import { lessonsError } from './lessons.errors.js';
 import { toInstant, toIso } from './lessons.time.js';
 import type { ListMyLessonsQueryDto, MyLessonAttendanceDto, MyLessonItemDto, MyLessonListDto } from './my-lessons.dto.js';
@@ -27,6 +28,8 @@ const MY_LESSON_SELECT = {
   endsAt: true,
   status: true,
   meetingUrl: true,
+  recordingUrl: true,
+  attachments: true,
   room: { select: { id: true, code: true, name: true, branch: { select: { id: true, code: true, name: true, timezone: true } } } },
   teacher: { select: { fullName: true, displayName: true } },
   syllabusItem: { select: { id: true, sortOrder: true, title: true } },
@@ -60,6 +63,8 @@ function toItem(row: MyLessonRow, ownership: LessonOwnership, record: MyRecordRo
     endsAt: toIso(row.endsAt),
     status: row.status,
     meetingUrl: row.meetingUrl,
+    recordingUrl: row.recordingUrl,
+    attachments: readLessonAttachments(row.attachments),
     room: row.room
       ? {
           id: row.room.id,

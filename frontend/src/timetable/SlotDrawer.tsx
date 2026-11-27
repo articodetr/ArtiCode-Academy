@@ -101,7 +101,7 @@ export function SlotDrawer({ opened, onClose, language, academyTimeZone, mobile,
               label: t('schedule.details.lessonLink'),
               children: (
                 <a href={link.url} target="_blank" rel="noopener noreferrer">
-                  {link.action === 'join' ? t('schedule.details.joinLesson') : t('schedule.details.openLink')}
+                  {link.action === 'join' ? t('schedule.details.joinLesson') : link.action === 'watch' ? t('lessons.attachments.watchVideo') : t('schedule.details.openLink')}
                 </a>
               ),
             },

@@ -14,6 +14,7 @@ import { useAuth } from '../auth/auth-context'
 import type { useMyClasses } from '../enrollments/useMyClasses'
 import { useLocalized } from '../i18n/useLocalized'
 import { displayNameOf, localizedLabel } from '../users/users.format'
+import { LessonAttachmentLinks } from './LessonAttachmentLinks'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
 import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle } from './lessons.format'
 import { attendanceCellOf, myLessonKey, showsStudents } from './myLessons.view'
@@ -167,6 +168,8 @@ function FeedRow({ item, showStudent }: { item: MyLessonItem; showStudent: boole
             </span>
           ) : null}
         </div>
+        {/* J-F77: the lesson's video and its books and links (none for a cancelled lesson). */}
+        {cancelled ? null : <LessonAttachmentLinks recordingUrl={item.recordingUrl} attachments={item.attachments} />}
       </div>
       <div className="hub-row__actions">
         {joinable ? (

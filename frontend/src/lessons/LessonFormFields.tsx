@@ -18,19 +18,23 @@
 // suggested (LRN-T06, D-R143). `simple` is the teacher's short creation form
 // (J-F76): the day and the start time only (the lesson lasts
 // TEACHER_LESSON_MINUTES), no teacher, room or syllabus item, and a live or
-// recorded delivery mode only.
+// recorded delivery mode only, and the join link of a live lesson or the
+// video of a recorded one is required (J-F77). Every form offers the lesson's
+// attachments (books and links) and the video of a recorded lesson; the edit
+// form offers the video for every mode (a live lesson's recording afterwards).
 import { Alert, Col, Form, Input, Row, Select, Typography } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
 import { DELIVERY_MODES, LESSON_TEXT_MAX_LENGTH, MAX_LESSON_HOURS } from '../api/lessons'
-import type { Lesson } from '../api/lessons'
+import type { DeliveryMode, Lesson } from '../api/lessons'
 import type { Room } from '../api/rooms'
 import { useAuth } from '../auth/auth-context'
 import { useLocalized } from '../i18n/useLocalized'
 import { RoomPicker } from '../timetable/TimetablePickers'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { localizedLabel } from '../users/users.format'
+import { LessonAttachmentsField } from './LessonAttachmentsField'
 import { LessonClassPicker, LessonTeacherSelect, SyllabusItemSelect } from './LessonPickers'
 import { TEACHER_DELIVERY_MODES, TEACHER_LESSON_MINUTES, isMeetingUrlValid } from './lessons.form'
 import { NEXT_DAY_MARK, differsFromDevice, durationMinutes, formatLessonDay, nextDayRangeOf, rangeOf, rangeProblem } from './lessons.format'
@@ -73,6 +77,8 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
   const watchedDate = Form.useWatch('date', form) as string | undefined
   const watchedStart = Form.useWatch('startTime', form) as string | undefined
   const watchedEnd = Form.useWatch('endTime', form) as string | undefined
+  // J-F77: the link fields follow the delivery mode.
+  const watchedMode = Form.useWatch('deliveryMode', form) as DeliveryMode | undefined
   const nextDay = nextDayRangeOf(watchedDate, watchedStart, watchedEnd, zone.timeZone)
   const device = deviceTimeZone()
 
@@ -223,14 +229,35 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
           </Col>
         )}
       </Row>
-      <Form.Item
-        name="meetingUrl"
-        label={t('lessons.fields.meetingUrl')}
-        extra={t('lessons.hints.meetingUrl')}
-        rules={[{ validator: (_, value: string | undefined) => (isMeetingUrlValid(value) ? Promise.resolve() : Promise.reject(new Error(t('lessons.validation.meetingUrl')))) }]}
-      >
-        <Input dir="ltr" placeholder="https://meet.example.com/…" />
-      </Form.Item>
+      {/* J-F77: a recorded lesson has no join link — its video instead; the teacher's form requires the one its mode needs. */}
+      {watchedMode !== 'recorded' ? (
+        <Form.Item
+          name="meetingUrl"
+          label={t(simple ? 'lessons.fields.joinUrl' : 'lessons.fields.meetingUrl')}
+          extra={t('lessons.hints.meetingUrl')}
+          rules={[
+            ...(simple ? [{ required: true, whitespace: true, message: t('lessons.validation.joinUrlRequired') }] : []),
+            { validator: (_: unknown, value: string | undefined) => (isMeetingUrlValid(value) ? Promise.resolve() : Promise.reject(new Error(t('lessons.validation.meetingUrl')))) },
+          ]}
+        >
+          <Input dir="ltr" placeholder="https://meet.example.com/…" />
+        </Form.Item>
+      ) : null}
+      {/* The video: a recorded lesson's, or — in the edit form — a live lesson's recording added afterwards. */}
+      {watchedMode === 'recorded' || mode === 'edit' ? (
+        <Form.Item
+          name="recordingUrl"
+          label={t('lessons.fields.recordingUrl')}
+          extra={t('lessons.hints.recordingUrl')}
+          rules={[
+            ...(simple && watchedMode === 'recorded' ? [{ required: true, whitespace: true, message: t('lessons.validation.recordingUrlRequired') }] : []),
+            { validator: (_: unknown, value: string | undefined) => (isMeetingUrlValid(value) ? Promise.resolve() : Promise.reject(new Error(t('lessons.validation.meetingUrl')))) },
+          ]}
+        >
+          <Input dir="ltr" placeholder="https://www.youtube.com/watch?v=…" />
+        </Form.Item>
+      ) : null}
+      <LessonAttachmentsField />
       <Row gutter={12}>
         <Col xs={24}>
           <Form.Item name="descriptionAr" label={t('lessons.fields.descriptionAr')} rules={[maxLength]}>

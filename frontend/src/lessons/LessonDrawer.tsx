@@ -48,6 +48,7 @@ import { useUnsavedChangesGuard } from '../common/useUnsavedChangesGuard'
 import { StatusTag } from '../components/StatusTag'
 import { useLocalized } from '../i18n/useLocalized'
 import { localizedLabel } from '../users/users.format'
+import { LessonAttachmentLinks } from './LessonAttachmentLinks'
 import { LessonFormFields } from './LessonFormFields'
 import { LessonZoneValue } from './LessonZone'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
@@ -66,7 +67,7 @@ const ICONS: Readonly<Record<LessonMenuAction, ReactNode>> = {
 }
 
 /** Form fields the edit form renders; a server error naming another field is shown as a message instead. */
-const EDIT_FIELDS = new Set(['titleAr', 'titleEn', 'descriptionAr', 'descriptionEn', 'deliveryMode', 'date', 'startTime', 'endTime', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl'])
+const EDIT_FIELDS = new Set(['titleAr', 'titleEn', 'descriptionAr', 'descriptionEn', 'deliveryMode', 'date', 'startTime', 'endTime', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl', 'recordingUrl', 'attachments'])
 
 /** The lesson or its class changed elsewhere (or the lesson is gone): the edit form closes and the drawer re-reads the lesson. */
 const STALE_EDIT_CODES = ['lesson_locked', 'class_closed', 'lesson_not_found'].map((code) => `lessons.errors.${code}`)
@@ -372,6 +373,19 @@ function LessonDetails({ lesson, onOpenAttendance }: { lesson: Lesson; onOpenAtt
           ) : (
             dash
           )}
+        </Descriptions.Item>
+        {/* J-F77: the video and the attachments (books and links). */}
+        <Descriptions.Item label={t('lessons.fields.recordingUrl')}>
+          {lesson.recordingUrl ? (
+            <Typography.Link href={lesson.recordingUrl} target="_blank" rel="noopener noreferrer">
+              <LinkOutlined /> <bdi dir="ltr">{lesson.recordingUrl}</bdi>
+            </Typography.Link>
+          ) : (
+            dash
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('lessons.fields.attachments')}>
+          {lesson.attachments.length > 0 ? <LessonAttachmentLinks attachments={lesson.attachments} /> : <Typography.Text type="secondary">{t('lessons.attachments.none')}</Typography.Text>}
         </Descriptions.Item>
         <Descriptions.Item label={t('lessons.fields.teacher')}>{lesson.teacher?.fullName ?? <Typography.Text type="secondary">{t('lessons.drawer.noTeacher')}</Typography.Text>}</Descriptions.Item>
         <Descriptions.Item label={t('lessons.fields.syllabusItem')}>

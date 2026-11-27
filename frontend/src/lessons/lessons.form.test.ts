@@ -48,6 +48,8 @@ describe('lessons.form', () => {
       teacherUserId: lesson.teacher!.userId,
       syllabusItemId: SYLLABUS_ITEM_IDS[0],
       meetingUrl: 'https://meet.example.com/a',
+      recordingUrl: '',
+      attachments: [],
     })
     // The lesson's zone, not the browser's: the same instants in UTC+14 are past midnight there (D-R41 — J-F28).
     const far = makeLesson({ timeZone: FAR_TIME_ZONE })
@@ -258,6 +260,38 @@ describe('lessons.form', () => {
     // Both description texts emptied: the PATCH clears a stored description; there is nothing to clear on a lesson without one.
     expect(lessonFormHasChanges(lesson, values({ descriptionAr: '', descriptionEn: '' }))).toBe(true)
     expect(lessonFormHasChanges(plain, { ...lessonFormValuesOf(plain), descriptionAr: ' ', descriptionEn: '' })).toBe(false)
+  })
+
+  it('J-F77 (TEST-340) — on creation a recorded lesson sends its video and no join link, any other its join link and no video, and the attachments trimmed', () => {
+    const create = (overrides: Partial<LessonFormValues>) => buildCreateLessonInput(values({ teacherUserId: undefined, roomId: undefined, syllabusItemId: undefined, ...overrides }), LESSON_TIME_ZONE)
+    const recorded = create({ deliveryMode: 'recorded', meetingUrl: 'https://meet.example.com/a', recordingUrl: ' https://youtu.be/x ' })
+    expect(recorded.recordingUrl).toBe('https://youtu.be/x')
+    expect(recorded).not.toHaveProperty('meetingUrl')
+    const live = create({ deliveryMode: 'live_online', recordingUrl: 'https://youtu.be/x' })
+    expect(live.meetingUrl).toBe('https://meet.example.com/a')
+    expect(live).not.toHaveProperty('recordingUrl')
+    expect(live).not.toHaveProperty('attachments')
+    const withBooks = create({ attachments: [{ kind: 'book', titleAr: ' الكتاب ', titleEn: '', titleTr: ' ', url: ' https://cdn.example.org/b.pdf ' }] })
+    expect(withBooks.attachments).toEqual([{ kind: 'book', title: { ar: 'الكتاب' }, url: 'https://cdn.example.org/b.pdf' }])
+  })
+
+  it('J-F77 (TEST-340) — an edit sends the video and the attachments only when they change, keeps the other locales of a title, and a field the form does not show is unchanged', () => {
+    const stored = makeLesson({ meetingUrl: 'https://meet.example.com/a', recordingUrl: 'https://youtu.be/x', attachments: [{ kind: 'book', title: { ar: 'الكتاب', en: 'The book' }, url: 'https://cdn.example.org/b.pdf' }] })
+    const loaded = lessonFormValuesOf(stored)
+    expect(loaded.attachments).toEqual([{ kind: 'book', titleAr: 'الكتاب', titleEn: 'The book', titleTr: '', url: 'https://cdn.example.org/b.pdf' }])
+    expect(planLessonPatch(stored, loaded)).toBeNull()
+    // The fields a recorded lesson's form does not show come back undefined: nothing is cleared.
+    expect(planLessonPatch(stored, { ...loaded, meetingUrl: undefined, recordingUrl: undefined, attachments: undefined })).toBeNull()
+    expect(planLessonPatch(stored, { ...loaded, recordingUrl: '' })).toEqual({ recordingUrl: null })
+    const renamed = planLessonPatch(stored, { ...loaded, attachments: [{ ...loaded.attachments![0]!, titleAr: 'كتاب الوحدة' }, { kind: 'link', titleAr: 'تمارين', url: 'https://example.org/d' }] })
+    expect(renamed).toEqual({
+      attachments: [
+        { kind: 'book', title: { ar: 'كتاب الوحدة', en: 'The book' }, url: 'https://cdn.example.org/b.pdf' },
+        { kind: 'link', title: { ar: 'تمارين' }, url: 'https://example.org/d' },
+      ],
+    })
+    expect(planLessonPatch(stored, { ...loaded, attachments: [] })).toEqual({ attachments: [] })
+    expect(lessonFormHasChanges(stored, { ...loaded, attachments: [] })).toBe(true)
   })
 
   it('accepts a blank or https meeting link only', () => {

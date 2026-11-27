@@ -160,6 +160,26 @@ describe('LessonDrawer', () => {
     expect(screen.queryByText(ar.lessons.actions.menu)).not.toBeInTheDocument()
   })
 
+  it('J-F77 (TEST-340) — shows the lesson’s video link and its books and links, each opening in a new tab; «no attachments» without any', async () => {
+    const lesson = makeLesson({
+      deliveryMode: 'recorded',
+      recordingUrl: 'https://videos.example.com/v1',
+      attachments: [
+        { kind: 'book', title: { ar: 'كتاب الوحدة' }, url: 'https://cdn.example.org/unit.pdf' },
+        { kind: 'link', title: { ar: 'تمارين' }, url: 'https://example.org/drills' },
+      ],
+    })
+    mockLessonApi(() => lesson)
+    renderDrawer(LESSON_STAFF_PERMISSIONS)
+    expect(await screen.findByText('https://videos.example.com/v1')).toBeInTheDocument()
+    expect(screen.getByText('https://videos.example.com/v1').closest('a')).toHaveAttribute('href', 'https://videos.example.com/v1')
+    const book = screen.getByText('كتاب الوحدة').closest('a')!
+    expect(book).toHaveAttribute('href', 'https://cdn.example.org/unit.pdf')
+    expect(book).toHaveAttribute('target', '_blank')
+    expect(screen.getByText('تمارين').closest('a')).toHaveAttribute('href', 'https://example.org/drills')
+    expect(screen.queryByText(ar.lessons.attachments.none)).not.toBeInTheDocument()
+  })
+
   it('says "not found or not in a class assigned to you" when the server answers 404', async () => {
     mockFetch(() => jsonResponse(404, { statusCode: 404, code: 'lesson_not_found', lessonId: LESSON_ID, message: 'No lesson' }))
     renderDrawer(LESSON_ADMIN_PERMISSIONS)

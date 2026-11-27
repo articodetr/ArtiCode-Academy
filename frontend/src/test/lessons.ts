@@ -57,6 +57,8 @@ export function makeLesson(overrides: Partial<Lesson> = {}): Lesson {
     syllabusItem: { id: SYLLABUS_ITEM_IDS[0], sortOrder: 0, title: { ar: 'المتغيرات', en: 'Variables' } },
     scheduleId: null,
     meetingUrl: null,
+    recordingUrl: null,
+    attachments: [],
     cancellationReason: null,
     attendanceTakenAt: null,
     attendance: { ...EMPTY_ATTENDANCE },

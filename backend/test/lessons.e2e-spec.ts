@@ -32,6 +32,7 @@ const CLASSES = '/api/classes';
 const LESSONS = '/api/lessons';
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 const LESSON_KEYS = [
+  'attachments',
   'attendance',
   'attendanceTakenAt',
   'cancellationReason',
@@ -42,6 +43,7 @@ const LESSON_KEYS = [
   'endsAt',
   'id',
   'meetingUrl',
+  'recordingUrl',
   'room',
   'scheduleId',
   'startsAt',
@@ -251,6 +253,8 @@ describe.skipIf(!available)('MOD-06 lessons (e2e, TEST-077)', () => {
       syllabusItem: { id: itemA1, sortOrder: 1 },
       scheduleId: null,
       meetingUrl: 'https://meet.example.com/a',
+      recordingUrl: null,
+      attachments: [],
       cancellationReason: null,
       attendanceTakenAt: null,
       attendance: { recorded: 0, present: 0, absent: 0, late: 0, excused: 0 },
@@ -483,6 +487,53 @@ describe.skipIf(!available)('MOD-06 lessons (e2e, TEST-077)', () => {
     }
     expect(await eventsSince(m3)).toEqual([]);
     expect((await eventsSince(m2)).map((event) => event.action)).toEqual(['lessons.updated']);
+  });
+
+  it('J-F77 (TEST-340) — the video link and the attachments: stored normalised, replaced as a whole with one event, refused when malformed, editable after the lesson, frozen once cancelled', async () => {
+    const book = { kind: 'book', title: { ar: ' كتاب الوحدة ', en: '' }, url: 'https://cdn.example.org/unit.pdf' };
+    const link = { kind: 'link', title: { ar: 'تمارين' }, url: 'https://example.org/drills' };
+    // Its own class, so the lists of AC7 and the other tests never see these lessons.
+    const e = await createClass('E', [id('teacher')], ['open']);
+    const m = await mark();
+    const created = await create(
+      e,
+      lesson({ startsAt: '2026-11-25T10:00:00Z', endsAt: '2026-11-25T11:00:00Z', deliveryMode: 'recorded', recordingUrl: 'https://videos.example.com/v1', attachments: [book] }),
+      'teacher',
+    );
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const lessonId = created.body.id as string;
+    expect(created.body).toMatchObject({ deliveryMode: 'recorded', recordingUrl: 'https://videos.example.com/v1', attachments: [{ kind: 'book', title: { ar: 'كتاب الوحدة' }, url: 'https://cdn.example.org/unit.pdf' }] });
+    expect((await get(lessonId).expect(200)).body).toMatchObject({ recordingUrl: 'https://videos.example.com/v1', attachments: created.body.attachments });
+    expect((await eventsSince(m)).map((event) => event.action)).toEqual(['lessons.created']);
+
+    // The same list (spaces and a blank locale aside) is no change; a new list and a new link are one event naming both fields.
+    const m2 = await mark();
+    expect((await patch(lessonId, { attachments: [book], recordingUrl: 'https://videos.example.com/v1' }, 'teacher')).status).toBe(200);
+    expect(await eventsSince(m2)).toEqual([]);
+    const changed = await patch(lessonId, { attachments: [link, book], recordingUrl: 'https://videos.example.com/v2' }, 'teacher');
+    expect(changed.status, JSON.stringify(changed.body)).toBe(200);
+    expect(changed.body.attachments.map((item: { kind: string }) => item.kind)).toEqual(['link', 'book']);
+    expect((await eventsSince(m2)).map((event) => [event.action, event.metadata])).toEqual([
+      ['lessons.updated', { classId: e, code: code('E'), fields: ['recordingUrl', 'attachments'] }],
+    ]);
+
+    // Malformed: 400 before anything is written — attachments_invalid names the problems; the DTO refuses the rest.
+    const m3 = await mark();
+    const bad = await patch(lessonId, { attachments: [{ ...link, url: 'http://example.org' }] }, 'teacher');
+    expect(bad.status).toBe(400);
+    expect(bad.body).toMatchObject({ code: 'attachments_invalid', problems: [expect.stringMatching(/^0\.url: /)] });
+    expect((await create(e, lesson({ attachments: [{ kind: 'video', title: { ar: 'x' }, url: 'https://x.org' }] }), 'teacher')).body.code).toBe('attachments_invalid');
+    for (const body of [{ attachments: null }, { attachments: 'book' }, { attachments: Array.from({ length: 21 }, () => link) }, { recordingUrl: 'http://videos.example.com/x' }]) {
+      expect((await patch(lessonId, body, 'teacher')).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await eventsSince(m3)).toEqual([]);
+
+    // After the lesson (completed) its video can still be added — a live lesson's recording; a cancelled lesson accepts nothing.
+    expect((await act(lessonId, 'complete', undefined, 'teacher')).status).toBe(200);
+    expect((await patch(lessonId, { recordingUrl: null, attachments: [] }, 'teacher')).body).toMatchObject({ recordingUrl: null, attachments: [] });
+    const other = (await create(e, lesson({ startsAt: '2026-11-26T10:00:00Z', endsAt: '2026-11-26T11:00:00Z' }), 'teacher')).body.id as string;
+    expect((await act(other, 'cancel', undefined, 'teacher')).status).toBe(200);
+    expect((await patch(other, { recordingUrl: 'https://videos.example.com/v3' }, 'teacher')).body).toMatchObject({ code: 'lesson_locked', fields: ['recordingUrl'] });
   });
 
   it('AC7 — the list filters by class, teacher, status and instants, and pages by start time then id', async () => {

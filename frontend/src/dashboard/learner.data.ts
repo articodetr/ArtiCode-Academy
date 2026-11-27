@@ -47,10 +47,18 @@ export function nextLessonOf(lessons: readonly MyLessonItem[], now: number): MyL
 /**
  * The link a lesson offers on the learner home (KI-062): every lesson with a stored link that is not cancelled, as
  * on «my lessons» — also while it runs and after it ended, when a recording may sit behind the link. «Join» only
- * fits a lesson that can still be joined; a recorded, finished or past one offers «open the link».
+ * fits a lesson that can still be joined; a recorded, finished or past one offers «open the link». Since J-F77 a
+ * lesson's video (`recordingUrl`) comes first for a recorded lesson, for a lesson without a join link and for one that
+ * has ended (a live lesson's recording): «watch the video».
  */
-export function lessonLinkOf(lesson: Pick<MyLessonItem, 'status' | 'meetingUrl' | 'deliveryMode' | 'endsAt'>, now: number): { url: string; action: 'join' | 'open' } | null {
-  if (lesson.status === 'cancelled' || !lesson.meetingUrl) return null
+export function lessonLinkOf(
+  lesson: Pick<MyLessonItem, 'status' | 'meetingUrl' | 'deliveryMode' | 'endsAt'> & { recordingUrl?: string | null },
+  now: number,
+): { url: string; action: 'join' | 'open' | 'watch' } | null {
+  if (lesson.status === 'cancelled') return null
+  const ended = lesson.status === 'completed' || Date.parse(lesson.endsAt) <= now
+  if (lesson.recordingUrl && (lesson.deliveryMode === 'recorded' || ended || !lesson.meetingUrl)) return { url: lesson.recordingUrl, action: 'watch' }
+  if (!lesson.meetingUrl) return null
   const joinable = lesson.deliveryMode !== 'recorded' && lesson.status === 'scheduled' && Date.parse(lesson.endsAt) > now
   return { url: lesson.meetingUrl, action: joinable ? 'join' : 'open' }
 }

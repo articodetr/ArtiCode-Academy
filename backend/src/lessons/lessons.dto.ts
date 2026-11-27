@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { SortOrder } from '../common/keyset-cursor.js';
 import { DeliveryMode, LessonStatus } from '../generated/prisma/client.js';
@@ -8,6 +8,8 @@ import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { ScheduleRoomDto, ScheduleTeacherDto } from '../schedule/class-schedule.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { nullableTextParam, textParam } from '../users/users.validation.js';
+import { ATTACHMENTS_MAX, ATTACHMENT_KINDS } from './lessons.attachments.js';
+import type { AttachmentKind } from './lessons.attachments.js';
 import { LESSON_STATUS_ACTIONS } from './lessons.status.js';
 import type { LessonStatusAction } from './lessons.status.js';
 import { IsInstant, MAX_LESSON_HOURS } from './lessons.time.js';
@@ -26,6 +28,11 @@ export const MEETING_URL_PATTERN = /^https:\/\/\S+$/;
 export const LESSON_STATUS_REASON_MAX_LENGTH = 500;
 
 const MEETING_URL_MESSAGE = 'meetingUrl must be an https:// link without spaces';
+const RECORDING_URL_MESSAGE = 'recordingUrl must be an https:// link without spaces';
+const ATTACHMENTS_DESCRIPTION =
+  'J-F77: the lesson’s attachments as a whole new list — [{ kind: book|link, title: { ar, en?, tr? }, url }], https links only, at most ' +
+  ATTACHMENTS_MAX +
+  '; [] removes them (400 attachments_invalid { problems }).';
 
 export class ListLessonsQueryDto {
   @ApiPropertyOptional({ maxLength: TITLE_QUERY_MAX_LENGTH, example: 'review', description: TITLE_QUERY_DESCRIPTION })
@@ -139,12 +146,37 @@ export class CreateLessonDto {
   @Length(1, MEETING_URL_MAX_LENGTH)
   @Matches(MEETING_URL_PATTERN, { message: MEETING_URL_MESSAGE })
   meetingUrl?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    maxLength: MEETING_URL_MAX_LENGTH,
+    example: 'https://www.youtube.com/watch?v=abc',
+    description: 'J-F77: the lesson’s video (a recorded lesson’s, or a live lesson’s recording) — `https://` only; null or blank = none / clears it',
+  })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @ValidateIf((_dto, value) => value !== null)
+  @IsString()
+  @Length(1, MEETING_URL_MAX_LENGTH)
+  @Matches(MEETING_URL_PATTERN, { message: RECORDING_URL_MESSAGE })
+  recordingUrl?: string | null;
+
+  @ApiPropertyOptional({ type: () => [LessonAttachmentDto], maxItems: ATTACHMENTS_MAX, description: ATTACHMENTS_DESCRIPTION })
+  // The raw JSON array: the global implicit conversion would turn each object into an array (as API-228 does).
+  @Transform(({ obj }: { obj: Record<string, unknown> }) => obj['attachments'])
+  // Absent, never null: `IsOptional` would let a null through to the service.
+  @ValidateIf((_dto, value) => value !== undefined)
+  @IsArray()
+  @ArrayMaxSize(ATTACHMENTS_MAX)
+  attachments?: unknown[];
 }
 
 /**
  * PATCH semantics (as API-018): absent = unchanged, `null` clears
  * `description`, `roomId`, `teacherUserId`, `syllabusItemId` and
- * `meetingUrl`; `title`, `deliveryMode`, `startsAt` and `endsAt` refuse null.
+ * `meetingUrl` and `recordingUrl`; `attachments` is replaced as a whole ([] = none);
+ * `title`, `deliveryMode`, `startsAt` and `endsAt` refuse null.
  * Time, room and teacher change for a scheduled lesson only; a cancelled
  * lesson accepts nothing (`lesson_locked`). The status changes through
  * `POST /api/lessons/:id/status`.
@@ -206,6 +238,30 @@ export class UpdateLessonDto {
   @Length(1, MEETING_URL_MAX_LENGTH)
   @Matches(MEETING_URL_PATTERN, { message: MEETING_URL_MESSAGE })
   meetingUrl?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    maxLength: MEETING_URL_MAX_LENGTH,
+    example: 'https://www.youtube.com/watch?v=abc',
+    description: 'J-F77: the lesson’s video (a recorded lesson’s, or a live lesson’s recording) — `https://` only; null or blank = none / clears it',
+  })
+  @IsOptional()
+  @Transform(nullableTextParam)
+  @ValidateIf((_dto, value) => value !== null)
+  @IsString()
+  @Length(1, MEETING_URL_MAX_LENGTH)
+  @Matches(MEETING_URL_PATTERN, { message: RECORDING_URL_MESSAGE })
+  recordingUrl?: string | null;
+
+  @ApiPropertyOptional({ type: () => [LessonAttachmentDto], maxItems: ATTACHMENTS_MAX, description: ATTACHMENTS_DESCRIPTION })
+  // The raw JSON array: the global implicit conversion would turn each object into an array (as API-228 does).
+  @Transform(({ obj }: { obj: Record<string, unknown> }) => obj['attachments'])
+  // Absent, never null: `IsOptional` would let a null through to the service.
+  @ValidateIf((_dto, value) => value !== undefined)
+  @IsArray()
+  @ArrayMaxSize(ATTACHMENTS_MAX)
+  attachments?: unknown[];
 }
 
 export class ChangeLessonStatusDto {
@@ -242,6 +298,18 @@ export class LessonSyllabusItemDto {
 
   @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
   title: LocalizedText;
+}
+
+/** J-F77: one attachment of a lesson — a book or a link. */
+export class LessonAttachmentDto {
+  @ApiProperty({ enum: ATTACHMENT_KINDS, description: 'book = a textbook or a handout (usually a PDF); link = any other page' })
+  kind: AttachmentKind;
+
+  @ApiProperty({ type: () => LocalizedTextDto, description: 'Localized title `{ ar, en?, tr? }`' })
+  title: LocalizedText;
+
+  @ApiProperty({ example: 'https://cdn.example.org/book.pdf', description: 'An absolute https URL' })
+  url: string;
 }
 
 /** Attendance records of the lesson by status (computed, never stored). */
@@ -304,6 +372,12 @@ export class LessonDto {
 
   @ApiProperty({ type: String, nullable: true })
   meetingUrl: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: 'J-F77: the lesson’s video link (https) or null' })
+  recordingUrl: string | null;
+
+  @ApiProperty({ type: () => [LessonAttachmentDto], description: 'J-F77: the lesson’s attachments (books and links); [] = none' })
+  attachments: LessonAttachmentDto[];
 
   @ApiProperty({ type: String, nullable: true, description: 'Set by `cancel`, cleared by `restore`' })
   cancellationReason: string | null;

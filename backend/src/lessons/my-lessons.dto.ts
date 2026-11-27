@@ -9,7 +9,7 @@ import { LocalizedTextDto } from '../roles/roles.dto.js';
 import { ScheduleRoomDto } from '../schedule/class-schedule.dto.js';
 import { TimetableClassDto } from '../schedule/timetable.dto.js';
 import { ATTENDANCE_STATUSES } from './attendance.dto.js';
-import { DELIVERY_MODES, LESSON_STATUSES, LESSONS_PAGE_DEFAULT, LESSONS_PAGE_MAX, LessonSyllabusItemDto } from './lessons.dto.js';
+import { DELIVERY_MODES, LESSON_STATUSES, LESSONS_PAGE_DEFAULT, LESSONS_PAGE_MAX, LessonAttachmentDto, LessonSyllabusItemDto } from './lessons.dto.js';
 import { IsInstant } from './lessons.time.js';
 
 const RELATIONS: MyClassRelation[] = ['self', 'child'];
@@ -101,6 +101,12 @@ export class MyLessonItemDto {
 
   @ApiProperty({ type: String, nullable: true, description: 'The meeting link of a live lesson, as stored' })
   meetingUrl: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: 'J-F77: the lesson’s video link (https), as stored' })
+  recordingUrl: string | null;
+
+  @ApiProperty({ type: () => [LessonAttachmentDto], description: 'J-F77: the lesson’s attachments (books and links); [] = none' })
+  attachments: LessonAttachmentDto[];
 
   @ApiProperty({ type: ScheduleRoomDto, nullable: true })
   room: ScheduleRoomDto | null;
