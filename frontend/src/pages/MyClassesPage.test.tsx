@@ -131,6 +131,24 @@ describe('MyClassesPage', () => {
     expect(document.body.textContent).not.toContain('@')
   })
 
+  it('titles a card by the course and names only a class of its own, never the general class (PORTAL-04-CARD-COURSE)', async () => {
+    // The general class «فتح الاشتراك» creates: `<course code>-GEN`, named «الفصل العام».
+    const general = makeMyClassItem({
+      enrollmentId: ENROLLMENT_IDS[1],
+      class: { ...own.class, id: 'c-gen', code: 'PY-101-GEN', name: { ar: 'الفصل العام', en: 'General class' } },
+    })
+    mockMyClassesApi(makeMyClassList([general, own]))
+    renderPage(['student'])
+
+    await screen.findAllByText('أساسيات بايثون')
+    const [generalCard, ownCard] = classCards()
+    expect(within(generalCard!).getByRole('heading', { level: 3, name: 'أساسيات بايثون' })).toBeInTheDocument()
+    expect(within(generalCard!).queryByText('الفصل العام')).not.toBeInTheDocument()
+    expect(within(generalCard!).queryByTestId('my-class-own-class')).not.toBeInTheDocument()
+    expect(within(ownCard!).getByRole('heading', { level: 3, name: 'أساسيات بايثون' })).toBeInTheDocument()
+    expect(within(ownCard!).getByTestId('my-class-own-class')).toHaveTextContent('بايثون — الفصل أ')
+  })
+
   it('shows a guardian the linked students with the relation tag', async () => {
     mockMyClassesApi(makeMyClassList([child, own]))
     renderPage(['guardian', 'student'])

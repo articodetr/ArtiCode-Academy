@@ -14,7 +14,8 @@ export type CourseStatus = (typeof COURSE_STATUSES)[number]
 export const COURSE_STATUS_ACTIONS = ['publish', 'unpublish', 'archive', 'restore'] as const
 export type CourseStatusAction = (typeof COURSE_STATUS_ACTIONS)[number]
 
-export const COURSE_SORT_FIELDS = ['code', 'createdAt'] as const
+// PORTAL-04-COURSE-ORDER: `position` = the order the office sets with the arrows, the catalogs' order.
+export const COURSE_SORT_FIELDS = ['code', 'createdAt', 'position'] as const
 export type CourseSortField = (typeof COURSE_SORT_FIELDS)[number]
 
 export interface CourseLevel {
@@ -61,6 +62,8 @@ export interface Course {
   minAge: number | null
   maxAge: number | null
   syllabusCount: number
+  /** PORTAL-04-COURSE-ORDER: the course's place (smaller = earlier) in the catalogs; unique, with gaps — compare, never count. */
+  sortOrder: number
   /** MOD-19 (D-R129): an absolute http(s) URL of the cover image, or null. */
   coverImageUrl: string | null
   /** J-F67: the course's own materials (its textbook), shown on its card in «دوراتي»; absent from an older server. */
@@ -178,6 +181,16 @@ export function updateCourse(id: string, input: UpdateCourseInput): Promise<Cour
 
 export function changeCourseStatus(id: string, action: CourseStatusAction): Promise<Course> {
   return apiRequest<Course>(`${coursePath(id)}/status`, { method: 'POST', body: { action } })
+}
+
+export type CourseMoveDirection = 'up' | 'down'
+
+/**
+ * PORTAL-04-COURSE-ORDER: POST /api/courses/:id/move — swaps the course with the one just before (`up`) or after
+ * (`down`) it in the order of every course; at the top or the bottom the server answers the course unchanged.
+ */
+export function moveCourse(id: string, direction: CourseMoveDirection): Promise<Course> {
+  return apiRequest<Course>(`${coursePath(id)}/move`, { method: 'POST', body: { direction } })
 }
 
 /** API-047: drafts only (`course_not_deletable` otherwise); resolves on 204. */

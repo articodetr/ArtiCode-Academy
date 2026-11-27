@@ -9,7 +9,7 @@ import { COURSE_MANAGER_PERMISSIONS, COURSE_READER_PERMISSIONS, makeCourse, make
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeFeePlan } from '../test/payments'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { SUBJECT_IDS, THREE_SUBJECTS } from '../test/subjects'
+import { THREE_SUBJECTS } from '../test/subjects'
 import { CoursesPage } from './CoursesPage'
 
 const python = makeCourse({ status: 'published' })
@@ -23,6 +23,7 @@ function mockCoursesApi(
 ) {
   const queries: URLSearchParams[] = []
   const posts: unknown[] = []
+  const moves: { id: string; body: unknown }[] = []
   const fetchMock = mockFetch((url, init) => {
     const parsed = new URL(url, 'http://localhost')
     const method = init?.method ?? 'GET'
@@ -37,10 +38,15 @@ function mockCoursesApi(
       posts.push(JSON.parse(String(init?.body)))
       return created
     }
+    const moved = /^\/api\/courses\/([^/]+)\/move$/.exec(parsed.pathname)
+    if (moved && method === 'POST') {
+      moves.push({ id: moved[1]!, body: JSON.parse(String(init?.body)) })
+      return jsonResponse(200, makeCourse({ id: moved[1]! }))
+    }
     if (parsed.pathname.startsWith('/api/courses/') && method === 'GET') return jsonResponse(200, makeCourse({ id: 'new-1', code: 'NEW-1', name: { ar: 'دورة جديدة' } }))
     return jsonResponse(404, { statusCode: 404, code: 'course_not_found', message: 'nope' })
   })
-  return { fetchMock, queries, posts }
+  return { fetchMock, queries, posts, moves }
 }
 
 /** The address's query string, to see that `?create=` is dropped once read (J-F59). */
@@ -66,12 +72,14 @@ describe('CoursesPage', () => {
     const rows = bodyRows()
     expect(rows).toHaveLength(1)
     expect(within(rows[0]!).getByText('أساسيات بايثون')).toBeInTheDocument()
-    expect(within(rows[0]!).getByText('مبتدئ')).toBeInTheDocument()
     expect(within(rows[0]!).getByText(ar.labels.published)).toBeInTheDocument()
     expect(screen.getByText(ar.courses.readOnlyHint)).toBeInTheDocument()
     expect(screen.queryByText(ar.courses.addCourse)).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: ar.common.status })).not.toBeInTheDocument()
-    expect(Object.fromEntries(api.queries[0]!)).toEqual({ sort: 'code', limit: '20' })
+    // PORTAL-04-COURSE-ORDER: the office's order by default — the order the catalogs show; no order column for a reader.
+    expect(Object.fromEntries(api.queries[0]!)).toEqual({ sort: 'position', limit: '20' })
+    expect(within(screen.getByRole('table')).queryByText(ar.courses.columns.order)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(ar.courses.level)).not.toBeInTheDocument()
   })
 
   it('keeps the table in its own horizontal scroll box, so a phone never scrolls the page sideways (KI-095)', async () => {
@@ -145,21 +153,6 @@ describe('CoursesPage', () => {
     expect(api.posts).toEqual([{ name: { ar: 'مكرر' } }])
   })
 
-  it('shows an inactive subject on the subject field', async () => {
-    mockCoursesApi(makeCourseList([python]), jsonResponse(422, { statusCode: 422, code: 'subject_inactive', subjectId: SUBJECT_IDS[1], message: 'off' }))
-    renderPage(COURSE_MANAGER_PERMISSIONS)
-    await screen.findByText('PY-101')
-
-    fireEvent.click(screen.getByText(ar.courses.addCourse).closest('button')!)
-    const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
-    await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة')
-    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.subject }))
-    fireEvent.click(await screen.findByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
-    fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
-
-    const shown = await within(dialog).findByText(ar.courses.errors.subject_inactive)
-    expect(shown.closest('.ant-form-item')).toHaveTextContent(ar.courses.fields.subject)
-  })
 
   it('refuses locally an empty name, a too long summary and a bad cover link, each under its field, before any request', async () => {
     const api = mockCoursesApi(makeCourseList([]))
@@ -178,7 +171,7 @@ describe('CoursesPage', () => {
     expect(api.posts).toEqual([])
   })
 
-  it('creates a course with its subject and asks no age range (PORTAL-04)', async () => {
+  it('creates a course with no subject and no age range, and reads no subjects list (PORTAL-04-COURSE-ORDER)', async () => {
     const api = mockCoursesApi(makeCourseList([python]))
     renderPage(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
@@ -187,14 +180,12 @@ describe('CoursesPage', () => {
     const dialog = (await screen.findByText(ar.courses.create.title)).closest('[role="dialog"]') as HTMLElement
     expect(within(dialog).queryByText('أصغر عمر')).not.toBeInTheDocument()
     expect(within(dialog).queryByText('أكبر عمر')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(ar.courses.fields.subject)).not.toBeInTheDocument()
     await userEvent.type(within(dialog).getByLabelText(ar.courses.fields.name), 'دورة جديدة')
-    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: ar.courses.fields.subject }))
-    // A manager reads the inactive subjects too: they are marked, not hidden.
-    expect(await screen.findByText(/الفنون/, { selector: '.ant-select-item-option-content' })).toHaveTextContent(ar.labels.inactive)
-    fireEvent.click(screen.getByText(/الرياضيات/, { selector: '.ant-select-item-option-content' }))
     fireEvent.click(within(dialog).getByText(ar.courses.create.submit).closest('button')!)
 
-    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة جديدة' }, subjectId: SUBJECT_IDS[1] }]))
+    await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة جديدة' } }]))
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/subjects'))).toBe(false)
   })
 
   it('creates a paid course with a general fee plan as its price; only the general active plans are offered (fee_plans.manage)', async () => {
@@ -245,42 +236,55 @@ describe('CoursesPage', () => {
     await waitFor(() => expect(api.posts).toEqual([{ name: { ar: 'دورة مجانية' } }]))
   })
 
-  it('gives a manager the subjects tab beside the levels tab; a reader neither the tab nor a read of the subjects (PORTAL-04)', async () => {
-    const managed = mockCoursesApi(makeCourseList([python]))
-    const view = renderPage(COURSE_MANAGER_PERMISSIONS)
+  it('has no levels or subjects tab, no level column and no level filter (PORTAL-04-COURSE-ORDER)', async () => {
+    const api = mockCoursesApi(makeCourseList([python]))
+    renderPage(COURSE_MANAGER_PERMISSIONS)
     await screen.findByText('PY-101')
 
-    const tabs = [...document.querySelectorAll('.ant-tabs-tab')].map((tab) => tab.textContent)
-    expect(tabs).toEqual([ar.courses.tabs.courses, ar.courses.tabs.levels, ar.courses.tabs.subjects])
-    fireEvent.click(screen.getByText(ar.courses.tabs.subjects))
-    expect(await screen.findByLabelText(`${ar.courses.subjects.delete}: PROG`)).toBeDisabled()
-    expect(screen.getByText(ar.courses.subjects.add)).toBeInTheDocument()
-    expect(screen.queryByText(ar.courses.addCourse)).not.toBeInTheDocument()
-    expect(managed.fetchMock.mock.calls.filter(([url]) => String(url) === '/api/subjects')).toHaveLength(1)
-    view.unmount()
-
-    const read = mockCoursesApi(makeCourseList([python]))
-    renderPage(COURSE_READER_PERMISSIONS)
-    await screen.findByText('PY-101')
+    expect(document.querySelector('.ant-tabs')).toBeNull()
+    expect(screen.queryByText(ar.courses.tabs.levels)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.courses.tabs.subjects)).not.toBeInTheDocument()
-    expect(read.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/subjects'))).toBe(false)
+    const headers = [...within(screen.getByRole('table')).getAllByRole('columnheader')].map((cell) => cell.textContent)
+    expect(headers).not.toContain(ar.courses.level)
+    expect(screen.queryByRole('combobox', { name: ar.courses.level })).not.toBeInTheDocument()
+    expect(within(bodyRows()[0]!).queryByText('مبتدئ')).not.toBeInTheDocument()
+    // Neither the levels nor the subjects are read any more.
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/levels'))).toBe(false)
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/subjects'))).toBe(false)
   })
 
-  it('gives a manager the levels tab (MOD-04-T06) and a reader no tabs at all', async () => {
-    mockCoursesApi(makeCourseList([python]))
-    const view = renderPage(COURSE_MANAGER_PERMISSIONS)
-    await screen.findByText('PY-101')
+  it('moves a course with the arrows: POST …/move with the direction, then the page is read again; the first row cannot go up nor the last down', async () => {
+    const first = makeCourse({ id: 'c-1', code: 'AAA', name: { ar: 'الأولى' }, sortOrder: 1 })
+    const second = makeCourse({ id: 'c-2', code: 'BBB', name: { ar: 'الثانية' }, sortOrder: 2 })
+    const api = mockCoursesApi(makeCourseList([first, second]))
+    renderPage(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('AAA')
+    expect(screen.getByTestId('courses-order-note')).toHaveTextContent(ar.courses.order.note)
 
-    fireEvent.click(screen.getByText(ar.courses.tabs.levels))
-    expect(await screen.findByLabelText(`${ar.courses.levels.delete}: BEG`)).toBeDisabled()
-    expect(screen.queryByText(ar.courses.addCourse)).not.toBeInTheDocument()
-    expect(screen.getByText(ar.courses.levels.add)).toBeInTheDocument()
-    view.unmount()
+    const up = (name: string) => screen.getByLabelText(`تقديم «${name}»`)
+    const down = (name: string) => screen.getByLabelText(`تأخير «${name}»`)
+    expect(up('الأولى')).toBeDisabled()
+    expect(down('الثانية')).toBeDisabled()
+    expect(down('الأولى')).toBeEnabled()
+    expect(up('الثانية')).toBeEnabled()
 
-    mockCoursesApi(makeCourseList([python]))
-    renderPage(COURSE_READER_PERMISSIONS)
-    await screen.findByText('PY-101')
-    expect(screen.queryByText(ar.courses.tabs.levels)).not.toBeInTheDocument()
+    const reads = api.queries.length
+    fireEvent.click(up('الثانية'))
+    await waitFor(() => expect(api.moves).toEqual([{ id: 'c-2', body: { direction: 'up' } }]))
+    await waitFor(() => expect(api.queries.length).toBeGreaterThan(reads))
+    // The arrow never opens the row's drawer.
+    expect(api.fetchMock.mock.calls.some(([url]) => String(url) === '/api/courses/c-2')).toBe(false)
+  })
+
+  it('turns the arrows off with a search, a status filter or another sort, and says why', async () => {
+    mockCoursesApi(makeCourseList([python, web]))
+    renderPage(COURSE_MANAGER_PERMISSIONS)
+    await screen.findByText('WEB-201')
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: ar.courses.sort }))
+    fireEvent.click(await screen.findByText(ar.courses.sortByCode, { selector: '.ant-select-item-option-content' }))
+    await waitFor(() => expect(screen.getByTestId('courses-order-note')).toHaveTextContent(ar.courses.order.hint))
+    for (const button of screen.getAllByLabelText(/^(تقديم|تأخير) «/)) expect(button).toBeDisabled()
   })
 
   it('opens the creation modal from ?create=course for a manager and drops the parameter; a reader gets no modal (J-F59)', async () => {

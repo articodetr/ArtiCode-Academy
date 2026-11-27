@@ -180,7 +180,8 @@ export const curriculum = {
       image: 'رابط الصورة يبدأ بـ https://',
       file: 'رابط الملف يبدأ بـ https://',
     },
-    durationSeconds: 'المدة (ثوانٍ)',
+    // PORTAL-04-MINUTES: typed in minutes (12.5 = 12 دقيقة و30 ثانية); stored in seconds.
+    durationMinutes: 'المدة (بالدقائق)',
     durationRequiredHint: 'مطلوبة: يُحسب إكمال الدرس من المدة المشاهَدة منها.',
     durationOptionalHint: 'اختيارية: تُعرض للطالب فقط.',
     detectDuration: 'اكتشاف المدة',
@@ -218,7 +219,7 @@ export const curriculum = {
       youtube: 'ليس رابط فيديو على YouTube',
       vimeo: 'ليس رابط فيديو على Vimeo',
       durationRequired: 'المدة مطلوبة لهذا النوع',
-      duration: 'عدد صحيح من الثواني بين 1 و{{max}}',
+      duration: 'أدخل المدة بالدقائق: أكبر من صفر وحتى {{max}} دقيقة، بمنزلتين عشريتين على الأكثر (مثل 12.5)',
     },
   },
 }

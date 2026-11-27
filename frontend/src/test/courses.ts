@@ -48,6 +48,7 @@ export function makeCourse(overrides: Partial<Course> = {}): Course {
     minAge: 10,
     maxAge: 14,
     syllabusCount: 0,
+    sortOrder: 1,
     coverImageUrl: null,
     pricing: 'free',
     enrollmentFeePlan: null,

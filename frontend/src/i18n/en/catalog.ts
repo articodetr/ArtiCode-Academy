@@ -44,6 +44,8 @@ export const catalog: typeof arCatalog = {
     notFound: 'This course does not exist or is no longer published.',
     loadError: 'The course could not be loaded.',
     installments: 'Installments',
+    // The course code at the foot of the enrollment card.
+    code: 'Course code',
     lockedNote: 'Lessons, assignments, exams and course materials open once your enrollment is active.',
     classes: 'Classes',
     unavailable: 'Enrollment is not available right now',

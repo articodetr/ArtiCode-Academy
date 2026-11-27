@@ -7,22 +7,21 @@
 // router state's `from`, a path of this site only — a visitor who came from a course goes back to
 // `/catalog/<id>?intent=enroll`, where a free course enrolls and a paid one sends a request, MOD-19), else the home page.
 // A course kept on this device by an earlier visit (keptCourse.ts) is cleared, never followed.
-// The e-mail way is closed unless API-205 says `selfRegistration: true`; «المتابعة باستخدام Google» is enabled only while
-// it says `googleSignUp: true` (it may stay open while the e-mail way is closed); a failed read closes both. Under the form,
+// The page is closed unless API-205 says `selfRegistration: true`; a failed read closes it. PORTAL-04-GOOGLE-OFF
+// (provisional id — the owner's request): no «المتابعة باستخدام Google» and no «أو» any more. Under the form,
 // «لديك حساب بالفعل؟ تسجيل الدخول» leads to /login with the same `returnTo`. The password lives in the form only: it is
 // sent once, never trimmed, never stored.
 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Divider, Flex, Form, Input, Spin, Typography } from 'antd'
+import { Alert, App, Button, Flex, Form, Input, Spin, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation } from 'react-router'
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../account/account.links'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
-import { isGoogleSignUpOpen, isSelfRegistrationOpen } from '../api/academy'
+import { isSelfRegistrationOpen } from '../api/academy'
 import { register } from '../api/registration'
 import { useAuth } from '../auth/auth-context'
 import { AuthLayout, AuthPrompt } from '../auth/AuthLayout'
-import { GoogleSignInButton } from '../auth/GoogleSignInButton'
 import { requestedReturnPath, signInTarget, withReturnTo } from '../auth/returnPath'
 import type { SignInDestination } from '../auth/returnPath'
 import { useLocalized } from '../i18n/useLocalized'
@@ -61,13 +60,12 @@ function RegisterBody({ onRegistered }: { onRegistered: (destination: SignInDest
   const { t } = useTranslation()
   const location = useLocation()
   // A path of this site only (returnPath.ts): `?returnTo=` (or the router state's `from`) is where the new account goes,
-  // and goes on to the sign-in page and to Google unchanged.
+  // and goes on to the sign-in page unchanged.
   const from = requestedReturnPath(location.search, location.state)
   const reading = usePublicAcademy()
   const [closedByServer, setClosedByServer] = useState(false)
 
   const emailOpen = !closedByServer && isSelfRegistrationOpen(reading.academy)
-  const googleOpen = isGoogleSignUpOpen(reading.academy)
 
   let body
   if (reading.loading) {
@@ -76,30 +74,14 @@ function RegisterBody({ onRegistered }: { onRegistered: (destination: SignInDest
         <Spin size="large" />
       </Flex>
     )
-  } else if (!emailOpen && !googleOpen) {
+  } else if (!emailOpen) {
     body = <RegistrationClosedNotice from={from} />
   } else {
     body = (
       <>
-        <GoogleSignInButton enabled={googleOpen} disabledHint={t('login.google.signUpNotEnabled')} returnTo={from} />
-        <Divider plain className="auth-layout__divider">
-          {t('login.or')}
-        </Divider>
-        {emailOpen ? (
-          <>
-            <Typography.Paragraph type="secondary">{t('studentRegistration.register.intro')}</Typography.Paragraph>
-            <RegisterForm from={from} onRegistered={onRegistered} onClosed={() => setClosedByServer(true)} />
-          </>
-        ) : (
-          <Alert
-            type="info"
-            showIcon
-            data-testid="register-email-closed"
-            title={t('studentRegistration.register.emailClosedTitle')}
-            description={t('studentRegistration.register.emailClosedText')}
-          />
-        )}
-        {/* «لديك حساب بالفعل؟ تسجيل الدخول» under the form (or Google's way in), with the same return path. The closed
+        <Typography.Paragraph type="secondary">{t('studentRegistration.register.intro')}</Typography.Paragraph>
+        <RegisterForm from={from} onRegistered={onRegistered} onClosed={() => setClosedByServer(true)} />
+        {/* «لديك حساب بالفعل؟ تسجيل الدخول» under the form, with the same return path. The closed
             notice carries its own way to the sign-in page. */}
         <AuthPrompt question={t('studentRegistration.register.haveAccount')} testId="register-sign-in">
           <Link to={withReturnTo('/login', from)}>{t('studentRegistration.register.signIn')}</Link>

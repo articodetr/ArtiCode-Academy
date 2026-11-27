@@ -101,9 +101,9 @@ describe('public academy (API-205)', () => {
     expect(isGoogleSignUpOpen({ googleSignUp: 1 as unknown as boolean })).toBe(false)
   })
 
-  it('canCreateAccount is open by e-mail registration or by a Google sign-up, else closed', () => {
+  it('canCreateAccount is open by e-mail registration only — a Google sign-up alone opens nothing (PORTAL-04-GOOGLE-OFF)', () => {
     expect(canCreateAccount(makePublicAcademy({ selfRegistration: true }))).toBe(true)
-    expect(canCreateAccount(makePublicAcademy({ googleSignUp: true }))).toBe(true)
+    expect(canCreateAccount(makePublicAcademy({ googleSignUp: true }))).toBe(false)
     expect(canCreateAccount(makePublicAcademy({ googleSignIn: true }))).toBe(false)
     expect(canCreateAccount(makePublicAcademy())).toBe(false)
     expect(canCreateAccount(null)).toBe(false)

@@ -1,8 +1,9 @@
 // Arabic texts of courses, levels and syllabus: part of the `ar` object, assembled in ../ar.ts.
 
 export const courses = {
-  title: 'الدورات والمستويات',
-  subtitle: 'الدورات التدريبية ومستوياتها',
+  // PORTAL-04-COURSE-ORDER: the levels and subjects tabs left the page.
+  title: 'الدورات',
+  subtitle: 'الدورات التدريبية وترتيب ظهورها للطلاب والزوار',
   addCourse: 'إضافة دورة',
   code: 'الرمز',
   level: 'المستوى',
@@ -17,6 +18,15 @@ export const courses = {
   sort: 'الترتيب',
   sortByCode: 'حسب الرمز',
   sortNewest: 'الأحدث أولاً',
+  // PORTAL-04-COURSE-ORDER: the office's order, the one the catalogs show.
+  sortByPosition: 'ترتيب العرض',
+  order: {
+    up: 'تقديم «{{name}}»',
+    down: 'تأخير «{{name}}»',
+    note: 'تظهر الدورات المنشورة للطلاب والزوار بهذا الترتيب. غيّره بالأسهم.',
+    hint: 'تتحرك الأسهم في «ترتيب العرض» بلا بحث ولا مرشّح حالة.',
+    failed: 'تعذّر تغيير ترتيب الدورة. أعد المحاولة.',
+  },
   refresh: 'تحديث',
   empty: 'لا توجد دورات',
   // CH-0372: a random code for a new subject or level, never one already used.
@@ -28,6 +38,7 @@ export const courses = {
   },
   columns: {
     updatedAt: 'آخر تعديل',
+    order: 'الترتيب',
   },
   pagination: {
     page: 'الصفحة {{page}}',

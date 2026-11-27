@@ -16,7 +16,6 @@ import { clickWhenSettled, waitForDrawersToSettle } from '../test/drawer'
 import { makeEnrollment, makeEnrollmentList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
-import { makeSubject } from '../test/subjects'
 import { makeUserList } from '../test/users'
 import { CourseDrawer } from './CourseDrawer'
 import { GENERAL_CLASS_NAME, GENERAL_CLASS_NOTE } from './courses.openEnrollment'
@@ -106,7 +105,7 @@ function mockDrawerServer(options: ServerOptions = {}) {
 
 function renderDrawer(permissions: string[] = ADMIN_PERMISSIONS) {
   const onClose = vi.fn()
-  renderWithProviders(<CourseDrawer courseId={COURSE_ID} subjects={[makeSubject()]} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
+  renderWithProviders(<CourseDrawer courseId={COURSE_ID} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
     auth: makeAuth({ user: makeUser({ permissions }) }),
     route: '/courses',
   })

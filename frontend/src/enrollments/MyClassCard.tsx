@@ -11,12 +11,16 @@
 // Since J-F81 «الدروس: N» adds the class lessons the teacher has added (MOD-06, API-101 — not cancelled) to the
 // course's curriculum lessons, and a course without a curriculum lesson says «دروس الفصل: N» instead of «لم تُنشر دروس
 // هذه الدورة بعد» while its class has lessons; the progress bar stays the curriculum's (the server's numbers).
-import { BookOutlined, FilePdfOutlined, LockOutlined, PlayCircleOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons'
+// PORTAL-04-CARD-COURSE (provisional id — the owner's request): the card is titled by the COURSE the learner chose; the
+// class is said under it only when it is a class of its own — the general class «فتح الاشتراك» creates for a course
+// (`<COURSE>-GEN…`, named «الفصل العام») is how the course takes learners, not something the learner chose.
+import { ApartmentOutlined, FilePdfOutlined, LockOutlined, PlayCircleOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons'
 import { Skeleton } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { MyClassItem } from '../api/enrollments'
 import type { MyLearningCourse, ProgressCounts } from '../api/learning'
 import { myCertificatePrintPath } from '../certificates/certificates.links'
+import { generalClassCodes } from '../courses/courses.openEnrollment'
 import { useLocalized } from '../i18n/useLocalized'
 import { ResourcesButton } from '../learn/hub/ResourcesButton'
 import { isHttpsUrl } from '../learn/learn.format'
@@ -50,6 +54,8 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
   const { language } = useLocalized()
   const className = localizedLabel(row.class.name, language)
   const courseName = localizedLabel(row.class.course.name, language)
+  // The general class of the course (its `-GEN` codes) is not named: the course is what the learner chose.
+  const ownClass = generalClassCodes(row.class.course.code).includes(row.class.code) ? null : className
   const cover = learning && isHttpsUrl(learning.course.coverImageUrl) ? learning.course.coverImageUrl : null
   const materials = learning?.course.resources ?? []
   // PORTAL-04: the course's school subject (المادة) from API-229; omitted when the course has none.
@@ -78,11 +84,13 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
         ) : null}
       </div>
 
-      <h3 className="hub-card__name">{className}</h3>
+      <h3 className="hub-card__name">{courseName}</h3>
 
-      <p className="hub-card__teacher">
-        <BookOutlined aria-hidden /> <span>{courseName}</span>
-      </p>
+      {ownClass ? (
+        <p className="hub-card__teacher" data-testid="my-class-own-class">
+          <ApartmentOutlined aria-hidden /> <span>{ownClass}</span>
+        </p>
+      ) : null}
       {showStudent ? (
         <p className="hub-card__teacher">
           <TeamOutlined aria-hidden /> <span>{displayNameOf(row.student)}</span>

@@ -6,6 +6,11 @@
 // server measures playback against it — D-R134). The form keeps the fields of
 // every kind; the body carries only the fields of the chosen one. A Turkish
 // text the form does not show is kept when the kind stays the same.
+// PORTAL-04-MINUTES (provisional id — the owner's request): the length of a video or an audio lesson is typed in
+// minutes (two decimals at most — 12.5 = 12 min 30 s); the body still carries whole seconds (`durationSeconds`,
+// the server's unit), rounded once from the minutes. A stored length reads back as minutes and, untouched, is sent
+// as the same seconds (`minutesOf()`/`secondsOf()` round-trip exactly to the second).
+import { MEDIA_SECONDS_MAX } from '../api/curriculum'
 import type { CurriculumItem, LessonContentInput, LessonContentInputValue, VideoProvider } from '../api/curriculum'
 import type { Caption, LearningItemKind, LessonContent } from '../api/learning'
 import { localizedOf } from '../courses/courses.form'
@@ -29,7 +34,8 @@ export interface ContentFormValues {
   bodyEn?: string
   provider?: VideoProvider
   url?: string
-  durationSeconds?: number | null
+  /** The length in minutes (two decimals at most); the body carries it as whole seconds. */
+  durationMinutes?: number | null
   captions?: CaptionFormValue[]
   altAr?: string
   altEn?: string
@@ -95,6 +101,27 @@ export function needsDuration(kind: LearningItemKind, provider: VideoProvider | 
   return kind === 'audio' || (kind === 'video' && (provider ?? 'file') === 'file')
 }
 
+/** The longest length the form takes, in minutes (MEDIA_SECONDS_MAX of the server, 24 hours). */
+export const MEDIA_MINUTES_MAX = MEDIA_SECONDS_MAX / 60
+
+/** Stored seconds as the form's minutes, to two decimals. */
+export function minutesOf(seconds: number): number {
+  return Math.round((seconds / 60) * 100) / 100
+}
+
+/** The form's minutes as the body's whole seconds. */
+export function secondsOf(minutes: number): number {
+  return Math.round(minutes * 60)
+}
+
+/** A typed length the server takes: more than 0, at most two decimals, 1 s to MEDIA_SECONDS_MAX once in seconds. */
+export function isMediaMinutes(minutes: number): boolean {
+  if (!Number.isFinite(minutes) || minutes <= 0) return false
+  if (Math.abs(minutes * 100 - Math.round(minutes * 100)) > 1e-6) return false
+  const seconds = secondsOf(minutes)
+  return seconds >= 1 && seconds <= MEDIA_SECONDS_MAX
+}
+
 /** The form as the lesson's stored content and resources fill it; every other field empty. */
 export function contentFormValuesOf(item: CurriculumItem): ContentFormValues {
   const values: ContentFormValues = {
@@ -103,7 +130,7 @@ export function contentFormValuesOf(item: CurriculumItem): ContentFormValues {
     bodyEn: '',
     provider: 'file',
     url: '',
-    durationSeconds: null,
+    durationMinutes: null,
     captions: [],
     altAr: '',
     altEn: '',
@@ -125,13 +152,13 @@ export function contentFormValuesOf(item: CurriculumItem): ContentFormValues {
         ...values,
         provider: video.provider,
         url: video.url,
-        durationSeconds: video.durationSeconds,
+        durationMinutes: video.durationSeconds === null ? null : minutesOf(video.durationSeconds),
         captions: (video.captions ?? []).map((caption) => ({ language: caption.language, url: caption.url, label: caption.label ?? '' })),
       }
     }
     case 'audio': {
       const audio = content as { url: string; durationSeconds: number }
-      return { ...values, url: audio.url, durationSeconds: audio.durationSeconds }
+      return { ...values, url: audio.url, durationMinutes: minutesOf(audio.durationSeconds) }
     }
     case 'pdf':
       return { ...values, url: (content as { url: string }).url }
@@ -161,7 +188,8 @@ function storedTr(item: CurriculumItem, kind: LearningItemKind, field: 'body' | 
 
 function contentOf(values: ContentFormValues, item: CurriculumItem): LessonContentInputValue | null {
   const url = trimmed(values.url)
-  const duration = values.durationSeconds ?? null
+  const minutes = values.durationMinutes
+  const duration = typeof minutes === 'number' ? secondsOf(minutes) : null
   switch (values.kind) {
     case 'text': {
       const body = localizedOf(values.bodyAr, values.bodyEn, storedTr(item, 'text', 'body'))

@@ -12,7 +12,6 @@ import { COURSE_ID, COURSE_MANAGER_PERMISSIONS, makeCourse } from '../test/cours
 import { makeCurriculum } from '../test/curriculum'
 import { jsonResponse, mockFetch } from '../test/http'
 import { answerDiscardQuestion, blockerStates, discardQuestionCount, goBack, latestDiscardQuestion, renderInDataRouter, unloadWouldPrompt } from '../test/navigation'
-import { SUBJECT_IDS, makeSubject } from '../test/subjects'
 import { makeAuth, makeUser } from '../test/render'
 import { CourseDrawer } from './CourseDrawer'
 
@@ -31,7 +30,7 @@ function mockCourseApi() {
 
 async function renderDrawer() {
   const onClose = vi.fn()
-  const { router } = renderInDataRouter(<CourseDrawer courseId={COURSE_ID} subjects={[makeSubject(), makeSubject({ id: SUBJECT_IDS[1], code: 'MATH', name: { ar: 'الرياضيات' } })]} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
+  const { router } = renderInDataRouter(<CourseDrawer courseId={COURSE_ID} onClose={onClose} onUpdated={vi.fn()} onDeleted={vi.fn()} />, {
     auth: makeAuth({ user: makeUser({ permissions: COURSE_MANAGER_PERMISSIONS }) }),
     path: '/courses',
   })

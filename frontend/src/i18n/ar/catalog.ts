@@ -48,6 +48,8 @@ export const catalog = {
     notFound: 'الدورة غير موجودة أو لم تعد منشورة.',
     loadError: 'تعذّر تحميل الدورة.',
     installments: 'عدد الأقساط',
+    // The course code at the foot of the enrollment card.
+    code: 'رمز الدورة',
     lockedNote: 'الدروس والواجبات والاختبارات ومواد الدورة تُفتح لك بعد تفعيل تسجيلك.',
     classes: 'الفصول',
     unavailable: 'التسجيل غير متاح حالياً',

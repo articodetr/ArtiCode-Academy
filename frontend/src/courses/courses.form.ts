@@ -3,11 +3,12 @@
 // only what was filled in; the PATCH body carries only fields whose normalised
 // value differs from the loaded course (null clears an optional field);
 // nothing changed → null (no request).
-// PORTAL-04: the form edits the school subject (`subjectId`, null clears it) and no
-// longer the age range — neither body carries `minAge`/`maxAge`, so a PATCH leaves
-// the stored ages alone.
-// The simplified course form: the form asks the Arabic name, summary and description, the cover,
-// the subject and the price only. Neither body names the code (the server generates one when the
+// PORTAL-04: no longer the age range — neither body carries `minAge`/`maxAge`, so a PATCH
+// leaves the stored ages alone.
+// PORTAL-04-COURSE-ORDER: no longer the school subject either — neither body names `subjectId`, so a course keeps
+// the subject stored on it (a PATCH never clears it).
+// The simplified course form: the form asks the Arabic name, summary and description, the cover
+// and the price only. Neither body names the code (the server generates one when the
 // create body has none), the level, the hours or the sessions, so a PATCH keeps the stored values;
 // a localized text keeps its stored English and Turkish texts when its Arabic text changes.
 import type { Course, CoursePricing, CourseResource, CreateCourseInput, UpdateCourseInput } from '../api/courses'
@@ -22,8 +23,6 @@ export interface CourseFormValues {
   nameAr: string
   summaryAr?: string
   descriptionAr?: string
-  /** PORTAL-04: the school subject; null/absent = none. */
-  subjectId?: string | null
   /** MOD-19: an absolute http(s) URL; '' = no cover. */
   coverImageUrl?: string
   /** MOD-19 (D-R122): shown only to holders of `fee_plans.manage`; absent = the form does not edit the price. */
@@ -74,7 +73,6 @@ export function courseFormValuesOf(course: Course): CourseFormValues {
     nameAr: course.name.ar,
     summaryAr: text(course.summary?.ar),
     descriptionAr: text(course.description?.ar),
-    subjectId: course.subject?.id ?? null,
     coverImageUrl: course.coverImageUrl ?? '',
     pricing: course.pricing,
     enrollmentFeePlanId: course.enrollmentFeePlan?.id ?? null,
@@ -146,7 +144,7 @@ export function arabicTextOf(ar: string | undefined, stored?: LocalizedLabel | n
 }
 
 /** The fields of the course forms. */
-const COURSE_FORM_FIELDS: ReadonlySet<string> = new Set(['nameAr', 'summaryAr', 'descriptionAr', 'coverImageUrl', 'subjectId', 'pricing', 'enrollmentFeePlanId', 'resources'])
+const COURSE_FORM_FIELDS: ReadonlySet<string> = new Set(['nameAr', 'summaryAr', 'descriptionAr', 'coverImageUrl', 'pricing', 'enrollmentFeePlanId', 'resources'])
 
 /**
  * The form field a server error belongs on, or undefined when the form has no
@@ -172,7 +170,6 @@ export function buildCreateCourseInput(values: CourseFormValues): CreateCourseIn
   if (description) input.description = description
   const cover = coverOf(values.coverImageUrl)
   if (cover) input.coverImageUrl = cover
-  if (values.subjectId) input.subjectId = values.subjectId
   // A paid course without a chosen plan is refused by the form; free sends no plan at all.
   const plan = chosenPlanOf(values)
   if (plan) input.enrollmentFeePlanId = plan
@@ -190,9 +187,6 @@ export function planCoursePatch(course: Course, values: CourseFormValues): Updat
   const description = arabicTextOf(values.descriptionAr, course.description)
   if (!sameLabel(description, course.description)) body.description = description
 
-  // An emptied picker (antd answers undefined on clear) clears the subject.
-  const subjectId = values.subjectId || null
-  if (subjectId !== (course.subject?.id ?? null)) body.subjectId = subjectId
   // MOD-19: the cover (null clears it) and — only when the form edits the price — the plan (null = free again).
   if (values.coverImageUrl !== undefined) {
     const cover = coverOf(values.coverImageUrl)

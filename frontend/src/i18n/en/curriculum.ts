@@ -174,7 +174,7 @@ export const curriculum: typeof arCurriculum = {
       image: 'A link to the image starting with https://',
       file: 'A link to the file starting with https://',
     },
-    durationSeconds: 'Length (seconds)',
+    durationMinutes: 'Length (minutes)',
     durationRequiredHint: 'Required: completion is measured against it.',
     durationOptionalHint: 'Optional: shown to the learner only.',
     detectDuration: 'Detect length',
@@ -212,7 +212,7 @@ export const curriculum: typeof arCurriculum = {
       youtube: 'Not a YouTube video link',
       vimeo: 'Not a Vimeo video link',
       durationRequired: 'The length is required for this type',
-      duration: 'A whole number of seconds from 1 to {{max}}',
+      duration: 'Enter the length in minutes: more than 0 and up to {{max}}, with two decimals at most (e.g. 12.5)',
     },
   },
 }

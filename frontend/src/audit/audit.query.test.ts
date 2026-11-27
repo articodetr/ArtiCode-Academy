@@ -80,6 +80,8 @@ describe('beforeToIso / hasActiveFilters / suggestions', () => {
       'courses.status.changed',
       'courses.deleted',
       'courses.syllabus.changed',
+      // PORTAL-04-COURSE-ORDER
+      'courses.reordered',
     ]
     for (const event of mod04Events) {
       expect(AUDIT_ACTION_SUGGESTIONS.filter((suggestion) => suggestion === event)).toEqual([event])

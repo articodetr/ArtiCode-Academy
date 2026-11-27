@@ -17,7 +17,6 @@ import {
   exploreSearchOf,
   isPublicCourseGone,
   levelNameOf,
-  orderPublicPage,
   publicCatalogParams,
   publicEnrollStateOf,
   publicFailureKey,
@@ -119,32 +118,15 @@ describe('publicCatalog.view', () => {
     })
   })
 
-  describe('orderPublicPage', () => {
+  describe('appendCards — the server’s order kept (PORTAL-04-COURSE-ORDER)', () => {
     const open = (id: string) => makePublicCard({ id })
-    const full = (id: string) => makePublicCard({ id, hasFreeSeat: false })
-    const unpriced = (id: string) => makePublicCard({ id, hasFreeSeat: false, pricing: 'paid', price: null })
     const soon = (id: string) => makePublicCard({ id, openClasses: 0, hasFreeSeat: false })
     const ids = (cards: readonly { id: string }[]) => cards.map((card) => card.id)
 
-    it('puts what can be joined first and «قريبًا» last, the server’s order kept inside each group', () => {
-      const page = [soon('s1'), full('f1'), open('o1'), unpriced('p1'), soon('s2'), open('o2'), full('f2')]
-      expect(ids(orderPublicPage(page))).toEqual(['o1', 'o2', 'f1', 'p1', 'f2', 's1', 's2'])
-    })
-
-    it('loses no card, adds none, and leaves the server’s page untouched', () => {
-      const page = [soon('s1'), open('o1'), full('f1')]
-      const before = ids(page)
-      const ordered = orderPublicPage(page)
-      expect(ids(page)).toEqual(before)
-      expect(ordered).toHaveLength(page.length)
-      expect(new Set(ids(ordered))).toEqual(new Set(before))
-      expect(orderPublicPage([])).toEqual([])
-    })
-
-    it('only appends the next page: the cards on screen keep their places, even a coming-soon one above an available one', () => {
-      const shown = orderPublicPage([soon('s1'), open('o1')])
-      const next = appendCards(shown, orderPublicPage([soon('s2'), soon('s1'), open('o2')]))
-      expect(ids(next)).toEqual(['o1', 's1', 'o2', 's2'])
+    it('appends the next page in the server’s order — a coming-soon card is not moved behind an open one — and never repeats a card on screen', () => {
+      const shown = [soon('s1'), open('o1')]
+      const next = appendCards(shown, [soon('s2'), soon('s1'), open('o2')])
+      expect(ids(next)).toEqual(['s1', 'o1', 's2', 'o2'])
     })
   })
 

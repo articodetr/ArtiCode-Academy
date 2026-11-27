@@ -61,7 +61,7 @@ describe('LessonContentModal (MOD-20)', () => {
     await choose(c.kind, ar.curriculum.kinds.video)
     expect(await inDialog().findByLabelText(c.provider)).toBeInTheDocument()
     expect(inDialog().getByLabelText(c.url)).toBeInTheDocument()
-    expect(inDialog().getByLabelText(c.durationSeconds)).toBeInTheDocument()
+    expect(inDialog().getByLabelText(c.durationMinutes)).toBeInTheDocument()
     expect(inDialog().getByText(c.durationRequiredHint)).toBeInTheDocument()
     expect(inDialog().getByText(c.detectDuration)).toBeInTheDocument()
     expect(inDialog().getByText(c.captions)).toBeInTheDocument()
@@ -78,7 +78,7 @@ describe('LessonContentModal (MOD-20)', () => {
 
     await choose(c.kind, ar.curriculum.kinds.pdf)
     expect(await inDialog().findByText(c.urlHints.pdf)).toBeInTheDocument()
-    expect(inDialog().queryByLabelText(c.durationSeconds)).not.toBeInTheDocument()
+    expect(inDialog().queryByLabelText(c.durationMinutes)).not.toBeInTheDocument()
 
     await choose(c.kind, ar.curriculum.kinds.image)
     expect(await inDialog().findByLabelText(c.altAr)).toBeInTheDocument()
@@ -153,7 +153,7 @@ describe('LessonContentModal (MOD-20)', () => {
     expect(probe).toHaveAttribute('src', 'https://cdn.example.org/lesson.mp4')
     Object.defineProperty(probe, 'duration', { configurable: true, value: 125.4 })
     fireEvent.loadedMetadata(probe)
-    await waitFor(() => expect(within(dialog()).getByLabelText<HTMLInputElement>(c.durationSeconds).value).toBe('125'))
+    await waitFor(() => expect(within(dialog()).getByLabelText<HTMLInputElement>(c.durationMinutes).value).toBe('2.08'))
     expect(within(dialog()).getByText('2:05', { selector: '.ant-typography-success bdi' })).toBeInTheDocument()
 
     fireEvent.click(within(dialog()).getByText(c.addCaption).closest('button')!)

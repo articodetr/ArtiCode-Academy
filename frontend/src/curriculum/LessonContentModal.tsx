@@ -14,7 +14,7 @@ import { CAPTIONS_MAX, CAPTION_LABEL_MAX, CONTENT_SHORT_TEXT_MAX, CONTENT_TEXT_M
 import type { CurriculumItem, VideoProvider } from '../api/curriculum'
 import { LEARNING_ITEM_KINDS } from '../api/learning'
 import type { LearningItemKind } from '../api/learning'
-import { buildLessonContentInput, contentFormHasChanges, contentFormValuesOf, isHttpsUrl, kindNeedsUrl, needsDuration, vimeoIdOf, youtubeIdOf } from './curriculum.content'
+import { buildLessonContentInput, contentFormHasChanges, contentFormValuesOf, isHttpsUrl, isMediaMinutes, kindNeedsUrl, MEDIA_MINUTES_MAX, minutesOf, needsDuration, secondsOf, vimeoIdOf, youtubeIdOf } from './curriculum.content'
 import type { ContentFormValues } from './curriculum.content'
 import { describeCurriculumFailure, failureMessage } from './curriculum.errors'
 import { formatMediaDuration } from './curriculum.format'
@@ -76,9 +76,7 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
       if (value === null || value === undefined) {
         return needsDuration(kind, provider) ? Promise.reject(new Error(t('curriculum.content.validation.durationRequired'))) : Promise.resolve()
       }
-      return Number.isInteger(value) && value >= 1 && value <= MEDIA_SECONDS_MAX
-        ? Promise.resolve()
-        : Promise.reject(new Error(t('curriculum.content.validation.duration', { max: MEDIA_SECONDS_MAX })))
+      return isMediaMinutes(value) ? Promise.resolve() : Promise.reject(new Error(t('curriculum.content.validation.duration', { max: MEDIA_MINUTES_MAX })))
     },
   }
 
@@ -120,8 +118,8 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
       return
     }
     const whole = Math.min(MEDIA_SECONDS_MAX, Math.max(1, Math.round(seconds)))
-    form.setFieldValue('durationSeconds', whole)
-    void form.validateFields(['durationSeconds']).catch(() => undefined)
+    form.setFieldValue('durationMinutes', minutesOf(whole))
+    void form.validateFields(['durationMinutes']).catch(() => undefined)
     refreshDirty()
     setProbe({ status: 'read', seconds: whole })
   }
@@ -196,13 +194,14 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
 
         {kind === 'video' || kind === 'audio' ? (
           <Form.Item
-            label={t('curriculum.content.durationSeconds')}
+            label={t('curriculum.content.durationMinutes')}
             extra={needsDuration(kind, provider) ? t('curriculum.content.durationRequiredHint') : t('curriculum.content.durationOptionalHint')}
             required={false}
           >
             <Flex gap={8} wrap align="center">
-              <Form.Item name="durationSeconds" noStyle dependencies={['provider', 'kind']} rules={[durationRule]}>
-                <InputNumber precision={0} style={{ width: 180 }} aria-label={t('curriculum.content.durationSeconds')} />
+              <Form.Item name="durationMinutes" noStyle dependencies={['provider', 'kind']} rules={[durationRule]}>
+                {/* No min/max/precision on the input: antd would round or clamp a typed value silently — the rule says why. */}
+                <InputNumber style={{ width: 180 }} step={1} inputMode="decimal" aria-label={t('curriculum.content.durationMinutes')} />
               </Form.Item>
               <DurationPreview form={form} />
               {needsDuration(kind, provider) ? (
@@ -371,13 +370,13 @@ export function LessonContentModal({ courseId, item, title, onSaved, onClose }: 
   )
 }
 
-/** The typed length as `m:ss` beside the seconds field. */
+/** The typed minutes as `m:ss` beside the field (12.5 → 12:30). */
 function DurationPreview({ form }: { form: FormInstance }) {
-  const seconds = Form.useWatch('durationSeconds', form) as number | null | undefined
-  if (typeof seconds !== 'number' || !Number.isInteger(seconds) || seconds < 1 || seconds > MEDIA_SECONDS_MAX) return null
+  const minutes = Form.useWatch('durationMinutes', form) as number | null | undefined
+  if (typeof minutes !== 'number' || !isMediaMinutes(minutes)) return null
   return (
     <Typography.Text type="secondary">
-      <bdi dir="ltr">{formatMediaDuration(seconds)}</bdi>
+      <bdi dir="ltr">{formatMediaDuration(secondsOf(minutes))}</bdi>
     </Typography.Text>
   )
 }

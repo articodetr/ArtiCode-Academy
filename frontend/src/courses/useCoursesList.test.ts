@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
-import { LEVEL_ID, makeCourse, makeCourseList } from '../test/courses'
+import { makeCourse, makeCourseList } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
 import { useCoursesList } from './useCoursesList'
 
@@ -33,12 +33,12 @@ describe('useCoursesList', () => {
       queries.push(query)
       return jsonResponse(200, makeCourseList([makeCourse()], query.get('cursor') ? null : 'c2'))
     })
-    const { result } = renderHook(() => useCoursesList({ q: ' py ', status: 'published', levelId: LEVEL_ID, sort: 'createdAt', limit: 50 }))
+    const { result } = renderHook(() => useCoursesList({ q: ' py ', status: 'published', sort: 'createdAt', limit: 50 }))
     await waitFor(() => expect(result.current.nextCursor).toBe('c2'))
     act(() => result.current.next())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    const filtered = { q: 'py', status: 'published', levelId: LEVEL_ID, sort: 'createdAt', limit: '50' }
+    const filtered = { q: 'py', status: 'published', sort: 'createdAt', limit: '50' }
     expect(queries.map((query) => Object.fromEntries(query))).toEqual([filtered, { ...filtered, cursor: 'c2' }])
     expect(Object.keys(result.current).sort()).toEqual([
       'back',

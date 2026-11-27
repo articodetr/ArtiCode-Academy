@@ -26,6 +26,7 @@ import type {
   CourseSortField,
   CreateCourseDto,
   ListCoursesQueryDto,
+  MoveCourseDto,
   UpdateCourseDto,
 } from './courses.dto.js';
 import { coursesError } from './courses.errors.js';
@@ -37,7 +38,12 @@ export const COURSES_AUDIT_ACTIONS = {
   updated: 'courses.updated',
   statusChanged: 'courses.status.changed',
   deleted: 'courses.deleted',
+  // PORTAL-04-COURSE-ORDER: one step of a course's place (POST /api/courses/:id/move).
+  reordered: 'courses.reordered',
 } as const;
+
+/** PORTAL-04-COURSE-ORDER: every move takes this transaction-scoped advisory lock, so two moves never interleave. */
+const COURSES_ORDER_LOCK = 'articode.courses.order';
 
 /** Audit `entity_type` of course events. */
 export const COURSES_ENTITY_TYPE = 'courses';
@@ -57,6 +63,7 @@ const COURSE_SELECT = {
   updatedAt: true,
   coverImageUrl: true,
   resources: true,
+  sortOrder: true,
   level: { select: { id: true, code: true, name: true, isActive: true } },
   // PORTAL-04: the school subject, read in the same query.
   subject: { select: { id: true, code: true, name: true } },
@@ -84,6 +91,7 @@ function toCourseDto(row: CourseRow, currency: string): CourseDto {
     minAge: row.minAge,
     maxAge: row.maxAge,
     syllabusCount: row._count.syllabusItems,
+    sortOrder: row.sortOrder,
     coverImageUrl: row.coverImageUrl,
     resources: readLessonResources(row.resources),
     pricing: row.enrollmentFeePlan ? 'paid' : 'free',
@@ -132,6 +140,13 @@ function toUpdateInput(data: CoursePatch): Prisma.CourseUncheckedUpdateInput {
   if (data.subjectId !== undefined) input.subjectId = data.subjectId;
   if (data.resources !== undefined) input.resources = data.resources as unknown as Prisma.InputJsonValue;
   return input;
+}
+
+/** The place carried by a `position` cursor: a positive integer, else 400 cursor_invalid. */
+function positionKey(key: string | null): number {
+  const value = Number(key);
+  if (key === null || !/^[1-9][0-9]{0,9}$/.test(key) || !Number.isSafeInteger(value)) throw coursesError.cursorInvalid();
+  return value;
 }
 
 /** A create without a code tries again once when a concurrent typed code took the generated one. */
@@ -185,7 +200,9 @@ export class CoursesService {
       throw authError.permissionDenied([MANAGE_COURSES_PERMISSION]);
     }
     const sort: CourseSortField = query.sort ?? 'code';
-    const order: SortOrder = query.order ?? (sort === 'code' ? 'asc' : 'desc');
+    const order: SortOrder = query.order ?? (sort === 'createdAt' ? 'desc' : 'asc');
+    // `code` and `position` carry their value in the cursor; `createdAt` sorts by the time-ordered id alone.
+    const keyed = sort !== 'createdAt';
     const limit = query.limit ?? COURSES_PAGE_DEFAULT;
 
     const filters: Prisma.CourseWhereInput[] = [];
@@ -199,14 +216,16 @@ export class CoursesService {
       });
     }
     if (query.cursor) {
-      const cursor = decodeKeysetCursor(query.cursor, sort, order, sort === 'code', () => coursesError.cursorInvalid());
+      const cursor = decodeKeysetCursor(query.cursor, sort, order, keyed, () => coursesError.cursorInvalid());
       const cmp = order === 'asc' ? 'gt' : 'lt';
-      filters.push(sort === 'code' ? { code: { [cmp]: cursor.key as string } } : { id: { [cmp]: cursor.id } });
+      if (sort === 'code') filters.push({ code: { [cmp]: cursor.key as string } });
+      else if (sort === 'position') filters.push({ sortOrder: { [cmp]: positionKey(cursor.key) } });
+      else filters.push({ id: { [cmp]: cursor.id } });
     }
 
     const rows = await this.prisma.db.course.findMany({
       where: { AND: filters },
-      orderBy: sort === 'code' ? [{ code: order }] : [{ id: order }],
+      orderBy: sort === 'code' ? [{ code: order }] : sort === 'position' ? [{ sortOrder: order }] : [{ id: order }],
       take: limit + 1,
       select: COURSE_SELECT,
     });
@@ -215,7 +234,7 @@ export class CoursesService {
     const last = page.at(-1);
     const nextCursor =
       rows.length > limit && last
-        ? encodeKeysetCursor({ sort, order, key: sort === 'code' ? last.code : null, id: last.id })
+        ? encodeKeysetCursor({ sort, order, key: sort === 'code' ? last.code : sort === 'position' ? String(last.sortOrder) : null, id: last.id })
         : null;
     return { items: page.map((item) => toCourseDto(item, currency)), nextCursor };
   }
@@ -435,6 +454,43 @@ export class CoursesService {
         tx,
       );
     });
+  }
+
+  /**
+   * PORTAL-04-COURSE-ORDER — one step of a course's place: `up` swaps it with the course just before it in the order
+   * (every course, whatever its state — the catalogs show the published ones in this order), `down` with the one just
+   * after it. At the top (or the bottom) there is nobody to swap with: 200 with the course, no write and no event.
+   * Under the advisory lock `articode.courses.order`, so two moves never interleave; the two rows share a place until
+   * the second UPDATE, which the deferred `uq_courses_sort_order` allows (checked at COMMIT). One `courses.reordered`
+   * event on the moved course: its code, the direction, its place before and after, and the other course's code.
+   */
+  async move(id: string, input: MoveCourseDto, caller: AuthPrincipal, ctx: RequestContext): Promise<CourseDto> {
+    await this.prisma.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${COURSES_ORDER_LOCK}))`;
+      const row = await tx.course.findUnique({ where: { id }, select: { id: true, code: true, sortOrder: true } });
+      if (!row) throw coursesError.courseNotFound(id);
+      const up = input.direction === 'up';
+      const neighbour = await tx.course.findFirst({
+        where: { sortOrder: up ? { lt: row.sortOrder } : { gt: row.sortOrder } },
+        orderBy: { sortOrder: up ? 'desc' : 'asc' },
+        select: { id: true, code: true, sortOrder: true },
+      });
+      if (!neighbour) return;
+      await tx.course.update({ where: { id: row.id }, data: { sortOrder: neighbour.sortOrder }, select: { id: true } });
+      await tx.course.update({ where: { id: neighbour.id }, data: { sortOrder: row.sortOrder }, select: { id: true } });
+      await this.audit.record(
+        {
+          action: COURSES_AUDIT_ACTIONS.reordered,
+          actorUserId: caller.id,
+          entityType: COURSES_ENTITY_TYPE,
+          entityId: row.id,
+          metadata: { code: row.code, direction: input.direction, from: row.sortOrder, to: neighbour.sortOrder, swappedWith: neighbour.code },
+          ...ctx,
+        },
+        tx,
+      );
+    });
+    return this.getForManager(id);
   }
 
   private async getForManager(id: string): Promise<CourseDto> {

@@ -2,27 +2,20 @@
 // course drawer (MOD-04-T05). Rendered inside the caller's <Form>; local rules
 // mirror the server (CreateCourseDto/UpdateCourseDto) — the server decides —
 // and every rule words its own message (J-F23: no antd default text).
-// PORTAL-04: a school-subject picker; the age range is no longer asked (the stored values stay).
-// The simplified course form: one column of the name, summary, description, cover and subject.
+// PORTAL-04: the age range is no longer asked (the stored values stay).
+// The simplified course form: one column of the name, summary, description and cover.
+// PORTAL-04-COURSE-ORDER: no subject picker any more (the subjects tab left the courses page); a course keeps the
+// subject stored on it — neither body names `subjectId` (courses.form.ts).
 // No code (the server generates one), no English texts, no level, hours or sessions: the
 // stored values stay untouched (planCoursePatch() never names them). The caller adds the
 // price (CoursePricingFields) after these fields.
-import { Form, Input, Select, Tag } from 'antd'
+import { Form, Input } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { useLocalized } from '../i18n/useLocalized'
-import { localizedLabel } from '../users/users.format'
 import { CourseCoverField } from './CourseCoverField'
 import { COURSE_TEXT_MAX_LENGTH, isCoverImageUrl } from './courses.form'
-import type { SubjectChoice } from './subjects.form'
 
-interface CourseFormFieldsProps {
-  /** PORTAL-04: the subjects to choose from (GET /api/subjects — a manager reads the inactive ones too; subjectChoicesFor()). */
-  subjects: readonly SubjectChoice[]
-}
-
-export function CourseFormFields({ subjects }: CourseFormFieldsProps) {
+export function CourseFormFields() {
   const { t } = useTranslation()
-  const { language } = useLocalized()
   /** The length rule of every text field, worded by the courses dictionary (J-F23). */
   const maxLength = { max: COURSE_TEXT_MAX_LENGTH, message: t('courses.validation.maxLength', { max: COURSE_TEXT_MAX_LENGTH }) }
 
@@ -54,21 +47,6 @@ export function CourseFormFields({ subjects }: CourseFormFieldsProps) {
         ]}
       >
         <CourseCoverField />
-      </Form.Item>
-      <Form.Item name="subjectId" label={t('courses.fields.subject')}>
-        <Select
-          allowClear
-          placeholder={t('courses.noSubject')}
-          options={subjects.map((subject) => ({
-            value: subject.id,
-            label: (
-              <>
-                {localizedLabel(subject.name, language)} <span dir="ltr">({subject.code})</span>
-                {subject.isActive === false ? <Tag style={{ marginInlineStart: 8 }}>{t('labels.inactive')}</Tag> : null}
-              </>
-            ),
-          }))}
-        />
       </Form.Item>
     </>
   )
