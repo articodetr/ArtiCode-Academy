@@ -170,7 +170,10 @@ export function isGoogleSignUpOpen(academy: Pick<PublicAcademy, 'googleSignUp'> 
   return academy?.googleSignUp === true
 }
 
-/** A visitor may create an account one way or the other: by e-mail (`selfRegistration`) or through Google (`googleSignUp`). */
-export function canCreateAccount(academy: Pick<PublicAcademy, 'selfRegistration' | 'googleSignUp'> | null | undefined): boolean {
-  return isSelfRegistrationOpen(academy) || isGoogleSignUpOpen(academy)
+/**
+ * A visitor may create an account: by e-mail (`selfRegistration`) only. PORTAL-04-GOOGLE-OFF (provisional id — the owner's
+ * request): the site offers no Google button any more, so `googleSignUp` alone opens no "إنشاء حساب" link.
+ */
+export function canCreateAccount(academy: Pick<PublicAcademy, 'selfRegistration'> | null | undefined): boolean {
+  return isSelfRegistrationOpen(academy)
 }

@@ -1,8 +1,9 @@
 // /login (MOD-01; PORTAL-04 redesign): the sign-in card of the academy's site, in the frame of the account pages
-// (auth/AuthLayout.tsx). The identifier and the password; «نسيت كلمة المرور؟»; «أو» and «المتابعة باستخدام Google» —
-// enabled only while API-205 says `googleSignIn`; under them «ليس لديك حساب؟ إنشاء حساب جديد» (to /register with the same
-// `returnTo`) only while a visitor may create an account (`selfRegistration` or `googleSignUp`); «تصفّح الدورات» while the
-// catalog is public.
+// (auth/AuthLayout.tsx). The identifier and the password; «نسيت كلمة المرور؟»; under them «ليس لديك حساب؟ إنشاء حساب
+// جديد» (to /register with the same `returnTo`) only while a visitor may create an account by e-mail
+// (`selfRegistration`); «تصفّح الدورات» while the catalog is public. PORTAL-04-GOOGLE-OFF (provisional id — the
+// owner's request): no «أو» and no «المتابعة باستخدام Google» any more, whatever API-205 says — the ordinary sign-in only.
+// The server's Google routes and settings are untouched.
 //
 // Where a sign-in leads (returnPath.ts): the return path the page was opened with (`?returnTo=` — the public course
 // page's visitor button —, else the router state's `from` — RequireAuth), else for a student the course kept on this
@@ -13,19 +14,18 @@
 // sent to a server) is read once, cleared from the address at once and held in memory only, and the existing second
 // step finishes the sign-in.
 import { BookOutlined, LockOutlined, UserOutlined } from '@ant-design/icons'
-import { Alert, Button, Divider, Form, Input } from 'antd'
+import { Alert, Button, Form, Input } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { usePublicAcademy } from '../academy/usePublicAcademy'
-import { canCreateAccount, isCatalogPublic, isGoogleSignInOn } from '../api/academy'
+import { isCatalogPublic, isSelfRegistrationOpen } from '../api/academy'
 import { isMfaChallenge } from '../api/auth'
 import type { MfaChallenge } from '../api/auth'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
 import type { AuthUser } from '../auth/auth-context'
 import { AuthLayout, AuthLoading, AuthPrompt } from '../auth/AuthLayout'
-import { GoogleSignInButton } from '../auth/GoogleSignInButton'
 import { googleMfaHandoffOf, googleResultOf, isGoogleMfaFragment, withoutGoogleResult } from '../auth/google.signIn'
 import { MfaChallengeStep } from '../auth/MfaChallengeStep'
 import { signInNotice, signInNoticeOf } from '../auth/mfa.signIn'
@@ -98,7 +98,8 @@ export function LoginPage() {
   // API-205, once the visitor is known to be signed out: the catalog (D-R138), registration (#221) and Google flags.
   const publicAcademy = usePublicAcademy(status === 'anonymous')
   const academy = publicAcademy.academy
-  const accountsOpen = canCreateAccount(academy)
+  // The e-mail way only: with no Google button on the site, a Google-only sign-up has no way in from here.
+  const accountsOpen = isSelfRegistrationOpen(academy)
 
   // The callback's leftovers leave the address at once (replace): the second step's challenge must survive neither a
   // reload nor the history, and a reload must not say again what `?google=` said. The return path stays.
@@ -215,15 +216,6 @@ export function LoginPage() {
               {submitting ? t('login.signingIn') : t('login.submit')}
             </Button>
           </Form>
-
-          <Divider plain className="auth-layout__divider">
-            {t('login.or')}
-          </Divider>
-          <GoogleSignInButton
-            enabled={isGoogleSignInOn(academy)}
-            disabledHint={publicAcademy.loading ? null : t('login.google.notEnabled')}
-            returnTo={from}
-          />
 
           {/* «ليس لديك حساب؟ إنشاء حساب جديد» under the form, carrying the chosen course (a path `requestedReturnPath()`
               already checked) as `?returnTo=`. */}

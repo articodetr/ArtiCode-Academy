@@ -1,13 +1,14 @@
-// The sign-in card of PORTAL-04: the frame (top bar, heading), what each API-205 flag shows or hides, Google's button,
+// The sign-in card of PORTAL-04: the frame (top bar, heading), what each API-205 flag shows or hides (no Google button
+// since PORTAL-04-GOOGLE-OFF),
 // the callback's verdicts (`?google=`) and hand-over of a second step (`#google-mfa=`), `?returnTo=`, and the course kept
 // on this device while registering.
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACADEMY_PUBLIC_PATH } from '../api/academy'
 import type { PublicAcademy } from '../api/academy'
-import { GOOGLE_PATHS, browserNavigation } from '../api/google'
+import { GOOGLE_PATHS } from '../api/google'
 import i18n from '../i18n'
 import { ar } from '../i18n/ar'
 import { en } from '../i18n/en'
@@ -52,11 +53,6 @@ function renderAt(entry: string, auth: AuthContextValue = makeAuth()) {
   )
 }
 
-function googleButton(): HTMLButtonElement {
-  const label = screen.queryByText(google.button) ?? screen.getByText(google.redirecting)
-  return label.closest('button') as HTMLButtonElement
-}
-
 async function settled() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -88,7 +84,6 @@ describe('LoginPage — PORTAL-04', () => {
       expect(screen.getByText(ar.login.layout.backHome).closest('a')).toHaveAttribute('href', '/home')
       expect(screen.getByText('English')).toBeInTheDocument()
       expect(screen.getByText(ar.forgotPassword.link).closest('a')).toHaveAttribute('href', '/forgot-password')
-      expect(screen.getByText(ar.login.or)).toBeInTheDocument()
       expect(screen.getByLabelText(ar.login.password)).toHaveAttribute('type', 'password')
     })
 
@@ -100,104 +95,40 @@ describe('LoginPage — PORTAL-04', () => {
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(en.login.title)
       expect(document.documentElement).toHaveAttribute('dir', 'ltr')
       expect(await screen.findByText('ArtiCode Academy')).toBeInTheDocument()
-      expect(screen.getByText(en.login.google.button)).toBeInTheDocument()
+      expect(screen.queryByText(en.login.google.button)).not.toBeInTheDocument()
       expect(screen.getByText(en.login.layout.backHome)).toBeInTheDocument()
       expect(screen.getByLabelText(en.login.identifier)).toBeInTheDocument()
     })
   })
 
+  // PORTAL-04-GOOGLE-OFF (the owner's request): the ordinary sign-in only — no Google button, no «أو», whatever API-205 says.
   describe('what API-205 shows and hides', () => {
-    it('shows Google’s button disabled, with its reason, while the server does not say Google is configured', async () => {
-      mockApi({ academy: makePublicAcademy() })
+    it.each([
+      ['Google is not configured', makePublicAcademy()],
+      ['Google sign-in and sign-up are on', makePublicAcademy({ googleSignIn: true, googleSignUp: true })],
+    ])('shows no Google button, no reason and no «أو» when %s', async (_label, academy) => {
+      mockApi({ academy })
       renderAt('/login')
 
-      const hint = await screen.findByTestId('google-sign-in-hint')
-      expect(hint).toHaveTextContent(google.notEnabled)
-      expect(googleButton()).toBeDisabled()
-      expect(googleButton()).toHaveAttribute('aria-describedby', hint.id)
-      // No way to an account while neither registration nor Google's sign-up is open.
+      expect(await screen.findByText('أكاديمية آرتي كود')).toBeInTheDocument()
+      expect(screen.queryByText(google.button)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('google-sign-in-hint')).not.toBeInTheDocument()
+      expect(screen.queryByText(ar.login.or)).not.toBeInTheDocument()
+      expect(screen.getByLabelText(ar.login.identifier)).toBeInTheDocument()
+      // A Google sign-up alone opens no way to an account: there is no Google button to take it.
       expect(screen.queryByTestId('login-register')).not.toBeInTheDocument()
     })
 
-    it('gives no reason while the academy is still being read', () => {
-      mockFetch(() => new Promise<Response>(() => {}))
-      renderAt('/login')
-      expect(googleButton()).toBeDisabled()
-      expect(screen.queryByTestId('google-sign-in-hint')).not.toBeInTheDocument()
-    })
-
-    it('enables Google’s button, with its «G» and no reason, when googleSignIn is true', async () => {
-      mockApi({ academy: makePublicAcademy({ googleSignIn: true }) })
-      renderAt('/login')
-
-      await waitFor(() => expect(googleButton()).toBeEnabled())
-      expect(googleButton().querySelector('svg.google-sign-in__mark')).not.toBeNull()
-      expect(screen.queryByTestId('google-sign-in-hint')).not.toBeInTheDocument()
-    })
-
-    it('offers to create an account when only a Google sign-up is open, carrying ?returnTo=', async () => {
-      mockApi({ academy: makePublicAcademy({ googleSignIn: true, googleSignUp: true }) })
+    it('offers to create an account while e-mail registration is open, carrying ?returnTo=', async () => {
+      mockApi({ academy: makePublicAcademy({ selfRegistration: true }) })
       renderAt(`/login?returnTo=${encodeURIComponent(INTENT)}`)
 
       const prompt = await screen.findByTestId('login-register')
       expect(prompt).toHaveTextContent(ar.studentRegistration.entry.noAccount)
       const link = within(prompt).getByRole('link', { name: ar.studentRegistration.entry.createAccountNow })
       expect(link).toHaveAttribute('href', `/register?returnTo=${encodeURIComponent(INTENT)}`)
-      // «الحسابات تُنشئها إدارة الأكاديمية» is untrue then too.
+      // «الحسابات تُنشئها إدارة الأكاديمية» is untrue then.
       expect(screen.getByTestId('login-enroll-intent')).toHaveTextContent(ar.studentRegistration.entry.courseNote)
-    })
-  })
-
-  describe('Google’s button', () => {
-    it('starts with the return path, then leaves for the address the server answered', async () => {
-      const fetchMock = mockApi({ academy: makePublicAcademy({ googleSignIn: true }) })
-      const assign = vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
-      renderAt(`/login?returnTo=${encodeURIComponent(INTENT)}`)
-      await waitFor(() => expect(googleButton()).toBeEnabled())
-
-      fireEvent.click(googleButton())
-      fireEvent.click(googleButton())
-
-      await waitFor(() => expect(assign).toHaveBeenCalledWith(GOOGLE_URL))
-      const starts = fetchMock.mock.calls.filter(([url]) => url === GOOGLE_PATHS.start)
-      expect(starts).toHaveLength(1)
-      expect(starts[0]![1]?.method).toBe('POST')
-      expect(starts[0]![1]?.credentials).toBe('include')
-      expect(JSON.parse(String(starts[0]![1]?.body))).toEqual({ returnTo: INTENT })
-      // The page is leaving: the button keeps waiting.
-      expect(screen.getByText(google.redirecting)).toBeInTheDocument()
-      expect(assign).toHaveBeenCalledTimes(1)
-    })
-
-    it('sends no return path for the home page or none', async () => {
-      const fetchMock = mockApi({ academy: makePublicAcademy({ googleSignIn: true }) })
-      vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
-      renderAt('/login?returnTo=%2F')
-      await waitFor(() => expect(googleButton()).toBeEnabled())
-
-      fireEvent.click(googleButton())
-
-      await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === GOOGLE_PATHS.start)).toBe(true))
-      const [, init] = fetchMock.mock.calls.find(([url]) => url === GOOGLE_PATHS.start)!
-      expect(JSON.parse(String(init?.body))).toEqual({})
-    })
-
-    it.each<[string, Answer, string]>([
-      ['503 google_unavailable', () => jsonResponse(503, { statusCode: 503, code: 'google_unavailable', message: 'off' }), google.errors.unavailable],
-      ['no network', () => Promise.reject(new TypeError('Failed to fetch')), ar.login.errors.network],
-      ['an answer that is no Google address', () => jsonResponse(200, { url: 'javascript:alert(1)' }), google.errors.failed],
-    ])('says what went wrong on %s, leaves nowhere, and can start again', async (_label, start, message) => {
-      mockApi({ academy: makePublicAcademy({ googleSignIn: true }), start })
-      const assign = vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
-      renderAt('/login')
-      await waitFor(() => expect(googleButton()).toBeEnabled())
-
-      fireEvent.click(googleButton())
-
-      expect(await screen.findByText(message)).toBeInTheDocument()
-      expect(assign).not.toHaveBeenCalled()
-      expect(googleButton()).toBeEnabled()
-      expect(screen.getByText(google.button)).toBeInTheDocument()
     })
   })
 

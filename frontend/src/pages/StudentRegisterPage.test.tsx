@@ -6,7 +6,6 @@ import type { ReactNode } from 'react'
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicAcademy } from '../api/academy'
-import { browserNavigation } from '../api/google'
 import { AuthContext } from '../auth/auth-context'
 import type { AuthUser } from '../auth/auth-context'
 import { getAccessToken, setAccessToken } from '../auth/token-store'
@@ -634,71 +633,29 @@ describe('StudentRegisterPage', () => {
     })
   })
 
-  describe('Google (PORTAL-04)', () => {
-    const GOOGLE_URL = 'https://accounts.google.com/o/oauth2/v2/auth?state=s'
-
-    it('heads the card with its title, then Google, «أو», the form, and the way to sign in under it', async () => {
-      mockApi()
+  // PORTAL-04-GOOGLE-OFF (the owner's request): the e-mail way only — no Google button and no «أو», whatever API-205 says.
+  describe('no Google (PORTAL-04-GOOGLE-OFF)', () => {
+    it('heads the card with its title, then the form and the way to sign in under it — no Google, no «أو»', async () => {
+      mockApi({ academy: () => jsonResponse(200, { ...OPEN, googleSignIn: true, googleSignUp: true }) })
       renderPage()
       await screen.findByLabelText(text.register.fullName)
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(text.register.title)
-      const google = screen.getByText(ar.login.google.button).closest('button')!
-      const or = screen.getByText(ar.login.or)
+      expect(screen.queryByText(ar.login.google.button)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('google-sign-in-hint')).not.toBeInTheDocument()
+      expect(screen.queryByText(ar.login.or)).not.toBeInTheDocument()
       const form = submitButton().closest('form')!
       const prompt = screen.getByTestId('register-sign-in')
-      expect(google.compareDocumentPosition(or) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      expect(or.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(form.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
-    it('shows Google disabled with its reason while googleSignUp is not on', async () => {
-      mockApi()
-      renderPage()
-      const hint = await screen.findByTestId('google-sign-in-hint')
-      expect(hint).toHaveTextContent(ar.login.google.signUpNotEnabled)
-      expect(screen.getByText(ar.login.google.button).closest('button')).toBeDisabled()
-    })
-
-    it('starts Google with the chosen course when googleSignUp is on', async () => {
-      const fetchMock = mockFetch((url) =>
-        url.endsWith('/api/academy/public')
-          ? jsonResponse(200, { ...OPEN, googleSignIn: true, googleSignUp: true })
-          : jsonResponse(200, { url: GOOGLE_URL }),
-      )
-      const assign = vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
-      renderPage({ from: INTENT })
-      const button = await waitFor(() => {
-        const found = screen.getByText(ar.login.google.button).closest('button')!
-        expect(found).toBeEnabled()
-        return found
-      })
-
-      fireEvent.click(button)
-
-      await waitFor(() => expect(assign).toHaveBeenCalledWith(GOOGLE_URL))
-      const [, init] = fetchMock.mock.calls.find(([url]) => url === '/api/auth/google/start')!
-      expect(JSON.parse(String(init?.body))).toEqual({ returnTo: INTENT })
-      expect(screen.queryByTestId('google-sign-in-hint')).not.toBeInTheDocument()
-    })
-
-    it('still offers Google when only the e-mail way is closed: a notice, no form', async () => {
+    it('shows the closed notice when only a Google sign-up is open: no form and no Google', async () => {
       const fetchMock = mockApi({ academy: () => jsonResponse(200, { ...OPEN, selfRegistration: false, googleSignIn: true, googleSignUp: true }) })
-      renderPage()
-
-      expect(await screen.findByTestId('register-email-closed')).toHaveTextContent(text.register.emailClosedTitle)
-      expect(screen.getByText(ar.login.google.button).closest('button')).toBeEnabled()
-      expect(screen.queryByLabelText(text.register.fullName)).not.toBeInTheDocument()
-      expect(screen.queryByText(text.closed.title)).not.toBeInTheDocument()
-      expect(screen.getByTestId('register-sign-in')).toBeInTheDocument()
-      expect(posts(fetchMock)).toHaveLength(0)
-    })
-
-    it('shows the plain closed notice, without Google, while neither way is open', async () => {
-      mockApi({ academy: () => jsonResponse(200, { ...OPEN, selfRegistration: false, googleSignIn: true, googleSignUp: false }) })
       renderPage()
 
       expect(await screen.findByText(text.closed.title)).toBeInTheDocument()
       expect(screen.queryByText(ar.login.google.button)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(text.register.fullName)).not.toBeInTheDocument()
+      expect(posts(fetchMock)).toHaveLength(0)
     })
   })
 })
