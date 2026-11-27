@@ -435,3 +435,87 @@ describe('CreateLessonModal', () => {
     expect(posts[0]).toMatchObject({ startsAt: '2026-11-11T19:00:00.000Z', endsAt: '2026-11-11T20:30:00.000Z' })
   })
 })
+
+describe('CreateLessonModal — the teacher’s short form (J-F76)', () => {
+  /** Serves the academy, the class picker and the POST, and records every request path (no syllabus or room read is expected). */
+  function mockTeacherApi() {
+    const posts: unknown[] = []
+    const reads: string[] = []
+    mockFetch((url, init) => {
+      const parsed = new URL(url, 'http://localhost')
+      const method = init?.method ?? 'GET'
+      reads.push(`${method} ${parsed.pathname}`)
+      if (parsed.pathname === '/api/academy') return jsonResponse(200, makeAcademy())
+      if (parsed.pathname === '/api/classes') return jsonResponse(200, makeClassList([twoTeachers]))
+      if (parsed.pathname === `/api/classes/${CLASS_ID}/lessons` && method === 'POST') {
+        posts.push(JSON.parse(String(init?.body)))
+        return jsonResponse(201, makeLesson({ id: 'new-1' }))
+      }
+      return jsonResponse(404, { statusCode: 404, code: 'class_not_found', message: 'nope' })
+    })
+    return { posts, reads }
+  }
+
+  /** A teacher-only viewer (the `teacher` role key, possibly with learner keys) opens the modal. */
+  async function renderTeacher(userId: string, initialClass?: typeof twoTeachers) {
+    const auth = makeAuth({ user: makeUser({ id: userId, role: 'teacher', roles: ['teacher', 'guardian'], permissions: ['lessons.read', 'lessons.manage', 'classes.read'] }) })
+    renderWithProviders(<CreateLessonModal open onClose={vi.fn()} onCreated={vi.fn()} initialClass={initialClass} />, { auth, route: '/classes' })
+    const dialog = (await screen.findByText(ar.lessons.create.title)).closest('[role="dialog"]') as HTMLElement
+    await waitFor(() => expect(within(dialog).getByTestId('lesson-zone-hint')).toHaveTextContent(zoneHint('academyInput', LESSON_TIME_ZONE)))
+    return dialog
+  }
+
+  it('asks for the day and the start only (one hour), offers live and recorded only, shows no teacher, room or syllabus item — and the lesson is the teacher’s own', async () => {
+    const { posts, reads } = mockTeacherApi()
+    // The assistant of the class: the server's default would give the lesson to the lead teacher.
+    const dialog = await renderTeacher(TEACHER_IDS[1], twoTeachers)
+
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.endTime)).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.teacher)).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.room)).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.syllabusItem)).not.toBeInTheDocument()
+    expect(within(dialog).getByText(ar.lessons.hints.teacherDuration.replace('{{minutes}}', '60'))).toBeInTheDocument()
+
+    // Live by default; the select offers live and recorded only.
+    const mode = within(dialog).getByLabelText(ar.lessons.fields.deliveryMode).closest('.ant-select') as HTMLElement
+    expect(mode).toHaveTextContent(ar.labels.live_online)
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.deliveryMode))
+    const options = await screen.findAllByText(new RegExp(`${ar.labels.live_online}|${ar.labels.recorded}|${ar.labels.in_person}|${ar.labels.hybrid}`), { selector: '.ant-select-item-option-content' })
+    expect(options.map((option) => option.textContent)).toEqual([ar.labels.live_online, ar.labels.recorded])
+
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'الحلقات')
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.date), { target: { value: '2026-11-12' } })
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: '10:00' } })
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    // 10:00 in Riyadh (UTC+3) is 07:00 UTC; the lesson lasts an hour.
+    expect(posts[0]).toEqual({ title: { ar: 'الحلقات' }, deliveryMode: 'live_online', startsAt: '2026-11-12T07:00:00.000Z', endsAt: '2026-11-12T08:00:00.000Z', teacherUserId: TEACHER_IDS[1] })
+    // Neither the course's syllabus nor the class's sessions nor the rooms were read.
+    expect(reads.filter((read) => /syllabus|\/api\/lessons|\/api\/rooms/.test(read) && read.startsWith('GET'))).toEqual([])
+  })
+
+  it('a lesson ending after midnight keeps its hour; a recorded lesson of a class the caller does not teach goes to the class’s default teacher', async () => {
+    const { posts } = mockTeacherApi()
+    const dialog = await renderTeacher(TEACHER_IDS[2])
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.class))
+    fireEvent.click(await screen.findByText('PY-101-A — بايثون — الفصل أ', { selector: '.ant-select-item-option-content' }))
+    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.deliveryMode))
+    fireEvent.click(await screen.findByText(ar.labels.recorded, { selector: '.ant-select-item-option-content' }))
+
+    await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'مراجعة')
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.date), { target: { value: '2026-11-12' } })
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: '23:30' } })
+    submit(dialog)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    // 23:30 in Riyadh is 20:30 UTC; an hour later is the next day in Riyadh — no next-day question for the teacher.
+    expect(posts[0]).toEqual({ title: { ar: 'مراجعة' }, deliveryMode: 'recorded', startsAt: '2026-11-12T20:30:00.000Z', endsAt: '2026-11-12T21:30:00.000Z' })
+  })
+
+  it('an academy admin keeps the whole form', async () => {
+    mockCreateApi()
+    const { dialog } = await renderOpen()
+    expect(within(dialog).getByLabelText(ar.lessons.fields.endTime)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(ar.lessons.fields.room)).toBeInTheDocument()
+    expect(within(dialog).queryByText(ar.lessons.hints.teacherDuration.replace('{{minutes}}', '60'))).not.toBeInTheDocument()
+  })
+})

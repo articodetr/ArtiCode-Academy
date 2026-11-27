@@ -74,6 +74,8 @@ export const lessons = {
     teacher: 'افتراضياً المعلم الرئيسي للفصل وقت الإنشاء؛ المعلم من معلمي الفصل',
     time: 'المدة حتى 12 ساعة، ووقت انتهاء أبكر من البدء يعني اليوم التالي',
     endsNextDay: 'ينتهي الدرس في اليوم التالي ({{date}})، ومدته {{minutes}} دقيقة',
+    // J-F76: the teacher's short form has no end time — the lesson lasts TEACHER_LESSON_MINUTES.
+    teacherDuration: 'مدة الدرس {{minutes}} دقيقة من وقت البدء',
     meetingUrl: 'رابط يبدأ بـ https:// (للدروس عبر الإنترنت)',
     timingLocked: 'الوقت والقاعة والمعلم لا تتغير لدرس مكتمل؛ يبقى العنوان والوصف وبند المنهج ونمط التقديم والرابط',
     needsClassesRead: 'إضافة درس تحتاج صلاحية قراءة الفصول (classes.read) لاختيار فصله',
