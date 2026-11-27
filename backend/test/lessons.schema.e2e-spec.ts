@@ -212,6 +212,11 @@ describe.skipIf(!available)('database schema — MOD-06 lessons and attendance (
       // Valid: a description with `ar`, an https link, a lesson in the past (D-R33 (2)), a 12-hour lesson (the duration limit is a service rule).
       await lesson(client, classId, { description: '{"ar":"وصف","en":"Description"}', meetingUrl: 'https://meet.example.com/x' });
       await lesson(client, classId, { start: '2020-01-01T08:00:00Z', end: '2020-01-01T20:00:00Z' });
+      // J-F77 (the 23rd migration): the video is an https link and the attachments a JSON array (their items are checked by the app).
+      const lessonId = await lesson(client, classId, { start: '2020-01-02T08:00:00Z', end: '2020-01-02T09:00:00Z' });
+      await expectSqlError(client, 'UPDATE lessons SET recording_url = $1 WHERE id = $2', ['http://videos.example.com/x', lessonId], CHECK_VIOLATION, 'ck_lessons_recording_url_https');
+      await expectSqlError(client, 'UPDATE lessons SET attachments = $1::jsonb WHERE id = $2', ['{"kind":"book"}', lessonId], CHECK_VIOLATION, 'ck_lessons_attachments_array');
+      await client.query('UPDATE lessons SET recording_url = $1, attachments = $2::jsonb WHERE id = $3', ['https://videos.example.com/x', '[]', lessonId]);
     });
   });
 
@@ -343,8 +348,10 @@ describe.skipIf(!available)('database schema — MOD-06 lessons and attendance (
     expect(constraints.rows).toEqual([
       { table_name: 'attendance_records', conname: 'ck_attendance_records_minutes_late_only_late', contype: 'c' },
       { table_name: 'attendance_records', conname: 'ck_attendance_records_minutes_late_positive', contype: 'c' },
+      { table_name: 'lessons', conname: 'ck_lessons_attachments_array', contype: 'c' },
       { table_name: 'lessons', conname: 'ck_lessons_description_localized', contype: 'c' },
       { table_name: 'lessons', conname: 'ck_lessons_meeting_url_https', contype: 'c' },
+      { table_name: 'lessons', conname: 'ck_lessons_recording_url_https', contype: 'c' },
       { table_name: 'lessons', conname: 'ck_lessons_times', contype: 'c' },
       { table_name: 'lessons', conname: 'ck_lessons_title_localized', contype: 'c' },
       { table_name: 'lessons', conname: 'ex_lessons_room', contype: 'x' },
