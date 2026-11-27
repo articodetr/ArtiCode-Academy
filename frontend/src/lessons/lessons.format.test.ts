@@ -5,6 +5,7 @@ import { deviceTimeZone } from '../timetable/timetable.settings'
 import {
   NEXT_DAY_MARK,
   academyZoneOf,
+  clockAfter,
   dateFilterValue,
   dayEndInstant,
   dayStartInstant,
@@ -188,5 +189,15 @@ describe('lessons.format', () => {
     expect(lessonRoomLabel({ code: 'HALL', name: null }, 'ar')).toBe('HALL')
     expect(syllabusItemLabel({ sortOrder: 2, title: { ar: 'الحلقات', en: 'Loops' } }, 'en')).toBe('3. Loops')
     expect(syllabusItemLabel({ sortOrder: 0, title: { ar: 'المتغيرات' } }, 'en')).toBe('1. المتغيرات')
+  })
+})
+
+describe('clockAfter (J-F79 — the short form shows the end it computes)', () => {
+  it('adds the minutes to a wall clock, past midnight too, and gives nothing without a clock', () => {
+    expect(clockAfter('11:30', 60)).toBe('12:30')
+    expect(clockAfter('23:30', 60)).toBe('00:30')
+    expect(clockAfter('09:05', 0)).toBe('09:05')
+    expect(clockAfter(undefined, 60)).toBeNull()
+    expect(clockAfter('', 60)).toBeNull()
   })
 })

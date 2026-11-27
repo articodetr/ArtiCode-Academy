@@ -66,7 +66,7 @@ export function LessonAttachmentsField() {
             </Row>
           ))}
           {fields.length < ATTACHMENTS_MAX ? (
-            <Button icon={<PlusOutlined />} onClick={() => add({ ...NEW_ROW })}>
+            <Button className="lesson-attachments__add" icon={<PlusOutlined />} onClick={() => add({ ...NEW_ROW })}>
               {t('lessons.attachments.add')}
             </Button>
           ) : null}

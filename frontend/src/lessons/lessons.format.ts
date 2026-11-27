@@ -213,3 +213,11 @@ export function syllabusItemLabel(item: { sortOrder: number; title: { ar: string
 export function lessonTitle(lesson: Pick<Lesson, 'title'>, language: Language): string {
   return localizedLabel(lesson.title, language)
 }
+
+/** The wall clock `minutes` after `clock` ('HH:MM', wrapping past midnight), or null for no clock — the short form's end, shown only. */
+export function clockAfter(clock: string | undefined, minutes: number): string | null {
+  const match = /^(\d{2}):(\d{2})/.exec(clock ?? '')
+  if (!match) return null
+  const total = (((Number(match[1]) * 60 + Number(match[2]) + minutes) % 1440) + 1440) % 1440
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}

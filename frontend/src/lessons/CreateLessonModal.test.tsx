@@ -8,6 +8,7 @@ import { makeAcademy } from '../test/academy'
 import { CLASS_ID, TEACHER_IDS, makeClass, makeClassList, makeClassTeacher } from '../test/classes'
 import { SYLLABUS_ITEM_IDS, makeSyllabus } from '../test/courses'
 import { jsonResponse, mockFetch } from '../test/http'
+import { DELIVERY_MODES } from '../api/lessons'
 import { FAR_TIME_ZONE, LESSON_ADMIN_PERMISSIONS, LESSON_TIME_ZONE, makeLesson, makeLessonList } from '../test/lessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { BRANCH_ID, ROOM_ID, makeRoom, makeRoomList } from '../test/timetable'
@@ -87,6 +88,15 @@ function fillTimes(dialog: HTMLElement, date: string, start: string, end: string
   fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: start } })
   fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.endTime), { target: { value: end } })
 }
+
+/** J-F79: the delivery modes are chips (a radio group) — a click on a mode's name chooses it. */
+function chooseMode(dialog: HTMLElement, label: string) {
+  fireEvent.click(within(dialog).getByText(label))
+}
+
+/** The chips in their order: each mode's name and whether it is chosen. */
+const modeChoices = (dialog: HTMLElement) =>
+  [...dialog.querySelectorAll<HTMLLabelElement>('.lesson-modal__chips label')].map((label) => ({ text: label.textContent, checked: label.querySelector('input')!.checked }))
 
 function submit(dialog: HTMLElement) {
   fireEvent.click(within(dialog).getByText(ar.lessons.create.submit).closest('button')!)
@@ -246,9 +256,8 @@ describe('CreateLessonModal', () => {
     fireEvent.click(await screen.findByText('LAB-1 — مختبر 1', { selector: '.ant-select-item-option-content' }))
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.syllabusItem))
     fireEvent.click(await screen.findByText('2. الشروط', { selector: '.ant-select-item-option-content' }))
-    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.deliveryMode))
-    // The select words the modes as the list's tag does (`labels.*` — J-F19).
-    fireEvent.click(await screen.findByText(ar.labels.hybrid, { selector: '.ant-select-item-option-content' }))
+    // The chips word the modes as the list's tag does (`labels.*` — J-F19; chips since J-F79).
+    chooseMode(dialog, ar.labels.hybrid)
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.meetingUrl), 'https://meet.example.com/f')
     submit(dialog)
 
@@ -476,12 +485,11 @@ describe('CreateLessonModal — the teacher’s short form (J-F76)', () => {
     expect(within(dialog).queryByLabelText(ar.lessons.fields.syllabusItem)).not.toBeInTheDocument()
     expect(within(dialog).getByText(ar.lessons.hints.teacherDuration.replace('{{minutes}}', '60'))).toBeInTheDocument()
 
-    // Live by default; the select offers live and recorded only.
-    const mode = within(dialog).getByLabelText(ar.lessons.fields.deliveryMode).closest('.ant-select') as HTMLElement
-    expect(mode).toHaveTextContent(ar.labels.live_online)
-    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.deliveryMode))
-    const options = await screen.findAllByText(new RegExp(`${ar.labels.live_online}|${ar.labels.recorded}|${ar.labels.in_person}|${ar.labels.hybrid}`), { selector: '.ant-select-item-option-content' })
-    expect(options.map((option) => option.textContent)).toEqual([ar.labels.live_online, ar.labels.recorded])
+    // Live by default; the chips offer live and recorded only.
+    expect(modeChoices(dialog)).toEqual([
+      { text: ar.labels.live_online, checked: true },
+      { text: ar.labels.recorded, checked: false },
+    ])
 
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'الحلقات')
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.date), { target: { value: '2026-11-12' } })
@@ -517,8 +525,7 @@ describe('CreateLessonModal — the teacher’s short form (J-F76)', () => {
     const dialog = await renderTeacher(TEACHER_IDS[2])
     fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.class))
     fireEvent.click(await screen.findByText('PY-101-A — بايثون — الفصل أ', { selector: '.ant-select-item-option-content' }))
-    fireEvent.mouseDown(within(dialog).getByLabelText(ar.lessons.fields.deliveryMode))
-    fireEvent.click(await screen.findByText(ar.labels.recorded, { selector: '.ant-select-item-option-content' }))
+    chooseMode(dialog, ar.labels.recorded)
 
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'مراجعة')
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.date), { target: { value: '2026-11-12' } })
@@ -544,5 +551,73 @@ describe('CreateLessonModal — the teacher’s short form (J-F76)', () => {
     expect(within(dialog).getByLabelText(ar.lessons.fields.endTime)).toBeInTheDocument()
     expect(within(dialog).getByLabelText(ar.lessons.fields.room)).toBeInTheDocument()
     expect(within(dialog).queryByText(ar.lessons.hints.teacherDuration.replace('{{minutes}}', '60'))).not.toBeInTheDocument()
+  })
+})
+
+// TEST-342 (J-F79, CH-0386): the «درس جديد» window has the look of a calendar's «new event» window — the same fields,
+// rules and data, each named inside itself (its label kept for screen readers) with an icon, the two times side by side,
+// the delivery modes as chips and a grey «إلغاء» beside «إنشاء الدرس».
+describe('CreateLessonModal — the «new event» look (J-F79)', () => {
+  /** The icon at the start of the field named `label`. */
+  const iconOf = (dialog: HTMLElement, label: string, name: string) =>
+    within(dialog).getByLabelText(label).closest('.ant-input-affix-wrapper')?.querySelector(`.anticon-${name}`) ?? null
+
+  it('names every field inside itself with an icon, shows the start, an arrow and the computed end side by side, and the modes as chips', async () => {
+    mockFetch((url) => {
+      const parsed = new URL(url, 'http://localhost')
+      if (parsed.pathname === '/api/academy') return jsonResponse(200, makeAcademy())
+      return jsonResponse(404, { statusCode: 404, code: 'class_not_found', message: 'nope' })
+    })
+    const auth = makeAuth({ user: makeUser({ id: TEACHER_IDS[0], role: 'teacher', roles: ['teacher'], permissions: ['lessons.read', 'lessons.manage', 'classes.read'] }) })
+    renderWithProviders(<CreateLessonModal open onClose={vi.fn()} onCreated={vi.fn()} initialClass={twoTeachers} />, { auth, route: '/classes' })
+    const dialog = (await screen.findByText(ar.lessons.create.title)).closest('[role="dialog"]') as HTMLElement
+    expect(dialog.closest('.lesson-modal')).not.toBeNull()
+
+    // Each field keeps its label (found by it) and shows its name inside itself.
+    expect(within(dialog).getByLabelText(ar.lessons.fields.titleAr)).toHaveAttribute('placeholder', ar.lessons.fields.titleAr)
+    expect(within(dialog).getByLabelText(ar.lessons.fields.descriptionAr)).toHaveAttribute('placeholder', ar.lessons.fields.descriptionAr)
+    expect(within(dialog).getByLabelText(ar.lessons.fields.joinUrl)).toHaveAttribute('placeholder', ar.lessons.fields.joinUrl)
+    expect(iconOf(dialog, ar.lessons.fields.date, 'calendar')).not.toBeNull()
+    expect(iconOf(dialog, ar.lessons.fields.startTime, 'clock-circle')).not.toBeNull()
+    expect(iconOf(dialog, ar.lessons.fields.joinUrl, 'link')).not.toBeNull()
+
+    // The start, an arrow and the end the short form computes (an hour later, past midnight too) — shown, not a field.
+    const times = dialog.querySelector('.lesson-modal__times') as HTMLElement
+    expect(within(times).getByLabelText(ar.lessons.fields.startTime)).toBeInTheDocument()
+    expect(times.querySelector('.lesson-modal__arrow')).not.toBeNull()
+    expect(within(dialog).getByTestId('lesson-simple-end')).toHaveTextContent('--:--')
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: '11:30' } })
+    await waitFor(() => expect(within(dialog).getByTestId('lesson-simple-end')).toHaveTextContent('12:30'))
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: '23:30' } })
+    await waitFor(() => expect(within(dialog).getByTestId('lesson-simple-end')).toHaveTextContent('00:30'))
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.endTime)).not.toBeInTheDocument()
+
+    // The modes are chips; a recorded lesson asks for its video, named inside the field with its icon.
+    chooseMode(dialog, ar.labels.recorded)
+    await waitFor(() => expect(modeChoices(dialog)).toEqual([
+      { text: ar.labels.live_online, checked: false },
+      { text: ar.labels.recorded, checked: true },
+    ]))
+    expect(within(dialog).getByLabelText(ar.lessons.fields.recordingUrl)).toHaveAttribute('placeholder', ar.lessons.fields.recordingUrl)
+    expect(iconOf(dialog, ar.lessons.fields.recordingUrl, 'video-camera')).not.toBeNull()
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.joinUrl)).not.toBeInTheDocument()
+
+    // «إلغاء» and the main button side by side in the footer.
+    const footer = dialog.querySelector('.ant-modal-footer') as HTMLElement
+    expect(within(footer).getByText(ar.common.cancel)).toBeInTheDocument()
+    expect(within(footer).getByText(ar.lessons.create.submit)).toBeInTheDocument()
+  })
+
+  it('the full form keeps every field: its end time beside the start with an icon, and the four modes as chips', async () => {
+    mockCreateApi()
+    const { dialog } = await renderOpen()
+    const times = dialog.querySelector('.lesson-modal__times') as HTMLElement
+    expect(within(times).getByLabelText(ar.lessons.fields.startTime)).toBeInTheDocument()
+    expect(within(times).getByLabelText(ar.lessons.fields.endTime)).toBeInTheDocument()
+    expect(iconOf(dialog, ar.lessons.fields.endTime, 'clock-circle')).not.toBeNull()
+    expect(within(dialog).queryByTestId('lesson-simple-end')).not.toBeInTheDocument()
+    expect(modeChoices(dialog)).toEqual(DELIVERY_MODES.map((mode) => ({ text: ar.labels[mode], checked: mode === 'in_person' })))
+    expect(within(dialog).getByLabelText(ar.lessons.fields.room)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(ar.lessons.fields.teacher)).toBeInTheDocument()
   })
 })
