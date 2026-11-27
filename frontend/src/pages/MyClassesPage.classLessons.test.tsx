@@ -190,6 +190,34 @@ describe('«دوراتي» — the lessons a teacher adds reach the student (J-F
     await waitFor(() => expect(document.querySelector('.ant-modal-title')?.textContent).toContain('اختبار المقدمة'))
   })
 
+  it('J-F83 — draws «الانضمام» in the look of its service, and keeps a recorded lesson’s video open after it ended', async () => {
+    const lessons = [
+      classLesson('yt', { title: { ar: 'درس يوتيوب' }, deliveryMode: 'recorded', status: 'completed', meetingUrl: 'https://www.youtube.com/watch?v=abc' }),
+      classLesson('zoom', { title: { ar: 'درس زوم' }, deliveryMode: 'live_online', status: 'scheduled', meetingUrl: 'https://us02web.zoom.us/j/123' }),
+      classLesson('meet', { title: { ar: 'درس ميت' }, deliveryMode: 'live_online', status: 'in_progress', meetingUrl: 'https://meet.google.com/abc-defg-hij' }),
+      classLesson('other', { title: { ar: 'درس آخر' }, deliveryMode: 'live_online', status: 'scheduled', meetingUrl: 'https://meet.example.com/room' }),
+      classLesson('ended', { title: { ar: 'درس مباشر انتهى' }, deliveryMode: 'live_online', status: 'completed', meetingUrl: 'https://us02web.zoom.us/j/9' }),
+      classLesson('video', { title: { ar: 'درس بفيديو' }, deliveryMode: 'live_online', status: 'completed', recordingUrl: 'https://youtu.be/xyz' }),
+    ]
+    serve({ pages: [lessons] })
+    renderClasses('/my-classes?course=c1')
+
+    const panel = await classPanel()
+    const link =(title: string, label: string) => {
+      const row = within(panel).getByText(title, { selector: '.hub-row__title, .hub-row__title *' }).closest('li')!
+      return within(row).queryByText(label)?.closest('a') ?? null
+    }
+    const join = ar.myLessons.feed.join
+    expect(link('درس يوتيوب', join)).toHaveClass('hub-btn--youtube')
+    expect(link('درس يوتيوب', join)).toHaveAttribute('href', 'https://www.youtube.com/watch?v=abc')
+    expect(link('درس زوم', join)).toHaveClass('hub-btn--zoom')
+    expect(link('درس ميت', join)).toHaveClass('hub-btn--meet')
+    expect(link('درس آخر', join)).toHaveClass('hub-btn--live')
+    // A live lesson that ended has nothing to join; its recording is «مشاهدة الفيديو», here a YouTube one.
+    expect(link('درس مباشر انتهى', join)).toBeNull()
+    expect(link('درس بفيديو', ar.lessons.attachments.watchVideo)).toHaveClass('hub-btn--youtube')
+  })
+
   it('shows the newest few and the rest on demand', async () => {
     const many = Array.from({ length: CLASS_LESSONS_SHOWN + 2 }, (_, index) => classLesson(`n${index}`))
     serve({ pages: [many] })
