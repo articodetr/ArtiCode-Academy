@@ -2,6 +2,8 @@
 // on its edit form, «حذف» deletes after a confirmation, «إضافة اختبار» opens the exam form with this lesson chosen —
 // greyed out with a reason when the lesson refuses them, absent in a closed class or without their keys, and never
 // opening the card's drawer by themselves.
+// TEST-341 (J-F78, CH-0385): a card shows the lesson's day, its times and its title only — no teacher or room line, no
+// zone name, no attendance count and no status tag.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -172,6 +174,24 @@ describe('ClassLessonsTab — the buttons of a lesson card (J-F75)', () => {
     expect(await screen.findByText('أُنشئ الاختبار «اختبار الدرس» مسودةً')).toBeInTheDocument()
     expect(onExamsChanged).toHaveBeenCalled()
     await waitFor(() => expect(calls.some((call) => call.path === '/api/exams/new-exam')).toBe(true))
+  })
+})
+
+describe('ClassLessonsTab — what a lesson card shows (J-F78)', () => {
+  it('shows the day, the times and the title, and no teacher, room, zone, attendance or status', async () => {
+    mockTabApi()
+    renderTab()
+    await screen.findByText('مقدمة في البرمجة')
+    for (const lesson of [scheduled, completed, cancelled, attended]) {
+      const shown = within(card(lesson.id))
+      expect(shown.getByTestId(`class-lesson-when-${lesson.id}`)).toHaveTextContent('13:00')
+      expect(shown.getByTestId(`class-lesson-when-${lesson.id}`)).toHaveTextContent('14:30')
+      for (const hidden of ['خالد المعلم', ar.lessons.drawer.noTeacher, ar.lessons.drawer.noRoom, 'Asia/Riyadh', ar.labels.scheduled, ar.labels.completed, ar.labels.cancelled]) {
+        expect(shown.queryByText(hidden)).toBeNull()
+      }
+      expect(card(lesson.id)).not.toHaveTextContent(/مختبر|LAB-1|الحضور/)
+      expect(card(lesson.id).querySelector('.ant-tag')).toBeNull()
+    }
   })
 })
 
