@@ -1,0 +1,254 @@
+/*
+ * The «درس جديد» window (J-F79, Jallal's request): the look of a calendar's «new event» window — one field under the
+ * other with its name inside it (a placeholder) and an icon at its start, the two times side by side with an arrow
+ * between them, the delivery modes as coloured chips, and a grey «إلغاء» beside the main «حفظ». Every rule hangs on
+ * the modal's root class `lesson-modal`, so the lesson drawer's edit form, which shares LessonFormFields, keeps its
+ * own look. The fields, their order, their rules and their data are those of LessonFormFields.
+ */
+
+.lesson-modal .ant-modal .ant-modal-container {
+  padding: 28px 28px 24px;
+}
+
+.lesson-modal .ant-modal .ant-modal-header {
+  margin-bottom: 24px;
+}
+
+.lesson-modal .ant-modal-title {
+  font-weight: 700;
+}
+
+/*
+ * The field names stay in the page for screen readers and for the label of each field (getByLabelText), hidden
+ * visually only — never `display: none`, which would cut the field from its name. The name shows inside the field.
+ */
+.lesson-modal .ant-form .ant-form-item .ant-form-item-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lesson-modal .ant-form-item {
+  margin-bottom: 14px;
+}
+
+.lesson-modal .ant-form-item-extra {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* The icon at the start of a field: grey, a little larger than the text, a gap before the value. */
+.lesson-modal .ant-input-prefix {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 18px;
+  margin-inline-end: 10px;
+}
+
+/* The two times: the start, an arrow, the end — the end of the teacher's short form is computed and shown only. */
+.lesson-modal__times {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.lesson-modal__times > .ant-form-item,
+.lesson-modal__times > .lesson-modal__end {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.lesson-modal__arrow {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  font-size: 18px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.lesson-modal__end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 11px;
+  border: 1px solid #d9d9d9;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.02);
+  color: rgba(0, 0, 0, 0.45);
+  margin-bottom: 14px;
+}
+
+.lesson-modal__end .anticon {
+  font-size: 18px;
+}
+
+/* The delivery modes: a coloured square (ticked when chosen) and the mode's name, side by side. */
+.lesson-modal__chips.ant-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+}
+
+.lesson-modal__chips .ant-radio-button-wrapper,
+.lesson-modal__chips .ant-radio-button-wrapper:first-child,
+.lesson-modal__chips .ant-radio-button-wrapper:last-child {
+  height: auto;
+  padding: 2px 0;
+  line-height: 1.5;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+
+.lesson-modal__chips .ant-radio-button-wrapper::before {
+  display: none;
+}
+
+.lesson-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lesson-chip__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 13px;
+  background: var(--lesson-chip-soft);
+  color: var(--lesson-chip-strong);
+  transition: box-shadow 0.15s;
+}
+
+.lesson-chip__box .anticon {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.lesson-modal__chips .ant-radio-button-wrapper-checked .lesson-chip__box {
+  box-shadow: inset 0 0 0 1.5px var(--lesson-chip-strong);
+}
+
+.lesson-modal__chips .ant-radio-button-wrapper-checked .lesson-chip__box .anticon {
+  opacity: 1;
+}
+
+.lesson-modal__chips .ant-radio-button-wrapper:has(:focus-visible) .lesson-chip__box {
+  outline: 2px solid var(--lesson-chip-strong);
+  outline-offset: 2px;
+}
+
+.lesson-chip--live_online {
+  --lesson-chip-soft: #e6f4ea;
+  --lesson-chip-strong: #389e0d;
+}
+
+.lesson-chip--recorded {
+  --lesson-chip-soft: #fff1e6;
+  --lesson-chip-strong: #d46b08;
+}
+
+.lesson-chip--in_person {
+  --lesson-chip-soft: #efeefe;
+  --lesson-chip-strong: #5b4fd8;
+}
+
+.lesson-chip--hybrid {
+  --lesson-chip-soft: #e6f2fb;
+  --lesson-chip-strong: #0f6cbd;
+}
+
+/* «إضافة مرفق»: a plain «+» line like the window's other secondary action, not a boxed button. */
+.lesson-modal .lesson-attachments__add.ant-btn {
+  padding-inline: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* The two buttons: the same size side by side at the end, «إلغاء» grey, «حفظ» in the primary colour. */
+.lesson-modal .ant-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.lesson-modal .ant-modal .ant-modal-footer .ant-btn {
+  min-width: 130px;
+  margin-inline-start: 0;
+}
+
+.lesson-modal .ant-modal .ant-modal-footer .ant-btn-default {
+  border-color: transparent;
+  background: #f2f3f5;
+}
+
+.lesson-modal .ant-modal .ant-modal-footer .ant-btn-default:not(:disabled):hover {
+  border-color: transparent;
+  background: #e7e8eb;
+  color: inherit;
+}
+
+/*
+ * A link field is typed left to right (index.css), so its Arabic name would sit at the left of the empty field in the
+ * Arabic UI: while the name shows (the field is empty) the field reads right to left, and left to right once typed in.
+ */
+.lesson-modal .ant-input-affix-wrapper-rtl .ant-input[dir='ltr']:placeholder-shown {
+  direction: rtl;
+}
+
+/*
+ * The day and the times: the field's own icon is the one at its start, so the browser's picker icon (Chromium, Safari)
+ * is stretched, invisible, over the whole field — a click anywhere opens the picker, typed digits still go in. In the
+ * Arabic UI the value sits beside the icon, as in the other fields.
+ */
+.lesson-modal .ant-input-affix-wrapper:has(input[type='date']),
+.lesson-modal .ant-input-affix-wrapper:has(input[type='time']) {
+  position: relative;
+}
+
+.lesson-modal input[type='date']::-webkit-calendar-picker-indicator,
+.lesson-modal input[type='time']::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.lesson-modal .ant-input-affix-wrapper-rtl input[type='date'],
+.lesson-modal .ant-input-affix-wrapper-rtl input[type='time'] {
+  text-align: right;
+}
+
+/* A field's box is as tall as its control: the chips and an empty attachments list leave no 46 px gap above them. */
+.lesson-modal .ant-form .ant-form-item .ant-form-item-control-input {
+  min-height: 0;
+}
+
+/* A chip keeps no box of its own — hovered, chosen or both; its square shows the state. */
+.lesson-modal .lesson-modal__chips .ant-radio-button-wrapper:hover,
+.lesson-modal .lesson-modal__chips .ant-radio-button-wrapper-checked,
+.lesson-modal .lesson-modal__chips .ant-radio-button-wrapper-checked:hover,
+.lesson-modal .lesson-modal__chips .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}

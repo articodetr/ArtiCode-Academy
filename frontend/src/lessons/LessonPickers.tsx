@@ -105,9 +105,11 @@ interface SyllabusItemSelectProps {
   disabled?: boolean
   id?: string
   'aria-label'?: string
+  /** J-F79: the placeholder while nothing is chosen (the window names the field inside it); default «بلا بند». */
+  emptyLabel?: string
 }
 
-export function SyllabusItemSelect({ courseId, current, syllabus, value, onChange, disabled, id, ...rest }: SyllabusItemSelectProps) {
+export function SyllabusItemSelect({ courseId, current, syllabus, value, onChange, disabled, id, emptyLabel, ...rest }: SyllabusItemSelectProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   // Reads the syllabus itself only when the caller did not hand it over.
@@ -115,7 +117,7 @@ export function SyllabusItemSelect({ courseId, current, syllabus, value, onChang
   const { items, loading, error } = syllabus ?? own
   const options = items.map((item) => ({ value: item.id, label: syllabusItemLabel(item, language) }))
   if (current && !items.some((item) => item.id === current.id)) options.unshift({ value: current.id, label: syllabusItemLabel(current, language) })
-  const placeholder = error ? t('lessons.syllabus.loadFailed') : courseId && !loading && items.length === 0 ? t('lessons.syllabus.empty') : t('lessons.syllabus.placeholder')
+  const placeholder = error ? t('lessons.syllabus.loadFailed') : courseId && !loading && items.length === 0 ? t('lessons.syllabus.empty') : (emptyLabel ?? t('lessons.syllabus.placeholder'))
   return (
     <Select<string>
       id={id}

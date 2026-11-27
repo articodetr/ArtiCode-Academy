@@ -24,7 +24,14 @@
 // syllabus item (nothing is suggested or read) and no teacher field — the
 // lesson is the caller's when they teach the class, else the server's default
 // (the lead teacher).
-import { Alert, Form, Modal } from 'antd'
+// J-F79 (Jallal's request): the window has the look of a calendar's «new
+// event» window — a scoped theme (lessonModal.theme.ts: taller, rounder fields
+// and buttons), the fields named inside themselves with an icon, the two times
+// side by side, the delivery modes as chips, a grey «إلغاء» beside «حفظ»
+// (LessonFormFields `inline`, lessonModal.css under the root class
+// `lesson-modal`). The fields, their order, their rules and the data are
+// unchanged; the teacher's short form is narrower than the full one.
+import { Alert, ConfigProvider, Form, Modal } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AcademyClass } from '../api/classes'
@@ -42,6 +49,8 @@ import { nextCurriculumItem } from './lessons.suggestion'
 import { useCoveredSyllabusItems } from './useCoveredSyllabusItems'
 import { useSyllabusItems } from './useSyllabusItems'
 import { useAcademyZone } from './useAcademyZone'
+import { LESSON_MODAL_THEME } from './lessonModal.theme'
+import './lessonModal.css'
 
 interface CreateLessonModalProps {
   open: boolean
@@ -59,24 +68,30 @@ export function CreateLessonModal({ open, onClose, onCreated, initialClass }: Cr
   // (until the new body is ready the OK button is disabled — J-F19).
   const [submit, setSubmit] = useState<(() => void) | null>(null)
   const onReady = useCallback((fn: (() => void) | null) => setSubmit(() => fn), [])
+  // The teacher's short form (J-F76) fits a narrower window (J-F79).
+  const { user } = useAuth()
+  const simple = user ? teachesOnly(user) : false
 
   return (
-    <Modal
-      open={open}
-      title={t('lessons.create.title')}
-      okText={t('lessons.create.submit')}
-      cancelText={t('common.cancel')}
-      confirmLoading={saving}
-      okButtonProps={{ disabled: !submit }}
-      onOk={() => submit?.()}
-      onCancel={() => {
-        if (!saving) onClose()
-      }}
-      width={820}
-      destroyOnHidden
-    >
-      {open ? <CreateLessonBody initialClass={initialClass} onSaving={setSaving} onReady={onReady} onCreated={onCreated} /> : null}
-    </Modal>
+    <ConfigProvider theme={LESSON_MODAL_THEME}>
+      <Modal
+        rootClassName="lesson-modal"
+        open={open}
+        title={t('lessons.create.title')}
+        okText={t('lessons.create.submit')}
+        cancelText={t('common.cancel')}
+        confirmLoading={saving}
+        okButtonProps={{ disabled: !submit }}
+        onOk={() => submit?.()}
+        onCancel={() => {
+          if (!saving) onClose()
+        }}
+        width={simple ? 560 : 760}
+        destroyOnHidden
+      >
+        {open ? <CreateLessonBody initialClass={initialClass} onSaving={setSaving} onReady={onReady} onCreated={onCreated} /> : null}
+      </Modal>
+    </ConfigProvider>
   )
 }
 
@@ -171,6 +186,7 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
           form={form}
           mode="create"
           simple={simple}
+          inline
           zone={zone}
           classLocked={initialClass !== undefined}
           onRoomChange={(_roomId, next) => setRoom(next ?? null)}
