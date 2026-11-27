@@ -3707,6 +3707,7 @@ export const en: Translation = {
     card: {
       select: 'Show the lessons of {{course}}',
       lessons: 'Lessons: {{total}}',
+      classLessons: 'Class lessons: {{n}}',
       progress: 'Completed lessons',
       browse: 'Browse lessons',
       certificate: 'Certificate',
@@ -4154,6 +4155,13 @@ export const en: Translation = {
         loadFailed: 'The exam could not be loaded.',
         notFound: 'This exam is not among your exams now.',
         manual: 'This exam is taken in class and its result is recorded by the teacher; you find it with its result in «My exams».',
+      },
+      classLessons: {
+        title: 'Class lessons',
+        curriculum: 'Course curriculum',
+        failed: 'The lessons your teacher adds to the class could not be loaded.',
+        all: 'Show every class lesson ({{n}})',
+        less: 'Show the latest lessons only',
       },
       emptyCourse: 'This course has no lessons yet.',
       emptyFilter: 'This course has no lessons of this type.',

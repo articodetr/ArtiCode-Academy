@@ -21,6 +21,10 @@
 // the certificates, the class's exams and (for the learner's own card) the course's lessons again and says what is
 // missing — the lessons left and how many exams are not passed yet; the exams themselves are listed only at the end of
 // the course's lessons below the cards («اختبارات الدورة» of HubLessons), which its «عرض الاختبارات» brings into view.
+// Since J-F81 (Jallal's request «اي درس ينشره الاستاذ يوصل مباشرة للطلاب») the page also reads the learner's class lessons
+// (MOD-06 — every lesson a teacher adds to a class, API-101, `useLearnerClassLessons`) once, and again whenever a card
+// is chosen: each card counts its enrollment's lessons and the course panel lists them first, under «دروس الفصل» — a
+// teacher's lesson needs no curriculum lesson (MOD-20) behind it to reach the student.
 import { ArrowLeftOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import { Alert, Button, ConfigProvider, Skeleton } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -40,8 +44,10 @@ import { MyClassCard } from '../enrollments/MyClassCard'
 import { MyEnrollmentRequests } from '../enrollments/MyEnrollmentRequests'
 import { useMyClasses } from '../enrollments/useMyClasses'
 import { HubLessons } from '../learn/hub/HubLessons'
+import { enrollmentLessonCount, enrollmentLessonsOf } from '../learn/hub/classLessons.view'
 import { HUB_ANTD_THEME } from '../learn/hub/hub.theme'
 import { COURSE_PARAM, LESSON_PARAM, chosenCourseOf, countsOf, isStudyCourse, studyCourses } from '../learn/hub/hub.view'
+import { useLearnerClassLessons } from '../lessons/useLearnerClassLessons'
 import { SECTION_PARAM, mySchoolFailureKey } from '../mySchool/mySchool.view'
 import { SourceAlert } from '../mySchool/SourceAlert'
 import { useMyLearning } from '../mySchool/useMyLearning'
@@ -128,6 +134,7 @@ function MyClassCards() {
   const [params, setParams] = useSearchParams()
   const my = useMyClasses()
   const learning = useMyLearning()
+  const lessons = useLearnerClassLessons()
   const [live, setLive] = useState<Readonly<Record<string, ProgressCounts>>>({})
   const [reveal, setReveal] = useState(0)
   // Asked from the window of «الشهادة» (J-F68): the chosen course's «اختبارات الدورة» comes into view once read.
@@ -154,6 +161,8 @@ function MyClassCards() {
   }, [reveal])
 
   const selectCourse = (courseId: string, target: 'lessons' | 'exams' = 'lessons') => {
+    // The teacher may have added a lesson since the page was read (J-F81).
+    lessons.reload()
     if (courseId !== selected?.course.id) {
       setParams((previous) => {
         const next = new URLSearchParams(previous)
@@ -215,6 +224,7 @@ function MyClassCards() {
                 active={choosable && item.course.id === selected?.course.id}
                 certificateId={issuedCertificateId(certificates.items, row)}
                 onShowCertificateGaps={() => setGapsOf(row.enrollmentId)}
+                classLessons={lessons.settled ? enrollmentLessonCount(lessons.items, row.class.id, row.student.id) : null}
               />
             )
           })}
@@ -237,7 +247,21 @@ function MyClassCards() {
       ) : null}
 
       <div ref={panelRef} className="hub-panel-anchor">
-        {selected ? <HubLessons key={selected.course.id} course={selected} onProgress={onProgress} examsFocus={examsFocus} onExamClosed={certificates.reload} /> : null}
+        {selected ? (
+          <HubLessons
+            key={selected.course.id}
+            course={selected}
+            onProgress={onProgress}
+            examsFocus={examsFocus}
+            onExamClosed={certificates.reload}
+            classLessons={{
+              items: enrollmentLessonsOf(lessons.items, selected.class.id, selected.student.id),
+              pending: !lessons.settled,
+              failed: lessons.failed,
+              onRetry: lessons.reload,
+            }}
+          />
+        ) : null}
       </div>
     </section>
   )

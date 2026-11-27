@@ -375,6 +375,14 @@ export const myLessons = {
       notFound: 'هذا الاختبار ليس ضمن اختباراتك الآن.',
       manual: 'هذا الاختبار يُقدَّم في الفصل وتسجّل نتيجته المعلّمة، وتجده مع نتيجته في «اختباراتي».',
     },
+    // J-F81: the lessons the class's teacher adds (API-101) at the top of a course's panel on «دوراتي».
+    classLessons: {
+      title: 'دروس الفصل',
+      curriculum: 'منهج الدورة',
+      failed: 'تعذّر تحميل دروس الفصل التي يضيفها المعلم.',
+      all: 'عرض كل دروس الفصل ({{n}})',
+      less: 'عرض أحدث الدروس فقط',
+    },
     emptyCourse: 'لا توجد دروس في هذه الدورة حالياً.',
     emptyFilter: 'لا توجد دروس من هذا النوع في هذه الدورة.',
     empty: {
