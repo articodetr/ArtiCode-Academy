@@ -13,7 +13,8 @@ import { makeAcademy } from '../test/academy'
 import { makeMyClassItem, makeMyClassList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
 import { makeMyExam, makePublishedMyExam } from '../test/myExams'
-import { makeMyLessonList } from '../test/myLessons'
+import type { MyLessonItem } from '../api/myLessons'
+import { makeMyLesson, makeMyLessonList } from '../test/myLessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { MyClassesPage } from './MyClassesPage'
 import { MyLessonsPage } from './MyLessonsPage'
@@ -22,8 +23,8 @@ const hub = ar.myLessons.hub
 const COURSE = makeLearningCourse({ course: { ...makeLearningCourse().course, id: 'c1', name: { ar: 'أساسيات البرمجة' } } })
 const CLASS = makeMyClassItem({ enrollmentId: COURSE.enrollmentId })
 
-function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWorkspace; items?: Record<string, LearningItem>; exams?: MyExamItem[] } = {}) {
-  const { courses = [COURSE], workspace = makeWorkspace(), items = { i2: makeItem('i2'), i3: makeItem('i3') }, exams = [] } = options
+function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWorkspace; items?: Record<string, LearningItem>; exams?: MyExamItem[]; classLessons?: MyLessonItem[] } = {}) {
+  const { courses = [COURSE], workspace = makeWorkspace(), items = { i2: makeItem('i2'), i3: makeItem('i3') }, exams = [], classLessons = [] } = options
   const paths: string[] = []
   const lessonQueries: URLSearchParams[] = []
   mockFetch((url, init) => {
@@ -38,7 +39,7 @@ function serve(options: { courses?: MyLearningCourse[]; workspace?: LearningWork
     if (item) return items[item[1]!] ? jsonResponse(200, items[item[1]!]) : jsonResponse(404, { statusCode: 404, code: 'lesson_not_found' })
     if (pathname === '/api/me/lessons') {
       lessonQueries.push(searchParams)
-      return jsonResponse(200, makeMyLessonList([]))
+      return jsonResponse(200, makeMyLessonList(classLessons))
     }
     if (pathname === '/api/me/classes') return jsonResponse(200, makeMyClassList([CLASS]))
     // J-F68: «اختبارات الدورة» at the end of a course's lessons (none here) and the cards' certificates.
@@ -185,7 +186,31 @@ describe('«دروسي» after J-F67 — one list of every course’s lessons, n
     expect(within(row(TITLES.i2)).getByRole('button', { name: new RegExp(hub.row.play) })).toBeInTheDocument()
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
     expect(document.querySelector('.hub-card, .hub-grid')).toBeNull()
-    expect(paths).not.toContain('GET /api/me/lessons')
+    // J-F80: the class lessons their teachers add are read too (API-101), in their own panel.
+    expect(paths).toContain('GET /api/me/lessons')
+    expect(await screen.findByRole('region', { name: ar.myLessons.feed.classTitle })).toBeInTheDocument()
+  })
+
+  it('J-F80 — shows a student the class lessons their teacher adds, with the join link, the video and the attachments (none for a cancelled lesson)', async () => {
+    const live = makeMyLesson({ id: 'live-1', title: { ar: 'درس الحلقات المباشر' }, deliveryMode: 'live_online', status: 'scheduled', startsAt: '2099-01-10T10:00:00Z', endsAt: '2099-01-10T11:00:00Z', meetingUrl: 'https://meet.example.com/loops', attachments: [{ kind: 'book', title: { ar: 'كتاب الحلقات' }, url: 'https://cdn.example.org/loops.pdf' }] })
+    const recorded = makeMyLesson({ id: 'rec-1', title: { ar: 'مراجعة مسجّلة' }, deliveryMode: 'recorded', status: 'completed', recordingUrl: 'https://videos.example.com/review', attachments: [{ kind: 'link', title: { ar: 'تمارين' }, url: 'https://example.org/drills' }] })
+    const cancelled = makeMyLesson({ id: 'off-1', title: { ar: 'درس ملغى' }, status: 'cancelled', recordingUrl: 'https://videos.example.com/off', attachments: [{ kind: 'link', title: { ar: 'رابط الدرس الملغى' }, url: 'https://example.org/off' }] })
+    serve({ classLessons: [live, recorded, cancelled] })
+    renderLessons()
+
+    const panel = await screen.findByRole('region', { name: ar.myLessons.feed.classTitle })
+    expect(within(panel).getByText(ar.myLessons.feed.classHint)).toBeInTheDocument()
+    const liveRow = (await within(panel).findByText('درس الحلقات المباشر')).closest('li')!
+    expect(within(liveRow).getByText(ar.myLessons.feed.join).closest('a')).toHaveAttribute('href', 'https://meet.example.com/loops')
+    expect(within(liveRow).getByText('كتاب الحلقات').closest('a')).toHaveAttribute('href', 'https://cdn.example.org/loops.pdf')
+    const recordedRow = within(panel).getByText('مراجعة مسجّلة').closest('li')!
+    const watch = within(recordedRow).getByText(ar.lessons.attachments.watchVideo).closest('a')!
+    expect(watch).toHaveAttribute('href', 'https://videos.example.com/review')
+    expect(watch).toHaveAttribute('target', '_blank')
+    expect(within(recordedRow).getByText('تمارين').closest('a')).toHaveAttribute('href', 'https://example.org/drills')
+    const cancelledRow = within(panel).getByText('درس ملغى').closest('li')!
+    expect(within(cancelledRow).queryByText(ar.lessons.attachments.watchVideo)).not.toBeInTheDocument()
+    expect(within(cancelledRow).queryByText('رابط الدرس الملغى')).not.toBeInTheDocument()
   })
 
   it('plays a lesson inside the page from «دروسي» too', async () => {

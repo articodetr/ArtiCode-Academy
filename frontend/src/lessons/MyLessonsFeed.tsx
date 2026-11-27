@@ -5,8 +5,11 @@
 // «كل الدروس» (newest first — the default), «اليوم والقادمة» (oldest first) and «السابقة» (newest first). Each row
 // shows its times in the lesson's own zone and the days are the academy's (D-R41) — without the note naming the zones
 // that the table shows (removed at Jallal's request); the student's OWN attendance only,
-// never the teacher's note (the DTO does not carry it). Pages follow the server's cursor.
-import { BookOutlined, CalendarOutlined, CheckCircleFilled, CloseCircleOutlined, EnvironmentOutlined, LinkOutlined, TeamOutlined, UserOutlined, VideoCameraOutlined } from '@ant-design/icons'
+// never the teacher's note (the DTO does not carry it). Pages follow the server's cursor. Since J-F80 a student's
+// «دروسي» shows this feed too (`variant: 'student'` — its own title and hint: the class lessons their teachers add),
+// and every row that is not cancelled offers the lesson's video («مشاهدة الفيديو») beside the join link and lists
+// its books and links (J-F77).
+import { BookOutlined, CalendarOutlined, CheckCircleFilled, CloseCircleOutlined, EnvironmentOutlined, LinkOutlined, PlayCircleOutlined, TeamOutlined, UserOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { MyLessonItem } from '../api/myLessons'
@@ -32,9 +35,11 @@ interface MyLessonsFeedProps {
   dayZone: string
   /** «My courses» (API-060): it tells a learner without any enrollment why the list is empty. */
   myClasses: ReturnType<typeof useMyClasses>
+  /** J-F80: `student` = the class lessons panel of a student's «دروسي» (its own title and hint); a guardian's feed by default. */
+  variant?: 'guardian' | 'student'
 }
 
-export function MyLessonsFeed({ dayZone, myClasses }: MyLessonsFeedProps) {
+export function MyLessonsFeed({ dayZone, myClasses, variant = 'guardian' }: MyLessonsFeedProps) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const list = useMyLessons(dayZone)
@@ -42,14 +47,16 @@ export function MyLessonsFeed({ dayZone, myClasses }: MyLessonsFeedProps) {
   const showStudent = showsStudents(user?.roles ?? [], list.items)
   const failure = list.error ? describeLessonsFailure(list.error) : null
   const noEnrollment = !myClasses.loading && !myClasses.error && myClasses.items.length === 0
+  const student = variant === 'student'
+  const title = t(student ? 'myLessons.feed.classTitle' : 'myLessons.feed.title')
   const emptyText = noEnrollment ? t('myLessons.empty.noEnrollment') : t(`myLessons.empty.${filters.view === 'range' ? 'all' : filters.view}`)
 
   return (
-    <section className="hub-panel" aria-label={t('myLessons.feed.title')}>
+    <section className="hub-panel" aria-label={title}>
       <div className="hub-panel__head">
         <div>
-          <h2 className="hub-panel__title">{t('myLessons.feed.title')}</h2>
-          <p className="hub-panel__hint">{t(filters.view === 'upcoming' ? 'myLessons.feed.hintUpcoming' : 'myLessons.feed.hint')}</p>
+          <h2 className="hub-panel__title">{title}</h2>
+          <p className="hub-panel__hint">{t(student ? 'myLessons.feed.classHint' : filters.view === 'upcoming' ? 'myLessons.feed.hintUpcoming' : 'myLessons.feed.hint')}</p>
         </div>
         <div className="hub-panel__tools">
           <div className="hub-pills" role="group" aria-label={t('myLessons.views.label')}>
@@ -169,12 +176,19 @@ function FeedRow({ item, showStudent }: { item: MyLessonItem; showStudent: boole
           ) : null}
         </div>
         {/* J-F77: the lesson's video and its books and links (none for a cancelled lesson). */}
-        {cancelled ? null : <LessonAttachmentLinks recordingUrl={item.recordingUrl} attachments={item.attachments} />}
+        {cancelled ? null : <LessonAttachmentLinks attachments={item.attachments} />}
       </div>
       <div className="hub-row__actions">
         {joinable ? (
           <a className="hub-btn hub-btn--live" href={item.meetingUrl!} target="_blank" rel="noopener noreferrer">
             <LinkOutlined aria-hidden /> {t('myLessons.feed.join')}
+            <span className="hub-sr-only">: {title}</span>
+          </a>
+        ) : null}
+        {/* J-F77/J-F80: the lesson's video — a recorded lesson's, or a live lesson's recording. */}
+        {!cancelled && item.recordingUrl ? (
+          <a className="hub-btn hub-btn--play" href={item.recordingUrl} target="_blank" rel="noopener noreferrer">
+            <PlayCircleOutlined aria-hidden /> {t('lessons.attachments.watchVideo')}
             <span className="hub-sr-only">: {title}</span>
           </a>
         ) : null}
