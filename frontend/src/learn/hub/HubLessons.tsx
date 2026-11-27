@@ -8,7 +8,8 @@
 // and the exams again and tells the page (`onExamClosed` — a certificate may have been issued).
 // Since J-F81 (Jallal's request «اي درس ينشره الاستاذ يوصل مباشرة للطلاب») the panel opens with «دروس الفصل»: the
 // lessons the class's teacher adds (MOD-06, API-101 — read by the page for every card, `classLessons`), newest first,
-// each with its join link, video and attachments (`MyLessonRow`), narrowed by the same pills; the curriculum (MOD-20)
+// each with its join link, video, exam and attachments beside each other (`MyLessonRow` — the exams are the class's,
+// read once here for «اختبارات الدورة» too), narrowed by the same pills; the curriculum (MOD-20)
 // follows under «منهج الدورة», and «لا توجد دروس» shows only when both are empty.
 import { LockOutlined, PlayCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
@@ -17,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 import type { MyLearningCourse, ProgressCounts } from '../../api/learning'
 import type { MyLessonItem } from '../../api/myLessons'
+import { useLoad } from '../../dashboard/useLoad'
 import { useLocalized } from '../../i18n/useLocalized'
 import { MyLessonRow } from '../../lessons/MyLessonRow'
 import { myLessonKey } from '../../lessons/myLessons.view'
@@ -29,7 +31,8 @@ import { useLearningWorkspace } from '../useLearningWorkspace'
 import { CourseExams } from './CourseExams'
 import { HubPlayer } from './HubPlayer'
 import { HubRow } from './HubRow'
-import { matchesLessonFilter } from './classLessons.view'
+import { readClassExams } from './classExams'
+import { lessonExamsOf, matchesLessonFilter } from './classLessons.view'
 import { COURSE_PARAM, HUB_FILTERS, LESSON_PARAM, hubGroupsOf } from './hub.view'
 import type { HubFilter } from './hub.view'
 
@@ -69,6 +72,10 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed, c
   const reading = useLearningWorkspace(courseId)
   const { workspace, update: updateWorkspace, reload: reloadWorkspace } = reading
   const [examsRefresh, setExamsRefresh] = useState(0)
+  // J-F81: the class's exams, read once for «اختبارات الدورة» and the class lessons' «الاختبار» (each lesson its own).
+  const classId = course.class.id
+  const studentId = course.student.id
+  const classExams = useLoad(`courseExams:${classId}:${studentId}:${examsRefresh}`, true, (signal) => readClassExams(classId, studentId, signal))
   // An exam taken from a lesson row or from «اختبارات الدورة»: the rows' «تم الاختبار», the exams and the card follow.
   const examClosed = useCallback(() => {
     reloadWorkspace()
@@ -188,7 +195,14 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed, c
             <h3 className="hub-level__title">{t('myLessons.hub.classLessons.title')}</h3>
             <ol className="hub-list">
               {shownClassRows.map((item) => (
-                <MyLessonRow key={myLessonKey(item)} item={item} showStudent={false} showClass={false} />
+                <MyLessonRow
+                  key={myLessonKey(item)}
+                  item={item}
+                  showStudent={false}
+                  showClass={false}
+                  exams={lessonExamsOf(classExams.data ?? [], item.id)}
+                  onExamClosed={examClosed}
+                />
               ))}
             </ol>
             {classRows.length > CLASS_LESSONS_SHOWN ? (
@@ -242,7 +256,7 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed, c
           ))
         )}
         {workspace !== null && !access ? (
-          <CourseExams classId={course.class.id} studentId={course.student.id} own={course.relation === 'self'} refresh={examsRefresh} focus={examsFocus} onClosed={examClosed} />
+          <CourseExams classId={classId} studentId={studentId} own={course.relation === 'self'} refresh={examsRefresh} focus={examsFocus} onClosed={examClosed} source={classExams} />
         ) : null}
       </div>
     </section>

@@ -9,7 +9,9 @@ import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, FileTextOutl
 import { Alert, Button, Skeleton } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { MyExamItem } from '../../api/myExams'
 import { useLoad } from '../../dashboard/useLoad'
+import type { Reloadable } from '../../dashboard/useLoad'
 import { examGapOf, examNote } from '../../enrollments/certificateGaps'
 import type { ExamGap } from '../../enrollments/certificateGaps'
 import { useLocalized } from '../../i18n/useLocalized'
@@ -29,12 +31,15 @@ export interface CourseExamsProps {
   focus: number
   /** An exam popup of this section closed. */
   onClosed: () => void
+  /** J-F81: the class's exams as the panel already read them (for its class lessons' «الاختبار»); absent = read here. */
+  source?: Reloadable<MyExamItem[]>
 }
 
-export function CourseExams({ classId, studentId, own, refresh, focus, onClosed }: CourseExamsProps) {
+export function CourseExams({ classId, studentId, own, refresh, focus, onClosed, source }: CourseExamsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
-  const exams = useLoad(`courseExams:${classId}:${studentId}:${refresh}`, true, (signal) => readClassExams(classId, studentId, signal))
+  const read = useLoad(`courseExams:${classId}:${studentId}:${refresh}`, source === undefined, (signal) => readClassExams(classId, studentId, signal))
+  const exams = source ?? read
   const [opened, setOpened] = useState<ExamGap | null>(null)
   const sectionRef = useRef<HTMLElement>(null)
   const shownFocus = useRef(0)

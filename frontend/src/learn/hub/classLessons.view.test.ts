@@ -1,7 +1,8 @@
 // J-F81 (TEST-344): the pure rules of the class lessons on «دوراتي».
 import { describe, expect, it } from 'vitest'
+import { makeMyExam, makeMyExamResult, makeOnlineMyExam } from '../../test/myExams'
 import { makeMyLesson } from '../../test/myLessons'
-import { enrollmentLessonCount, enrollmentLessonsOf, matchesLessonFilter } from './classLessons.view'
+import { enrollmentLessonCount, enrollmentLessonsOf, lessonExamsOf, matchesLessonFilter } from './classLessons.view'
 
 const base = makeMyLesson()
 const lesson = (id: string, classId: string, studentId: string, status: 'scheduled' | 'completed' | 'cancelled' = 'scheduled') =>
@@ -19,6 +20,23 @@ describe('classLessons.view', () => {
     expect(enrollmentLessonCount(items, 'k1', 's1')).toBe(2)
     expect(enrollmentLessonCount(items, 'k1', 's2')).toBe(1)
     expect(enrollmentLessonCount([], 'k1', 's1')).toBe(0)
+  })
+
+  it('J-F82: hands a lesson the class exams linked to it, taken once there is a result or a finished attempt', () => {
+    const lesson = { id: 'k1-l', title: { ar: 'درس' }, startsAt: '2026-11-20T10:00:00.000Z' }
+    const exams = [
+      makeMyExam({ id: 'manual', lesson }),
+      makeMyExam({ id: 'scored', lesson, status: 'published', result: makeMyExamResult() }),
+      makeOnlineMyExam({ id: 'finished', lesson }, { attemptsUsed: 1, inProgress: null }),
+      makeOnlineMyExam({ id: 'other', lesson: { ...lesson, id: 'another' } }),
+    ]
+    const linked = lessonExamsOf(exams, 'k1-l')
+    expect(linked.map((exam) => [exam.id, exam.done])).toEqual([
+      ['manual', false],
+      ['scored', true],
+      ['finished', true],
+    ])
+    expect(lessonExamsOf(exams, 'none')).toEqual([])
   })
 
   it('«المسجلة» keeps recorded lessons and «المباشرة» every other kind', () => {

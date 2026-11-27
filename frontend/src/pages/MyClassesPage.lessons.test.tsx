@@ -202,15 +202,16 @@ describe('«دروسي» after J-F67 — one list of every course’s lessons, n
     expect(within(panel).getByText(ar.myLessons.feed.classHint)).toBeInTheDocument()
     const liveRow = (await within(panel).findByText('درس الحلقات المباشر')).closest('li')!
     expect(within(liveRow).getByText(ar.myLessons.feed.join).closest('a')).toHaveAttribute('href', 'https://meet.example.com/loops')
-    expect(within(liveRow).getByText('كتاب الحلقات').closest('a')).toHaveAttribute('href', 'https://cdn.example.org/loops.pdf')
+    // J-F81: the attachments are a button beside «الانضمام» (one = «المرفق», opening it in a new tab).
+    expect(within(liveRow).getByText(ar.myLessons.hub.row.file).closest('a')).toHaveAttribute('href', 'https://cdn.example.org/loops.pdf')
     const recordedRow = within(panel).getByText('مراجعة مسجّلة').closest('li')!
     const watch = within(recordedRow).getByText(ar.lessons.attachments.watchVideo).closest('a')!
     expect(watch).toHaveAttribute('href', 'https://videos.example.com/review')
     expect(watch).toHaveAttribute('target', '_blank')
-    expect(within(recordedRow).getByText('تمارين').closest('a')).toHaveAttribute('href', 'https://example.org/drills')
+    expect(within(recordedRow).getByText(ar.myLessons.hub.row.file).closest('a')).toHaveAttribute('href', 'https://example.org/drills')
     const cancelledRow = within(panel).getByText('درس ملغى').closest('li')!
     expect(within(cancelledRow).queryByText(ar.lessons.attachments.watchVideo)).not.toBeInTheDocument()
-    expect(within(cancelledRow).queryByText('رابط الدرس الملغى')).not.toBeInTheDocument()
+    expect(within(cancelledRow).queryByText(ar.myLessons.hub.row.file)).not.toBeInTheDocument()
   })
 
   it('plays a lesson inside the page from «دروسي» too', async () => {
