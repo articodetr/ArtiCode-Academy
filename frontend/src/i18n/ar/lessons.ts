@@ -394,6 +394,9 @@ export const myLessons = {
     emptyFilter: 'لا توجد دروس من هذا النوع في دوراتك.',
     someFailed: 'تعذّر تحميل دروس: {{courses}}',
     join: 'الانضمام',
+    // J-F80: the class lessons panel of a student's «دروسي» — the lessons their teachers add (API-101).
+    classTitle: 'دروس الفصل',
+    classHint: 'الدروس التي يضيفها معلمك لفصلك مع روابط الانضمام والفيديو والمرفقات، الأحدث في الأعلى.',
   },
   title: 'دروسي',
   subtitle: 'دروس الفصول المسجَّل فيها أنت أو الطلاب المرتبطون بك، مع حالة الحضور في كل درس',

@@ -5,10 +5,12 @@
 // its course and level where a course's panel names its course. The rows and the in-page player are those of a
 // course's panel in «دوراتي» (`HubRow`, `HubPlayer`); the opened lesson lives in the address (`?course=…&lesson=…`).
 // Each course's workspace is read by its own `CourseSource` (the course player's `useLearningWorkspace`), so progress
-// answers land in the right course. Every count is the server's (D-R133).
+// answers land in the right course. Every count is the server's (D-R133). Since J-F80 the page may put a panel
+// between the summary and the curriculum (`afterSummary`): the class lessons the teacher adds (API-101).
 import { PlayCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import type { LearningWorkspace, MyLearningCourse, ProgressCounts } from '../../api/learning'
@@ -39,7 +41,7 @@ function CourseSource({ courseId, onReading }: { courseId: string; onReading: (c
   return null
 }
 
-export function AllCoursesLessons() {
+export function AllCoursesLessons({ afterSummary }: { afterSummary?: ReactNode } = {}) {
   const { t } = useTranslation()
   const learning = useMyLearning()
   const courses = useMemo(() => (learning.data ? studyCourses(learning.data) : null), [learning.data])
@@ -56,6 +58,7 @@ export function AllCoursesLessons() {
   return (
     <>
       <HubSummary courses={courses} live={live} />
+      {afterSummary}
       {(courses ?? []).map((course) => (
         <CourseSource key={course.course.id} courseId={course.course.id} onReading={onReading} />
       ))}

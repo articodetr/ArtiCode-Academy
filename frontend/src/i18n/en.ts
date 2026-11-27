@@ -4172,6 +4172,9 @@ export const en: Translation = {
       emptyFilter: 'Your courses have no lessons of this type.',
       someFailed: 'The lessons of {{courses}} could not be loaded',
       join: 'Join',
+      // J-F80: the class lessons panel of a student's «my lessons» — the lessons their teachers add (API-101).
+      classTitle: 'Class lessons',
+      classHint: 'The lessons your teacher adds to your class, with their join links, videos and attachments — newest first.',
     },
     title: 'My lessons',
     subtitle: 'Lessons of the classes you or the students linked to you are enrolled in, with the attendance of each lesson',

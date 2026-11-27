@@ -10,6 +10,9 @@
 // the same look: `lessons/MyLessonsFeed.tsx` on GET /api/me/lessons (API-101 —
 // ownership, `relation: child` while they hold the `guardian` role), which waits
 // for the academy's zone (the shared API-035 reading), as /lessons does.
+// Since J-F80 (CH-0387, Jallal's request «يجب ان يرى الطالب الدروس والروابط التي يرسلها الاستاذ») a student's page
+// also lists the class lessons their teachers add (MOD-06, API-101 — the guardian's feed in its student variant),
+// between the summary and the curriculum, each with its join link, video and attachments.
 // The learner home still links here with `?view=sessions` (SESSIONS_PATH); the
 // page reads no parameter of its own, so that link opens this same page.
 import { Card, ConfigProvider } from 'antd'
@@ -23,6 +26,13 @@ import '../publicCatalog/publicFonts.css'
 import '../learn/hub/hub.css'
 import { MyLessonsFeed } from '../lessons/MyLessonsFeed'
 import { useAcademyZone } from '../lessons/useAcademyZone'
+
+/** J-F80: a student's class lessons (API-101), once the academy's zone is read. */
+function StudentClassLessons() {
+  const zone = useAcademyZone()
+  const myClasses = useMyClasses()
+  return zone.settled ? <MyLessonsFeed key={zone.timeZone} dayZone={zone.timeZone} myClasses={myClasses} variant="student" /> : <Card loading />
+}
 
 /** A guardian's page: their children's lessons, newest first. */
 function ChildrenLessons() {
@@ -44,7 +54,7 @@ export function MyLessonsPage() {
 
   return (
     <ConfigProvider theme={HUB_ANTD_THEME}>
-      <div className="hub hub-sessions">{studies ? <AllCoursesLessons /> : <ChildrenLessons />}</div>
+      <div className="hub hub-sessions">{studies ? <AllCoursesLessons afterSummary={<StudentClassLessons />} /> : <ChildrenLessons />}</div>
     </ConfigProvider>
   )
 }
