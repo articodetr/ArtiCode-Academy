@@ -6,6 +6,10 @@
 // (API-115), then the new exam's drawer. Edit and delete need `lessons.manage`, the exam `exams.manage`; a button the
 // lesson's state refuses (the server's rules, mirrored in lessons.status.ts) is greyed out and says why. A click on a
 // button never opens the card's lesson drawer.
+// J-F78 (CH-0385, Jallal's request): a card shows the lesson's day, its times and its title only — no teacher or room
+// line, no zone name, no attendance count and no status tag («مجدول»/«مكتمل»). A lesson reaches the class's students as
+// soon as it is saved (API-101 has no draft state), so the card says nothing about publishing. The times stay in the
+// lesson's own zone (D-R41); only the zone's name is gone.
 import { DeleteOutlined, EditOutlined, FileAddOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Empty, Flex, Skeleton, Tooltip, Typography } from 'antd'
 import { useEffect, useState } from 'react'
@@ -15,16 +19,14 @@ import type { AcademyClass } from '../api/classes'
 import { deleteLesson, listLessons } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import { useAuth } from '../auth/auth-context'
-import { StatusTag } from '../components/StatusTag'
 import { CreateExamModal } from '../exams/CreateExamModal'
 import { ExamDrawer } from '../exams/ExamDrawer'
 import { examTitle } from '../exams/exams.format'
 import { useLocalized } from '../i18n/useLocalized'
 import { CreateLessonModal } from '../lessons/CreateLessonModal'
 import { LessonDrawer } from '../lessons/LessonDrawer'
-import { LessonWhen } from '../lessons/LessonZone'
 import { describeLessonsFailure, failureMessage } from '../lessons/lessons.errors'
-import { lessonRoomLabel, lessonTitle } from '../lessons/lessons.format'
+import { formatLessonDay, formatLessonTimes, lessonTitle } from '../lessons/lessons.format'
 import { isLessonDeletable } from '../lessons/lessons.status'
 import { localizedLabel } from '../users/users.format'
 
@@ -149,23 +151,19 @@ export function ClassLessonsTab({ cls, onExamsChanged }: ClassLessonsTabProps) {
           <Card key={lesson.id} hoverable size="small" onClick={() => setOpened({ id: lesson.id, edit: false })} data-testid={`class-lesson-${lesson.id}`}>
             <Flex justify="space-between" align="center" wrap gap={10}>
               <Flex gap={16} align="center" wrap>
-                <LessonWhen startsAt={lesson.startsAt} endsAt={lesson.endsAt} timeZone={lesson.timeZone} />
-                <Flex vertical gap={2}>
-                  <Typography.Text strong>
-                    <bdi>{lessonTitle(lesson, language)}</bdi>
+                <span data-testid={`class-lesson-when-${lesson.id}`}>
+                  <Typography.Text>{formatLessonDay(lesson.startsAt, language, lesson.timeZone)}</Typography.Text>
+                  <br />
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {/* A plain LTR span: antd Typography's RTL class would reverse `10:00 – 11:30`. */}
+                    <span dir="ltr">{formatLessonTimes(lesson.startsAt, lesson.endsAt, language, lesson.timeZone)}</span>
                   </Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                    {lesson.teacher?.fullName ?? t('lessons.drawer.noTeacher')}
-                    {' · '}
-                    {lesson.room ? <bdi dir="ltr">{lessonRoomLabel(lesson.room, language)}</bdi> : t('lessons.drawer.noRoom')}
-                  </Typography.Text>
-                </Flex>
+                </span>
+                <Typography.Text strong>
+                  <bdi>{lessonTitle(lesson, language)}</bdi>
+                </Typography.Text>
               </Flex>
-              <Flex gap={10} align="center" wrap>
-                {showActions ? actionsOf(lesson) : null}
-                <Typography.Text style={{ fontSize: 13 }}>{t('classPage.lessons.attendance', { count: lesson.attendance.recorded })}</Typography.Text>
-                <StatusTag value={lesson.status} />
-              </Flex>
+              {showActions ? actionsOf(lesson) : null}
             </Flex>
           </Card>
         ))

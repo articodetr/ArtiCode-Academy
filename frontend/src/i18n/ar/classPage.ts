@@ -14,13 +14,6 @@ export const classPage = {
     title: 'دروس هذا الفصل',
     empty: 'لا دروس في هذا الفصل بعد.',
     emptyManage: 'لا دروس في هذا الفصل بعد. اضغط «إضافة درس» لإضافة أول درس.',
-    attendance_zero: 'لم يُسجَّل الحضور',
-    attendance_one: 'حضور طالب واحد مسجّل',
-    attendance_two: 'حضور طالبين مسجّل',
-    attendance_few: 'حضور {{count}} طلاب مسجّل',
-    attendance_many: 'حضور {{count}} طالبًا مسجّل',
-    attendance_other: 'حضور {{count}} طالب مسجّل',
-    attendance: 'لم يُسجَّل الحضور',
     // J-F75: the three buttons of a lesson card.
     edit: 'تعديل',
     delete: 'حذف',
