@@ -7,7 +7,9 @@
 // Since J-F81 (Jallal's request) every button sits beside «الانضمام», as on a curriculum row: the video, the lesson's
 // exam («الاختبار» — the exam popup, when the panel hands the row its exams) and its attachments («المرفق», or a menu
 // «المرفقات (n)», each in a new tab) — none for a cancelled lesson.
-import { BookOutlined, CalendarOutlined, CheckCircleFilled, CloseCircleOutlined, EnvironmentOutlined, LinkOutlined, PlayCircleOutlined, TeamOutlined, UserOutlined, VideoCameraOutlined } from '@ant-design/icons'
+// Since J-F83 (Jallal's request) «الانضمام» and «مشاهدة الفيديو» take the look of the service their link opens
+// (`LessonLinkButton`: YouTube, Zoom, Google Meet), and a recorded lesson keeps «الانضمام» to its video after it ended.
+import { BookOutlined, CalendarOutlined, CheckCircleFilled, CloseCircleOutlined, EnvironmentOutlined, TeamOutlined, UserOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceItemExam } from '../api/learning'
 import type { MyLessonItem } from '../api/myLessons'
@@ -15,6 +17,7 @@ import { useLocalized } from '../i18n/useLocalized'
 import { LessonExams } from '../learn/hub/LessonExams'
 import { ResourcesButton } from '../learn/hub/ResourcesButton'
 import { displayNameOf, localizedLabel } from '../users/users.format'
+import { LessonLinkButton } from './LessonLinkButton'
 import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle } from './lessons.format'
 import { attendanceCellOf, myLessonKey } from './myLessons.view'
 
@@ -41,7 +44,8 @@ export function MyLessonRow({ item, showStudent, showClass = true, exams = [], o
   const online = item.deliveryMode === 'live_online' || item.deliveryMode === 'hybrid'
   const attendance = attendanceCellOf(item)
   const title = lessonTitle(item, language)
-  const joinable = item.meetingUrl !== null && item.status === 'scheduled'
+  // J-F83: a live lesson can be joined until it ends; a recorded lesson's link (its video) stays open after it ended.
+  const joinable = item.meetingUrl !== null && !cancelled && (item.status === 'scheduled' || item.status === 'in_progress' || item.deliveryMode === 'recorded')
 
   return (
     <li className={`hub-row${cancelled ? ' is-locked' : ''}`} data-testid={`my-lesson-${myLessonKey(item)}`}>
@@ -91,19 +95,10 @@ export function MyLessonRow({ item, showStudent, showClass = true, exams = [], o
         </div>
       </div>
       <div className="hub-row__actions">
-        {joinable ? (
-          <a className="hub-btn hub-btn--live" href={item.meetingUrl!} target="_blank" rel="noopener noreferrer">
-            <LinkOutlined aria-hidden /> {t('myLessons.feed.join')}
-            <span className="hub-sr-only">: {title}</span>
-          </a>
-        ) : null}
+        {/* J-F83: each link in the look of its service — YouTube, Zoom, Google Meet — else the academy's own. */}
+        {joinable ? <LessonLinkButton url={item.meetingUrl!} label={t('myLessons.feed.join')} context={title} kind="join" /> : null}
         {/* J-F77/J-F80: the lesson's video — a recorded lesson's, or a live lesson's recording. */}
-        {!cancelled && item.recordingUrl ? (
-          <a className="hub-btn hub-btn--play" href={item.recordingUrl} target="_blank" rel="noopener noreferrer">
-            <PlayCircleOutlined aria-hidden /> {t('lessons.attachments.watchVideo')}
-            <span className="hub-sr-only">: {title}</span>
-          </a>
-        ) : null}
+        {!cancelled && item.recordingUrl ? <LessonLinkButton url={item.recordingUrl} label={t('lessons.attachments.watchVideo')} context={title} kind="watch" /> : null}
         {/* J-F81: the lesson's exam and its books and links, beside «الانضمام» (none for a cancelled lesson). */}
         {cancelled ? null : (
           <>

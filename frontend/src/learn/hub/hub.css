@@ -851,6 +851,59 @@ a.hub-btn--live:visited {
   text-decoration: none;
 }
 
+/* J-F83: a lesson link in the look of its service (LessonLinkButton) — YouTube's red play button with the label
+   inside, Zoom's blue, Google Meet's white with its four-colour camera. */
+.hub-btn__brand {
+  inline-size: 16px;
+  block-size: 16px;
+  flex: none;
+}
+
+a.hub-btn--youtube,
+a.hub-btn--youtube:visited {
+  color: #fff;
+  text-decoration: none;
+  background: #f00;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(255 0 0 / 25%);
+}
+
+a.hub-btn--youtube:hover,
+a.hub-btn--youtube:focus-visible {
+  color: #fff;
+  background: #cc0000;
+}
+
+a.hub-btn--zoom,
+a.hub-btn--zoom:visited {
+  color: #fff;
+  text-decoration: none;
+  background: #0b5cff;
+  box-shadow: 0 2px 8px rgb(11 92 255 / 25%);
+}
+
+a.hub-btn--zoom:hover,
+a.hub-btn--zoom:focus-visible {
+  color: #fff;
+  background: #0848cc;
+}
+
+a.hub-btn--meet,
+a.hub-btn--meet:visited {
+  color: #1f1f1f;
+  text-decoration: none;
+  background: #fff;
+  border-color: #dadce0;
+  box-shadow: 0 1px 3px rgb(60 64 67 / 20%);
+}
+
+a.hub-btn--meet:hover,
+a.hub-btn--meet:focus-visible {
+  color: #1f1f1f;
+  background: #f1f3f4;
+  border-color: #c4c7c5;
+}
+
 /* The lesson's exam and attachments beside its button (J-F67). */
 .hub-btn--exam,
 a.hub-btn--exam,
