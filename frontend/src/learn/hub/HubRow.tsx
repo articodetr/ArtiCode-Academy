@@ -4,19 +4,17 @@
 // opens; a lesson of a level not open yet shows the day it opens instead (D-R145). Beside the main button (J-F67,
 // Jallal's request) the lesson's exam — «الاختبار», which opens the exam in a popup (LessonExamModal) — and its attachments — «المرفق»,
 // each opened in a new tab — as API-230 lists them; more than one of either is a small menu.
-import { BookOutlined, CheckCircleFilled, DownOutlined, FileTextOutlined, LockOutlined, PaperClipOutlined, PlayCircleFilled, VideoCameraOutlined } from '@ant-design/icons'
-import { Dropdown } from 'antd'
-import { useState } from 'react'
+import { BookOutlined, CheckCircleFilled, LockOutlined, PaperClipOutlined, PlayCircleFilled, VideoCameraOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import type { WorkspaceItem, WorkspaceItemExam } from '../../api/learning'
+import type { WorkspaceItem } from '../../api/learning'
 import { useAuth } from '../../auth/auth-context'
 import { useLocalized } from '../../i18n/useLocalized'
-import { LessonExamModal } from '../../takeExam/LessonExamModal'
 import { formatDay, localizedLabel } from '../../users/users.format'
 import { itemDurationLabel } from '../learn.format'
 import { isItemAvailable } from '../learn.state'
 import { useWatchedPercent } from '../watched.store'
 import { rowActionOf } from './hub.view'
+import { LessonExams } from './LessonExams'
 import { ResourcesButton } from './ResourcesButton'
 
 interface HubRowProps {
@@ -134,50 +132,5 @@ export function HubRow({ item, number, current, opensOn, onOpen, origin, onExamC
         )}
       </div>
     </li>
-  )
-}
-
-/** The lesson's exam (or a menu of its exams), opened in a popup: the exam's own page, in place (J-F67). */
-function LessonExams({ exams, lessonTitle, onClosed }: { exams: readonly WorkspaceItemExam[]; lessonTitle: string; onClosed?: () => void }) {
-  const { t } = useTranslation()
-  const { language } = useLocalized()
-  const [opened, setOpened] = useState<WorkspaceItemExam | null>(null)
-  if (exams.length === 0) return null
-  const close = () => {
-    setOpened(null)
-    onClosed?.()
-  }
-  const popup = opened ? <LessonExamModal key={opened.id} examId={opened.id} title={localizedLabel(opened.title, language)} onClose={close} /> : null
-  // «تم الاختبار» once the learner has taken every exam of the lesson (one, as a rule).
-  const allDone = exams.every((exam) => exam.done === true)
-  if (exams.length === 1) {
-    const exam = exams[0]!
-    return (
-      <>
-        <button type="button" className={`hub-btn ${allDone ? 'hub-btn--exam-done' : 'hub-btn--exam'}`} title={localizedLabel(exam.title, language)} onClick={() => setOpened(exam)}>
-          {allDone ? <CheckCircleFilled aria-hidden /> : <FileTextOutlined aria-hidden />} {t(allDone ? 'myLessons.hub.row.examDone' : 'myLessons.hub.row.exam')}
-          <span className="learn-sr-only">: {lessonTitle}</span>
-        </button>
-        {popup}
-      </>
-    )
-  }
-  return (
-    <>
-      <Dropdown
-        trigger={['click']}
-        destroyOnHidden
-        menu={{
-          items: exams.map((exam) => ({ key: exam.id, icon: exam.done ? <CheckCircleFilled aria-hidden /> : undefined, label: exam.done ? `${localizedLabel(exam.title, language)} — ${t('myLessons.hub.row.examDone')}` : localizedLabel(exam.title, language) })),
-          onClick: ({ key }) => setOpened(exams.find((exam) => exam.id === key) ?? null),
-        }}
-      >
-        <button type="button" className={`hub-btn ${allDone ? 'hub-btn--exam-done' : 'hub-btn--exam'}`}>
-          {allDone ? <CheckCircleFilled aria-hidden /> : <FileTextOutlined aria-hidden />} {t('myLessons.hub.row.exams', { n: exams.length })} <DownOutlined aria-hidden />
-          <span className="learn-sr-only">: {lessonTitle}</span>
-        </button>
-      </Dropdown>
-      {popup}
-    </>
   )
 }

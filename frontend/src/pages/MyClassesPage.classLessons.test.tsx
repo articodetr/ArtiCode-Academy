@@ -4,6 +4,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { LearningWorkspace, MyLearningCourse } from '../api/learning'
+import type { MyExamItem } from '../api/myExams'
 import type { MyLessonItem } from '../api/myLessons'
 import { ar } from '../i18n/ar'
 import { makeWorkspace } from '../learn/learn.fixtures'
@@ -12,6 +13,7 @@ import { CLASS_LESSONS_SHOWN } from '../learn/hub/HubLessons'
 import { makeLearningCourse, makeProgress } from '../mySchool/mySchool.fixtures'
 import { makeMyClassItem, makeMyClassList } from '../test/enrollments'
 import { jsonResponse, mockFetch } from '../test/http'
+import { makeMyExam, makeMyExamResult, makeOnlineMyExam } from '../test/myExams'
 import { makeMyLesson, makeMyLessonList } from '../test/myLessons'
 import { makeAuth, makeUser, renderWithProviders } from '../test/render'
 import { MyClassesPage } from './MyClassesPage'
@@ -36,9 +38,11 @@ interface Options {
   workspace?: LearningWorkspace
   /** API-101's pages in order; a Response fails the read. */
   pages?: (MyLessonItem[] | Response)[]
+  /** API-121 for the class (the class lessons' «الاختبار» and «اختبارات الدورة»). */
+  exams?: MyExamItem[]
 }
 
-function serve({ course = COURSE, workspace = makeWorkspace(), pages = [[]] }: Options = {}) {
+function serve({ course = COURSE, workspace = makeWorkspace(), pages = [[]], exams = [] }: Options = {}) {
   const lessonQueries: URLSearchParams[] = []
   mockFetch((url) => {
     const { pathname, searchParams } = new URL(url, 'http://localhost')
@@ -53,7 +57,7 @@ function serve({ course = COURSE, workspace = makeWorkspace(), pages = [[]] }: O
       if (answer instanceof Response) return answer
       return jsonResponse(200, makeMyLessonList(answer, index + 1 < pages.length ? String(index + 1) : null))
     }
-    if (pathname === '/api/me/exams') return jsonResponse(200, { items: [], nextCursor: null })
+    if (pathname === '/api/me/exams') return jsonResponse(200, { items: exams, nextCursor: null })
     if (pathname === '/api/me/certificates') return jsonResponse(200, { items: [] })
     return jsonResponse(404, { statusCode: 404, message: 'nope' })
   })
@@ -105,7 +109,7 @@ describe('«دوراتي» — the lessons a teacher adds reach the student (J-F
     expect(within(panel).getByRole('heading', { name: hub.classLessons.title })).toBeInTheDocument()
     const liveRow = within(panel).getByText('درس الحلقات المباشر').closest('li')!
     expect(within(liveRow).getByText(ar.myLessons.feed.join).closest('a')).toHaveAttribute('href', 'https://meet.example.com/loops')
-    expect(within(liveRow).getByText('كتاب الحلقات').closest('a')).toHaveAttribute('href', 'https://cdn.example.org/loops.pdf')
+    expect(within(liveRow).getByText(hub.row.file).closest('a')).toHaveAttribute('href', 'https://cdn.example.org/loops.pdf')
     // The panel's heading names the course: the rows do not repeat the class line.
     expect(within(liveRow).queryByText(/بايثون — الفصل أ/)).not.toBeInTheDocument()
     const recordedRow = within(panel).getByText('مراجعة مسجّلة').closest('li')!
@@ -153,6 +157,37 @@ describe('«دوراتي» — the lessons a teacher adds reach the student (J-F
     fireEvent.click(screen.getByRole('button', { name: hub.filters.live }))
     await waitFor(() => expect(within(panel).queryByText('عنوان مسجّل')).not.toBeInTheDocument())
     expect(within(panel).getByText('عنوان مباشر')).toBeInTheDocument()
+  })
+
+  it('puts the lesson’s exam and its attachments beside «الانضمام»: «الاختبار» opens the exam popup, «تم الاختبار» once taken', async () => {
+    const live = classLesson('live', { title: { ar: 'مقدمة في البرمجة' }, deliveryMode: 'live_online', status: 'scheduled', meetingUrl: 'https://meet.example.com/intro', attachments: [{ kind: 'book', title: { ar: 'الكتاب' }, url: 'https://cdn.example.org/book.pdf' }, { kind: 'link', title: { ar: 'تمارين' }, url: 'https://example.org/drills' }] })
+    const done = classLesson('done', { title: { ar: 'درس سابق' }, status: 'completed' })
+    const plain = classLesson('plain', { title: { ar: 'درس بلا اختبار' } })
+    const onClass = { ...makeMyExam().class, id: COURSE.class.id }
+    const owner = { ...makeMyExam().student, id: COURSE.student.id }
+    const exams = [
+      makeOnlineMyExam({ id: 'ex-live', title: { ar: 'اختبار المقدمة' }, class: onClass, student: owner, lesson: { id: 'live', title: { ar: 'مقدمة في البرمجة' }, startsAt: live.startsAt } }),
+      makeMyExam({ id: 'ex-done', title: { ar: 'اختبار سابق' }, status: 'published', class: onClass, student: owner, lesson: { id: 'done', title: { ar: 'درس سابق' }, startsAt: done.startsAt }, result: makeMyExamResult({ score: 9 }) }),
+    ]
+    serve({ pages: [[live, done, plain]], exams })
+    renderClasses('/my-classes?course=c1')
+
+    const panel = await classPanel()
+    const liveRow = (await within(panel).findByText('مقدمة في البرمجة', { selector: '.hub-row__title, .hub-row__title *' })).closest('li')!
+    const actions = liveRow.querySelector('.hub-row__actions') as HTMLElement
+    expect(within(actions).getByText(ar.myLessons.feed.join)).toBeInTheDocument()
+    const exam = await within(actions).findByText(hub.row.exam)
+    expect(within(actions).getByText(hub.row.files.replace('{{n}}', '2'))).toBeInTheDocument()
+    // «تم الاختبار» for the exam already taken; nothing on a lesson without an exam or an attachment.
+    const doneRow = within(panel).getByText('درس سابق', { selector: '.hub-row__title, .hub-row__title *' }).closest('li')!
+    expect(within(doneRow).getByText(hub.row.examDone)).toBeInTheDocument()
+    const plainRow = within(panel).getByText('درس بلا اختبار', { selector: '.hub-row__title, .hub-row__title *' }).closest('li')!
+    expect(within(plainRow).queryByText(hub.row.exam)).not.toBeInTheDocument()
+    expect(within(plainRow).queryByText(hub.row.file)).not.toBeInTheDocument()
+
+    fireEvent.click(exam.closest('button')!)
+    // The exam's own popup (LessonExamModal), titled by the exam.
+    await waitFor(() => expect(document.querySelector('.ant-modal-title')?.textContent).toContain('اختبار المقدمة'))
   })
 
   it('shows the newest few and the rest on demand', async () => {

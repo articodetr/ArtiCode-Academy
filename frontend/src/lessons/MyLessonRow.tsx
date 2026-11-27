@@ -4,12 +4,17 @@
 // Drawn by a guardian's «دروسي» and a student's «دروس الفصل» there (`MyLessonsFeed` — J-F67/J-F80), and since J-F81 by
 // the course panel under the cards of «دوراتي» (`learn/hub/HubLessons.tsx`), which leaves out the class line its
 // heading already names (`showClass: false`).
+// Since J-F81 (Jallal's request) every button sits beside «الانضمام», as on a curriculum row: the video, the lesson's
+// exam («الاختبار» — the exam popup, when the panel hands the row its exams) and its attachments («المرفق», or a menu
+// «المرفقات (n)», each in a new tab) — none for a cancelled lesson.
 import { BookOutlined, CalendarOutlined, CheckCircleFilled, CloseCircleOutlined, EnvironmentOutlined, LinkOutlined, PlayCircleOutlined, TeamOutlined, UserOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import type { WorkspaceItemExam } from '../api/learning'
 import type { MyLessonItem } from '../api/myLessons'
 import { useLocalized } from '../i18n/useLocalized'
+import { LessonExams } from '../learn/hub/LessonExams'
+import { ResourcesButton } from '../learn/hub/ResourcesButton'
 import { displayNameOf, localizedLabel } from '../users/users.format'
-import { LessonAttachmentLinks } from './LessonAttachmentLinks'
 import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle } from './lessons.format'
 import { attendanceCellOf, myLessonKey } from './myLessons.view'
 
@@ -22,9 +27,13 @@ export interface MyLessonRowProps {
   showStudent: boolean
   /** Name the class and its course; false where the panel's heading already names them. */
   showClass?: boolean
+  /** J-F81: the exams linked to this lesson (the course panel of «دوراتي» reads them); none = no exam button. */
+  exams?: readonly WorkspaceItemExam[]
+  /** An exam popup of the row closed: the panel reads the exams again. */
+  onExamClosed?: () => void
 }
 
-export function MyLessonRow({ item, showStudent, showClass = true }: MyLessonRowProps) {
+export function MyLessonRow({ item, showStudent, showClass = true, exams = [], onExamClosed }: MyLessonRowProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const cancelled = item.status === 'cancelled'
@@ -80,8 +89,6 @@ export function MyLessonRow({ item, showStudent, showClass = true }: MyLessonRow
             </span>
           ) : null}
         </div>
-        {/* J-F77: the lesson's video and its books and links (none for a cancelled lesson). */}
-        {cancelled ? null : <LessonAttachmentLinks attachments={item.attachments} />}
       </div>
       <div className="hub-row__actions">
         {joinable ? (
@@ -97,6 +104,19 @@ export function MyLessonRow({ item, showStudent, showClass = true }: MyLessonRow
             <span className="hub-sr-only">: {title}</span>
           </a>
         ) : null}
+        {/* J-F81: the lesson's exam and its books and links, beside «الانضمام» (none for a cancelled lesson). */}
+        {cancelled ? null : (
+          <>
+            <LessonExams exams={exams} lessonTitle={title} onClosed={onExamClosed} />
+            <ResourcesButton
+              resources={item.attachments}
+              label={t('myLessons.hub.row.file')}
+              labelMany={t('myLessons.hub.row.files', { n: item.attachments.length })}
+              context={title}
+              className="hub-btn--open"
+            />
+          </>
+        )}
       </div>
     </li>
   )
