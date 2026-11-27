@@ -15,7 +15,10 @@
 // zone, with this device's when they differ, and follows the room as it
 // changes. On creation the caller may hand over the course's syllabus it read
 // itself and a hint under the syllabus item — the next curriculum lesson it
-// suggested (LRN-T06, D-R143).
+// suggested (LRN-T06, D-R143). `simple` is the teacher's short creation form
+// (J-F76): the day and the start time only (the lesson lasts
+// TEACHER_LESSON_MINUTES), no teacher, room or syllabus item, and a live or
+// recorded delivery mode only.
 import { Alert, Col, Form, Input, Row, Select, Typography } from 'antd'
 import type { FormInstance } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -29,7 +32,7 @@ import { RoomPicker } from '../timetable/TimetablePickers'
 import { deviceTimeZone } from '../timetable/timetable.settings'
 import { localizedLabel } from '../users/users.format'
 import { LessonClassPicker, LessonTeacherSelect, SyllabusItemSelect } from './LessonPickers'
-import { isMeetingUrlValid } from './lessons.form'
+import { TEACHER_DELIVERY_MODES, TEACHER_LESSON_MINUTES, isMeetingUrlValid } from './lessons.form'
 import { NEXT_DAY_MARK, differsFromDevice, durationMinutes, formatLessonDay, nextDayRangeOf, rangeOf, rangeProblem } from './lessons.format'
 import type { LessonZone } from './lessons.format'
 import type { SyllabusItems } from './useSyllabusItems'
@@ -56,9 +59,11 @@ interface LessonFormFieldsProps {
   syllabus?: SyllabusItems
   /** Create only: a line under the syllabus item — «the next lesson of the curriculum» while the suggestion is chosen (LRN-T06). */
   syllabusHint?: string
+  /** J-F76, create only: the teacher's short form — day and start time, a live or recorded delivery mode, the title, link and description. */
+  simple?: boolean
 }
 
-export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson, timingLocked = false, classLocked = false, onClassChange, syllabus, syllabusHint }: LessonFormFieldsProps) {
+export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson, timingLocked = false, classLocked = false, onClassChange, syllabus, syllabusHint, simple = false }: LessonFormFieldsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   // GET /api/classes(/:id) needs classes.read at the controller: without it the class list and the class's teachers stay unknown.
@@ -136,16 +141,22 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
         {differsFromDevice(zone.timeZone, device) ? ` — ${t('lessons.zone.device', { zone: device })}` : ''}
       </Typography.Paragraph>
       <Row gutter={12}>
-        <Col xs={24} md={8}>
+        <Col xs={24} md={simple ? 12 : 8}>
           <Form.Item name="date" label={t('lessons.fields.date')} rules={[{ required: true, message: t('lessons.validation.dateRequired') }]}>
             <Input type="date" dir="ltr" disabled={timingLocked} />
           </Form.Item>
         </Col>
-        <Col xs={12} md={8}>
-          <Form.Item name="startTime" label={t('lessons.fields.startTime')} rules={[{ required: true, message: t('lessons.validation.startRequired') }]}>
+        <Col xs={simple ? 24 : 12} md={simple ? 12 : 8}>
+          <Form.Item
+            name="startTime"
+            label={t('lessons.fields.startTime')}
+            extra={simple ? t('lessons.hints.teacherDuration', { minutes: TEACHER_LESSON_MINUTES }) : undefined}
+            rules={[{ required: true, message: t('lessons.validation.startRequired') }]}
+          >
             <Input type="time" dir="ltr" disabled={timingLocked} />
           </Form.Item>
         </Col>
+        {simple ? null : (
         <Col xs={12} md={8}>
           <Form.Item
             name="endTime"
@@ -177,7 +188,9 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
             />
           </Form.Item>
         </Col>
+        )}
       </Row>
+      {simple ? null : (
       <Row gutter={12}>
         <Col xs={24} md={12}>
           <Form.Item
@@ -194,18 +207,21 @@ export function LessonFormFields({ form, mode, zone, onRoomChange, klass, lesson
           </Form.Item>
         </Col>
       </Row>
+      )}
       <Row gutter={12}>
         <Col xs={24} md={12}>
           <Form.Item name="deliveryMode" label={t('lessons.fields.deliveryMode')} rules={[{ required: true, message: t('lessons.validation.deliveryModeRequired') }]}>
             {/* The same `labels.*` words as the StatusTag of the list and the drawer. */}
-            <Select options={DELIVERY_MODES.map((mode) => ({ value: mode, label: t(`labels.${mode}`) }))} />
+            <Select options={(simple ? TEACHER_DELIVERY_MODES : DELIVERY_MODES).map((mode) => ({ value: mode, label: t(`labels.${mode}`) }))} />
           </Form.Item>
         </Col>
-        <Col xs={24} md={12}>
-          <Form.Item name="syllabusItemId" label={t('lessons.fields.syllabusItem')} extra={syllabusHint}>
-            <SyllabusItemSelect courseId={courseId} current={lesson?.syllabusItem} syllabus={syllabus} />
-          </Form.Item>
-        </Col>
+        {simple ? null : (
+          <Col xs={24} md={12}>
+            <Form.Item name="syllabusItemId" label={t('lessons.fields.syllabusItem')} extra={syllabusHint}>
+              <SyllabusItemSelect courseId={courseId} current={lesson?.syllabusItem} syllabus={syllabus} />
+            </Form.Item>
+          </Col>
+        )}
       </Row>
       <Form.Item
         name="meetingUrl"

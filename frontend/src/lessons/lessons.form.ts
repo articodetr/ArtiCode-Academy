@@ -14,13 +14,23 @@
 // — while an edited time keeps its wall clock, read in the new zone. Local
 // rules mirror backend/src/lessons/lessons.dto.ts — the server decides. The
 // edit form holds unsaved work while lessonFormHasChanges() says so (KI-058 —
-// J-F40).
+// J-F40). A teacher-only viewer adds a lesson through a shorter form (J-F76):
+// the day and the start time only — the lesson then lasts
+// TEACHER_LESSON_MINUTES — no teacher (the caller when they teach the class),
+// no room, no syllabus item, and a live or recorded delivery mode only.
 import { MEETING_URL_PATTERN } from '../api/lessons'
 import type { CreateLessonInput, DeliveryMode, Lesson, UpdateLessonInput } from '../api/lessons'
 import type { Room } from '../api/rooms'
+import { instantIn } from '../common/timeZone'
 import { englishWithoutArabic, localizedOf, sameLabel } from '../courses/courses.form'
 import { lessonZoneFor, rangeOf, sameTimeZone, zonedPartsOf } from './lessons.format'
 import type { LessonZone } from './lessons.format'
+
+/** J-F76: the length of a lesson added without an end time (the teacher's short form) — the server needs an end. */
+export const TEACHER_LESSON_MINUTES = 60
+
+/** J-F76: the delivery modes the teacher's short form offers, the first one by default. */
+export const TEACHER_DELIVERY_MODES: readonly DeliveryMode[] = ['live_online', 'recorded']
 
 /**
  * Value of the teacher Select meaning "no teacher" (`teacherUserId: null`), as
@@ -39,7 +49,8 @@ export interface LessonFormValues {
   /** `YYYY-MM-DD` and `HH:MM` from the native inputs, on the wall clock of the form's zone (the zone the server will give the lesson — J-F48). */
   date: string
   startTime: string
-  endTime: string
+  /** Absent in the teacher's short form (J-F76): the lesson then ends TEACHER_LESSON_MINUTES after its start. */
+  endTime?: string
   roomId?: string
   /** A teacher of the class, NO_TEACHER, or empty (creation: the default lead teacher). */
   teacherUserId?: string
@@ -61,7 +72,7 @@ export function isMeetingUrlValid(value: string | undefined): boolean {
   return trimmed === '' || MEETING_URL_PATTERN.test(trimmed)
 }
 
-/** The three time fields of the form. */
+/** The three time fields of the form (lessonTimesIn() always fills the end time; the teacher's short form has none — J-F76). */
 export type LessonTimeFields = Pick<LessonFormValues, 'date' | 'startTime' | 'endTime'>
 
 /** The lesson's day, start time and end time on the wall clock of `timeZone` — what the form shows for its instants there. */
@@ -128,9 +139,15 @@ export function retimedFields(lesson: Pick<Lesson, 'startsAt' | 'endsAt'>, value
   return Object.keys(update).length > 0 ? update : null
 }
 
+/** J-F76: a lesson typed with its start only lasts TEACHER_LESSON_MINUTES — counted on the instant, so a DST night keeps the length. */
+function defaultRangeOf(date: string, startTime: string, timeZone: string): { startsAt: string; endsAt: string } | undefined {
+  const startsAt = instantIn(date, startTime, timeZone)
+  return startsAt ? { startsAt, endsAt: new Date(new Date(startsAt).getTime() + TEACHER_LESSON_MINUTES * 60_000).toISOString() } : undefined
+}
+
 /** The create body; the day and times are read in `timeZone` — the zone the server will give the lesson (the chosen room's, else the academy's — lessonZoneFor()). */
 export function buildCreateLessonInput(values: LessonFormValues, timeZone: string): CreateLessonInput {
-  const range = rangeOf(values.date, values.startTime, values.endTime, timeZone)
+  const range = values.endTime ? rangeOf(values.date, values.startTime, values.endTime, timeZone) : defaultRangeOf(values.date, values.startTime, timeZone)
   const input: CreateLessonInput = {
     title: localizedOf(values.titleAr, values.titleEn) ?? { ar: text(values.titleAr) },
     deliveryMode: values.deliveryMode,

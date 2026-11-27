@@ -1887,6 +1887,8 @@ export const en: Translation = {
       teacher: 'Defaults to the class’s lead teacher at creation; one of the class’s teachers',
       time: 'Up to 12 hours, and an end time earlier than the start means the next day',
       endsNextDay: 'The lesson ends on the next day ({{date}}) and lasts {{minutes}} min',
+      // J-F76: the teacher's short form has no end time — the lesson lasts TEACHER_LESSON_MINUTES.
+      teacherDuration: 'The lesson lasts {{minutes}} min from its start',
       meetingUrl: 'A link starting with https:// (for online lessons)',
       timingLocked: 'Time, room and teacher cannot change for a completed lesson; title, description, syllabus item, delivery mode and link still can',
       needsClassesRead: 'Adding a lesson needs the classes.read permission to choose its class',

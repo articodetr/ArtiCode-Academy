@@ -18,6 +18,12 @@
 // no non-cancelled session covers yet is preselected as the syllabus item,
 // with the hint «اقتراح: الدرس التالي في المنهج» (LRN-T06, D-R143) — once per
 // class, never over a choice the user made, and the user may change or clear it.
+// A teacher-only viewer (teachesOnly() — J-F76) gets the short form: the day
+// and the start time only (the lesson lasts TEACHER_LESSON_MINUTES), a live
+// (default) or recorded delivery mode, no room (the academy's zone), no
+// syllabus item (nothing is suggested or read) and no teacher field — the
+// lesson is the caller's when they teach the class, else the server's default
+// (the lead teacher).
 import { Alert, Form, Modal } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -26,9 +32,10 @@ import { createLesson } from '../api/lessons'
 import type { Lesson } from '../api/lessons'
 import type { Room } from '../api/rooms'
 import { useAuth } from '../auth/auth-context'
+import { teachesOnly } from '../layout/navigation'
 import { LessonFormFields } from './LessonFormFields'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
-import { buildCreateLessonInput } from './lessons.form'
+import { TEACHER_DELIVERY_MODES, buildCreateLessonInput } from './lessons.form'
 import type { LessonFormValues } from './lessons.form'
 import { lessonZoneFor } from './lessons.format'
 import { nextCurriculumItem } from './lessons.suggestion'
@@ -94,11 +101,13 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
   const academy = useAcademyZone()
   const zone = lessonZoneFor(room, { timeZone: academy.timeZone, source: academy.source })
 
+  const { user, hasPermission } = useAuth()
+  // J-F76: a teacher-only viewer adds a lesson through the short form (no syllabus item, so nothing below is read).
+  const simple = user ? teachesOnly(user) : false
   // The next curriculum lesson of the class (LRN-T06, D-R143): the syllabus is read here once and handed to the select.
   const classId = klass?.id
-  const syllabus = useSyllabusItems(klass?.course.id)
-  const canReadLessons = useAuth().hasPermission('lessons.read')
-  const covered = useCoveredSyllabusItems(classId, canReadLessons)
+  const syllabus = useSyllabusItems(simple ? undefined : klass?.course.id)
+  const covered = useCoveredSyllabusItems(classId, !simple && hasPermission('lessons.read'))
   const suggestion = useMemo(
     () => (covered && !syllabus.loading && !syllabus.error ? nextCurriculumItem(syllabus.items, covered) : null),
     [covered, syllabus.items, syllabus.loading, syllabus.error],
@@ -126,9 +135,11 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
     setSaving(true)
     onSaving(true)
     setError(null)
+    // J-F76: the short form has no teacher field — the lesson is the caller's when they teach the class.
+    const own = simple && user && klass?.id === classId && klass.teachers.some((teacher) => teacher.userId === user.id)
     try {
       // The instants are built now, in the zone of the room chosen last (J-F48).
-      const created = await createLesson(classId, buildCreateLessonInput(values, zone.timeZone))
+      const created = await createLesson(classId, buildCreateLessonInput(own ? { ...values, teacherUserId: user.id } : values, zone.timeZone))
       onCreated(created)
     } catch (caught) {
       const failure = describeLessonsFailure(caught)
@@ -148,7 +159,7 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={{ classId: initialClass?.id, deliveryMode: 'in_person' }}
+        initialValues={{ classId: initialClass?.id, deliveryMode: simple ? TEACHER_DELIVERY_MODES[0] : 'in_person' }}
         onFinish={(values) => void submit(values as LessonFormValues)}
         // A syllabus item the user picks or clears is theirs: the suggestion never replaces it.
         onValuesChange={(changed: Record<string, unknown>) => {
@@ -159,6 +170,7 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
         <LessonFormFields
           form={form}
           mode="create"
+          simple={simple}
           zone={zone}
           classLocked={initialClass !== undefined}
           onRoomChange={(_roomId, next) => setRoom(next ?? null)}
