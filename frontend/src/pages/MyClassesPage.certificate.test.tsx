@@ -63,6 +63,8 @@ function mockApi(rows: MyClassItem[], learning: MyLearningCourse[], api: Api = {
     if (parsed.pathname === '/api/academy') return jsonResponse(200, makeAcademy())
     if (parsed.pathname === '/api/me/classes') return jsonResponse(200, makeMyClassList(rows))
     if (parsed.pathname === '/api/me/learning') return jsonResponse(200, { items: learning })
+    // J-F81: the class lessons a teacher adds (none in these tests).
+    if (parsed.pathname === '/api/me/lessons') return jsonResponse(200, { items: [], nextCursor: null })
     if (parsed.pathname === '/api/me/certificates') {
       const answers = api.certificates ?? [[]]
       const items = answers[Math.min(certificateReads, answers.length - 1)]!

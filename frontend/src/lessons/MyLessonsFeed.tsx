@@ -7,28 +7,20 @@
 // that the table shows (removed at Jallal's request); the student's OWN attendance only,
 // never the teacher's note (the DTO does not carry it). Pages follow the server's cursor. Since J-F80 a student's
 // «دروسي» shows this feed too (`variant: 'student'` — its own title and hint: the class lessons their teachers add),
-// and every row that is not cancelled offers the lesson's video («مشاهدة الفيديو») beside the join link and lists
+// and every row (`MyLessonRow` — shared with «دوراتي» since J-F81) that is not cancelled offers the lesson's video («مشاهدة الفيديو») beside the join link and lists
 // its books and links (J-F77).
-import { BookOutlined, CalendarOutlined, CheckCircleFilled, CloseCircleOutlined, EnvironmentOutlined, LinkOutlined, PlayCircleOutlined, TeamOutlined, UserOutlined, VideoCameraOutlined } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
 import { useTranslation } from 'react-i18next'
-import type { MyLessonItem } from '../api/myLessons'
 import { useAuth } from '../auth/auth-context'
 import type { useMyClasses } from '../enrollments/useMyClasses'
-import { useLocalized } from '../i18n/useLocalized'
-import { displayNameOf, localizedLabel } from '../users/users.format'
-import { LessonAttachmentLinks } from './LessonAttachmentLinks'
 import { describeLessonsFailure, failureMessage } from './lessons.errors'
-import { formatLessonDay, formatLessonTimes, lessonRoomLabel, lessonTitle } from './lessons.format'
-import { attendanceCellOf, myLessonKey, showsStudents } from './myLessons.view'
+import { MyLessonRow } from './MyLessonRow'
+import { myLessonKey, showsStudents } from './myLessons.view'
 import type { MyLessonView } from './myLessons.view'
 import { useMyLessons } from './useMyLessons'
 
 /** The views the pills offer; a custom range stays on one class's page. */
 const FEED_VIEWS: readonly MyLessonView[] = ['all', 'upcoming', 'past']
-
-/** The colour of a recorded attendance: present green, late amber, absent red, excused grey. */
-const ATTENDANCE_BADGE: Record<string, string> = { present: 'hub-badge--done', late: 'hub-badge--progress', absent: 'hub-badge--danger', excused: 'hub-badge--kind' }
 
 interface MyLessonsFeedProps {
   /** The zone of «today»: the academy's, or this device's when the academy could not be read. */
@@ -101,7 +93,7 @@ export function MyLessonsFeed({ dayZone, myClasses, variant = 'guardian' }: MyLe
       ) : (
         <ol className="hub-list" aria-busy={list.loading}>
           {list.items.map((item) => (
-            <FeedRow key={myLessonKey(item)} item={item} showStudent={showStudent} />
+            <MyLessonRow key={myLessonKey(item)} item={item} showStudent={showStudent} />
           ))}
         </ol>
       )}
@@ -118,81 +110,5 @@ export function MyLessonsFeed({ dayZone, myClasses, variant = 'guardian' }: MyLe
         </div>
       ) : null}
     </section>
-  )
-}
-
-function FeedRow({ item, showStudent }: { item: MyLessonItem; showStudent: boolean }) {
-  const { t } = useTranslation()
-  const { language } = useLocalized()
-  const cancelled = item.status === 'cancelled'
-  const completed = item.status === 'completed'
-  const online = item.deliveryMode === 'live_online' || item.deliveryMode === 'hybrid'
-  const attendance = attendanceCellOf(item)
-  const title = lessonTitle(item, language)
-  const joinable = item.meetingUrl !== null && item.status === 'scheduled'
-
-  return (
-    <li className={`hub-row${cancelled ? ' is-locked' : ''}`} data-testid={`my-lesson-${myLessonKey(item)}`}>
-      <span className="hub-row__number" aria-hidden>
-        {completed ? <CheckCircleFilled /> : cancelled ? <CloseCircleOutlined /> : <CalendarOutlined />}
-      </span>
-      <div className="hub-row__main">
-        <div className="hub-row__badges">
-          <span className={`hub-badge ${online ? 'hub-badge--live' : 'hub-badge--recorded'}`}>
-            {online ? <VideoCameraOutlined aria-hidden /> : null} {t(`labels.${item.deliveryMode}`)}
-          </span>
-          <span className={`hub-badge ${completed ? 'hub-badge--done' : cancelled ? 'hub-badge--kind' : 'hub-badge--progress'}`}>
-            {completed ? <CheckCircleFilled aria-hidden /> : null} {t(`labels.${item.status}`)}
-          </span>
-          {attendance.kind === 'recorded' ? (
-            <span className={`hub-badge ${ATTENDANCE_BADGE[attendance.status] ?? 'hub-badge--kind'}`}>
-              {t(`lessons.attendance.${attendance.status}`)}
-              {attendance.minutesLate !== null ? ` · ${t('myLessons.attendance.minutes', { count: attendance.minutesLate })}` : ''}
-            </span>
-          ) : null}
-        </div>
-        <h4 className="hub-row__title">{cancelled ? <s>{title}</s> : title}</h4>
-        <div className="hub-row__meta">
-          <span>
-            <CalendarOutlined aria-hidden /> {formatLessonDay(item.startsAt, language, item.timeZone)} · <bdi dir="ltr">{formatLessonTimes(item.startsAt, item.endsAt, language, item.timeZone)}</bdi>
-          </span>
-          <span>
-            <BookOutlined aria-hidden /> {`${localizedLabel(item.class.name, language)} · ${localizedLabel(item.class.course.name, language)}`}
-          </span>
-          {item.teacher ? (
-            <span>
-              <UserOutlined aria-hidden /> {displayNameOf(item.teacher)}
-            </span>
-          ) : null}
-          {item.room ? (
-            <span>
-              <EnvironmentOutlined aria-hidden /> <bdi dir="ltr">{lessonRoomLabel(item.room, language)}</bdi>
-            </span>
-          ) : null}
-          {showStudent ? (
-            <span>
-              <TeamOutlined aria-hidden /> {displayNameOf(item.student)} ({t(`myClasses.relation.${item.relation}`)})
-            </span>
-          ) : null}
-        </div>
-        {/* J-F77: the lesson's video and its books and links (none for a cancelled lesson). */}
-        {cancelled ? null : <LessonAttachmentLinks attachments={item.attachments} />}
-      </div>
-      <div className="hub-row__actions">
-        {joinable ? (
-          <a className="hub-btn hub-btn--live" href={item.meetingUrl!} target="_blank" rel="noopener noreferrer">
-            <LinkOutlined aria-hidden /> {t('myLessons.feed.join')}
-            <span className="hub-sr-only">: {title}</span>
-          </a>
-        ) : null}
-        {/* J-F77/J-F80: the lesson's video — a recorded lesson's, or a live lesson's recording. */}
-        {!cancelled && item.recordingUrl ? (
-          <a className="hub-btn hub-btn--play" href={item.recordingUrl} target="_blank" rel="noopener noreferrer">
-            <PlayCircleOutlined aria-hidden /> {t('lessons.attachments.watchVideo')}
-            <span className="hub-sr-only">: {title}</span>
-          </a>
-        ) : null}
-      </div>
-    </li>
   )
 }

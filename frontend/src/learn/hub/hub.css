@@ -585,6 +585,17 @@ a.hub-btn--live:hover {
   margin-block-start: 20px;
 }
 
+/* J-F81: «عرض كل دروس الفصل» under the newest class lessons. */
+.hub-class-more {
+  margin-block-start: 12px;
+}
+
+/* J-F81: «منهج الدورة» under the class lessons («دروس الفصل»): the same gap as between two levels, a little larger. */
+.hub-level__title--curriculum {
+  margin-block-start: 24px;
+  font-size: 16px;
+}
+
 .hub-level__title {
   display: flex;
   align-items: center;

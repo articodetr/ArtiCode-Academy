@@ -6,13 +6,20 @@
 // Since J-F68 the panel ends with «اختبارات الدورة» (`CourseExams`): every exam of the class and where it stands, so the
 // learner sees here what they have not taken or passed yet; an exam popup closed anywhere in the panel reads the lessons
 // and the exams again and tells the page (`onExamClosed` — a certificate may have been issued).
+// Since J-F81 (Jallal's request «اي درس ينشره الاستاذ يوصل مباشرة للطلاب») the panel opens with «دروس الفصل»: the
+// lessons the class's teacher adds (MOD-06, API-101 — read by the page for every card, `classLessons`), newest first,
+// each with its join link, video and attachments (`MyLessonRow`), narrowed by the same pills; the curriculum (MOD-20)
+// follows under «منهج الدورة», and «لا توجد دروس» shows only when both are empty.
 import { LockOutlined, PlayCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Skeleton } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 import type { MyLearningCourse, ProgressCounts } from '../../api/learning'
+import type { MyLessonItem } from '../../api/myLessons'
 import { useLocalized } from '../../i18n/useLocalized'
+import { MyLessonRow } from '../../lessons/MyLessonRow'
+import { myLessonKey } from '../../lessons/myLessons.view'
 import { localizedLabel } from '../../users/users.format'
 import { accessFailureOf } from '../learn.errors'
 import { levelName } from '../learn.format'
@@ -22,6 +29,7 @@ import { useLearningWorkspace } from '../useLearningWorkspace'
 import { CourseExams } from './CourseExams'
 import { HubPlayer } from './HubPlayer'
 import { HubRow } from './HubRow'
+import { matchesLessonFilter } from './classLessons.view'
 import { COURSE_PARAM, HUB_FILTERS, LESSON_PARAM, hubGroupsOf } from './hub.view'
 import type { HubFilter } from './hub.view'
 
@@ -33,15 +41,30 @@ export interface HubLessonsProps {
   examsFocus?: number
   /** An exam popup of the panel closed: the page may read the certificates again. */
   onExamClosed?: () => void
+  /** J-F81: the class lessons of this enrollment (API-101), newest first; absent = the panel shows the curriculum only. */
+  classLessons?: HubClassLessons
 }
 
-export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }: HubLessonsProps) {
+/** The newest class lessons shown before «عرض كل دروس الفصل», so the curriculum stays near. */
+export const CLASS_LESSONS_SHOWN = 6
+
+export interface HubClassLessons {
+  items: readonly MyLessonItem[]
+  /** No answer yet: the first read is on its way. */
+  pending: boolean
+  /** The last read failed. */
+  failed: boolean
+  onRetry: () => void
+}
+
+export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed, classLessons }: HubLessonsProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const courseId = course.course.id
   const [params, setParams] = useSearchParams()
   const [filter, setFilter] = useState<HubFilter>('all')
   const [notice, setNotice] = useState<string | null>(null)
+  const [showAllClass, setShowAllClass] = useState(false)
 
   const reading = useLearningWorkspace(courseId)
   const { workspace, update: updateWorkspace, reload: reloadWorkspace } = reading
@@ -99,6 +122,11 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }:
   const groups = workspace ? hubGroupsOf(workspace, filter) : []
   const resumeId = workspace ? openingItemOf(workspace) : null
   const started = course.lastLesson !== null || (workspace?.progress.completed ?? 0) > 0
+  const classRows = classLessons ? classLessons.items.filter((item) => matchesLessonFilter(item, filter)) : []
+  const shownClassRows = showAllClass ? classRows : classRows.slice(0, CLASS_LESSONS_SHOWN)
+  const hasClassLessons = (classLessons?.items.length ?? 0) > 0
+  // Under «دروس الفصل» the curriculum gets its own heading, so its rows are never read as the class's.
+  const curriculumHeading = classRows.length > 0 && groups.length > 0
 
   return (
     <section className="hub-panel" aria-label={t('myLessons.hub.panel.label', { course: courseName })}>
@@ -142,6 +170,35 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }:
       ) : null}
 
       <div className="hub-list-anchor">
+        {classLessons?.failed ? (
+          <Alert
+            className="hub-notice"
+            type="warning"
+            showIcon
+            title={t('myLessons.hub.classLessons.failed')}
+            action={
+              <Button size="small" onClick={classLessons.onRetry}>
+                {t('learn.load.retry')}
+              </Button>
+            }
+          />
+        ) : null}
+        {classRows.length > 0 ? (
+          <div className="hub-level" data-testid="hub-class-lessons">
+            <h3 className="hub-level__title">{t('myLessons.hub.classLessons.title')}</h3>
+            <ol className="hub-list">
+              {shownClassRows.map((item) => (
+                <MyLessonRow key={myLessonKey(item)} item={item} showStudent={false} showClass={false} />
+              ))}
+            </ol>
+            {classRows.length > CLASS_LESSONS_SHOWN ? (
+              <button type="button" className="hub-btn hub-btn--open hub-class-more" aria-expanded={showAllClass} onClick={() => setShowAllClass((value) => !value)}>
+                {showAllClass ? t('myLessons.hub.classLessons.less') : t('myLessons.hub.classLessons.all', { n: classRows.length })}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {curriculumHeading ? <h3 className="hub-level__title hub-level__title--curriculum">{t('myLessons.hub.classLessons.curriculum')}</h3> : null}
         {access ? (
           <LearnAccessNotice failure={access} courseId={courseId} />
         ) : workspace === null ? (
@@ -160,9 +217,14 @@ export function HubLessons({ course, onProgress, examsFocus = 0, onExamClosed }:
             />
           )
         ) : groups.length === 0 ? (
-          <div className="hub-empty">
-            <h3>{t(workspace.sections.some((section) => section.items.length > 0) ? 'myLessons.hub.emptyFilter' : 'myLessons.hub.emptyCourse')}</h3>
-          </div>
+          // The class lessons fill the panel, or are still on their way: no «no lessons» message under them.
+          classRows.length > 0 ? null : classLessons?.pending ? (
+            <Skeleton active paragraph={{ rows: 3 }} />
+          ) : (
+            <div className="hub-empty">
+              <h3>{t(hasClassLessons || workspace.sections.some((section) => section.items.length > 0) ? 'myLessons.hub.emptyFilter' : 'myLessons.hub.emptyCourse')}</h3>
+            </div>
+          )
         ) : (
           groups.map(({ section, rows }) => (
             <div key={section.id ?? 'loose'} className="hub-level">

@@ -49,6 +49,11 @@ function mockMyClassesApi(list: MyClassList | Response, sources: Sources = {}) {
       other.push(parsed.pathname)
       return jsonResponse(200, makeMyRequestList(sources.requests ?? []))
     }
+    // J-F81: the class lessons a teacher adds (none in these tests).
+    if (parsed.pathname === '/api/me/lessons') {
+      other.push(parsed.pathname)
+      return jsonResponse(200, { items: [], nextCursor: null })
+    }
     // J-F67: the issued certificates behind «الشهادة» (none in these tests).
     if (parsed.pathname === '/api/me/certificates') {
       other.push(parsed.pathname)
@@ -250,7 +255,7 @@ describe('MyClassesPage', () => {
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.queryByText(ar.mySchool.card.actions.continue)).not.toBeInTheDocument()
     expect(screen.queryByText(ar.mySchool.card.actions.start)).not.toBeInTheDocument()
-    expect([...api.other].sort()).toEqual(['/api/me/certificates', '/api/me/learning'])
+    expect([...api.other].sort()).toEqual(['/api/me/certificates', '/api/me/learning', '/api/me/lessons'])
   })
 
   it('keeps the classes on screen when the progress cannot be read, with its own retry (J-F61)', async () => {

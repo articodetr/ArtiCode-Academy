@@ -270,6 +270,8 @@ export const myClasses = {
   card: {
     select: 'عرض دروس {{course}}',
     lessons: 'الدروس: {{total}}',
+    // J-F81: a card whose course has no curriculum lesson yet, while its teacher has added class lessons.
+    classLessons: 'دروس الفصل: {{n}}',
     progress: 'الدروس المكتملة',
     browse: 'استعراض الدروس',
     certificate: 'الشهادة',

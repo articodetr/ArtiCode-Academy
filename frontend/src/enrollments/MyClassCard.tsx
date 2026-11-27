@@ -8,6 +8,9 @@
 // (`CertificateGapsModal`, opened by the page). The course's own materials (API-229 `course.resources` — its
 // textbook) add «المقرّر», each file in a new tab.
 // No enrollment badge, no class code, no period / class status / enrollment day, no «واصل التعلم».
+// Since J-F81 «الدروس: N» adds the class lessons the teacher has added (MOD-06, API-101 — not cancelled) to the
+// course's curriculum lessons, and a course without a curriculum lesson says «دروس الفصل: N» instead of «لم تُنشر دروس
+// هذه الدورة بعد» while its class has lessons; the progress bar stays the curriculum's (the server's numbers).
 import { BookOutlined, FilePdfOutlined, LockOutlined, PlayCircleOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined } from '@ant-design/icons'
 import { Skeleton } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -38,9 +41,11 @@ interface MyClassCardProps {
   certificateId: string | null
   /** «الشهادة» without a certificate: show what the course still needs (J-F68). */
   onShowCertificateGaps: () => void
+  /** J-F81: the class lessons of this enrollment that are not cancelled (API-101); null while unknown. */
+  classLessons?: number | null
 }
 
-export function MyClassCard({ row, learning, counts, learningLoading, showStudent, onSelect, active, certificateId, onShowCertificateGaps }: MyClassCardProps) {
+export function MyClassCard({ row, learning, counts, learningLoading, showStudent, onSelect, active, certificateId, onShowCertificateGaps, classLessons = null }: MyClassCardProps) {
   const { t } = useTranslation()
   const { language } = useLocalized()
   const className = localizedLabel(row.class.name, language)
@@ -49,6 +54,8 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
   const materials = learning?.course.resources ?? []
   // PORTAL-04: the course's school subject (المادة) from API-229; omitted when the course has none.
   const subject = learning?.course.subject ? localizedLabel(learning.course.subject.name, language) : null
+  const teacherLessons = classLessons ?? 0
+  const lessonsTotal = (learning ? (counts ?? learning.progress).total : 0) + teacherLessons
 
   return (
     <article className={`hub-card hub-card--class${active ? ' is-active' : ''}`} data-testid={`class-card-${row.enrollmentId}`}>
@@ -57,15 +64,15 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
       ) : null}
       <div className="hub-card__top">
         <span className="hub-card__icon">{cover ? <img src={cover} alt="" referrerPolicy="no-referrer" decoding="async" /> : <ReadOutlined aria-hidden />}</span>
-        {learning ? (
+        {learning || teacherLessons > 0 ? (
           <span className="hub-card__badges">
             {subject ? (
               <span className="hub-badge hub-badge--kind" data-testid="class-card-subject">
                 {subject}
               </span>
             ) : null}
-            <span className="hub-badge hub-badge--kind">
-              <PlayCircleOutlined aria-hidden /> {t('myClasses.card.lessons', { total: (counts ?? learning.progress).total })}
+            <span className="hub-badge hub-badge--kind" data-testid={`class-card-lessons-${row.enrollmentId}`}>
+              <PlayCircleOutlined aria-hidden /> {t('myClasses.card.lessons', { total: lessonsTotal })}
             </span>
           </span>
         ) : null}
@@ -86,7 +93,13 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
         <UserOutlined aria-hidden /> {row.class.leadTeacher ? displayNameOf(row.class.leadTeacher) : t('classes.noTeacher')}
       </p>
 
-      {learning ? <ClassProgress item={learning} counts={counts ?? learning.progress} /> : learningLoading && hasClassLessons(row.enrollmentStatus) ? <Skeleton.Input active size="small" block /> : null}
+      {learning ? (
+        <ClassProgress item={learning} counts={counts ?? learning.progress} classLessons={teacherLessons} />
+      ) : learningLoading && hasClassLessons(row.enrollmentStatus) ? (
+        <Skeleton.Input active size="small" block />
+      ) : teacherLessons > 0 ? (
+        <p className="hub-card__note">{t('myClasses.card.classLessons', { n: teacherLessons })}</p>
+      ) : null}
 
       {/* «الشهادة» is always there (J-F68), so the row of actions always is. */}
       <div className="hub-card__actions">
@@ -125,12 +138,12 @@ export function MyClassCard({ row, learning, counts, learningLoading, showStuden
 }
 
 /** The learner's progress in the course, as the cards of «دروسي» showed it: the server's counts and percent only. */
-function ClassProgress({ item, counts }: { item: MyLearningCourse; counts: ProgressCounts }) {
+function ClassProgress({ item, counts, classLessons }: { item: MyLearningCourse; counts: ProgressCounts; classLessons: number }) {
   const { t } = useTranslation()
   if (counts.total === 0) {
     return (
       <p className="hub-card__note" data-testid={`class-progress-${item.enrollmentId}`}>
-        {t('mySchool.card.noLessons')}
+        {classLessons > 0 ? t('myClasses.card.classLessons', { n: classLessons }) : t('mySchool.card.noLessons')}
       </p>
     )
   }
