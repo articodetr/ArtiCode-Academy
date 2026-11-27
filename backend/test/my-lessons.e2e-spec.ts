@@ -29,7 +29,7 @@ const PASSWORD = 'Correct-Horse-Battery-9';
 const USER_AGENT = 'TEST-079 supertest';
 const CLASSES = '/api/classes';
 const MY_LESSONS = '/api/me/lessons';
-const ITEM_KEYS = ['attendance', 'class', 'deliveryMode', 'description', 'endsAt', 'id', 'meetingUrl', 'relation', 'room', 'startsAt', 'status', 'student', 'syllabusItem', 'teacher', 'timeZone', 'title'];
+const ITEM_KEYS = ['attachments', 'attendance', 'class', 'deliveryMode', 'description', 'endsAt', 'id', 'meetingUrl', 'recordingUrl', 'relation', 'room', 'startsAt', 'status', 'student', 'syllabusItem', 'teacher', 'timeZone', 'title'];
 const SECRET_KEY = /hash|password/i;
 const FORBIDDEN_KEYS = new Set(['email', 'username', 'phone', 'emailVerifiedAt', 'lastLoginAt', 'lockedUntil', 'note', 'recordedBy', 'recordedById', 'cancellationReason', 'userId', 'createdBy', 'createdById']);
 
@@ -200,7 +200,8 @@ describe.skipIf(!available)('MOD-06 my lessons (e2e, TEST-079)', () => {
     });
     const item = (await prisma.courseSyllabusItem.findFirstOrThrow({ where: { courseId }, select: { id: true } })).id;
     await createLesson('L1', 'A', '2026-01-10', { description: { ar: 'مقدمة' }, syllabusItemId: item, meetingUrl: 'https://meet.example.com/l1', deliveryMode: 'live_online' });
-    await createLesson('L2', 'A', '2027-06-01');
+    // J-F77 (TEST-340): a recorded lesson with its video and a book.
+    await createLesson('L2', 'A', '2027-06-01', { deliveryMode: 'recorded', recordingUrl: 'https://videos.example.com/l2', attachments: [{ kind: 'book', title: { ar: 'كتاب L2' }, url: 'https://cdn.example.org/l2.pdf' }] });
     await createLesson('L3', 'A', '2026-01-11');
     await createLesson('LB', 'B', '2026-01-12');
     await api().post(`/api/lessons/${lessons['L3']}/status`).set(bearer('manager')).send({ action: 'cancel', reason: 'سبب داخلي' }).expect(200);
@@ -243,6 +244,8 @@ describe.skipIf(!available)('MOD-06 my lessons (e2e, TEST-079)', () => {
       endsAt: '2026-01-10T11:30:00.000Z',
       status: 'scheduled',
       meetingUrl: 'https://meet.example.com/l1',
+      recordingUrl: null,
+      attachments: [],
       room: null,
       timeZone: academyTimeZone, // D-R41: no room → the academy's zone
       teacher: { fullName: 'Test teacher', displayName: null },
@@ -254,7 +257,13 @@ describe.skipIf(!available)('MOD-06 my lessons (e2e, TEST-079)', () => {
     });
     expect(typeof items[0]!.attendance?.recordedAt).toBe('string');
     expect(items[1]).toMatchObject({ id: lessons['L3'], status: 'cancelled', attendance: null });
-    expect(items[2]).toMatchObject({ id: lessons['L2'], attendance: null });
+    expect(items[2]).toMatchObject({
+      id: lessons['L2'],
+      attendance: null,
+      deliveryMode: 'recorded',
+      recordingUrl: 'https://videos.example.com/l2',
+      attachments: [{ kind: 'book', title: { ar: 'كتاب L2' }, url: 'https://cdn.example.org/l2.pdf' }],
+    });
 
     expect(names((await mine('s1', { status: 'cancelled' }).expect(200)).body.items)).toEqual(['L3']);
     expect(names((await mine('s1', { from: '2026-01-10T12:00:00Z', to: '2027-12-31T00:00:00Z' }).expect(200)).body.items)).toEqual(['L3', 'L2']);

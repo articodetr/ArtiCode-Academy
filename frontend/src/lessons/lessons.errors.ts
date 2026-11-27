@@ -12,7 +12,7 @@ export interface LessonsFailure extends UsersFailure {
 }
 
 /** The PATCH fields of API-096 (`LESSON_PATCH_FIELDS` of lessons.changes.ts) — each has a `lessons.patchFields.*` label. */
-const PATCH_FIELDS = new Set(['title', 'description', 'deliveryMode', 'startsAt', 'endsAt', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl'])
+const PATCH_FIELDS = new Set(['title', 'description', 'deliveryMode', 'startsAt', 'endsAt', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl', 'recordingUrl', 'attachments'])
 
 /** The failure's text; `lesson_locked` lists the refused fields by their translated labels, not their API names. */
 export function failureMessage(t: (key: string, options?: Record<string, unknown>) => string, failure: LessonsFailure): string {
@@ -40,6 +40,8 @@ const KNOWN_CODES = new Set([
   'cursor_invalid',
   'attendance_closed',
   'not_enrolled',
+  // J-F77: the attachments list is malformed (the form checks it first).
+  'attachments_invalid',
   'permission_denied',
   'origin_forbidden',
   'rate_limited',
@@ -55,6 +57,7 @@ const FIELD_OF_CODE: Readonly<Record<string, string[]>> = {
   room_not_found: ['roomId'],
   room_inactive: ['roomId'],
   time_range_invalid: ['endTime'],
+  attachments_invalid: ['attachments'],
 }
 
 function strings(value: unknown): string[] {

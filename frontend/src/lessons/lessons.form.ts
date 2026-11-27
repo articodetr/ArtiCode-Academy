@@ -18,8 +18,14 @@
 // the day and the start time only — the lesson then lasts
 // TEACHER_LESSON_MINUTES — no teacher (the caller when they teach the class),
 // no room, no syllabus item, and a live or recorded delivery mode only.
+// Since J-F77 a lesson also carries its video link (`recordingUrl` — the
+// video of a recorded lesson, or a live lesson's recording afterwards) and its
+// attachments — books and links, replaced as a whole list. On creation a
+// recorded lesson sends its video and no join link, any other its join link
+// and no video; an edit sends only what changed, and a field the form does
+// not show (undefined) is unchanged.
 import { MEETING_URL_PATTERN } from '../api/lessons'
-import type { CreateLessonInput, DeliveryMode, Lesson, UpdateLessonInput } from '../api/lessons'
+import type { AttachmentKind, CreateLessonInput, DeliveryMode, Lesson, LessonAttachment, UpdateLessonInput } from '../api/lessons'
 import type { Room } from '../api/rooms'
 import { instantIn } from '../common/timeZone'
 import { englishWithoutArabic, localizedOf, sameLabel } from '../courses/courses.form'
@@ -56,6 +62,40 @@ export interface LessonFormValues {
   teacherUserId?: string
   syllabusItemId?: string
   meetingUrl?: string
+  /** J-F77: the video link (https). */
+  recordingUrl?: string
+  /** J-F77: the attachments as edited, in order; undefined = the form does not show them (unchanged). */
+  attachments?: AttachmentFormValue[]
+}
+
+/** J-F77: one row of the attachments list — the Arabic title is edited; English and Turkish ride along unchanged. */
+export interface AttachmentFormValue {
+  kind: AttachmentKind
+  titleAr: string
+  titleEn?: string
+  titleTr?: string
+  url: string
+}
+
+/** J-F77: a stored attachment as a form row. */
+export function attachmentFormValueOf(attachment: LessonAttachment): AttachmentFormValue {
+  return { kind: attachment.kind, titleAr: attachment.title.ar, titleEn: attachment.title.en ?? '', titleTr: attachment.title.tr ?? '', url: attachment.url }
+}
+
+/** J-F77: the rows as the server stores them — trimmed, blank locales dropped. */
+export function attachmentsOfForm(rows: readonly AttachmentFormValue[] | undefined): LessonAttachment[] {
+  return (rows ?? []).map((row) => {
+    const title: LessonAttachment['title'] = { ar: text(row.titleAr) }
+    if (text(row.titleEn)) title.en = text(row.titleEn)
+    if (text(row.titleTr)) title.tr = text(row.titleTr)
+    return { kind: row.kind, title, url: text(row.url) }
+  })
+}
+
+/** J-F77: two lists are the same when every item matches in order (the server compares them so too). */
+function sameAttachments(a: readonly LessonAttachment[], b: readonly LessonAttachment[]): boolean {
+  const canonical = (list: readonly LessonAttachment[]) => JSON.stringify(list.map((item) => [item.kind, item.title.ar, item.title.en ?? '', item.title.tr ?? '', item.url]))
+  return canonical(a) === canonical(b)
 }
 
 const text = (value: string | undefined) => (value ?? '').trim()
@@ -95,6 +135,8 @@ export function lessonFormValuesOf(lesson: Lesson): LessonFormValues {
     teacherUserId: lesson.teacher?.userId ?? NO_TEACHER,
     syllabusItemId: lesson.syllabusItem?.id,
     meetingUrl: lesson.meetingUrl ?? '',
+    recordingUrl: lesson.recordingUrl ?? '',
+    attachments: lesson.attachments.map(attachmentFormValueOf),
   }
 }
 
@@ -160,8 +202,16 @@ export function buildCreateLessonInput(values: LessonFormValues, timeZone: strin
   if (values.teacherUserId === NO_TEACHER) input.teacherUserId = null
   else if (values.teacherUserId) input.teacherUserId = values.teacherUserId
   if (values.syllabusItemId) input.syllabusItemId = values.syllabusItemId
-  const meetingUrl = text(values.meetingUrl)
-  if (meetingUrl) input.meetingUrl = meetingUrl
+  // J-F77: a recorded lesson has a video and no join link; any other a join link and no video.
+  if (values.deliveryMode === 'recorded') {
+    const recordingUrl = text(values.recordingUrl)
+    if (recordingUrl) input.recordingUrl = recordingUrl
+  } else {
+    const meetingUrl = text(values.meetingUrl)
+    if (meetingUrl) input.meetingUrl = meetingUrl
+  }
+  const attachments = attachmentsOfForm(values.attachments)
+  if (attachments.length > 0) input.attachments = attachments
   return input
 }
 
@@ -199,8 +249,19 @@ export function planLessonPatch(lesson: Lesson, values: LessonFormValues, timeZo
   }
   const syllabusItemId = values.syllabusItemId || null
   if (syllabusItemId !== (lesson.syllabusItem?.id ?? null)) body.syllabusItemId = syllabusItemId
-  const meetingUrl = text(values.meetingUrl) || null
-  if (meetingUrl !== lesson.meetingUrl) body.meetingUrl = meetingUrl
+  // A link field the form does not show (undefined) is unchanged (J-F77: the join link of a recorded lesson, the video of another).
+  if (values.meetingUrl !== undefined) {
+    const meetingUrl = text(values.meetingUrl) || null
+    if (meetingUrl !== lesson.meetingUrl) body.meetingUrl = meetingUrl
+  }
+  if (values.recordingUrl !== undefined) {
+    const recordingUrl = text(values.recordingUrl) || null
+    if (recordingUrl !== lesson.recordingUrl) body.recordingUrl = recordingUrl
+  }
+  if (values.attachments !== undefined) {
+    const attachments = attachmentsOfForm(values.attachments)
+    if (!sameAttachments(attachments, lesson.attachments)) body.attachments = attachments
+  }
   return Object.keys(body).length > 0 ? body : null
 }
 

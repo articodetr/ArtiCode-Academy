@@ -39,6 +39,10 @@
 //                                   start time (D-R33) ({ reason: cancelled|not_started, startsAt })
 //   not_enrolled              422 — a student without an active or completed enrollment
 //                                   in the class ({ studentIds })
+//   -- J-F77 (the lesson's video and attachments) --
+//   attachments_invalid       400 — the attachments are not a list of at most 20
+//                                   { kind: book|link, title: { ar, en?, tr? }, url: https }
+//                                   ({ problems })
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { STATUS_CODES } from 'node:http';
 
@@ -61,6 +65,7 @@ export const LESSONS_ERROR_CODES = [
   'cursor_invalid',
   'attendance_closed',
   'not_enrolled',
+  'attachments_invalid',
 ] as const;
 
 export type LessonsErrorCode = (typeof LESSONS_ERROR_CODES)[number];
@@ -147,5 +152,9 @@ export const lessonsError = {
   notEnrolled: (studentIds: readonly string[]) =>
     new LessonsHttpException(HttpStatus.UNPROCESSABLE_ENTITY, 'not_enrolled', 'These students have no active or completed enrollment in the class', {
       studentIds: [...studentIds],
+    }),
+  attachmentsInvalid: (problems: readonly string[]) =>
+    new LessonsHttpException(HttpStatus.BAD_REQUEST, 'attachments_invalid', 'The attachments are not a list of books and links with a title and an https URL', {
+      problems: [...problems],
     }),
 };

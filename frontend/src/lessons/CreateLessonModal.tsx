@@ -159,7 +159,7 @@ function CreateLessonBody({ initialClass, onSaving, onReady, onCreated }: Create
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={{ classId: initialClass?.id, deliveryMode: simple ? TEACHER_DELIVERY_MODES[0] : 'in_person' }}
+        initialValues={{ classId: initialClass?.id, deliveryMode: simple ? TEACHER_DELIVERY_MODES[0] : 'in_person', attachments: [] }}
         onFinish={(values) => void submit(values as LessonFormValues)}
         // A syllabus item the user picks or clears is theirs: the suggestion never replaces it.
         onValuesChange={(changed: Record<string, unknown>) => {

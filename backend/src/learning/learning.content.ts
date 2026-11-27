@@ -31,14 +31,15 @@ export const MEDIA_SECONDS_MAX = 86_400;
 export const RESOURCES_MAX = 20;
 export const CAPTIONS_MAX = 5;
 
-/** An absolute https URL without white space (an http one would be blocked as mixed content on an https page). */
-const httpsUrl = z
+/** An absolute https URL without white space (an http one would be blocked as mixed content on an https page). Also a lesson attachment’s link (J-F77). */
+export const httpsUrl = z
   .string()
   .trim()
   .max(URL_MAX)
   .regex(/^https:\/\/[^\s]+$/, 'must be an absolute https URL');
 
-function localized(max: number) {
+/** A localized text `{ ar, en?, tr? }` of at most `max` characters per locale, blank locales dropped. Also a lesson attachment’s title (J-F77). */
+export function localized(max: number) {
   const optionalLocale = z
     .string()
     .trim()

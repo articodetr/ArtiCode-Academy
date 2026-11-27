@@ -46,6 +46,19 @@ describe('learner home rules (redesign)', () => {
     expect(lessonLinkOf({ ...lesson, deliveryMode: 'recorded' }, Date.parse('2026-11-23T07:00:00Z'))).toEqual({ url, action: 'open' })
   })
 
+  it('J-F77 (TEST-340) — offers the video of a recorded lesson, of a lesson without a join link, and of a live lesson once it ended', () => {
+    const video = 'https://videos.example.com/v'
+    const join = 'https://meet.example.com/room'
+    const before = Date.parse('2026-11-23T07:00:00Z')
+    const after = Date.parse('2026-11-23T09:30:00Z')
+    const live = makeMyLesson({ meetingUrl: join, recordingUrl: video, deliveryMode: 'live_online', status: 'scheduled', startsAt: '2026-11-23T08:00:00Z', endsAt: '2026-11-23T09:00:00Z' })
+    expect(lessonLinkOf(live, before)).toEqual({ url: join, action: 'join' })
+    expect(lessonLinkOf(live, after)).toEqual({ url: video, action: 'watch' })
+    expect(lessonLinkOf({ ...live, deliveryMode: 'recorded' }, before)).toEqual({ url: video, action: 'watch' })
+    expect(lessonLinkOf({ ...live, meetingUrl: null }, before)).toEqual({ url: video, action: 'watch' })
+    expect(lessonLinkOf({ ...live, status: 'cancelled' }, after)).toBeNull()
+  })
+
   it('offers no link for a cancelled lesson or a lesson without one', () => {
     const now = Date.parse('2026-11-23T07:00:00Z')
     const lesson = makeMyLesson({ meetingUrl: 'https://meet.example.com/room', endsAt: '2026-11-23T09:00:00Z' })

@@ -35,6 +35,7 @@ import {
 } from './myLessons.view'
 import type { MyLessonView, MyLessonsFilters } from './myLessons.view'
 import { useMyLessons } from './useMyLessons'
+import { LessonAttachmentLinks } from './LessonAttachmentLinks'
 
 function AttendanceCell({ item }: { item: MyLessonItem }) {
   const { t } = useTranslation()
@@ -140,6 +141,12 @@ export function MyLessonsList({ dayZone, myClasses, classId, initialStudentId }:
                 <LinkOutlined /> {t('lessons.drawer.openMeeting')}
               </Typography.Link>
             </>
+          ) : null}
+          {/* J-F77: the video and the books and links of the lesson. */}
+          {row.status !== 'cancelled' && (row.recordingUrl || row.attachments.length > 0) ? (
+            <div style={{ fontSize: 12 }}>
+              <LessonAttachmentLinks recordingUrl={row.recordingUrl} attachments={row.attachments} />
+            </div>
           ) : null}
         </span>
       ),

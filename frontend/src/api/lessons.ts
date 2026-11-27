@@ -7,7 +7,9 @@
 // holder of `classes.manage` sees every lesson, anyone else the lessons of
 // the classes they teach); writing needs `lessons.manage` with the same
 // visibility — the server decides. Instants are ISO 8601 in UTC; each lesson
-// names the IANA zone it is shown in (`timeZone` — D-R41).
+// names the IANA zone it is shown in (`timeZone` — D-R41). Since J-F77 a lesson
+// carries its video link (`recordingUrl`) and its attachments — books and
+// links (`attachments`): pasted https links, the academy stores no file.
 import { CLASSES_PATH } from './classes'
 import { apiRequest } from './client'
 import type { ScheduleClass, ScheduleRoom, ScheduleTeacher } from './timetable'
@@ -40,6 +42,20 @@ export interface LessonSyllabusItem {
   id: string
   sortOrder: number
   title: LocalizedLabel
+}
+
+/** J-F77: the kinds of a lesson attachment — a book (a textbook or a handout, usually a PDF) or a link to any other page. */
+export const ATTACHMENT_KINDS = ['book', 'link'] as const
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number]
+/** Mirrors of backend/src/lessons/lessons.attachments.ts. */
+export const ATTACHMENTS_MAX = 20
+export const ATTACHMENT_TITLE_MAX_LENGTH = 300
+
+/** `LessonAttachmentDto` (J-F77): one attachment of a lesson. */
+export interface LessonAttachment {
+  kind: AttachmentKind
+  title: LocalizedLabel
+  url: string
 }
 
 /** `AttendanceCountsDto`: attendance records of the lesson by status (computed by the server). */
@@ -76,6 +92,10 @@ export interface Lesson {
   /** The weekly slot the lesson was generated from (MOD-07-T05); null when created by hand. */
   scheduleId: string | null
   meetingUrl: string | null
+  /** J-F77: the lesson's video (https) or null. */
+  recordingUrl: string | null
+  /** J-F77: the lesson's books and links; [] = none. */
+  attachments: LessonAttachment[]
   /** Set by `cancel`, cleared by `restore`. */
   cancellationReason: string | null
   /** ISO 8601; set when attendance is first recorded (MOD-06-T03). */
@@ -118,6 +138,10 @@ export interface CreateLessonInput {
   teacherUserId?: string | null
   syllabusItemId?: string | null
   meetingUrl?: string | null
+  /** J-F77: the video link; null or absent = none / clears it. */
+  recordingUrl?: string | null
+  /** J-F77: the whole new list ([] removes them); 400 `attachments_invalid` when malformed. */
+  attachments?: LessonAttachment[]
 }
 
 /** Body of API-096 (`UpdateLessonDto`): absent = unchanged, null clears the optional links; the status moves through API-097. */
@@ -131,6 +155,10 @@ export interface UpdateLessonInput {
   teacherUserId?: string | null
   syllabusItemId?: string | null
   meetingUrl?: string | null
+  /** J-F77: the video link; null or absent = none / clears it. */
+  recordingUrl?: string | null
+  /** J-F77: the whole new list ([] removes them); 400 `attachments_invalid` when malformed. */
+  attachments?: LessonAttachment[]
 }
 
 /** Body of API-097: `reason` is stored as `cancellationReason` for `cancel` and recorded in the audit event. */

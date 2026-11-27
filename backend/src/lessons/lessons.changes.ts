@@ -3,12 +3,15 @@
 // idempotent PATCH writes nothing and records nothing, and the audit metadata
 // carries field names only. The class is fixed and the status changes through
 // POST /api/lessons/:id/status. Instants are compared as ISO strings in UTC
-// (the column value), so equality is a plain string comparison.
+// (the column value), so equality is a plain string comparison. The video
+// link and the attachments (J-F77) are compared as their normalised values.
 import { sameLocalizedText } from '../authorization/localized-text.js';
 import type { LocalizedText } from '../authorization/localized-text.js';
 import type { DeliveryMode } from '../generated/prisma/client.js';
+import { sameAttachments } from './lessons.attachments.js';
+import type { LessonAttachment } from './lessons.attachments.js';
 
-export const LESSON_PATCH_FIELDS = ['title', 'description', 'deliveryMode', 'startsAt', 'endsAt', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl'] as const;
+export const LESSON_PATCH_FIELDS = ['title', 'description', 'deliveryMode', 'startsAt', 'endsAt', 'roomId', 'teacherUserId', 'syllabusItemId', 'meetingUrl', 'recordingUrl', 'attachments'] as const;
 export type LessonPatchField = (typeof LESSON_PATCH_FIELDS)[number];
 
 export interface LessonValues {
@@ -22,6 +25,10 @@ export interface LessonValues {
   teacherUserId: string | null;
   syllabusItemId: string | null;
   meetingUrl: string | null;
+  /** J-F77: the lesson's video link. */
+  recordingUrl: string | null;
+  /** J-F77: normalised by parseLessonAttachments(). */
+  attachments: LessonAttachment[];
 }
 
 export type LessonPatch = Partial<LessonValues>;
@@ -43,6 +50,7 @@ function sameValue(field: LessonPatchField, current: LessonValues, requested: un
     if (current.description === null || next === null) return current.description === next;
     return sameLocalizedText(current.description, next);
   }
+  if (field === 'attachments') return sameAttachments(current.attachments, requested as LessonAttachment[]);
   return current[field] === requested;
 }
 

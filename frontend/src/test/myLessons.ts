@@ -22,6 +22,8 @@ export function makeMyLesson(overrides: Partial<MyLessonItem> = {}): MyLessonIte
     endsAt: lesson.endsAt,
     status: lesson.status,
     meetingUrl: null,
+    recordingUrl: null,
+    attachments: [],
     room: lesson.room,
     timeZone: lesson.timeZone,
     teacher: { fullName: 'خالد المعلم', displayName: null },

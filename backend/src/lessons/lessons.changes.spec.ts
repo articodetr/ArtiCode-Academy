@@ -13,6 +13,8 @@ const current: LessonValues = {
   teacherUserId: 'teacher-1',
   syllabusItemId: null,
   meetingUrl: null,
+  recordingUrl: null,
+  attachments: [{ kind: 'book', title: { ar: 'الكتاب' }, url: 'https://cdn.example.org/book.pdf' }],
 };
 
 describe('isEmptyLessonPatch', () => {
@@ -52,6 +54,14 @@ describe('planLessonUpdate', () => {
     expect(planLessonUpdate({ ...current, description: null }, { description: null }).fields).toEqual([]);
     expect(planLessonUpdate({ ...current, description: null }, { description: { ar: 'جديد' } }).fields).toEqual(['description']);
     expect(planLessonUpdate(current, { description: { ar: 'وصف', en: 'Desc' } }).fields).toEqual(['description']);
+  });
+
+  it('J-F77 — compares the video link as text and the attachments as a whole ordered list', () => {
+    expect(planLessonUpdate(current, { recordingUrl: null }).fields).toEqual([]);
+    expect(planLessonUpdate(current, { recordingUrl: 'https://youtu.be/x' })).toEqual({ data: { recordingUrl: 'https://youtu.be/x' }, fields: ['recordingUrl'] });
+    expect(planLessonUpdate(current, { attachments: [{ kind: 'book', title: { ar: 'الكتاب' }, url: 'https://cdn.example.org/book.pdf' }] }).fields).toEqual([]);
+    expect(planLessonUpdate(current, { attachments: [] }).fields).toEqual(['attachments']);
+    expect(planLessonUpdate(current, { attachments: [{ kind: 'link', title: { ar: 'الكتاب' }, url: 'https://cdn.example.org/book.pdf' }] }).fields).toEqual(['attachments']);
   });
 });
 

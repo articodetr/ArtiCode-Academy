@@ -38,6 +38,10 @@ export interface MyLessonItem {
   status: LessonStatus
   /** The meeting link as stored (https only). */
   meetingUrl: string | null
+  /** J-F77: the lesson's video link (https) as stored, or null. */
+  recordingUrl: string | null
+  /** J-F77: the lesson's books and links; [] = none. */
+  attachments: Lesson['attachments']
   /** `ScheduleRoomDto` — the same shape as a lesson's room. */
   room: Lesson['room']
   /** IANA zone the lesson is displayed in: the room's branch when it has one, else the academy's (D-R41 — as API-093). */

@@ -486,10 +486,28 @@ describe('CreateLessonModal — the teacher’s short form (J-F76)', () => {
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'الحلقات')
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.date), { target: { value: '2026-11-12' } })
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: '10:00' } })
+    // J-F77: a live lesson needs its join link; no video field for it.
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.recordingUrl)).not.toBeInTheDocument()
+    submit(dialog)
+    expect(await within(dialog).findByText(ar.lessons.validation.joinUrlRequired)).toBeInTheDocument()
+    expect(posts).toEqual([])
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.joinUrl), { target: { value: 'https://meet.example.com/loops' } })
+    // J-F77: a book attached to the lesson.
+    fireEvent.click(within(dialog).getByText(ar.lessons.attachments.add).closest('button')!)
+    fireEvent.change(await within(dialog).findByLabelText(`${ar.lessons.attachments.title} 1`), { target: { value: 'كتاب الحلقات' } })
+    fireEvent.change(within(dialog).getByLabelText(`${ar.lessons.attachments.url} 1`), { target: { value: 'https://cdn.example.org/loops.pdf' } })
     submit(dialog)
     await waitFor(() => expect(posts).toHaveLength(1))
     // 10:00 in Riyadh (UTC+3) is 07:00 UTC; the lesson lasts an hour.
-    expect(posts[0]).toEqual({ title: { ar: 'الحلقات' }, deliveryMode: 'live_online', startsAt: '2026-11-12T07:00:00.000Z', endsAt: '2026-11-12T08:00:00.000Z', teacherUserId: TEACHER_IDS[1] })
+    expect(posts[0]).toEqual({
+      title: { ar: 'الحلقات' },
+      deliveryMode: 'live_online',
+      startsAt: '2026-11-12T07:00:00.000Z',
+      endsAt: '2026-11-12T08:00:00.000Z',
+      teacherUserId: TEACHER_IDS[1],
+      meetingUrl: 'https://meet.example.com/loops',
+      attachments: [{ kind: 'book', title: { ar: 'كتاب الحلقات' }, url: 'https://cdn.example.org/loops.pdf' }],
+    })
     // Neither the course's syllabus nor the class's sessions nor the rooms were read.
     expect(reads.filter((read) => /syllabus|\/api\/lessons|\/api\/rooms/.test(read) && read.startsWith('GET'))).toEqual([])
   })
@@ -505,10 +523,19 @@ describe('CreateLessonModal — the teacher’s short form (J-F76)', () => {
     await userEvent.type(within(dialog).getByLabelText(ar.lessons.fields.titleAr), 'مراجعة')
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.date), { target: { value: '2026-11-12' } })
     fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.startTime), { target: { value: '23:30' } })
+    // J-F77: a recorded lesson has no join link but needs its video, an https link.
+    expect(within(dialog).queryByLabelText(ar.lessons.fields.joinUrl)).not.toBeInTheDocument()
+    submit(dialog)
+    expect(await within(dialog).findByText(ar.lessons.validation.recordingUrlRequired)).toBeInTheDocument()
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.recordingUrl), { target: { value: 'http://videos.example.com/review' } })
+    submit(dialog)
+    expect(await within(dialog).findByText(ar.lessons.validation.meetingUrl)).toBeInTheDocument()
+    expect(posts).toEqual([])
+    fireEvent.change(within(dialog).getByLabelText(ar.lessons.fields.recordingUrl), { target: { value: 'https://videos.example.com/review' } })
     submit(dialog)
     await waitFor(() => expect(posts).toHaveLength(1))
     // 23:30 in Riyadh is 20:30 UTC; an hour later is the next day in Riyadh — no next-day question for the teacher.
-    expect(posts[0]).toEqual({ title: { ar: 'مراجعة' }, deliveryMode: 'recorded', startsAt: '2026-11-12T20:30:00.000Z', endsAt: '2026-11-12T21:30:00.000Z' })
+    expect(posts[0]).toEqual({ title: { ar: 'مراجعة' }, deliveryMode: 'recorded', startsAt: '2026-11-12T20:30:00.000Z', endsAt: '2026-11-12T21:30:00.000Z', recordingUrl: 'https://videos.example.com/review' })
   })
 
   it('an academy admin keeps the whole form', async () => {
